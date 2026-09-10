@@ -1186,8 +1186,14 @@ System Owner position, and writes an audit-log entry.
 `AuthService.register_user()` runs. A caller that meets only the length rule
 still receives a 400, so the full contract is:
 
-- at least `PASSWORD_MIN_LENGTH` characters (12 by default) and no more than
-  `PASSWORD_MAX_LENGTH` (128)
+- **at least 12 characters on this endpoint**, whatever `PASSWORD_MIN_LENGTH`
+  says, and no more than `PASSWORD_MAX_LENGTH` (128). `SystemOwnerCreate`
+  hard-codes `min_length=12` on `password` and `password_confirm`, so the
+  effective floor is `max(12, PASSWORD_MIN_LENGTH)`. A deployment that lowers
+  the setting — which config permits, with only a warning from the security
+  check — still gets a schema-level 422 here, raised by Pydantic before
+  `validate_password_strength()` runs, so none of the rules below are reported
+  with it
 - at least one uppercase letter, one lowercase letter, one number and one
   special character — each class is separately configurable
   (`PASSWORD_REQUIRE_UPPERCASE` and its three siblings) and all four are on by
@@ -1294,9 +1300,38 @@ affected today, and it is a live regression rather than a hypothetical:
 completing onboarding turns the Public Information module off. The other seven
 default to false, so the two paths agree on them by coincidence.
 
+That holds only when something was submitted. `_persist_session_data_to_org()`
+guards the rebuild with `if modules_data and modules_data.get("enabled")`, and
+an empty list is falsy — so a caller who posts `{modules: []}` to
+`/session/modules` has it stored, and completion then skips the whole block.
+`Organization.settings.modules` is never written, every declared default
+survives, and `public_info` stays **true**. Selecting nothing and selecting
+everything-but therefore diverge sharply, and the empty case is the one that
+leaves defaults intact.
+
 Both halves of this are worth knowing before relying on either route: the
 direct route preserves defaults and misreports the result, the session route
 reports nothing per-module and silently overwrites defaults.
+
+### Save Department Info
+
+```
+POST /api/v1/onboarding/session/department
+Body: {
+  name: string,                        // 3-100 characters
+  logo?: string,                       // base64-encoded image
+  navigation_layout: "top" | "left"    // required; anything else is a 422
+}
+```
+
+What the Navigation Choice step submits. `navigation_layout` is validated
+against exactly those two literals by a `field_validator`, so a plausible
+guess (`sidebar`, `horizontal`) is refused.
+
+This is the one session group `/complete` does **not** copy into
+`Organization.settings` — see Complete Onboarding — so the layout choice and
+the name recorded here stay on the session row. The organization's own name and
+logo come from the organization routes, not from this call.
 
 ### Configure Roles
 
