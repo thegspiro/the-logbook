@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2460](https://github.com/thegspiro/the-logbook/pull/2460)
+(Feature 18, Training extended, pass 4) merged clean, merge commit
+`21470e693`, all CI checks green, nine rounds of Codex review across the
+PR's lifetime — eight real findings (TRX4-2, TRX4-4, TRX4-5, TRX4-6,
+TRX4-7, TRX4-8 as code/config fixes; TRX4-1 and TRX4-3 as doc corrections)
+plus a scope-check qualification and a reversed-heading fix, all resolved
+(13 review threads, 0 unaddressed). Rotation row 18 is now `✅`. Next:
+Feature 19 (Skills testing).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 4, PR #2460, before the merge), preserved for history</summary>
+
 **Feature 18 (Training extended), pass 4** — PR
 [#2460](https://github.com/thegspiro/the-logbook/pull/2460), branch
 `claude/friendly-babbage-0mo420` (this watchdog session's designated
@@ -123,6 +135,8 @@ owner merge. Full write-up:
 `docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
 18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until merged, then
 Feature 19 (Skills testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 4, PR #2455), preserved for history</summary>
@@ -12767,7 +12781,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⏳     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
@@ -12791,6 +12805,81 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-10 — Feature 18 (Training extended, pass 4) — 1 doc correction, 6 real fixes, corrected across nine Codex review rounds
+
+**Step 0:** the rotation had gone quiet — no open security-review PR, no
+new branch for Feature 18, ~4h19m since PR #2455's (Feature 17) merge
+despite the 30-minute cadence. A watchdog iteration (checking on the
+primary rotation session per its own 30-minute schedule) started the pass
+directly rather than wait further, the same pattern Feature 16's own pass
+4 documents above.
+
+**Scope check** against pass 3's merge (`7455d6708`): zero backend/schema
+changes among this feature's fifteen declared artifacts; the only touch
+was an unrelated pass's addition to `frontend/src/utils/apiCache.ts`. All
+ten pass-1 findings and pass-2's TRX2-1 re-verified intact by reading the
+current code directly. First draft: one doc correction (TRX4-1 — pass 2's
+"correctly left cacheable" claim for `/instructors/validate` was stale;
+the endpoint pairs a named member with a qualification verdict, which is
+itself sensitive regardless of payload size).
+
+**Nine Codex review rounds on PR #2460 found real gaps a first-draft
+"re-verification" pass had missed**, each read and fixed directly rather
+than taken on faith:
+
+- **TRX4-2** (MEDIUM) — `GET /instructors/qualifications`,
+  `.../qualified`, and `.../validate/{user_id}/{course_id}` had **no**
+  permission dependency at all, bypassing the `training.manage`-gated
+  frontend entirely. Fixed, then corrected once more when the first fix
+  (`training.manage`-only) silently dropped read-only `training.view_all`
+  officer access — final gate matches `training_programs.py`'s own
+  `get_program_enrollments` OR-gate exactly.
+- **TRX4-3** (doc correction) — `KNOWN_LIMITATIONS.md`'s "Outbound
+  Integration Requests" six-site count had missed `documenso_service.py`
+  (no `assert_outbound_url_safe` call anywhere in the file); corrected to
+  seven, the actual fix left to a dedicated cross-cutting pass per the
+  note's own standing guidance.
+- **TRX4-4** (doc correction) — pass 2 called `GET /training/multi-agency`
+  roster-free; it carries per-organization contact PII, member ids, and
+  free-text after-action fields. Added to `UNCACHEABLE_PREFIXES`.
+- **TRX4-5** (LOW/MED) — the bare `GET /training/external/providers` list
+  was cacheable (only its sub-paths were excluded by a trailing-slash
+  prefix) and returns `config.additional_headers`, which can carry an
+  integration auth token; an existing test asserted the gap outright.
+  Dropped the trailing slash.
+- **TRX4-6** (MEDIUM) — same shape as TRX4-2: `GET /multi-agency` had no
+  permission gate at all; making it uncacheable (TRX4-4) didn't stop the
+  unauthorized first read. Same OR-gate applied.
+- **TRX4-7** (MEDIUM) — every route serializing
+  `ExternalTrainingProviderResponse` still returned `additional_headers`
+  verbatim even after TRX4-5's cache fix. Added a response-only
+  `field_validator` redacting values while keeping keys.
+- **TRX4-8** (HIGH, data integrity) — TRX4-7's own redaction fix had a
+  real bug: a load→edit→save round trip would silently overwrite the real
+  stored header value with the literal marker string on save, since
+  `update_provider` replaced the whole config wholesale. Fixed the same
+  way `OrganizationService.update_settings` already handles this shape for
+  other secrets — preserve the stored value when the submitted value
+  equals the shared `REDACTED_SECRET` sentinel.
+- Two further doc-accuracy corrections: the pass's own "zero backend
+  changes" scope-check claim needed qualifying as the pre-TRX4-2 starting
+  point once TRX4-2 actually changed `training_enhancements.py`; TRX4-3's
+  own heading had the six/seven count backwards.
+
+Guard tests added across five new/extended files
+(`test_instructor_qualification_endpoint_permissions.py`,
+`test_multi_agency_endpoint_permissions.py`,
+`test_external_provider_header_redaction.py`, plus `apiCache.test.ts`
+additions), driving real dependency `__call__`s and asserting serialized
+JSON never contains a raw secret, not only configuration. Full completion
+gate green throughout: flake8/black/isort clean; migrations validated (no
+schema change); full backend suite re-run clean after every real fix,
+final run 12315 passed / 21 skipped (pre-existing) / 0 failed; frontend
+typecheck/eslint/vitest clean. All 13 review threads resolved. PR #2460
+merged clean (merge commit `21470e693`) by the repo owner. Full write-up:
+`docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
+18 → `✅`. Next: Feature 19 (Skills testing).
 
 ### 2026-09-10 — Feature 16 (Events & requests, pass 4) — 1 fixed (EV-24, P2), 1 re-verified open (EV-23), corrected on two Codex review rounds
 
