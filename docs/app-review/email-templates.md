@@ -55,29 +55,54 @@ disabled, so the meaningful check is that the row's status is untouched. A
 second test asserts an **active** org's due email is still processed, so the
 fix cannot degenerate into filtering everything out.
 
-### MAIL-21 — LOW — Attachment deletion blocked the event loop and could orphan its own row — ✅ FIXED
+### MAIL-21 — LOW — Attachment deletion blocked the event loop, and its first fix got the ordering backwards — ✅ FIXED (corrected after review)
 
-**What:** `delete_attachment` did two things the same module already does
-correctly elsewhere:
-
-1. **Blocking `os.path.isfile` / `os.remove` directly in an async handler**
-   (`email_templates.py:708-709`), 60 lines below an upload path that carefully
-   wraps `makedirs` and the file write in `asyncio.to_thread`.
-2. **Removed the file _before_ committing the row delete.** If the commit then
-   failed, the row survived pointing at a file that was already gone — and that
-   row is loaded by the send path, so the next email using the template fails on
-   a missing attachment.
+**What:** `delete_attachment` performed blocking `os.path.isfile` / `os.remove`
+directly in an async handler (`email_templates.py:708-709`), 60 lines below an
+upload path that carefully wraps `makedirs` and the file write in
+`asyncio.to_thread`.
 
 **Where:** `backend/app/api/v1/endpoints/email_templates.py:707-712`.
 
-**Impact:** the blocking calls are one small `unlink`, so the event-loop stall is
-real but slight. The ordering is the substantive half: it converts a transient
-database failure into a permanently broken template.
+**Fix:** the syscalls moved into `asyncio.to_thread`, and `FileNotFoundError` is
+tolerated because that is what a retry after a half-completed delete looks like.
 
-**Fix:** capture the path and filename first, delete the row and commit, then
-remove the file in a thread, tolerating `OSError`. The failure mode inverts from
-"row pointing at a missing file" (breaks sending) to "orphaned file on disk"
-(wasted bytes).
+**The ordering half of this finding was wrong, and Codex caught it (P2 on PR
+#2446).** The first draft also reversed the two operations — commit the row
+delete, then unlink, swallowing `OSError` — on the reasoning that a failed commit
+otherwise leaves a row pointing at a missing file and breaks the send path. That
+reasoning was incomplete in a way worth recording, because the conclusion
+inverted once the missing half was supplied:
+
+- **The row is the only record the file exists.** Nothing sweeps
+  `storage/email_attachments`; a repo-wide search finds no orphan-cleanup task
+  anywhere. Verified rather than taken on the reviewer's word.
+- So committing first and discarding an unlink error turns a transient
+  `EACCES`/`EIO` into a file that **survives forever with nothing pointing at
+  it**, while the API answers 204. These are member-facing attachments: what is
+  left behind can be exactly the document the department believes it just
+  deleted — a retention problem on a HIPAA-scoped system, not the "wasted bytes"
+  the first draft called it.
+- Meanwhile the problem that draft was solving is **self-healing**. A failed
+  commit leaves the file gone and the row present; the retry finds `isfile`
+  False, skips to the delete, and completes. The broken-send window is real but
+  transient.
+
+So the original order was already recoverable in both directions and the
+"improvement" was a regression:
+
+| Failure      | file → row (now)                                     | row → file (rejected)                         |
+| ------------ | ---------------------------------------------------- | --------------------------------------------- |
+| unlink fails | 500, nothing changed, retry does the whole operation | **204, file orphaned permanently, no record** |
+| commit fails | 500, file gone, row survives, retry completes        | n/a                                           |
+
+The handler now unlinks first and lets a genuine `OSError` propagate, so the row
+still names the file and the admin can simply try again.
+
+**Guarded:** `tests/test_email_attachment_delete_order.py` — a failed unlink
+leaves the row intact and raises; a successful delete removes the file _before_
+the row; an already-missing file completes rather than failing forever. Against
+the rejected shape the first of those fails with `DID NOT RAISE`.
 
 ### MAIL-22 — LOW — The detected MIME type is validated and then thrown away — 🚩 FLAGGED
 

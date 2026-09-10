@@ -704,37 +704,46 @@ async def delete_attachment(
             status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found"
         )
 
-    # Captured before the delete: reading them back off a deleted instance
-    # after the commit is a refresh waiting to happen, and the removal below
-    # needs both.
     storage_path = attachment.storage_path
     filename = attachment.filename
 
-    # Row first, file second. The other order — which this did — leaves a row
-    # pointing at a file that is already gone whenever the commit fails, and
-    # that row is loaded by the send path, so the next email using this
-    # template fails on a missing attachment. Committing first means a failed
-    # unlink leaves an orphaned file on disk instead: wasted bytes rather than
-    # a broken send.
+    # File first, row second, and a failed unlink is NOT swallowed.
+    #
+    # The row is the only record that this file exists: nothing sweeps
+    # `storage/email_attachments`. So committing the delete first and then
+    # discarding an unlink error turns a transient EACCES/EIO into a file that
+    # survives forever with nothing pointing at it — and these are member-facing
+    # attachments, so the bytes left behind can be exactly the sort of document
+    # this application is not supposed to keep after it reports it deleted.
+    # Raising here instead means the row still names the file and the admin can
+    # simply try again.
+    #
+    # This order is recoverable in both directions, which is what makes it the
+    # right one:
+    #   * unlink fails    -> 500, nothing changed at all, a retry does the whole
+    #                        operation cleanly.
+    #   * commit fails    -> 500, file gone but the row survives; the retry's
+    #                        unlink raises FileNotFoundError, which is swallowed
+    #                        below, and the delete then succeeds. The window
+    #                        where a row points at a missing file is real but
+    #                        self-healing.
+    # (Codex P2 on PR #2446: an earlier draft of this handler had the two the
+    # other way round, on the reasoning that a stale row breaks the send path.
+    # It does — but only until the delete is retried, whereas the orphan the
+    # other order leaves is permanent and silent.)
+    def _remove_file(path: str) -> None:
+        # `to_thread`, matching the upload path above: blocking syscalls stay
+        # off the event loop. FileNotFoundError is not an error here — it is
+        # what a retry after a half-completed delete looks like.
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+
+    await asyncio.to_thread(_remove_file, storage_path)
+
     await db.delete(attachment)
     await db.commit()
-
-    # `to_thread`, matching the upload path 60 lines above: these are blocking
-    # syscalls and everything else in this module already keeps them off the
-    # event loop.
-    def _remove_file(path: str) -> None:
-        if os.path.isfile(path):
-            os.remove(path)
-
-    try:
-        await asyncio.to_thread(_remove_file, storage_path)
-    except OSError:
-        # The attachment is already gone as far as the application is
-        # concerned; a file that outlives it is a cleanup problem, not a
-        # reason to fail the request the admin just made.
-        logger.warning(
-            "Attachment row deleted but file could not be removed: {}", storage_path
-        )
 
     logger.info("Attachment deleted: {} from template {}", filename, template_id)
 
