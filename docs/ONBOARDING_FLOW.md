@@ -1260,9 +1260,12 @@ permissions) is the System Owner's position. This runs once per install, and
 the Positions step later lets the department keep or drop what was seeded, and
 add positions of its own. It does **not** rename a seeded one:
 `save_session_roles` updates an existing position's permissions, priority and
-description, and never assigns the submitted `name`, so a renamed seeded
-position comes back in the `updated` list with its stored name unchanged. The
-wizard exposes no rename control for them either.
+description, and never assigns the submitted `name`. The response is actively
+misleading about it: the handler appends `role_data.name` — the name that was
+**submitted** — to `updated`, so a caller who renames a seeded position gets it
+back in the `updated` list under the new name while the stored row keeps the
+old one. Do not read that list as confirmation the rename persisted. The wizard
+exposes no rename control for them either.
 
 > The wiki described this as "creates 6 default roles: Super Admin, Admin,
 > Chief, Officer, Member, Probationary" until 2026-09-10. That list was stale in
@@ -1490,7 +1493,14 @@ alongside valid credentials gets a success response and a configuration stored
 
 `other` is the configure-later choice, not a custom-SMTP one: it forces
 `enabled` to false whatever `config` holds, so SMTP fields sent with it are
-stored disabled and no mail is sent. Custom SMTP goes under `selfhosted`.
+stored disabled. Custom SMTP goes under `selfhosted`.
+
+**Disabled here does not mean the installation sends no mail.**
+`EmailService._get_smtp_config()` takes the organization's section only when it
+is `enabled`, and otherwise falls through to the deployment's `SMTP_*` settings.
+So on a deployment with a global relay configured, choosing `other` leaves
+transactional mail going out through that relay; what it disables is the
+configuration onboarding collected, not outbound email.
 
 `fromEmail` is required on `gmail`, `microsoft` and `selfhosted`. On the two
 presets it doubles as the SMTP login — `resolve_smtp_settings()` returns
@@ -1637,14 +1647,25 @@ Marks onboarding as finished, and does three further things worth knowing:
   email configuration, file storage, auth choice and module selections. Those
   are held in the session until now and reach the organization here.
 
-  Three of the five are **best-effort**. The IT-team, email and file-storage
-  blocks each sit inside their own `try/except Exception` in
-  `_persist_session_data_to_org()`, which logs a warning and continues; auth and
-  modules are not wrapped. So if the stored ciphertext cannot be decrypted —
-  after an `ENCRYPTION_KEY` rotation without the previous key, say — `/complete`
-  still marks onboarding finished and commits, and the department ends up
-  complete with no file-storage platform and no credentials recorded, having
-  seen nothing but a success. The warning in the log is the only trace.
+  **What happens when one of them fails differs per group, and the differences
+  matter more than the similarity.** Take the case of an `ENCRYPTION_KEY`
+  rotated without the previous key, so no stored ciphertext decrypts:
+
+  | Group        | On failure                                                                                                                                                                                               |
+  | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Email        | **Completion is refused.** `_incomplete_session_email()` runs _before_ anything is persisted and returns 400                                                                                             |
+  | File storage | **Silent.** Its whole block is a `try/except Exception` that logs a warning and continues                                                                                                                |
+  | IT team      | Contacts persist regardless — the settings assignment is outside any `try`. Only `create_it_team_users()` is wrapped, so the contacts are recorded while their **login accounts** may silently not exist |
+  | Auth         | Not wrapped; a plain assignment that cannot fail this way                                                                                                                                                |
+  | Modules      | Not wrapped; likewise                                                                                                                                                                                    |
+
+  So file storage is the group that leaves a department complete with no
+  platform and no credentials recorded, having seen nothing but a success
+  screen; a log warning is the only trace. Email is the opposite — it blocks
+  completion with an error naming the step to return to. The email block inside
+  `_persist_session_data_to_org()` has its own `try/except` as well, but it
+  covers what happens _after_ that pre-check has already decrypted the section
+  successfully, such as re-encryption failing.
 
   This is **not** true of `/session/*` generally, and assuming it is gets the
   picture backwards in both directions. `/session/organization`,
