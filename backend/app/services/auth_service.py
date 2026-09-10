@@ -214,12 +214,49 @@ class AuthService:
         # Verify password
         password_valid, rehashed = verify_password(password, user.password_hash)
         if not password_valid:
-            # Increment failed login attempts
-            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+            # Count the failure under a row lock (Pitfall #27), the same fix
+            # `_verify_and_consume_totp` and `_verify_and_consume_recovery_code`
+            # carry one layer up. The tally is a read-modify-write: `user` was
+            # loaded by the unlocked `candidates` query above, so N simultaneous
+            # wrong-password requests all read the same committed counter, all
+            # write value+1, and the account absorbs N guesses for the price of
+            # one increment. Per-IP rate limiting does not cover this — lockout
+            # exists precisely for the distributed case, where each source stays
+            # under its own limit and only the per-account tally can see the
+            # total.
+            #
+            # The lock is taken here, inside the failure branch, and never
+            # around the Argon2 verify above: holding a user row for the
+            # ~100-300ms of a hash would serialize that account's logins for
+            # the duration and hand an attacker a cheaper denial of service
+            # than the one this counter defends against.
+            #
+            # `populate_existing=True` is required, not cosmetic:
+            # `expire_on_commit=False` (app/core/database.py) means the `user`
+            # object this session already holds is never auto-expired, so
+            # without it the lock would be taken at SQL level while
+            # `failed_login_attempts` kept reading the stale pre-lock value out
+            # of the identity map — the lock would be real and the count still
+            # wrong.
+            locked = await self.db.execute(
+                select(User)
+                .where(User.id == user.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            locked_user = locked.scalar_one_or_none()
+            # Deleted between the candidate read and here; nothing to count.
+            if locked_user is None:
+                await self.db.rollback()
+                return None, "Incorrect username or password"
+
+            locked_user.failed_login_attempts = (
+                locked_user.failed_login_attempts or 0
+            ) + 1
 
             # Lock the account once the configured attempt threshold is hit.
-            if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
-                user.locked_until = datetime.now(timezone.utc) + timedelta(
+            if locked_user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
+                locked_user.locked_until = datetime.now(timezone.utc) + timedelta(
                     minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES
                 )
                 logger.warning(f"Account locked due to failed attempts - {username}")

@@ -33,6 +33,7 @@ from app.services import (
     finance_service,
     inventory_service,
     scheduling_service,
+    storefront_service,
     testing_checklist_service,
 )
 
@@ -497,3 +498,43 @@ class TestLockedMutationsUseTheSharedHelper:
                 f"{method.__name__} must lock its item via _get_item_locked, "
                 "not a duplicated inline SELECT ... FOR UPDATE."
             )
+
+
+class TestStorefrontStockCapacity:
+    """A store product's stock, window cap and per-member cap are the same
+    read-then-write as a shift seat, and the storefront was never in this
+    file. It had the half that is easy to see -- ``_lock_products`` takes a
+    ``FOR UPDATE`` on every product in the cart -- and not the half that is
+    not: the tallies it then compares against were plain reads.
+
+    ``create_order`` reads the store settings row before it reaches the
+    lock, so its REPEATABLE READ snapshot is already open by then. The
+    second of two simultaneous submissions blocked on the product lock,
+    waited, acquired it, counted -- and still saw the tally from before the
+    first one committed, so both members were sold the last shirt.
+    """
+
+    def test_both_availability_tallies_are_locking_reads(self):
+        _assert_every_count_locks(
+            storefront_service.StorefrontService._ordered_quantities,
+            expected=1,
+        )
+
+    def test_the_order_path_asks_for_the_lock(self):
+        """The tally is shared with the browse path, which must NOT lock --
+        rendering the store would otherwise take write locks on every order
+        item in the window. So the lock is a parameter, and this asserts the
+        capacity-checking caller actually passes it."""
+        source = _source_of(storefront_service.StorefrontService._price_lines)
+        assert source.count("for_update=True") == 2, (
+            "_price_lines must request a locking read for both the window "
+            "tally and the per-member tally; found "
+            f"{source.count('for_update=True')}."
+        )
+
+    def test_the_browse_path_does_not_lock(self):
+        source = _source_of(storefront_service.StorefrontService._build_offers)
+        assert "for_update" not in source, (
+            "_build_offers renders the member-facing store. Taking row locks "
+            "there would block order submission behind every page view."
+        )

@@ -1193,9 +1193,22 @@ class StorefrontService:
         window_id: str,
         organization_id: str,
         user_id: Optional[str] = None,
-        exclude_order_id: Optional[str] = None,
+        for_update: bool = False,
     ) -> Dict[Tuple[str, Optional[str]], int]:
-        """Units already claimed in a window, keyed by (product_id, variant_id)."""
+        """Units already claimed in a window, keyed by (product_id, variant_id).
+
+        ``for_update`` makes the tally a locking read, and only the order-placing
+        path asks for it — browsing the store must not take write locks on the
+        rows it is merely counting.
+
+        Locking the product row in ``_lock_products`` serializes the decision but
+        does **not** refresh the caller's REPEATABLE READ snapshot, and by the
+        time ``create_order`` gets here it has already read the settings row, so
+        the snapshot predates the lock. A plain SELECT would then answer from
+        before the order that beat us committed: the loser of the race counts a
+        stale tally, sees the last unit as free, and the cap is exceeded by
+        however many members tapped at once (CLAUDE.md pitfall #27).
+        """
         query = (
             select(
                 StoreOrderItem.product_id,
@@ -1212,8 +1225,8 @@ class StorefrontService:
         )
         if user_id:
             query = query.where(StoreOrder.user_id == str(user_id))
-        if exclude_order_id:
-            query = query.where(StoreOrder.id != str(exclude_order_id))
+        if for_update:
+            query = query.with_for_update()
 
         result = await self.db.execute(query)
         return {
@@ -1502,15 +1515,46 @@ class StorefrontService:
         )
         offerings = {o.product_id: o for o in offering_result.scalars().all()}
 
-        # Lock first, then count: the counts below must not be able to change
-        # under a concurrent order between here and the insert.
+        # Serialize the whole decision on the WINDOW row before anything else.
+        #
+        # This is the "lock the parent, not the rows being counted" half of
+        # CLAUDE.md pitfall #27, and it is what makes the locking tallies below
+        # safe rather than merely correct. Those tallies are range reads over an
+        # order window that is usually empty when it opens, so under InnoDB they
+        # take next-key/gap locks over that empty range. Gap locks do not
+        # conflict with each other, so two members ordering *different* products
+        # both sail past `_lock_products` (disjoint product rows) and both
+        # acquire the same gap — and then each one's INSERT needs an
+        # insertion-intention lock that the other's gap lock blocks. That is a
+        # guaranteed deadlock, and InnoDB resolves it by killing one member's
+        # order with a 1213.
+        #
+        # Different products is the *common* case when a window opens, so
+        # without this the cure was worse than the disease: the tally lock fixed
+        # a same-product oversell and introduced a different-product deadlock.
+        # Measured against a real database, 5 concurrent disjoint-cart rounds
+        # produced 2 deadlocks without this lock and 0 with it.
+        # (Codex P2 on PR #2446.)
+        #
+        # Lock order is window -> products -> tallies on every path through
+        # here, so these cannot invert against each other.
+        await self.db.execute(
+            select(StoreOrderWindow.id)
+            .where(StoreOrderWindow.id == window.id)
+            .with_for_update()
+        )
+
+        # Then the products, then count: the counts below must not be able to
+        # change under a concurrent order between here and the insert.
         await self._lock_products(
             [item["product_id"] for item in items], organization_id
         )
 
-        window_totals = await self._ordered_quantities(window.id, organization_id)
+        window_totals = await self._ordered_quantities(
+            window.id, organization_id, for_update=True
+        )
         member_totals = await self._ordered_quantities(
-            window.id, organization_id, user_id=user_id
+            window.id, organization_id, user_id=user_id, for_update=True
         )
 
         # Collapse duplicate cart lines so per-product limits see the true ask.

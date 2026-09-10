@@ -1,7 +1,205 @@
 # Application Review — Email Templates & Delivery
 
 **Prefix:** `MAIL` · **Iteration:** A4 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-09-09 (pass 5)
+
+## Pass 5 (2026-09-09) — the send path's org filter, and two smaller repairs
+
+**2 fixed (1 MED, 1 LOW), 1 flagged (LOW).** The feature has grown ~970 lines
+since pass 2 — endpoints 671 → 904 L (11 → 13 routes), the template service
+2,739 → 3,247 L, `email_service` 1,633 → 1,862 L — so unlike the previous
+iteration there was genuinely new ground: the footer library, the layout /
+colourway / status-chip fields, and the two footer endpoints.
+
+> **Finding ids start at MAIL-20.** `MAIL-1 … MAIL-5` are used by **both** this
+> file and `docs/security-review/MSG-25-messaging-notifications.md`, and
+> `FORM-26-forms.md` cites a `MAIL-4` of its own. Same structural problem
+> recorded for `SF-`, `AUTH-` and `CRON-`; giving each track its own prefix is
+> an owner call, not something to rename unilaterally across six documents.
+
+### MAIL-20 — MED — A decommissioned department keeps mailing its members — ✅ FIXED
+
+**What:** `_run_scheduled_emails_inner` selected every `PENDING` `ScheduledEmail`
+whose time had come, across all organizations, with **no `Organization.active`
+filter**. Its only organization check is `if not org` (`scheduled_tasks.py:3564`),
+which catches a _deleted_ row and not a deactivated one.
+
+**Where:** `backend/app/services/scheduled_tasks.py:3520` (the query).
+
+**Impact:** an organization switched off — offboarded, closed, non-paying —
+keeps sending every scheduled email still queued against it, to its former
+members. The send is real: the runner renders the template and calls
+`EmailService.send_email`, and nothing downstream re-checks the org.
+
+**This is a known shape that had already been closed next door.** CRON2-31-11 /
+CRON-31-5 established it, and the sibling `run_publish_scheduled_messages` — the
+same "due row, org-keyed, fans out to members" pattern for department _messages_
+— was fixed as CRON3-31-1 two days before this pass, with a comment naming the
+shape. Scheduled _email_ lives in a different function, and that pass was scoped
+to its own diff, so this one was never in view. Every other org-spanning loop in
+`scheduled_tasks.py` already carries the filter (`:533`, `:1000`, `:1290`,
+`:1493`, …).
+
+**Fix:** joined to `Organization` and filtered `active.isnot(False)` — `isnot`
+rather than `== True`, matching the file's convention, so a row whose flag was
+never populated still counts as active. Filtered rather than retired: an
+inactive org's rows stay `PENDING`, so a department that is switched back on
+keeps what it had queued instead of this task having destroyed it in passing.
+
+**Reproduced.** `tests/test_scheduled_email_active_org.py` asserts a deactivated
+org's due email is left strictly alone. Against the unfixed code it fails with
+the row's status having moved to `failed` and `total_processed: 1` — i.e. the
+row _was_ picked up and put through the send path. Note which assertion does the
+work: `result["sent"] == 0` holds either way in a test environment with email
+disabled, so the meaningful check is that the row's status is untouched. A
+second test asserts an **active** org's due email is still processed, so the
+fix cannot degenerate into filtering everything out.
+
+### MAIL-21 — LOW — Attachment deletion blocked the event loop, and its first fix got the ordering backwards — ✅ FIXED (corrected after review)
+
+**What:** `delete_attachment` performed blocking `os.path.isfile` / `os.remove`
+directly in an async handler (`email_templates.py:708-709`), 60 lines below an
+upload path that carefully wraps `makedirs` and the file write in
+`asyncio.to_thread`.
+
+**Where:** `backend/app/api/v1/endpoints/email_templates.py:707-712`.
+
+**Fix:** the syscalls moved into `asyncio.to_thread`, and `FileNotFoundError` is
+tolerated because that is what a retry after a half-completed delete looks like.
+
+**The ordering half of this finding was wrong, and Codex caught it (P2 on PR
+#2446).** The first draft also reversed the two operations — commit the row
+delete, then unlink, swallowing `OSError` — on the reasoning that a failed commit
+otherwise leaves a row pointing at a missing file and breaks the send path. That
+reasoning was incomplete in a way worth recording, because the conclusion
+inverted once the missing half was supplied:
+
+- **The row is the only record the file exists.** Nothing sweeps
+  `storage/email_attachments`; a repo-wide search finds no orphan-cleanup task
+  anywhere. Verified rather than taken on the reviewer's word.
+- So committing first and discarding an unlink error turns a transient
+  `EACCES`/`EIO` into a file that **survives forever with nothing pointing at
+  it**, while the API answers 204. These are member-facing attachments: what is
+  left behind can be exactly the document the department believes it just
+  deleted — a retention problem on a HIPAA-scoped system, not the "wasted bytes"
+  the first draft called it.
+- Meanwhile the problem that draft was solving is **self-healing**. A failed
+  commit leaves the file gone and the row present; the retry finds `isfile`
+  False, skips to the delete, and completes. The broken-send window is real but
+  transient.
+
+So the original order was already recoverable in both directions and the
+"improvement" was a regression:
+
+| Failure      | file → row (now)                                     | row → file (rejected)                         |
+| ------------ | ---------------------------------------------------- | --------------------------------------------- |
+| unlink fails | 500, nothing changed, retry does the whole operation | **204, file orphaned permanently, no record** |
+| commit fails | 500, file gone, row survives, retry completes        | n/a                                           |
+
+The handler now unlinks first and lets a genuine `OSError` propagate, so the row
+still names the file and the admin can simply try again.
+
+**Guarded:** `tests/test_email_attachment_delete_order.py` — a failed unlink
+leaves the row intact and raises; a successful delete removes the file _before_
+the row; an already-missing file completes rather than failing forever. Against
+the rejected shape the first of those fails with `DID NOT RAISE`.
+
+### MAIL-22 — LOW — The detected MIME type is validated and then thrown away — 🚩 FLAGGED
+
+**What:** `upload_attachment` sniffs the real MIME with `detect_mime_type`
+(`:616`), uses it to accept or reject (`:623`) — and then persists
+`content_type=file.content_type` (`:665`), the **client's claim**, which is what
+the send path attaches the file as.
+
+**Where:** `backend/app/api/v1/endpoints/email_templates.py:616` vs `:665`.
+
+**Impact:** low, and bounded by who can reach it — the uploader already holds
+`settings.manage`. But extension and content are validated against two
+independent allowlists and never against _each other_, so a file named `.pdf`
+whose bytes are `image/svg+xml` satisfies both and is then mailed out declared
+as `application/pdf`. The code does the expensive, correct thing and discards
+the answer.
+
+**Fix — not applied, and the obvious one is wrong.** Simply storing
+`detected_mime` would regress the Office formats: `.docx`/`.xlsx`/`.pptx` are
+ZIP containers and libmagic commonly reports `application/zip` for them — which
+is precisely why `ALLOWED_EMAIL_MIME_TYPES` lists both `application/zip` **and**
+the three OOXML types. Storing the detected value would attach a Word document
+as a zip and mail clients would present it as one. The right change is a
+consistency check between the extension and the detected type (with an explicit
+OOXML/zip equivalence), which is a table of pairings and a product decision
+about what to do on mismatch — reject, or store the detected type. Recorded
+rather than guessed at. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+### Verified good this pass
+
+- **All 13 endpoints are gated**, uniformly on `settings.manage` **or**
+  `organization.update_settings`, enumerated by AST rather than grep (pass 2's
+  note that the multi-line dependency defeats a line-oriented grep still
+  applies, and the count has since moved 11 → 13).
+- **The footer library, new since pass 2, is correct on both counts this
+  codebase gets wrong.** Writes deep-copy `Organization.settings` before
+  touching a nested key (`email_templates.py:139`, CLAUDE.md pitfall #12), and
+  the whole library is saved as a unit precisely so `default_key` cannot name a
+  footer the same request deleted. Rendering escapes admin-entered line text
+  _and_ the substituted values (`email_footers.py:184-205`, `:252-266`).
+- **XC-1 is closed on both scheduled-email write paths.** `schedule_email`
+  validates a client-supplied `template_id` with `assert_in_org` before storing
+  it (`:761-774`), the send task re-scopes it at load time
+  (`scheduled_tasks.py:3574-3582`), and `update_scheduled_email` accepts only a
+  reschedule or a cancel — there is no path that swaps `template_id` after the
+  fact, which is where this class of gap usually survives.
+- **The scheduled-email send path does _not_ have the "marked sent, nothing
+  delivered" bug** that its cron neighbours still carry (CRON-31-7): it branches
+  on `success_count > 0` and records `FAILED` with a message otherwise
+  (`scheduled_tasks.py:3647-3653`).
+- **The attachment upload is properly hardened** — extension allowlist,
+  magic-byte MIME check that **fails closed** with a 503 when libmagic is
+  missing (the MAIL-3 fix, still in place), UUID storage filename, per-org
+  directory, 10 MB cap — and the delete is org-scoped through a join to the
+  template.
+
+### Re-verified, still open
+
+- **MAIL-4 — arbitrary recipients.** `schedule_email` still accepts any
+  `to_emails`/`cc_emails`/`bcc_emails` the caller supplies, with no restriction
+  to organization members. Unchanged, and still the standing CS-9 policy call
+  rather than a defect.
+- **A PATCH carrying an unrecognised `status` silently succeeds.**
+  `update_scheduled_email` acts only on the literal `"cancelled"` (`:850`);
+  any other value returns 200 with an empty `changes` list and nothing written.
+  Harmless today (the row cannot be un-cancelled — a non-`PENDING` row is
+  rejected earlier) but it is a silent no-op of the kind the checklist's
+  correctness lens names. Not fixed: tightening it to a 400 changes a public
+  response code.
+
+### Pass 5 scope
+
+Read this pass: all 13 endpoints (AST-enumerated for gating), the footer
+endpoints and `email_footers.py` in full, the attachment upload and delete in
+full, all four scheduled-email endpoints, and `_run_scheduled_emails_inner` end
+to end.
+
+**Not re-read**, and carrying no pass-5 verdict: the rendering core
+(`render`, `render_static`, `_replace_variables`, `_RAW_HTML_VARIABLES`) and
+`email_service`'s header/send path — both read in full by passes 1 and 2, whose
+MAIL-1/MAIL-2/MAIL-5 conclusions this pass did not disturb — and the ~20 default
+template bodies, which remain content rather than logic.
+
+### Pass 5 completion gate
+
+| Check          | Result                                                |
+| -------------- | ----------------------------------------------------- |
+| tsc --noEmit   | ✅ 0 errors                                           |
+| flake8         | ✅ 0 violations (`app/ tests/`)                       |
+| black --check  | ✅ clean                                              |
+| eslint         | ✅ 0 errors, 2 pre-existing warnings (limit 10)       |
+| frontend tests | n/a — no frontend file changed this pass              |
+| backend tests  | ✅ **full suite** 11,924 passed, 21 skipped, 0 failed |
+
+The full suite was run rather than the email slice (1,490 passed on its own)
+because the MAIL-20 fix lands in `scheduled_tasks.py`, which the whole cron
+surface shares.
 
 ## Pass 2 (2026-08-08) — six-lens sweep
 
