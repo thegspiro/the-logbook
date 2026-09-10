@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Users } from 'lucide-react';
 import type { MembershipTier } from '../../types/user';
 
@@ -15,6 +15,15 @@ interface MembershipTiersSectionProps {
   onAddTier: (name: string) => void;
   onRemoveTier: (tierId: string) => void;
   onMoveTier: (index: number, direction: 'up' | 'down') => void;
+  /**
+   * Told while `newTierName` holds something that has not been added.
+   *
+   * The field's value lives here, so it is in neither `dirty` nor the config a
+   * Save would write — a caller that unmounts this section on a Continue would
+   * discard it silently. Setup guards on it; the settings screen has no such
+   * moment and does not pass one.
+   */
+  onPendingTierChange?: ((pending: boolean) => void) | undefined;
   onSave: () => void;
   onReset: () => void;
 }
@@ -46,11 +55,19 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
   onAddTier,
   onRemoveTier,
   onMoveTier,
+  onPendingTierChange,
   onSave,
   onReset,
 }) => {
   const [newTierName, setNewTierName] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  const tierNamePending = newTierName.trim().length > 0;
+  // Declared above the loading early-return, or the hook order changes between
+  // renders. Reported on every change so a cleared field retracts the guard.
+  useEffect(() => {
+    onPendingTierChange?.(tierNamePending);
+  }, [tierNamePending, onPendingTierChange]);
 
   if (loading) {
     return (

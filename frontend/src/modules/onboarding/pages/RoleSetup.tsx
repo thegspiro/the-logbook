@@ -483,6 +483,10 @@ const PositionSetup: React.FC = () => {
   // The rank editor's Add/Edit form is the same hazard in the other section:
   // typed, not yet written, and discarded when Continue unmounts it.
   const [rankFormPending, setRankFormPending] = useState(false);
+  // And the tier editor's Add a tier field is the third: its value lives inside
+  // `MembershipTiersSection`, so a half-typed tier is in neither `dirty` nor
+  // the config a Save would write.
+  const [tierNamePending, setTierNamePending] = useState(false);
   const [customPositionName, setCustomPositionName] = useState('');
   const [customPositionDescription, setCustomPositionDescription] = useState('');
 
@@ -615,6 +619,11 @@ const PositionSetup: React.FC = () => {
       return;
     }
 
+    if (tierNamePending) {
+      toast.error('Add or clear the tier you are typing before continuing');
+      return;
+    }
+
     // Verify organization was created first
     if (!departmentName) {
       toast.error('Please complete organization setup first');
@@ -702,7 +711,11 @@ const PositionSetup: React.FC = () => {
             </p>
           </div>
 
-          <MembershipLadderSection onDirtyChange={setLadderDirty} onLoadingChange={setLadderLoading} />
+          <MembershipLadderSection
+            onDirtyChange={setLadderDirty}
+            onLoadingChange={setLadderLoading}
+            onPendingTierChange={setTierNamePending}
+          />
 
           <RankLadderSection onPendingChange={setRankFormPending} />
 

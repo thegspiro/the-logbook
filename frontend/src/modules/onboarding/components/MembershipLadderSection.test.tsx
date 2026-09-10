@@ -211,3 +211,72 @@ describe('a save whose refresh did not come back', () => {
     expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument();
   });
 });
+
+describe('the Refresh button beside the warning', () => {
+  beforeEach(installDefaults);
+
+  const saveThenFailTheRefresh = async (user: ReturnType<typeof userEvent.setup>) => {
+    const years = await screen.findByLabelText('Years of service', { selector: '#years-active' });
+    await user.clear(years);
+    await user.type(years, '3');
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+    await user.click(screen.getByRole('button', { name: /save tiers/i }));
+    await screen.findByText(/could not be refreshed afterwards/i);
+  };
+
+  it('is offered while nothing is pending', async () => {
+    const user = userEvent.setup();
+    render(<MembershipLadderSection />);
+    await saveThenFailTheRefresh(user);
+
+    expect(screen.getByRole('button', { name: /^Refresh$/ })).toBeEnabled();
+  });
+
+  it('is withheld once there are edits it would discard', async () => {
+    // The warning leaves the editor live, which is the point — but Refresh
+    // replaces the whole configuration with the server's, so offering it beside
+    // unsaved edits would throw them away without asking. Reset is the control
+    // that means discard.
+    const user = userEvent.setup();
+    render(<MembershipLadderSection />);
+    await saveThenFailTheRefresh(user);
+
+    const years = screen.getByLabelText('Years of service', { selector: '#years-active' });
+    await user.clear(years);
+    await user.type(years, '5');
+
+    expect(screen.getByRole('button', { name: /^Refresh$/ })).toBeDisabled();
+    expect(screen.getByText(/refreshing would discard them/i)).toBeInTheDocument();
+  });
+});
+
+describe('a tier name typed but not added', () => {
+  beforeEach(installDefaults);
+
+  it('is reported upward, so the step can refuse to unmount it', async () => {
+    // `newTierName` lives inside MembershipTiersSection, so it is in neither
+    // `dirty` nor the config a Save would write — the same silent loss the rank
+    // form had, one field over.
+    const user = userEvent.setup();
+    const onPendingTierChange = vi.fn();
+    render(<MembershipLadderSection onPendingTierChange={onPendingTierChange} />);
+    await screen.findByDisplayValue('Probationary');
+
+    await user.type(screen.getByLabelText(/add a tier/i), 'Cadet');
+
+    await waitFor(() => expect(onPendingTierChange).toHaveBeenLastCalledWith(true));
+  });
+
+  it('retracts the report when the field is cleared', async () => {
+    const user = userEvent.setup();
+    const onPendingTierChange = vi.fn();
+    render(<MembershipLadderSection onPendingTierChange={onPendingTierChange} />);
+    await screen.findByDisplayValue('Probationary');
+
+    const field = screen.getByLabelText(/add a tier/i);
+    await user.type(field, 'Cadet');
+    await user.clear(field);
+
+    await waitFor(() => expect(onPendingTierChange).toHaveBeenLastCalledWith(false));
+  });
+});

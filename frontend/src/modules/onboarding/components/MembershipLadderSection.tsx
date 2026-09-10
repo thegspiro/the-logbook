@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Layers } from 'lucide-react';
 import MembershipTiersSection from '../../../components/settings/MembershipTiersSection';
+import TierRefreshAlert from '../../../components/settings/TierRefreshAlert';
 import { useTierEditor } from '../../../hooks/useTierEditor';
 import { useAuthStore } from '../../../stores/authStore';
 
@@ -52,9 +53,21 @@ interface MembershipLadderSectionProps {
    * keep failing.
    */
   onLoadingChange?: (loading: boolean) => void;
+  /**
+   * Told while a tier name has been typed into Add a tier but not added.
+   *
+   * The same hazard as the rank form, in the section next door: the field lives
+   * inside `MembershipTiersSection`, so a half-typed tier is in neither `dirty`
+   * nor the config, and Continue unmounts it without a word.
+   */
+  onPendingTierChange?: ((pending: boolean) => void) | undefined;
 }
 
-const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDirtyChange, onLoadingChange }) => {
+const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({
+  onDirtyChange,
+  onLoadingChange,
+  onPendingTierChange,
+}) => {
   const editor = useTierEditor();
 
   // Which rung the signed-in System Owner is standing on, if it is one of these.
@@ -123,30 +136,8 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDir
         </div>
       ) : (
         <>
-          {/* The write landed and the read back did not, so the ladder below is
-              the stored one and the member counts beside it are from before the
-              save. Shown as a warning over a working editor rather than through
-              the failure panel above, which would take the editor away and
-              claim nothing had changed — and rather than not at all, which
-              would leave the success toast as the only account of a request
-              that failed. */}
           {editor.refreshFailed && (
-            <div className="alert-warning mb-4" role="status">
-              <p className="text-theme-text-primary text-sm font-medium">
-                Your tiers were saved, but this page could not be refreshed afterwards.
-              </p>
-              <p className="text-theme-text-muted mt-1 text-sm">
-                The ladder below is what was stored. Member counts, and any adjustment the server made when it saved,
-                are not shown yet.
-              </p>
-              <button
-                type="button"
-                className="btn-secondary mobile-touch-target mt-3 px-4 text-sm font-medium"
-                onClick={editor.retry}
-              >
-                Refresh
-              </button>
-            </div>
+            <TierRefreshAlert unconfirmedSave={editor.unconfirmedSave} dirty={editor.dirty} onRefresh={editor.retry} />
           )}
           <MembershipTiersSection
             tiers={editor.tiers}
@@ -161,6 +152,7 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDir
             onAddTier={editor.addTier}
             onRemoveTier={editor.removeTier}
             onMoveTier={editor.moveTier}
+            onPendingTierChange={onPendingTierChange}
             onSave={() => {
               void editor.save();
             }}

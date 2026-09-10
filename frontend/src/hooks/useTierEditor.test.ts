@@ -274,6 +274,54 @@ describe('a save the refresh could not confirm', () => {
     expect(result.current.dirty).toBe(false);
   });
 
+  it('keeps a retry that also fails out of the load-failure panel', async () => {
+    // The warning's own Refresh button goes through the same fetch. Letting its
+    // failure set `failed` would replace the editor with "could not be loaded —
+    // nothing has changed", about a ladder that had just been stored. Every
+    // retry during an outage lands here, so this is the common path, not an
+    // edge.
+    const result = await loaded();
+    act(() => result.current.setAutoAdvance(false));
+    getTierConfig.mockRejectedValue(new Error('network'));
+    await act(async () => {
+      await result.current.save();
+    });
+    expect(result.current.refreshFailed).toBe(true);
+
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    expect(result.current.failed).toBe(false);
+    expect(result.current.refreshFailed).toBe(true);
+    expect(result.current.tiers).toHaveLength(2);
+  });
+
+  it('says a save is unconfirmed only when one was made', async () => {
+    // A re-read that fails with no save behind it is a stale screen, not an
+    // unconfirmed write, and must not claim "your tiers were saved".
+    const result = await loaded();
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    expect(result.current.refreshFailed).toBe(true);
+    expect(result.current.unconfirmedSave).toBe(false);
+    expect(result.current.failed).toBe(false);
+  });
+
+  it('still reports a first load that fails as a load failure', async () => {
+    // There is nothing on screen to keep, so the panel is right here.
+    getTierConfig.mockRejectedValue(new Error('network'));
+    const { result } = renderHook(() => useTierEditor());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.failed).toBe(true);
+    expect(result.current.refreshFailed).toBe(false);
+  });
+
   it('clears the refresh warning once a read succeeds', async () => {
     const result = await loaded();
     act(() => result.current.setAutoAdvance(false));

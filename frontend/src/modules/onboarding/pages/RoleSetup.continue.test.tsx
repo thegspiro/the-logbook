@@ -34,6 +34,7 @@ vi.mock('react-hot-toast', () => ({
 // Continue, so they are stubbed down to what it needs to know.
 let ladderDirty = false;
 let ladderLoading = false;
+let tierNamePending = false;
 let rankFormPending = false;
 vi.mock('../components', async () => {
   const actual = await vi.importActual<typeof import('../components')>('../components');
@@ -47,12 +48,15 @@ vi.mock('../components', async () => {
     MembershipLadderSection: ({
       onDirtyChange,
       onLoadingChange,
+      onPendingTierChange,
     }: {
       onDirtyChange?: (d: boolean) => void;
       onLoadingChange?: (l: boolean) => void;
+      onPendingTierChange?: (p: boolean) => void;
     }) => {
       React.useEffect(() => onDirtyChange?.(ladderDirty), [onDirtyChange]);
       React.useEffect(() => onLoadingChange?.(ladderLoading), [onLoadingChange]);
+      React.useEffect(() => onPendingTierChange?.(tierNamePending), [onPendingTierChange]);
       return null;
     },
   };
@@ -75,6 +79,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   ladderDirty = false;
   ladderLoading = false;
+  tierNamePending = false;
   rankFormPending = false;
   savePositionsConfig.mockResolvedValue({ data: { created: [], updated: [], removed: [] } });
   useOnboardingStore.setState({
@@ -210,6 +215,22 @@ describe('a draft saved before unticking meant deletion', () => {
     await waitFor(() => expect(savePositionsConfig).toHaveBeenCalled());
     const sent = savePositionsConfig.mock.calls[0]?.[0] as { positions: { id: string }[] };
     expect(sent.positions.map((p) => p.id)).not.toContain('captain');
+  });
+});
+
+describe('a tier name typed but never added', () => {
+  it('refuses to continue, the way an unsaved rank edit does', async () => {
+    // The Add a tier field's value lives inside MembershipTiersSection, so it
+    // is in neither the ladder's dirty flag nor the config a Save would write.
+    // Continue unmounts the field, and the tier is gone with it.
+    tierNamePending = true;
+    const user = userEvent.setup();
+    renderStep();
+
+    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+
+    expect(savePositionsConfig).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining('tier you are typing'));
   });
 });
 

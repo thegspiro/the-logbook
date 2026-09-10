@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { memberStatusService } from '../services/api';
 import type { MembershipTier, MembershipTierBenefits, MembershipTierConfig } from '../types/user';
@@ -42,6 +42,14 @@ export function useTierEditor() {
   // a working editor, never a reason to take the editor away or to block the
   // step.
   const [refreshFailed, setRefreshFailed] = useState(false);
+  // Whether a PUT has been accepted since the last read that confirmed it. It
+  // is what lets the warning say "your tiers were saved" only when they were —
+  // a re-read that fails for any other reason gets the plainer wording.
+  const [unconfirmedSave, setUnconfirmedSave] = useState(false);
+  // `fetchConfig` is deliberately identity-stable (it is a mount-effect
+  // dependency), so it cannot close over `config`. This is how its catch knows
+  // whether there is already a ladder worth keeping on screen.
+  const configRef = useRef<MembershipTierConfig | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -53,12 +61,15 @@ export function useTierEditor() {
       const data = await memberStatusService.getTierConfig();
       // A ladder is only meaningful in order, and `sort_order` is what the
       // backend advances along — not array position.
-      setConfig({
+      const loaded = {
         ...data,
         tiers: [...(data.tiers ?? [])].sort((a, b) => a.sort_order - b.sort_order),
-      });
+      };
+      configRef.current = loaded;
+      setConfig(loaded);
       setFailed(false);
       setRefreshFailed(false);
+      setUnconfirmedSave(false);
       // A ladder the backend synthesized rather than read is *proposed*, not in
       // effect: `MembershipTierService._load_tiers` still sees nothing stored,
       // so advancement does not run and no benefit applies. Opening dirty is
@@ -71,7 +82,18 @@ export function useTierEditor() {
       // would tell a department it has no membership structure because a
       // request failed, and inviting them to build one from scratch here would
       // then remove the rungs their members are standing on.
-      setFailed(true);
+      //
+      // But that panel replaces the editor and says nothing has changed, which
+      // is only true when there is nothing on screen to lose. Once a ladder has
+      // been read — or stored by a save whose read-back failed — a later failed
+      // read is a stale screen, not an absent one, and taking the ladder away
+      // to say so is the worse of the two reports. Every retry after a failed
+      // post-save refresh lands here.
+      if (configRef.current) {
+        setRefreshFailed(true);
+      } else {
+        setFailed(true);
+      }
       return false;
     } finally {
       setLoading(false);
@@ -199,6 +221,10 @@ export function useTierEditor() {
       // refusing an edit the administrator has no control left to save. The
       // write was accepted; the ladder on screen is the stored one.
       setDirty(false);
+      // Recorded before the refresh is attempted, so a read that fails knows a
+      // write was accepted and the warning can say so.
+      configRef.current = { ...config, is_saved: true };
+      setUnconfirmedSave(true);
       toast.success('Membership tiers saved');
       if (!(await fetchConfig())) {
         // Reported as its own state rather than through `failed`. That panel
@@ -207,8 +233,6 @@ export function useTierEditor() {
         // that was just stored. Discarding the error instead would be worse
         // again: the member counts on screen and any server-side normalisation
         // are unconfirmed, and only the success toast would say anything.
-        setFailed(false);
-        setRefreshFailed(true);
         setConfig((prev) => (prev ? { ...prev, is_saved: true } : prev));
       }
     } catch (err: unknown) {
@@ -229,6 +253,7 @@ export function useTierEditor() {
     loading,
     failed,
     refreshFailed,
+    unconfirmedSave,
     retry,
     saving,
     dirty,
