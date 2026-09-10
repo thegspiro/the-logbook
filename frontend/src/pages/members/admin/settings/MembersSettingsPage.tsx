@@ -26,6 +26,7 @@ import { MEMBERS_SETTINGS_SECTIONS, type MembersSettingsTab, membersSettingsPath
 import ContactVisibilitySection from './ContactVisibilitySection';
 import MembershipIdSection from './MembershipIdSection';
 import RanksSection from './RanksSection';
+import TiersSection from './TiersSection';
 import EvocSection from './EvocSection';
 
 interface MembersSettingsPageProps {
@@ -62,6 +63,17 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
   const openable = sections.some((entry) => entry.key === section);
   const fallback = sections[0]?.key;
 
+  // Where "back" goes depends on where the officer came from, because the two
+  // grants that reach this screen do not reach the same places. The routes admit
+  // the settings grants as well as the hub's, so a settings.manage officer with
+  // no members.manage arrives here legitimately — from the relocation link on
+  // /settings, or a legacy ?tab= redirect — and /members/admin refuses them.
+  // Offering a back control that answers Access Denied is worse than offering
+  // none, and the page already knows which it is.
+  const canOpenHub = checkPermission('members.manage');
+  const backPath = canOpenHub ? '/members/admin' : '/settings';
+  const backLabel = canOpenHub ? 'Back to members administration' : 'Back to organization settings';
+
   // Redirected rather than rendered in place. Falling back silently left the
   // address bar and the breadcrumb naming EVOC while Operational Ranks was on
   // screen — and the hub lists every section unconditionally, so clicking "EVOC
@@ -84,9 +96,9 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
         <button
           type="button"
           className="btn-secondary mobile-touch-target mt-6 px-4 text-sm font-medium"
-          onClick={() => void navigate('/members/admin')}
+          onClick={() => void navigate(backPath)}
         >
-          Back to members administration
+          {backLabel}
         </button>
       </div>
     );
@@ -106,6 +118,8 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
         return <MembershipIdSection save={saveVoid} saveDebounced={saveDebouncedVoid} />;
       case 'ranks':
         return <RanksSection />;
+      case 'tiers':
+        return <TiersSection />;
       case 'evoc':
         return <EvocSection />;
       case 'visibility':
@@ -123,8 +137,8 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
       subtitle="What members see of each other, how they are numbered, and the ranks they hold"
       saveState={saveState}
       onRetrySave={retry}
-      onBack={() => void navigate('/members/admin')}
-      backLabel="Back to members administration"
+      onBack={() => void navigate(backPath)}
+      backLabel={backLabel}
       showBreadcrumbs
     >
       {renderSection()}

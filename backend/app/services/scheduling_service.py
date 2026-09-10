@@ -7681,6 +7681,22 @@ class SchedulingService:
             call_service = CallTrackingService(self.db)
 
             if count_only:
+                # SCH-13 round 4 (Codex review of PR #2437): attach_response's
+                # insert of an OrgCallResponse takes an implicit lock on the
+                # referenced OrgCall row before record_shift_calls's own
+                # organization lock below is ever requested — call-then-
+                # organization, the reverse of the settings-side deletion
+                # guard's organization-then-call order (Pitfall #27). When
+                # this pass will do both, lock the organization first so
+                # every path in this file agrees on one lock order.
+                will_lock_types = reported_call_count is not None and any(
+                    int(v) > 0 for v in (reported_call_types or {}).values()
+                )
+                if attach_call_ids and will_lock_types:
+                    await call_service.get_settings(
+                        str(organization_id), for_update=True
+                    )
+
                 # Attach to calls another unit already logged *before*
                 # recording our own, so a shared call is counted toward the
                 # total instead of being duplicated alongside it.
@@ -8075,6 +8091,17 @@ class SchedulingService:
             return None, "Shift is already finalized — reopen it to make changes"
 
         call_service = CallTrackingService(self.db)
+
+        # SCH-13 round 4 (Codex review of PR #2437) — same fix and reasoning
+        # as finalize_shift's own call-tracking block above: lock the
+        # organization first whenever this save will also validate a type
+        # breakdown, so attach_response's call-row lock never precedes it.
+        will_lock_types = count_provided and any(
+            int(v) > 0 for v in (reported_call_types or {}).values()
+        )
+        if attach_call_ids and will_lock_types:
+            await call_service.get_settings(str(organization_id), for_update=True)
+
         for call_id in attach_call_ids or []:
             ok, err = await call_service.attach_response(
                 str(call_id), shift, str(organization_id)

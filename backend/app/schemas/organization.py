@@ -527,7 +527,23 @@ class MemberDropNotificationSettings(BaseModel):
 
 
 class MembershipTierBenefits(BaseModel):
-    """Benefits granted at a specific membership tier."""
+    """Benefits granted at a specific membership tier.
+
+    ``extra="allow"`` is load-bearing. Until the tier config endpoint started
+    validating, it stored the submitted dict verbatim, so a department could
+    hold benefit keys this class never named -- the frontend type declares
+    ``discount_percentage``, ``voting_rights`` and an open index signature, and
+    a department that set one had it round-trip. Validating with Pydantic's
+    default ``extra="ignore"`` and dumping the result back would drop those on
+    the first save of an unrelated field: an irreversible loss, reported as
+    success. Allowing them keeps every named field validated exactly as before
+    and lets the rest survive.
+
+    ``custom_benefits`` remains the place to put a *new* department-specific
+    key; this is what keeps the ones already stored.
+    """
+
+    model_config = ConfigDict(extra="allow")
 
     training_exempt: bool = Field(
         default=False,
@@ -610,6 +626,12 @@ class MembershipTierSettings(BaseModel):
         description="Automatically advance members to higher tiers when they meet the years-of-service threshold",
     )
     tiers: List[MembershipTier] = Field(
+        # Bounded because this is reachable from the API directly, and the
+        # duplicate-id and ordering checks below are per-tier. A department's
+        # ladder is four rungs in the shipped defaults; fifty is headroom no
+        # real bylaws reach, and the alternative is an unbounded payload
+        # occupying a worker.
+        max_length=50,
         default_factory=lambda: [
             MembershipTier(
                 id="probationary",
@@ -1256,6 +1278,23 @@ class OrganizationSetupCreate(BaseModel):
     # Logo
     logo: Optional[str] = Field(
         None, description="Logo as base64 data URL or external URL"
+    )
+
+    # Member numbering.
+    #
+    # Asked here, in step 1, rather than on a members screen, because the
+    # counter only produces a coherent sequence for members created after it is
+    # switched on. The System Owner is created in step 9 and the IT team in step
+    # 10, so a department that turned numbering on afterwards ended up with its
+    # first two or three members holding no number at all and the roster import
+    # starting at 0001 behind them -- an off-by-a-few nobody notices until a
+    # badge is printed.
+    membership_id: Optional[MembershipIdSettings] = Field(
+        None,
+        description=(
+            "How member numbers are assigned. Omitted leaves the shipped "
+            "default, which is off."
+        ),
     )
 
     @field_validator("name")

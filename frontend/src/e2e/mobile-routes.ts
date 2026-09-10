@@ -66,6 +66,12 @@ export const ALL_ROUTES: RouteCheck[] = [
   // grant a real roster officer arrives with, and the one fixture that would
   // catch those two drifting apart again.
   { path: '/members/admin/settings/ranks', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
+  // The membership ladder, the second measurable section of that screen. Listed
+  // separately rather than left to the ranks entry because its rows carry
+  // controls the rank ladder has no equivalent of — a reorder pair, a rights
+  // disclosure and a remove button, all of which the fixture's two rungs put on
+  // screen.
+  { path: '/members/admin/settings/tiers', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
   { path: '/members/check-in-station', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.check_in'] },
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },
@@ -185,12 +191,13 @@ export const ALL_ROUTES: RouteCheck[] = [
   //: Step 1 is the representative: the remaining steps render the same shell,
   //: the same progress strip and the same form utilities.
   //:
-  //: "Render the same shell" is an assumption, and it was wrong once:
-  //: `ModuleConfigTemplate` builds its own root, so it had no `#main-content`
-  //: and the skip link pointed at nothing. Reaching it here is not the fix —
-  //: it redirects to step 1 unless the onboarding store is seeded, so the pass
-  //: would measure step 1 twice and report it as coverage. `skipLinkTarget.test.ts`
-  //: checks the assumption directly instead, on every page that owns its shell.
+  //: "Render the same shell" is an assumption, and it was wrong once: the
+  //: per-module configuration step (since removed) built its own root, so it
+  //: had no `#main-content` and the skip link pointed at nothing. Reaching a
+  //: step here is not the fix — one redirects to step 1 unless the onboarding
+  //: store is seeded, so the pass would measure step 1 twice and report it as
+  //: coverage. `skipLinkTarget.test.ts` checks the assumption directly instead,
+  //: on every page that owns its shell.
   { path: '/onboarding/start', maxSmallTargets: 0, maxTinyText: 0 },
 ];
 

@@ -34,8 +34,14 @@ from app.api.v1.email_test_helper import (
     test_microsoft_connection,
     test_smtp_connection,
 )
+from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.permissions import (
+    module_checkbox_grants,
+    module_checkbox_is_held,
+    module_for_permission,
+)
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.onboarding import (
@@ -465,6 +471,12 @@ class ITTeamMemberRequest(BaseModel):
     email: str = Field("", max_length=255)
     phone: str = Field("", max_length=20)
     role: str = Field("", max_length=100)
+    # Optional, and validated at completion rather than here. The rank step
+    # runs after this one, so a department that picks a rank here and then
+    # removes it from its ladder must not be unable to finish setup over an
+    # optional field — create_it_team_users resolves it and drops what it
+    # cannot resolve, with a warning.
+    rank: str = Field("", max_length=100)
 
 
 class ITTeamRequest(BaseModel):
@@ -591,6 +603,12 @@ class RolesSetupResponse(BaseModel):
     message: str
     created: list[str] = Field(default_factory=list)
     updated: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
+    #: Unticked positions that could not be removed because a member holds one.
+    #: Reported rather than left out: the save succeeds either way, so without
+    #: this an administrator finishes setup believing a position was removed and
+    #: then finds it still listed in every picker.
+    retained: list[str] = Field(default_factory=list)
     total_roles: int
 
 
@@ -612,6 +630,12 @@ class PositionsSetupResponse(BaseModel):
     message: str
     created: list[str] = Field(default_factory=list)
     updated: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
+    #: Unticked positions that could not be removed because a member holds one.
+    #: Reported rather than left out: the save succeeds either way, so without
+    #: this an administrator finishes setup believing a position was removed and
+    #: then finds it still listed in every picker.
+    retained: list[str] = Field(default_factory=list)
     total_positions: int
 
 
@@ -834,6 +858,22 @@ async def _persist_session_data_to_org(
                     )
             except Exception as e:
                 logger.warning(f"Could not create IT team user accounts: {e}")
+
+        # `create_it_team_users` numbers each contact through
+        # `generate_next_membership_id`, which advances the counter on the live
+        # organization row -- while `org_settings` above is a snapshot taken
+        # before it ran. Reassigning that snapshot at the end of this function
+        # would roll the counter back to the value from before those contacts
+        # were numbered, so the Membership ID screen would report a number
+        # already on a badge and the next generator call would have to
+        # rediscover the occupied ones.
+        #
+        # Read back unconditionally and after the try/except: the counter
+        # advances per contact, so a failure part-way through still leaves it
+        # ahead of the snapshot.
+        live_membership_id = (organization.settings or {}).get("membership_id")
+        if live_membership_id is not None:
+            org_settings["membership_id"] = copy.deepcopy(live_membership_id)
 
     # Persist email configuration
     email_data = session_data.get("email")
@@ -1142,6 +1182,20 @@ async def verify_database(request: Request, db: AsyncSession = Depends(get_db)):
     return result
 
 
+def _membership_id_settings(data: OrganizationSetupCreate) -> dict:
+    """The organization settings step 1 writes, or an empty dict.
+
+    Only ``membership_id`` is set here; every other key keeps whatever
+    ``create_organization`` defaults it to. Omitting the block entirely leaves
+    the shipped default (numbering off) rather than writing an explicit "off",
+    so a department that skipped the question is indistinguishable from one
+    that has never seen it.
+    """
+    if data.membership_id is None:
+        return {}
+    return {"membership_id": data.membership_id.model_dump()}
+
+
 @router.post("/organization", response_model=OrganizationSetupResponse)
 async def create_organization(
     request: Request,
@@ -1219,6 +1273,7 @@ async def create_organization(
             county=org_data.county,
             founded_year=org_data.founded_year,
             logo=validate_logo_image(org_data.logo),
+            settings_dict=_membership_id_settings(org_data),
         )
 
         await db.commit()
@@ -1415,7 +1470,7 @@ async def configure_notifications(
     onboarding_status = await service.get_onboarding_status()
     if onboarding_status:
         onboarding_status.email_configured = config.email_enabled
-        await service._mark_step_completed(onboarding_status, 6, "notifications")
+        await service._mark_step_completed(onboarding_status, "email_config")
 
     return {
         "message": "Notifications configured successfully",
@@ -1883,7 +1938,7 @@ async def save_session_stations(
 
     onboarding_status = await service.get_onboarding_status()
     if onboarding_status:
-        await service._mark_step_completed(onboarding_status, 2, "stations")
+        await service._mark_step_completed(onboarding_status, "stations")
 
     await db.commit()
 
@@ -1947,7 +2002,7 @@ async def save_session_apparatus(
 
     onboarding_status = await service.get_onboarding_status()
     if onboarding_status:
-        await service._mark_step_completed(onboarding_status, 3, "apparatus")
+        await service._mark_step_completed(onboarding_status, "apparatus")
 
     await db.commit()
 
@@ -2085,6 +2140,7 @@ async def save_session_organization(
             county=data.county,
             founded_year=data.founded_year,
             logo=validate_logo_image(data.logo),  # Validate and sanitize logo
+            settings_dict=_membership_id_settings(data),
         )
 
         # Store organization ID in session for subsequent steps
@@ -2144,17 +2200,21 @@ _VIEW_IMPLIED_PERMISSIONS: dict[str, tuple[str, ...]] = {
 
 
 def expand_module_checkboxes(submitted: dict[str, RolePermission]) -> list[str]:
-    """Turn the editor's per-module view/manage checkboxes into permissions."""
+    """Turn the editor's per-module view/manage checkboxes into permissions.
+
+    What a checkbox grants comes from ``module_checkbox_grants``, because a
+    registry module id is a *settings* key and is only usually the permission
+    prefix as well. Four are not, and expanding those by prefix wrote grants no
+    endpoint reads — see ``_MODULE_CHECKBOX_GRANTS`` in ``core/permissions``.
+    """
     permission_list: list[str] = []
     for module_id, perms in submitted.items():
         if perms.view:
-            permission_list.append(f"{module_id}.view")
+            permission_list.extend(module_checkbox_grants(module_id, "view"))
             if not perms.manage:
                 permission_list.extend(_VIEW_IMPLIED_PERMISSIONS.get(module_id, ()))
         if perms.manage:
-            permission_list.append(f"{module_id}.manage")
-            # Full access if manage
-            permission_list.append(f"{module_id}.*")
+            permission_list.extend(module_checkbox_grants(module_id, "manage"))
     return permission_list
 
 
@@ -2196,11 +2256,11 @@ def _merge_default_permissions(
     for perm in default_perms:
         if "." not in perm:
             continue
-        module_prefix = perm.partition(".")[0]
-        if module_prefix not in submitted or module_prefix in untouched:
+        owning_module = module_for_permission(perm)
+        if owning_module not in submitted or owning_module in untouched:
             merged.append(perm)
         elif perm in _CARRYOVER_SUBPERMISSIONS:
-            module_perms = submitted[module_prefix]
+            module_perms = submitted[owning_module]
             if module_perms.view and not module_perms.manage:
                 merged.append(perm)
     seen: set[str] = set()
@@ -2217,12 +2277,14 @@ def registry_checkboxes(default_perms: Iterable[str], module_id: str) -> tuple:
     lets the backend tell "the admin left this module alone" from "the admin
     set it to look like the default", without the wizard having to send a
     baseline it could get wrong.
+
+    A tier the wizard does not offer reads as unticked, so a submission that
+    ticks it can only have come from a client the registry no longer matches.
     """
     granted = set(default_perms)
-    wildcard = f"{module_id}.*" in granted
     return (
-        wildcard or f"{module_id}.view" in granted,
-        wildcard or f"{module_id}.manage" in granted,
+        module_checkbox_is_held(module_id, "view", granted),
+        module_checkbox_is_held(module_id, "manage", granted),
     )
 
 
@@ -2312,7 +2374,7 @@ async def save_session_roles(
     from sqlalchemy import delete
 
     from app.core.permissions import DEFAULT_ROLES
-    from app.models.user import Role
+    from app.models.user import Role, user_positions
 
     # Delete existing non-system roles for this organization (custom roles from previous attempts)
     await db.execute(
@@ -2409,6 +2471,48 @@ async def save_session_roles(
             db.add(new_role)
             created_roles.append(role_data.name)
 
+    # A seeded position the wizard did not submit was unticked, and unticking
+    # has to mean something. It did not: only non-system rows were deleted
+    # above, so an unticked Lieutenant survived setup and went on appearing in
+    # every position picker — the wizard showed a checkbox that looked like it
+    # removed a position and quietly did not, which is the opposite of letting
+    # a department describe the structure it actually has.
+    #
+    # Three things are never removed this way:
+    #   - it_manager, which is the System Owner's own position;
+    #   - member, the baseline every account is given;
+    #   - any position somebody already holds. During setup that is only the
+    #     System Owner, whose positions are both protected, so this is a guard
+    #     against a resumed or unusual session rather than an expected case —
+    #     but silently stripping a member's access is not a thing to leave to
+    #     circumstance.
+    submitted_slugs = {role_data.id for role_data in data.roles}
+    unticked = [
+        role
+        for slug, role in existing_system_roles.items()
+        if slug not in submitted_slugs and slug not in {ROLE_IT_MANAGER, ROLE_MEMBER}
+    ]
+    removed_roles: list[str] = []
+    retained_roles: list[str] = []
+    if unticked:
+        held = await db.execute(
+            select(user_positions.c.position_id).where(
+                user_positions.c.position_id.in_([role.id for role in unticked])
+            )
+        )
+        held_ids = set(held.scalars().all())
+        for role in unticked:
+            if role.id in held_ids:
+                # Reported, not skipped in silence. The endpoint still returns
+                # success and the toast still says the configuration was saved,
+                # so an administrator who unticked this would otherwise finish
+                # setup believing the position was gone -- and go looking for it
+                # in a picker where it is still listed.
+                retained_roles.append(role.name)
+                continue
+            await db.delete(role)
+            removed_roles.append(role.name)
+
     # Update session data
     session.data = session.data or {}
     session.data["roles"] = {
@@ -2427,6 +2531,8 @@ async def save_session_roles(
         message="Roles configured successfully",
         created=created_roles,
         updated=updated_roles,
+        removed=removed_roles,
+        retained=retained_roles,
         total_roles=len(data.roles),
     )
 
@@ -2451,6 +2557,8 @@ async def save_session_positions(
         message=roles_response.message.replace("Roles", "Positions"),
         created=roles_response.created,
         updated=roles_response.updated,
+        removed=roles_response.removed,
+        retained=roles_response.retained,
         total_positions=roles_response.total_roles,
     )
 

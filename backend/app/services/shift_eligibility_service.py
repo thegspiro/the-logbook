@@ -138,10 +138,39 @@ class ShiftEligibilityService:
     # Org settings helpers
     # ------------------------------------------------------------------
 
-    async def _get_org(self, organization_id: str) -> Optional[Organization]:
-        result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
-        )
+    async def _get_org(
+        self, organization_id: str, for_update: bool = False
+    ) -> Optional[Organization]:
+        """Load the organization row.
+
+        ``for_update=True`` takes a row lock and, on MySQL/MariaDB InnoDB,
+        reads the latest *committed* value regardless of this transaction's
+        REPEATABLE READ snapshot — unlike a plain ``SELECT``, which answers
+        from whatever snapshot the transaction's first read established
+        (CLAUDE.md Pitfall #27, "the row is locked and the count is stale
+        anyway"). Used by a validate-then-write sequence against
+        ``settings.scheduling.call_tracking`` that must serialize against a
+        concurrent writer rather than each reading its own stale snapshot of
+        the other's in-flight change.
+
+        ``for_update=True`` also asks SQLAlchemy to refresh an already-loaded
+        object's attributes from the freshly-locked row
+        (``populate_existing``) — the same reasoning ``get_shift_by_id``
+        documents for the identical gotcha. ``finalize_shift``
+        (``scheduling_service.py``) loads the ``Organization`` row with a
+        plain, non-locking query of its own earlier in the same transaction,
+        before ever calling into a locking ``_get_org`` here; without
+        ``populate_existing``, the identity map would hand back that earlier
+        Python object unchanged, so the `FOR UPDATE` query would correctly
+        block and read the latest committed row at the database level while
+        every caller reading ``org.settings`` off the returned object still
+        saw the stale pre-lock values — silently defeating the lock's entire
+        purpose for the one thing it exists to fix.
+        """
+        query = select(Organization).where(Organization.id == organization_id)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     def _get_scheduling_settings(self, org: Organization) -> dict:

@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.membership_pipeline import (
@@ -676,3 +677,123 @@ class TestStageOrderStaysUnique:
         orders = [s.sort_order for s in refreshed.steps]
         assert sorted(orders) == [0, 1, 2, 3]
         assert len(set(orders)) == len(orders)
+
+
+class TestTheDatabaseEnforcesStageOrder:
+    """`(pipeline_id, sort_order)` is unique, not merely indexed.
+
+    Every service path that allocates a position already avoids collisions.
+    This is about what happens when something gets past them — a writer racing
+    the row lock in `add_step`, a future caller, a hand-run UPDATE. Before, the
+    duplicate simply landed and the board's column order and the destination of
+    an advance became a coin toss; now the database refuses it.
+    """
+
+    async def test_a_duplicate_position_is_refused_by_the_database(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 2)
+
+        async def _move_one_stage_onto_another() -> None:
+            # Nested so the refusal rolls back to this savepoint rather than
+            # poisoning the session the fixture still has to unwind.
+            async with db_session.begin_nested():
+                await db_session.execute(
+                    text(
+                        "UPDATE membership_pipeline_steps SET sort_order = :order "
+                        "WHERE id = :id"
+                    ),
+                    {"order": steps[0].sort_order, "id": steps[1].id},
+                )
+
+        with pytest.raises(IntegrityError):
+            await _move_one_stage_onto_another()
+
+    async def test_the_generic_update_cannot_move_a_stage(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """Reordering is its own operation. The generic update used to write
+        sort_order verbatim, so one PUT could put two stages in the same slot
+        — and under the unique index that would now be an IntegrityError
+        instead, which is no better a way to find out."""
+        org_id, _ = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 3)
+
+        updated = await svc.update_step(
+            step_id=steps[2].id,
+            pipeline_id=pipeline.id,
+            organization_id=org_id,
+            data={"name": "Renamed", "sort_order": 0},
+        )
+
+        assert updated.name == "Renamed"
+        assert updated.sort_order == 2
+
+    async def test_a_reorder_must_name_every_stage_exactly_once(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """A short or repeated list renumbered a subset and left the rest
+        where they were, which is how a reorder used to produce the duplicate
+        ordering it exists to arrange. Refused up front instead."""
+        org_id, _ = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 3)
+
+        with pytest.raises(ValueError, match="every stage"):
+            await svc.reorder_steps(pipeline.id, org_id, [steps[0].id])
+
+        with pytest.raises(ValueError, match="every stage"):
+            await svc.reorder_steps(
+                pipeline.id, org_id, [steps[0].id, steps[0].id, steps[1].id]
+            )
+
+        refreshed = await svc.get_pipeline(pipeline.id, org_id)
+        assert sorted(s.sort_order for s in refreshed.steps) == [0, 1, 2]
+
+    async def test_a_full_reversal_round_trips(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """The worst case for a single-pass renumber: every stage's new
+        position is held by another stage at the moment it is written."""
+        org_id, _ = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 4)
+
+        await svc.reorder_steps(pipeline.id, org_id, [s.id for s in reversed(steps)])
+
+        refreshed = await svc.get_pipeline(pipeline.id, org_id)
+        by_order = sorted(refreshed.steps, key=lambda s: s.sort_order)
+        assert [s.sort_order for s in by_order] == [0, 1, 2, 3]
+        assert [s.name for s in by_order] == [
+            "Stage 4",
+            "Stage 3",
+            "Stage 2",
+            "Stage 1",
+        ]
+
+    async def test_duplicating_a_pipeline_positions_by_order_not_by_value(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """create_pipeline takes its step list from templates and from
+        duplicate_pipeline. A duplicate among the supplied positions is now an
+        IntegrityError that loses the whole pipeline, so the list order — the
+        actual intent in both cases — decides instead."""
+        org_id, _ = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+
+        pipeline = await svc.create_pipeline(
+            organization_id=org_id,
+            name=f"Collides-{_uid()[:8]}",
+            steps=[
+                {"name": "First", "step_type": "checkbox", "sort_order": 5},
+                {"name": "Second", "step_type": "checkbox", "sort_order": 5},
+                {"name": "Third", "step_type": "checkbox", "sort_order": 5},
+            ],
+        )
+
+        by_order = sorted(pipeline.steps, key=lambda s: s.sort_order)
+        assert len({s.sort_order for s in by_order}) == 3
+        assert [s.name for s in by_order] == ["First", "Second", "Third"]

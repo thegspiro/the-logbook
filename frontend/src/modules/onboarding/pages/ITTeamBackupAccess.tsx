@@ -14,6 +14,7 @@ import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 import { isValidEmail, isValidPhoneNumber } from '../utils/validation';
+import { useRanks } from '../../../hooks/useRanks';
 
 interface ITTeamMember {
   id: string;
@@ -21,6 +22,16 @@ interface ITTeamMember {
   email: string;
   phone: string;
   role: string;
+  /**
+   * Operational rank, optional.
+   *
+   * The rank ladder is edited on the next step, so this offers whatever the
+   * department has at this point — the agency defaults, unless it has already
+   * been here and gone back. A rank picked here and then removed from the
+   * ladder is dropped at completion rather than failing setup: an optional
+   * field must not be able to block the final Continue.
+   */
+  rank?: string;
 }
 
 const ITTeamBackupAccess: React.FC = () => {
@@ -44,6 +55,11 @@ const ITTeamBackupAccess: React.FC = () => {
   const systemOwnerFirstName = useOnboardingStore((state) => state.systemOwnerFirstName);
   const systemOwnerLastName = useOnboardingStore((state) => state.systemOwnerLastName);
   const systemOwnerEmail = useOnboardingStore((state) => state.systemOwnerEmail);
+
+  // The ladder as it stands now. The System Owner is signed in from the
+  // previous step, so this reads the organization's real ranks rather than a
+  // hardcoded list — and it seeds the agency defaults on first load.
+  const { rankOptions } = useRanks();
 
   // Validation errors (local state - no need to persist)
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -177,6 +193,7 @@ const ITTeamBackupAccess: React.FC = () => {
           email: member.email,
           phone: member.phone,
           role: member.role,
+          rank: member.rank || '',
         })),
       backup_access: {
         email: backupEmail,
@@ -319,6 +336,29 @@ const ITTeamBackupAccess: React.FC = () => {
                         className="form-input placeholder-theme-text-muted py-3 transition-all"
                         placeholder="IT Manager"
                       />
+                    </div>
+
+                    {/* Operational rank */}
+                    <div>
+                      <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                        Operational Rank
+                      </label>
+                      <select
+                        value={member.rank ?? ''}
+                        onChange={(e) => updateITMember(member.id, 'rank', e.target.value)}
+                        className="form-input py-3 transition-all"
+                        aria-label={`Operational rank for IT contact ${index + 1}`}
+                      >
+                        <option value="">No rank</option>
+                        {rankOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        Optional. You can edit the ladder itself on the next step.
+                      </p>
                     </div>
 
                     {/* Email */}

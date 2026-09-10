@@ -439,6 +439,43 @@ class OperationalRankService:
         )
         return result.scalar_one_or_none()
 
+    async def resolve_configured_rank_code(
+        self, organization_id: str, rank_code: str
+    ) -> Optional[str]:
+        """The canonical code, but only for a rank this organization still has.
+
+        The strict form of :meth:`resolve_rank_code`, for a *deferred* write —
+        one where the value was chosen at one moment and stored at a later one,
+        and the ladder may have changed in between.
+
+        That gap is real during setup: the IT team is named at step 10 and its
+        accounts are created at completion, with the rank ladder edited at step
+        11 in between. ``resolve_rank_code`` answers from ``DEFAULT_RANK_CODES``
+        before it consults the organization's rows, deliberately — a department
+        onboarded before a code joined ``DEFAULT_RANKS`` has no row for it while
+        the eligibility fallback still honours it, and rejecting those is the
+        EMT bug in #1833. But that same permissiveness lets a code the
+        administrator has just *deleted* be written anyway, and
+        ``get_rank_default_permissions`` then grants its static defaults: an
+        account holding Captain-level access under a rank the ladder no longer
+        lists.
+
+        Onboarding seeds the ladder on arrival at the rank step, so every rank a
+        department can legitimately choose there has a row. Requiring one costs
+        that path nothing and closes this gap without touching the fallback the
+        rest of the system relies on.
+        """
+        code = (rank_code or "").strip()
+        if not code:
+            return None
+        result = await self.db.execute(
+            select(OperationalRank.rank_code).where(
+                OperationalRank.organization_id == organization_id,
+                func.lower(OperationalRank.rank_code) == code.lower(),
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def is_known_rank(self, organization_id: str, rank_code: str) -> bool:
         """Whether ``rank_code`` names a rank this organization has.
 

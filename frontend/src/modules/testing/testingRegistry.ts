@@ -25,6 +25,7 @@ import {
   MEMBERS_SETTINGS_EVOC_GATE,
   MEMBERS_SETTINGS_IDS_GATE,
   MEMBERS_SETTINGS_RANKS_GATE,
+  MEMBERS_SETTINGS_TIERS_GATE,
   MEMBERS_SETTINGS_VISIBILITY_GATE,
 } from '../membership/routes';
 
@@ -172,12 +173,18 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/onboarding/apparatus', label: 'Apparatus setup', isPublic: true },
       { path: '/onboarding/modules', label: 'Module selection', isPublic: true },
       {
+        path: '/onboarding/modules/:moduleId/config',
+        label: 'Module configuration (removed)',
+        note: 'The per-module permission step was removed; positions own that decision',
+        redirectsTo: '/onboarding/modules',
+        isPublic: true,
+      },
+      {
         path: '/onboarding/module-selection',
         label: 'Module selection (alias URL)',
         note: 'Same page, URL stays as typed',
         isPublic: true,
       },
-      { path: '/onboarding/modules/:moduleId/config', label: 'Module configuration', isPublic: true },
       { path: '/onboarding/system-owner', label: 'System owner creation', isPublic: true },
       {
         path: '/onboarding/admin-user',
@@ -225,6 +232,11 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         path: '/members/admin/settings/ranks',
         label: 'Members settings — operational ranks',
         anyPermission: MEMBERS_SETTINGS_RANKS_GATE,
+      },
+      {
+        path: '/members/admin/settings/tiers',
+        label: 'Members settings — membership tiers',
+        anyPermission: MEMBERS_SETTINGS_TIERS_GATE,
       },
       {
         path: '/members/admin/settings/evoc',

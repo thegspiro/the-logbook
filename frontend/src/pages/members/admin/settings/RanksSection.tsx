@@ -26,162 +26,31 @@
  * a *malformed* response never reaches the catch at all, because
  * `ranksService.getRanks` funnels it through `asArray` and hands back `[]`.
  * This reads through `getRankLadder`, which does not.
+ *
+ * The state and the six handlers now live in `useRankEditor`, because the setup
+ * wizard renders this same editor while a department describes the ladder it
+ * already uses — and it is the ladder that arrives on day one, so it must be
+ * the same code that maintains it afterwards. This screen keeps what is its
+ * own: the heading, and the failure state above.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
-import toast from 'react-hot-toast';
-import { ranksService } from '../../../../services/api';
-import type { OperationalRankResponse, RankValidationIssue } from '../../../../services/api';
-import { invalidateRanksCache } from '../../../../hooks/useRanks';
+import React from 'react';
+import { useRankEditor } from '../../../../hooks/useRankEditor';
+import { useAuthStore } from '../../../../stores/authStore';
 import RanksSettingsSection from '../../../../components/settings/RanksSettingsSection';
 import { SettingsPanelHead } from '../../../../components/settings/SettingsPanelHead';
 
-interface RankForm {
-  rank_code: string;
-  display_name: string;
-}
-
-const EMPTY_FORM: RankForm = { rank_code: '', display_name: '' };
-
 const RanksSection: React.FC = () => {
-  const [ranks, setRanks] = useState<OperationalRankResponse[]>([]);
-  const [ranksLoading, setRanksLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-  const [attempt, setAttempt] = useState(0);
+  const editor = useRankEditor();
+  const checkPermission = useAuthStore((state) => state.checkPermission);
 
-  const [editingRank, setEditingRank] = useState<OperationalRankResponse | null>(null);
-  const [addingRank, setAddingRank] = useState(false);
-  const [rankForm, setRankForm] = useState<RankForm>(EMPTY_FORM);
-  const [rankSaving, setRankSaving] = useState(false);
-  const [deletingRankId, setDeletingRankId] = useState<string | null>(null);
-  const [editingPositionsRankId, setEditingPositionsRankId] = useState<string | null>(null);
-  const [rankValidationIssues, setRankValidationIssues] = useState<RankValidationIssue[]>([]);
-
-  // Non-blocking on purpose: the validation call reports members whose rank
-  // matches no configured rung. Its failure must not take the ladder down with
-  // it, and an absent warning is not a claim that nothing is wrong.
-  //
-  // Which is why a failure leaves the last known issues on screen rather than
-  // clearing them. This re-runs after every add, rename and delete, so clearing
-  // would make the warning vanish the moment an officer touched anything —
-  // reading as "you fixed it" when nothing had confirmed that, and at exactly
-  // the moment they would believe it.
-  const fetchRankValidation = useCallback(async () => {
-    try {
-      const result = await ranksService.validateRanks();
-      setRankValidationIssues(Array.isArray(result?.issues) ? result.issues : []);
-    } catch {
-      /* keep the last answer; an unanswered check is not a clean one */
-    }
-  }, []);
-
-  const fetchRanks = useCallback(async () => {
-    setRanksLoading(true);
-    try {
-      invalidateRanksCache();
-      // getRankLadder, not getRanks: the latter routes through `asArray`, which
-      // turns a non-array body into `[]` — so a gateway or proxy error page
-      // resolved successfully and rendered "no ranks configured", the exact
-      // false-empty this section's failure state exists to prevent. Checking
-      // here instead would have been dead code, because the swallow happens one
-      // layer down.
-      const data = await ranksService.getRankLadder();
-      setRanks(data);
-      setFailed(false);
-    } catch {
-      setFailed(true);
-    } finally {
-      setRanksLoading(false);
-    }
-    await fetchRankValidation();
-  }, [fetchRankValidation]);
-
-  useEffect(() => {
-    void fetchRanks();
-  }, [fetchRanks, attempt]);
-
-  const handleAddRank = async () => {
-    if (!rankForm.rank_code.trim() || !rankForm.display_name.trim()) return;
-    setRankSaving(true);
-    try {
-      await ranksService.createRank({
-        rank_code: rankForm.rank_code.trim().toLowerCase().replace(/\s+/g, '_'),
-        display_name: rankForm.display_name.trim(),
-        sort_order: ranks.length,
-      });
-      setRankForm(EMPTY_FORM);
-      setAddingRank(false);
-      toast.success('Rank added');
-      await fetchRanks();
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.error(detail || 'Failed to add rank');
-    } finally {
-      setRankSaving(false);
-    }
-  };
-
-  const handleUpdateRank = async () => {
-    if (!editingRank || !rankForm.display_name.trim()) return;
-    setRankSaving(true);
-    try {
-      await ranksService.updateRank(editingRank.id, {
-        rank_code: rankForm.rank_code.trim().toLowerCase().replace(/\s+/g, '_'),
-        display_name: rankForm.display_name.trim(),
-      });
-      setEditingRank(null);
-      setRankForm(EMPTY_FORM);
-      toast.success('Rank updated');
-      await fetchRanks();
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.error(detail || 'Failed to update rank');
-    } finally {
-      setRankSaving(false);
-    }
-  };
-
-  const handleDeleteRank = async (rankId: string) => {
-    setDeletingRankId(rankId);
-    try {
-      await ranksService.deleteRank(rankId);
-      toast.success('Rank removed');
-      await fetchRanks();
-    } catch {
-      toast.error('Failed to remove rank');
-    } finally {
-      setDeletingRankId(null);
-    }
-  };
-
-  const handleMoveRank = async (index: number, direction: 'up' | 'down') => {
-    const swapIndex = direction === 'up' ? index - 1 : index + 1;
-    if (swapIndex < 0 || swapIndex >= ranks.length) return;
-    const newRanks = [...ranks];
-    const a = newRanks[index];
-    const b = newRanks[swapIndex];
-    if (a === undefined || b === undefined) return;
-    [newRanks[index], newRanks[swapIndex]] = [b, a];
-    const reorderPayload = newRanks.map((r, i) => ({ id: r.id, sort_order: i }));
-    setRanks(newRanks);
-    try {
-      await ranksService.reorderRanks(reorderPayload);
-    } catch {
-      toast.error('Failed to reorder');
-      await fetchRanks();
-    }
-  };
-
-  const handleToggleEligiblePosition = async (rank: OperationalRankResponse, position: string) => {
-    const current = rank.eligible_positions ?? [];
-    const updated = current.includes(position) ? current.filter((p) => p !== position) : [...current, position];
-    try {
-      await ranksService.updateRank(rank.id, { eligible_positions: updated });
-      setRanks((prev) => prev.map((r) => (r.id === rank.id ? { ...r, eligible_positions: updated } : r)));
-    } catch {
-      toast.error('Failed to update eligible positions');
-    }
-  };
+  // Not the grant this section stands on. A rank's sort_order is read by the
+  // inventory rule as a predicate — a lower number is treated as more senior —
+  // so placing a rank decides who sees restricted stock, and ordering kept
+  // `settings.manage` when the ladder's contents moved to `members.manage`.
+  // The controls have to follow the endpoint: offered to an officer it refuses,
+  // every click moved the row optimistically, failed, and snapped back.
+  const canReorder = checkPermission('settings.manage');
 
   return (
     <div className="space-y-6">
@@ -190,7 +59,7 @@ const RanksSection: React.FC = () => {
         description="Customize rank and position choices for your department. Higher ranks appear first."
       />
 
-      {failed && !ranksLoading ? (
+      {editor.failed && !editor.ranksLoading ? (
         <div className="alert-danger" role="alert">
           <p className="text-theme-text-primary text-sm font-medium">The rank ladder could not be loaded.</p>
           <p className="text-theme-text-muted mt-1 text-sm">
@@ -199,40 +68,42 @@ const RanksSection: React.FC = () => {
           <button
             type="button"
             className="btn-secondary mobile-touch-target mt-3 px-4 text-sm font-medium"
-            onClick={() => setAttempt((n) => n + 1)}
+            onClick={editor.retry}
           >
             Try again
           </button>
         </div>
       ) : (
         <RanksSettingsSection
-          ranks={ranks}
-          ranksLoading={ranksLoading}
-          editingRank={editingRank}
-          addingRank={addingRank}
-          rankForm={rankForm}
-          rankSaving={rankSaving}
-          deletingRankId={deletingRankId}
-          editingPositionsRankId={editingPositionsRankId}
-          rankValidationIssues={rankValidationIssues}
-          onSetEditingRank={setEditingRank}
-          onSetAddingRank={setAddingRank}
-          onSetRankForm={setRankForm}
-          onSetEditingPositionsRankId={setEditingPositionsRankId}
+          ranks={editor.ranks}
+          ranksLoading={editor.ranksLoading}
+          editingRank={editor.editingRank}
+          addingRank={editor.addingRank}
+          rankForm={editor.rankForm}
+          rankSaving={editor.rankSaving}
+          deletingRankId={editor.deletingRankId}
+          editingPositionsRankId={editor.editingPositionsRankId}
+          rankValidationIssues={editor.rankValidationIssues}
+          seatOptions={editor.seatOptions}
+          onSetEditingRank={editor.setEditingRank}
+          onSetAddingRank={editor.setAddingRank}
+          onSetRankForm={editor.setRankForm}
+          onSetEditingPositionsRankId={editor.setEditingPositionsRankId}
           onAddRank={() => {
-            void handleAddRank();
+            void editor.handleAddRank();
           }}
           onUpdateRank={() => {
-            void handleUpdateRank();
+            void editor.handleUpdateRank();
           }}
           onDeleteRank={(id) => {
-            void handleDeleteRank(id);
+            void editor.handleDeleteRank(id);
           }}
           onMoveRank={(index, direction) => {
-            void handleMoveRank(index, direction);
+            void editor.handleMoveRank(index, direction);
           }}
+          canReorder={canReorder}
           onToggleEligiblePosition={(rank, pos) => {
-            void handleToggleEligiblePosition(rank, pos);
+            void editor.handleToggleEligiblePosition(rank, pos);
           }}
         />
       )}

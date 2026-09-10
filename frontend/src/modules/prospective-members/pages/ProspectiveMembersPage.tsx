@@ -877,6 +877,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 )}
                 {viewMode === 'kanban' && (
                   <PipelineKanban
+                    pipelineId={currentPipeline.id}
                     stages={sortedStages}
                     applicants={applicants}
                     totalApplicants={totalApplicants}

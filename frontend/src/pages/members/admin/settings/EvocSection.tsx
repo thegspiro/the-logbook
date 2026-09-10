@@ -2,8 +2,14 @@
  * EVOC Levels — the driver certification ladder.
  *
  * `EvocLevelsSettingsSection` already owned its own fetching and state, so this
- * is only the heading and the route's claim on it. Nothing about the component
- * changed in the move.
+ * is only the heading and the route's claim on it.
+ *
+ * The heading lives here rather than in that component, for the reason its
+ * sibling's does: it carried its own `<h3>` because the global settings page
+ * mounted it bare, so after the move the title rendered twice — and dropping the
+ * wrapper's instead would leave the `<h3>` with no `<h2>` above it, a
+ * heading-order jump. This route is exempt from the mobile ratchet, which is why
+ * the accessibility pass caught that on the rank ladder and not here.
  *
  * **Its grant is `apparatus.manage`, not `members.manage`.** The levels are
  * served by the apparatus API, and completing a level's training program

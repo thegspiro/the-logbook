@@ -16,6 +16,7 @@ Terminology
 
 from collections.abc import Iterable
 from enum import Enum
+from typing import NamedTuple
 
 
 class PermissionCategory(str, Enum):
@@ -796,6 +797,180 @@ ALL_PERMISSIONS: list[Permission] = [
 def get_all_permissions() -> list[str]:
     """Get list of all permission names"""
     return [p.name for p in ALL_PERMISSIONS]
+
+
+# ── What the setup wizard's module checkboxes actually grant ──────────────
+#
+# The wizard's Positions step shows two checkboxes — View and Manage — for each
+# module in the frontend registry, and its ids are *module settings* keys: the
+# same strings ``Organization.settings.modules`` stores. For most modules that
+# key is also the permission prefix, so the boxes mean ``{id}.view`` and
+# ``{id}.manage`` (plus the ``{id}.*`` wildcard, which is what actually carries
+# a module's action grants). Four modules are not that shape, and every one of
+# them wrote permissions no endpoint has ever read:
+#
+#   medical_supplies  Stored under its own settings key, gated by
+#                     ``inventory.view_medical`` / ``inventory.manage_medical``.
+#                     A position given Manage here held ``medical_supplies.*``,
+#                     which no route checks, and the navigation entry — gated on
+#                     ``view_medical`` — never appeared. The EMS supply officer
+#                     could not open the module the department had just enabled.
+#   mobile            The PWA has no permission gate at all.
+#   integrations      There is no read-only console; every route requires
+#                     ``integrations.manage``.
+#   positions         The manage tier is ``positions.create`` / ``.edit`` /
+#                     ``.delete`` / ``.manage_permissions``, reached through the
+#                     wildcard. ``positions.manage`` does not exist.
+#
+# ``tests/test_module_checkbox_grants.py`` holds every entry, and every
+# defaulted module, to permissions that exist.
+
+
+class ModuleCheckboxTier(NamedTuple):
+    """One checkbox on the setup wizard's position editor.
+
+    ``grants`` is everything ticking the box writes. ``defining`` is the single
+    permission whose presence means the box is ticked — which is not the same
+    question, because Manage writes both ``{module}.manage`` and the
+    ``{module}.*`` wildcard while a seeded position may hold either one alone.
+
+    ``defining`` is ``None`` for a tier the app has no permission for. The
+    wizard does not render that checkbox: a box that cannot grant anything is a
+    promise the app will not keep.
+    """
+
+    grants: tuple[str, ...]
+    defining: str | None
+
+
+_NO_TIER = ModuleCheckboxTier((), None)
+
+_MODULE_CHECKBOX_GRANTS: dict[str, dict[str, ModuleCheckboxTier]] = {
+    "medical_supplies": {
+        "view": ModuleCheckboxTier(
+            ("inventory.view_medical",), "inventory.view_medical"
+        ),
+        # Manage does not imply view here: the route and the navigation entry
+        # both gate on view_medical, and there is no manage-implies-view rule.
+        "manage": ModuleCheckboxTier(
+            ("inventory.view_medical", "inventory.manage_medical"),
+            "inventory.manage_medical",
+        ),
+    },
+    "mobile": {"view": _NO_TIER, "manage": _NO_TIER},
+    "integrations": {
+        "view": _NO_TIER,
+        "manage": ModuleCheckboxTier(("integrations.manage",), "integrations.manage"),
+    },
+    "positions": {
+        "view": ModuleCheckboxTier(("positions.view",), "positions.view"),
+        "manage": ModuleCheckboxTier(("positions.*",), "positions.*"),
+    },
+}
+
+
+def module_checkbox_tier(module_id: str, action: str) -> ModuleCheckboxTier:
+    """One module checkbox, as the wizard and the save handler both read it.
+
+    ``action`` is ``"view"`` or ``"manage"``. Defaults to the module's own
+    prefix, which is right for every module whose settings key and permission
+    prefix are the same string.
+    """
+    override = _MODULE_CHECKBOX_GRANTS.get(module_id)
+    if override is not None:
+        return override[action]
+    if action == "manage":
+        return ModuleCheckboxTier(
+            (f"{module_id}.manage", f"{module_id}.*"), f"{module_id}.manage"
+        )
+    return ModuleCheckboxTier((f"{module_id}.view",), f"{module_id}.view")
+
+
+def module_checkbox_grants(module_id: str, action: str) -> tuple[str, ...]:
+    """The permissions ticking one module checkbox writes."""
+    return module_checkbox_tier(module_id, action).grants
+
+
+def module_checkbox_offered(module_id: str, action: str) -> bool:
+    """Whether the wizard shows this module's View or Manage checkbox."""
+    return module_checkbox_tier(module_id, action).defining is not None
+
+
+def module_checkbox_is_held(module_id: str, action: str, granted: set[str]) -> bool:
+    """Whether a granted set already says what this checkbox says.
+
+    A module wildcard satisfies both of its tiers, which is what lets a
+    position seeded with ``training.*`` present as ticked rather than as an
+    administrator having cleared both boxes.
+    """
+    tier = module_checkbox_tier(module_id, action)
+    if tier.defining is None:
+        return False
+    if "*" in granted or tier.defining in granted:
+        return True
+    prefix = tier.defining.partition(".")[0]
+    return f"{prefix}.*" in granted
+
+
+#: A checkbox tier that a *different* module's checkbox also confers, because
+#: the routes behind it accept that module's grant as well as their own.
+#:
+#: Medical Supplies is the only one, and it is not a quirk of the wizard: every
+#: route in ``api/v1/endpoints/medical_supplies.py`` is gated
+#: ``require_permission("inventory.view_medical", "inventory.view")`` or the
+#: manage pair, which is an OR. So the broad Inventory grant opens the module
+#: on its own -- and every seeded position down to ``member`` carries
+#: ``inventory.view``, while ``facilities_manager`` carries
+#: ``inventory.manage`` with no medical grant at all.
+#:
+#: The editor showed those positions an unticked Medical Supplies box, which
+#: was a claim that they could not reach the module. Reporting it instead is
+#: the whole of what this map does: it changes no grant and no route. Unticking
+#: could not revoke the access anyway -- that would mean taking Inventory away
+#: -- so the box is shown ticked and not editable while Inventory confers it.
+#:
+#: ``tests/test_module_checkbox_grants.py`` reads the medical endpoints and
+#: fails if a route stops accepting the broad grant, or if one starts.
+_CHECKBOX_CONFERRED_BY: dict[str, dict[str, tuple[str, str]]] = {
+    "medical_supplies": {
+        "view": ("inventory", "view"),
+        "manage": ("inventory", "manage"),
+    },
+}
+
+
+def module_checkbox_conferred_by(module_id: str, action: str) -> tuple[str, str] | None:
+    """The other checkbox that also confers this one, as ``(module, action)``.
+
+    ``None`` when nothing outside this module's own grants opens it, which is
+    every row but Medical Supplies.
+    """
+    return _CHECKBOX_CONFERRED_BY.get(module_id, {}).get(action)
+
+
+#: Permission -> the module checkbox that owns it, for the ones that are not
+#: named after their own module. Built once; the reverse of the map above.
+_PERMISSION_OWNER: dict[str, str] = {
+    permission: module_id
+    for module_id, tiers in _MODULE_CHECKBOX_GRANTS.items()
+    for tier in tiers.values()
+    for permission in tier.grants
+    if not permission.startswith(f"{module_id}.")
+}
+
+
+def module_for_permission(permission: str) -> str:
+    """Which module checkbox a stored permission belongs to.
+
+    ``inventory.manage_medical`` belongs to the Medical Supplies row, not the
+    Inventory one. Bucketing it by prefix meant that editing a position's
+    Inventory boxes rebuilt the inventory grants from those two checkboxes and
+    dropped the medical ones with them.
+    """
+    owner = _PERMISSION_OWNER.get(permission)
+    if owner is not None:
+        return owner
+    return permission.partition(".")[0]
 
 
 def permission_matches(required: str, granted: set[str]) -> bool:

@@ -1046,3 +1046,585 @@ of a loaded JSON value), no new capacity/count-then-insert pattern.
 | `eslint .`                                                                      | ✅ 0 errors                                                                                                                                                             |
 | `npx vitest run src/modules/scheduling src/pages/scheduling`                    | ✅ 375 passed (26 files) — not in CLAUDE.md's mandatory gate list, run anyway since a "full completion gate green" claim should not omit a check there's a means to run |
 | `npm run build` (frontend)                                                      | ✅ built in 6.62s, PWA precache generated — pre-existing chunk-size warning only                                                                                        |
+
+## Pass 4 (2026-09-09) — 1 fix (SCH-13, LOW/MED, four Codex-caught rounds), 0 flagged, SCH-10 re-verified unchanged
+
+**Revision note.** Codex review of the draft PR caught four real gaps, all
+verified against the current code and addressed rather than disputed: (1)
+the draft's own churn inventory and full-read list omitted two files —
+`shift_eligibility_service.py` (+183/-3) and `shift_completion_service.py`
+(+95/-1) — that changed since pass 3's baseline and implement real pieces
+of the reviewed surface (the signup-window settings reader, the call-type
+normalization/label-disambiguation logic, and the report call-type-
+provenance tracking); both now read in full below. (2) The completion gate
+never ran `npm run build` despite the pass auditing 79 changed frontend
+files — run now, clean, matching pass 3's own precedent of running it as a
+bonus check. (3) **SCH-13** — a real TOCTOU race between deleting a call
+type and a concurrent close-out naming it, which could orphan history
+referring to a slug no longer configured. Fixed below. (4) The draft
+marked rotation row 15 `✅` and reported "0 fixed" while its own PR was
+still open — corrected in `PROGRESS.md` to `⏳` (awaiting merge), matching
+the tracker's own legend and established convention.
+
+**PR note.** The draft PR ([#2435](https://github.com/thegspiro/the-logbook/pull/2435))
+merged before these four fixes were pushed — a merge race, not a rejection;
+see `PROGRESS.md`'s Open PR section for the full account. All four items
+below are carried on a same-day follow-up PR
+([#2437](https://github.com/thegspiro/the-logbook/pull/2437)), the same
+shape the EC-15 follow-up (Feature 14) used for the identical situation. A
+Codex review of #2437 itself then caught two further gaps in SCH-13's own
+locking fix — see "Round 2" in the SCH-13 write-up below — both fixed on
+the same branch before merge. A further Codex review of round 2's push
+caught two more real gaps — one of them a genuine deadlock, not merely a
+race — plus a robustness gap in round 2's own guard test that had kept it
+from being able to catch either; see "Round 3," also fixed on the same
+branch before merge. A fourth Codex review, of PR #2437 itself, then found
+one more real gap — this time in the lock _order_ rounds 1-3 together
+established, not in any one lock's own completeness: an attach-and-report
+close-out could lock call-then-organization, the reverse of the deletion
+guard's own order, a genuine deadlock between two otherwise ordinary
+requests; see "Round 4," fixed on a fresh branch after PR #2437 had already
+merged (CLAUDE.md Pitfall #24 — never push to a merged branch), the same
+same-day-follow-up shape #2437 itself used for #2435. CLAUDE.md's stance on
+this is explicit: no round limit — repeated findings on a pushed fix mean
+the root cause isn't closed yet, not that review has become noise.
+
+**Baseline:** `8b89f319d` (the merge commit of PR #2212, pass 3's actual landing
+point — found via `git merge-base --is-ancestor` against pass 3's own tip
+commit `05b910382`, not assumed from the doc's prose). Six days and
+substantial churn sit between it and `fda025c8` (this pass's HEAD): a large
+new "editable call types" feature (department-defined call-type slugs, with
+retirement instead of deletion, three follow-on migrations, and multiple of
+its own internal Codex review rounds per its commit messages), a close-out
+backlog queue, a member's own hours-history screen, a late-signup escape
+hatch, and a self-scoped decline-assignment endpoint.
+
+**Diff-scoped, not re-read whole**, consistent with pass 3's practice once a
+baseline commit is reachable (the shallow clone needed deepening to reach it,
+as in prior passes). Real churn against the **nine** declared/adjacent
+backend files — two more than the draft's "seven," corrected on Codex
+review (see the Revision note): `scheduling.py` (+503/-20),
+`scheduling_service.py` (+1083/-47), `schemas/scheduling.py` (+152/-4),
+`models/training.py` (+10, one new nullable column), `calcom_service.py`
+(+30/-9), `shift_eligibility_service.py` (+183/-3), and
+`shift_completion_service.py` (+95/-1) — the last two omitted from the
+draft's own inventory entirely despite being reached from `scheduling.py`'s
+settings endpoints and `record_shift_calls`/`update_report`'s call-type
+handling, and now read in full below. `scheduling_module_config.py`,
+`calcom_sync.py`, `standing_shift_service.py`,
+`app/mcp/tools/scheduling.py` are byte-identical to pass 3. 79 frontend files
+under `modules/scheduling/`+`pages/scheduling/` changed (+11250/-2322) — grep-swept
+for the checklist's red flags (`window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, banned `.toLocale*`, `date-fns` imports, raw
+`fetch()`) rather than read line-by-line; zero hits, and the same is enforced
+independently by ESLint's `noBlockingBrowserDialogs` rule, which the
+completion gate confirms at 0 errors. Partial-scope, not assumed clean, per
+the same disclosure pass 2/3 used for their own grep-only sweeps.
+
+**Route/permission enumeration re-run from scratch** (not diffed against pass
+3's table): **101/101 routes** (97 in `scheduling.py`, up from 92 — five new:
+`GET /shifts/needing-closeout`, `POST`/`DELETE /shifts/{id}/late-signup`,
+`POST /assignments/{id}/decline`, `GET /my-hours-history`; +3 in
+`scheduling_module_config.py`; +1 in `calcom_sync.py`) carry a recognized auth
+dependency. No route with none. Cross-checked against `git diff` for
+`require_permission`/`Depends(get_current_user)` changes on **existing**
+routes:
+
+- **Eight `.view`-only reads widened to `.view` OR `.manage`**
+  (`list_shifts`, `get_shift`, `get_attendance`, `list_shift_calls`,
+  `list_templates`, `get_template`, `list_patterns`, `get_pattern`,
+  `list_shift_assignments` — nine, not eight; corrected while writing this up).
+  Each carries an in-code comment naming the mechanism: `permission_matches`
+  treats `scheduling.manage` and `scheduling.view` as unrelated literal
+  strings, so a position holding only `.manage` — every page in Scheduling
+  Administration — was refused the reads those same pages are built to show.
+  Strictly widening, not a downgrade: every caller who could read these
+  before still can, and `.manage` already permits every corresponding write.
+  Verified `.manage` is the more sensitive grant, not the reverse
+  (`create_shift`/`update_shift`/`delete_call`/etc. all already required
+  it), so pairing it onto a read is not a XC-2 pattern.
+- **One `require_permission` OR-gate narrowed**: `get_position_roster` went
+  from `("scheduling.manage", "training.view_all", "training.manage")` to
+  `("scheduling.manage")` alone, with a comment explaining why — the roster
+  moved into Scheduling Administration and a training officer's continued
+  access to the whole eligibility/EVOC roster via a wide OR-gate was the
+  finding the code comment itself describes fixing. A narrowing is a
+  behavior change in the opposite (safe) direction from what this checklist
+  exists to catch, so re-verified rather than treated as a red flag: no
+  other route in either file still grants read access to this data through
+  `training.view_all`/`training.manage`.
+
+**New XC-1/XC-3 surface, checked individually:**
+
+- `open_late_signup`/`close_late_signup` (`scheduling_service.py:2085-2168`)
+  resolve the shift via `get_shift_by_id(shift_id, organization_id,
+for_update=True)` — the same already-established org-scoped, row-locked
+  helper every other shift mutation in this file uses. `minutes` is
+  server-clock-relative (`datetime.now(timezone.utc) + timedelta(minutes=...)`),
+  never a client-supplied instant, and is both schema-bounded
+  (`Field(ge=1, le=720)`, 12 hours) and further clamped against the shift's
+  own roster deadline at write time — a reopening made a second before the
+  cutoff cannot smuggle a window past it. Gated on `scheduling.assign` OR the
+  shift's own officer via the existing `_authorize_shift_management` helper.
+- `decline_assignment` (`:4453-4520`) resolves its row by `id` **and**
+  `user_id` **and** `organization_id` in one `WHERE` — the same three-column
+  shape `confirm_assignment` already used — so a foreign assignment id can
+  never cross tenants or users.
+- `get_my_hours_history`/`get_member_month_totals` (`:6630-6776`) filter on
+  both `ShiftAttendance.user_id == user_id` and `Shift.organization_id ==
+organization_id` via the join; self-scoped by the caller's own id, no
+  permission gate needed for the same reason `/my-attendance-history` has
+  none.
+- `get_closeout_backlog`/`closeout_backlog_criteria` (`:1152-1195`,
+  `:212-254`) scope every query on `Shift.organization_id ==
+organization_id`; the raw-SQL `INTERVAL {int(cushion)} HOUR` fragment in
+  `closeout_effective_end` is safe because `cushion` is coerced through
+  `int()` before interpolation (`open_ended_cushion_hours`, which itself
+  degrades to a bounded default rather than raising on a malformed stored
+  setting, per Pitfall #19) — not a string an admin's JSON could turn into
+  SQL.
+
+**New feature reviewed in full: department-editable call types** (`models/
+call_tracking.py`, `services/call_tracking_service.py`, both new since pass
+3 and not previously in this doc's scope, but reached from the declared
+`scheduling.py`'s settings endpoints — reviewed per the "check a file
+`SchedulingService` newly reads" precedent pass 2 established). Read both
+files in full (240 L + 601 L):
+
+- Every query is `organization_id`-scoped; `attach_response` resolves a
+  client-supplied `call_id` against `OrgCall.organization_id ==
+organization_id` before permitting the attach (XC-1) rather than trusting
+  the caller's permission alone (XC-3/Pitfall #14b, cited explicitly in the
+  method's own docstring).
+- `slugs_locked_by_history`'s `ShiftCompletionReport.call_types.like(...)`
+  calls all pass `escape=LIKE_ESCAPE_CHAR` with `like_pattern()`-built
+  patterns (Pitfall #25 compliant) — the only `.like()`/`.ilike()` surface
+  this feature adds; `scheduling_service.py` itself remains at zero.
+  `_partition_existing` explicitly locks (`with_for_update()`) the existing
+  `OrgCallResponse` rows before a finalize/closeout-calls save reconciles
+  them, citing AP-13 findings 8/9 as the precedent for why the shift-row
+  lock alone doesn't refresh a REPEATABLE READ snapshot for a sibling table
+  — Pitfall #27 applied correctly to a table outside `scheduling_service.py`
+  itself.
+- `OrgCall`/`OrgCallResponse` models (`models/call_tracking.py`): the one
+  `ondelete="SET NULL"` column (`OrgCallResponse.shift_id`) is
+  `nullable=True` (Pitfall #2); `MAX_CALLS_PER_SHIFT=100` and
+  `MAX_CALL_TYPES=50` bound both the per-shift write and the org's
+  configured list against a DoS-shaped abuse. `CallTypeOption.slug` is
+  schema-validated (`pattern=r"^[a-z0-9_]+$"`, `max_length=50`) before it can
+  reach `OrgCall.call_type` (`String(50)`).
+- Three new migrations (`a3d7e2f18c45`, `c9f4a2b71d38`, `d7c1b95e2a40`, all
+  2026-09-05) read in full: all guard `shift_completion_reports`/
+  `organizations` existence before touching them (Pitfall #26), use
+  parameterized `sa.text(...).bindparams(...)`/`{"param": value}` throughout
+  — no f-string SQL — are explicitly idempotent, and correctly declare
+  themselves irreversible (no-op `downgrade()`) where the information needed
+  to reverse them was never retained. The table-creation migration
+  (`82bdcb3b1e64`, 2026-08-18, predates pass 3 but was never previously in
+  this doc's scope since the feature hadn't reached `scheduling.py` yet) is
+  itself guarded and correct: both FKs use `nullable=True` where
+  `ondelete="SET NULL"` applies.
+- `add_shift_late_signup_until` (`c9f2a4b71d38`) touches `shifts` without an
+  explicit `_has_table` guard, which looked at first read like a Pitfall #26
+  gap matching the exact shape that migration `e2c8f5a71d40` (pass 2) and
+  `fab0ab7897d3` (pass 3) were praised for adding. **Verified, not assumed,
+  to be safe**: `shifts` is created unconditionally by
+  `20260122_0015_add_training_programs_and_requirements.py`, an ancestor of
+  every migration in this chain — confirmed by running the repo's own
+  `test_migration_create_all_tables.py` detection logic
+  (`_tables_created_by_migrations`) against the source directly, not by
+  trusting pass 3's prose (which called `shifts` "a `create_all`-only
+  table" — that description was already inaccurate then and remains so; not
+  corrected further here since it's a passing reference in a completed
+  section, not a standing claim this pass relies on). `shift_templates` and
+  `basic_apparatus`, the tables `e2c8f5a71d40`/`fab0ab7897d3` guarded, are
+  genuinely create_all-only — the two cases are not the same shape, and the
+  new migration touching only `shifts` needs no guard.
+
+**The two previously-omitted service files, read in full against all seven
+checklist dimensions** (added on Codex review — see the Revision note):
+
+- **`shift_eligibility_service.py` (+183/-3).** New methods:
+  `get_signup_window_settings` (defensive `int()` casts with
+  `min(max(value,0), ceiling)` clamping, degrading to a built-in default
+  rather than raising on a hand-edited value — Pitfall #19), `stored_call_type_slugs`
+  / `effective_call_type_slugs` / `effective_call_type_slugs_for` (pure
+  reads off an already-loaded `org`, or `_get_org(organization_id)` for the
+  by-id variant — no client-supplied FK, no injection surface),
+  `_disambiguate_label` (pure string manipulation, no DB access). The one
+  pre-existing method that gained two new parameters,
+  `update_scheduling_settings`, still opens with
+  `copy.deepcopy(org.settings or {})` before mutating — confirmed unchanged
+  and still Pitfall #12-compliant (a shallow `dict()` here would let the two
+  new fields silently fail to persist, the exact bug that pitfall
+  describes). `_get_org`'s only caller-visible change this pass is the
+  `for_update` parameter added for SCH-13 below; every existing call site
+  (unaffected by the fix) keeps calling it with no `for_update` argument
+  and is unaffected.
+- **`shift_completion_service.py` (+95/-1).** `_edit_preserves_org_slugs`
+  and `_shift_has_incident_rows` (new) decide whether an edited report's
+  `call_types` list still supports an `org_calls` provenance marker — pure
+  reads, `report.organization_id` and `shift_id` both already org-resolved
+  by the caller (`update_report`, which itself double-checks
+  `report.organization_id != str(organization_id)` before any mutation,
+  in addition to its own `get_report(report_id, organization_id)` lookup —
+  XC-3 satisfied twice over, unchanged this pass). The one nested-JSON write
+  this diff adds (`update_report`, clearing a stale `data_sources` marker)
+  correctly uses `copy.deepcopy(report.data_sources or {})` before mutating
+  and reassigning — Pitfall #12 compliant, confirmed by reading the exact
+  lines rather than assumed from the pattern being familiar elsewhere in
+  this codebase.
+
+No new finding in either file on its own. Reading both in full, however, is
+what surfaced SCH-13 below: `shift_eligibility_service.py`'s `_get_org` and
+`shift_completion_service.py`'s consumer `record_shift_calls` (in
+`call_tracking_service.py`, itself already in scope) are the two ends of
+the same race.
+
+### SCH-13 — LOW/MED (fixed) — deleting a call type could race a concurrent close-out into orphaning it
+
+**What:** `_reject_deleting_a_used_call_type` (the settings-save guard in
+`scheduling.py`) decides whether a call-type slug can be dropped by reading
+_current_ `OrgCall`/`ShiftCompletionReport` usage. `CallTrackingService.
+record_shift_calls` (invoked from a shift close-out) decides whether a
+submitted type breakdown names a _valid_ slug by reading _current_ settings.
+Both reads were plain `SELECT`s. Under InnoDB's default REPEATABLE READ, a
+plain `SELECT` answers from the snapshot taken at the transaction's first
+read, not from whatever is current when the statement actually runs
+(CLAUDE.md Pitfall #27 — the same shape FORM-10 fixed for duplicate form
+submissions). Two overlapping requests — an administrator deleting "brush"
+from settings, and an officer's close-out recording a call under "brush" —
+could each pass its own validation against a stale read of the other's
+in-flight change, and both commit.
+
+**Where:** `app/api/v1/endpoints/scheduling.py:_reject_deleting_a_used_call_type`
+and `app/services/call_tracking_service.py:record_shift_calls` (the
+`if type_counts:` validation branch).
+
+**Failure scenario:** at T0, "brush" is configured with zero current usage
+(so the deletion guard's usage check would currently find nothing locked).
+An admin's settings PUT (removing "brush") and an officer's close-out PUT
+(reporting one call as "brush") arrive close enough together that both
+transactions take their first real read before either commits. Regardless
+of which one the database happens to serialize first: the admin's usage
+check (a plain `SELECT` on `org_calls`) doesn't see the officer's
+not-yet-committed (or, if it committed first, already-committed-but-outside-
+this-transaction's-snapshot) call, so it finds no usage and proceeds; the
+officer's validity check (a plain `SELECT` on `organizations.settings`)
+still sees "brush" as configured, so it validates and inserts. Final state:
+the org's settings no longer list "brush," but an `OrgCall` row exists with
+`call_type="brush"` — the exact orphan retirement exists to prevent. No
+cross-tenant or privilege component; this is a within-org data-integrity
+race, not an access-control bypass.
+
+**Impact:** LOW/MED. Requires a real race (an admin editing call-type
+settings within the same narrow window as an officer's close-out naming
+that type) with no security-boundary crossing — the outcome is an orphaned
+history row (a call whose type resolves to a raw slug instead of a label,
+and which can never again lock that slug's name from being reused for a
+differently-meant type), not unauthorized access or data exposure.
+
+**Fix (round 1):** threaded `for_update: bool = False` through
+`ShiftEligibilityService._get_org` and, in `call_tracking_service.py`,
+`get_settings` / `_valid_type_slugs` / `type_usage_counts` /
+`slugs_locked_by_history` (each defaulting to the prior plain-read
+behavior, so every other caller — settings `GET`, the usage-display
+helpers — is unaffected). `for_update=True` is passed from exactly the two
+call sites in the race:
+
+- `_reject_deleting_a_used_call_type` now takes a locking read of the
+  organization row (discarding the return value — only the lock matters,
+  since `in_force`/`persisted`/`removed` were already computed from an
+  earlier plain read that doesn't need freshness for the admin's own edit
+  intent) immediately before calling `slugs_locked_by_history(...,
+for_update=True)`.
+- `record_shift_calls`'s `if type_counts:` branch now calls
+  `self._valid_type_slugs(organization_id, for_update=True)`.
+
+Both now serialize on the organization row. Locking the row alone is not
+sufficient — the same "the row is locked and the count is stale anyway"
+trap FORM-10 closed — so `type_usage_counts`'s `OrgCall` query is _itself_
+also a locking read when `for_update=True`, verified directly against this
+codebase's own test database that MySQL permits `SELECT ... GROUP BY ...
+FOR UPDATE` without error (not assumed).
+
+**Round 2 — Codex review of the round-1 fix caught two further real gaps,
+both verified by reading the code directly and reproducing each with a
+guard test before fixing (not taken on the review's prose alone):**
+
+1. **Identity-map staleness — `_get_org`'s locking read never refreshed an
+   already-loaded `Organization` object.** `for_update=True` locks the row
+   and reads the latest committed data _at the database level_, but
+   SQLAlchemy's identity map returns an already-loaded Python object
+   unchanged unless the query also carries
+   `execution_options(populate_existing=True)` — the exact gotcha
+   `get_shift_by_id` already documents and handles for the identical shape.
+   `finalize_shift` (`scheduling_service.py`) loads `Organization` with a
+   plain, non-locking `select()` of its own (for its equipment-check and
+   call-tracking-mode logic) well before it ever reaches
+   `record_shift_calls`'s locking call — so a finalize that races a
+   settings deletion would still validate against the `Organization` object
+   `finalize_shift` loaded _before_ the lock, silently defeating round 1's
+   entire fix for exactly the caller SCH-13 was written to protect.
+   **Fixed:** `_get_org` now adds `.execution_options(populate_existing=True)`
+   alongside `.with_for_update()`, matching `get_shift_by_id`'s existing
+   pattern exactly.
+2. **The `ShiftCompletionReport` half of the usage check was wrongly
+   reasoned to be outside the race window.** Round 1's fix left this half a
+   plain read, reasoning "a report is filed well after its shift's calls,
+   not in the same race window." That covers report _creation_ and misses
+   report _editing_: `ShiftCompletionService.update_report` /
+   `_edit_preserves_org_slugs` can change an **existing** `org_calls`-sourced
+   report to newly name a different slug at any later time, entirely
+   independent of when its calls were recorded — and that edit never took
+   the organization lock at all. An officer editing a report to reference
+   "brush" and an admin deleting "brush" could each pass validation against
+   a stale read of the other's in-flight change: the edit sees "brush" still
+   configured and keeps the `org_calls` marker, the deletion's (still-plain)
+   report scan doesn't see the edit yet and proceeds — the identical orphan,
+   reached through the report-edit path instead of the close-out path.
+   **Fixed two ways:** `slugs_locked_by_history`'s `ShiftCompletionReport`
+   query is now also a locking read (`.with_for_update()`) when
+   `for_update=True` — this query selects bare columns rather than mapped
+   entities, so `populate_existing` doesn't apply to it; only the identity
+   map (round-2 gap 1) needed that option. And
+   `_edit_preserves_org_slugs` (`shift_completion_service.py`) now takes its
+   own locking read of the organization row
+   (`ShiftEligibilityService._get_org(..., for_update=True)`) before
+   deciding whether to preserve the marker, joining the same protocol —
+   scoped to only run past the method's two early returns, so an ordinary
+   narrative-only edit that never touches `call_types` (or one on a report
+   that was never `org_calls`-sourced, or one that empties the list) costs
+   no lock at all. **This round's own claim that this introduced "no
+   lock-order inversion" was wrong** — see round 3, gap 2 below, which
+   Codex caught on this exact PR's next review and which this section is
+   corrected to no longer assert.
+
+**Guard tests:** `tests/test_call_type_deletion_race.py`, three classes:
+
+- `TestCallTypeDeletionRace` (round 1) — two real, independently-committing
+  sessions (not the savepoint-based `db_session` fixture, which never truly
+  commits) with both transactions' REPEATABLE READ snapshots pinned via a
+  throwaway real read before either coroutine's actual work starts, run
+  through `asyncio.gather`. Asserts the winner-agnostic invariant: never
+  both "brush" absent from settings and present on a committed `OrgCall`
+  row.
+- `TestPopulateExistingRefreshesTheLock` (round 2, gap 1) — a single
+  session takes a plain read of `Organization` first (matching
+  `finalize_shift`'s own shape), a second independent session commits a
+  real settings change, then the first session's locking `_get_org` call is
+  asserted to return the identity-mapped object refreshed with the second
+  session's committed value, not its own stale first read.
+- `TestReportEditVsDeletionRace` (round 2, gap 2) — same two-session,
+  pinned-snapshot, `asyncio.gather` shape as the round-1 test, but racing
+  `ShiftCompletionService.update_report` (editing an existing report to
+  newly name "brush") against the deletion guard instead of a close-out.
+  Asserts the same winner-agnostic invariant against the report's own
+  `call_types`/`data_sources` rather than `org_calls`.
+
+All three confirmed failing reliably against the code each is meant to
+guard (round 1's test against the pre-round-1 code from its own commit
+history; both round-2 tests confirmed failing 3/3 runs against the
+round-1-only fix, i.e. with round 2's changes reverted) and passing
+reliably (5/5 runs, all three together) against the fully-fixed code.
+
+**Round 3 — Codex review of round 2's push caught two more real gaps in
+the locking fix and one test-robustness gap in round 2's own guard test,
+verified the same way (code read directly, each reproduced before fixing):**
+
+1. **The bulk call-type-list save derived every settings-dependent value
+   from a pre-lock read.** `_reject_deleting_a_used_call_type` only took
+   the organization lock immediately before the usage check — `in_force`,
+   `persisted`, and the cap-ratchet comparison against `incoming.call_types`
+   were all computed from the plain read at the top of the function, before
+   any lock. `populate_existing` (round 2, gap 1) refreshes the ORM
+   object on a locking read; it cannot retroactively refresh values a
+   caller already computed from an earlier, unrefreshed read of that same
+   object. Two administrators saving different call-type lists
+   concurrently — one shrinking a 60-type legacy list to 55, another to 40
+   — could each derive `persisted=60` from their own pre-lock snapshot,
+   each satisfy the cap ratchet against that stale ceiling, and between
+   them leave the department's stored list larger than either save alone
+   would have permitted. **Fixed:** the organization lock is now taken as
+   the very first thing after resolving `org is None`, and every
+   settings-dependent value (`in_force`, `persisted`, the cap check,
+   `removed`) is derived from that locked, freshly-read `org` — not merely
+   the usage check at the end.
+2. **The report-edit fix (round 2, gap 2) introduced a genuine deadlock,
+   not merely a race.** `update_report` assigns the new value to
+   `report.call_types` via `setattr` _before_ calling
+   `_edit_preserves_org_slugs`. SQLAlchemy's default autoflush means the
+   very next query this session issues — `_edit_preserves_org_slugs`'s own
+   `_get_org(..., for_update=True)` — first flushes (and row-locks) the
+   dirtied report, _then_ tries to lock the organization: a
+   report-then-organization order. The deletion guard
+   (`_reject_deleting_a_used_call_type`, after gap 1's fix above) locks
+   organization-then-report (`slugs_locked_by_history`'s locking scan of
+   matching report rows). An ordinary report edit and a concurrent
+   call-type deletion, overlapping, could each hold the lock the other
+   wants next — a real InnoDB deadlock (error 1213), not a hypothetical
+   one: reproduced reliably (15/15 runs) with round 3 gap 3's strengthened
+   test, below, against the round-2-only code. **Fixed:** `update_report`
+   now calls `_edit_preserves_org_slugs` — which reads only
+   `report.data_sources` (untouched by the `setattr` loop; `data_sources`
+   isn't in `UPDATABLE_FIELDS`) and the new `call_types` value already in
+   hand, needing nothing the loop produces — _before_ the `setattr` loop
+   runs, so its lock acquisition (when it reaches that far) is the first
+   write-intent operation the transaction takes, establishing the same
+   organization-then-report order the deletion guard uses. Purely a
+   reordering: `_edit_preserves_org_slugs`'s answer cannot depend on
+   `report`'s mutated state, since it never reads `report.call_types`
+   directly.
+3. **The round-2 guard test for gap 2 could not have caught either gap.**
+   `TestReportEditVsDeletionRace`'s `edit_the_report()` caught bare
+   `Exception`, converted it to a string, and returned — so a database
+   deadlock (or any other unexpected failure) was indistinguishable from
+   an ordinary, successful non-commit: the final orphan assertion passed
+   either way, because an edit that never committed cannot itself create
+   an orphan. **Fixed:** the broad `try/except` is removed; any exception
+   now propagates to `asyncio.gather(..., return_exceptions=True)` as a
+   real exception object, which the existing
+   `assert not isinstance(outcome, BaseException)` loop already fails
+   loudly on. Re-running the strengthened test against the round-2-only
+   code (round 3's other two fixes reverted) reproduced the deadlock from
+   gap 2 reliably — 15/15 runs, `OperationalError` 1213 — corroborating
+   that finding directly rather than taking its analysis on faith; the
+   same test then passes reliably (5/5, and a further 15/15 focused on
+   this class alone) against the fully-fixed code.
+
+No new guard test was added for gap 1 specifically — the fix is a
+mechanical reordering equivalent in shape to `TestReportEditVsDeletionRace`
+and `TestPopulateExistingRefreshesTheLock`'s own lesson, exercising a
+same-organization two-different-payload race that is harder to make
+deterministic than the settings-vs-usage races the existing three classes
+already cover deterministically via `asyncio.gather` and pinned snapshots;
+verified instead by inspection (the lock is now provably the first
+settings-dependent read in the function) and by the existing
+`test_call_tracking.py` mocked-unit-test suite (141 tests) passing
+unchanged, confirming no behavioral regression in the non-concurrent case.
+
+**Round 4 — Codex review of PR #2437 itself found one more real gap, this
+time in the lock _order_ established by rounds 1-3, not in a specific
+lock's own completeness:**
+
+4. **A close-out that both attaches an already-logged call and reports a
+   type breakdown locked call-then-organization — the reverse of the
+   deletion guard's own organization-then-call order.**
+   `SchedulingService.finalize_shift`/`save_closeout_calls` both call
+   `CallTrackingService.attach_response` (attaching this shift to a call
+   another unit already logged) _before_ calling `record_shift_calls`,
+   whose organization lock (round 1) only runs when a type breakdown is
+   also present. `attach_response`'s `INSERT` of an `OrgCallResponse` takes
+   an implicit database lock on the referenced `OrgCall` row via its
+   foreign key — so a close-out doing both attaches the call (lock A) and
+   only afterward locks the organization (lock B): call-then-organization.
+   The deletion guard (`_reject_deleting_a_used_call_type`, per gap 1
+   above) locks organization-then-call. Two ordinary, unrelated requests —
+   an attach-and-report close-out, a concurrent type deletion — can each
+   hold the lock the other wants next: a real InnoDB deadlock (error
+   1213), reproduced directly (see below), not merely a theoretical
+   ordering concern. **Fixed:** both callers now lock the organization
+   first — before the `attach_call_ids` loop runs — whenever this pass
+   will also validate a type breakdown (mirroring each caller's own
+   `record_shift_calls`-invocation gate: `reported_call_count is not None`
+   for `finalize_shift`, `count_provided` for `save_closeout_calls`, both
+   combined with a non-empty positive-valued `reported_call_types`), so
+   `attach_response`'s call-row lock never precedes the organization lock
+   in either caller.
+
+   Reproducing this one needed more than the pinned-snapshot-plus-`gather`
+   shape the first three classes use: that shape is built to expose
+   _read staleness_, and this bug is about lock _order_, not a stale read.
+   A gather-only version of the test (no explicit pausing) was run 15/15
+   times against the pre-round-4 code with **zero** failures — confirming
+   the natural interleaving isn't reliable here before spending effort on
+   a deterministic one, not merely assumed. `TestAttachThenRecordVs
+DeletionDeadlock` instead patches `CallTrackingService.attach_response`
+   to pause immediately after its own flush (the exact point where,
+   pre-fix, the attach-and-report close-out holds the attached call's row
+   lock and nothing else), matching the pause-and-release pattern
+   `test_facility_document_reference_race.py` already uses for its own
+   lock-order races: waits for that pause, starts the deletion, confirms
+   with a bounded wait that the deletion is genuinely blocked (not merely
+   not-yet-scheduled), then releases the paused attach and awaits both.
+   Confirmed failing 6/6 with `OperationalError` 1213 ("Deadlock found")
+   against the pre-round-4 code, and passing 5/5 with zero deadlocks
+   against the fix.
+
+   The patch is applied once, from the test itself, before either task
+   starts, and only the attach task ever calls the patched method — not
+   the two-coroutines-hold-the-same-`patch()` shape CLAUDE.md Pitfall #22
+   warns against (which corrupts the mock for the rest of the session
+   rather than merely failing this one test).
+
+**`calcom_service.py`'s 30-line change** (`parse_webhook_event`, now also
+recognizing `MEETING_ENDED` and dropping Cal.com-flagged no-show attendees
+from `attendee_emails`) is pure parsing logic with no outbound request and no
+DB access — SCH-10 (the DNS-rebinding TOCTOU) is unaffected, since it
+concerns the outbound `httpx` calls in `test_connection`/`list_bookings`,
+neither of which changed. The consuming webhook
+(`api/public/integrations_webhook.py:187-255`, a different rotation
+feature's file, not re-reviewed in full here) still verifies
+`X-Cal-Signature-256` via `verify_hmac_signature` before any payload is
+parsed, still resolves the organization through `integration.organization_id`
+rather than a client-supplied value, and still has replay protection
+(`is_duplicate_webhook`) — spot-checked because the declared file's output
+feeds directly into it, not because the endpoint itself is in scope this
+pass.
+
+**SCH-10 re-verified, unchanged.** `docs/KNOWN_LIMITATIONS.md`'s entry
+(updated by the training-extended and push-service closures) still correctly
+lists `calcom_service.py` among the six remaining unpinned `httpx` call
+sites; nothing in this pass's diff touches the two `assert_outbound_url_safe`
+call sites in that file. Not re-fixed here for the same reason pass 1 flagged
+rather than fixed it: closing it means pinning the resolved address across
+every `create_integration_client()`-based transport at once, not a
+scheduling-scoped change.
+
+**No new findings** on any other checklist dimension: no new
+`.like()`/`.ilike()` call in `scheduling_service.py` itself (still zero); no
+new CSV/export surface; no new Pitfall #12 JSON-mutation beyond the two
+already reviewed above (`late_signup_until` is a scalar column, not JSON;
+the call-type settings write is a wholesale `model_dump()` reassignment,
+not an in-place nested mutation); no capacity/count-then-insert pattern
+added without a lock beyond SCH-13 (`_partition_existing`, reviewed under
+the call-tracking feature above, is the one other new instance, and it
+already locks). Existing guard tests (`test_scheduling_org_scoping.py`,
+`test_swap_offer_response.py`, `test_shift_template_equipment_checks.py`)
+re-run clean as part of the full suite below; no regression in any of pass
+1/2/3's fixes.
+
+### Guard tests
+
+- `tests/test_call_type_deletion_race.py` (new) — SCH-13's guard test; see
+  above for its shape and the fail-before/pass-after confirmation.
+  `TestAttachThenRecordVsDeletionDeadlock` (round 4) added to the same
+  file.
+
+Everything else: no fix was needed for the rest of this pass's scope, so no
+further guard test was added. Existing coverage for the new surface
+reviewed above was confirmed present and passing rather than written fresh:
+`test_scheduling_closeout_backlog.py`, `test_member_hours_history.py`,
+`test_shift_signup_window.py`, `test_shift_signup_window_enforcement.py`,
+`test_call_tracking.py`, `test_call_type_provenance_narrowing_migration.py`,
+`test_reserved_call_type_slug_migration.py`, plus decline/late-signup cases
+inside `test_scheduling.py`.
+
+## Completion gate (pass 4, after all four SCH-13 rounds)
+
+| Check                                                                                                                                 | Result                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                         | ✅ 0 violations                                                                                                                          |
+| `black --check app/ tests/ alembic/`                                                                                                  | ✅ 1556 files unchanged                                                                                                                  |
+| `isort --check-only app/ tests/ alembic/`                                                                                             | ✅ clean (installed, not skipped)                                                                                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                                                     | ✅ single head, 440 revisions                                                                                                            |
+| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type"`                         | ✅ 1251 passed, 1 skipped (pre-existing optional-dep skip) — +1 over round 3, round 4's new deadlock guard test                          |
+| `pytest tests/test_call_type_deletion_race.py` — round-1 test, 5 runs each direction                                                  | ✅ fails 5/5 on the pre-round-1 code, passes 5/5 on the round-1 fix                                                                      |
+| `pytest tests/test_call_type_deletion_race.py` — round-2 tests vs. round-1-only code                                                  | ✅ both fail 3/5/5 against round-1-only code (identity-map staleness and the report-edit orphan both reproduce)                          |
+| `pytest tests/test_call_type_deletion_race.py::TestReportEditVsDeletionRace` — round-3's strengthened test vs. round-2-only code      | ✅ fails 15/15 with `OperationalError` 1213 (deadlock found) — corroborates round-3 gap 2 directly, not on the review's analysis alone   |
+| `pytest tests/test_call_type_deletion_race.py::TestAttachThenRecordVsDeletionDeadlock` — gather-only variant vs. pre-round-4 code     | ➖ passed 15/15 with **no** failure — confirms natural interleaving alone doesn't expose this one; motivated the patch-and-pause rewrite |
+| `pytest tests/test_call_type_deletion_race.py::TestAttachThenRecordVsDeletionDeadlock` — patch-and-pause version vs. pre-round-4 code | ✅ fails 6/6 with `OperationalError` 1213 (deadlock found)                                                                               |
+| `pytest tests/test_call_type_deletion_race.py` — all 4 classes vs. the fully-fixed code                                               | ✅ passes 5/5 with zero deadlocks                                                                                                        |
+| `pytest tests/` (full backend suite)                                                                                                  | ✅ 11971 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep) — +1 over round 3, round 4's new guard test                      |
+| `npm run typecheck` (aliased TS7 compiler, per CLAUDE.md)                                                                             | ➖ not re-run this round — no frontend file touched                                                                                      |
+| `npx eslint .`                                                                                                                        | ➖ not re-run this round — no frontend file touched                                                                                      |

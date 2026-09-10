@@ -2,8 +2,16 @@
  * Central Module Registry
  *
  * This is the single source of truth for all application modules.
- * When adding a new module, add it here and it will automatically
- * appear in ModuleOverview, ModuleConfigTemplate, and PositionSetup pages.
+ * When adding a new module, add it here and it will automatically appear in
+ * ModuleOverview and on the Positions step.
+ *
+ * There is deliberately no per-module configuration step. Each module used to
+ * carry a `configRoute` to a screen that collected "who may manage this" into
+ * the wizard's Zustand store, reported "permissions configured!" and submitted
+ * nothing — no API client method carried the answer and no backend field held
+ * it. Who may manage a module is decided one step earlier, on the Positions
+ * step, which does save to the backend; a second editor for the same decision
+ * would be a second answer to a question that already has one.
  */
 
 import {
@@ -42,7 +50,6 @@ export interface ModuleDefinition {
   icon: LucideIcon;
   priority: 'essential' | 'recommended' | 'optional';
   category: string;
-  configRoute?: string;
   // Permission details for the two-tier model
   permissions: {
     viewDescription: string;
@@ -69,7 +76,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Users,
     priority: 'essential',
     category: 'Core',
-    configRoute: '/onboarding/modules/members/config',
     permissions: {
       viewDescription: 'View member directory, contact information, and profiles',
       manageDescription: 'Add/edit members, assign positions, update member status',
@@ -95,7 +101,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Calendar,
     priority: 'essential',
     category: 'Core',
-    configRoute: '/onboarding/modules/events/config',
     permissions: {
       viewDescription: 'View upcoming events, RSVP, and check attendance',
       manageDescription: 'Create events, manage RSVPs, record attendance',
@@ -122,7 +127,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: FileText,
     priority: 'essential',
     category: 'Core',
-    configRoute: '/onboarding/modules/documents/config',
     permissions: {
       viewDescription: 'Browse and download department documents and files',
       manageDescription: 'Upload documents, manage folders, set visibility',
@@ -139,7 +143,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: FormInput,
     priority: 'essential',
     category: 'Core',
-    configRoute: '/onboarding/modules/forms/config',
     permissions: {
       viewDescription: 'Fill out and submit forms across all modules',
       manageDescription: 'Create forms, design fields, view submissions, export data',
@@ -166,7 +169,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: GraduationCap,
     priority: 'recommended',
     category: 'Operations',
-    configRoute: '/onboarding/modules/training/config',
     permissions: {
       viewDescription: 'View training records, upcoming courses, and certifications',
       manageDescription: 'Create courses, record completions, manage requirements',
@@ -186,7 +188,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Package,
     priority: 'recommended',
     category: 'Operations',
-    configRoute: '/onboarding/modules/inventory/config',
     permissions: {
       viewDescription: 'View gear, check availability, request items',
       manageDescription: 'Add gear, track maintenance, manage assignments',
@@ -223,7 +224,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Clock,
     priority: 'recommended',
     category: 'Operations',
-    configRoute: '/onboarding/modules/scheduling/config',
     permissions: {
       viewDescription: 'View shift schedules, request swaps, see coverage',
       manageDescription: 'Create schedules, approve swaps, manage coverage',
@@ -249,7 +249,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Truck,
     priority: 'recommended',
     category: 'Operations',
-    configRoute: '/onboarding/modules/apparatus/config',
     permissions: {
       viewDescription: 'View fleet roster, apparatus details, and maintenance schedules',
       manageDescription: 'Add/edit apparatus, log maintenance, manage operators and equipment',
@@ -267,7 +266,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Building2,
     priority: 'recommended',
     category: 'Operations',
-    configRoute: '/onboarding/modules/facilities/config',
     permissions: {
       viewDescription: 'View facilities, buildings, and maintenance schedules',
       manageDescription: 'Add facilities, log maintenance, manage inspections and systems',
@@ -285,9 +283,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Store,
     priority: 'optional',
     category: 'Operations',
-    // Deliberately no configRoute. That step's Save writes only to a local
-    // store nothing submits, so it reports "permissions configured!" and
-    // changes nothing — the store enables directly instead.
     permissions: {
       viewDescription: 'Browse the store and track your own orders',
       manageDescription: 'Manage the catalog, order windows, orders, and payments',
@@ -314,7 +309,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Vote,
     priority: 'recommended',
     category: 'Governance',
-    configRoute: '/onboarding/modules/elections/config',
     permissions: {
       viewDescription: 'View elections, cast votes, see results when published',
       manageDescription: 'Create elections, manage candidates, certify results',
@@ -331,7 +325,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: ClipboardList,
     priority: 'optional',
     category: 'Governance',
-    configRoute: '/onboarding/modules/minutes/config',
     permissions: {
       viewDescription: 'Read meeting minutes and organizational history',
       manageDescription: 'Record minutes, publish drafts, manage archives',
@@ -347,7 +340,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: BarChart3,
     priority: 'optional',
     category: 'Governance',
-    configRoute: '/onboarding/modules/reports/config',
     permissions: {
       viewDescription: 'View dashboards and personal reports',
       manageDescription: 'Create custom reports, export data, configure analytics',
@@ -367,7 +359,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Bell,
     priority: 'optional',
     category: 'Communication',
-    configRoute: '/onboarding/modules/notifications/config',
     permissions: {
       viewDescription: 'Receive notifications and manage personal preferences',
       manageDescription: 'Configure notification templates and triggers',
@@ -384,7 +375,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Smartphone,
     priority: 'optional',
     category: 'Communication',
-    configRoute: '/onboarding/modules/mobile/config',
     permissions: {
       viewDescription: 'Access the platform from mobile devices',
       manageDescription: 'Configure mobile-specific features and settings',
@@ -404,7 +394,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Plug,
     priority: 'optional',
     category: 'Advanced',
-    configRoute: '/onboarding/modules/integrations/config',
     permissions: {
       viewDescription: 'Use integrated features (calendar sync, etc.)',
       manageDescription: 'Configure and manage external service connections',
@@ -425,7 +414,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: UserPlus,
     priority: 'optional',
     category: 'Core',
-    configRoute: '/onboarding/modules/prospective-members/config',
     permissions: {
       viewDescription: 'View prospective member pipeline and applicant progress',
       manageDescription: 'Manage applicants, configure pipeline stages, and convert members',

@@ -147,39 +147,134 @@ Two smaller ones, both deliberate:
 - **Tool results are point-in-time.** The server exposes no resources or
   subscriptions; a client re-asks to refresh.
 
-## ONBOARD-1 — The Setup Wizard's Per-Module Configuration Step Is Inert (2026-08-24)
+## ONBOARD-1 — The Setup Wizard's Per-Module Configuration Step (resolved 2026-09-09)
 
-Fifteen of the setup wizard's module cards point at a per-module
-"configure permissions" step. **That step reports success and discards the
-answer.** `modulePermissionConfigs` is written to the Zustand store and read
-back by nothing: no API client method submits it and no backend field
-corresponds to it. `handleSave` sets it, toasts "permissions configured!", and
-navigates on.
+**Resolved by removing the step.** Fifteen of the wizard's module cards pointed
+at a per-module "configure permissions" screen that reported success and
+discarded the answer: `modulePermissionConfigs` was written to the Zustand store
+and read back by nothing — no API client method submitted it and no backend
+field corresponded to it. `handleSave` set it, toasted "permissions
+configured!", and navigated on. An administrator who used that step to restrict
+a module during setup believed the restriction was in place.
 
-This is CLAUDE.md **Pitfall #19** — a config switch with a UI and no reader —
-in its worst form, because the toast actively asserts that something was saved.
-An administrator who uses that step to restrict a module during setup will
-believe the restriction is in place.
+The open question was whether to wire it to the positions saved on the previous
+step or to submit it separately. Neither: **the Positions step already answers
+it**, one step earlier and against the backend
+(`POST /onboarding/session/roles`, which expands two checkboxes per module into
+real grants). A second editor would be a second answer to a question that has
+one, so the routes, the page and the store field are gone, and the module step's
+buttons say "Enable" rather than "Configure Now" — which is what they now do.
+`/onboarding/modules/{id}/config` redirects to the module step for a session
+restored from an older client.
 
-**The Department Store's route was removed rather than repaired**, and that was
-the deliberate call: the previous change had _added_ a `configRoute` for
-storefront "for parity with its peers", and parity with a screen that changes
-nothing is a liability, not a feature. The store now enables directly.
+The Department Store had already taken this route on 2026-08-24, for the same
+reason: parity with a screen that changes nothing is a liability, not a feature.
 
-**Why the rest were not removed with it.** Wiring the step up means deciding
-whether it edits the positions saved on the previous step or submits
-separately — that is its own change, with its own data model question, and
-doing it under a storefront bug fix would have been the wrong place. Removing
-all fifteen routes without deciding that question would delete the only place
-the intent is expressed.
+**Related, and resolved with it:** three module ids offered by checkbox
+(`medical_supplies`, `mobile`, `integrations`) granted permissions that did not
+exist. See **ONBOARD-2** below.
 
-**Whichever way it is resolved, the toast must go first.** A step that silently
-does nothing is recoverable; a step that says it succeeded is not.
+## ONBOARD-2 — Module Checkboxes That Grant Nothing (resolved 2026-09-09)
 
-**Related, and also open:** three module ids offered by checkbox
-(`medical_supplies`, `mobile`, `integrations`) grant permissions that **do not
-exist**. That predates this window and is not caused by the module-list
-reconciliation above.
+The wizard's Positions step renders one row per module from the frontend
+registry, and expanded each row's two checkboxes into `{module}.view` /
+`{module}.manage` / `{module}.*`. The registry's ids are _module settings_
+keys, and for four modules that key is not the permission prefix:
+
+| Row                | Emitted              | Actually gated by                                     |
+| ------------------ | -------------------- | ----------------------------------------------------- |
+| `medical_supplies` | `medical_supplies.*` | `inventory.view_medical` / `inventory.manage_medical` |
+| `mobile`           | `mobile.*`           | nothing — the PWA has no permission gate              |
+| `integrations`     | `integrations.view`  | nothing — the console requires `integrations.manage`  |
+| `positions`        | `positions.manage`   | covered by the `positions.*` wildcard beside it       |
+
+Medical Supplies was the one that cost a department something. A position
+given "Medical Supplies → Manage" during setup held a permission no endpoint
+checks, and the navigation entry — gated on `inventory.view_medical` — never
+appeared, so the EMS supply officer could not reach the module the department
+had just enabled. The wizard also had no template for `ems_supply_officer` at
+all, though the backend seeds it and the registry names it as the module's
+default manager.
+
+**Resolved.** `_MODULE_CHECKBOX_GRANTS` in `app/core/permissions.py` is now the
+one place that says what a module checkbox grants, and what proves it is
+already ticked — two questions that are not the same, since Manage writes both
+`{module}.manage` and the `{module}.*` wildcard while a seeded position may
+hold either alone. A tier with no permission behind it is declared as such and
+the wizard does not render that checkbox: Mobile App Access loses its row,
+Integrations loses View. `inventory.*_medical` now belongs to the Medical
+Supplies row rather than the Inventory one, so editing Inventory no longer
+rebuilds the medical grants away with it. The EMS Supply Officer has a
+template.
+
+`tests/test_module_checkbox_grants.py` holds every row to permissions that
+exist and every seeded position to having a template, so the next module whose
+settings key is not its permission prefix fails rather than shipping inert.
+
+## ONBOARD-4 — The Membership Ladder Had No Screen (resolved 2026-09-09)
+
+`organization.settings["membership_tiers"]` decides who is in the ballot
+electorate, who may stand for elected office, whether a member must meet a
+meeting-attendance threshold to vote, and who is graded for training.
+`election_service` reads it in six places, and `run_membership_tier_advance`
+promotes members along it nightly as `performed_by="system"`.
+
+It shipped with an answer — Probationary at 0 years, Active at 1, Senior at 10,
+Life at 20, voting switched on at Active behind a 50% attendance rule, training
+exemption at Life, `auto_advance: true` — and **nothing rendered it**. Not the
+setup wizard, not Members Administration, not Organization Settings. The API
+existed, `adminServices.ts` had `getTierConfig`, `updateTierConfig` and
+`advanceMembershipTiers`, and all three had zero callers; the endpoint's own
+docstring pointed at an Organization Settings screen that did not exist. A
+department whose bylaws differed found out at its first election.
+
+That is CLAUDE.md pitfall 19 inverted: not a switch with no reader, but a reader
+with no switch — and the worse direction, because the thing with no switch was
+already acting.
+
+**Resolved.** `useTierEditor` + `MembershipTiersSection` render at
+**Members → Settings → Membership Tiers** and on the setup wizard's Ranks &
+Positions step, where the ladder is cheap to state; afterwards a rung cannot be
+removed without moving the members on it first.
+
+The endpoint was hardened with it. It took a raw dict and checked two fields of
+nine, so a malformed rung was stored verbatim and every reader — defensive
+`.get()` calls — silently answered "no" on its behalf. It now validates through
+`MembershipTierSettings`, rejects duplicate tier ids, and refuses to drop or
+rename a tier that members hold, naming how many. `GET` reports `member_counts`
+so the editor shows them and greys out an occupied rung.
+
+Tier **ids** are not editable, for the reason rank codes are not: `id` is what
+`User.membership_type` stores, nothing cascades a change, and
+`split_membership_type` deliberately refuses to guess a class for an id it does
+not recognise — so a renamed id drops those members out of the operational body
+and the electorate at once.
+
+## ONBOARD-3 — A Deleted Seed Rank Is Still Accepted on a Write (2026-09-09)
+
+Setup now lets a department curate its rank ladder, and removing a rank does
+remove the row: it disappears from the rank pickers, from the ladder editor and
+from shift eligibility, which is the whole of what a department sees.
+
+`OperationalRankService.resolve_rank_code` is broader than that. It resolves a
+code two ways — a stored `operational_ranks` row **or** one of the built-in
+`DEFAULT_RANK_CODES` — and it checks the built-ins first, unconditionally. So a
+department that deletes `firefighter` during setup will still have
+`rank="firefighter"` accepted by any path that goes through that resolver: the
+member API, a CSV import, the prospect-conversion flow.
+
+**It is deliberate and is not being changed here.** The fallback exists because
+`seed_defaults` only ever fires into an empty table, so an organization
+onboarded before a code joined `DEFAULT_RANKS` has no row for it while the
+eligibility fallback still honours it — rejecting those is the exact shape of
+the EMT bug in #1833, which the fallback was added to close. Narrowing it to
+"only when the organization has no stored rows at all" is probably right and is
+a change to a guard that several write paths depend on, so it wants its own
+piece of work rather than riding along with the setup editor.
+
+**What it means in practice:** removing a rank during setup is a statement
+about what the department uses, not a constraint the API enforces. Nothing in
+the UI offers a deleted seed rank, so reaching this needs a direct write.
 
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
@@ -3874,6 +3969,61 @@ to, and the fix above has to be done.
 `skipLinkTarget.test.ts` names both files and explains the constraint in its
 failure message, so the next person to try the obvious fix is told why it is not
 one rather than discovering the duplicate id in review.
+
+## SCHED-CUSTOM-SEAT — A Department's Own Crew Seat Cannot Be Assigned to Anybody (2026-09-09)
+
+A department defines its own seats in Scheduling → Position Names, and they
+belong to the vocabulary nearly everywhere: a shift template can carry one,
+`canonical_position` round-trips it verbatim rather than folding its case, the
+board renders the admin-chosen label, and `getPositionOptions` offers it in the
+template form's dropdown.
+
+Nobody can be put in one. Every route that seats a member types `position` as
+the closed `ShiftPosition` enum — `ShiftSignupRequest`, `ShiftAssignmentCreate`,
+`ShiftAssignmentUpdate` and `StandingShiftCreate` — and `shift_assignments.position`
+is a MySQL `ENUM` behind them. A custom seat is therefore refused at request
+validation with a 422, and would be refused again at the flush.
+
+**What this costs.** A department can build a template around "Rescue
+Technician", publish shifts from it, and watch every attempt to claim that seat
+fail. The seat looks configured everywhere except where it counts.
+
+**Why it is recorded rather than fixed here.** Widening it is a schema
+migration on an ENUM column plus a decision about how an open-vocabulary seat is
+validated against a shift's own list — a scheduling change, not an onboarding
+one. What this branch did do is stop the rank editor offering custom seats: a
+rank made eligible for one grants nothing, and offering it is a promise the app
+cannot keep, the same reason a module checkbox with no permission behind it is
+not rendered. `rankEligibleSeatOptions` in
+`frontend/src/modules/scheduling/utils/positionLabels.ts` states this, and
+`positionLabels.test.ts` asserts a custom seat is not offered.
+
+**What would fix it.** Widen the four request schemas to a validated string
+checked against the shift's configured seats, migrate the ENUM columns to
+`VARCHAR`, and then restore custom seats to the rank picker in the same change.
+
+## TIER-OFFICE — `can_hold_office` Is Stored, Editable, and Read by Nothing (2026-09-09)
+
+`MembershipTierBenefits.can_hold_office` has shipped in the schema and in the
+default ladder (Probationary is `False`) since membership tiers existed. No
+nomination or candidate path reads it: `election_service.py` consumes the tier's
+voting and attendance settings only, and a repository-wide search finds the
+field in the schema, the defaults, and a docstring — nowhere else.
+
+Until this branch nothing surfaced it, so it was inert but invisible. The tier
+editor now exposes it as a control, which makes the gap reachable: an
+administrator can clear "Can hold elected office" for Probationary, save it
+successfully, and have a probationary member nominated and elected anyway.
+
+**What was done.** CLAUDE.md pitfall #19 allows exactly two responses to a
+setting whose only effect is being stored — wire a reader in the same change, or
+mark it in the UI as not yet in effect. Wiring office eligibility into candidate
+validation is a change to elections, so the control carries a warning naming what
+it does not do and telling officers to screen candidates by hand.
+
+**What would fix it.** Consult the nominee's tier in the candidate-creation and
+nomination paths, refuse a member whose tier clears the flag, and delete the
+warning in the same change.
 
 ## Process
 

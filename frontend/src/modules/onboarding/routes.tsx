@@ -15,7 +15,6 @@ import {
   ITTeamBackupAccess,
   PositionSetup,
   ModuleOverview,
-  ModuleConfigTemplate,
   SystemOwnerCreation,
   SetupComplete,
 } from './pages';
@@ -78,8 +77,12 @@ export const getOnboardingRoutes = () => {
       {/* Onboarding wizard - Module Overview */}
       <Route path="/onboarding/modules" element={<ModuleOverview />} />
 
-      {/* Module Configuration Pages */}
-      <Route path="/onboarding/modules/:moduleId/config" element={<ModuleConfigTemplate />} />
+      {/* Legacy route redirect: the per-module configuration step is gone. It
+          collected manage positions into the wizard's store and submitted
+          nothing; the Positions step, one step earlier, owns that decision and
+          saves it. Kept as a redirect because a restored session can still hold
+          the old URL. */}
+      <Route path="/onboarding/modules/:moduleId/config" element={<Navigate to="/onboarding/modules" replace />} />
 
       {/* Legacy route redirect */}
       <Route path="/onboarding/module-selection" element={<ModuleOverview />} />

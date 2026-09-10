@@ -27,9 +27,19 @@ from typing import Any, Dict, List
 from pydantic import BaseModel
 
 # The seat vocabulary the rest of the system speaks: ``ShiftPosition`` on the
-# wire, ``operational_ranks.eligible_positions`` in config, and the rank
-# editor's own button list. ``tests/test_position_slots.py`` asserts this set
-# against ShiftPosition so the two cannot drift apart again.
+# wire and ``operational_ranks.eligible_positions`` in config.
+# ``tests/test_position_slots.py`` asserts this set against ShiftPosition so
+# the two cannot drift apart again.
+#
+# The rank editor's seat picker used to carry its own copy of this list. It now
+# derives from ``POSITION_LABELS`` in ``frontend/src/constants/enums.ts``, which
+# ``test_frontend_labels_agree`` below holds equal to this set, and unions in
+# the department's own ``customPositions`` — so a seat added here reaches that
+# picker without a second edit, and a seat a department invented is grantable at
+# all. ``paramedic`` is the one canonical seat the picker withholds: a medic
+# seat is a credential, granted by ``get_eligible_positions`` step 3b from the
+# member's certifications as of the shift date, and a rank that could confer it
+# would outlive the card.
 CANONICAL_POSITIONS = frozenset(
     {
         "officer",

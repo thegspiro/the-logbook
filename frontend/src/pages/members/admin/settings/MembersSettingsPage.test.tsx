@@ -117,6 +117,28 @@ describe('MembersSettingsPage', () => {
     expect(screen.queryByText('Show Contact Information')).not.toBeInTheDocument();
   });
 
+  // The routes admit the settings grants as well as the hub's, so an officer
+  // holding settings.manage and not members.manage reaches this screen
+  // legitimately — from the relocation link on /settings, or a legacy ?tab=
+  // redirect. /members/admin refuses them, so a back control pointing there
+  // answered Access Denied from the page's own chrome.
+  it('sends an officer without the hub grant back to organization settings', async () => {
+    granted.current = ['settings.manage'];
+
+    renderWithRouter(<MembersSettingsPage section="visibility" />);
+
+    expect(await screen.findByRole('button', { name: /back to organization settings/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /back to members administration/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the members administration destination for an officer who holds it', async () => {
+    granted.current = ['members.manage', 'settings.manage'];
+
+    renderWithRouter(<MembersSettingsPage section="visibility" />);
+
+    expect(await screen.findByRole('button', { name: /back to members administration/i })).toBeInTheDocument();
+  });
+
   // A grant per section, not one for the screen: an officer with settings.edit
   // alone can number members without being able to change what they see of
   // each other.

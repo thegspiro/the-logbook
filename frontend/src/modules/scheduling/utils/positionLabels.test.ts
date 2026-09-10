@@ -16,7 +16,7 @@ vi.mock('../services/shiftSettingsApi', () => ({
 }));
 
 // Imported after the mock is in place (store test pattern).
-import { positionLabel } from './positionLabels';
+import { positionLabel, rankEligibleSeatOptions } from './positionLabels';
 
 describe('positionLabel', () => {
   beforeEach(() => {
@@ -59,5 +59,51 @@ describe('positionLabel', () => {
     expect(positionLabel(null)).toBe('');
     expect(positionLabel(undefined)).toBe('');
     expect(positionLabel('  ')).toBe('');
+  });
+});
+
+describe('rankEligibleSeatOptions', () => {
+  beforeEach(() => {
+    getCachedShiftSettings.mockReset();
+    getCachedShiftSettings.mockReturnValue(DEFAULT_SETTINGS);
+  });
+
+  it('does not offer a custom seat nobody can be assigned to', () => {
+    // A custom seat belongs to the vocabulary everywhere else — a template can
+    // carry it, `canonical_position` round-trips it, the board renders its
+    // label — but `ShiftSignupRequest`, `ShiftAssignmentCreate` and
+    // `StandingShiftCreate` all type `position` as the closed `ShiftPosition`
+    // enum, with a MySQL ENUM column behind them. Granting a rank eligibility
+    // for one is a promise the app refuses at request validation.
+    getCachedShiftSettings.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      customPositions: [{ value: 'rescue_tech', label: 'Rescue Technician' }],
+    });
+
+    const options = rankEligibleSeatOptions();
+
+    expect(options.map((o) => o.value)).not.toContain('rescue_tech');
+    expect(options.map((o) => o.value)).toContain('firefighter');
+  });
+
+  it('withholds the medic seat, which a certification confers and a rank must not', () => {
+    // get_eligible_positions grants `paramedic` from step 3b, the member's
+    // certifications as of the shift date. A rank that could hand it out would
+    // outlive the card.
+    expect(rankEligibleSeatOptions().map((o) => o.value)).not.toContain('paramedic');
+  });
+
+  it('names each built-in seat the way every other screen does', () => {
+    const ems = rankEligibleSeatOptions().find((o) => o.value === 'ems');
+    expect(ems?.label).toBe('EMT');
+  });
+
+  it('offers each built-in seat exactly once', () => {
+    getCachedShiftSettings.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      customPositions: [{ value: 'officer', label: 'Company Officer' }],
+    });
+
+    expect(rankEligibleSeatOptions().filter((o) => o.value === 'officer')).toHaveLength(1);
   });
 });

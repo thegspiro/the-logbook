@@ -22,6 +22,7 @@ import {
   MEMBERS_SETTINGS_EVOC_GATE,
   MEMBERS_SETTINGS_IDS_GATE,
   MEMBERS_SETTINGS_RANKS_GATE,
+  MEMBERS_SETTINGS_TIERS_GATE,
   MEMBERS_SETTINGS_VISIBILITY_GATE,
 } from './routes';
 import {
@@ -41,6 +42,7 @@ describe('Members settings route gates', () => {
     ['visibility', MEMBERS_SETTINGS_VISIBILITY_GATE],
     ['ids', MEMBERS_SETTINGS_IDS_GATE],
     ['ranks', MEMBERS_SETTINGS_RANKS_GATE],
+    ['tiers', MEMBERS_SETTINGS_TIERS_GATE],
     ['evoc', MEMBERS_SETTINGS_EVOC_GATE],
   ] as [MembersSettingsTab, string[]][])('the %s route admits exactly what its section declares', (tab, gate) => {
     expect([...gate].sort()).toEqual(expectedGate(tab).sort());
@@ -50,7 +52,7 @@ describe('Members settings route gates', () => {
     // The list above is hand-written. Without this, a fifth section would ship
     // with no route gate asserted at all and the suite would still be green.
     expect(MEMBERS_SETTINGS_SECTIONS.map((entry) => entry.key).sort()).toEqual(
-      ['evoc', 'ids', 'ranks', 'visibility'].sort()
+      ['evoc', 'ids', 'ranks', 'tiers', 'visibility'].sort()
     );
   });
 
@@ -67,6 +69,7 @@ describe('Members settings route gates', () => {
       MEMBERS_SETTINGS_VISIBILITY_GATE,
       MEMBERS_SETTINGS_IDS_GATE,
       MEMBERS_SETTINGS_RANKS_GATE,
+      MEMBERS_SETTINGS_TIERS_GATE,
       MEMBERS_SETTINGS_EVOC_GATE,
       MEMBERS_SETTINGS_ANY_PERMISSION,
     ]) {

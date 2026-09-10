@@ -489,6 +489,19 @@ docker compose exec backend alembic upgrade head
 
 ### Traditional Deployment
 
+Note the ordering below: `alembic upgrade head` runs while the *old* backend is
+still serving. That is fine for ordinary migrations, but a revision that adds a
+uniqueness constraint can be beaten to it by a write from the still-running old
+code. Migrations here are written so that such a failure is safe — nothing is
+dropped, the revision does not move, and the schema is left exactly as it was —
+so the fix is simply to retry with the backend stopped:
+
+```bash
+sudo systemctl stop logbook-backend
+alembic upgrade head
+sudo systemctl start logbook-backend
+```
+
 ```bash
 # Pull latest code
 git pull

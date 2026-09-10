@@ -187,14 +187,13 @@ const EvocLevelsSettingsSection: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-theme-text-primary text-lg font-semibold">EVOC Levels</h3>
-          <p className="text-theme-text-muted mt-1 text-sm">
-            The driving certification ladder for your apparatus. Link a level to the training program that certifies it
-            and members are added as operators automatically when they finish.
-          </p>
-        </div>
+      {/* Title and description come from the page's SettingsPanelHead, which
+          renders them as the <h2> every settings section uses. This carried its
+          own <h3> while the global settings page mounted it bare; keeping both
+          showed the heading twice, and keeping only the <h3> would leave it with
+          no <h2> above it — a heading-order jump the accessibility pass counts,
+          which is what it did on the rank ladder beside it. */}
+      <div className="flex items-center justify-end gap-3">
         {!adding && !editingLevel && (
           <button
             type="button"
