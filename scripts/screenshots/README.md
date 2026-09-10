@@ -212,13 +212,49 @@ declines to guess if two placeholders match it.
    `openFirstFromApi()` rather than hard-coding an id — ids change every seed.
 4. If it pictures what a **member** sees, or a **dark-mode** page, set `auth` /
    `theme` rather than reaching for the administrator's session.
-5. Capture with `--only <id-prefix>`, **look at the PNG**, then apply.
+5. Give it an **`expect`** — text (or `{ selector }`) that proves this is the
+   screen the placeholder describes. Required for a new shot;
+   `scripts/test_screenshot_landing_assertion.py` fails without one.
+6. Capture with `--only <id-prefix>`, **look at the PNG**, then apply.
 
 > **Look at the image, every time.** A capture that exits `+` proves only that
 > Playwright reached a page and wrote a file. It does not prove the page is the
 > one the placeholder describes: a collapsed accordion, an unapplied filter, or
 > a route that now renders a different audience's view all capture cleanly.
 > Every one of those happened while these shots were being written.
+
+### `expect` — the assertion that the shot landed where it says
+
+`expect` is checked at capture time, and it checks two things at once, because
+both have shipped a wrong image:
+
+- **The right screen.** `03-25` photographed the Schedule tab and was captioned
+  "Equipment checks tab" (#2341). It had no `prepare`, so nothing looked at the
+  page — and nothing could have, from the URL: measured against this build,
+  `/scheduling?tab=totally-bogus` **keeps the bogus parameter in the address
+  bar** and renders the schedule underneath it. The URL is not evidence of the
+  screen. Only content is.
+- **The subject actually in the picture.** `03-69` satisfied its own wait — the
+  catalog matches were in the DOM — and framed every one of them off the bottom
+  of a 390px page (#2449). So `expect` is asserted _visible and inside the
+  captured frame_: the element's own box for a `selector` shot, the document for
+  `fullPage`, the viewport otherwise.
+
+```js
+expect: "Equipment & Readiness",        // text on that screen and no other
+expect: { selector: "#seal-drug-bag" }, // or an element
+```
+
+Pick something that would be **absent from the screen you'd land on by
+mistake** — a heading, not a nav label that appears on every page.
+
+`capture.mjs` separately fails any shot whose **pathname** changed on arrival
+(a not-found route redirects to `/dashboard`, a lost session to `/login`). A
+route that redirects by design declares where it ends up with `landsOn`.
+
+509 shots predate this rule and are listed in `landing_assertion_baseline.txt`.
+That list is a ratchet: a new shot cannot join it, and adding an `expect` means
+deleting the line, so it only shrinks.
 
 Two waiting pitfalls worth knowing, both of which cost a debugging round here:
 
