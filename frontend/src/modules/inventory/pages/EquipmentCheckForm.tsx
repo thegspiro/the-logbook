@@ -542,9 +542,18 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Load pending count on mount
   useEffect(() => {
     if (previewMode) return;
+    // Cancelled like every other async effect in this file. This one was
+    // missed: `.then(setPendingQueueCount)` passes the setter straight to the
+    // promise, so it fires whenever the read settles, mount or no mount.
+    let cancelled = false;
     void getPendingCount()
-      .then(setPendingQueueCount)
+      .then((count) => {
+        if (!cancelled) setPendingQueueCount(count);
+      })
       .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [previewMode]);
 
   // --------------------------------------------------------------------------
@@ -929,7 +938,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           `Draft restored — saved by you ${minutes === 0 ? 'just now' : `${String(minutes)} minutes ago`}; ${String(completed)} of ${String(totalItems)} items completed`
         );
       })
-      .catch(() => toast.error('Draft recovery is unavailable; no prior answers were opened'))
+      .catch(() => {
+        // Guarded like the `.finally` below it, which it was not: a draft
+        // recovery that fails after the member has left the form used to
+        // raise "Draft recovery is unavailable" over whatever page they had
+        // moved on to, describing a form no longer on screen.
+        if (!cancelled) toast.error('Draft recovery is unavailable; no prior answers were opened');
+      })
       .finally(() => {
         if (!cancelled) setDraftReady(true);
       });
