@@ -2300,6 +2300,7 @@ export const SHOTS = [
   },
   {
     id: "03-50-vehicle-preset-picker",
+    expect: "Start from a vehicle layout",
     doc: "03-scheduling.md",
     line: 736,
     anchor:
@@ -3773,11 +3774,12 @@ export const SHOTS = [
   },
   {
     id: "02-92-requirement-evaluation-period",
+    expect: "Evaluation Period",
     doc: "02-training.md",
     line: 780,
     anchor: "The requirement add/edit form showing the",
     alt: "The Evaluation Period selector on a requirement, with the note on what it changes",
-    route: "/training/requirements",
+    route: "/training/admin?page=setup&tab=requirements",
     prepare: async (page) => {
       await page
         .getByRole("button", { name: /Create Requirement/i })
@@ -3878,11 +3880,12 @@ export const SHOTS = [
   },
   {
     id: "08-59-breadcrumbs",
+    expect: "Back to Expense Reports",
     doc: "08-admin-reports.md",
     line: 596,
     anchor: "Screenshot of a page showing its breadcrumb trail",
     alt: "A breadcrumb trail at the top of an expense report detail page",
-    route: "/finance/expense-reports",
+    route: "/finance/expenses",
     prepare: openFirstFromApi(
       "/finance/expense-reports?limit=5",
       (id) => `/finance/expenses/${id}`,
@@ -4517,12 +4520,13 @@ export const SHOTS = [
   },
   {
     id: "00-09-account-settings",
+    expect: "Account Information",
     doc: "00-getting-started.md",
     line: 206,
     anchor:
       "Screenshot of the Account Settings page showing the profile section, notification preferences",
     alt: "Account Settings on its Account tab — the tab row leads to password, security, emergency contacts, appearance and notifications",
-    route: "/settings/account",
+    route: "/account",
     fullPage: true,
   },
 
@@ -4553,22 +4557,24 @@ export const SHOTS = [
   },
   {
     id: "01-05-add-member-form",
+    expect: "Add Member",
     doc: "01-membership.md",
     line: 128,
     anchor:
       "Screenshot of the Add Member form showing the personal information fields, role",
     alt: "Add Member form with personal information and role assignment fields",
-    route: "/members/add",
+    route: "/members/admin?tab=add",
     fullPage: true,
   },
   {
     id: "01-06-import-members",
+    expect: "Import Members",
     doc: "01-membership.md",
     line: 152,
     anchor:
       "Screenshot of the Import Members page showing the file upload area, the",
     alt: "Import Members page with the file upload area and template download link",
-    route: "/members/import",
+    route: "/members/admin?tab=import",
     fullPage: true,
   },
   {
@@ -5151,40 +5157,45 @@ export const SHOTS = [
   },
   {
     id: "02-04-course-library",
+    expect: "Course Library",
     doc: "02-training.md",
     line: 111,
     anchor:
       "Screenshot of the Course Library page showing course cards organized by category,",
     alt: "Course Library showing course cards grouped by category",
+    auth: "member",
     route: "/training/courses",
   },
   {
     id: "02-16-requirements",
+    expect: "Requirements",
     doc: "02-training.md",
     line: 438,
     anchor:
       "Screenshot of the Requirements management page showing a table of requirements with",
     alt: "Training requirements management table",
-    route: "/training/requirements",
+    route: "/training/admin?page=setup&tab=requirements",
   },
   {
     id: "02-17-officer-dashboard",
+    expect: "Officer Dashboard",
     doc: "02-training.md",
     line: 462,
     anchor:
       "Screenshot of the Training Officer Dashboard showing summary cards (completion rate, pending",
     alt: "Training Officer Dashboard with summary cards and pending review queue",
-    route: "/training/officer",
+    route: "/training/admin?page=dashboard&tab=overview",
     fullPage: true,
   },
   {
     id: "02-18-review-submissions",
+    expect: "Submissions",
     doc: "02-training.md",
     line: 480,
     anchor:
       "Screenshot of the Review Submissions page showing a list of pending submissions",
     alt: "Review Submissions page listing pending training submissions",
-    route: "/training/submissions",
+    route: "/training/admin?page=records&tab=submissions",
   },
   {
     id: "02-38-manual-shift-report",
@@ -5198,12 +5209,13 @@ export const SHOTS = [
   },
   {
     id: "02-42-external-integrations",
+    expect: "External Training Integrations",
     doc: "02-training.md",
     line: 984,
     anchor:
       "Screenshot of the External Training Integrations page showing a saved provider card with",
     alt: "The Integrations tab with a saved provider — its platform, last sync, auto-sync interval and sync actions",
-    route: "/training/integrations",
+    route: "/training/admin?page=setup&tab=integrations",
   },
   {
     id: "02-45-training-programs",
@@ -5425,6 +5437,7 @@ export const SHOTS = [
   },
   {
     id: "04-05-create-event",
+    expect: "Create Event",
     // "No reminders" is a line inside the notification defaults on a blank
     // create form; the Reminder Schedule beside it carries its 1-day chip and
     // the audience selector the caption is about.
@@ -5434,7 +5447,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Create Event form showing fields for type, title, date/time,",
     alt: "Create Event form with type, title, date, location, and reminder fields",
-    route: "/events/new",
+    route: "/events/admin?tab=create",
     fullPage: true,
   },
   {
@@ -6900,6 +6913,7 @@ export const SHOTS = [
   },
   {
     id: "03-69-catalog-quick-add",
+    expect: "SCBA Spare Cylinder",
     doc: "03-scheduling.md",
     line: 1055,
     anchor:
@@ -6962,6 +6976,7 @@ export const SHOTS = [
   },
   {
     id: "03-68-inventory-match-dialog",
+    expect: "Link items to inventory",
     doc: "03-scheduling.md",
     line: 1058,
     anchor:
@@ -7608,7 +7623,7 @@ export const SHOTS = [
     // else entirely: which *membership types* may self-sign-up, and which
     // positions are open to everyone. Per-rank position eligibility is set on
     // the ranks themselves, in the main settings area.
-    route: "/settings?tab=ranks",
+    route: "/members/admin/settings/ranks",
     fullPage: true,
   },
   {
@@ -7622,6 +7637,7 @@ export const SHOTS = [
   },
   {
     id: "03-34-settings-checklist-timing",
+    expect: "Checklist Settings",
     doc: "03-scheduling.md",
     line: 802,
     anchor: "Checklist Timing",
@@ -8090,6 +8106,7 @@ export const SHOTS = [
   },
   {
     id: "03-25-equipment-checks-tab",
+    expect: "Equipment & Readiness",
     doc: "03-scheduling.md",
     line: 1329,
     anchor: "Screenshot of Fleet Readiness showing a list of apparatus with",
@@ -11439,7 +11456,7 @@ export const SHOTS = [
     line: 703,
     anchor: "the event form with Recruitment selected, showing",
     alt: "A new event with Recruitment chosen: guest sign-in and create-a-prospect both switched on, under the banner explaining that guests reach the prospective-members pipeline",
-    route: "/events/new",
+    route: "/events/admin?tab=create",
     allowEmptyState:
       'Matches "No reminders", one of the three options inside the ' +
       "reminder-audience select rather than an empty state. The form is fully " +
@@ -11535,7 +11552,7 @@ export const SHOTS = [
     line: 1539,
     anchor: "Create Event → Notifications with all three",
     alt: "The Notifications panel on a new optional event, its reminder audience defaulting to Members who sign up",
-    route: "/events/new",
+    route: "/events/admin?tab=create",
     selector: "section:has(> h2:has-text('Notifications'))",
     allowEmptyState:
       'Same "No reminders" select option as 19-10. The panel is populated: the ' +
@@ -11557,7 +11574,7 @@ export const SHOTS = [
     line: 1573,
     anchor: "Check-In Settings showing Flexible and 60 minutes before",
     alt: "Check-In Settings on a new event: the Flexible window with self check-in opening 60 minutes before the start",
-    route: "/events/new",
+    route: "/events/admin?tab=create",
     selector: "section:has(> h2:has-text('Check-In Settings'))",
     prepare: async (page) => {
       await page
@@ -11576,7 +11593,7 @@ export const SHOTS = [
     anchor:
       "mandatory-event form after the Mandatory switch is enabled, showing",
     alt: "The Notifications panel after checking Mandatory attendance on a new event: the reminder audience switching to All active members",
-    route: "/events/new",
+    route: "/events/admin?tab=create",
     selector: "section:has(> h2:has-text('Notifications'))",
     prepare: async (page) => {
       await page.locator("#is-mandatory").check();
@@ -11735,7 +11752,7 @@ export const SHOTS = [
     line: 283,
     anchor: "an event form's room picker with indented sub-rooms",
     alt: "The event form's location picker with a nested room chosen, the control showing the full containment path from the room up to its station",
-    route: "/events/new",
+    route: "/events/admin?tab=create",
     selector: "section:has(> h2:has-text('Location'))",
     prepare: async (page) => {
       const picker = page.locator("#location-select");
@@ -11852,7 +11869,7 @@ export const SHOTS = [
     line: 797,
     anchor: "a tall dialog on a 390x844 viewport, scrolled to its",
     alt: "A dialog taller than the phone screen, scrolled to its Cancel and Save row — the bottom navigation bar is gone while it is open, so both buttons are reachable",
-    route: "/training/courses",
+    route: "/training/admin?page=setup&tab=courses",
     viewport: { width: 390, height: 844 },
     fullPage: false,
     prepare: openTallDialogAtActionRow,
@@ -11863,7 +11880,7 @@ export const SHOTS = [
     line: 728,
     anchor: "a tall dialog on a 390x844 viewport scrolled to its",
     alt: "The fix in force: a dialog scrolled to its action row on a phone, with no navigation bar painting over the buttons",
-    route: "/training/courses",
+    route: "/training/admin?page=setup&tab=courses",
     viewport: { width: 390, height: 844 },
     fullPage: false,
     prepare: openTallDialogAtActionRow,
@@ -12156,7 +12173,7 @@ export const SHOTS = [
     line: 237,
     anchor: "training-session edit flow with requirement, course, and program",
     alt: "Step 2 of the training-session wizard: an existing course selected, and the category, requirement and program links under a plain-language line saying what attendance will advance",
-    route: "/training/sessions/new",
+    route: "/training/admin?page=records&tab=sessions",
     prepare: async (page) => {
       await page
         .getByRole("button", { name: /^Next$/ })
@@ -12483,6 +12500,7 @@ export const SHOTS = [
   },
   {
     id: "19-40-seal-panel",
+    expect: "Tamper seal",
     doc: "19-august-2026-release-changes.md",
     line: 1478,
     anchor: "the seal panel on a check",
