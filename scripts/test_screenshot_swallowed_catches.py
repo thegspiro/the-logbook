@@ -62,32 +62,64 @@ STATEMENT_START = re.compile(
 
 
 def strip_comments(lines: list[str]) -> list[str]:
-    """Blank out comment text, preserving line count so numbers stay true.
+    """Blank out comment text, preserving line count so line numbers stay true.
 
     Needed because this file's own prose quotes the pattern it bans, and so does
     every comment in `capture.mjs` explaining why a catch was removed — scanning
-    raw text reports those as live code.
+    raw text reported those quotations as live code, which is how the first run
+    of this sweep "found" a defect inside its own docstring.
+
+    String-aware, and that is not theoretical tidiness: `capture.mjs:36` and
+    `inventory-setup.mjs:53` both hold `"http://localhost:..."`, and a stripper
+    that treats the `//` in a URL as a line comment truncates the rest of that
+    line. No `.catch` shares a line with either today, so nothing was missed —
+    but a `await page.goto("http://x").catch(() => {})` would have gone
+    unreported, and a guard that silently sees nothing is the failure this file
+    exists to prevent.
+
+    Quote state resets per line. A template literal spanning lines is therefore
+    scanned as if each line opened fresh; none of the three files has one, and
+    the alternative (carrying state across lines) mis-reads a stray backtick in
+    prose far more often than it helps.
     """
     out: list[str] = []
     in_block = False
     for line in lines:
-        kept, i = [], 0
+        kept: list[str] = []
+        quote: str | None = None
+        i = 0
         while i < len(line):
-            two = line[i : i + 2]
+            char, pair = line[i], line[i : i + 2]
             if in_block:
-                if two == "*/":
+                if pair == "*/":
                     in_block = False
                     i += 2
+                else:
+                    i += 1
+                continue
+            if quote is not None:
+                kept.append(char)
+                if char == "\\" and i + 1 < len(line):
+                    kept.append(line[i + 1])
+                    i += 2
                     continue
+                if char == quote:
+                    quote = None
                 i += 1
-            elif two == "/*":
+                continue
+            if char in ("'", '"', "`"):
+                quote = char
+                kept.append(char)
+                i += 1
+                continue
+            if pair == "/*":
                 in_block = True
                 i += 2
-            elif two == "//":
+                continue
+            if pair == "//":
                 break
-            else:
-                kept.append(line[i])
-                i += 1
+            kept.append(char)
+            i += 1
         out.append("".join(kept))
     return out
 
@@ -309,6 +341,22 @@ class TestNoNewSwallowedCatches(unittest.TestCase):
         assert ".catch(" not in stripped[1], stripped[1]
         assert ".catch(() => {})" in stripped[2], stripped[2]
         assert len(stripped) == 3, "line numbering must survive stripping"
+
+    def test_a_url_in_a_string_is_not_read_as_a_comment(self):
+        """`//` inside a string literal must not truncate the line.
+
+        Both `capture.mjs` and `inventory-setup.mjs` hold a `http://localhost`
+        default, so a stripper that misses this goes blind to any `.catch` that
+        shares a line with a URL — reporting nothing, which is indistinguishable
+        from a clean sweep.
+        """
+        line = 'await page.goto("http://localhost:3000").catch(() => {});'
+        assert ".catch(() => {})" in strip_comments([line])[0]
+        # And the real files' URL lines survive intact.
+        kept = strip_comments(
+            ['const BASE_URL = process.env.X || "http://localhost:3000";']
+        )[0]
+        assert kept.endswith(";"), kept
 
 
 if __name__ == "__main__":
