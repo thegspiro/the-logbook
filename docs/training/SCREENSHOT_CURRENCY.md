@@ -1,5 +1,93 @@
 # Screenshot currency
 
+## Disposition for September 10, 2026 (later pass) — scheduling settings gained a heading, items list now folds variants, EVOC tab strip was stale
+
+**Recaptured, not queued** — the app was already up for this rebase's audit, so
+the three findings below were captured and diffed against the committed images
+rather than assumed. All twenty images changed for a confirmed reason; nothing
+was recaptured speculatively.
+
+Rebasing this branch onto main (through #2472; see the plain audit entry at
+the bottom of this file for the full commit range) landed three independent
+pieces of drift:
+
+**1. Every scheduling settings tab gained a heading it never had, plus a
+mobile-accessibility touch-target sweep (`bdb0f4554`).** `ShiftSettingsPanel`
+now renders a `SettingsPanelHead` (title + description) above whichever tab is
+active — General, Apparatus, Platoons, Eligibility, Notifications and Shift
+Reports all share the one component, so all six gained it, not just General.
+The same commit also swept ~80 controls across `DepartmentDefaultsCard`,
+`PositionNamesCard`, `PositionListEditor`, `EligibilitySettingsCard` and
+`SchedulingNotificationsPanel` onto `mobile-touch-row` / `mobile-touch-target`
+(rows and pills that were shorter than 44px grow, by up to 20px), added
+`htmlFor` associations that were missing, and moved the "Safety" badge on
+"Enforce EVOC for drivers" from emerald-700 to emerald-800 for AA contrast.
+None of this is a color/edge finding `audit_images.py` catches — it ran clean
+(568/568, no new baseline findings) throughout.
+
+Recaptured (diffed against the committed image first; `03-34-settings-checklist-timing`
+was checked and did **not** change, so it was left alone rather than
+overwritten on the assumption):
+
+| Image | What changed |
+| --- | --- |
+| `03-47-settings-desktop`, `03-48-settings-phone` | New "General" heading; new "require end-of-shift checks" tip banner; row height growth |
+| `03-15-scheduling-settings`, `03-32-settings-general-closeout` | New heading; Safety badge now emerald-800 |
+| `03-40-settings-position-eligibility` | New "Eligibility" heading; pill buttons now `mobile-touch-target` |
+| `03-35-settings-form-sections`, `03-36-settings-apparatus-skills`, `03-37-settings-rating-scale` | New "Shift Reports" heading |
+| `03-38-notifications-assignment`, `03-39-notifications-reminders` | New "Notifications" heading; checkbox rows and role pills taller |
+| `03-74-settings-call-count-toggle` | New heading |
+| `02-76-report-form-sections`, `02-77-apparatus-skills` | Same shift-reports page, reached from the training guide |
+
+This is a **partial** resolution of the "toggle switches grew a 44px hit
+target" entry below: `SchedulingNotificationsPanel` and `ShiftSettingsPanel`
+are two of the thirteen call sites that entry lists, and every image of theirs
+this manifest captures is now recaptured against the current build (which
+already carries that toggle-track height too, since these were shot against
+the live app just now). The other eleven call sites — `EmailSettingsSection`,
+`ElectionsSettingsPage`, `MembershipIdSection`, `ContactVisibilitySection`,
+`CallTypesCard`, `PipelineSection`, `EmailSection`, `UserSettingsPage`,
+`VisibilityControl`, `MfaPolicyCard`, `AdminMetricsSettings`, `ItemFormModal`
+— are untouched by this pass and remain queued exactly as written below.
+
+**2. The inventory items list now folds size/colour variants into one row
+(`items-variant-rows-collapse`, PR #2465).** Adjacent rows sharing a
+`variant_group_id` under the default name sort now render as a single
+"Department Polo · 8 loaded" row with a size-badge capsule instead of one row
+per variant — confirmed live: the demo department's seeded Department Polo
+and Structural Coat variant groups collapsed exactly this way. Recaptured
+`05-01-inventory-items`, `05-47-items-filter-bar`, `05-53-items-grid-lot-stock`,
+`05-53-items-variant-capsules` and `10-05-mobile-inventory` (all render the
+same `InventoryItemsPage`); `05-49-variant-stock-matrix` (a different page,
+Variant Groups admin) was recaptured too but only shows ordinary seed-data
+count drift, not a code change.
+
+**3. `01-42-evoc-levels-settings` was stale against a tab that already existed
+at the prior rebase point.** The Members Settings tab strip has carried a
+**Membership Tiers** tab (`bfa43989a`, merged before this branch's last
+rebase) since before this pass started, but the image committed for the EVOC
+Levels screen (from `b01c76873`, this branch's own "recapture ranks/evoc"
+commit) was captured missing it — a stale capture on this branch's own
+history, not new drift from the current rebase range. `03-33-settings-eligibility`
+already showed the tab correctly (recaptured against a newer build by a
+different conflict resolution earlier in this same rebase — see the plain
+audit entry below). Recaptured to match.
+
+**Also found, not fixed — a new seeder failure, out of scope for this pass:**
+re-seeding hit `PATCH /users/{id}/membership-type -> 400: Invalid membership
+tier 'administrative'. Valid tiers: ['probationary', 'active', 'senior',
+'life']` for both `ADMINISTRATIVE_USERNAMES` (`jwhitfield`, `bhollis`). The
+membership-tier ladder feature (`bfa43989a`) appears to have replaced the
+fixed `administrative` membership type with a configurable tier ladder that no
+longer accepts it as a `membership_type` value, and `seed_demo_data.py`'s
+`ADMINISTRATIVE_USERNAMES` handling was never updated to match. This blocks
+neither of the two members from being created (they land as ordinary members
+with a rank, since the demotion patch 400s) nor any placeholder this pass
+touched, so it is flagged here — same posture as `b01c76873`'s three flagged,
+unfixed seeder bugs — rather than guessed at. Whoever next needs an
+administrative-class member pictured (no rank, `settings.manage` without
+`members.manage`) should check this first.
+
 ## Disposition for September 10, 2026 — toggle switches grew a 44px hit target
 
 Queued, not yet shot. `toggle-track` (`frontend/src/styles/index.css`) went from a
@@ -13,7 +101,7 @@ findings) on this rebase and still needs a human queue entry.
 
 `SettingsToggle` / `toggle-track` appear in at least: `EmailSettingsSection`,
 `ElectionsSettingsPage`, `MembershipIdSection`, `ContactVisibilitySection`,
-`SchedulingNotificationsPanel`, `ShiftSettingsPanel`, `CallTypesCard`,
+~~`SchedulingNotificationsPanel`, `ShiftSettingsPanel`~~, `CallTypesCard`,
 `PipelineSection`, `EmailSection` (events settings), `UserSettingsPage`,
 `VisibilityControl` (member profile), `MfaPolicyCard`, `AdminMetricsSettings`,
 and `ItemFormModal`. That reaches settings screens across guides 01, 03, 04,
@@ -23,6 +111,14 @@ to tell which of those rows actually pictured a switch as the tallest element
 (and so didn't move at all). Re-run `capture.mjs` for the affected guides and
 diff against the current images before recapturing; do not recapture on the
 assumption alone.
+
+**The two struck through are done.** The entry above this one recaptured
+every guide-03 image `SchedulingNotificationsPanel` and `ShiftSettingsPanel`
+appear in (they needed it anyway, for the new settings heading), against the
+live app, so whatever `toggle-track` height those images carry is already
+current. The other eleven call sites — guides 01, 04, 08, 10 and the
+member-profile panel — are untouched and still need the capture-and-diff pass
+this entry originally called for.
 
 ## Disposition for September 8, 2026 — Operational Ranks and EVOC Levels moved into Members Administration
 
