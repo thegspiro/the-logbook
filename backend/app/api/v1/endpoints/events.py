@@ -1059,10 +1059,12 @@ async def get_event(
     )
 
     # Waitlist standing, computed in Python from the already eager-loaded
-    # rsvps — no extra query. Ordered by responded_at because that is the
-    # column promote_from_waitlist promotes on; ordering by updated_at would
-    # send a member to the back of the line for editing a note, and would make
-    # the position we display disagree with who actually gets promoted.
+    # rsvps — no extra query. Ordered by (responded_at, id) because that is
+    # the tiebroken order promote_from_waitlist promotes on (EV-24); ordering
+    # by updated_at would send a member to the back of the line for editing a
+    # note, and dropping the id tiebreaker would disagree with promotion
+    # whenever two RSVPs land in the same second — MySQL's DATETIME column is
+    # only second-precision, so that tie is routine, not an edge case.
     #
     # Filtered to the parties promotion can actually reach, using the same
     # rule promote_from_waitlist applies: a party needing more seats than the
@@ -1073,7 +1075,7 @@ async def get_event(
     # an organizer lowered max_attendees after somebody had already queued.)
     all_waitlisted = sorted(
         (r for r in (event.rsvps or []) if r.status == RSVPStatus.WAITLISTED),
-        key=lambda r: r.responded_at,
+        key=lambda r: (r.responded_at, r.id),
     )
     if event.max_attendees:
         waitlisted = [

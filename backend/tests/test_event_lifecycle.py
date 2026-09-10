@@ -716,6 +716,163 @@ class TestEventRSVP:
         assert err3b is None
         assert rsvp3_again.status.value == "waitlisted"
 
+    async def test_tied_responded_at_uses_id_as_a_consistent_tiebreaker(
+        self, db_session, setup_org_and_users
+    ):
+        """Codex review of PR #2451 (EV-24 follow-up): production MySQL
+        stores responded_at as a second-precision DATETIME, so two RSVPs
+        queued within the same second tie on that column alone -- routine,
+        not a rare edge case (the test above sidesteps it by assigning
+        distinct timestamps on purpose). Before this fix, the admission
+        guard's bare "<" comparison found neither tied row "earlier" than
+        the other, so a tied row could resubmit and jump the queue
+        regardless of which one promote_from_waitlist would actually
+        promote first. The fix adds `id` as a second, deterministic sort key
+        everywhere responded_at is compared or ordered, so a tie resolves
+        the same way in the guard and in promotion.
+        """
+        org_id, user_id, user2_id = setup_org_and_users
+        user3_id = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO users (id, organization_id, username, first_name, "
+                "last_name, email, password_hash, status) "
+                "VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
+            ),
+            {
+                "id": user3_id,
+                "org": org_id,
+                "un": "ctied",
+                "fn": "Casey",
+                "ln": "Tied",
+                "em": "ctied@test.com",
+                "pw": "hashed",
+            },
+        )
+        await db_session.flush()
+
+        svc = EventService(db_session)
+        event = await svc.create_event(
+            event_data=_make_event_create(
+                title="Tied Waitlist Event",
+                requires_rsvp=True,
+                max_attendees=3,
+                allow_guests=True,
+            ),
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+        )
+
+        # user1 takes the whole roster with a party of three.
+        rsvp1, err1 = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(status="going", guest_count=2),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err1 is None
+        assert rsvp1.status.value == "going"
+
+        # user2 and user3 both RSVP while the roster is full and are both
+        # waitlisted.
+        rsvp2, err2 = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user2_id),
+            rsvp_data=RSVPCreate(status="going"),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err2 is None
+        assert rsvp2.status.value == "waitlisted"
+
+        rsvp3, err3 = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user3_id),
+            rsvp_data=RSVPCreate(status="going"),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err3 is None
+        assert rsvp3.status.value == "waitlisted"
+
+        # Tie the two waitlisted rows' responded_at exactly, and assign the
+        # "needs three seats, doesn't fit a two-seat gap" party to whichever
+        # id sorts first. id order is a random UUID, not creation order, so
+        # the pairing has to be read back from the actual rows rather than
+        # assumed.
+        # microsecond=0: the column is a second-precision DATETIME, so MySQL
+        # truncates on storage. A later query re-fetches this same row by id
+        # only (not full entities) and so reads the truncated DB value
+        # directly -- if the in-memory tied_at still carried microseconds it
+        # would compare as strictly *greater* than the truncated stored
+        # value, an artificial inequality that has nothing to do with the
+        # tiebreaker this test means to exercise.
+        tied_at = (datetime.now(timezone.utc) - timedelta(minutes=10)).replace(
+            microsecond=0
+        )
+        order = await db_session.execute(
+            text(
+                "SELECT user_id FROM event_rsvps "
+                "WHERE event_id = :eid AND user_id IN (:u2, :u3) ORDER BY id ASC"
+            ),
+            {"eid": event.id, "u2": user2_id, "u3": user3_id},
+        )
+        ahead_user_id, behind_user_id = [row[0] for row in order.fetchall()]
+        ahead_rsvp = rsvp2 if str(rsvp2.user_id) == ahead_user_id else rsvp3
+        behind_rsvp_row = rsvp3 if ahead_rsvp is rsvp2 else rsvp2
+
+        # Both guest_count and responded_at are set through the already-
+        # loaded ORM objects, never raw SQL: both create_or_update_rsvp's own
+        # later re-fetch and promote_from_waitlist re-read inside this same
+        # transaction, and a raw UPDATE would leave these objects' cached
+        # attributes stale in the session's identity map (the same gotcha
+        # get_shift_by_id's populate_existing works around) -- silently
+        # comparing against each row's original, pre-tie creation timestamp
+        # instead of the tie this test means to set up.
+        ahead_rsvp.guest_count = 2
+        ahead_rsvp.responded_at = tied_at
+        behind_rsvp_row.guest_count = 0
+        behind_rsvp_row.responded_at = tied_at
+        await db_session.flush()
+
+        # user1 shrinks their own party down to one, freeing two seats --
+        # same precondition as the distinct-timestamp test above, but now
+        # the two waitlisted rows are exactly tied.
+        rsvp1_again, err1b = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(status="going", guest_count=0),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err1b is None
+        assert rsvp1_again.status.value == "going"
+
+        # The tiebroken-ahead (id-first) row still needs three seats and
+        # does not fit a two-seat gap, so automatic promotion correctly
+        # skips it and it stays waitlisted.
+        ahead_check = await db_session.execute(
+            text(
+                "SELECT status FROM event_rsvps "
+                "WHERE user_id = :uid AND event_id = :eid"
+            ),
+            {"uid": ahead_user_id, "eid": event.id},
+        )
+        assert ahead_check.scalar_one() == "waitlisted"
+
+        # The tiebroken-behind row resubmits its own already-waitlisted RSVP
+        # unchanged. Its own one-seat party fits the two-seat gap, but the
+        # tiebroken-ahead row is -- by the same tiebreaker -- still queued
+        # ahead of it and is ever-admissible (three fits the event's own cap
+        # of three). Before the fix, the bare "<" on a tied timestamp found
+        # no row "earlier" than the resubmission, so this slipped through;
+        # it must not.
+        behind_rsvp, behind_err = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(behind_user_id),
+            rsvp_data=RSVPCreate(status="going"),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert behind_err is None
+        assert behind_rsvp.status.value == "waitlisted"
+
 
 # ── Attendance Tests ────────────────────────────────────────────────
 

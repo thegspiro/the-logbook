@@ -205,6 +205,49 @@ that_can_never_fit`'s own pattern) that the admissibility filter and the
 mocked DB never executes the real SQL predicate — confirmed to fail pre-fix
 (both the core-block test and the structural test).
 
+**Codex review follow-up (same PR, #2451): tied `responded_at` had no
+consistent tiebreaker.** Production MySQL stores `responded_at` as a
+second-precision `DATETIME`, so two RSVPs queued within the same second tie
+on that column alone — routine, not a rare edge case (the guard test above
+sidesteps it on purpose, assigning distinct timestamps). Under a tie, the
+admission guard's `<` predicate found neither tied row "earlier" than the
+other, and `promote_from_waitlist`'s own `order_by(responded_at.asc())`
+carried no secondary key either — so which of two tied rows counted as
+"ahead" could disagree between the guard, promotion, and the position
+displayed to the member (`events.py`'s `user_waitlist_position`, sorted in
+Python). Fixed by adding `EventRSVP.id` as a second, deterministic sort key
+in all three places: the guard's earlier-row predicate becomes
+`responded_at < X OR (responded_at == X AND id < X.id)`; `promote_from_
+waitlist`'s query gains `.order_by(responded_at.asc(), id.asc())`, matching
+the same tiebreak `list_event_rsvps`'s own going-roster query already used;
+and the endpoint's Python `sorted(...)` sorts on `(responded_at, id)`
+instead of `responded_at` alone. The id order does not correspond to
+arrival order (ids are random UUIDs, not sequential) — that is not the
+point: the fix only needs the three sites to agree with each other on
+*some* order, not to reconstruct real-world arrival order for a genuine
+tie, which no stored column can recover after the fact.
+
+**Guard test:**
+`tests/test_event_lifecycle.py::TestEventRSVP::test_tied_responded_at_uses_id_as_a_consistent_tiebreaker`
+forces two waitlisted rows to an exact, microsecond-stripped tie (matching
+the second-precision `DATETIME` column) and confirms a consistent order
+holds through both automatic promotion and a direct resubmission of the
+tiebroken-behind row. Two non-obvious gotchas surfaced writing it, both
+about the SQLAlchemy identity map, not the fix itself: (1) a raw `UPDATE`
+that bypasses the ORM leaves already-loaded Python objects holding stale
+attribute values for the rest of the transaction (the same class of gotcha
+`get_shift_by_id`'s `populate_existing` works around) — worked around by
+mutating the loaded ORM objects directly instead of raw SQL; (2) the
+in-memory tied timestamp must have `microsecond=0` to actually match what
+MySQL stores after truncating a second-precision column — otherwise the
+un-truncated bind parameter compares as strictly greater than the
+truncated stored value, an artificial inequality with nothing to do with
+the tiebreaker under test. Both are why the test initially passed against
+the **unpatched** code (a false pass) before these were found and fixed;
+confirmed genuinely failing against the pre-fix code
+(`assert 'going' == 'waitlisted'`, since a tied resubmission was wrongly
+promoted) once both were corrected, and passing against the fix.
+
 ## Completion gate (pass 4)
 
 | Check                                             | Result                                                     |
@@ -213,8 +256,8 @@ mocked DB never executes the real SQL predicate — confirmed to fail pre-fix
 | `black --check app/ tests/ alembic/`              | ✅ 1564 files unchanged                                    |
 | `isort --check-only app/ tests/ alembic/`         | ✅ clean                                                   |
 | `python3 scripts/validate_migrations.py --strict` | ✅ single head, 441 revisions (no schema change this pass) |
-| `pytest tests/ -k "event"`                        | ✅ 713 passed, 1 skipped (pre-existing), +8 new            |
-| `pytest tests/` (full backend suite)              | ✅ 12065 passed, 21 skipped (pre-existing), 0 failed       |
+| `pytest tests/ -k "event"`                        | ✅ 714 passed, 1 skipped (pre-existing), +9 new            |
+| `pytest tests/` (full backend suite)              | ✅ 12066 passed, 21 skipped (pre-existing), 0 failed       |
 | `tsc --noEmit`                                    | ✅ 0 errors                                                |
 | `eslint .`                                        | ⚠️ see note below                                          |
 

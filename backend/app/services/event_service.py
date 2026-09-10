@@ -1488,6 +1488,14 @@ class EventService:
             # a member further back whose party happens to be small enough for
             # today's gap could resubmit and slip in ahead of someone who has
             # been waiting longer for those same seats.
+            #
+            # "earlier" is (responded_at, id), not responded_at alone:
+            # production MySQL stores it as a second-precision DATETIME, so
+            # two RSVPs queued in the same second tie on the column, and a
+            # bare "<" finds neither ahead of the other. Without the id
+            # tiebreaker, either tied row could resubmit and pass this check
+            # even though promote_from_waitlist's own order (below, now given
+            # the same tiebreaker) would have promoted the other one first.
             queue_jump = False
             if (
                 would_fit
@@ -1500,7 +1508,16 @@ class EventService:
                         .where(EventRSVP.event_id == str(event_id))
                         .where(EventRSVP.status == RSVPStatus.WAITLISTED)
                         .where(EventRSVP.id != existing_rsvp.id)
-                        .where(EventRSVP.responded_at < existing_rsvp.responded_at)
+                        .where(
+                            or_(
+                                EventRSVP.responded_at < existing_rsvp.responded_at,
+                                and_(
+                                    EventRSVP.responded_at
+                                    == existing_rsvp.responded_at,
+                                    EventRSVP.id < existing_rsvp.id,
+                                ),
+                            )
+                        )
                         .where(1 + EventRSVP.guest_count <= event.max_attendees)
                         .limit(1)
                         .with_for_update()
@@ -1659,7 +1676,10 @@ class EventService:
         # Ordering by responded_at is not a preference — create_or_update_rsvp's
         # waitlist position is computed on the same column, and if the two ever
         # disagree the app tells a member they are next and then promotes
-        # somebody else.
+        # somebody else. The id tiebreaker matches that same check's
+        # EV-24 fix: a second-precision timestamp tie must resolve the same
+        # way here as it does there, or the two can each think the other goes
+        # first.
         #
         # The seat filter excludes parties that can *never* fit — bigger than
         # the whole event. create_or_update_rsvp now rejects those outright,
@@ -1674,7 +1694,7 @@ class EventService:
             .where(EventRSVP.organization_id == str(organization_id))
             .where(EventRSVP.status == RSVPStatus.WAITLISTED)
             .where(1 + EventRSVP.guest_count <= event.max_attendees)
-            .order_by(EventRSVP.responded_at.asc())
+            .order_by(EventRSVP.responded_at.asc(), EventRSVP.id.asc())
             .limit(1)
             .with_for_update()
         )
