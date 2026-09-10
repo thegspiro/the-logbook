@@ -173,9 +173,13 @@ The request bodies, and a table naming the model behind each response, live in
 which is the reference this document defers to.
 
 They were written out in full here as well until 2026-09-10, in a third copy
-alongside this one and `wiki/Onboarding.md` — which is published _from_ this
-file, so a stale API section here would be mirrored back over a corrected one
-there. The copies had already drifted: this one documented
+alongside this one and `wiki/Onboarding.md`. That file's header asks anyone
+editing it to change this one first and mirror the result — but nothing
+enforces it: `wiki/setup-wiki.sh` copies `wiki/*.md` verbatim and generates
+only Troubleshooting and Error-Codes from `docs/`, so the two pages are
+independently maintained and a hand-applied "mirror" is the only thing that
+would carry a stale section from here to there. The copies had already drifted:
+this one documented
 `POST /onboarding/organization` with a five-field body, which that route stopped
 accepting when it moved to the full `OrganizationSetupCreate` schema, so a
 caller following it gets a 422.

@@ -531,11 +531,15 @@ no error is raised at any point.
 `s3SecretAccessKey` as **required**, and its `missingRequired` check blocks
 Save & Continue until each is filled, naming the ones outstanding. The rest —
 `googleDriveFolderId`, `sharePointSiteUrl`, `s3EndpointUrl` and
-`localStoragePath` — are optional there. The one route through the screen with
-an empty configuration is the explicit **"I'll add these later"** button, which
-posts `{}` deliberately so the platform choice is recorded and Settings can
-show what is missing. An installer following the wizard therefore cannot save
-half a credential set; a caller posting to the endpoint can.
+`localStoragePath` — are optional there. On the three credential-bearing
+platforms the only route through the screen with an empty configuration is the
+explicit **"I'll add these later"** button, which posts `{}` deliberately so the
+platform choice is recorded and Settings can show what is missing. `local` is
+the exception, legitimately: its single field is optional, so saving it blank
+posts `{}` through the ordinary Save & Continue — meaning "use the server's
+default path", not "I have not finished". An installer following the wizard
+therefore cannot save half a credential set; a caller posting to the endpoint
+can.
 
 And no error is raised later either, because **nothing reads these settings**
 — see the note under step 8. Uploads go to fixed local directories whatever is
@@ -1572,8 +1576,13 @@ Marks onboarding as finished, and does three further things worth knowing:
   the department name, its uploaded logo (base64 or a URL, as validated at
   save time) and the navigation choice, the created facility and apparatus ids, and the id, name and priority of every position the department
   configured. Position descriptions and permission lists are **not** among them
-  — those live on the `Role` rows. `/complete` clears only the browser-side
-  identifiers.
+  — those live on the `Role` rows. `/complete` clears the browser's copy
+  thoroughly — a successful `completeOnboarding()` calls
+  `clearSession({ preserveAuth: true })`, which removes the session and CSRF
+  identifiers **and** `onboarding_data` and the whole persisted
+  `onboarding-storage` wizard state, so the names, logos and answers held
+  client-side do go (the in-memory Zustand state survives until reload). It is
+  the server row that stays.
   Worth knowing for a retention review, and worth stating here because
   "session" invites the assumption that it is transient.
 
