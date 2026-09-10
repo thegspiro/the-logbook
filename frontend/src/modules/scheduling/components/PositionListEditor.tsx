@@ -131,15 +131,25 @@ export const PositionListEditor: React.FC<PositionListEditorProps> = (props) => 
                 />
                 Administrative
               </label>
-              <button onClick={() => handleRemove(i)} className="rounded-sm p-1 text-red-500 hover:bg-red-500/10">
+              <button
+                onClick={() => handleRemove(i)}
+                className="mobile-touch-target shrink-0 rounded-sm text-red-500 hover:bg-red-500/10"
+                aria-label={`Remove position ${i + 1}`}
+              >
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}
         </div>
+        {/* These two, and the row above, only exist once a slot has been added,
+            so the E2E fixture — which serves no apparatus positions — never
+            renders them and the route ratchet never measured them. Sized here
+            rather than left for the day the fixture grows: "0 controls under
+            44px" should mean the screen is right, not that the fixture is
+            empty. */}
         <button
           onClick={handleAdd}
-          className="mt-1.5 flex items-center gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
+          className="mobile-touch-target mt-1.5 gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
         >
           <Plus className="h-3 w-3" /> {addButtonLabel}
         </button>

@@ -92,27 +92,42 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
         <div className="mb-4">
           <p className="text-theme-text-secondary mb-2 text-xs font-medium">Custom Positions</p>
           <div className="space-y-1.5">
+            {/* The <label> is the point here, and it was missing. The row used
+                to be a <div> holding a bare checkbox, so the only thing that
+                toggled the position was the 16px box itself and a screen reader
+                announced an unnamed checkbox — the built-in positions above have
+                had their label all along, and this list never did.
+
+                Putting `mobile-touch-row` on the row did not fix that: a 44px
+                <div> around a checkbox grows nothing a finger can land on. The
+                utility belongs on whatever the tap actually resolves to, which
+                is what form-checkbox in index.css means by "give a bare checkbox
+                mobile-touch-target on its label, not padding on the box".
+
+                Remove stays outside the label — nested in it, a click on the
+                bin would toggle the checkbox on the way past. */}
             {settings.customPositions.map((cp) => (
               <div
                 key={cp.value}
-                className="bg-theme-surface-hover/50 border-theme-surface-border mobile-touch-row justify-between rounded-lg border p-2.5"
+                className="bg-theme-surface-hover/50 border-theme-surface-border flex items-center justify-between gap-2 rounded-lg border p-2.5"
               >
-                <div className="flex items-center gap-2">
+                <label className="mobile-touch-row min-w-0 cursor-pointer gap-2">
                   <input
                     type="checkbox"
                     checked={settings.enabledPositions.includes(cp.value)}
                     onChange={() => togglePosition(cp.value)}
-                    className="border-theme-input-border rounded-sm"
+                    className="border-theme-input-border shrink-0 rounded-sm"
                   />
-                  <span className="text-theme-text-primary text-sm">{cp.label}</span>
-                  <span className="text-theme-text-muted bg-theme-surface-hover rounded-sm px-1.5 py-0.5 text-[10px]">
+                  <span className="text-theme-text-primary truncate text-sm">{cp.label}</span>
+                  <span className="text-theme-text-muted bg-theme-surface-hover shrink-0 rounded-sm px-1.5 py-0.5 text-[10px]">
                     {cp.value}
                   </span>
-                </div>
+                </label>
                 <button
                   onClick={() => removeCustomPosition(cp.value)}
-                  className="rounded-sm p-1 text-red-500 hover:bg-red-500/10"
+                  className="mobile-touch-target shrink-0 rounded-sm text-red-500 hover:bg-red-500/10"
                   title="Remove custom position"
+                  aria-label={`Remove ${cp.label}`}
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>

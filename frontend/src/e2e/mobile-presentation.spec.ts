@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { signIn } from './helpers';
-import { BASE_PERMISSIONS, MIN_FONT_PX, MIN_TAP, PHONE, ROUTES } from './mobile-routes';
+import { MIN_FONT_PX, MIN_TAP, PHONE, ROUTES, signInForRoute } from './mobile-routes';
+import type { SignInState } from './mobile-routes';
 
 /**
  * One pass over every feature at phone size, checking each one is presentable.
@@ -60,10 +60,10 @@ test.describe('mobile presentation', () => {
     // is granted for the same reason: /facilities/settings requires it, and
     // without it that route (and /facilities itself, which only needs
     // facilities.view) would silently measure the dashboard instead.
-    let granted = BASE_PERMISSIONS;
-    await signIn(page, { permissions: granted });
+    let granted: SignInState | null = null;
 
     const crashed: string[] = [];
+    const wrongPage: string[] = [];
     const overflowed: string[] = [];
     const invalidScrollRegions: string[] = [];
     const tapBudgetBusted: string[] = [];
@@ -72,17 +72,31 @@ test.describe('mobile presentation', () => {
     const table: string[] = [];
 
     for (const route of ROUTES) {
-      // Re-sign-in only when the needed set actually changes, so the common
+      // Re-signs only when what the route needs actually changed, so the common
       // case stays one sign-in for the whole pass.
-      const needed = route.permissions ? [...BASE_PERMISSIONS, ...route.permissions] : BASE_PERMISSIONS;
-      if (needed.join() !== granted.join()) {
-        granted = needed;
-        await signIn(page, { permissions: granted });
-      }
+      granted = await signInForRoute(page, route, granted);
 
       await page.goto(route.path);
       await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
       await page.waitForTimeout(400);
+
+      // Did this visit reach the page the entry names? Every budget below is
+      // meaningless on a route that quietly rendered something else, and this
+      // pass has shipped that twice: /analytics and /profile reporting the
+      // dashboard's numbers, and /scheduling/admin/settings/platoons reporting
+      // General's because the fixture had platoons off and the page substituted
+      // a section. Opt-in per route via `expectText`, since most routes have no
+      // second page they could plausibly be confused with.
+      //
+      // `exact: true`, and it is the whole difference between a check and a
+      // decoration. The first version of this used the default substring match,
+      // which is case-insensitive, so "Platoon Roster" — the heading of the
+      // panel that was not rendering — was satisfied by the General tab's own
+      // body copy, "...and show platoon rosters on shifts". The guard passed on
+      // exactly the page it was written to catch.
+      if (route.expectText && !(await page.getByText(route.expectText, { exact: true }).first().isVisible())) {
+        wrongPage.push(`${route.path}: expected text "${route.expectText}" is not on the page`);
+      }
 
       const m: Measurement = await page.evaluate(
         ({ minTap, minFont }) => {
@@ -253,6 +267,9 @@ test.describe('mobile presentation', () => {
     }
 
     expect(crashed, 'routes that hit the ErrorBoundary').toEqual([]);
+    // Before the budgets: a route measuring the wrong page makes every number
+    // below it a statement about somewhere else.
+    expect(wrongPage, 'routes that did not render the page their entry names').toEqual([]);
     expect(overflowed, 'routes with visible elements extending outside the viewport').toEqual([]);
     expect(invalidScrollRegions, 'intentional scroll regions that break the accessibility contract').toEqual([]);
     expect(tapBudgetBusted, `routes that grew tap targets under ${MIN_TAP}px`).toEqual([]);

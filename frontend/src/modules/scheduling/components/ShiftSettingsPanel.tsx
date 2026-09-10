@@ -583,7 +583,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           <div className="flex justify-end">
             <Link
               to="/scheduling/admin/platoons"
-              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target gap-1.5 rounded-lg border px-3 text-sm"
             >
               <Users className="h-4 w-4" /> Department platoon overview
             </Link>
