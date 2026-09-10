@@ -1437,8 +1437,12 @@ Use the admin panel to manage settings.` So it is a bootstrap-only escape
   identified by the wildcard position `create_system_owner` grants, and the
   caller must be authenticated as them; anyone else gets
   `System-owner authentication is required to reset onboarding.` Before a
-  System Owner exists the call is unauthenticated, which is what makes an
-  abandoned half-finished setup recoverable. If the system-owner position is
+  System Owner exists no **user** authentication is required, which is what
+  makes an abandoned half-finished setup recoverable — but the call is not
+  open: `reset_onboarding` runs `validate_session` first, so a live
+  `X-Session-ID` and its matching `X-CSRF-Token` are needed either way. A
+  recovery client without those gets a 401 or 403 before any of the checks
+  below are reached. If the system-owner position is
   missing entirely the reset is refused rather than allowed —
   `System-owner role is missing; onboarding cannot be reset safely.` — failing
   closed on the one operation where failing open would be unrecoverable.
@@ -1472,7 +1476,21 @@ Marks onboarding as finished, and does three further things worth knowing:
   `/complete` runs. In the other direction, `/session/department` is never
   copied into settings at all: `_persist_session_data_to_org()` reads
   `it_team`, `email`, `file_storage`, `auth` and `modules` and nothing else,
-  so the department block stays session-only and disappears with it.
+  so the department block never reaches the organization.
+
+  It does not follow that it goes away. **A completed session's row is never
+  deleted.** Neither `/complete` nor `OnboardingService.complete_onboarding()`
+  removes it, no scheduled job reaps expired rows, and the only statement in
+  the backend that deletes from this table is inside `/onboarding/reset` —
+  which is refused once onboarding is complete. Expiry (`expires_at`) stops
+  the row validating; it does not remove it.
+
+  So every finished installation keeps its onboarding session indefinitely,
+  holding the encrypted email and file-storage credentials plus the IT-team
+  members and backup-access contact details, which are stored as plain JSON
+  rather than encrypted. `/complete` clears only the browser-side identifiers.
+  Worth knowing for a retention review, and worth stating here because
+  "session" invites the assumption that it is transient.
 
 - **Seeds default data**: `_seed_default_data()` creates the standard admin
   hours categories and event mappings so hour tracking works immediately after
