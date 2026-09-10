@@ -144,10 +144,10 @@ A feature is not done until all of these pass. This is non-negotiable per
 [CLAUDE.md](../../CLAUDE.md) — including for errors that pre-date the iteration.
 
 ```bash
-cd frontend && npx tsc --noEmit        # must be 0 errors, repo-wide
+cd frontend && npm run typecheck       # must be 0 errors, repo-wide
 cd backend  && flake8 app/ tests/      # must be 0 (run from backend/ for .flake8)
 cd backend  && black --check app/ tests/
-cd frontend && npx eslint .            # max-warnings 10
+cd frontend && npm run lint            # max-warnings 10
 cd frontend && npm test -- --run       # no newly failing test
 cd backend  && pytest                  # no newly failing test
 ```
