@@ -193,7 +193,13 @@ describe('RoleSetup restore — a resumed session does not carry stale grants', 
     expect(new Set(markers).size).toBe(markers.length);
     // The filter and the recorded value must both be the marker, not the slug.
     expect(source).toMatch(/!done\.has\(marker\)/);
-    expect(source).toMatch(/markSeededSlugsReconciled\(Object\.keys\(STALE_SEEDED_MARKERS\)\)/);
+    // The whole key set, unfiltered. Written as a spread since the
+    // all-positions baseline marker joined it — that one is a property of the
+    // draft rather than of a slug, so it is not in this map, but the invariant
+    // here is unchanged: every key of the map is recorded, not the subset this
+    // mount happened to reconcile.
+    expect(source).toMatch(/markSeededSlugsReconciled\(\[\.\.\.Object\.keys\(STALE_SEEDED_MARKERS\)/);
+    expect(source).not.toMatch(/markSeededSlugsReconciled\(slugsToReconcile\)/);
   });
 
   it('does it once, not on every mount', () => {
@@ -213,7 +219,13 @@ describe('RoleSetup restore — a resumed session does not carry stale grants', 
     // back to find those current-build edits treated as legacy and reset.
     // A slug selected after this screen is reached came from the current
     // template by definition, so recording the whole set is what says so.
-    expect(source).toMatch(/markSeededSlugsReconciled\(Object\.keys\(STALE_SEEDED_MARKERS\)\)/);
+    // The whole key set, unfiltered. Written as a spread since the
+    // all-positions baseline marker joined it — that one is a property of the
+    // draft rather than of a slug, so it is not in this map, but the invariant
+    // here is unchanged: every key of the map is recorded, not the subset this
+    // mount happened to reconcile.
+    expect(source).toMatch(/markSeededSlugsReconciled\(\[\.\.\.Object\.keys\(STALE_SEEDED_MARKERS\)/);
+    expect(source).not.toMatch(/markSeededSlugsReconciled\(slugsToReconcile\)/);
   });
 
   it('latches the decision instead of recomputing it', () => {

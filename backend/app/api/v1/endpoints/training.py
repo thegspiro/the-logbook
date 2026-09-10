@@ -85,6 +85,7 @@ from app.services.training_compliance import (
     evaluate_member_requirement_detail,
     get_org_include_current_month,
     get_requirement_date_window,
+    requirement_applies_to_member,
 )
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_org_waivers, fetch_user_waivers
@@ -173,8 +174,7 @@ async def get_training_dashboard_summary(
         applicable = [
             r
             for r in requirements
-            if not r.required_membership_types
-            or (member.membership_type or "active") in r.required_membership_types
+            if requirement_applies_to_member(r, member.membership_type or "active")
         ]
         unmet: list[str] = []
         for req in applicable:
@@ -1532,20 +1532,18 @@ async def get_compliance_summary(
     )
     all_requirements = list(requirements_result.scalars().all())
 
-    # Filter to requirements applicable to this user
-    requirements = []
-    for req in all_requirements:
-        # Check membership type applicability first
-        if req.required_membership_types:
-            if member_membership_type not in req.required_membership_types:
-                continue
-
-        if req.applies_to_all:
-            requirements.append(req)
-        elif req.required_roles and any(
-            rid in user_role_ids for rid in req.required_roles
-        ):
-            requirements.append(req)
+    # Filter to requirements applicable to this user. Was a hand-rolled
+    # loop that checked required_membership_types before applies_to_all --
+    # the wrong order, and one that also silently dropped a requirement
+    # scoped ONLY by required_membership_types (applies_to_all=False, no
+    # required_roles), since neither branch below it re-checked a
+    # membership-type match as its own inclusion criterion. See
+    # requirement_applies_to_member's docstring.
+    requirements = [
+        req
+        for req in all_requirements
+        if requirement_applies_to_member(req, member_membership_type, user_role_ids)
+    ]
 
     # Pre-fetch all completed records for the user (no date filter —
     # _evaluate_member_requirement handles windowing internally)
@@ -2861,10 +2859,11 @@ async def get_compliance_matrix(
                     member_at_risk_threshold = profile.at_risk_threshold_override
 
         for req in member_requirements:
-            # Skip requirements not applicable to this member's membership type
-            if req.required_membership_types:
-                if member_membership_type not in req.required_membership_types:
-                    continue
+            # Skip requirements not applicable to this member. See
+            # requirement_applies_to_member's docstring for why this is a
+            # shared helper rather than another ad-hoc reimplementation.
+            if not requirement_applies_to_member(req, member_membership_type):
+                continue
 
             ev = evaluate_member_requirement_detail(
                 req,
@@ -3074,8 +3073,7 @@ async def get_member_period_status(
         applicable = [
             req
             for req in requirements
-            if not req.required_membership_types
-            or member_membership_type in req.required_membership_types
+            if requirement_applies_to_member(req, member_membership_type)
         ]
         met = 0
         for req in applicable:

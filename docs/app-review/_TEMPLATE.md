@@ -55,13 +55,13 @@ product decision.
 
 ## Completion gate
 
-| Check          | Result |
-| -------------- | ------ |
-| tsc --noEmit   |        |
-| flake8         |        |
-| black --check  |        |
-| eslint         |        |
-| frontend tests |        |
-| backend tests  |        |
+| Check             | Result |
+| ----------------- | ------ |
+| npm run typecheck |        |
+| flake8            |        |
+| black --check     |        |
+| npm run lint      |        |
+| frontend tests    |        |
+| backend tests     |        |
 
 </content>

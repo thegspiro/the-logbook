@@ -26,6 +26,10 @@ def _scalar(value):
     return MagicMock(scalar=MagicMock(return_value=value))
 
 
+def _first(value):
+    return MagicMock(first=MagicMock(return_value=value))
+
+
 def _db(side_effect):
     db = MagicMock()
     db.execute = AsyncMock(side_effect=side_effect)
@@ -385,6 +389,155 @@ class TestSeatReleaseTriggersPromotion:
         assert err is None
         assert rsvp.status == RSVPStatus.WAITLISTED
         svc.promote_from_waitlist.assert_awaited_once()
+
+
+class TestResubmittingAWaitlistedRsvpCannotJumpTheQueue:
+    """EV-24: resubmitting an RSVP that is already WAITLISTED (editing notes,
+    say) reaches the same capacity check a first-time RSVP does. A bare "does
+    my own party fit" question ignores the party queued ahead of it, and
+    promote_from_waitlist never promotes anyone while an earlier,
+    ever-admissible party is still waiting -- even one that does not
+    currently fit -- so this write path has to honor the same rule.
+    """
+
+    @staticmethod
+    def _svc(db):
+        svc = EventService(db)
+        svc._evaluate_session_phase_warning = AsyncMock(return_value=None)
+        return svc
+
+    def _waitlisted_existing(self, responded_at, guest_count=0, rsvp_id="r2"):
+        return SimpleNamespace(
+            id=rsvp_id,
+            status=RSVPStatus.WAITLISTED,
+            guest_count=guest_count,
+            responded_at=responded_at,
+            notes=None,
+            dietary_restrictions=None,
+            accessibility_needs=None,
+            updated_at=None,
+        )
+
+    async def test_earlier_admissible_party_blocks_the_resubmission(self):
+        """One seat is free. This member's own party fits it, but somebody
+        queued ahead of them could also fit it -- so the resubmission stays
+        waitlisted rather than taking the seat out of turn."""
+        ev = _event(max_attendees=5)
+        existing = self._waitlisted_existing(responded_at=datetime.now(tz.utc))
+        db = _db(
+            [
+                _one(ev),  # event
+                _one(existing),  # existing (waitlisted) RSVP
+                _scalar(4),  # 4 seats occupied -- 1 free, fits this party
+                _first(SimpleNamespace(id="earlier-row")),  # earlier admissible row
+            ]
+        )
+        rsvp, err = await self._svc(db).create_or_update_rsvp(
+            "e1", "u1", RSVPCreate(status="going"), "org-1"
+        )
+        assert err is None
+        assert rsvp.status == RSVPStatus.WAITLISTED
+
+    async def test_no_earlier_admissible_party_lets_it_through(self):
+        """Same free seat, but this member really is next -- no earlier row
+        exists, so the normal capacity check decides and it goes through."""
+        ev = _event(max_attendees=5)
+        existing = self._waitlisted_existing(responded_at=datetime.now(tz.utc))
+        db = _db(
+            [
+                _one(ev),
+                _one(existing),
+                _scalar(4),
+                _first(None),  # nobody queued ahead of them
+            ]
+        )
+        rsvp, err = await self._svc(db).create_or_update_rsvp(
+            "e1", "u1", RSVPCreate(status="going"), "org-1"
+        )
+        assert err is None
+        assert rsvp.status == "going"
+
+    async def test_an_earlier_row_too_big_for_the_whole_event_does_not_block(self):
+        """The earlier-row query mirrors promote_from_waitlist's own filter:
+        a party that could never fit the event at all does not hold up
+        somebody behind it -- promote_from_waitlist would skip it too."""
+        ev = _event(max_attendees=3)
+        existing = self._waitlisted_existing(responded_at=datetime.now(tz.utc))
+        db = _db(
+            [
+                _one(ev),
+                _one(existing),
+                _scalar(2),
+                # No matching row: the query itself filters
+                # `1 + guest_count <= max_attendees`, so an earlier row
+                # needing 5 seats on a 3-seat event is excluded server-side.
+                _first(None),
+            ]
+        )
+        rsvp, err = await self._svc(db).create_or_update_rsvp(
+            "e1", "u1", RSVPCreate(status="going"), "org-1"
+        )
+        assert err is None
+        assert rsvp.status == "going"
+
+    async def test_first_time_rsvp_never_triggers_the_earlier_row_query(self):
+        """A brand-new RSVP has no queue position of its own to protect --
+        the earlier-row query only runs for a resubmission out of an
+        existing WAITLISTED row."""
+        ev = _event(max_attendees=5)
+        db = _db([_one(ev), _one(None), _scalar(2)])
+        rsvp, err = await self._svc(db).create_or_update_rsvp(
+            "e1", "u1", RSVPCreate(status="going"), "org-1"
+        )
+        assert err is None
+        assert rsvp.status == "going"
+        assert db.execute.await_count == 3
+
+    async def test_editing_an_already_going_rsvp_never_triggers_the_query(self):
+        """Editing an RSVP that is already GOING (changing notes, say) is not
+        a resubmission out of the waitlist -- old_status is "going", not
+        "waitlisted", so the queue-jump guard does not apply."""
+        ev = _event(max_attendees=5)
+        existing = SimpleNamespace(
+            id="r1",
+            status=RSVPStatus.GOING,
+            guest_count=0,
+            notes=None,
+            dietary_restrictions=None,
+            accessibility_needs=None,
+            updated_at=None,
+        )
+        db = _db([_one(ev), _one(existing), _scalar(3)])
+        rsvp, err = await self._svc(db).create_or_update_rsvp(
+            "e1", "u1", RSVPCreate(status="going"), "org-1"
+        )
+        assert err is None
+        assert rsvp.status == "going"
+        assert db.execute.await_count == 3
+
+    async def test_a_resubmission_that_does_not_fit_anyway_skips_the_query(self):
+        """The earlier-row check only matters when the plain capacity check
+        would otherwise let the write through -- if it doesn't fit regardless,
+        there's nothing to protect against."""
+        ev = _event(max_attendees=5)
+        existing = self._waitlisted_existing(responded_at=datetime.now(tz.utc))
+        db = _db([_one(ev), _one(existing), _scalar(5)])  # already full
+        rsvp, err = await self._svc(db).create_or_update_rsvp(
+            "e1", "u1", RSVPCreate(status="going"), "org-1"
+        )
+        assert err is None
+        assert rsvp.status == RSVPStatus.WAITLISTED
+        assert db.execute.await_count == 3
+
+    def test_the_earlier_row_query_excludes_parties_that_can_never_fit(self):
+        """Structural, same reasoning as promote_from_waitlist's own version
+        of this check: the escape hatch lives in SQL, and a mocked db never
+        exercises the actual filter clause."""
+        import inspect
+
+        source = inspect.getsource(EventService.create_or_update_rsvp)
+        assert "1 + EventRSVP.guest_count <= event.max_attendees" in source
+        assert "EventRSVP.responded_at < existing_rsvp.responded_at" in source
 
 
 class TestRsvpToSeries:

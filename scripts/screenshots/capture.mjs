@@ -165,12 +165,24 @@ async function detectPageError(page) {
   return match ? match[0].trim() : null;
 }
 
+/**
+ * The page's visible text, for the three checks below.
+ *
+ * Deliberately not caught. This one read feeds `detectCrash`,
+ * `detectPageError` AND `detectEmptyState`, so `.catch(() => "")` cleared all
+ * three guards at once: an empty string matches no pattern, so a read that
+ * failed reported a page with no crash, no error and no empty state — the
+ * exact clean bill of health the checks exist to withhold. `detectCrash` is
+ * the one that matters most, since its own comment calls a crash "a bug to
+ * fix" rather than a fact about the demo data.
+ *
+ * A blank page does not reject — `innerText` on an empty body returns "" —
+ * so a rejection here means the read itself failed (a destroyed execution
+ * context, a navigation mid-read). That is a fault worth reporting, and the
+ * caller is inside the per-shot try, so it is recorded against this shot.
+ */
 async function pageText(page) {
-  return page
-    .locator("main, body")
-    .first()
-    .innerText()
-    .catch(() => "");
+  return page.locator("main, body").first().innerText();
 }
 
 async function detectCrash(page) {
@@ -191,28 +203,32 @@ async function detectCrash(page) {
  * document already is, so they report the symptom rather than the cause.
  */
 async function detectHorizontalOverflow(page) {
-  return page
-    .evaluate(() => {
-      const de = document.documentElement;
-      if (de.scrollWidth <= de.clientWidth + 1) return null;
-      const culprits = [...document.querySelectorAll("body *")]
-        .filter((el) => {
-          const position = getComputedStyle(el).position;
-          if (position === "fixed" || position === "absolute") return false;
-          return el.getBoundingClientRect().right > de.clientWidth + 1;
-        })
-        .slice(0, 3)
-        .map(
-          (el) =>
-            `<${el.tagName.toLowerCase()} class="${String(el.className).slice(0, 70)}">`,
-        );
-      return {
-        scrollWidth: de.scrollWidth,
-        clientWidth: de.clientWidth,
-        culprits,
-      };
-    })
-    .catch(() => null);
+  // Not caught: `null` is this function's "measured, and it does not overflow"
+  // answer, so swallowing a rejection made a page that could not be measured
+  // indistinguishable from a clean one. Overflow is reported rather than fatal,
+  // but "I could not look" must not read as "I looked and it is fine" — and a
+  // rejecting evaluate this late means the context died, which invalidates the
+  // crash and empty-state checks that ran just before it too.
+  return page.evaluate(() => {
+    const de = document.documentElement;
+    if (de.scrollWidth <= de.clientWidth + 1) return null;
+    const culprits = [...document.querySelectorAll("body *")]
+      .filter((el) => {
+        const position = getComputedStyle(el).position;
+        if (position === "fixed" || position === "absolute") return false;
+        return el.getBoundingClientRect().right > de.clientWidth + 1;
+      })
+      .slice(0, 3)
+      .map(
+        (el) =>
+          `<${el.tagName.toLowerCase()} class="${String(el.className).slice(0, 70)}">`,
+      );
+    return {
+      scrollWidth: de.scrollWidth,
+      clientWidth: de.clientWidth,
+      culprits,
+    };
+  });
 }
 
 /**
@@ -274,16 +290,117 @@ async function optionLabels(page) {
   );
 }
 
+/**
+ * Did the app keep the route we asked for?
+ *
+ * Checked immediately after navigation and BEFORE the prepare step, because
+ * plenty of prepare steps navigate on purpose -- `openFirstFromApi` goes
+ * straight to a record's own page -- and comparing after them would flag that
+ * as a failure. Before prepare, any difference is the application's own doing.
+ *
+ * Only the pathname is compared. The query string cannot be: `/scheduling`
+ * appends its own `view=week&date=…` on arrival, so every scheduling shot
+ * would fail an equality check on `search`.
+ *
+ * **And that is the limit of what a URL can tell us.** Measured against this
+ * build: `/scheduling?tab=totally-bogus` keeps the bogus parameter in the
+ * address bar and renders the Schedule tab underneath it. The URL is not
+ * evidence of the screen. That is exactly how a picture of the Schedule tab
+ * shipped captioned "Equipment checks tab" (#2341), and it is why `expect`
+ * below exists: this function catches a redirect, never a fallback.
+ */
+function detectWrongPathname(page, route) {
+  const asked = new URL(route, BASE_URL).pathname;
+  const landed = new URL(page.url()).pathname;
+  return asked === landed ? null : { asked, landed };
+}
+
+/**
+ * Is the thing this shot is *of* actually inside the picture?
+ *
+ * Two distinct failures, one check. A shot can land on the wrong screen
+ * entirely and still succeed (nothing else verifies the screen -- 148 of 516
+ * shots carry neither a selector nor a prepare step). And a shot can land on
+ * the right screen and frame the subject out of shot: 03-69 satisfied its own
+ * wait, because the catalog matches were in the DOM, and photographed an input
+ * with every one of them clipped off the bottom of a 390px page.
+ *
+ * So presence is not enough. The subject has to be within the region the
+ * screenshot actually covers:
+ *
+ *   selector shot  the element's own box -- Playwright clips to it
+ *   fullPage       the whole document
+ *   otherwise      the viewport, which is the case that clipped 03-69
+ *
+ * Fully contained rather than merely intersecting: a label with its bottom
+ * half cut off is the defect, not a near miss.
+ */
+async function detectSubjectOutOfFrame(page, shot) {
+  const want = typeof shot.expect === "string" ? { text: shot.expect } : shot.expect;
+  if (!want) return null;
+  const subject = want.selector
+    ? page.locator(want.selector).first()
+    : page.getByText(want.text, { exact: false }).first();
+
+  let box = null;
+  try {
+    await subject.waitFor({ state: "visible", timeout: 10_000 });
+    box = await subject.boundingBox();
+  } catch {
+    return { reason: "not on the page", want: want.selector ?? want.text };
+  }
+  if (!box) return { reason: "on the page but not rendered", want: want.selector ?? want.text };
+
+  const frame = await captureFrame(page, shot);
+  if (!frame) return null;
+  const inside =
+    box.x >= frame.x - 1 &&
+    box.y >= frame.y - 1 &&
+    box.x + box.width <= frame.x + frame.width + 1 &&
+    box.y + box.height <= frame.y + frame.height + 1;
+  return inside
+    ? null
+    : {
+        reason: "outside the captured frame",
+        want: want.selector ?? want.text,
+        box: `${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.width)}x${Math.round(box.height)}`,
+        frame: `${Math.round(frame.x)},${Math.round(frame.y)} ${Math.round(frame.width)}x${Math.round(frame.height)}`,
+      };
+}
+
+/** The document-space rectangle the screenshot will cover. */
+async function captureFrame(page, shot) {
+  if (shot.selector) {
+    return await page.locator(shot.selector).first().boundingBox();
+  }
+  return await page.evaluate((isFullPage) => {
+    if (isFullPage) {
+      return {
+        x: 0,
+        y: 0,
+        width: document.documentElement.scrollWidth,
+        height: document.documentElement.scrollHeight,
+      };
+    }
+    // boundingBox() is document-space, so the viewport rect has to be too.
+    return {
+      x: window.scrollX,
+      y: window.scrollY,
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+  }, Boolean(shot.fullPage));
+}
+
 async function detectEmptyState(page, selector) {
   // Scan what the image will actually contain. A clipped shot pictures one
   // section, and scanning the whole page around it flags copy that is nowhere
   // in the screenshot.
+  // Not caught, for the reason `pageText` records: "" matches no empty-state
+  // pattern, so a failed read of the clipped region reported the region as
+  // populated.
   const text = selector
-    ? await page
-        .locator(selector)
-        .first()
-        .innerText()
-        .catch(() => "")
+    ? await page.locator(selector).first().innerText()
     : await pageText(page);
 
   // Match per line, and only on lines short enough to be the message itself.
@@ -533,6 +650,17 @@ async function main() {
         waitUntil: "domcontentloaded",
       });
       await settle(page);
+      // Before the prepare step, so a prepare that navigates on purpose is not
+      // mistaken for the app bouncing us. `landsOn` is for a route that
+      // redirects by design -- SchedulingSettingsRedirect forwards the old
+      // `?tab=` contract to a section route, and that is correct behaviour.
+      const wrongPathname = detectWrongPathname(page, shot.route);
+      if (wrongPathname && wrongPathname.landed !== shot.landsOn) {
+        throw new Error(
+          `route did not land: asked for ${wrongPathname.asked}, ` +
+            `the app served ${wrongPathname.landed}`,
+        );
+      }
       if (shot.prepare) {
         // The second argument gives a prepare step a signed-in page to look
         // things up with. A signed-out shot still needs ids the seeder minted
@@ -599,6 +727,15 @@ async function main() {
         });
       }
       await optimize(target);
+      const outOfFrame = await detectSubjectOutOfFrame(page, shot);
+      if (outOfFrame) {
+        throw new Error(
+          `the shot's subject (${outOfFrame.want}) is ${outOfFrame.reason}` +
+            (outOfFrame.box
+              ? ` — subject at ${outOfFrame.box}, frame ${outOfFrame.frame}`
+              : ""),
+        );
+      }
       const emptyState = shot.allowEmptyState
         ? null
         : await detectEmptyState(page, shot.selector);

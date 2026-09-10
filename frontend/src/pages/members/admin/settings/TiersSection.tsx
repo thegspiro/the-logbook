@@ -25,6 +25,7 @@
 import React from 'react';
 import { useTierEditor } from '../../../../hooks/useTierEditor';
 import MembershipTiersSection from '../../../../components/settings/MembershipTiersSection';
+import TierRefreshAlert from '../../../../components/settings/TierRefreshAlert';
 import { SettingsPanelHead } from '../../../../components/settings/SettingsPanelHead';
 
 const TiersSection: React.FC = () => {
@@ -52,26 +53,41 @@ const TiersSection: React.FC = () => {
           </button>
         </div>
       ) : (
-        <MembershipTiersSection
-          tiers={editor.tiers}
-          autoAdvance={editor.autoAdvance}
-          loading={editor.loading}
-          saving={editor.saving}
-          dirty={editor.dirty}
-          memberCount={editor.memberCount}
-          onSetAutoAdvance={editor.setAutoAdvance}
-          onUpdateTier={editor.updateTier}
-          onUpdateBenefits={editor.updateBenefits}
-          onAddTier={editor.addTier}
-          onRemoveTier={editor.removeTier}
-          onMoveTier={editor.moveTier}
-          onSave={() => {
-            void editor.save();
-          }}
-          onReset={() => {
-            void editor.reload();
-          }}
-        />
+        <>
+          {/* This screen drives the same hook as the setup wizard, so it has
+              the same two failure states and must report both. It read only
+              `failed` at first, which left a save whose read-back failed
+              showing stale member counts behind a success toast. */}
+          {editor.refreshFailed && (
+            <TierRefreshAlert
+              unconfirmedSave={editor.unconfirmedSave}
+              dirty={editor.dirty}
+              loading={editor.loading}
+              onRefresh={editor.retry}
+            />
+          )}
+          <MembershipTiersSection
+            tiers={editor.tiers}
+            autoAdvance={editor.autoAdvance}
+            loading={editor.loading}
+            saving={editor.saving}
+            dirty={editor.dirty}
+            memberCount={editor.memberCount}
+            onSetAutoAdvance={editor.setAutoAdvance}
+            onUpdateTier={editor.updateTier}
+            onUpdateBenefits={editor.updateBenefits}
+            onAddTier={editor.addTier}
+            onRemoveTier={editor.removeTier}
+            onMoveTier={editor.moveTier}
+            nothingStored={editor.neverSaved}
+            onSave={() => {
+              void editor.save();
+            }}
+            onReset={() => {
+              void editor.reload();
+            }}
+          />
+        </>
       )}
     </div>
   );

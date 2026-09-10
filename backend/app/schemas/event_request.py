@@ -6,12 +6,36 @@ Supports flexible date preferences, configurable pipeline tasks, comments,
 assignment, scheduling with room booking, and postponement.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app.schemas.base import UTCResponseBase
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Read a datetime as UTC when it carries no offset of its own.
+
+    A JSON body can mix the two — ``"2026-10-01T10:00:00"`` parses naive,
+    ``"2026-10-02T10:00:00Z"`` parses aware — and comparing them raises
+    ``TypeError``. Pydantic v2 converts only ``ValueError`` and
+    ``AssertionError`` into validation errors, so a ``TypeError`` raised inside
+    a validator escapes as a 500 rather than the 422 the caller should get.
+    Every datetime in this system is UTC (see CLAUDE.md), so a value that
+    omitted its offset is read as the UTC it was always meant to be.
+
+    An **aware** value is converted rather than passed through. The driver
+    formats a datetime by its wall clock and drops the offset — pymysql renders
+    ``12:00:00-04:00`` as ``'2026-10-01 12:00:00'`` — so returning it unchanged
+    stores 12:00 where 16:00 was meant, and every surface reading it back (the
+    calendar entry, the signup sheet, the reminder emails, the status page)
+    inherits the error. Comparisons inside these validators are correct either
+    way; storage is not.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 class EventRequestCreate(BaseModel):
@@ -24,6 +48,11 @@ class EventRequestCreate(BaseModel):
 
     outreach_type: str = Field(
         ...,
+        min_length=1,
+        # Matches EventRequest.outreach_type's String(100). Without the cap a
+        # longer value reached MySQL as a DataError and a member of the public
+        # got a 500 on a form they filled in correctly.
+        max_length=100,
         description="Type of outreach event (configurable per department, e.g., fire_safety_demo, station_tour)",
     )
     description: str = Field(..., min_length=10, max_length=2000)
@@ -61,6 +90,34 @@ class EventRequestCreate(BaseModel):
     hp_website: Optional[str] = Field(None, alias="website", max_length=255)
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def _date_range_ordered(self) -> "EventRequestCreate":
+        """A window that ends before it starts is not a date preference.
+
+        ``EventRequestSchedule`` has refused a reversed window since the room
+        double-booking check was added; intake did not, so a requester could
+        store one and the coordinator's board rendered "March 20 – March 3".
+
+        The normalised values are **assigned back**, not just compared. Fixing
+        only the comparison leaves a naive datetime on the model, and every
+        reader downstream — the lead-time gate, the stored column, the
+        coordinator's board — then has the same mixed-awareness problem this
+        validator was added to stop.
+        """
+        if self.preferred_date_start:
+            self.preferred_date_start = _as_utc(self.preferred_date_start)
+        if self.preferred_date_end:
+            self.preferred_date_end = _as_utc(self.preferred_date_end)
+        if (
+            self.preferred_date_start
+            and self.preferred_date_end
+            and self.preferred_date_end < self.preferred_date_start
+        ):
+            raise ValueError(
+                "preferred_date_end must not be before preferred_date_start"
+            )
+        return self
 
 
 class EventRequestStatusUpdate(BaseModel):
@@ -104,9 +161,26 @@ class EventRequestSchedule(BaseModel):
         The double-booking check compares the requested window against existing
         events, so a reversed window overlaps nothing and the conflict guard
         silently passes.
+
+        Assigned back rather than only compared: `schedule_request` hands these
+        straight to `EventCreate`, whose own `validate_dates` compares them
+        again. Normalising a copy left the naive value on the model and moved
+        the `TypeError` one layer down — still an uncaught 500, just from a
+        different validator.
         """
-        if self.event_end_date and self.event_end_date < self.event_date:
-            raise ValueError("event_end_date must not be before event_date")
+        self.event_date = _as_utc(self.event_date)
+        if self.event_end_date:
+            self.event_end_date = _as_utc(self.event_end_date)
+            # `<=`, not `<`: an end *equal* to the start is a zero-length
+            # booking, which `EventCreate` and `EventUpdate` both refuse. The
+            # create branch in `schedule_request` builds `EventCreate` outside
+            # an exception handler, so letting it through turned a coordinator
+            # typo into a 500 rather than a 422 at this boundary — and a
+            # zero-length window overlaps nothing, so the room double-booking
+            # check passed it silently on the way there. Matches
+            # `EventRequestPostpone._new_window_ordered`.
+            if self.event_end_date <= self.event_date:
+                raise ValueError("event_end_date must be after event_date")
         return self
 
 
@@ -200,6 +274,33 @@ class EventRequestPostpone(BaseModel):
     reason: Optional[str] = Field(None, max_length=2000)
     new_event_date: Optional[datetime] = Field(None, description="Optional new date")
     new_event_end_date: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def _new_window_ordered(self) -> "EventRequestPostpone":
+        """The same rule ``EventRequestSchedule`` enforces, on the other path
+        that sets a confirmed date.
+
+        Without it an end at or before the start is taken at face value:
+        ``resolve_confirmed_end`` returns an explicit end unchanged, the request
+        stores the reversed interval, ``sync_staffing_shift_date`` moves the
+        signup sheet to a zero-or-negative window, and
+        ``sync_calendar_event_date`` swallows the calendar service's rejection
+        by design — so the endpoint reports success while the request, the sheet
+        and the calendar disagree about when the event is.
+
+        An end with no start is meaningless here too: `postpone_request` only
+        reads the end when a new date is given, so silently ignoring it would
+        discard something the caller asked for.
+        """
+        if self.new_event_end_date and not self.new_event_date:
+            raise ValueError("new_event_end_date requires new_event_date")
+        if self.new_event_date:
+            self.new_event_date = _as_utc(self.new_event_date)
+        if self.new_event_end_date:
+            self.new_event_end_date = _as_utc(self.new_event_end_date)
+            if self.new_event_end_date <= self.new_event_date:
+                raise ValueError("new_event_end_date must be after new_event_date")
+        return self
 
 
 class EventRequestComment(BaseModel):

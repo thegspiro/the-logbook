@@ -3517,11 +3517,25 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
     from app.services.email_template_service import EmailTemplateService
 
     now = _dt.now(_tz.utc)
+    # Joined to Organization and filtered the same way every other org-spanning
+    # runner in this file is (`isnot(False)`, not `== True`, so a row whose flag
+    # was never populated still counts as active). Without it a decommissioned
+    # department keeps mailing its members every scheduled email still sitting
+    # PENDING — the `if not org` check below only catches a *deleted* org row,
+    # not a deactivated one. This is the CRON2-31-11 / CRON-31-5 shape, fixed in
+    # the sibling `run_publish_scheduled_messages` as CRON3-31-1 and missed here
+    # because that pass was scoped to its own diff.
+    #
+    # Filtered rather than retired: an inactive org's rows stay PENDING, so a
+    # department that is reactivated keeps whatever it had queued instead of
+    # this task having destroyed it.
     result = await db.execute(
         select(ScheduledEmail)
+        .join(Organization, Organization.id == ScheduledEmail.organization_id)
         .where(
             ScheduledEmail.status == ScheduledEmailStatus.PENDING,
             ScheduledEmail.scheduled_at <= now,
+            Organization.active.isnot(False),
         )
         .options(selectinload(ScheduledEmail.organization))
         .limit(100)

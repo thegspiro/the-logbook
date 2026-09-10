@@ -216,3 +216,212 @@ describe('useTierEditor saving', () => {
     expect(result.current.dirty).toBe(false);
   });
 });
+
+describe('a ladder the backend synthesized rather than stored', () => {
+  beforeEach(installDefaults);
+
+  it('reports that nothing is stored, so the step can say what actually resolves it', async () => {
+    // It opens dirty on purpose — nothing reads the ladder until it is saved.
+    // But Discard reloads, which re-proposes the same defaults and sets dirty
+    // straight back, so a refusal offering "or discard" names a way out that
+    // does not exist.
+    getTierConfig.mockResolvedValue(config({ is_saved: false }));
+    const result = await loaded();
+
+    expect(result.current.dirty).toBe(true);
+    expect(result.current.neverSaved).toBe(true);
+  });
+
+  it('says nothing of the sort once a ladder is stored', async () => {
+    getTierConfig.mockResolvedValue(config({ is_saved: true }));
+    const result = await loaded();
+
+    expect(result.current.neverSaved).toBe(false);
+  });
+
+  it('says nothing of the sort when the backend does not report either way', async () => {
+    // An older backend that predates the flag. Assuming "never saved" there
+    // would badge every organization's stored ladder as pending.
+    getTierConfig.mockResolvedValue(config());
+    const result = await loaded();
+
+    expect(result.current.neverSaved).toBe(false);
+  });
+});
+
+describe('a save the refresh could not confirm', () => {
+  beforeEach(installDefaults);
+
+  it('stays clean, so the step is not left refusing an edit that was stored', async () => {
+    // `fetchConfig` swallows its own failure, so a read that fails after an
+    // accepted PUT used to leave `dirty` true. The section has by then swapped
+    // its Save button for the failure panel, and `RoleSetup`'s Continue guard
+    // goes on refusing — an administrator stranded on the step with no control
+    // left that would clear it.
+    const result = await loaded();
+    act(() => result.current.setAutoAdvance(false));
+    expect(result.current.dirty).toBe(true);
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(updateTierConfig).toHaveBeenCalled();
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it('keeps showing the ladder it just stored, rather than the load-failure panel', async () => {
+    // That panel says "could not be loaded — nothing has changed", which after
+    // an accepted PUT is untrue and contradicts the success toast raised a
+    // moment earlier. The write landed; the ladder on screen is the stored one.
+    const result = await loaded();
+    act(() => result.current.setAutoAdvance(false));
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(result.current.failed).toBe(false);
+    expect(result.current.tiers).toHaveLength(2);
+    expect(result.current.config?.is_saved).toBe(true);
+  });
+
+  it('still says the refresh failed, rather than leaving the toast as the only account of it', async () => {
+    // Keeping the editor on screen must not become discarding the error. The
+    // member counts beside the ladder are from before the save and the server
+    // may have normalised what it stored, so a screen that says nothing is
+    // reporting a confidence it does not have.
+    const result = await loaded();
+    act(() => result.current.setAutoAdvance(false));
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(result.current.refreshFailed).toBe(true);
+    expect(result.current.failed).toBe(false);
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it('keeps a retry that also fails out of the load-failure panel', async () => {
+    // The warning's own Refresh button goes through the same fetch. Letting its
+    // failure set `failed` would replace the editor with "could not be loaded —
+    // nothing has changed", about a ladder that had just been stored. Every
+    // retry during an outage lands here, so this is the common path, not an
+    // edge.
+    const result = await loaded();
+    act(() => result.current.setAutoAdvance(false));
+    getTierConfig.mockRejectedValue(new Error('network'));
+    await act(async () => {
+      await result.current.save();
+    });
+    expect(result.current.refreshFailed).toBe(true);
+
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    expect(result.current.failed).toBe(false);
+    expect(result.current.refreshFailed).toBe(true);
+    expect(result.current.tiers).toHaveLength(2);
+  });
+
+  it('says a save is unconfirmed only when one was made', async () => {
+    // A re-read that fails with no save behind it is a stale screen, not an
+    // unconfirmed write, and must not claim "your tiers were saved".
+    const result = await loaded();
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    expect(result.current.refreshFailed).toBe(true);
+    expect(result.current.unconfirmedSave).toBe(false);
+    expect(result.current.failed).toBe(false);
+  });
+
+  it('still reports a first load that fails as a load failure', async () => {
+    // There is nothing on screen to keep, so the panel is right here.
+    getTierConfig.mockRejectedValue(new Error('network'));
+    const { result } = renderHook(() => useTierEditor());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.failed).toBe(true);
+    expect(result.current.refreshFailed).toBe(false);
+  });
+
+  it('clears the refresh warning once a read succeeds', async () => {
+    const result = await loaded();
+    act(() => result.current.setAutoAdvance(false));
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+    await act(async () => {
+      await result.current.save();
+    });
+    expect(result.current.refreshFailed).toBe(true);
+
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    expect(result.current.refreshFailed).toBe(false);
+  });
+
+  it('still reports a failed load that was not preceded by a save', async () => {
+    // The narrowing is to the post-save refresh only. An ordinary read failure
+    // must still reach the panel, or a department is told it has no ladder.
+    getTierConfig.mockRejectedValue(new Error('network'));
+    const { result } = renderHook(() => useTierEditor());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.failed).toBe(true);
+  });
+});
+
+describe('useTierEditor and a ladder that was never saved', () => {
+  beforeEach(installDefaults);
+
+  it('opens dirty when the backend synthesized the ladder', async () => {
+    // `_load_tiers` reads the stored section, so a synthesized ladder is
+    // proposed rather than in effect: nothing advances and no benefit applies
+    // until it is saved. Presenting it as clean would show a department
+    // settings that no reader honours.
+    getTierConfig.mockResolvedValue(config({ is_saved: false }));
+    const result = await loaded();
+
+    expect(result.current.dirty).toBe(true);
+  });
+
+  it('opens clean when the ladder is stored', async () => {
+    getTierConfig.mockResolvedValue(config({ is_saved: true }));
+    const result = await loaded();
+
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it('opens clean when the backend does not say', async () => {
+    // An older backend has no such field, and a missing answer must not be read
+    // as "unsaved" — that would make every load dirty and every screen nag.
+    const result = await loaded();
+
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it('does not send the saved-state flag back', async () => {
+    // It is a statement about whether the section exists. Storing it would be
+    // storing an answer about the storage.
+    getTierConfig.mockResolvedValue(config({ is_saved: false }));
+    const result = await loaded();
+
+    await act(async () => {
+      await result.current.save();
+    });
+
+    const sent = updateTierConfig.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(sent).not.toHaveProperty('is_saved');
+    expect(sent).not.toHaveProperty('member_counts');
+  });
+});

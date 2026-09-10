@@ -18,10 +18,10 @@ been through a review pass.
 
 | #   | Feature                        | Code                                                                                                                                                                                                                                                                      | Prefix | Status |
 | --- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
-| A1  | Storefront & payments          | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF     | ⬜     |
-| A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ⬜     |
-| A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ⬜     |
-| A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ⬜     |
+| A1  | Storefront & payments          | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF     | ✅     |
+| A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ✅     |
+| A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ✅     |
+| A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ✅     |
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ⬜     |
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ⬜     |
 | A7  | Dashboard & action items       | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`                                                                                                                | DASH   | ⬜     |
@@ -2089,3 +2089,252 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   KNOWN_LIMITATIONS entry marked resolved with the documented residual edge
   (10+ simultaneously _pending_ newer messages; pinning wins). Gate: tsc 0 ·
   eslint 0 · Dashboard tests 16 passed (was 13).
+- **A1 storefront & payments ✅ (pass 5) — SF-8, a HIGH the first four passes
+  could not see.** First Tier A re-run since pass 2; the module has grown ~1.2k
+  lines since (endpoints 1597 → 1660 L, service 2965 → 3345 L) and gained the
+  payment-policy gate, personalization thread colour/method, window rollups and
+  the notification preview surface. Every pass-2 verdict re-verified and still
+  holding — `Decimal` end to end, `SafeCsvWriter`, 44/44 routes gated,
+  `/orders/mine/*` self-scoped, XC-3 clean, webhook fails closed, SF-4's
+  currency guard present. This pass applied the **concurrency lens**, which no
+  earlier pass had, and that is where the module is weakest. **2 fixed, 1
+  flagged.** **SF-8 (HIGH, fixed):** `_price_lines` locked every cart product
+  with `FOR UPDATE` and then compared against a **plain** `SELECT` tally —
+  Pitfall #27's second half, with only the first half present. `create_order`
+  reads settings and windows before reaching the lock, so its REPEATABLE READ
+  snapshot is already open; the loser of two simultaneous submissions blocks on
+  the lock, waits, counts, and still sees the tally from before the winner
+  committed. Both members are sold the last shirt, and `max_per_member` and a
+  window's `quantity_limit` fall the same way. Realistic here because ordering
+  is bursty — the window-opened mail goes to the whole department at once.
+  **Why four passes missed it:** `test_storefront_locking.py` asserts
+  `_lock_products` locks the right ids (the half already correct) and reads as
+  coverage of the whole question, while `test_capacity_locking.py` — the
+  repository's ratchet for this exact rule — imported six services and not this
+  one. Fixed with a `for_update` flag on `_ordered_quantities`, mirroring
+  `scheduling_service.get_shift_by_id`; it is a flag rather than an
+  unconditional lock because the same helper renders the member-facing store,
+  where locking would block submission behind browsing. `FOR UPDATE` on the
+  `GROUP BY` + `JOIN` aggregate was run against the live DB before the change
+  was written. Ratchet extended: `TestStorefrontStockCapacity` asserts the tally
+  locks, the order path passes the flag twice, **and the browse path does not** —
+  the third is what stops the next reader collapsing it. **The tally lock alone
+  was not the fix, and on its own was worse than the bug** (Codex P2 on PR
+  #2446, corrected in `8499603`): those tallies are range reads over a window
+  that is empty exactly when it opens, so InnoDB gap-locks that empty range —
+  and gap locks do not conflict with each other, so two members ordering
+  **different** products both pass `_lock_products` (disjoint product rows),
+  both take the same gap, and then each one's `INSERT` is blocked by the other's
+  gap lock. InnoDB kills one member's order with a 1213, and different products
+  is the _common_ case when a window opens, so the intermediate version traded a
+  rare same-product oversell for a frequent different-product failure.
+  Reproduced against a real database: **2 deadlocks in 5 rounds** without the
+  remedy, **0** with it. The remedy is the half of Pitfall #27 the intermediate
+  version skipped — **lock the parent row, not the rows being counted**; the
+  parent of a window-scoped tally is the **window**, so `_price_lines` now takes
+  an exclusive lock on the window row before the products and the tallies (lock
+  order window → products → tallies on every path, so they cannot invert).
+  Guarded by `tests/test_storefront_order_deadlock.py`, which drives concurrent
+  disjoint carts against a real database and fails with
+  `outcomes=['ok', 'deadlock', 'ok', 'deadlock', 'ok', 'ok']` if the window lock
+  is removed, plus a source guard that the lock precedes the tallies.
+  **SF-10 (NIT, fixed):**
+  dead `exclude_order_id` parameter on the same helper. **SF-9 (MED, flagged):**
+  `record_payment` is a read-modify-write on `amount_paid` with no row lock, so
+  the webhook's auto-apply landing while a treasurer works the same order loses
+  a payment off the ledger and the member is chased for money they sent; not
+  fixed because the one-line lock moves transaction boundaries shared by
+  `bulk_mark_paid`'s loop and the unauthenticated webhook, and this contract
+  flags rather than guesses in a payments path. Two options written up; mirrored
+  to KNOWN_LIMITATIONS. Pass-2's webhook-500-on-racing-duplicate item
+  re-verified, still open, deliberately left with SF-9. Also noted, **not**
+  fixed as out of scope: `CHECKLIST.md` and `CLAUDE.md` both point at
+  `docs/endpoint-permissions.md`, which does not exist. Gate: tsc 0 · flake8 0 ·
+  black 1101 unchanged · eslint 0 errors / 2 pre-existing warnings · backend 774
+  passed, 1 skipped · frontend storefront 185 passed (15 files). DB-backed tests
+  **did** run this pass — the session-start hook provides MariaDB and Redis. See
+  storefront.md → Pass 5. Next: A2 auth & session lifecycle.
+- **A2 auth & session lifecycle ✅ (pass 5) — AUTH-20, the lockout counter, one
+  layer up from AUTH-9/AUTH-13.** The most heavily reviewed surface in the
+  repository — four app-review passes plus the security-review track's 19
+  findings, last touched 2026-09-08 — so this pass took the one lens that had
+  produced results here before (concurrency) to the two auth paths AUTH-9 and
+  AUTH-13 did **not** cover: the password step and the refresh rotation. Both
+  carry the same unlocked read-then-write shape. **1 fixed (MED), 1 flagged
+  (LOW).** **AUTH-20 (MED, fixed):** `authenticate_user` counted a failed
+  sign-in by reading `failed_login_attempts` off the object the unlocked
+  `candidates` query loaded, adding one, and committing — a read-modify-write on
+  the exact field the lockout threshold is measured against. N simultaneous
+  wrong passwords all read the same value, all write value+1, and the account
+  absorbs N guesses per increment. Per-IP rate limiting does not cover this:
+  account lockout is the layer that exists for the **distributed** case, where
+  every source stays under its own per-IP limit and only the per-account tally
+  sees the total. Calibrated honestly as a weakening rather than a bypass — the
+  account still locks, just after ~N× more guesses — which is why MED and not
+  the P1 that AUTH-9/AUTH-13 carried. **Reproduced, not argued:**
+  `tests/test_auth_lockout_race.py` drives two real, independently-committing
+  AsyncSessions through `authenticate_user` and asserts the stored counter is 2;
+  against the unfixed code it fails with `recorded 1 failure(s), not 2`. The
+  race is deterministic rather than lucky because Argon2 is slow — both requests
+  read the counter, then both spend ~100-300ms hashing before either writes, so
+  the overlap is the whole verify. Fixed with the `with_for_update()` +
+  `populate_existing=True` re-read AUTH-9/AUTH-13 established, placed **inside
+  the failure branch, after the verify**: taking it earlier would hold a user row
+  across every Argon2 hash and hand an attacker a cheaper denial of service than
+  the counter defends against, so a second test fails if the lock ever moves
+  above the verify. `mfa_login`'s copy of the counter is already covered (both
+  consume helpers lock before returning False); the one unlocked path there is a
+  request supplying neither code, which is not a guess — recorded, not changed,
+  since the tightening would turn a 401 into a 422 for existing clients.
+  **AUTH-21 (LOW, flagged):** `refresh_access_token` rotates
+  `session.refresh_token` after a plain SELECT, so two concurrent refreshes of
+  the same token both write and the loser's client then presents a token that
+  matches no session — which the replay branch answers by revoking **every**
+  session the member has. Fails closed, but a benign double-fire logs someone out
+  everywhere with an audit trail saying token theft. Explicitly **not
+  reproduced**, and said so in the write-up; not fixed because a row lock on the
+  hottest path in the auth surface is a performance decision, not a mechanical
+  one. Three options recorded, including a conditional UPDATE that needs no lock;
+  mirrored to KNOWN_LIMITATIONS. **Re-verified still open:** AUTH-15
+  (max password age browser-only), AUTH-17 (sessions never reaped),
+  `previous_refresh_token`/`_expires_at` still dead (dropping the columns needs a
+  migration), and `/check` still has no production caller (left as pass 4 left
+  it — wrapper and route are a pair). Finding ids start at AUTH-20 because the
+  `AUTH-` prefix is shared with the security-review track and the two have
+  **already collided** on AUTH-2/3/14/15; same structural problem recorded for
+  `SF-` the same day, and giving one track its own prefix is an owner call.
+  Gate: tsc 0 · flake8 0 · black 1102 unchanged · eslint 0 errors / 2
+  pre-existing warnings · **full backend suite 11,922 passed, 21 skipped, 0
+  failed** (run whole rather than the 433-test auth slice, since
+  `authenticate_user` is reached by most of the suite). See auth-session.md →
+  Pass 5. Next: A3 scheduled tasks & cron.
+- **A3 scheduled tasks & cron ✅ (pass 5) — CRON-40, the scheduler's own claim.**
+  **0 fixed, 1 flagged (HIGH).** Five prior passes (two here, three in the
+  security-review track, the last on 2026-09-07 — two days before this one) have
+  read the 44 runners closely, and `git log --since` on both target files
+  returns **no commits**, so re-reading the runner bodies would have re-derived
+  pass 3's conclusions rather than adding to them. This pass looked at the layer
+  _above_ the runners — `main.py`'s in-process scheduler, which decides which
+  worker runs them — and found the one defect that makes every runner's own
+  correctness moot. **CRON-40 (HIGH, flagged):** `_scheduled_task_loop` claims
+  the scheduler role with a Redis SETNX (`main.py:1739`) and then renews it at
+  the bottom of each iteration (`:1789-1798`) with a **plain `set`** — no `nx`,
+  no `xx`, no comparison against the PID in the key — and no code path ever
+  exits the loop. Three verified facts combine: the TTL is 180s and is refreshed
+  only _after_ the whole batch; the first iteration runs **all 43** scheduled
+  runners back to back (`last_run` seeds to `0.0` and `time.monotonic()` is
+  seconds since boot, so on any host up longer than the longest interval every
+  task is due at once); and the losing workers retry every 60s. A first batch
+  that overruns 180s therefore lets a second worker claim and enter its own run
+  loop, after which the original unconditionally re-sets the key to its own PID —
+  taking the claim back without ever learning it lost it. Both then run all 43
+  runners every 60s, permanently and silently (each logs "started" once, minutes
+  apart, in separate worker logs), and a later overrun adds a third. Production
+  runs **four** workers (`backend/Dockerfile:104`), so the effect is members
+  receiving event reminders, shift reminders, cert-expiry alerts and inactivity
+  warnings two or more times, with every "stamp as sent" write becoming a
+  cross-worker race. **There is no backstop:** exactly one of the 44 runners
+  (`run_scheduled_emails`) takes its own distributed lock, and it is also the one
+  task deliberately excluded from this loop — the codebase already has the
+  pattern that would contain this, applied to the task that does not need it
+  here. Explicitly **not reproduced** (needs a multi-worker deployment and an
+  overrunning batch; the three constituent facts are each verified in source) and
+  the write-up says so. Not fixed: this is background-worker coordination in
+  production startup code and every remedy changes how workers agree on who
+  schedules. Recommended shape recorded — compare-and-swap the renewal via Lua
+  and `break` out of the loop when the CAS fails, plus a guard test whose fake
+  Redis changes the value underneath the loop; two weaker options (renew during
+  the batch, raise the TTL) written up as mitigations rather than fixes.
+  Mirrored to KNOWN_LIMITATIONS. **Verified good:** the three-way task registry
+  is consistent _and enforced_ — `SCHEDULE` 44 = `TASK_RUNNERS` 44,
+  `TASK_INTERVALS_SECONDS` 43, the difference being `scheduled_emails` which is
+  in `_MANUAL_ONLY_TASKS` because its own loop drives it every minute. This pass
+  checked the **runner/interval** pair specifically: pass 3 verified
+  SCHEDULE/TASK_RUNNERS, but the loop is built from `TASK_INTERVALS_SECONDS`, so
+  that is the pair whose drift would silently stop a task firing.
+  `tests/test_scheduled_task_coverage.py` fails the build in both directions —
+  CLAUDE.md #19 done correctly. Both endpoints gated (`run-task` correctly
+  stricter at wildcard `system.run_tasks`, since every runner spans all orgs).
+  Pass-2's naive-datetime flag is **closed** — it was deferred pending a
+  database to verify against, and `run_rolling_recurrence_extend` now uses
+  `datetime.now(utc).replace(tzinfo=None)` with the reasoning in the code.
+  **Re-verified still open:** CRON-31-7 (`newly_sent` appended after a send
+  failure, now `:2972`), CRON-31-8 (due interval stamped sent with zero
+  recipients), the Redis-down fail-open (same blast radius as CRON-40 by another
+  route), and the `cert_alert_service` per-record N+1. Ids start at CRON-40
+  because the `CRON-` prefix is shared **four** ways and `CRON-2` alone currently
+  means three different things. Gate (tree as found; no code changed): tsc 0 ·
+  flake8 0 · black 1102 unchanged · eslint 0 errors / 2 pre-existing warnings ·
+  scheduled-task suites 122 passed, 1 skipped · docs link check 352 files, 0
+  broken. See scheduled-tasks.md → Pass 5. Next: A4 email templates & delivery.
+- **A4 email templates & delivery ✅ (pass 5) — MAIL-20: a decommissioned
+  department kept mailing its members.** Unlike A3, this feature had genuinely
+  new ground: ~970 lines since pass 2 (endpoints 671 → 904 L and 11 → 13 routes,
+  template service 2,739 → 3,247 L, `email_service` 1,633 → 1,862 L), including
+  the footer library and the layout/colourway fields. **2 fixed (1 MED, 1 LOW),
+  1 flagged (LOW).** **MAIL-20 (MED, fixed):**
+  `_run_scheduled_emails_inner` selected every due `PENDING` `ScheduledEmail`
+  across all organizations with **no `Organization.active` filter** — its only
+  org check (`if not org`) catches a _deleted_ row, not a deactivated one — so an
+  organization switched off keeps sending everything still queued against it, to
+  its former members. This is the CRON2-31-11/CRON-31-5 shape, and it had
+  already been closed **next door**: the sibling `run_publish_scheduled_messages`
+  was fixed as CRON3-31-1 two days earlier, with a comment naming the shape.
+  Scheduled _email_ lives in a different function and that pass was scoped to its
+  own diff, so this one was never in view — a good argument for the rotation
+  running features rather than diffs. Fixed with the canonical join +
+  `active.isnot(False)`; filtered rather than retired, so a reactivated
+  department keeps its queue instead of this task destroying it in passing.
+  **Reproduced:** `tests/test_scheduled_email_active_org.py` fails against the
+  unfixed code with the row moved to `failed` and `total_processed: 1` — it _was_
+  put through the send path. Worth knowing which assertion carries the weight:
+  `result["sent"] == 0` holds either way in a test env with email disabled, so
+  the real check is that the row is untouched; a second test asserts an **active**
+  org's email is still processed, so the fix cannot degenerate into filtering
+  everything out. **MAIL-21 (LOW, fixed):** `delete_attachment` did blocking
+  `os.path.isfile`/`os.remove` on the event loop 60 lines below an upload path
+  that correctly uses `asyncio.to_thread`. The `to_thread` move is the fix that
+  stood; the ordering change shipped alongside it was **reverted** after review
+  (Codex P2 on PR #2446, corrected in `3828a5e`). That change committed the row
+  delete first and swallowed `OSError`, on the reasoning that a failed commit
+  otherwise leaves a row pointing at a missing file and breaks the send path.
+  That reasoning was incomplete and the conclusion inverted once the missing
+  half was supplied: **the row is the only record the file exists** — nothing
+  sweeps `storage/email_attachments` and no orphan-cleanup task exists anywhere
+  (verified by repo-wide search) — so committing first and discarding an unlink
+  error turns a transient `EACCES`/`EIO` into a member-facing attachment that
+  survives forever with nothing pointing at it, while the API answers 204. On a
+  HIPAA-scoped system that is a retention problem, not the "wasted bytes" the
+  first draft called it; meanwhile the broken-send window it was avoiding is
+  **self-healing**, since the retry's unlink raises `FileNotFoundError` and the
+  delete then completes. So the original order was already recoverable in both
+  directions. The handler now unlinks first and lets a genuine `OSError`
+  propagate, leaving the row naming the file so the admin can retry; guarded by
+  `tests/test_email_attachment_delete_order.py` (failed unlink leaves the row
+  and raises, success removes file before row, already-missing file completes).
+  **MAIL-22 (LOW, flagged):** `upload_attachment` sniffs the real MIME, uses it
+  to accept/reject, then persists the **client's claimed** `content_type` — the
+  expensive correct answer is computed and discarded, and extension and content
+  are checked against two independent allowlists but never against each other.
+  Not fixed because the obvious fix is wrong: `.docx`/`.xlsx`/`.pptx` are ZIP
+  containers that libmagic commonly reports as `application/zip` (which is why
+  the allowlist carries both), so storing the detected value would mail Word
+  documents as zips. The right change is an extension↔MIME consistency table plus
+  a decision on what to do on mismatch. Mirrored to KNOWN_LIMITATIONS.
+  **Verified good:** all 13 endpoints gated (AST-enumerated — pass 2's note that
+  the multi-line dependency defeats a line grep still holds); the new footer
+  library deep-copies `Organization.settings` before a nested write (pitfall #12)
+  and escapes both admin line text and substituted values; XC-1 closed on **both**
+  scheduled-email write paths, with `update_scheduled_email` offering no way to
+  swap `template_id` after the fact — the place this class of gap usually
+  survives; and the scheduled-email send path does **not** carry the "marked sent,
+  nothing delivered" bug its cron neighbours still have (CRON-31-7), branching on
+  `success_count > 0`. **Re-verified still open:** MAIL-4 (arbitrary recipients,
+  the standing CS-9 policy call) and a silent no-op where a PATCH with an
+  unrecognised `status` returns 200 having written nothing. Ids start at MAIL-20
+  because `MAIL-1…5` are used by both this file and MSG-25, and FORM-26 cites a
+  `MAIL-4` of its own. Gate: tsc 0 · flake8 0 · black 1103 unchanged · eslint 0
+  errors / 2 pre-existing warnings · **full backend suite 11,924 passed, 21
+  skipped, 0 failed** (run whole rather than the 1,490-test email slice, since
+  the MAIL-20 fix lands in `scheduled_tasks.py`). See email-templates.md → Pass 5.
+  Next: A5 course cohorts & syllabus.

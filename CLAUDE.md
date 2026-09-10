@@ -216,8 +216,54 @@ neither depends on npm choosing to auto-install anything.
 | `node_modules/typescript`        | 5.9.3   | The frontend's own declaration, hoisted |
 | `node_modules/typescript-native` | 7.0.2   | The aliased compiler, hoisted           |
 
-Nothing nests under `frontend/node_modules/` any more: with no version
-conflict left to work around, both hoist to the root.
+**Correction (2026-09-10), re-confirmed against the actual committed
+lockfile:** the claim that nothing nests under `frontend/node_modules/`
+does not hold. `frontend/node_modules/typescript` resolves to `7.0.2`
+while the hoisted root `node_modules/typescript` is `5.9.3`, so `npm ls
+typescript` reports the nested one `invalid` (`ELSPROBLEMS`), and a bare
+`tsc` run from inside `frontend/` resolves `7.0.2`, not `5.9.3` — verified
+via a fresh `npm ci` (exactly what CI and the Docker build run) directly
+against `origin/main`, with no local edits. (An intermediate version of
+this note briefly claimed the opposite — "verified clean" — based on
+testing against a lockfile that had been hand-merged with an unrelated
+branch's changes via `git merge`, which is not a reliable way to test a
+generated lockfile; that claim was wrong and has been reverted. The
+finding below is the one confirmed twice, independently, against a clean
+`npm ci`.)
+
+This appears to be an inherent consequence of `typescript-native:
+npm:typescript@7.0.2` sharing its real package name with the direct
+`typescript` dependency, not a stale artifact fixable by regenerating —
+`npm ci`, `eslint`, and `tsc-native.mjs --noEmit` are all still verified
+clean under it (CI's own "Frontend Lint, Typecheck & Build" job has been
+green across every PR touching this tree), so nothing in the actual
+build/test path is failing, but `npm ls typescript`'s own `ELSPROBLEMS` is
+a real, standing dependency-check failure. Closing it needs a restructure
+of how `typescript-native` is aliased, which is beyond a manifest-text fix
+and hasn't been done — **this is escalated, not resolved:** see
+`docs/KNOWN_LIMITATIONS.md`'s "Frontend — `typescript`'s declared version
+has drifted..." entry for the open item awaiting that decision.
+
+**Separately: this lockfile is not safely regenerable from scratch either.**
+`rm package-lock.json && npm install` — a full, lockfile-free
+re-resolution — is unreliable for this tree: across repeated attempts it
+has produced a spurious invalid `typescript` entry, silently shifted the
+_root_ `typescript` to an unrelated, undeclared `6.0.3` (which broke
+type-aware lint locally), and crashed npm outright with an internal error
+(`Cannot read properties of null (reading 'edgesOut')`, npm 10.9.7) — three
+different failure modes from the same starting state on different
+attempts. Never run `rm package-lock.json && npm install` to "clean up" or
+diagnose this tree, and never hand-merge a generated lockfile across
+branches with `git merge` — regenerate a _specific_ package's resolution
+with a targeted `npm install <pkg>@<version> --workspace frontend` (run
+from the repo root, per this repo's single-lockfile convention — the
+`--workspace` flag is what targets `frontend/package.json` rather than
+the root one; omitting it can put the dependency in the wrong manifest
+while still touching the shared lockfile) against a lockfile freshly
+checked out from the base branch, and verify with `npm ci` afterward
+(never `npm install`, which re-resolves from the manifest rather than
+trusting the lockfile), the way #2452 and the `@vitest/ui` fix below both
+did.
 
 **typescript-eslint cannot run on TypeScript 7.** It throws
 `typescript-eslint does not support TS 7.0` from a hard version guard, and
@@ -227,18 +273,30 @@ support). A workspace can only declare one package named `typescript`, so the
 plain name is the version the linter needs and the compiler the project builds
 with is the same package installed again under an alias.
 
-This is not cosmetic. It is what keeps the lockfile regenerable: with
-`typescript` declared at 7.0.2, `rm package-lock.json && npm install` failed
-outright with ERESOLVE against typescript-eslint's peer range, so the lockfile
-could not be rebuilt and any bump of typescript-eslint broke the install.
+This is not cosmetic. It is what keeps `npm install` able to resolve at all:
+with `typescript` declared at 7.0.2, `rm package-lock.json && npm install`
+failed outright with ERESOLVE against typescript-eslint's peer range — a
+different, worse failure than anything below, since it couldn't even produce
+a lockfile. The alias fixes that specific rejection. It does **not** make a
+from-scratch regeneration safe in general: see "Separately: this lockfile is
+not safely regenerable from scratch either" above for the three failure
+modes still observed with the alias correctly in place. Never run `rm
+package-lock.json && npm install` on this tree regardless of which problem
+you're trying to solve.
 
 Consequences worth knowing:
 
 - `npm run typecheck` / `npm run build` go through `frontend/scripts/tsc-native.mjs`,
   which resolves the aliased compiler explicitly. Keep it that way — the
   wrapper is what makes "which compiler ran" a fact rather than a hoisting
-  outcome. Bare `tsc` resolves to 5.9.3, because both installs ship a `tsc`
-  bin and npm links only one into `node_modules/.bin`.
+  outcome. **Bare `tsc` resolves differently depending on the current
+  directory, against the committed lockfile:** `5.9.3` from the repo root,
+  but `7.0.2` from `frontend/` — the nested `frontend/node_modules/.bin/tsc`
+  the "Correction" above documents shadows the root's own bin. Verified via
+  `npx --no-install tsc --version` in both directories, after a fresh
+  `npm ci`. Never trust a bare `tsc` invocation's version from either
+  directory; use `tsc-native.mjs` (or, to deliberately run the `5.9.3` the
+  linter uses, `node_modules/typescript/bin/tsc` from the repo root).
 - **Point your editor at the aliased compiler.** In VS Code, set this in your
   local `.vscode/settings.json` (the directory is gitignored, so this cannot
   be committed for you):

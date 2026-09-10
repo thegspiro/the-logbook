@@ -966,13 +966,28 @@ async def get_membership_tier_config(
     # that deliberately saved a ladder with no rungs made a decision, and
     # resurrecting the defaults over it would be the same overreach in the other
     # direction.
+    configured = "membership_tiers" in settings
     tier_config = (
         settings["membership_tiers"]
-        if "membership_tiers" in settings
+        if configured
         else MembershipTierSettings().model_dump()
     )
     return {
         **tier_config,
+        # Whether the ladder above is stored or merely proposed.
+        #
+        # Synthesizing the defaults is what stops the editor reading "No tiers
+        # configured" under its own copy about the arrangement we ship. But
+        # `MembershipTierService._load_tiers` reads the stored section, and for
+        # an organization that has none it still sees nothing — so advancement
+        # does not run and no benefit applies. An editor that presented the
+        # synthesized ladder as clean would show settings as current that no
+        # reader honours, which is the same false report the fallback was added
+        # to fix, moved one step along.
+        #
+        # Reported rather than written here: a GET does not persist. The editor
+        # opens dirty on this and Save is what makes it real.
+        "is_saved": configured,
         # How many members currently sit on each tier, so the editor can say so
         # beside the rung and refuse to remove one that is occupied. Reported
         # rather than left to the client to work out: `membership_type` also
@@ -1042,7 +1057,14 @@ async def update_membership_tier_config(
     # `member_counts` is reported by the GET and is not part of the stored
     # config; accepting it back would persist a snapshot that is wrong the
     # moment anyone joins.
-    submitted = {k: v for k, v in config.items() if k != "member_counts"}
+    # `member_counts` and `is_saved` are both reported by the GET and neither is
+    # part of the stored config: the first is a count of the roster, wrong the
+    # moment anyone joins, and the second is a statement about whether this very
+    # section exists. Storing either would be storing an answer about the
+    # storage.
+    submitted = {
+        k: v for k, v in config.items() if k not in {"member_counts", "is_saved"}
+    }
     try:
         validated = MembershipTierSettings.model_validate(submitted)
     except ValidationError as exc:

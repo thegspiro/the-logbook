@@ -63,20 +63,27 @@ from app.schemas.forms import FormResponse, FormsListResponse
 from app.services.event_request_service import (
     apply_default_assignee,
     configured_task_ids,
+    get_linked_calendar_event,
+    get_live_staffing_shift,
     get_outreach_roles,
     get_outreach_types,
     get_pipeline_settings,
     get_staffing_state,
     get_user_name,
     lead_time_error,
+    normalize_request_preferences,
     open_staffing_shift,
+    public_daily_limit,
     render_request_template,
+    resolve_confirmed_end,
 )
 from app.services.event_request_service import (
     send_request_notification as _send_request_notification,
 )
 from app.services.event_request_service import (
     send_volunteer_call,
+    sync_calendar_event_cancelled,
+    sync_calendar_event_date,
     sync_staffing_shift_cancelled,
     sync_staffing_shift_date,
 )
@@ -84,6 +91,16 @@ from app.services.forms_service import FormsService
 from app.utils.org_scoping import assert_in_org
 
 router = APIRouter(prefix="/event-requests", tags=["event-requests"])
+
+
+def _as_aware(value: datetime) -> datetime:
+    """Read a stored datetime as UTC when it carries no offset.
+
+    MySQL hands back naive datetimes for `DateTime(timezone=True)` columns, so
+    comparing one against an aware `now()` raises `TypeError`. Everything in
+    this system is stored as UTC (see CLAUDE.md).
+    """
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
 async def _get_location_name(
@@ -298,8 +315,28 @@ async def submit_public_event_request(
     # contract is that the counter is spent only by a submission that would
     # otherwise be accepted, so every rejection path belongs above it — the
     # same ordering `FormsService.submit_public_form` already keeps.
+
+    # Settle the preference fields before anything reads them, so the lead-time
+    # gate below measures the same `date_flexibility` that gets stored. The
+    # forms path calls the same helper — one canonical shape, settled at the
+    # write (CLAUDE.md pitfall #20).
+    settled = normalize_request_preferences(
+        org,
+        {
+            "outreach_type": data.outreach_type,
+            "date_flexibility": data.date_flexibility,
+            "venue_preference": data.venue_preference,
+            "preferred_time_of_day": data.preferred_time_of_day,
+            "preferred_date_start": data.preferred_date_start,
+            "preferred_date_end": data.preferred_date_end,
+        },
+    )
+
     lead_error = lead_time_error(
-        pipeline, data.date_flexibility, data.preferred_date_start
+        pipeline,
+        settled["date_flexibility"],
+        data.preferred_date_start,
+        preferred_date_end=data.preferred_date_end,
     )
     if lead_error:
         raise HTTPException(status_code=400, detail=lead_error)
@@ -308,7 +345,7 @@ async def submit_public_event_request(
     # passed authorization, the honeypot and every business-rule rejection.
     if await daily_cap_exceeded(
         f"pub_event_request:{organization_id}",
-        int(pipeline.get("public_daily_limit", 50)),
+        public_daily_limit(pipeline),
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -321,16 +358,16 @@ async def submit_public_event_request(
         contact_email=data.contact_email,
         contact_phone=data.contact_phone,
         organization_name=data.organization_name,
-        outreach_type=data.outreach_type,
+        outreach_type=settled["outreach_type"],
         description=data.description,
-        date_flexibility=data.date_flexibility,
+        date_flexibility=settled["date_flexibility"],
         preferred_date_start=data.preferred_date_start,
         preferred_date_end=data.preferred_date_end,
         preferred_timeframe=data.preferred_timeframe,
-        preferred_time_of_day=data.preferred_time_of_day,
+        preferred_time_of_day=settled["preferred_time_of_day"],
         audience_size=data.audience_size,
         age_group=data.age_group,
-        venue_preference=data.venue_preference,
+        venue_preference=settled["venue_preference"],
         venue_address=data.venue_address,
         special_requests=data.special_requests,
         status=EventRequestStatus.SUBMITTED,
@@ -415,8 +452,16 @@ async def check_request_status(
     if not event_date and event_request.event_id:
         from app.models.event import Event
 
+        # A cancelled event is not a confirmed date. Postponing a request to
+        # a date TBD clears `event_date` and stands the calendar entry down, so
+        # without this filter the public status page answered "your event is
+        # still on <the old date>" by reading the very event that was cancelled
+        # because it is not.
         event_result = await db.execute(
-            select(Event.start_datetime).where(Event.id == event_request.event_id)
+            select(Event.start_datetime).where(
+                Event.id == event_request.event_id,
+                Event.is_cancelled.is_(False),
+            )
         )
         row = event_result.first()
         if row:
@@ -508,6 +553,44 @@ async def public_cancel_request(
         actor_id=None,
         reason="The requester cancelled this outreach event.",
     )
+    # The calendar entry is stood down only if the event has not started.
+    #
+    # This path is reached with a status token and no session, and
+    # `EventService.cancel_event` refuses only an event whose attendance is
+    # already finalized. An outreach event that has happened but not yet been
+    # closed out is therefore still cancellable from a link — which would take
+    # it off members' calendars after the fact, tell anyone who RSVPed it was
+    # cancelled, and revoke attendance credit if it had been reopened.
+    #
+    # Withdrawing before the day is the case this cascade exists for. Afterwards
+    # the request is still marked cancelled and the withdrawal still recorded in
+    # the activity log, but the record of an event that took place is left
+    # alone — correcting that is an officer's decision, made while signed in.
+    linked_event = await get_linked_calendar_event(db, event_request)
+    event_has_started = (
+        linked_event is not None
+        and linked_event.start_datetime is not None
+        and _as_aware(linked_event.start_datetime) <= datetime.now(timezone.utc)
+    )
+    if event_has_started:
+        db.add(
+            EventRequestActivity(
+                request_id=event_request.id,
+                action="calendar_event_kept",
+                notes=(
+                    "The requester cancelled after the event start time; the "
+                    "calendar entry was left in place for an officer to review."
+                ),
+                details={"event_id": str(event_request.event_id)},
+            )
+        )
+    else:
+        await sync_calendar_event_cancelled(
+            db,
+            event_request,
+            actor_id=None,
+            reason="The requester cancelled this outreach event.",
+        )
 
     await db.commit()
 
@@ -771,6 +854,12 @@ async def update_event_request_status(
             actor_id=current_user.id,
             reason=update.decline_reason or update.notes,
         )
+        await sync_calendar_event_cancelled(
+            db,
+            event_request,
+            actor_id=current_user.id,
+            reason=update.decline_reason or update.notes,
+        )
 
     await db.commit()
 
@@ -966,8 +1055,53 @@ async def schedule_request(
             raise HTTPException(status_code=400, detail=safe_error_detail(e))
         event_request.event_location_id = data.location_id
 
-    event_id = None
     location_name = None
+
+    # A request coming back out of POSTPONED may already carry the calendar
+    # entry opened the first time round. Re-creating one leaves the first
+    # standing at the old date with nothing pointing at it any more — the
+    # request's `event_id` is overwritten — so the department's calendar grows a
+    # phantom outreach event per reschedule. Move the existing entry instead,
+    # and create only when there is none or the previous one was stood down (a
+    # postponement to a date TBD cancels it, and a cancelled event refuses
+    # further edits by design).
+    existing_event = await get_linked_calendar_event(db, event_request)
+    if existing_event is not None and existing_event.is_cancelled:
+        existing_event = None
+        # Drop the stored link as well as the local value. A cancelled entry
+        # cannot be moved to the new date, and the create branch below writes
+        # the replacement's id over this — but when the caller asks for no
+        # calendar entry, nothing else clears it, and the request stays
+        # scheduled while pointing at an event that is not happening. This
+        # call's own response then reports no event while the next
+        # request-detail response hands back the cancelled one.
+        event_request.event_id = None
+    # The id the caller gets back names the entry that is actually on the
+    # calendar, so a link to a stood-down event is never handed out.
+    event_id = existing_event.id if existing_event is not None else None
+
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = org_result.scalar_one_or_none()
+
+    # Resolve the confirmed end once, here, and store it on the request.
+    #
+    # An end at or before the start is refused by both EventCreate and
+    # EventUpdate, so `data.event_end_date or data.event_date` raised an
+    # uncaught ValidationError — a 500 — every time a coordinator scheduled a
+    # request without filling in the optional end time. It also meant the room
+    # double-booking check below measured a zero-length window, which overlaps
+    # nothing and therefore always passed.
+    #
+    # Storing it is the other half: the staffing helpers fall back to two hours
+    # when the request carries no end, so a derived-but-unstored end would put
+    # the calendar entry and the signup sheet on different clocks for the same
+    # outreach event.
+    end_datetime = resolve_confirmed_end(
+        data.event_date, data.event_end_date, existing_event, org
+    )
+    event_request.event_end_date = end_datetime
 
     # Optionally create a calendar event
     if data.create_calendar_event:
@@ -976,10 +1110,6 @@ async def schedule_request(
         event_service = EventService(db)
 
         # Get outreach type label for event title
-        org_result = await db.execute(
-            select(Organization).where(Organization.id == current_user.organization_id)
-        )
-        org = org_result.scalar_one_or_none()
         outreach_types = get_outreach_types(org) if org else []
         type_label = event_request.outreach_type.replace("_", " ").title()
         for t in outreach_types:
@@ -991,8 +1121,6 @@ async def schedule_request(
         if event_request.organization_name:
             title = f"{type_label} — {event_request.organization_name}"
 
-        end_datetime = data.event_end_date or data.event_date
-
         # Check for room double-booking if location specified
         if data.location_id:
             from app.services.location_service import LocationService
@@ -1003,6 +1131,10 @@ async def schedule_request(
                 organization_id=str(current_user.organization_id),
                 start_datetime=data.event_date,
                 end_datetime=end_datetime,
+                # The entry being moved is not a conflict with itself. Without
+                # this a reschedule that keeps the same room and overlaps its
+                # own old window is refused as double-booked.
+                exclude_event_id=(existing_event.id if existing_event else None),
             )
             if overlapping:
                 raise HTTPException(
@@ -1013,38 +1145,84 @@ async def schedule_request(
                 db, data.location_id, current_user.organization_id
             )
 
-        from app.schemas.event import EventCreate
+        if existing_event is not None:
+            from app.schemas.event import EventUpdate
 
-        event_data = EventCreate(
-            title=title,
-            description=f"Public outreach event request from {event_request.contact_name}.\n\n{event_request.description}",
-            event_type="public_education",
-            start_datetime=data.event_date,
-            end_datetime=end_datetime,
-            location_id=data.location_id,
-            location=event_request.venue_address,
-            requires_rsvp=False,
-            is_mandatory=False,
-            send_reminders=True,
+            # The title is deliberately not sent. A coordinator may have
+            # renamed the calendar entry, and a reschedule changes when and
+            # where the event is, not what it is called — overwriting it with
+            # the generated title discards that edit for a field the caller
+            # never asked to change. `sync_calendar_event_date` already sends
+            # only the clock and the room, so this keeps the two paths saying
+            # the same thing. The create branch below still names it, because
+            # there is nothing to preserve.
+            update_fields: dict = {
+                "start_datetime": data.event_date,
+                "end_datetime": end_datetime,
+            }
+            # An omitted key means "leave it alone" on an update payload
+            # (CLAUDE.md pitfall #1): a reschedule that names no room must not
+            # clear the room the event already had.
+            if data.location_id:
+                update_fields["location_id"] = data.location_id
+            try:
+                await event_service.update_event(
+                    event_id=existing_event.id,
+                    organization_id=current_user.organization_id,
+                    event_data=EventUpdate(**update_fields),
+                    updated_by=current_user.id,
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=safe_error_detail(e))
+            event_id = existing_event.id
+        else:
+            from app.schemas.event import EventCreate
+
+            event_data = EventCreate(
+                title=title,
+                description=f"Public outreach event request from {event_request.contact_name}.\n\n{event_request.description}",
+                event_type="public_education",
+                start_datetime=data.event_date,
+                end_datetime=end_datetime,
+                location_id=data.location_id,
+                location=event_request.venue_address,
+                requires_rsvp=False,
+                is_mandatory=False,
+                send_reminders=True,
+            )
+            event = await event_service.create_event(
+                event_data=event_data,
+                organization_id=current_user.organization_id,
+                created_by=current_user.id,
+            )
+            event_request.event_id = event.id
+            event_id = event.id
+    elif existing_event is not None:
+        # No new entry was asked for, but the confirmed date moved and the old
+        # entry is still on the calendar. Same reasoning as the staffing sheet
+        # below: a stale date on the surface members read is worse than none.
+        # A refusal (room conflict, finalized event) is the coordinator's to
+        # resolve, and matches the 409 the create branch already returns.
+        # The room goes through too. `event_request.event_location_id` was
+        # already set above, so without it a coordinator who picks a new room
+        # and asks for no calendar entry leaves the request and its activity
+        # row naming one room while the entry stays in the old one. Passing it
+        # also puts the move through `update_event`'s own double-booking check,
+        # which the create branch above performs explicitly and this path
+        # otherwise skipped entirely.
+        refusal = await sync_calendar_event_date(
+            db, event_request, current_user.id, location_id=data.location_id
         )
-        event = await event_service.create_event(
-            event_data=event_data,
-            organization_id=current_user.organization_id,
-            created_by=current_user.id,
-        )
-        event_request.event_id = event.id
-        event_id = event.id
+        if refusal:
+            raise HTTPException(
+                status_code=409, detail=safe_error_detail(ValueError(refusal))
+            )
 
     # A request being re-scheduled out of POSTPONED may still carry the sheet
     # opened the first time round; move it rather than stranding the crew on
     # the old date.
     if event_request.staffing_shift_id:
-        org_for_shift = await db.scalar(
-            select(Organization).where(Organization.id == current_user.organization_id)
-        )
-        await sync_staffing_shift_date(
-            db, event_request, org_for_shift, current_user.id
-        )
+        await sync_staffing_shift_date(db, event_request, org, current_user.id)
 
     activity = EventRequestActivity(
         request_id=event_request.id,
@@ -1116,9 +1294,25 @@ async def postpone_request(
     old_status = event_request.status.value
     event_request.status = EventRequestStatus.POSTPONED
 
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = org_result.scalar_one_or_none()
+
     if data.new_event_date:
         event_request.event_date = data.new_event_date
-        event_request.event_end_date = data.new_event_end_date
+        # Resolved and stored for the same reason `schedule_request` does it: a
+        # postponement that names a new date but no new end left the request
+        # carrying None, and the two sync helpers below then disagreed —
+        # `sync_staffing_shift_date` assuming two hours while
+        # `sync_calendar_event_date` preserved the linked entry's own span. Both
+        # now read one answer off the request.
+        event_request.event_end_date = resolve_confirmed_end(
+            data.new_event_date,
+            data.new_event_end_date,
+            await get_linked_calendar_event(db, event_request),
+            org,
+        )
     else:
         # Clear the date — it's TBD
         event_request.event_date = None
@@ -1146,18 +1340,30 @@ async def postpone_request(
     )
     db.add(activity)
 
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == current_user.organization_id)
-    )
-    org = org_result.scalar_one_or_none()
-
     # Keep the signup sheet honest about the postponement. A new date moves the
     # shift and keeps the crew who already volunteered; no date means there is
     # nothing left to sign up for, so the sheet is cancelled and they are told.
     if data.new_event_date:
+        # The calendar entry is asked first, and its refusal stops the whole
+        # move. `update_event` rejects a room double-booking and a finalized
+        # event by raising, and swallowing that left the request and the signup
+        # sheet on the new date while the calendar stayed on the old one — three
+        # surfaces disagreeing behind a success response. Nothing has been
+        # committed at this point, so raising here leaves the request untouched.
+        refusal = await sync_calendar_event_date(db, event_request, current_user.id)
+        if refusal:
+            raise HTTPException(
+                status_code=409, detail=safe_error_detail(ValueError(refusal))
+            )
         await sync_staffing_shift_date(db, event_request, org, current_user.id)
     else:
         await sync_staffing_shift_cancelled(
+            db,
+            event_request,
+            actor_id=current_user.id,
+            reason=data.reason or "This outreach event was postponed to a date TBD.",
+        )
+        await sync_calendar_event_cancelled(
             db,
             event_request,
             actor_id=current_user.id,
@@ -1427,7 +1633,11 @@ async def open_request_staffing(
                 )
             ),
         )
-    if event_request.staffing_shift_id:
+    # A link alone is not an open sheet. A postponement to a date TBD cancels
+    # the shift and tells the crew but leaves the link set, so refusing on the
+    # link left a rescheduled request permanently tied to a sheet members
+    # cannot see or join. A cancelled sheet is replaced; a live one is not.
+    if await get_live_staffing_shift(db, event_request) is not None:
         raise HTTPException(
             status_code=409,
             detail="Volunteer signups are already open for this request.",

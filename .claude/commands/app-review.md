@@ -40,10 +40,10 @@ into one run and do not leave a feature half-reviewed.
 6. **Run the completion gate** and record the results in the findings file:
 
    ```bash
-   cd frontend && npx tsc --noEmit
+   cd frontend && npm run typecheck
    cd backend  && flake8 app/ tests/        # from backend/, for .flake8
    cd backend  && black --check app/ tests/
-   cd frontend && npx eslint .
+   cd frontend && npm run lint
    ```
 
    Plus the tests covering what you touched. Fix every failure, including

@@ -1,7 +1,167 @@
 # Application Review — Scheduled Tasks & Cron
 
 **Prefix:** `CRON` · **Iteration:** A3 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-09-09 (pass 5)
+
+## Pass 5 (2026-09-09) — the scheduler's own claim, not the tasks it runs
+
+**0 fixed, 1 flagged (HIGH).** Five prior passes (two here, three in the
+security-review track — the last on 2026-09-07, two days before this one) have
+read the 44 task runners closely, and the delta since is nil: `git log --since`
+on both target files returns no commits, so re-reading the runner bodies would
+have re-derived pass 3's conclusions rather than adding to them. This pass
+therefore looked at the layer _above_ the runners — the in-process scheduler in
+`main.py` that decides **which worker runs them** — and found the one defect
+that makes every runner's own correctness moot.
+
+> **Finding ids here start at CRON-40.** The `CRON-` prefix is shared four ways:
+> this file uses `CRON-1 … CRON-6`, and the security-review track uses plain
+> `CRON-1/2/5/6` in `CRON2-31-…` **and** a namespaced `CRON-31-n` in
+> `CRON-31-…`/`CRON3-31-…`. `CRON-2` alone currently means three different
+> things. 40 clears the finding ids and the `31` feature number both. Same
+> structural problem recorded for `SF-` and `AUTH-` on the same day; giving each
+> track its own prefix is an owner call.
+
+### CRON-40 — HIGH — The scheduler's claim renewal never checks it still owns the claim, so workers permanently double-run every task — 🚩 FLAGGED
+
+**What:** `_scheduled_task_loop` claims the right to be the scheduler with a
+Redis `SETNX` (`main.py:1739`), then renews it at the bottom of each iteration
+(`main.py:1789-1798`) with a **plain `set`** — no `nx`, no `xx`, and no
+comparison against the PID stored in the key. It is an unconditional write, and
+there is no code path by which the loop ever exits.
+
+**Where:** `backend/main.py:1739-1745` (the claim), `:1751` (the run loop),
+`:1789-1798` (the renewal).
+
+**The sequence.** Three facts combine:
+
+1. **The claim's TTL is 180 s** (`claim_ttl = check_interval + 120`,
+   `main.py:1736`) and is refreshed **only after the whole batch finishes**.
+2. **The first iteration runs every scheduled task back to back.**
+   `task_schedule` seeds `last_run` to `0.0` (`:1731-1733`) and the due test is
+   `(time.monotonic() - last_run) < interval` (`:1758`). `time.monotonic()` is
+   seconds since boot, so on any host up longer than the longest interval — 30
+   days — _all 43_ scheduled runners are due on the first pass. On a host up a
+   day, every daily task is. Each runner iterates every organization and sends
+   email, so exceeding 180 s of wall clock on a real dataset is unremarkable.
+3. **The losing workers keep retrying every 60 s** (`:1739-1745`), so the moment
+   the key expires one of them claims it and enters its own run loop.
+
+The holder then finishes its long batch and unconditionally re-sets the key to
+its own PID — taking the claim back without ever learning it had lost it, while
+the second worker carries on in the run loop it has already entered. Both now
+run all 43 runners every 60 s, forever, and a later overrun can add a third.
+**The degradation is permanent until restart and silent** — each worker logs
+"Scheduled task runner started" once, at different times, minutes apart, in
+separate worker logs.
+
+**Impact:** production runs **four** workers (`backend/Dockerfile:104`,
+`--workers 4`). Duplicate execution means members receive event reminders, shift
+reminders, certification-expiry alerts and membership-inactivity warnings two or
+more times, and every "stamp it as sent" write in the runners becomes a race
+between workers rather than the single-threaded update it is written as.
+
+**There is no second line of defence.** Exactly **one** of the 44 runners —
+`run_scheduled_emails` — takes its own distributed lock
+(`scheduled_tasks.py:3485`, `lock:run_scheduled_emails`), and it is also the one
+task deliberately excluded from this loop. The other 43 rely entirely on the
+claim above being exclusive. That asymmetry is worth noting on its own: the
+codebase already contains the lock pattern that would contain this, applied to
+the one task that does not need it from here.
+
+**Not reproduced.** Demonstrating it needs a multi-worker deployment and a batch
+that overruns the TTL; this is read from the code path, and the three facts above
+are each individually verified in the source. Said plainly so the next reader
+does not inherit it as measured.
+
+**Fix — not applied, deliberately.** This is background-worker coordination in
+production startup code, and every remedy changes how workers agree on who
+schedules. Three options, not equivalent:
+
+1. **Compare-and-swap the renewal, and stand down when it fails** — renew via a
+   Lua script (or `WATCH`/`GET`-then-`SET`) that extends the TTL _only_ if the
+   stored value is still this worker's PID, and `break` out of the run loop when
+   it is not. This is the correct fix: it makes losing the claim recoverable
+   instead of invisible. It is also the only option that closes the ownership
+   hole rather than making it less likely.
+2. **Renew before and during the batch, not only after it** — cheap, and reduces
+   the lapse window, but a batch longer than the TTL still lapses and the
+   unconditional re-set still steals the claim back. A mitigation, not a fix.
+3. **Raise `claim_ttl`** — a band-aid that trades a longer blind spot after a
+   genuine worker death for a smaller chance of overrun.
+
+Option 1 with a guard test (a fake Redis whose value changes underneath the
+loop, asserting the loop exits) is the recommended shape. Mirrored into
+`KNOWN_LIMITATIONS.md`.
+
+### Verified good this pass
+
+- **The three-way task registry is consistent and _enforced_.** `SCHEDULE` (44)
+  and `TASK_RUNNERS` (44) match exactly; `TASK_INTERVALS_SECONDS` holds 43 and
+  the difference is `scheduled_emails`, which is listed in `_MANUAL_ONLY_TASKS`
+  (`scheduled_tasks.py:6067`) because `main.py:1672`'s `_scheduled_email_loop`
+  drives it every minute. This pass checked the runner/interval pair
+  specifically — pass 3 verified `SCHEDULE`/`TASK_RUNNERS`, but the loop is
+  built from `TASK_INTERVALS_SECONDS`, so that is the pair whose drift would
+  silently stop a task firing. It does not drift, and
+  `tests/test_scheduled_task_coverage.py` fails the build in **both**
+  directions if it ever does, including on an entry appearing in both maps.
+  This is the CLAUDE.md #19 shape ("a config switch must have a reader") done
+  correctly.
+- **Both endpoints are gated.** `GET /scheduled/tasks` requires
+  `admin.access` **or** `settings.manage`; `POST /scheduled/run-task` requires
+  the wildcard `system.run_tasks`, correctly stricter because every runner
+  iterates all organizations — a single-org admin must not be able to trigger
+  platform-wide side effects.
+- **The pass-2 naive-datetime flag is closed.** It was deferred pending a
+  verification against a real database; `run_rolling_recurrence_extend` now uses
+  `datetime.now(dt_timezone.utc).replace(tzinfo=None)`
+  (`scheduled_tasks.py:4996`) with the reasoning recorded in the code, and the
+  per-parent rollback plus `needs_refresh` handling the same flag worried about
+  are both present.
+
+### Re-verified, still open
+
+- **CRON-31-7** — `run_end_of_shift_summary` still appends to `newly_sent`
+  unconditionally after a per-member send failure (`scheduled_tasks.py:2972`,
+  directly below the `email_err` log), so a member can be marked "sent" with
+  nothing delivered.
+- **CRON-31-8** — `run_event_reminders` still stamps a due interval as sent with
+  zero recipients, by explicit design comment.
+- **The Redis-down fallback still fails open** — `_try_claim_background_task`
+  returns `True` when Redis is unreachable (`main.py:1555`), so every worker
+  runs everything. Unchanged and still the considered trade-off; note it is the
+  _same_ blast radius CRON-40 produces, reached by a different route.
+- **`cert_alert_service` per-record N+1** — still present (per-record officer
+  and tier loops, `cert_alert_service.py:256-436`).
+
+### Pass 5 scope
+
+Read this pass: `main.py`'s `_try_claim_background_task`, `_scheduled_email_loop`
+and `_scheduled_task_loop` in full; `scheduled.py` in full (58 L, 2 routes); the
+`SCHEDULE` / `TASK_RUNNERS` / `TASK_INTERVALS_SECONDS` / `_MANUAL_ONLY_TASKS`
+registries and their coverage test; `run_rolling_recurrence_extend` and
+`run_scheduled_emails`.
+
+**Not re-read**, because the delta since pass 3 (2026-09-07) is empty and
+re-deriving its conclusions would be busywork rather than review: the other 42
+runner bodies, `cert_alert_service.py` and
+`property_return_reminder_service.py` beyond the specific re-verifications
+above. Pass 3's line-by-line verdict stands for those and this pass does not
+restate it as its own.
+
+### Pass 5 completion gate
+
+No code changed this pass, so the gate records the tree as found.
+
+| Check          | Result                                          |
+| -------------- | ----------------------------------------------- |
+| tsc --noEmit   | ✅ 0 errors                                     |
+| flake8         | ✅ 0 violations (`app/ tests/`)                 |
+| black --check  | ✅ 1102 files unchanged                         |
+| eslint         | ✅ 0 errors, 2 pre-existing warnings (limit 10) |
+| frontend tests | n/a — feature has no frontend                   |
+| backend tests  | ✅ scheduled-task suites pass                   |
 
 **2026-08-27 — security-review feature 31 did the line-by-line read this
 doc's own Scope section says pass 2 could not honestly claim** (see below —
