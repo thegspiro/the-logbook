@@ -17,6 +17,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.models.event_request import EventRequest, EventRequestActivity
@@ -450,7 +451,8 @@ async def test_postponing_to_a_new_date_stores_a_resolved_end():
             "app.api.v1.endpoints.event_requests.sync_staffing_shift_date", AsyncMock()
         ),
         patch(
-            "app.api.v1.endpoints.event_requests.sync_calendar_event_date", AsyncMock()
+            "app.api.v1.endpoints.event_requests.sync_calendar_event_date",
+            AsyncMock(return_value=None),
         ),
         patch(
             "app.api.v1.endpoints.event_requests._send_request_notification",
@@ -581,7 +583,7 @@ class TestOutreachTypesAreReadDefensively:
         types = get_outreach_types(self._org(None))
         assert {t["value"] for t in types} >= {"station_tour", "other"}
 
-    @pytest.mark.parametrize("stored", ["a string", 42, {}, []])
+    @pytest.mark.parametrize("stored", ["a string", 42, {}])
     def test_a_non_list_falls_back_to_the_defaults(self, stored):
         from app.services.event_request_service import get_outreach_types
 
@@ -990,3 +992,157 @@ class TestPostponeWindowIsValidated:
         from app.schemas.event_request import EventRequestPostpone
 
         assert EventRequestPostpone(reason="TBD").new_event_date is None
+
+
+EVENT_UUID = "00000000-0000-0000-0000-0000000000ee"
+REQUEST_UUID = "00000000-0000-0000-0000-0000000000ff"
+USER_UUID = "00000000-0000-0000-0000-0000000000a1"
+
+
+class TestCalendarRefusalsReachTheCoordinator:
+    """`EventService.update_event` raises `ValueError` for a room
+    double-booking and for a finalized event. Swallowing those as a log line let
+    a postponement commit the new date and move the signup sheet while the
+    calendar stayed put — three surfaces disagreeing behind a 200."""
+
+    @staticmethod
+    def _request_and_db(linked):
+        from app.models.event_request import EventRequestStatus
+
+        start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+        event_request = SimpleNamespace(
+            id="req-1",
+            organization_id=ORG_ID,
+            status=EventRequestStatus.SCHEDULED,
+            event_id="ev-1",
+            event_date=None,
+            event_end_date=None,
+            staffing_shift_id=None,
+        )
+        org = SimpleNamespace(
+            id=ORG_ID, name="Oakville", timezone="UTC", settings={"events": {}}
+        )
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: event_request),
+            SimpleNamespace(scalar_one_or_none=lambda: org),
+        ]
+        db.scalar.return_value = linked
+        return event_request, db, start
+
+    @pytest.mark.asyncio
+    async def test_a_room_conflict_returns_a_reason(self):
+        from app.services.event_request_service import sync_calendar_event_date
+
+        start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+        linked = SimpleNamespace(
+            id=EVENT_UUID,
+            organization_id=ORG_ID,
+            is_cancelled=False,
+            start_datetime=start - timedelta(days=7),
+            end_datetime=start - timedelta(days=7) + timedelta(hours=2),
+        )
+        request = SimpleNamespace(
+            id=REQUEST_UUID,
+            organization_id=ORG_ID,
+            event_id=EVENT_UUID,
+            event_date=start,
+            event_end_date=start + timedelta(hours=2),
+        )
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.scalar.return_value = linked
+
+        class _Conflicting:
+            def __init__(self, _db):
+                self.update_event = AsyncMock(
+                    side_effect=ValueError("Location is already booked")
+                )
+
+        with patch("app.services.event_service.EventService", _Conflicting):
+            reason = await sync_calendar_event_date(db, request, USER_UUID)
+
+        assert reason == "Location is already booked"
+        # No activity row claims a move that did not happen.
+        assert db.add.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_postponing_into_a_conflict_is_refused_with_409(self):
+        from app.api.v1.endpoints.event_requests import postpone_request
+        from app.schemas.event_request import EventRequestPostpone
+
+        now = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+        linked = SimpleNamespace(
+            id=EVENT_UUID,
+            organization_id=ORG_ID,
+            is_cancelled=False,
+            start_datetime=now - timedelta(days=7),
+            end_datetime=now - timedelta(days=7) + timedelta(hours=2),
+        )
+        event_request, db, start = self._request_and_db(linked)
+
+        with (
+            patch(
+                "app.api.v1.endpoints.event_requests.sync_calendar_event_date",
+                AsyncMock(return_value="Location is already booked"),
+            ),
+            patch(
+                "app.api.v1.endpoints.event_requests.sync_staffing_shift_date",
+                AsyncMock(),
+            ) as shift,
+            patch(
+                "app.api.v1.endpoints.event_requests._send_request_notification",
+                AsyncMock(),
+            ),
+            pytest.raises(HTTPException) as exc,
+        ):
+            await postpone_request(
+                request_id="req-1",
+                data=EventRequestPostpone(new_event_date=start),
+                db=db,
+                current_user=SimpleNamespace(id="user-1", organization_id=ORG_ID),
+            )
+
+        assert exc.value.status_code == 409
+        # Nothing was committed, and the signup sheet was never moved.
+        db.commit.assert_not_awaited()
+        shift.assert_not_awaited()
+
+
+class TestAnEmptyOutreachTypeListIsPreserved:
+    """An explicitly empty list is a configuration, not an absence. Falling back
+    to the defaults made `/types/labels`, intake normalization and the form
+    generator behave as though five types were configured while the settings
+    screen showed none."""
+
+    def _org(self, stored):
+        return SimpleNamespace(
+            id=ORG_ID, settings={"events": {"outreach_event_types": stored}}
+        )
+
+    def test_an_explicit_empty_list_stays_empty(self):
+        from app.services.event_request_service import get_outreach_types
+
+        assert get_outreach_types(self._org([])) == []
+
+    def test_a_malformed_value_still_falls_back(self):
+        from app.services.event_request_service import get_outreach_types
+
+        assert get_outreach_types(self._org(None))
+        assert get_outreach_types(self._org("nonsense"))
+
+    def test_intake_still_settles_to_other_with_no_types_configured(self):
+        from app.services.event_request_service import normalize_request_preferences
+
+        settled = normalize_request_preferences(
+            self._org([]),
+            {
+                "outreach_type": "station_tour",
+                "date_flexibility": "flexible",
+                "venue_preference": "either",
+                "preferred_time_of_day": "morning",
+                "preferred_date_start": None,
+            },
+        )
+        assert settled["outreach_type"] == "other"

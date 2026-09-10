@@ -1181,7 +1181,13 @@ async def schedule_request(
         # No new entry was asked for, but the confirmed date moved and the old
         # entry is still on the calendar. Same reasoning as the staffing sheet
         # below: a stale date on the surface members read is worse than none.
-        await sync_calendar_event_date(db, event_request, current_user.id)
+        # A refusal (room conflict, finalized event) is the coordinator's to
+        # resolve, and matches the 409 the create branch already returns.
+        refusal = await sync_calendar_event_date(db, event_request, current_user.id)
+        if refusal:
+            raise HTTPException(
+                status_code=409, detail=safe_error_detail(ValueError(refusal))
+            )
 
     # A request being re-scheduled out of POSTPONED may still carry the sheet
     # opened the first time round; move it rather than stranding the crew on
@@ -1309,8 +1315,18 @@ async def postpone_request(
     # shift and keeps the crew who already volunteered; no date means there is
     # nothing left to sign up for, so the sheet is cancelled and they are told.
     if data.new_event_date:
+        # The calendar entry is asked first, and its refusal stops the whole
+        # move. `update_event` rejects a room double-booking and a finalized
+        # event by raising, and swallowing that left the request and the signup
+        # sheet on the new date while the calendar stayed on the old one — three
+        # surfaces disagreeing behind a success response. Nothing has been
+        # committed at this point, so raising here leaves the request untouched.
+        refusal = await sync_calendar_event_date(db, event_request, current_user.id)
+        if refusal:
+            raise HTTPException(
+                status_code=409, detail=safe_error_detail(ValueError(refusal))
+            )
         await sync_staffing_shift_date(db, event_request, org, current_user.id)
-        await sync_calendar_event_date(db, event_request, current_user.id)
     else:
         await sync_staffing_shift_cancelled(
             db,

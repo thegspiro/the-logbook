@@ -98,9 +98,18 @@ a months-long relationship they are expected to track themselves; a station
 tour is a short exchange the department drives, and a link that reaches every
 requester's inbox is a link that reaches every forwarded inbox, spam filter and
 screenshot with it. **Do not "finish" this by adding the URL to the default
-`EVENT_REQUEST_STATUS` email template** — reopen the decision first. A
-department that wants self-service tracking can paste the link into its own
-template today.
+`EVENT_REQUEST_STATUS` email template** — reopen the decision first.
+
+**And do not paste a status link into a department email template as a
+workaround.** Templates are reusable and the renderer has no per-request token
+placeholder — `render_request_template` substitutes only `contact_name`,
+`outreach_type`, `organization_name`, `organization_logo_img` and `event_date`,
+and the send action supplies just a `template_id`. A pasted URL therefore
+hard-codes one requester's bearer token into a template that will be sent to
+the next requester, handing them the first one's status page and its
+self-service cancel. Enabling self-service tracking properly means adding a
+status-link placeholder resolved per request at send time, which is the change
+the decision above defers.
 
 **Publishing a request form is not the same as opting into public intake.**
 Since 2026-09-09 both intake paths honour

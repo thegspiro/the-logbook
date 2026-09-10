@@ -165,8 +165,13 @@ def get_outreach_types(org: Optional[Organization]) -> list[dict[str, str]]:
     stored = settings.get("outreach_event_types", defaults)
     if not isinstance(stored, list):
         return list(defaults)
-    usable = [t for t in stored if isinstance(t, dict) and t.get("value")]
-    return usable if usable else list(defaults)
+    # An explicitly empty list is a configuration, not an absence: the
+    # department offers no outreach types, and the settings screen says so.
+    # Substituting the defaults here would make `/types/labels`, intake
+    # normalization and the form generator all behave as though five types
+    # were configured while the screen showed none. Only a *malformed* value
+    # falls back.
+    return [t for t in stored if isinstance(t, dict) and t.get("value")]
 
 
 def configured_task_ids(org: Optional[Organization]) -> set[str]:
@@ -1378,7 +1383,7 @@ async def sync_calendar_event_date(
     db: AsyncSession,
     event_request: EventRequest,
     actor_id: Optional[str],
-) -> None:
+) -> Optional[str]:
     """Move the calendar event when its request's confirmed date changes.
 
     ``schedule_request`` puts the outreach event on the department calendar and
@@ -1392,9 +1397,18 @@ async def sync_calendar_event_date(
     does not: the request has already been rescheduled, and failing that write to
     report a calendar problem leaves the pipeline in a worse state than the stale
     entry does.
+
+    **Returns a reason string when the move was refused for a reason the
+    coordinator can act on**, and ``None`` when it moved or there was nothing to
+    move. ``EventService.update_event`` raises ``ValueError`` for a room
+    double-booking and for a finalized event — decisions, not faults — and
+    swallowing those as a log line is what let a postponement commit a new date,
+    move the signup sheet, and report success while the calendar stayed where it
+    was. An infrastructure failure is still only logged; a caller that can turn a
+    refusal into a 409 should.
     """
     if not event_request.event_id or not event_request.event_date:
-        return
+        return None
     from uuid import UUID
 
     from app.schemas.event import EventUpdate
@@ -1403,7 +1417,7 @@ async def sync_calendar_event_date(
     try:
         event = await get_linked_calendar_event(db, event_request)
         if event is None or event.is_cancelled:
-            return
+            return None
 
         start = event_request.event_date
         if start.tzinfo is None:
@@ -1425,14 +1439,34 @@ async def sync_calendar_event_date(
             end = end.replace(tzinfo=timezone.utc)
 
         if event.start_datetime == start and event.end_datetime == end:
-            return
+            return None
 
-        await EventService(db).update_event(
-            event_id=UUID(str(event_request.event_id)),
-            organization_id=UUID(str(event_request.organization_id)),
-            event_data=EventUpdate(start_datetime=start, end_datetime=end),
-            updated_by=UUID(actor_id) if actor_id else None,
-        )
+        # Built before the try below, not inside it: argument evaluation
+        # counts as being in the block, so a malformed id would raise the same
+        # ValueError the room-conflict handler is looking for and be reported
+        # to the coordinator as a conflict they could act on.
+        event_uuid = UUID(str(event_request.event_id))
+        org_uuid = UUID(str(event_request.organization_id))
+        actor_uuid = UUID(actor_id) if actor_id else None
+        try:
+            await EventService(db).update_event(
+                event_id=event_uuid,
+                organization_id=org_uuid,
+                event_data=EventUpdate(start_datetime=start, end_datetime=end),
+                updated_by=actor_uuid,
+            )
+        except ValueError as refusal:
+            # Scoped to this call on purpose. A blanket `except ValueError`
+            # around the whole body would also catch, say, a malformed id from
+            # `UUID(...)` and report an internal fault to the coordinator as a
+            # room conflict they could act on.
+            logger.info(
+                "Calendar event {} refused the move for request {}: {}",
+                event_request.event_id,
+                event_request.id,
+                refusal,
+            )
+            return str(refusal)
         db.add(
             EventRequestActivity(
                 request_id=event_request.id,
@@ -1445,16 +1479,15 @@ async def sync_calendar_event_date(
                 performed_by=actor_id,
             )
         )
+        return None
     except Exception as e:
-        # A finalized event refuses a clock change on purpose — its credited
-        # hours were derived from the old window — so this is an expected miss,
-        # not only a failure.
         logger.warning(
             "Could not move calendar event {} for request {}: {}",
             event_request.event_id,
             event_request.id,
             e,
         )
+        return None
 
 
 async def sync_calendar_event_cancelled(

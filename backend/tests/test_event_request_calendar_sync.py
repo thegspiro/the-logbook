@@ -467,7 +467,8 @@ async def test_postponing_moves_or_stands_down_the_entry(new_date, moved, stood_
     event_request = _scheduled_request()
     event_request.status = EventRequestStatus.SCHEDULED
     db = _pipeline_db(event_request, _org(), linked_event=_event())
-    move = AsyncMock()
+    # The date sync returns a refusal reason or None; None means it moved.
+    move = AsyncMock(return_value=None)
     cancel = AsyncMock()
 
     with (
