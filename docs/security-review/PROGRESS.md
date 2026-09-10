@@ -63,10 +63,28 @@ also drives the real `PermissionChecker.__call__` against a
 with neither, not only asserting the configured permission set. One doc
 correction (TRX4-1, retiring a stale pass-2 "verified good" claim); one
 real fix (TRX4-2, corrected once more on review); one doc correction
-(TRX4-3); all ten pass-1 and one pass-2 finding re-verified intact. Full
-write-up: `docs/security-review/TRX-18-training-extended.md` → Pass 4.
-Rotation row 18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until
-merged, then Feature 19 (Skills testing).
+(TRX4-3); all ten pass-1 and one pass-2 finding re-verified intact. **A
+fourth Codex review round caught two more real gaps, both corrected:** (6)
+this section's own "zero backend changes" scope-check claim, left
+unqualified, read as still true after TRX4-2 changed
+`training_enhancements.py` — qualified it as the pre-TRX4-2 starting
+point, not this PR's net diff. (7) TRX4-3's own heading read "six, not
+seven" — backwards from its body, which correctly says the count is
+seven — reworded. Two further findings from the same round: **TRX4-4**
+(doc correction) — pass 2 called `GET /training/multi-agency`
+roster-free; it actually carries `contact_name`/`contact_email` per
+participating organization, `ics_position_assignments` (user ids),
+`created_by`, and free-text after-action fields — added to
+`UNCACHEABLE_PREFIXES`. **TRX4-5** (LOW/MED, real fix) — the bare
+`GET /training/external/providers` list was cacheable (only its
+sub-paths were excluded, by a trailing-slash prefix), and returns
+`config.additional_headers`, which can carry an integration auth token;
+an existing test asserted the gap (`isCacheable() === true`) rather than
+merely missing coverage of it — dropped the trailing slash so the shorter
+prefix covers the bare list too, and corrected that test. Full write-up:
+`docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
+18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until merged, then
+Feature 19 (Skills testing).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 4, PR #2455), preserved for history</summary>

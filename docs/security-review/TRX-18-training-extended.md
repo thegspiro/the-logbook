@@ -776,20 +776,28 @@ submissions`/`training_waivers`/`training_enhancements`/
 
 **Prefix:** `TRX4`
 
-**Scope check:** diffed the current tree against `7455d6708` (the pass-3
-merge commit for PR #2223) across all fifteen declared backend/schema
-artifacts (the twelve feature files, `training_program_service.py`,
-`schemas/training.py`, and `frontend/src/utils/apiCache.ts`) — **zero**
-backend changes; the only touch is 37 added lines in `apiCache.ts`. A
-broader glob (`api/v1/endpoints/*training*`, `api/v1/endpoints/course_*`,
+**Scope check (as of this pass's own starting point, before any of this
+pass's own fixes below):** diffed the current tree against `7455d6708`
+(the pass-3 merge commit for PR #2223) across all fifteen declared
+backend/schema artifacts (the twelve feature files,
+`training_program_service.py`, `schemas/training.py`, and
+`frontend/src/utils/apiCache.ts`) — **zero** backend changes; the only
+touch was 37 added lines in `apiCache.ts`. A broader glob
+(`api/v1/endpoints/*training*`, `api/v1/endpoints/course_*`,
 `services/*training*`, `services/course_*`, `schemas/*training*`, wider
 than this feature's own file list, to catch anything a stale declared list
-would miss) additionally returns `api/v1/endpoints/training.py` and
+would miss) additionally returned `api/v1/endpoints/training.py` and
 `services/training_compliance.py` — both Feature 17's (Training core) own
 files, matched only because the glob is name-based, and already reviewed
 by that feature's own pass 4 (PR #2455, TR4-1..TR4-4, merged
 2026-09-10T11:28:16Z). Confirmed by name against this feature's twelve-file
-list: neither matches.
+list: neither matches. **This "zero backend changes" statement describes
+the tree before TRX4-2's own fix below — it is a starting point, not this
+PR's net diff.** A Codex review round on this pass's own PR correctly
+flagged that leaving it unqualified made it read as still true after
+TRX4-2 changed `training_enhancements.py` in three places; those changes
+are this pass's own fix, not something a future pass's scope check needs
+to independently re-discover — see TRX4-2 below for what changed and why.
 
 **Correction, caught by a Codex review round on this pass's own PR:** the
 scope check above, as first drafted, omitted the ten established frontend
@@ -953,7 +961,7 @@ configuration. The two existing POST/PATCH routes are asserted unchanged
 (`training.manage` only), so a future "fix" cannot loosen the write side
 while adjusting the read side.
 
-### TRX4-3 — Corrects this pass's own first-draft claim — `docs/KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" count was six, not seven
+### TRX4-3 — Corrects this pass's own first-draft claim — `docs/KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" count was undercounted at six; it is seven
 
 **Also caught by a Codex review round on this pass's own PR.** This pass's
 first draft claimed the entry "is current and needs no correction," on the
@@ -986,22 +994,74 @@ is not one of this feature's own fifteen artifacts. Corrected the count
 named the mechanism and the missing call, and corrected this pass's own
 "Verified good" claim below rather than let it stand.
 
+### TRX4-4 — Corrects pass 2's own "verified good" claim — `GET /training/multi-agency` is not roster-free
+
+**Caught by a Codex review round on this pass's own PR.** Pass 2 (TRX2-1's
+write-up) checked this endpoint and recorded it as "joint-exercise records,
+no member roster in `MultiAgencyTrainingResponse`" and therefore correctly
+left cacheable. Reading the schema directly rather than trusting that
+premise: `MultiAgencyTrainingResponse` (via `MultiAgencyTrainingBase`)
+carries `participating_organizations: List[ParticipatingOrganization]`,
+and `ParticipatingOrganization` has `contact_name`/`contact_email`;
+separately, `ics_position_assignments: Optional[List[Dict[str, Any]]]`
+holds per-position user ids, `created_by` is a member id, and
+`after_action_report`/`lessons_learned` are free text. None of that is a
+"member roster" in the compliance-matrix sense, but it is exactly the
+contact-PII-plus-free-text shape this file's own `UNCACHEABLE_PREFIXES`
+comments already use to justify exclusion elsewhere (e.g.
+`/training/effectiveness/evaluations`).
+
+**Fix:** added `'/training/multi-agency'` to `UNCACHEABLE_PREFIXES`.
+Guard tests added to `apiCache.test.ts`.
+
+### TRX4-5 — LOW/MED (data exposure) — The bare `/training/external/providers` list was cacheable, unlike every sub-path on the same resource
+
+**Also caught by a Codex review round on this pass's own PR**, in the same
+sweep as TRX4-4. `UNCACHEABLE_PREFIXES` carried
+`'/training/external/providers/'` — trailing slash — which excludes every
+sub-path (`{id}`, `{id}/user-mappings`, …) but not the bare list request
+itself (`externalTrainingService.getProviders()` calls
+`GET /training/external/providers`, no trailing slash), since
+`isCacheable()` matches by `url.startsWith(prefix)`. An existing test
+(`apiCache.test.ts`, "returns false for training cohort/program/provider
+member-roster sub-paths") asserted this bare path `isCacheable() === true`
+— a passing test asserting the gap, not merely an absent one.
+
+`ExternalTrainingProviderResponse` (via `ExternalTrainingProviderBase`)
+returns `config: Optional[ExternalProviderConfig]`, and
+`ExternalProviderConfig.additional_headers: Optional[dict]` — a
+provider-defined map an admin could populate with a custom auth header
+(e.g. an API key some LMS integrations require outside the dedicated
+`api_key`/`api_secret` fields, which are correctly never returned).
+`connection_error` (free text, potentially echoing part of a failed
+request) is also on this list response.
+
+**Fix:** dropped the trailing slash (`'/training/external/providers'`),
+which as a shorter prefix still excludes every sub-path — the same
+bare-prefix pattern already used for `/training/waivers`, `/messages`,
+`/forms`, and others in this same list — while now also excluding the bare
+list. Updated the pre-existing test to assert `false` instead of `true`,
+and added a sub-path case alongside it.
+
 ### Verified good ✅ (pass 4, not previously stated this way)
 
 - **No new endpoint, model, or migration touches any training-extended
   table since pass 3** — confirmed via the zero-diff scope check above
-  rather than inferred from a diff-stat alone.
+  rather than inferred from a diff-stat alone. That scope check itself
+  covers only the state before TRX4-2's fix; see the note at the top of
+  this pass's scope-check section for what changed after it.
 
 ## Completion gate (pass 4)
 
-| Check                                                                                                             | Result                                              |
-| ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `flake8 app/ tests/ alembic/` (feature scope + new test file)                                                     | ✅ 0 violations                                     |
-| `black --check` (feature scope + new test file)                                                                   | ✅ clean                                            |
-| `isort --check-only` (feature scope + new test file)                                                              | ✅ clean                                            |
-| `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 443 revisions, single head (no schema change)    |
-| `pytest tests/test_instructor_qualification_endpoint_permissions.py -v`                                           | ✅ 14 passed (new, TRX4-2)                          |
-| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ passed, including the new permission-guard tests |
-| `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors (no frontend file changed this pass)    |
-| `cd frontend && npx eslint .`                                                                                     | ✅ 0 errors                                         |
-| `cd frontend && npx vitest run src/utils/apiCache.test.ts`                                                        | ✅ 88 passed (no frontend file changed this pass)   |
+| Check                                                                                                             | Result                                                         |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (feature scope + new test file)                                                     | ✅ 0 violations                                                |
+| `black --check` (feature scope + new test file)                                                                   | ✅ clean                                                       |
+| `isort --check-only` (feature scope + new test file)                                                              | ✅ clean                                                       |
+| `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 443 revisions, single head (no schema change)               |
+| `pytest tests/test_instructor_qualification_endpoint_permissions.py -v`                                           | ✅ 14 passed (new, TRX4-2)                                     |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ passed, including the new permission-guard tests            |
+| `pytest tests/` (full backend suite)                                                                              | ✅ 12294 passed, 21 skipped (pre-existing), 0 failed           |
+| `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors                                                    |
+| `cd frontend && npx eslint src/utils/apiCache.ts src/utils/apiCache.test.ts`                                      | ✅ 0 errors                                                    |
+| `cd frontend && npx vitest run src/utils/apiCache.test.ts`                                                        | ✅ 89 passed (TRX4-4, TRX4-5, one corrected pre-existing test) |
