@@ -141,12 +141,6 @@ export const PositionListEditor: React.FC<PositionListEditorProps> = (props) => 
             </div>
           ))}
         </div>
-        {/* These two, and the row above, only exist once a slot has been added,
-            so the E2E fixture — which serves no apparatus positions — never
-            renders them and the route ratchet never measured them. Sized here
-            rather than left for the day the fixture grows: "0 controls under
-            44px" should mean the screen is right, not that the fixture is
-            empty. */}
         <button
           onClick={handleAdd}
           className="mobile-touch-target mt-1.5 gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
@@ -199,11 +193,11 @@ export const PositionListEditor: React.FC<PositionListEditorProps> = (props) => 
           </div>
         ))}
       </div>
-      {/* Sized to match the structured branch above. This is the branch the
-          apparatus and resource cards use in edit mode, and edit mode is a click
-          the route pass never makes — so the ratchet has never seen either copy
-          of these controls, and fixing only the one I happened to be reading
-          would have left the used path at 22px. */}
+      {/* The two branches render the same row twice, so a change to the controls
+          in one belongs in the other: the structured branch is what the shift
+          templates use and this flat-string one is what the apparatus and
+          resource cards use in edit mode, and a fix applied to only one leaves
+          half the callers behind. */}
       <button
         onClick={handleAdd}
         className="mobile-touch-target mt-1.5 gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
