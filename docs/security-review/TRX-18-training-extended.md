@@ -769,3 +769,377 @@ submissions`/`training_waivers`/`training_enhancements`/
 | `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ all passed (no new backend test needed — no code change, doc-only fix) |
 | `cd frontend && npx tsc --noEmit`                                                                                 | ✅ 0 errors (no frontend file changed this pass)                          |
 | `cd frontend && npx eslint .`                                                                                     | ✅ 0 errors                                                               |
+
+---
+
+## Pass 4 (2026-09-10)
+
+**Prefix:** `TRX4`
+
+**Scope check (as of this pass's own starting point, before any of this
+pass's own fixes below):** diffed the current tree against `7455d6708`
+(the pass-3 merge commit for PR #2223) across all fifteen declared
+backend/schema artifacts (the twelve feature files,
+`training_program_service.py`, `schemas/training.py`, and
+`frontend/src/utils/apiCache.ts`) — **zero** backend changes; the only
+touch was 37 added lines in `apiCache.ts`. A broader glob
+(`api/v1/endpoints/*training*`, `api/v1/endpoints/course_*`,
+`services/*training*`, `services/course_*`, `schemas/*training*`, wider
+than this feature's own file list, to catch anything a stale declared list
+would miss) additionally returned `api/v1/endpoints/training.py` and
+`services/training_compliance.py` — both Feature 17's (Training core) own
+files, matched only because the glob is name-based, and already reviewed
+by that feature's own pass 4 (PR #2455, TR4-1..TR4-4, merged
+2026-09-10T11:28:16Z). Confirmed by name against this feature's twelve-file
+list: neither matches. **This "zero backend changes" statement describes
+the tree before TRX4-2's own fix below — it is a starting point, not this
+PR's net diff.** A Codex review round on this pass's own PR correctly
+flagged that leaving it unqualified made it read as still true after
+TRX4-2 changed `training_enhancements.py` in three places; those changes
+are this pass's own fix, not something a future pass's scope check needs
+to independently re-discover — see TRX4-2 below for what changed and why.
+
+**Correction, caught by a Codex review round on this pass's own PR:** the
+scope check above, as first drafted, omitted the ten established frontend
+files pass 2/3 both carry in their own scope (`CohortWizard.tsx`,
+`CourseSyllabusBuilder.tsx`, `ExternalTrainingPage.tsx`,
+`ReviewSubmissionsPage.tsx`, `SubmitTrainingPage.tsx`,
+`TrainingEnhancementsTab.tsx`, `TrainingWaiversTab.tsx`,
+`WaiverManagementPage.tsx`, `pages/training/CohortDetailPage.tsx`,
+`pages/training/CohortsPage.tsx`) and `apiCache.test.ts`, so "zero backend
+changes" did not cover the feature's actual current surface. Diffed all
+eleven against `7455d6708`: **seven** changed —
+`CourseSyllabusBuilder.tsx` (1 line), `ReviewSubmissionsPage.tsx` (8),
+`SubmitTrainingPage.tsx` (43), `TrainingEnhancementsTab.tsx` (5),
+`WaiverManagementPage.tsx` (3), `CohortDetailPage.tsx` (23), and
+`CohortsPage.tsx` (11); `CohortWizard.tsx`, `ExternalTrainingPage.tsx`, and
+`TrainingWaiversTab.tsx` are unchanged. Read all seven diffs directly
+rather than trusting the diffstat: every one is a cross-cutting,
+non-training-specific sweep already landed and reviewed elsewhere —
+`Breadcrumbs` added to five pages/components (a navigation-trail rollout),
+an `EmptyState` `headingLevel={4}` accessibility prop added at four call
+sites, a `<main>` → `<div data-page-main>` landmark-uniqueness swap on two
+pages, and two `bg-green-600`/`bg-orange-600` → `-700` contrast-shade bumps
+on `ReviewSubmissionsPage.tsx` matching the AAA-contrast convention
+CLAUDE.md documents. None adds a new API call, new user input, or touches
+any org-scoping/permission/data-exposure surface. `apiCache.test.ts`'s
+44-line diff is entirely new `/admin-hours/`- and `/inventory/`-prefix
+coverage (unrelated features) — no training-extended-specific test line
+in it. This correction changes no finding: the feature's frontend surface
+is confirmed clean, not merely unexamined.
+
+### Re-verification of pass 1-3 fixes
+
+Re-read the current code directly for each (not re-cited from the doc);
+every one is unchanged, consistent with the zero-diff scope check above:
+
+- **TRX-1** — `training_program_service.py`'s batch `User` lookup in the
+  prerequisite-gate error path still filters `User.organization_id`.
+- **TRX-2 / TRX-5 / TRX-5b** — `update_provider`, `CourseCohortService.
+update_cohort`, and `CourseSyllabusService.update_class` all still route
+  through `apply_updates`.
+- **TRX-3 / TRX2-1** — `get_effectiveness_evaluations` still calls
+  `can_view_officer_training_data` and confines non-officers to their own
+  `user_id`; `get_evaluations` still accepts and applies the parameter.
+- **TRX-4** — `_get_cohort_class` still takes `cohort_id`, threaded into
+  both `reschedule_class`/`cancel_class` before any write.
+- **TRX-6** — `training_waivers.py` still calls `assert_all_in_org` on
+  `requirement_ids` (create and update).
+- **TRX-7** — `training_submission_service.py` still calls `assert_in_org`
+  on `category_id` (create and update).
+- **TRX-8** — `RecertificationService._validate_references` (and the
+  sibling `_validate_references` methods in the same module — `Instructor
+QualificationService`, `TrainingEffectivenessService`,
+  `MultiAgencyService`) still exist and are still called from create/update.
+- **TRX-9** — `MultiAgencyService`'s own `_validate_references` still calls
+  `assert_in_org` (allow_none) on `training_session_id`/`training_record_id`.
+- **TRX-10** — `XAPIService.ingest_statement`'s `_provider_validated` flag
+  and `ingest_batch`'s once-per-batch validation are both still present and
+  wired as before.
+
+### TRX4-1 — Corrects pass 2's own "verified good" claim — `/training/instructors/validate/{user_id}/{course_id}` is no longer left cacheable, closed outside this rotation
+
+Pass 2 (TRX2-1's write-up) explicitly checked this endpoint against the
+`UNCACHEABLE_PREFIXES` sweep and recorded it as "echoes back only a boolean
+the caller-supplied `user_id` already implies" and therefore correctly left
+cacheable. That premise no longer holds as a reason to leave it cacheable:
+`frontend/src/utils/apiCache.ts:64` now carries
+`'/training/instructors/validate/'` with the comment "a named member's
+qualification verdict" — added by an unrelated, later pass
+(`ae423afa3`, "Fix two data-leakage findings: separation reports, response
+cache", 2026-09-07), not by this feature's own rotation.
+
+**Correction, caught by a Codex review round on this pass's own PR:** an
+earlier draft of this entry claimed the response "carries the instructor's
+qualification detail" beyond a boolean, matching
+`/training/instructors/qualifications`'s shape. Read the endpoint directly
+(`training_enhancements.py:352-364`, `validate_instructor`) to check that
+claim rather than repeat it: the handler returns exactly
+`{"user_id": user_id, "course_id": course_id, "is_qualified": is_qualified}`
+— the echoed path parameters plus the one boolean
+`validate_instructor_for_session` itself returns. Pass 2's original
+premise ("echoes back only a boolean") was accurate about the payload
+shape; what it missed is that the shape doesn't need to carry extra detail
+to be sensitive — pairing a specific member's identity with a verdict
+_about_ them is itself the PII, the same reasoning the commit's own
+comment states ("a named member's qualification verdict"), independent of
+how much is in the payload beyond that pairing. This pass's own re-check of
+every GET route in the feature's fifteen backend/schema artifacts against
+the current `UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` list found no
+further gap.
+
+**Disposition:** documentation-only correction — the code was already
+fixed, by a different security-review pass, outside this feature's own
+scope. No further code change needed here; this entry retires pass 2's
+stale "correctly left cacheable" claim for this one route.
+
+### TRX4-2 — MEDIUM (XC-2) — Instructor-qualification reads had no permission gate at all
+
+**Caught by a Codex review round on this pass's own PR**, surfaced while
+verifying TRX4-1's own claim about `validate_instructor`'s response shape:
+that endpoint, plus its two siblings on the same resource, depended only on
+`get_current_user` — no permission dependency, no self-filter — while the
+POST/PATCH routes on the same `InstructorQualificationResponse` resource
+already require `training.manage`:
+
+- `GET /instructors/qualifications` (`training_enhancements.py:266-280`) —
+  with no `user_id`/`course_id` query params, returns every instructor
+  qualification in the org: `certification_number`, `issuing_agency`,
+  `certification_level`, `issued_date`, `expiration_date`, `verified_by`.
+- `GET /instructors/qualifications/{course_id}/qualified` (`:335-349`) —
+  the qualified-instructor roster for any course, org-wide.
+- `GET /instructors/validate/{user_id}/{course_id}` (`:352-364`) — the
+  route TRX4-1 discusses; per TRX4-1's corrected rationale, pairing a named
+  member with a qualification verdict is itself sensitive.
+
+The frontend route hosting all three (`/training/admin`, gated
+`requiredPermission="training.manage"` in `modules/training/routes.tsx`)
+and `docs/training/02-training.md` ("Navigate to Training Admin, Advanced,
+Instructors to manage instructor qualifications") both describe this as
+training-officer-only data. The backend GET routes let any authenticated
+member reach the same data directly, bypassing the frontend gate entirely
+— confirmed by reading the routes, the response schema, and the one
+frontend consumer (`TrainingEnhancementsTab.tsx`, the only file in the
+codebase that calls any of the three) rather than assuming from the route
+path alone.
+
+**Fix (round 1):** all three routes depend on
+`Depends(require_permission("training.manage"))`, matching the file's own
+write-side convention. No self-scoped exception is needed (unlike TRX-3's
+effectiveness-evaluations fix) — nothing in the frontend or docs describes
+an ordinary member's own use case for these three reads, so admin-only is
+the correct shape, not admin-plus-self.
+
+**Correction, caught by a second Codex review round on the same PR:**
+gating to `training.manage` alone silently dropped read-only officer
+access. `training.view_all` is this codebase's established read-only
+officer tier for training data — `training_programs.py`'s own
+`get_program_enrollments` already gates the equivalent org-wide enrollment
+read with `require_permission("training.view_all", "training.manage")`,
+and this file's own `can_view_officer_training_data` helper treats the two
+permissions as equally sufficient everywhere else it gates a read (the
+exact TRX-3 precedent this entry's first draft cited as "not needed" for
+the self-scoping question, missing that it still applied to the
+officer-tier question). Verified the sibling pattern by reading
+`get_program_enrollments` directly rather than assuming Codex's claim.
+**Fix (round 2):** all three routes now use
+`Depends(require_permission("training.view_all", "training.manage"))`,
+matching `get_program_enrollments`'s own OR-gate exactly. The write-side
+POST/PATCH routes are unchanged — creating or editing a qualification
+stays `training.manage`-only.
+
+Guard test added:
+`test_instructor_qualification_endpoint_permissions.py` (14 tests) —
+introspects `router.routes` for the `PermissionChecker.required_permissions`
+each route now carries (the same pattern
+`test_equipment_check_endpoint_permissions.py` established) to assert the
+configured permission set, and separately drives the real
+`PermissionChecker.__call__` against a `training.view_all`-only user, a
+`training.manage`-only user, and a user with neither, to prove the OR-gate
+actually authorizes and actually rejects rather than only asserting its
+configuration. The two existing POST/PATCH routes are asserted unchanged
+(`training.manage` only), so a future "fix" cannot loosen the write side
+while adjusting the read side.
+
+### TRX4-3 — Corrects this pass's own first-draft claim — `docs/KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" count was undercounted at six; it is seven
+
+**Also caught by a Codex review round on this pass's own PR.** This pass's
+first draft claimed the entry "is current and needs no correction," on the
+strength of re-reading the two closures (`external_training_service.py`,
+`push_service.py`) pass 3 had already verified — without independently
+checking every site the entry's own six-site list names. It missed one:
+`integration_services/documenso_service.py` was never in that list at all.
+
+Read the file directly: `test_connection` and `create_document` both call
+`create_integration_client().get`/`.post` against the admin-configured
+`api_base_url`, with **no** `assert_outbound_url_safe` call anywhere in the
+file — unlike its closest sibling, `calcom_service.py` (the same
+"self-hosted org points this at its own `https://<host>/api/v1`" shape),
+which does call it before every request (confirmed directly, not assumed
+from the shared shape). Documenso is worse than "narrowed, not closed":
+`DocumensoConfig.api_base_url` does get the generic save-time
+`_validate_urls_in_config`/`validate_integration_url` check every
+integration's URL fields get (`integrations.py`), but nothing re-validates
+it at send time, so its save-to-send window is the entire gap rather than
+the check-then-connect race the other six sites narrow.
+
+**Disposition:** documentation-only correction, same shape as TRX3-1 — the
+underlying fix (adding `assert_outbound_url_safe` to
+`documenso_service.py`, or migrating the whole family onto a pinning
+transport) is explicitly out of this feature-scoped pass's bounds per this
+note's own standing guidance ("needs a dedicated cross-cutting pass... not
+a unilateral fix inside a feature-scoped review"), and `documenso_service.py`
+is not one of this feature's own fifteen artifacts. Corrected the count
+(six → seven) and the affected-site list in `docs/KNOWN_LIMITATIONS.md`,
+named the mechanism and the missing call, and corrected this pass's own
+"Verified good" claim below rather than let it stand.
+
+### TRX4-4 — Corrects pass 2's own "verified good" claim — `GET /training/multi-agency` is not roster-free
+
+**Caught by a Codex review round on this pass's own PR.** Pass 2 (TRX2-1's
+write-up) checked this endpoint and recorded it as "joint-exercise records,
+no member roster in `MultiAgencyTrainingResponse`" and therefore correctly
+left cacheable. Reading the schema directly rather than trusting that
+premise: `MultiAgencyTrainingResponse` (via `MultiAgencyTrainingBase`)
+carries `participating_organizations: List[ParticipatingOrganization]`,
+and `ParticipatingOrganization` has `contact_name`/`contact_email`;
+separately, `ics_position_assignments: Optional[List[Dict[str, Any]]]`
+holds per-position user ids, `created_by` is a member id, and
+`after_action_report`/`lessons_learned` are free text. None of that is a
+"member roster" in the compliance-matrix sense, but it is exactly the
+contact-PII-plus-free-text shape this file's own `UNCACHEABLE_PREFIXES`
+comments already use to justify exclusion elsewhere (e.g.
+`/training/effectiveness/evaluations`).
+
+**Fix:** added `'/training/multi-agency'` to `UNCACHEABLE_PREFIXES`.
+Guard tests added to `apiCache.test.ts`.
+
+### TRX4-5 — LOW/MED (data exposure) — The bare `/training/external/providers` list was cacheable, unlike every sub-path on the same resource
+
+**Also caught by a Codex review round on this pass's own PR**, in the same
+sweep as TRX4-4. `UNCACHEABLE_PREFIXES` carried
+`'/training/external/providers/'` — trailing slash — which excludes every
+sub-path (`{id}`, `{id}/user-mappings`, …) but not the bare list request
+itself (`externalTrainingService.getProviders()` calls
+`GET /training/external/providers`, no trailing slash), since
+`isCacheable()` matches by `url.startsWith(prefix)`. An existing test
+(`apiCache.test.ts`, "returns false for training cohort/program/provider
+member-roster sub-paths") asserted this bare path `isCacheable() === true`
+— a passing test asserting the gap, not merely an absent one.
+
+`ExternalTrainingProviderResponse` (via `ExternalTrainingProviderBase`)
+returns `config: Optional[ExternalProviderConfig]`, and
+`ExternalProviderConfig.additional_headers: Optional[dict]` — a
+provider-defined map an admin could populate with a custom auth header
+(e.g. an API key some LMS integrations require outside the dedicated
+`api_key`/`api_secret` fields, which are correctly never returned).
+`connection_error` (free text, potentially echoing part of a failed
+request) is also on this list response.
+
+**Fix:** dropped the trailing slash (`'/training/external/providers'`),
+which as a shorter prefix still excludes every sub-path — the same
+bare-prefix pattern already used for `/training/waivers`, `/messages`,
+`/forms`, and others in this same list — while now also excluding the bare
+list. Updated the pre-existing test to assert `false` instead of `true`,
+and added a sub-path case alongside it.
+
+### TRX4-6 — MEDIUM (XC-2) — `GET /multi-agency` had no permission gate at all
+
+**Caught by a Codex review round on this pass's own PR**, verifying
+TRX4-4's own fix: making the route uncacheable stops stale browser
+retention, not the initial unauthorized read. `get_multi_agency_exercises`
+(`training_enhancements.py:445-459`) depended only on `get_current_user`,
+while its sibling POST/PATCH routes on the same resource already require
+`training.manage`. The response carries exactly the contact-PII/member-id/
+free-text shape TRX4-4 documents. Its only frontend consumer
+(`MultiAgencySection`, `TrainingEnhancementsTab.tsx`) is reachable only
+through the `training.manage`-gated `/training/admin` route — confirmed by
+reading the frontend call graph, not assumed. Same class as TRX4-2 and
+TRX4-6's own POST/PATCH siblings.
+
+**Fix:** gated with `Depends(require_permission("training.view_all", "training.manage"))`,
+matching the OR-gate TRX4-2 already established in this same file. Guard
+test added: `test_multi_agency_endpoint_permissions.py` (6 tests, same
+`_permission_set`/`PermissionChecker.__call__` pattern as TRX4-2's).
+
+### TRX4-7 — MEDIUM (data exposure) — `additional_headers` values were returned verbatim on every provider response
+
+**Also caught by a Codex review round on this pass's own PR**, in the same
+verification pass as TRX4-6: TRX4-5 made the provider _list_ uncacheable,
+but every route serializing `ExternalTrainingProviderResponse`
+(`GET /providers`, `GET /providers/{id}`, and the create/update responses)
+still returned `config.additional_headers` — an admin-defined, arbitrary-
+keyed header map — verbatim. The schema's own comment already states
+"api_key, api_secret, client_secret are never returned for security"; that
+convention only covered the fixed credential fields, not this open-ended
+dict, even though its stated purpose (a custom header some LMS
+integrations require outside the dedicated `api_key`/`api_secret` fields)
+makes a stored credential a plausible value. Traced whether anything
+internal currently reads this field for outbound requests — nothing does
+(`grep -rn additional_headers app/` outside the schema itself returns
+nothing) — so this is a defense-in-depth fix for what an admin could type
+into the field today, not a fix for an active internal consumer.
+
+**Fix:** added a `field_validator("config", mode="after")` to
+`ExternalTrainingProviderResponse` (only — `ExternalProviderConfig` itself,
+shared with the Create/Update schemas, is untouched, so real values still
+round-trip for storage) that replaces every `additional_headers` value with
+`REDACTED_SECRET` (`app/utils/email_providers.py` — the same shared
+constant `OrganizationService` already uses for this exact marker, rather
+than an independent literal) while keeping the keys, so the admin UI can
+still show which headers are configured.
+
+### TRX4-8 — HIGH (data integrity) — TRX4-7's own redaction fix silently destroyed real header values on save
+
+**Caught by a further Codex review round on this pass's own PR**, reviewing
+TRX4-7 itself. A load → edit → save UI flow (the normal shape for a
+provider-settings form) populates its form from the now-redacted
+`GET`/`PATCH` response, then `PATCH`es the whole `config` back.
+`update_provider` (`external_training.py`) replaced the entire stored
+`config` with whatever the client submitted — it did not merge — so
+`additional_headers` entries the caller never touched round-tripped as the
+literal `••••••••` string and were persisted verbatim, permanently
+overwriting the real value TRX4-7 had only redacted for display.
+`OrganizationService.update_settings` already solves the identical shape
+for email/file-storage/auth secrets: when a submitted value equals
+`REDACTED_SECRET`, keep the value the row already had instead of writing
+the marker.
+
+**Fix:** in `update_provider`, before finalizing `update_data["config"]`,
+walk the submitted `additional_headers` and replace any value equal to
+`REDACTED_SECRET` with the corresponding key's value from `provider.config`
+(read before `apply_updates` mutates the row, so it is still the pre-update
+stored value) — `None` if the key didn't exist before, matching
+`OrganizationService`'s own fallback. `create_provider` is unaffected
+(nothing to preserve on a brand-new row). Guard tests added to the same
+file: `test_update_preserves_unchanged_header_and_applies_a_real_new_one`
+(a mix of one untouched, redacted-marker header and one genuinely edited
+header — the untouched one survives, the edit lands) and
+`test_update_with_no_prior_config_drops_a_redacted_only_submission` (no
+prior config: a submitted marker resolves to `None`, never to the literal
+placeholder string).
+
+### Verified good ✅ (pass 4, not previously stated this way)
+
+- **No new endpoint, model, or migration touches any training-extended
+  table since pass 3** — confirmed via the zero-diff scope check above
+  rather than inferred from a diff-stat alone. That scope check itself
+  covers only the state before TRX4-2's fix; see the note at the top of
+  this pass's scope-check section for what changed after it.
+
+## Completion gate (pass 4)
+
+| Check                                                                                                             | Result                                                                  |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (feature scope + new test files)                                                    | ✅ 0 violations                                                         |
+| `black --check` (feature scope + new test files)                                                                  | ✅ clean                                                                |
+| `isort --check-only` (feature scope + new test files)                                                             | ✅ clean                                                                |
+| `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 443 revisions, single head (no schema change)                        |
+| `pytest tests/test_instructor_qualification_endpoint_permissions.py -v`                                           | ✅ 14 passed (new, TRX4-2)                                              |
+| `pytest tests/test_multi_agency_endpoint_permissions.py -v`                                                       | ✅ 6 passed (new, TRX4-6)                                               |
+| `pytest tests/test_external_provider_header_redaction.py -v`                                                      | ✅ 6 passed (new, TRX4-7/TRX4-8)                                        |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ 1096 passed, 1 skipped (pre-existing), including all new guard tests |
+| `pytest tests/` (full backend suite)                                                                              | ✅ 12315 passed, 21 skipped (pre-existing), 0 failed                    |
+| `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors                                                             |
+| `cd frontend && npx eslint src/utils/apiCache.ts src/utils/apiCache.test.ts`                                      | ✅ 0 errors                                                             |
+| `cd frontend && npx vitest run src/utils/apiCache.test.ts`                                                        | ✅ 89 passed (TRX4-4, TRX4-5, one corrected pre-existing test)          |

@@ -74,7 +74,11 @@ const UNCACHEABLE_PREFIXES = [
   '/training/skills-testing/tests', // per-member skills-test scores + evaluator notes (PHI)
   '/training/cohorts/', // cohort detail carries a resolved-name+email member roster (bare list is roster-free)
   '/training/programs/programs/', // per-program enrollment eligibility carries a full member roster + reason
-  '/training/external/providers/', // provider user-mappings carry internal member name + email
+  '/training/external/providers', // provider list itself: config.additional_headers can carry an
+  // integration auth token; sub-paths carry internal member name + email. No trailing slash — the
+  // bare GET list is the same shape and was missed by a prefix that only matched sub-paths.
+  '/training/multi-agency', // joint-exercise records: participating_organizations[].contact_name/
+  // contact_email, ics_position_assignments (user ids), created_by, free-text after_action_report
   '/facilities/emergency-contacts', // emergency contact PII
   '/messages', // department messages: targeted announcements + per-member inbox/read state (no trailing slash covers GET /messages)
   '/admin-hours/', // individual work hours and clock-in records

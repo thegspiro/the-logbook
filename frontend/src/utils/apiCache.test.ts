@@ -712,10 +712,20 @@ describe('apiCache', () => {
       // the program catalog list itself carries no member data.
       expect(isCacheable('/training/programs/programs/p1/eligibility')).toBe(false);
       expect(isCacheable('/training/programs/programs')).toBe(true);
-      // Provider user-mappings carry internal member name + email; the
-      // provider config list itself does not.
+      // Provider user-mappings carry internal member name + email, and the
+      // provider list itself (TRX4-5) can carry config.additional_headers,
+      // which may hold an integration auth token.
       expect(isCacheable('/training/external/providers/p1/user-mappings')).toBe(false);
-      expect(isCacheable('/training/external/providers')).toBe(true);
+      expect(isCacheable('/training/external/providers')).toBe(false);
+      expect(isCacheable('/training/external/providers/p1')).toBe(false);
+    });
+
+    it('returns false for /training/multi-agency (TRX4-4)', () => {
+      // participating_organizations[].contact_name/contact_email,
+      // ics_position_assignments (user ids), created_by, and free-text
+      // after_action_report/lessons_learned.
+      expect(isCacheable('/training/multi-agency')).toBe(false);
+      expect(isCacheable('/training/multi-agency/ex1')).toBe(false);
     });
 
     it('returns false for raw per-user analytics export (FE2-34)', () => {

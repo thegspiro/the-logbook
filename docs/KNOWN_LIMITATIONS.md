@@ -2825,19 +2825,34 @@ already records this pairing as deliberately unadjudicated, for the same
 reason. (Security review EC-14 residual,
 `docs/security-review/EC-14-equipment-check-shifts.md`.)
 
-## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26, count corrected 2026-08-26, `external_training_service.py` and `push_service.py` closed 2026-09-02)
+## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26, count corrected 2026-08-26, `external_training_service.py` and `push_service.py` closed 2026-09-02, `documenso_service.py` added 2026-09-10)
 
 `assert_outbound_url_safe()` (`app/utils/url_validator.py`) re-resolves an
 org-configured integration URL's hostname via `socket.getaddrinfo()`
 immediately before an outbound request, to catch a hostname that was
-repointed at an internal address since it was saved. **Six** call sites
-still share the gap. All six use `httpx`, via two different
+repointed at an internal address since it was saved. **Seven** call sites
+still share the gap. All seven use `httpx`, via two different
 client-construction paths — the distinction that matters for scoping a fix,
 since a factory-only fix would miss the one that doesn't use the factory:
 
-- **Five** go through the shared `create_integration_client()` (plain
+- **Six** go through the shared `create_integration_client()` (plain
   `httpx.AsyncClient`) and share one remediation:
-  `integration_services/{teams,webhook,slack,discord,calcom}_service.py`.
+  `integration_services/{teams,webhook,slack,discord,calcom,documenso}_service.py`.
+  `documenso_service.py` is the odd one of the six: `test_connection` and
+  `create_document` call `create_integration_client().get/post` against the
+  admin-configured `api_base_url` with **no** `assert_outbound_url_safe`
+  call anywhere in the file — unlike its closest sibling
+  `calcom_service.py` (same "self-hosted org points this at its own
+  `https://<host>/api/v1`" shape), which does call it before every request.
+  The generic `_validate_urls_in_config`/`validate_integration_url` save-time
+  check in `integrations.py` still applies to `DocumensoConfig.api_base_url`
+  like every other integration's URL fields, so this is not an unvalidated
+  field — but Documenso's window between that save-time check and the
+  request that actually uses the value is the entire gap this note
+  describes, with none of the send-time narrowing its five siblings already
+  have. Caught by a Codex review of `docs/security-review/
+TRX-18-training-extended.md`'s pass 4 (PR #2460), which had claimed this
+  entry needed no correction without checking every site named in it.
 - **One** constructs its own `httpx.AsyncClient` directly rather than going
   through `create_integration_client` — a `create_integration_client` fix
   alone would not reach it; it needs either migrating onto the shared
@@ -2889,20 +2904,27 @@ independently closed on 2026-09-02, outside any security-review PR:
   correction (added by the same commit) and was not re-run as part of this
   correction since no code changed.
 
-In each of the remaining six, the actual request performs its **own**
-independent DNS resolution when it connects, separate from the
-`assert_outbound_url_safe` check. A hostname that resolves to a public IP
-for the check and an internal one moments later (classic DNS rebinding)
-passes the check and still reaches the internal address. The function's own
-docstring says it "shrink[s] the rebinding window... versus
-save-time-to-send" — narrows, not closes — which is accurate; a security
-review draft that read this as "closed," and then first wrote it up as six
-files sharing one fix, was corrected twice (SCH-10, then a Codex review of
-that correction itself), the count was corrected again when the
-training-extended pass found the eighth site, and corrected twice more when
-that eighth site and `push_service.py` were independently closed.
+In six of the remaining seven (every site except `documenso_service.py`),
+the actual request performs its **own** independent DNS resolution when it
+connects, separate from the `assert_outbound_url_safe` check the site does
+call. A hostname that resolves to a public IP for the check and an
+internal one moments later (classic DNS rebinding) passes the check and
+still reaches the internal address. The function's own docstring says it
+"shrink[s] the rebinding window... versus save-time-to-send" — narrows,
+not closes — which is accurate for those six. `documenso_service.py` is
+worse, not narrowed: it never calls `assert_outbound_url_safe` at all, so
+its only protection is the generic save-time config check, with the full
+save-to-send window open behind it. A security review draft that read this
+as "closed," and then first wrote it up as six files sharing one fix, was
+corrected twice (SCH-10, then a Codex review of that correction itself),
+the count was corrected again when the training-extended pass found the
+eighth site, corrected twice more when that eighth site and
+`push_service.py` were independently closed, and corrected once more (six
+to seven) when a later training-extended pass found `documenso_service.py`
+had been missed from the `create_integration_client` family's list the
+whole time.
 
-Not fixed: closing the remaining six means pinning the address
+Not fixed: closing the remaining seven means pinning the address
 `assert_outbound_url_safe` resolved for the actual connection (while
 preserving the original Host header / SNI) across both client-construction
 paths above — not one shared-infrastructure change, and not a fix scoped
@@ -2910,17 +2932,22 @@ to any single file, but narrower than before now that the two sites
 outside this `httpx` family (`external_training_service.py`'s own client,
 and `push_service.py`'s non-`httpx` `pywebpush` transport) are closed.
 `external_training_service.py`'s fix (above) is the reference shape for
-the six remaining `httpx` sites; `push_service.py`'s is the reference shape
-should a future non-`httpx` transport need the same treatment. Needs a
-dedicated cross-cutting pass (the shape SEC-00 exists for) that accounts
-for both `httpx` client-construction paths, not a unilateral fix inside a
+the six remaining `create_integration_client`-family `httpx` sites (and,
+for `documenso_service.py` specifically, adding the missing
+`assert_outbound_url_safe` call is the first step before that shape
+applies at all); `push_service.py`'s is the reference shape should a
+future non-`httpx` transport need the same treatment. Needs a dedicated
+cross-cutting pass (the shape SEC-00 exists for) that accounts for both
+`httpx` client-construction paths, not a unilateral fix inside a
 feature-scoped review.
 (Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`;
 count corrected by the training-extended pass,
 `docs/security-review/TRX-18-training-extended.md`;
 `external_training_service.py` and `push_service.py` closed independently,
 both re-verified in the training-extended pass 3 re-review, the latter
-following a Codex finding on that pass's own PR.)
+following a Codex finding on that pass's own PR; `documenso_service.py`
+added to the list following a Codex finding on the training-extended pass
+4 PR, #2460.)
 
 ## Outbound Integration Requests — No Wall-Clock Deadline (INT-7 follow-up, 2026-09-06)
 
