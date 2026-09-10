@@ -99,7 +99,8 @@ keeping keys visible. Guard test
 (`test_external_provider_header_redaction.py`, 4 tests, including one
 asserting the raw secret string never appears in the serialized JSON).
 Two real fixes total across this round (TRX4-6, TRX4-7); full backend
-suite re-run clean after both. Full write-up:
+suite re-run clean after both (12313 passed, 21 skipped pre-existing, 0
+failed). Full write-up:
 `docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
 18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until merged, then
 Feature 19 (Skills testing).
