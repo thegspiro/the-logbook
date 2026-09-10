@@ -671,12 +671,10 @@ export const SchedulingNotificationsPanel: React.FC = () => {
               <>
                 {/* Lookahead hours */}
                 <div className="ml-4">
-                  {/* The caption was a bare <label> with no htmlFor, and the
-                      select is its sibling rather than its child, so it named
-                      nothing: axe reported the select as having no accessible
-                      name and a screen reader announced a combo box with no
-                      question attached. htmlFor rather than wrapping, to leave
-                      the block layout alone. */}
+                  {/* htmlFor rather than wrapping: the select is the label's
+                      sibling, and this keeps the block layout while still giving
+                      it a name. Without the association a screen reader
+                      announces a combo box with no question attached. */}
                   <label
                     htmlFor={reminderLookaheadId}
                     className="text-theme-text-secondary mb-1 block text-xs font-medium"

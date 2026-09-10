@@ -1123,9 +1123,9 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/scheduling/admin/settings/shift-reports',
     source: 'src/modules/scheduling/routes.tsx',
-    coverage: 'exempt',
+    coverage: 'ratchet',
     detail:
-      'seven subsections behind an in-page tab strip the route pass cannot reach; measured at 38/6/6/9/9 controls under 44px across the five it never renders, so a route-level budget would describe one seventh of the screen. See the note in mobile-routes.ts',
+      'fast route-level mobile presentation ratchet, over the subsection the panel opens on; six siblings sit behind an in-page tab strip the pass cannot drive and carry debt of their own — see the note in mobile-routes.ts',
   },
   {
     path: '/inventory/checklists/my',

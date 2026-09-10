@@ -1405,4 +1405,152 @@ describe('InventoryItemsPage — CSV export', () => {
       expect(mockGetItems.mock.calls.length).toBe(before);
     });
   });
+
+  describe('bounding the automatic top-up', () => {
+    beforeEach(() => {
+      mockGetItems.mockReset();
+      mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    });
+
+    const hiddenPage = (id: string) => ({
+      items: [makeItem({ id, name: `Hidden ${id}`, group_key: 'PPE' })],
+      total: 10_000,
+      groups: [{ key: 'PPE', label: 'PPE', count: 10_000 }],
+    });
+
+    const collapsePPE = async () => {
+      const select = await screen.findByLabelText('Group by:');
+      await userEvent.selectOptions(select, 'category');
+      await screen.findAllByRole('button', { name: /PPE/ });
+      const available = screen.getByRole('table', { name: 'Available' });
+      await userEvent.click(within(available).getByRole('button', { name: /PPE/ }));
+    };
+
+    it('never issues more than MAX_AUTO_TOP_UPS automatic pages', async () => {
+      // A collapsed group can outrun a page: the backend orders by group key
+      // and then applies offset/limit, so nothing keeps a group inside one.
+      // The cap is what stops "keep going until something is visible" from
+      // walking a 400-row category. Counted by offset, because the top-ups
+      // flush inside the same act() as the collapse.
+      let page = 0;
+      const topUps: number[] = [];
+      mockGetItems.mockImplementation((params: unknown) => {
+        const skip = (params as { skip?: number } | undefined)?.skip ?? 0;
+        if (skip > 0) topUps.push(skip);
+        return Promise.resolve(hiddenPage(`p${(page += 1)}`));
+      });
+
+      renderWithRouter(<InventoryItemsPage />);
+      await collapsePPE();
+
+      await waitFor(() => expect(topUps.length).toBeGreaterThan(0));
+      await new Promise((r) => setTimeout(r, 150));
+      const settled = topUps.length;
+      await new Promise((r) => setTimeout(r, 150));
+      expect(topUps.length).toBe(settled);
+      expect(settled).toBeLessThanOrEqual(3);
+    });
+
+    it('halts on a failed top-up instead of retrying forever', async () => {
+      // The rejection path is the one that provably ran away: `loadingMore`
+      // returns to false with nothing loaded, so the effect re-fired at once
+      // and raised a toast every turn.
+      mockGetItems.mockImplementation((params: unknown) =>
+        ((params as { skip?: number } | undefined)?.skip ?? 0) === 0
+          ? Promise.resolve(hiddenPage('p1'))
+          : Promise.reject(new Error('network down'))
+      );
+
+      renderWithRouter(<InventoryItemsPage />);
+      await collapsePPE();
+
+      await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 150));
+      const settled = mockGetItems.mock.calls.length;
+      await new Promise((r) => setTimeout(r, 150));
+      expect(mockGetItems.mock.calls.length).toBe(settled);
+      // One failure, one toast -- not one per turn.
+      expect(mockToastError).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not consume the page offset when a load fails', async () => {
+      // `skip` advanced before the request, so a failed page was skipped for
+      // good and the rows in it were never fetched.
+      const seen: number[] = [];
+      mockGetItems.mockImplementation((params: unknown) => {
+        const skip = (params as { skip?: number } | undefined)?.skip ?? 0;
+        seen.push(skip);
+        if (skip === 0) return Promise.resolve({ items: [makeItem({ id: 'a' })], total: 500 });
+        return Promise.reject(new Error('network down'));
+      });
+
+      renderWithRouter(<InventoryItemsPage />);
+      await screen.findByText('Cordless Drill');
+
+      await userEvent.click(await screen.findByRole('button', { name: /Load More/ }));
+      await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+      await userEvent.click(screen.getByRole('button', { name: /Load More/ }));
+      await waitFor(() => expect(seen.filter((v) => v === 50).length).toBe(2));
+
+      expect(seen).not.toContain(100);
+    });
+
+    it('renders no per-item detail cells on a product row', async () => {
+      // Below 768px `.rwd-table tbody td` is display:flex and only cells with
+      // NO data-label are hidden, so a `hidden` cell carrying one still shows
+      // as a labelled row on a phone. Rendering these five empty put five
+      // blank Manufacturer/Serial/Asset Tag/Barcode/Cost lines in every folded
+      // card; they describe one physical item and a product row is not one.
+      const shirt = (id: string, size: string) =>
+        makeItem({
+          id,
+          name: `Duty Shirt \u2014 ${size}`,
+          variant_group_id: 'vg-4',
+          standard_size: size.toLowerCase(),
+          tracking_type: 'pool',
+          quantity: 3,
+        });
+      mockGetItems.mockResolvedValue({ items: [shirt('d-s', 'S'), shirt('d-m', 'M')], total: 2 });
+
+      renderWithRouter(<InventoryItemsPage />);
+      await screen.findByRole('button', { name: /Duty Shirt/ });
+      const row = screen
+        .getAllByRole('row')
+        .find((r) => within(r).queryByRole('button', { name: /Duty Shirt/ }) !== null);
+      expect(row).toBeDefined();
+      const labels = within(row as HTMLElement)
+        .getAllByRole('cell')
+        .map((c) => c.getAttribute('data-label'));
+      expect(labels).not.toContain('Serial #');
+      expect(labels).not.toContain('Asset Tag');
+      expect(labels).not.toContain('Barcode');
+      expect(labels).not.toContain('Manufacturer');
+      expect(labels).not.toContain('Cost');
+    });
+
+    it('does not call an entirely uncategorised product "Mixed"', async () => {
+      // Every member agrees -- their shared category is *none*. `category_id`
+      // arrives as an explicit null from the API, which a `T | null` result
+      // could not tell apart from "they differ".
+      const bare = (id: string, size: string) =>
+        makeItem({
+          id,
+          name: `Spare Hood — ${size}`,
+          variant_group_id: 'vg-9',
+          standard_size: size.toLowerCase(),
+          tracking_type: 'pool',
+          quantity: 2,
+          category_id: null as unknown as undefined,
+        });
+      mockGetItems.mockResolvedValue({ items: [bare('h-s', 'S'), bare('h-m', 'M')], total: 2 });
+
+      renderWithRouter(<InventoryItemsPage />);
+      await screen.findByRole('button', { name: /Spare Hood/ });
+      const row = screen
+        .getAllByRole('row')
+        .find((r) => within(r).queryByRole('button', { name: /Spare Hood/ }) !== null);
+      expect(row).toBeDefined();
+      expect(within(row as HTMLElement).queryByText('Mixed')).not.toBeInTheDocument();
+    });
+  });
 });

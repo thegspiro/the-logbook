@@ -1140,12 +1140,10 @@
      `justify-center` centres a row that should read from the left, beside the
      box the label belongs to.
 
-     The min-width is *not* the difference, though a first draft of this said so
-     — "the row is as wide as the panel anyway". Most of these rows are, and one
-     is not: the `Req` label in PositionListEditor sits inline beside a select
-     and measures about 40px. The tap rule is `height < 44 || width < 44`, so it
-     still counted. Set both here; on a full-width row the min-width costs
-     nothing. */
+     Both axes are set, not just the height. Most rows using this are as wide as
+     their panel, but not all — the `Req` label in PositionListEditor sits inline
+     beside a select at about 40px — and a target is judged on its narrow side as
+     well as its short one. On a full-width row the min-width costs nothing. */
   @apply flex min-h-[44px] min-w-[44px] items-center;
 }
 

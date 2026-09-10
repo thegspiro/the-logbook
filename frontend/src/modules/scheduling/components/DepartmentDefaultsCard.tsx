@@ -14,12 +14,11 @@ interface DepartmentDefaultsCardProps {
 }
 
 export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ settings, onSettingsChange }) => {
-  // The three number fields had a <label> each, sitting beside the input rather
-  // than wrapping it and carrying no htmlFor — which is a styled caption, not a
-  // label. A screen reader announced all three as "spin button, blank", and
-  // tapping the caption did not focus the field. `useId` rather than literal
-  // ids because this card is a component, not a page: two of them on one screen
-  // would otherwise point every label at the first card's inputs.
+  // The three number fields have a <label> beside them rather than wrapping
+  // them, so each needs an htmlFor to be a label at all rather than a styled
+  // caption. `useId` rather than literal ids because this is a component, not a
+  // page: two cards on one screen would otherwise point every label at the
+  // first card's inputs.
   const durationId = useId();
   const staffingId = useId();
   const overtimeId = useId();
