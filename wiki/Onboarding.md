@@ -226,7 +226,7 @@ After completing onboarding, a checklist is automatically created with critical 
 
 ## API Endpoints
 
-The request and response bodies live in
+The request bodies, and a table naming the model behind each response, live in
 [`docs/ONBOARDING_FLOW.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/ONBOARDING_FLOW.md#backend-api-endpoints),
 which is the reference this page defers to. That is an absolute link on purpose:
 `wiki/setup-wiki.sh` publishes `wiki/*.md` and generates two pages from `docs/`,

@@ -924,6 +924,35 @@ the main application layout via sessionStorage keys `departmentName` and
 
 ## Backend API Endpoints
 
+### Responses
+
+The bodies below are requests. Responses are given here as the model that
+defines them, rather than copied out as JSON: a model name stays true when a
+field is added, and a hand-copied example does not — which is how the wiki came
+to document an organization body the route had stopped accepting.
+
+| Endpoint                                                                 | Response                                                                                                                                                                            |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /onboarding/status`                                                 | `OnboardingStatusResponse` — `needs_onboarding`, `is_completed`, `current_step`, `total_steps`, `steps_completed`, `organization_name`                                              |
+| `POST /onboarding/start`                                                 | `StartSessionResponse` — `session_id`, `expires_at`, `csrf_token`, `message`, `current_step`, `steps`. A client cannot proceed without the first three                              |
+| `GET /onboarding/system-info`                                            | Unmodelled dict from `OnboardingService.get_system_info()`                                                                                                                          |
+| `GET /onboarding/security-check`                                         | Unmodelled dict from `OnboardingService.verify_security_configuration()`                                                                                                            |
+| `GET /onboarding/database-check`                                         | Unmodelled dict from `OnboardingService.verify_database_connection()`                                                                                                               |
+| `POST /onboarding/organization`, `POST /onboarding/session/organization` | `OrganizationSetupResponse` — `id`, `name`, `slug`, `organization_type`, `timezone`, `active`, `created_at`                                                                         |
+| `POST /onboarding/system-owner`                                          | `SystemOwnerResponse` — `id`, `username`, `email`, `first_name`, `last_name`, `membership_number`, `status`. Also sets the auth cookies, so the caller is signed in when it returns |
+| `POST /onboarding/modules`                                               | `{ message, modules }` — every module with its resulting boolean, not only the enabled ones                                                                                         |
+| `POST /onboarding/notifications`                                         | `{ message, email_enabled, sms_enabled }` — the two booleans it was given                                                                                                           |
+| `POST /onboarding/complete`                                              | `{ message, organization, admin_user, completed_at, next_steps }`                                                                                                                   |
+| `POST /onboarding/session/roles`                                         | `RolesSetupResponse`                                                                                                                                                                |
+| `POST /onboarding/session/positions`                                     | `PositionsSetupResponse`                                                                                                                                                            |
+| every other `POST /onboarding/session/*`, including `/session/email`     | `SessionDataResponse` — `success`, `message`, `step`                                                                                                                                |
+| `GET /organization/setup-checklist`                                      | `SetupChecklistResponse` — `items`, `completed_count`, `total_count`, `enabled_modules`                                                                                             |
+| `POST /organization/setup-checklist/{item_key}/acknowledge`              | `{ item_key, acknowledged }`                                                                                                                                                        |
+
+Three of these are unmodelled on purpose in this table rather than by omission:
+their handlers return whatever the named service method builds, so there is no
+schema to cite and any shape written here would be a snapshot free to go stale.
+
 ### Onboarding Status
 
 ```
