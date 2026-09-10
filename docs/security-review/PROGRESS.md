@@ -68,7 +68,9 @@ tree on top of that — across attempts it has reproduced the same invalid
 entry, silently shifted the root `typescript` to an undeclared `6.0.3`,
 and crashed npm outright (`Cannot read properties of null (reading
 'edgesOut')`) — so it should never be used to diagnose or "clean up" this
-tree; only a targeted `npm install <pkg>@<version>` against a lockfile
+tree; only a targeted `npm install <pkg>@<version> --workspace frontend`
+(run from the repo root — `--workspace` is what targets
+`frontend/package.json` rather than the root manifest) against a lockfile
 freshly checked out from the base branch, verified with `npm ci`
 afterward, is reliable. Corrected CLAUDE.md's "Two TypeScript installs"
 section accordingly. Kept out of this feature's own rotation entry either
@@ -12651,7 +12653,9 @@ unreliable for this tree on its own terms — across attempts it has
 reproduced this same invalid entry, silently shifted the root `typescript`
 to an undeclared `6.0.3`, and crashed npm outright with an internal error
 — so it should never be used to diagnose or "clean up" this dependency
-tree; only a targeted `npm install <pkg>@<version>` against a freshly
+tree; only a targeted `npm install <pkg>@<version> --workspace frontend`
+(run from the repo root — `--workspace` is what targets
+`frontend/package.json` rather than the root manifest) against a freshly
 checked-out lockfile, verified with `npm ci` afterward, is reliable.
 Corrected CLAUDE.md's "Two TypeScript installs" section and the
 `docs/KNOWN_LIMITATIONS.md` entry to say so accurately. Separately, and
