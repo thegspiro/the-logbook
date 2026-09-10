@@ -76,8 +76,7 @@ This document describes the complete onboarding flow for The Logbook application
 └─ v
 ┌─ 11. Module Overview ────────────────── /onboarding/modules
 │  POST /onboarding/session/modules, then POST /onboarding/complete
-│  Per module: "Enable & Configure" → /onboarding/modules/{id}/config,
-│  "Configure Later", or "Ignore".
+│  Per module: "Enable" (in place), "Configure Later", or "Ignore".
 └─ v
 ┌─ 12. Setup Complete ─────────────────── /onboarding/complete
 │  Summary of what was configured, plus what still needs the
@@ -194,7 +193,6 @@ POST /api/v1/onboarding/session/organization
 Body: {
   name: string,
   slug?: string,
-  description?: string,
   organization_type: "fire_department" | "ems_only" | "fire_ems_combined",
   timezone: string,
   phone?: string,
@@ -217,7 +215,6 @@ Body: {
   department_id?: string,
   county?: string,
   founded_year?: number,
-  tax_id?: string,
   logo?: string,  // Base64 data URL
   membership_id?: {   // omitted entirely when the department does not number members
     enabled: boolean,
@@ -814,7 +811,9 @@ Information and the Testing Checklist — are turned on later from
 
 **Per-Module Actions**:
 
-- "Enable & Configure" → `/onboarding/modules/{moduleId}/config`
+- "Enable" → Mark as "enabled". Enabling is the whole action; it does not
+  navigate. See 13a for why the per-module configuration step it used to open
+  was removed
 - "Configure Later" → Mark as "skipped"
 - "Ignore" → Mark as "ignored"
 
@@ -987,7 +986,6 @@ POST /api/v1/onboarding/session/organization
 Body: {
   name: string,
   slug?: string,
-  description?: string,
   organization_type: "fire_department" | "ems_only" | "fire_ems_combined",
   timezone: string,
   phone?: string,
@@ -1003,8 +1001,13 @@ Body: {
   department_id?: string,
   county?: string,
   founded_year?: number,
-  tax_id?: string,
-  logo?: string
+  logo?: string,
+  membership_id?: {   // omitted entirely when the department does not number members
+    enabled: boolean,
+    auto_generate: boolean,
+    prefix: string,
+    next_number: number
+  }
 }
 ```
 
@@ -1037,6 +1040,20 @@ Body: {
 ```
 
 Saves enabled module configuration.
+
+### Configure Modules (Direct)
+
+```
+POST /api/v1/onboarding/modules
+Body: {
+  enabled_modules: string[]   // e.g. ["training", "compliance", "scheduling"]
+}
+```
+
+The non-session counterpart. It validates the onboarding session and refuses
+once onboarding is complete, so a still-valid session cannot be replayed to
+change module settings after setup. The response reports every module with its
+resulting boolean, not only the ones enabled.
 
 ### Configure Roles
 
