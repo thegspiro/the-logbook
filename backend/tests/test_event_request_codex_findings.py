@@ -1558,3 +1558,223 @@ class TestTheBackfillComparesAccentSensitively:
         # Bytes decide *whether* to preserve; what gets stored is still the
         # LOWER(TRIM(...)) form, so " Morning" lands as "morning".
         assert "THEN LOWER(TRIM({column}))" in self.BACKFILL.read_text()
+
+
+# ============================================
+# Round 8 — findings on the round-7 fixes
+# ============================================
+
+
+class TestAnInfiniteAudienceSizeIsJustUnparseable:
+    """`float()` accepts "1e309", "inf" and "Infinity"; `int(inf)` then raises
+    OverflowError, not ValueError. Uncaught it escaped this parser's lenient
+    contract and failed the whole integration, losing a community enquiry over
+    the one field the parser is allowed to give up on."""
+
+    @pytest.mark.parametrize("value", ["1e309", "inf", "-inf", "Infinity", "nan"])
+    def test_a_non_finite_answer_costs_the_field_not_the_request(self, value):
+        assert parse_audience_size(value) is None
+
+    def test_a_large_but_finite_answer_still_clamps(self):
+        from app.services.event_request_service import AUDIENCE_SIZE_MAX
+
+        assert parse_audience_size("1e300") == AUDIENCE_SIZE_MAX
+
+    def test_ordinary_answers_are_unaffected(self):
+        assert parse_audience_size("40") == 40
+        assert parse_audience_size("40.7") == 40
+
+
+class TestAZeroLengthScheduledWindowIsRefused:
+    """`EventCreate` and `EventUpdate` both refuse an end at or before the
+    start, and `schedule_request` builds `EventCreate` outside an exception
+    handler — so an end *equal* to the start became a 500 rather than a 422 at
+    this boundary. A zero-length window also overlaps nothing, so the room
+    double-booking check passed it on the way there."""
+
+    def test_an_end_equal_to_the_start_is_refused(self):
+        start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+
+        with pytest.raises(ValidationError):
+            EventRequestSchedule(event_date=start, event_end_date=start)
+
+    def test_a_reversed_window_is_still_refused(self):
+        start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+
+        with pytest.raises(ValidationError):
+            EventRequestSchedule(
+                event_date=start, event_end_date=start - timedelta(hours=1)
+            )
+
+    def test_a_real_window_is_accepted(self):
+        start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+        data = EventRequestSchedule(
+            event_date=start, event_end_date=start + timedelta(hours=2)
+        )
+
+        assert data.event_end_date == start + timedelta(hours=2)
+
+    def test_it_matches_the_postpone_validator(self):
+        """Both paths set a confirmed date; one rule, not two."""
+        from app.schemas.event_request import EventRequestPostpone
+
+        start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+        with pytest.raises(ValidationError):
+            EventRequestPostpone(new_event_date=start, new_event_end_date=start)
+
+
+class TestANewRoomReachesTheCalendarEntry:
+    """`schedule_request` stores `event_location_id` before deciding what to do
+    with the calendar entry. With `create_calendar_event=false` the sync path
+    sent only the times, so the request and its activity row named the new room
+    while the entry stayed in the old one."""
+
+    LOCATION_ID = "00000000-0000-0000-0000-0000000000c3"
+    OLD_LOCATION_ID = "00000000-0000-0000-0000-0000000000c4"
+
+    def _linked(self, location_id):
+        start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+        return SimpleNamespace(
+            id=EVENT_UUID,
+            organization_id=ORG_ID,
+            is_cancelled=False,
+            location_id=location_id,
+            start_datetime=start,
+            end_datetime=start + timedelta(hours=2),
+        )
+
+    def _request(self, start):
+        return SimpleNamespace(
+            id=REQUEST_UUID,
+            organization_id=ORG_ID,
+            event_id=EVENT_UUID,
+            event_date=start,
+            event_end_date=start + timedelta(hours=2),
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_room_is_sent_with_the_move(self):
+        from app.services.event_request_service import sync_calendar_event_date
+
+        start = datetime(2026, 11, 11, 14, 0, tzinfo=timezone.utc)
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.scalar.return_value = self._linked(self.OLD_LOCATION_ID)
+        captured: dict = {}
+
+        class _Recording:
+            def __init__(self, _db):
+                self.update_event = AsyncMock(
+                    side_effect=lambda **kw: captured.update(kw)
+                )
+
+        with patch("app.services.event_service.EventService", _Recording):
+            refusal = await sync_calendar_event_date(
+                db, self._request(start), USER_UUID, location_id=self.LOCATION_ID
+            )
+
+        assert refusal is None
+        assert str(captured["event_data"].location_id) == self.LOCATION_ID
+
+    @pytest.mark.asyncio
+    async def test_a_room_change_alone_still_updates_the_entry(self):
+        """The times did not move, but returning early would leave the entry in
+        the old room while the request names the new one."""
+        from app.services.event_request_service import sync_calendar_event_date
+
+        linked = self._linked(self.OLD_LOCATION_ID)
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.scalar.return_value = linked
+        captured: dict = {}
+
+        class _Recording:
+            def __init__(self, _db):
+                self.update_event = AsyncMock(
+                    side_effect=lambda **kw: captured.update(kw)
+                )
+
+        with patch("app.services.event_service.EventService", _Recording):
+            refusal = await sync_calendar_event_date(
+                db,
+                self._request(linked.start_datetime),
+                USER_UUID,
+                location_id=self.LOCATION_ID,
+            )
+
+        assert refusal is None
+        assert str(captured["event_data"].location_id) == self.LOCATION_ID
+
+    @pytest.mark.asyncio
+    async def test_naming_no_room_leaves_the_existing_one_alone(self):
+        """An omitted key on an update payload means "leave this alone"; a
+        postponement must not clear the room the entry already had."""
+        from app.services.event_request_service import sync_calendar_event_date
+
+        start = datetime(2026, 11, 11, 14, 0, tzinfo=timezone.utc)
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.scalar.return_value = self._linked(self.OLD_LOCATION_ID)
+        captured: dict = {}
+
+        class _Recording:
+            def __init__(self, _db):
+                self.update_event = AsyncMock(
+                    side_effect=lambda **kw: captured.update(kw)
+                )
+
+        with patch("app.services.event_service.EventService", _Recording):
+            await sync_calendar_event_date(db, self._request(start), USER_UUID)
+
+        assert "location_id" not in captured["event_data"].model_dump(
+            exclude_unset=True
+        )
+
+    @pytest.mark.asyncio
+    async def test_an_unchanged_room_and_time_still_short_circuits(self):
+        from app.services.event_request_service import sync_calendar_event_date
+
+        linked = self._linked(self.LOCATION_ID)
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.scalar.return_value = linked
+
+        class _Unexpected:
+            def __init__(self, _db):
+                self.update_event = AsyncMock(
+                    side_effect=AssertionError("should not be called")
+                )
+
+        with patch("app.services.event_service.EventService", _Unexpected):
+            refusal = await sync_calendar_event_date(
+                db,
+                self._request(linked.start_datetime),
+                USER_UUID,
+                location_id=self.LOCATION_ID,
+            )
+
+        assert refusal is None
+        assert db.add.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_a_room_conflict_on_this_path_reaches_the_coordinator(self):
+        from app.services.event_request_service import sync_calendar_event_date
+
+        start = datetime(2026, 11, 11, 14, 0, tzinfo=timezone.utc)
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.scalar.return_value = self._linked(self.OLD_LOCATION_ID)
+
+        class _Conflicting:
+            def __init__(self, _db):
+                self.update_event = AsyncMock(
+                    side_effect=ValueError("Location is already booked")
+                )
+
+        with patch("app.services.event_service.EventService", _Conflicting):
+            refusal = await sync_calendar_event_date(
+                db, self._request(start), USER_UUID, location_id=self.LOCATION_ID
+            )
+
+        assert refusal == "Location is already booked"
+        assert db.add.call_count == 0

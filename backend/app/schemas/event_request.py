@@ -161,8 +161,16 @@ class EventRequestSchedule(BaseModel):
         self.event_date = _as_utc(self.event_date)
         if self.event_end_date:
             self.event_end_date = _as_utc(self.event_end_date)
-            if self.event_end_date < self.event_date:
-                raise ValueError("event_end_date must not be before event_date")
+            # `<=`, not `<`: an end *equal* to the start is a zero-length
+            # booking, which `EventCreate` and `EventUpdate` both refuse. The
+            # create branch in `schedule_request` builds `EventCreate` outside
+            # an exception handler, so letting it through turned a coordinator
+            # typo into a 500 rather than a 422 at this boundary — and a
+            # zero-length window overlaps nothing, so the room double-booking
+            # check passed it silently on the way there. Matches
+            # `EventRequestPostpone._new_window_ordered`.
+            if self.event_end_date <= self.event_date:
+                raise ValueError("event_end_date must be after event_date")
         return self
 
 

@@ -479,9 +479,20 @@ class TestScheduling:
                 event_date=start, event_end_date=start - timedelta(hours=2)
             )
 
-    def test_an_equal_end_is_allowed(self):
+    def test_an_equal_end_is_rejected(self):
+        """Deliberate change of behaviour (2026-09-10).
+
+        This asserted the opposite, and the opposite was a defect: a
+        zero-length window is refused by `EventCreate` and `EventUpdate` alike,
+        and `schedule_request` builds `EventCreate` outside an exception
+        handler — so what this test called "allowed" reached the coordinator as
+        a 500. It also overlaps nothing, so the room double-booking check
+        waved it through on the way there. Refusing it here makes it a 422 at
+        the boundary, and matches `EventRequestPostpone`.
+        """
         start = datetime.now(timezone.utc) + timedelta(days=30)
-        assert EventRequestSchedule(event_date=start, event_end_date=start)
+        with pytest.raises(ValidationError):
+            EventRequestSchedule(event_date=start, event_end_date=start)
 
 
 class TestStaffing:

@@ -1192,7 +1192,16 @@ async def schedule_request(
         # below: a stale date on the surface members read is worse than none.
         # A refusal (room conflict, finalized event) is the coordinator's to
         # resolve, and matches the 409 the create branch already returns.
-        refusal = await sync_calendar_event_date(db, event_request, current_user.id)
+        # The room goes through too. `event_request.event_location_id` was
+        # already set above, so without it a coordinator who picks a new room
+        # and asks for no calendar entry leaves the request and its activity
+        # row naming one room while the entry stays in the old one. Passing it
+        # also puts the move through `update_event`'s own double-booking check,
+        # which the create branch above performs explicitly and this path
+        # otherwise skipped entirely.
+        refusal = await sync_calendar_event_date(
+            db, event_request, current_user.id, location_id=data.location_id
+        )
         if refusal:
             raise HTTPException(
                 status_code=409, detail=safe_error_detail(ValueError(refusal))

@@ -258,7 +258,15 @@ def parse_audience_size(value: Any) -> Optional[int]:
     except ValueError:
         try:
             size = int(float(text))
-        except ValueError:
+        except (ValueError, OverflowError):
+            # OverflowError as well as ValueError: "1e309", "inf" and
+            # "Infinity" are all things a member of the public can type into a
+            # text box, and `float()` accepts every one of them before
+            # `int(inf)` raises — with a different exception type. Uncaught it
+            # escaped this parser's lenient contract and failed the whole
+            # integration, losing the enquiry over the one field this is
+            # supposed to be able to give up on. (`float("nan")` raises
+            # ValueError from `int()`, so it was already covered.)
             return None
     if size < AUDIENCE_SIZE_MIN:
         return None
@@ -1425,6 +1433,7 @@ async def sync_calendar_event_date(
     db: AsyncSession,
     event_request: EventRequest,
     actor_id: Optional[str],
+    location_id: Optional[str] = None,
 ) -> Optional[str]:
     """Move the calendar event when its request's confirmed date changes.
 
@@ -1480,7 +1489,19 @@ async def sync_calendar_event_date(
         if end.tzinfo is None:
             end = end.replace(tzinfo=timezone.utc)
 
-        if event.start_datetime == start and event.end_datetime == end:
+        # A room the coordinator picked on this save counts as a change even
+        # when the times did not move: `schedule_request` stores the new
+        # `event_location_id` on the request before reaching here, so returning
+        # early would leave the request and its activity row naming one room
+        # and the calendar entry still sitting in the old one.
+        room_move = bool(location_id) and str(
+            getattr(event, "location_id", None) or ""
+        ) != str(location_id)
+        if (
+            event.start_datetime == start
+            and event.end_datetime == end
+            and not room_move
+        ):
             return None
 
         # Built before the try below, not inside it: argument evaluation
@@ -1490,11 +1511,18 @@ async def sync_calendar_event_date(
         event_uuid = UUID(str(event_request.event_id))
         org_uuid = UUID(str(event_request.organization_id))
         actor_uuid = UUID(actor_id) if actor_id else None
+        update_fields: dict = {"start_datetime": start, "end_datetime": end}
+        # Omitted rather than sent as None when the caller named no room: an
+        # update payload's absent key means "leave this alone" (CLAUDE.md
+        # pitfall #1), and a postponement must not clear the room the entry
+        # already had.
+        if location_id:
+            update_fields["location_id"] = str(location_id)
         try:
             await EventService(db).update_event(
                 event_id=event_uuid,
                 organization_id=org_uuid,
-                event_data=EventUpdate(start_datetime=start, end_datetime=end),
+                event_data=EventUpdate(**update_fields),
                 updated_by=actor_uuid,
             )
         except ValueError as refusal:
@@ -1513,10 +1541,15 @@ async def sync_calendar_event_date(
             EventRequestActivity(
                 request_id=event_request.id,
                 action="calendar_event_rescheduled",
-                notes="Moved the calendar event to the new date",
+                notes=(
+                    "Moved the calendar event to the new room"
+                    if room_move and event.start_datetime == start
+                    else "Moved the calendar event to the new date"
+                ),
                 details={
                     "event_id": str(event_request.event_id),
                     "start_datetime": start.isoformat(),
+                    "location_id": str(location_id) if location_id else None,
                 },
                 performed_by=actor_id,
             )
