@@ -112,8 +112,14 @@ shared `REDACTED_SECRET` constant is replaced with the row's existing
 value for that key before the write, rather than persisted verbatim.
 Guard tests added covering both a mixed untouched/edited submission and a
 brand-new row with nothing to preserve; full backend suite re-run clean
-after this fix too (12315 passed, 21 skipped pre-existing, 0 failed). Full
-write-up:
+after this fix too (12315 passed, 21 skipped pre-existing, 0 failed).
+**As of 2026-09-10T17:47 UTC: PR #2460 is fully green** — 17/17 CI checks
+pass (including CI Success), `mergeable_state: clean`, all 13 review
+threads resolved, no Codex findings on the latest commit (`037d04a41`).
+Nine Codex review rounds total across this pass, eight real findings
+(TRX4-2, TRX4-3, TRX4-4, TRX4-5, TRX4-6, TRX4-7, TRX4-8, plus the scope-
+check/heading doc corrections), every one fixed and verified. Awaiting
+owner merge. Full write-up:
 `docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
 18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until merged, then
 Feature 19 (Skills testing).
