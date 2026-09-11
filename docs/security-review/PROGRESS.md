@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2481](https://github.com/thegspiro/the-logbook/pull/2481)
+(Feature 21, Admin hours, pass 4) merged clean via squash, merge commit
+`1fb968938ce2`, all 17 CI checks green (CI Success, both MySQL/MariaDB
+integration and contract suites, Migration Chain, Docker Image Build &
+Container Tests, Frontend Tests, Frontend Lint/Typecheck/Build, Frontend
+E2E/Playwright, Backend Unit Tests, Backend Lint, Backend Security Scan,
+Docs Link Check, Trivy, Gitleaks, SBOM). All 36 review threads (six rounds
+of Codex review, including the P1 reactivation-validation bug and its own
+fifth/sixth-round TOCTOU and test-quality follow-ups) resolved with no
+outstanding findings on the final commit. Merged directly once fully green
+with `mergeable_state: clean` and no unresolved threads. Rotation row 21 is
+now `✅`. Next: Feature 22 (Grants & fundraising).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 4, PR #2481, before the merge), preserved for history</summary>
+
 **Feature 21 (Admin hours), pass 4** — PR
 [#2481](https://github.com/thegspiro/the-logbook/pull/2481), branch
 `claude/security-review-admin-hours`, tending. The declared-scope diff
@@ -53,6 +69,8 @@ unbounded/non-streaming, same shape as two sibling exports — needs a
 shared page-size/streaming decision, not a drive-by fix. **1 fixed (P1), 1
 flagged.** Full write-up: `docs/security-review/AH-21-admin-hours.md` →
 Pass 4.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 4, before the fifth/sixth Codex rounds found the TOCTOU gap and its test-quality follow-up), preserved for history</summary>
@@ -13432,7 +13450,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
