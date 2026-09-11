@@ -3,7 +3,7 @@
 **Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 (pass 1, PR
 #1905), 2026-08-30 (pass 2, PR #2075; audit-trail follow-up, PR #2076),
 2026-09-06 (pass 3 through pass 10, all on PR #2301), 2026-09-11 (pass 11, PR
-#TBD)
+#2489)
 
 **Backend:** `app/api/v1/endpoints/medical_supplies.py` (pass 1: 667 L, 15
 endpoints; pass 2: 670 L, 14 routes — no route added or removed). No

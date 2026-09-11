@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)** —
+**PR [#2489](https://github.com/thegspiro/the-logbook/pull/2489)** —
 Feature 23 (Medical supplies), a fresh rotation-lap review (this feature's
 own findings file is at "pass 11," continuing the cumulative numbering
 from its prior lap's ten Codex-review rounds; this is the first pass of
