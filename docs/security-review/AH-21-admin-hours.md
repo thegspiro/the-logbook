@@ -28,23 +28,52 @@ across two categories. This is the exact class of bug AH-11 and this
 pass's own re-verification of it were meant to have closed — the fix just
 never reached this one code path into the same invariant.
 
-**Where:** `app/services/admin_hours_service.py`, `update_event_hour_mapping`.
-
 **Fix:** the lock-and-validate block now also runs when `is_active is True
 and not mapping.is_active` (an inactive→active transition), using the
-mapping's existing `percentage` as the effective value when the caller
-didn't also send a new one. A no-op `is_active: true` on an already-active
-mapping, and any `is_active: false`, still skip it — neither can push a
-source over 100%, and the second (deactivation) is the common, harmless
-case that shouldn't pay for a lock it doesn't need. **Guard tests** (new,
-`TestEventHourMappingPercentageLocking` in
+target mapping's existing `percentage` as the effective value when the
+caller didn't also send a new one. A no-op `is_active: true` on an
+already-active mapping, and any `is_active: false`, still skip it —
+neither can push a source over 100%, and the second (deactivation) is the
+common, harmless case that shouldn't pay for a lock it doesn't need.
+
+**Correction (Codex review on this fix's own first commit):** the first
+version read `effective_percentage` from the `mapping` reference captured
+by the initial, unlocked fetch — before the source set's `FOR UPDATE`
+lock was taken. SQLAlchemy's identity map returns that same Python object
+for a second query against the same primary key within one session and
+does not refresh its already-loaded attributes by default, so a
+concurrent transaction that changed this mapping's own percentage while
+it was inactive (which needs no validation, so nothing blocks it) between
+the initial fetch and the lock would leave `effective_percentage` reading
+the stale, pre-lock value even after the lock resolved — the exact TOCTOU
+gap the surrounding lock exists to close, just moved one step earlier.
+Fixed two ways together: the locking query now carries
+`.execution_options(populate_existing=True)`, which forces SQLAlchemy to
+overwrite the identity-mapped object's attributes from the row the lock
+just waited on rather than leaving the pre-lock snapshot in place; and
+`effective_percentage` is now read from the target's own row inside the
+freshly locked `source_mappings` result, not from the `mapping` reference
+captured before the lock. Also trimmed the fix's own code comment, which
+Codex separately flagged as a transient PR narrative
+(`AGENTS.md`'s "Avoid adding transient debugging narratives to production
+source comments") rather than a durable statement of the invariant.
+
+**Where:** `app/services/admin_hours_service.py`, `update_event_hour_mapping`
+(the reactivation branch and its locking query).
+
+**Guard tests** (new, `TestEventHourMappingPercentageLocking` in
 `tests/test_admin_hours_service.py`): `test_reactivation_is_a_locking_read`
 (a bare reactivation issues the `FOR UPDATE` query),
 `test_reactivation_rejects_when_total_would_exceed_100` (reproduces the
-exact scenario above and asserts `ValueError` plus that the mapping is
-left inactive on rejection), `test_deactivation_skips_the_locking_check`
+scenario in "Failure scenario" above and asserts `ValueError` plus that
+the mapping is left inactive on rejection), `test_deactivation_skips_the_locking_check`
 (confirms deactivation issues no locking query at all — the fix doesn't
-regress the cheap path).
+regress the cheap path), and
+`test_reactivation_reads_percentage_from_the_locked_row` (the TOCTOU
+correction's own guard: models the pre-lock and post-lock rows as two
+distinct objects with different percentages and asserts validation uses
+the post-lock one — the one case where using the pre-lock value would
+wrongly pass a total that the post-lock value correctly rejects).
 
 **AH-16 — MED — `export_entries_csv` remains unbounded/non-streaming — 🚩 FLAGGED (carried forward, not newly introduced)**
 
@@ -95,7 +124,14 @@ git diff --stat 4ba836420..HEAD -- \
 ```
 
 **All four backend files (endpoint, service, model, schema) are
-byte-identical to pass 3's merge — zero backend diff.** Eight frontend files
+byte-identical to pass 3's merge — zero backend diff.** (**Pre-fix
+snapshot, caught by Codex review:** true only against `4ba836420`, this
+pass's declared-scope baseline — `admin_hours_service.py` is no longer
+byte-identical to pass 3 once AH-15's fix, below, lands as this PR's own
+commit. That fix is not part of the declared-scope diff and does not
+change this statement's truth against its stated baseline; it means a
+future pass diffing against _this_ pass's merge will correctly see
+`admin_hours_service.py` as changed.) Eight frontend files
 changed; none touch admin-hours _logic_ (no data-fetching, validation, or
 write-path code changed), but two are real behavioral changes rather than
 cosmetic chrome, and this pass's first draft mislabeled both (caught by
@@ -243,6 +279,23 @@ renumbering fix among other changes) sits well before the
 outside the `PII_REPORT_PERMISSIONS` map (lines 51-65) and its lookup
 (lines 65-100). Neither diff touches its admin-hours-relevant lines.
 
+**Two cross-cutting authorization/monitoring files also reference
+admin-hours without importing the module at all (caught by Codex review):**
+`app/core/security_middleware.py` special-cases
+`/api/v1/admin-hours/entries/export` (line 1587) for exfiltration
+monitoring; `app/core/permissions.py` defines
+`ADMIN_HOURS_VIEW`/`ADMIN_HOURS_LOG`/`ADMIN_HOURS_MANAGE` (lines 620-631)
+and lists them in `ALL_PERMISSIONS` (lines 782-784) — the permissions
+every route in this module enforces. Both files changed substantially
+since `4ba836420` (`security_middleware.py`: +438/-84 across four hunks
+spanning lines 10-480; `permissions.py`: +247/-84 across six hunks
+spanning lines 16-2463) — verified by line number that none of the
+changed hunks in either file overlaps its admin-hours-relevant lines: the
+export special-case sits well past `security_middleware.py`'s last
+changed hunk (which ends around line 480), and the permission
+definitions/list entries sit in the gaps between `permissions.py`'s
+hunks (before line 590 and again before line 799).
+
 **Migration content, not just chain hygiene, checked against the declared
 scope** (CHECKLIST.md's schema-and-migration dimension — `validate_migrations.py
 --strict` only proves a single head with no duplicate revisions, it says
@@ -338,24 +391,37 @@ test-file exclusion in the sweep that found it.
 current line**, by direct grep against the file content (not inferred from
 "the diff is empty"): the AH-7 org filter on `get_user_hours_compliance`'s
 target-user fetch (`UserModel.organization_id == organization_id`, line
-1850); every `with_for_update()` call site from AH-10/AH-11 and pass 3's
-Codex-fixed locking findings 2/4/7. **Corrected count and labels (caught by
-Codex review on this pass's own first commit):** the executable
+1880 — see the line-number note at the end of this paragraph); every
+`with_for_update()` call site from AH-10/AH-11 and pass 3's Codex-fixed
+locking findings 2/4/7. **Corrected count and labels (caught by Codex
+review on this pass's own first commit):** the executable
 `with_for_update()` sites are **11**, not 12, and two were mislabeled —
-line 884 is `approve_or_reject`'s own lock (omitted from the first draft),
-and line 1347 is `_check_overlap`'s conditional lock (`for_update=True`,
-called from `create_manual_entry`/`edit_pending_entry`), not
-`approve_or_reject`'s. The corrected inventory: `clock_in`'s `User` lock at
-226, `_get_active_session`'s entry lock at 380, `create_manual_entry`'s
-`User` lock at 539, `edit_pending_entry`'s locks at 772/788,
-`approve_or_reject`'s lock at 884, `bulk_approve`'s member-then-entry locks
-at 1072/1092, `_check_overlap`'s conditional lock at 1347, and the
-event-hour-mapping percentage locks at 1487/1561 — 11 sites, re-verified by
+`approve_or_reject`'s own lock (omitted from the first draft) and
+`_check_overlap`'s conditional lock (`for_update=True`, called from
+`create_manual_entry`/`edit_pending_entry`) were transposed. The corrected
+inventory, by function rather than by line number (see the note below for
+why): `clock_in`'s `User` lock, `_get_active_session`'s entry lock,
+`create_manual_entry`'s `User` lock, `edit_pending_entry`'s two locks,
+`approve_or_reject`'s lock, `bulk_approve`'s member-then-entry locks,
+`_check_overlap`'s conditional lock, and the two event-hour-mapping
+percentage locks (`create_event_hour_mapping` and
+`update_event_hour_mapping`) — 11 sites, re-verified by
 mapping each line number to its enclosing `async def` rather than trusting
 the first draft's labels; and the quarterly-compliance rejection logic from
-pass 3's finding 8 (lines 1893-1936, the `ValueError` raised before any
-per-requirement query runs when a quarterly requirement is requested for a
-non-current year).
+pass 3's finding 8 (the `ValueError` raised before any per-requirement
+query runs when a quarterly requirement is requested for a non-current
+year).
+
+**Line-number note:** this pass's own code changes (AH-15, then its
+TOCTOU follow-up below) shifted every line number after them in the file
+twice within this same pass — the first draft's "1561," the second
+draft's "1577," and Codex's own "1587" were each correct only against the
+commit they were written against. Rather than publish a fourth set of
+citations equally likely to go stale against a fifth commit, this
+paragraph and the ones above name functions; the two places below that
+still cite line numbers (AH-15's own `Where`, and the AH-7 org filter at
+line 1880) are checked against the final commit on this PR and are not
+expected to shift again, since no further code changes are planned.
 
 **Route inventory re-enumerated mechanically** (`grep -c "^@router\."` plus a
 `Depends(...)` extraction, not a manual count): **27/27**, matching every

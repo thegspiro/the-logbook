@@ -1167,6 +1167,69 @@ class TestEventHourMappingPercentageLocking:
 
         assert target.is_active is False, "must not reactivate on rejection"
 
+    async def test_reactivation_reads_percentage_from_the_locked_row(self):
+        """A concurrent transaction can change the target mapping's own
+        percentage (while it's inactive, so no validation is triggered)
+        between this method's initial unlocked fetch and its lock. The
+        pre-lock `mapping` reference must not be trusted for
+        `effective_percentage` -- only the row returned by the locked,
+        `populate_existing=True` query reflects what's true once the lock
+        is actually held."""
+        stale = SimpleNamespace(
+            id="map-1",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=10,  # the pre-lock snapshot
+            is_active=False,
+        )
+        # Same mapping, but the row a concurrent transaction committed
+        # while this call was blocked on the lock: percentage raised to 50.
+        locked_fresh = SimpleNamespace(
+            id="map-1",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=50,
+            is_active=False,
+        )
+        other_active = SimpleNamespace(
+            id="map-2",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=90,
+            is_active=True,
+        )
+
+        def _scalars(items):
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = items
+            return r
+
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                return _one(stale)
+            return _scalars([locked_fresh, other_active])
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        # other_active (90) + the stale percentage (10) = 100, which would
+        # wrongly pass. other_active (90) + the locked-fresh percentage
+        # (50) = 140, which must reject.
+        with pytest.raises(ValueError, match="Maximum is 100%"):
+            await AdminHoursService(db).update_event_hour_mapping(
+                mapping_id="map-1", organization_id="org-1", is_active=True
+            )
+
+        assert stale.is_active is False, "must not reactivate on rejection"
+
     async def test_deactivation_skips_the_locking_check(self):
         """Deactivating can never push a source over 100%, so it should not
         pay for (or be blocked by) the locking read the reactivation path

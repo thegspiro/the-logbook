@@ -250,9 +250,13 @@ service-import greps, plus all 4 external backend callers of
 `event_service.py`, `nfc_tag_service.py`), plus a migration-content sweep
 (not just chain hygiene) of the 45 migration files changed since pass 3.
 
-**Zero backend diff, zero admin-hours-behavioral frontend diff.** All four
-backend files (endpoint, service, model, schema) are byte-identical to
-pass 3. Eight frontend files changed; two are real functional changes in
+**Zero backend diff (against the declared-scope baseline), zero
+admin-hours-behavioral frontend diff.** All four backend files (endpoint,
+service, model, schema) were byte-identical to pass 3's merge at the
+`4ba836420` baseline — a pre-fix snapshot: `admin_hours_service.py` is no
+longer byte-identical to pass 3 once AH-15's fix (below) lands as this
+PR's own commit, found by re-reading the code directly rather than by
+this diff. Eight frontend files changed; two are real functional changes in
 adjacent features (a `Breadcrumbs` navigation rollout, and `Dashboard.tsx`'s
 inventory-tile count changing from a quantity sum to a row count) — neither
 touches admin-hours logic, but neither is merely cosmetic either, and both
