@@ -5,7 +5,7 @@
  * on the presence of an :id route parameter.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -96,10 +96,15 @@ export const GrantApplicationFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const isEditing = Boolean(id);
   const [searchParams] = useSearchParams();
+  // Read once at mount, not from state — the mount effect below needs this
+  // exact value without re-running every time formData.opportunityId changes
+  // (e.g. as the user picks a different one from the dropdown).
+  const initialOpportunityIdRef = useRef(isEditing ? '' : (searchParams.get('opportunity_id') ?? ''));
 
-  const [formData, setFormData] = useState<FormData>(() =>
-    isEditing ? EMPTY_FORM : { ...EMPTY_FORM, opportunityId: searchParams.get('opportunity_id') ?? '' }
-  );
+  const [formData, setFormData] = useState<FormData>(() => ({
+    ...EMPTY_FORM,
+    opportunityId: initialOpportunityIdRef.current,
+  }));
   const [opportunities, setOpportunities] = useState<GrantOpportunity[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -110,6 +115,22 @@ export const GrantApplicationFormPage: React.FC = () => {
     const loadOpportunities = async () => {
       try {
         const data = await grantsService.listOpportunities();
+        const linkedId = initialOpportunityIdRef.current;
+        // An org with more than 100 opportunities may have linked one from
+        // outside this unfiltered first page (the opportunities page's own
+        // search/filter can reach it, this dropdown's default fetch can't).
+        // Fetch it directly so the "Apply" flow's link stays visible and
+        // selected instead of silently showing "-- None --".
+        if (linkedId && !data.some((opp) => opp.id === linkedId)) {
+          try {
+            const linked = await grantsService.getOpportunity(linkedId);
+            setOpportunities([linked, ...data]);
+            return;
+          } catch {
+            // The linked opportunity doesn't exist or isn't in this org —
+            // fall through to the unfiltered list.
+          }
+        }
         setOpportunities(data);
       } catch {
         // Silently fail — the dropdown will just be empty

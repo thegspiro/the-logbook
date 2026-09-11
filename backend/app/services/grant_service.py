@@ -222,6 +222,19 @@ class GrantService:
     async def get_application(
         self, application_id: str, organization_id: str
     ) -> Optional[GrantApplication]:
+        """Fetch a single application with every child collection eager-loaded.
+
+        ``populate_existing=True`` is required, not cosmetic: ``update_application``
+        calls this once to load the application, mutates it (adding a status-change
+        note and, on award, generating compliance tasks via a bare ``application_id=``
+        assignment rather than a relationship append), then the endpoint calls this
+        again to "reload with fresh relationships." Without ``populate_existing``,
+        the identity map hands back the same Python object with its ``grant_notes``/
+        ``compliance_tasks`` collections already marked loaded from the *first* call
+        — ``selectinload`` does not re-run for a collection already populated on an
+        identity-mapped object — so the response would silently omit the note/tasks
+        this same request just created.
+        """
         result = await self.db.execute(
             select(GrantApplication)
             .where(
@@ -235,6 +248,7 @@ class GrantService:
                 selectinload(GrantApplication.grant_notes),
                 selectinload(GrantApplication.opportunity),
             )
+            .execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
 

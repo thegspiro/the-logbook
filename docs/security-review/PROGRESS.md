@@ -18,6 +18,29 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 22 (Grants & fundraising), pass 4** — PR
 [#2483](https://github.com/thegspiro/the-logbook/pull/2483), branch
+`claude/security-review-grants-fundraising`, tending. Two rounds of Codex
+review on the original commit caught two real P2 gaps in the pass's own
+fixes, both closed in the same PR: GF-38 extended (the opportunities-page
+"Apply" link could point at an opportunity outside the dropdown's own
+unfiltered first-100 fetch — now fetched directly via `getOpportunity` and
+merged in) and GF-36 extended (`update_application`'s own "reload with
+fresh relationships" call didn't, on a status change — SQLAlchemy's
+identity map skipped re-loading `grant_notes`/`compliance_tasks` collections
+already marked loaded earlier in the same request, so the note/tasks the
+request itself just created were absent from the PUT response, not merely
+unattributed; fixed with `populate_existing=True` on `get_application()`).
+Full write-up: `docs/security-review/GF-22-grants-fundraising.md` → Pass 4,
+"Revised after Codex review." Completion gate re-run green: flake8/black/
+isort clean; migrations unchanged (443 revisions, single head); 611/611
+grant/fundraising-scoped and 12,369/12,369 full backend suite pass;
+frontend `tsc`/`eslint` clean; `vitest run src/modules/grants-fundraising`
+5 files, 10 passed.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, pass 4, PR #2483, before the two Codex-review rounds), preserved for history</summary>
+
+**Feature 22 (Grants & fundraising), pass 4** — PR
+[#2483](https://github.com/thegspiro/the-logbook/pull/2483), branch
 `claude/security-review-grants-fundraising`, tending.
 **Watchdog iteration:** PR #2482 closed out Feature 21 (Admin hours) at
 2026-09-11T08:40 UTC; by 10:46 UTC — over two hours later, past the
@@ -36,6 +59,8 @@ gate green: flake8/black/isort clean; migrations validated (443 revisions,
 single head, no new migration); 609/609 grant/fundraising-scoped and
 12,367/12,367 full backend suite pass; frontend `tsc`/`eslint` clean;
 `vitest run src/modules/grants-fundraising` 5 files, 9 passed.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2482's merge, Feature 21 pass 4 docs-recording), preserved for history</summary>

@@ -10,10 +10,12 @@ import { MemoryRouter } from 'react-router';
 import type { GrantOpportunity } from '../types';
 
 const mockListOpportunities = vi.fn();
+const mockGetOpportunity = vi.fn();
 
 vi.mock('../services/api', () => ({
   grantsService: {
     listOpportunities: (...args: unknown[]) => mockListOpportunities(...args) as unknown,
+    getOpportunity: (...args: unknown[]) => mockGetOpportunity(...args) as unknown,
   },
 }));
 
@@ -52,6 +54,8 @@ describe('GrantApplicationFormPage — opportunityId from the URL', () => {
   beforeEach(() => {
     mockListOpportunities.mockReset();
     mockListOpportunities.mockResolvedValue([opportunity]);
+    mockGetOpportunity.mockReset();
+    mockGetOpportunity.mockResolvedValue(opportunity);
   });
 
   it('seeds opportunityId from ?opportunity_id= when creating a new application', async () => {
@@ -74,5 +78,21 @@ describe('GrantApplicationFormPage — opportunityId from the URL', () => {
 
     const select = await screen.findByLabelText<HTMLSelectElement>(/opportunity id/i);
     expect(select.value).toBe('');
+  });
+
+  it('fetches the linked opportunity directly when it is outside the unfiltered first page', async () => {
+    // Simulates an org with >100 opportunities: the dropdown's own
+    // unfiltered fetch doesn't include the one the URL links to.
+    mockListOpportunities.mockResolvedValue([]);
+
+    render(
+      <MemoryRouter initialEntries={['/grants/applications/new?opportunity_id=opp-123']}>
+        <GrantApplicationFormPage />
+      </MemoryRouter>
+    );
+
+    const select = await screen.findByLabelText<HTMLSelectElement>(/opportunity id/i);
+    expect(mockGetOpportunity).toHaveBeenCalledWith('opp-123');
+    expect(select.value).toBe('opp-123');
   });
 });
