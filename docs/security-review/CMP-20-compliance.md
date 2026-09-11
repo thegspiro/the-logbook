@@ -365,16 +365,31 @@ later in this same PR, but for CI health, not a compliance finding:
 `frontend/src/pages/scheduling/board/PhoneMonth.tsx` (a one-line
 `opacity-45` → `opacity-65` port from open PR #2477, fixing a pre-existing,
 date-sensitive WCAG AA contrast failure already red on `main` before this
-PR branched — unrelated to the Compliance feature) and
-`frontend/src/e2e/mobile-accessibility.spec.ts` (recording the resulting
-AAA-only contrast node in `AAA_CONTRAST_BUDGET`, then widening it from a
-single day's measured count of 1 to the mathematical maximum of 6 once
-Codex correctly pointed out the count is calendar-dependent — see the
-`/scheduling` entries in that file for the full reasoning). Both are
-validated by the `Frontend E2E (Playwright)` CI job directly, not by a
-local run of the ~20-minute suite in this review session; the completion
-gate row below reflects what was actually run locally (typecheck, lint)
-versus what CI validates.
+PR branched — unrelated to the Compliance feature; `main` itself gained the
+identical fix via #2477 shortly after, merged into this branch as a
+same-content conflict) and `frontend/src/e2e/mobile-accessibility.spec.ts`
+(recording the resulting AAA-only contrast node in `AAA_CONTRAST_BUDGET`).
+
+That budget went through two more corrections, both from Codex review, and
+both worth recording since they reverse each other: first widened from a
+single day's measured count of 1 to the mathematical maximum of 6, since
+`/scheduling` defaults to the week view and the count of dimmed prior days
+is calendar-dependent (0 Sunday, up to 6 Saturday) — then Codex correctly
+pointed out that a wide budget defeats the ratchet on every day but the
+worst one (a Sunday run has 0 real findings and 6 slots of unused headroom
+for an unrelated regression to hide in). Fixed properly: the test now
+freezes `/scheduling`'s render to a fixed Monday via
+`page.clock.setFixedTime()` (reset to a fresh real timestamp right after
+this route's own iteration, so no other route inherits the frozen date —
+Playwright's Clock API has no explicit "uninstall"), making exactly one
+dimmed prior day (Sunday) deterministic on every run. The budget is back to
+1, this time reproducible rather than a single day's measurement — see the
+`/scheduling` entry's own comment in that file for the full reasoning.
+
+Both frontend files are validated by the `Frontend E2E (Playwright)` CI job
+directly, not by a local run of the ~20-minute suite in this review
+session; the completion gate row below reflects what was actually run
+locally (typecheck, lint) versus what CI validates.
 
 **One environment wrinkle, not a code finding:** this worktree initially had no
 `node_modules` of its own (only the base checkout's, five directories up), and
