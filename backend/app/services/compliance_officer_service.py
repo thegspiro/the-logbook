@@ -38,6 +38,7 @@ from app.models.user import User, UserStatus
 from app.services.training_compliance import (
     evaluate_member_requirement,
     get_org_include_current_month,
+    requirement_applies_to_member,
 )
 from app.services.training_waiver_service import fetch_org_waivers
 from app.utils.hours import hours_from_minutes, round_hours_exact
@@ -887,9 +888,26 @@ class AnnualComplianceReportService:
             hours = sum(r.hours_completed or 0 for r in user_year_records)
             total_hours += hours
 
+            # A requirement that doesn't apply to this member (by
+            # applies_to_all/required_membership_types/required_roles) is not
+            # in their denominator here either -- mirrors the identical fix
+            # applied to compute_org_compliance_pct and get_compliance_matrix
+            # (see requirement_applies_to_member's docstring). Without this,
+            # a member holding a requirement never meant to apply to them
+            # (e.g. an "officers only" cert) was graded against it anyway,
+            # almost always as unmet, understating both this member's and
+            # the org-wide compliance percentage this report exists to state
+            # authoritatively.
+            member_membership_type = member.membership_type or "active"
+            applicable_reqs = [
+                req
+                for req in requirements
+                if requirement_applies_to_member(req, member_membership_type)
+            ]
+
             met_count = 0
-            req_total = len(requirements)
-            for req in requirements:
+            req_total = len(applicable_reqs)
+            for req in applicable_reqs:
                 status, _, _ = evaluate_member_requirement(
                     req,
                     user_records,
@@ -966,7 +984,19 @@ class AnnualComplianceReportService:
         requirement_analysis: List[Dict[str, Any]] = []
         for req in requirements:
             req_compliant = 0
-            for member in members:
+            # Same applicability filter as the member loop above: a
+            # requirement's own "members_total" must be the members it
+            # actually applies to, not the org's whole active roster, or an
+            # "officers only" requirement's percentage is diluted by every
+            # member it was never meant to grade.
+            applicable_members = [
+                member
+                for member in members
+                if requirement_applies_to_member(
+                    req, member.membership_type or "active"
+                )
+            ]
+            for member in applicable_members:
                 user_records = records_by_user.get(member.id, [])
                 user_waivers = waivers_by_user.get(str(member.id), [])
                 status, _, _ = evaluate_member_requirement(
@@ -984,16 +1014,17 @@ class AnnualComplianceReportService:
                 if hasattr(req.requirement_type, "value")
                 else str(req.requirement_type)
             )
+            req_members_total = len(applicable_members)
             requirement_analysis.append(
                 {
                     "requirement_id": str(req.id),
                     "name": req.name,
                     "type": req_type,
                     "members_compliant": req_compliant,
-                    "members_total": total_members,
+                    "members_total": req_members_total,
                     "compliance_pct": (
-                        round(req_compliant / total_members * 100, 1)
-                        if total_members > 0
+                        round(req_compliant / req_members_total * 100, 1)
+                        if req_members_total > 0
                         else 0.0
                     ),
                 }

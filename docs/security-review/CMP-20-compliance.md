@@ -1,11 +1,159 @@
 # Security Review — Compliance
 
 **Prefix:** `CMP` · **Iteration:** 20 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-30 (pass 2), 2026-09-05 (pass 3) · **PR:** #1902 (pass 1, merged),
-[#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2, merged),
-pass 3 (this PR)
+2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4) · **PR:** #1902
+(pass 1, merged), [#2059](https://github.com/thegspiro/the-logbook/pull/2059)
+(pass 2, merged), #2245 (pass 3, merged), pass 4 (this PR)
 
-## Pass 3 (2026-09-05)
+## Pass 4 (2026-09-11)
+
+**Scope check.** Diffed the current tree against `062464a` (pass 3's merge
+commit, PR #2245) across all seven files pass 1-3 declared in scope. The six
+backend files (`compliance_config.py`, `compliance_officer.py`,
+`compliance_config_service.py`, `compliance_officer_service.py`, the model,
+the schema) are **byte-identical** to pass 3's merge — `git diff --stat` on
+all six returns no output. Two files did change:
+
+- `training_compliance.py` (+266/-52) — a substantial rewrite, but entirely
+  **Feature 17 (Training core)'s own pass 4** (PR #2455, merge commit
+  `569348ef2`, findings doc `docs/security-review/TR-17-training-core.md`),
+  not this rotation's. It extracts a shared `requirement_applies_to_member`
+  helper (`applies_to_all` / `required_membership_types` / `required_roles`,
+  matching `TrainingService.get_applicable_requirements`'s precedence) and
+  applies it to `compute_org_compliance_pct`, plus fixes a real bug in
+  `_find_matching_profile` — the compliance-profile matcher this feature owns
+  — where `role_ids` matching read a nonexistent `Position.role_id` (Position
+  has no such column) instead of `Position.id`, so **every** compliance
+  profile carrying `role_ids` silently matched no one. Re-verified both fixes
+  are intact and correct by direct code read; not re-flagged as new since
+  they're TR-17's fixes, not this pass's, and TR-17-training-core.md already
+  documents them. Confirmed this pass's own test run (`-k compliance`, 381
+  passed) exercises the now-fixed `_find_matching_profile` path without
+  regression.
+- `ComplianceRequirementsConfigPage.tsx` (+11/-7) — cosmetic only: an
+  unrelated `Breadcrumbs` rollout and a `green-600`→`green-700` contrast bump
+  on the "Generate Report" button (a one-off inline class, not the shared
+  `btn-success` utility CLAUDE.md's contrast note governs). No security or
+  correctness content.
+
+**New finding this pass** — see CMP4-1 below: `training_compliance.py`'s
+`requirement_applies_to_member` extraction states in its own docstring that it
+replaced four independent, incomplete reimplementations of the same
+applicability check. A fifth reimplementation, in this feature's own
+`compliance_officer_service.py`, was not one of the four TR-17 found or fixed.
+
+**Re-verified still open, unchanged:** CS-8 (attestation dual-control), CS-9
+(monthly windowing), CMP2-1 (notify settings stored/unread, "Not yet active"
+notice still present) — all in files confirmed byte-identical to pass 3, so
+nothing to re-derive beyond confirming that.
+
+**Route inventory re-enumerated** (fresh `grep` over both endpoint files, not
+a re-read of prior prose): `compliance_config.py` — 12 routes, all
+`Depends(require_permission(...))`; `compliance_officer.py` — 8 routes, all
+`Depends(require_permission(...))`. 20/20, unchanged from pass 1-3. No route
+relies on bare `get_current_user`. `get_contributed_hours`'s three-permission
+OR (`training.manage`/`reports.view`/`compliance.view`) is unchanged and
+remains the pass-1 design observation, not re-flagged. List endpoints
+(`GET /reports`, `GET /attestations`) are still bounded (`limit: ge=1, le=100`).
+CSV export (`export_annual_report`) still routes through `SafeCsvWriter`
+(Pitfall #15); report email still `html.escape()`s org name/type/period
+(CS-6). Org-scoping unchanged (byte-identical files) — every by-id
+read/update/delete still resolves through `current_user.organization_id`
+directly or via an org-scoped parent join; no compliance-officer endpoint
+takes a target member id.
+
+### CMP4-1 — MED — `generate_annual_report` graded every member against every requirement, ignoring `applies_to_all`/`required_membership_types`/`required_roles` — ✅ FIXED
+
+**What:** `AnnualComplianceReportService.generate_annual_report`
+(`compliance_officer_service.py`) has two loops that each independently
+reimplement "which requirements count for this member" without the
+applicability check `requirement_applies_to_member` exists to centralize
+(see that helper's own docstring, added this cycle by TR-17 pass 4, which
+names four other call sites it replaced — this file's annual report was a
+fifth, uncaught reimplementation):
+
+- The per-member loop built `req_total = len(requirements)` from **every**
+  active org requirement, regardless of whether that requirement's
+  `applies_to_all`/`required_membership_types`/`required_roles` actually
+  named the member being graded.
+- The "Requirement Analysis" loop computed each requirement's
+  `members_compliant / members_total` against `total_members` — the org's
+  entire active roster — rather than the subset of members the requirement
+  applies to.
+
+**Where:** `app/services/compliance_officer_service.py:882-919` (member loop,
+was `:882-905`), `:983-1030` (requirement-analysis loop, was `:965-1000`).
+
+**Failure scenario:** an "Officer Continuing Education" requirement is scoped
+to `required_membership_types: ["officer"]`. A regular ("active") member is
+graded against it anyway — `evaluate_member_requirement` almost always
+returns `not_started` for a requirement the member was never asked to
+satisfy — so that member's own compliance percentage, and the org-wide
+percentage this annual report (and its ISO/grant-facing export) is built to
+state authoritatively, are both understated by a requirement that was never
+theirs to begin with. Separately, that same requirement's row in the
+"Requirement Analysis" section reports `members_compliant / total_members`
+(every active member, officer or not) instead of `members_compliant /
+<members actually scoped to it>`, diluting the percentage for any
+membership- or role-scoped requirement with every member outside its scope.
+Both numbers reach a compliance officer's annual report, its CSV export, and
+its emailed executive summary.
+
+**Fix:** both loops now filter through the same
+`requirement_applies_to_member` helper `training_compliance.py` already
+exports (membership-type check; `role_ids` intentionally omitted, matching
+`compute_org_compliance_pct`'s own call — the org query here doesn't eager-load
+`User.positions`, and adding that is a separate, larger change this fix
+doesn't need to make since no known requirement in this codebase is
+`required_roles`-only with no `required_membership_types` fallback). The
+per-member loop's `req_total`/`met_count` are now computed only over
+requirements applicable to that member; the requirement-analysis loop's
+`members_total`/`members_compliant` are computed only over members the
+requirement applies to. The zero-denominator fallback for a requirement that
+(rare edge case) currently applies to no active member is left at the
+pre-existing `0.0`, unchanged — redefining that as "not applicable" is a
+product-level display decision beyond this fix's scope.
+
+Guard test: `tests/test_annual_report_membership_scoped_requirements.py` (new)
+— a member outside a requirement's scope is graded against nothing
+(`requirements_total == 0`, `compliant`, pre-fix would have shown `0%`/
+`non_compliant`); the same setup with a member actually inside scope is still
+graded and still fails it (so the first assertion can't pass by excluding
+every requirement unconditionally); and the requirement-analysis row's
+`members_total` counts only the in-scope member, not every active member in
+the org.
+
+## Completion gate (pass 4)
+
+| Check                                                                                  | Result                                                                    |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                          | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                                                   | ✅ 1579 files unchanged                                                   |
+| `isort --check-only app/ tests/ alembic/`                                              | ✅ clean (`isort==9.0.1`, CI's pin, already installed)                    |
+| `python3 scripts/validate_migrations.py --strict`                                      | ✅ 443 revisions, single head `0533644945cd`                              |
+| `pytest tests/ -q -k "compliance"`                                                     | ✅ 381 passed, 1 skipped (pre-existing optional-dependency skip)          |
+| `pytest tests/ -q` (full backend suite, extra diligence — shared service file touched) | ✅ 12358 passed, 21 skipped (pre-existing Docker/no-MySQL/optional skips) |
+| `cd frontend && npm run typecheck`                                                     | ✅ 0 errors                                                               |
+| `cd frontend && npm run lint`                                                          | ✅ 0 errors, 0 warnings                                                   |
+
+No frontend file was modified this pass (`ComplianceRequirementsConfigPage.tsx`'s
+only diff since pass 3 is the unrelated cosmetic change noted above), so the
+frontend checks above are a clean-state confirmation, not a diff-driven fix.
+
+**One environment wrinkle, not a code finding:** this worktree initially had no
+`node_modules` of its own (only the base checkout's, five directories up), and
+under that state `npm run lint` reported 1,382 phantom
+`@typescript-eslint/no-unsafe-*` warnings across dozens of unrelated files —
+typescript-eslint's type-aware project service failing to resolve Node
+built-in types for every `*.test.ts(x)` file that imports `fs`/`path`/etc.
+`npm run typecheck` was unaffected (Node's own runtime module resolution
+walks up to the ancestor `node_modules` correctly; the TS "Project" build for
+ESLint's parser evidently did not). Running `npm ci` at the repo root
+(materializing `frontend/node_modules` and the root `node_modules` directly in
+this worktree, matching the committed lockfile exactly — no lockfile changes,
+confirmed via `git status`) resolved it completely: `npm run lint` came back
+clean. Recorded here rather than as a finding because it is a property of this
+review session's worktree layout, not of the reviewed code.
 
 Diff-scoped against pass 2's merge commit (`4931fbb54cb85fa30f0108cbe16f659ed47a6155`,
 PR #2059) rather than re-reading the whole surface. All four declared backend
