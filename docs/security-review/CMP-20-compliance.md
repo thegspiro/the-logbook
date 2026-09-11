@@ -3,7 +3,8 @@
 **Prefix:** `CMP` · **Iteration:** 20 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4) · **PR:** #1902
 (pass 1, merged), [#2059](https://github.com/thegspiro/the-logbook/pull/2059)
-(pass 2, merged), #2245 (pass 3, merged), pass 4 (this PR)
+(pass 2, merged), #2245 (pass 3, merged),
+[#2476](https://github.com/thegspiro/the-logbook/pull/2476) (pass 4)
 
 ## Pass 4 (2026-09-11)
 

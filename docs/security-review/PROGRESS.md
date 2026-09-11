@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 20 (Compliance), pass 4** — branch
-`claude/security-review-compliance`, PR pending creation this run (this
-section will be updated with the number once opened). Diff-scoped against
+**Feature 20 (Compliance), pass 4** — PR
+[#2476](https://github.com/thegspiro/the-logbook/pull/2476), branch
+`claude/security-review-compliance`. Diff-scoped against
 `062464a` (pass 3's merge, PR #2245): the six declared backend files are
 byte-identical to pass 3; `training_compliance.py` (shared, in this
 feature's declared scope) changed substantially but entirely under Feature
