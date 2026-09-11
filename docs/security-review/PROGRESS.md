@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 22 (Grants & fundraising), pass 4** — branch
-`claude/security-review-grants-fundraising`, PR pending creation.
+**Feature 22 (Grants & fundraising), pass 4** — PR
+[#2483](https://github.com/thegspiro/the-logbook/pull/2483), branch
+`claude/security-review-grants-fundraising`, tending.
 **Watchdog iteration:** PR #2482 closed out Feature 21 (Admin hours) at
 2026-09-11T08:40 UTC; by 10:46 UTC — over two hours later, past the
 ~90-minute stall threshold documented on Feature 19 (PR #2473) — no branch
