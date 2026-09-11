@@ -150,8 +150,10 @@ fourth, `required_positions` (`app/models/training.py:566-568`, "positions:
 probationary, driver_candidate, officer, aic, etc."), a JSON array of
 **position slugs** the training-program requirements API
 (`training_program_service.py:599-601`) already lets an admin populate on its
-own, independent of `required_roles` (which stores position _ids_, not
-slugs — see `training_compliance.py`'s own docstring). `requirement_applies_to_member`
+own — a third, distinct representation from both `required_roles` (which is
+itself stored as **rank slugs**, matched against `user.rank`; see CMP4-5
+below — not position ids, correcting this section's own earlier draft) and
+`User.positions`/`roles` (position UUIDs). `requirement_applies_to_member`
 has no `required_positions` branch at all — it was never one of the three
 dimensions its docstring names — so a requirement scoped only through
 `required_positions` (`applies_to_all=False`, no `required_membership_types`,
