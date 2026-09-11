@@ -358,9 +358,23 @@ this pass, below, rather than a duplicate entry.
 | `cd frontend && npm run typecheck`                                                                                                                                                                                                                                  | ✅ 0 errors                                                                                                                                                   |
 | `cd frontend && npm run lint`                                                                                                                                                                                                                                       | ✅ 0 errors, 0 warnings                                                                                                                                       |
 
-No frontend file was modified this pass (`ComplianceRequirementsConfigPage.tsx`'s
-only diff since pass 3 is the unrelated cosmetic change noted above), so the
-frontend checks above are a clean-state confirmation, not a diff-driven fix.
+No frontend file was modified by CMP4-1 through CMP4-5 themselves
+(`ComplianceRequirementsConfigPage.tsx`'s only diff since pass 3 is the
+unrelated cosmetic change noted above). Two frontend files were touched
+later in this same PR, but for CI health, not a compliance finding:
+`frontend/src/pages/scheduling/board/PhoneMonth.tsx` (a one-line
+`opacity-45` → `opacity-65` port from open PR #2477, fixing a pre-existing,
+date-sensitive WCAG AA contrast failure already red on `main` before this
+PR branched — unrelated to the Compliance feature) and
+`frontend/src/e2e/mobile-accessibility.spec.ts` (recording the resulting
+AAA-only contrast node in `AAA_CONTRAST_BUDGET`, then widening it from a
+single day's measured count of 1 to the mathematical maximum of 6 once
+Codex correctly pointed out the count is calendar-dependent — see the
+`/scheduling` entries in that file for the full reasoning). Both are
+validated by the `Frontend E2E (Playwright)` CI job directly, not by a
+local run of the ~20-minute suite in this review session; the completion
+gate row below reflects what was actually run locally (typecheck, lint)
+versus what CI validates.
 
 **One environment wrinkle, not a code finding:** this worktree initially had no
 `node_modules` of its own (only the base checkout's, five directories up), and
