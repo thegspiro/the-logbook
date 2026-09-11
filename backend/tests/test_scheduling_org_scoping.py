@@ -353,10 +353,12 @@ class TestShiftCallRespondingMembersScoping:
 
     async def test_update_rejects_foreign_responding_member(self):
         call = SimpleNamespace(id="c1", organization_id="org-1")
+        org = SimpleNamespace(id="org-1", settings={})
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[
                 _one(call),  # get_shift_call_by_id
+                _one(org),  # CallTrackingService.get_settings -> _get_org
                 _scalars([]),  # _all_users_in_org -> none found, foreign
             ]
         )
@@ -371,10 +373,12 @@ class TestShiftCallRespondingMembersScoping:
         """One valid id and one foreign id must still reject the whole call
         — a batched query has to compare the full set, not just non-empty."""
         call = SimpleNamespace(id="c1", organization_id="org-1")
+        org = SimpleNamespace(id="org-1", settings={})
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[
                 _one(call),  # get_shift_call_by_id
+                _one(org),  # CallTrackingService.get_settings -> _get_org
                 _scalars(["u1"]),  # only u1 found; uFOREIGN is not
             ]
         )
