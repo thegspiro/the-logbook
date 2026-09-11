@@ -211,37 +211,55 @@ that were an artifact of the worktree layout, not the code). Rotation row
 ### 2026-09-11 — Feature 21 (Admin hours), pass 4 — 0 fixes, 0 flagged
 
 Diff-scoped against `4ba836420` (pass 3's merge commit, PR #2247), verified
-via `git merge-base --is-ancestor` rather than assumed — this environment's
-clone was not shallow, so the check succeeded directly. Scope covered all
-four backend files, the full 26-file frontend module plus all 6 outside
-consumers, and all 4 external backend callers of `admin_hours_service`
-(`training_session_service.py`, `scheduled_tasks.py`, `event_service.py`,
-`nfc_tag_service.py`).
+via `git merge-base --is-ancestor` — the first check failed against this
+session's initial shallow clone; `git fetch --unshallow` succeeded (itself
+evidence the clone had been shallow, since that command errors on an
+already-complete repo), and only then did the check succeed. Scope covered
+all four backend files, the full 26-file frontend module plus all 6 direct
+outside consumers, plus every _indirect_ frontend consumer and every
+_direct-model_ backend caller found by widening the sweep past
+service-import greps, plus all 4 external backend callers of
+`admin_hours_service` (`training_session_service.py`, `scheduled_tasks.py`,
+`event_service.py`, `nfc_tag_service.py`), plus a migration-content sweep
+(not just chain hygiene) of the 45 migration files changed since pass 3.
 
-**Zero backend diff** — all four backend files (endpoint, service, model,
-schema) are byte-identical to pass 3. Eight frontend files changed, all
-cosmetic (aria-labels, two contrast-token bumps, a `Breadcrumbs` rollout,
-an inventory-tile relabeling on `Dashboard.tsx` unrelated to its
-admin-hours summary card) — none touch admin-hours logic, verified by
-reading each diff directly. `event_service.py` and `scheduled_tasks.py`
-both changed since pass 3 (an RSVP waitlist fix and an inactive-org message
-filter, respectively) but neither diff's line range overlaps either file's
-admin-hours call sites, checked by line number.
+**Zero backend diff, zero admin-hours-behavioral frontend diff.** All four
+backend files (endpoint, service, model, schema) are byte-identical to
+pass 3. Eight frontend files changed; two are real functional changes in
+adjacent features (a `Breadcrumbs` navigation rollout, and `Dashboard.tsx`'s
+inventory-tile count changing from a quantity sum to a row count) — neither
+touches admin-hours logic, but neither is merely cosmetic either, and both
+are recorded as such rather than folded into "all cosmetic." `event_service.py`
+and `scheduled_tasks.py` both changed since pass 3 (an RSVP waitlist fix and
+two unrelated changes — an inactive-org message filter and a call-type
+label resolution) but neither diff's line range overlaps either file's
+admin-hours call sites, checked by line number; same result for the three
+direct-model backend consumers found by widening the caller sweep
+(`reports_service.py`, `dashboard.py`, `compliance_officer_service.py`) that
+changed since pass 3. None of the 45 changed migration files reference
+`admin_hours`/`AdminHours` (grepped by content, not filename).
 
 Spot-verified every fix from passes 1-3 (AH-7 through AH-14, AH21-1 through
-AH21-4, and pass 3's 8 Codex-driven fixes, including all locking sites and
-the quarterly-compliance rejection) still present at its current line by
-direct grep. Route inventory re-enumerated mechanically: 27/27, unchanged,
-one uniform permission string. Both deliberate "confirmed still open"
-product-decision items (unconditional SoD guard, resync growth without
-re-review) re-confirmed unchanged; cross-referenced in
-`docs/KNOWN_LIMITATIONS.md`.
+AH21-4, and pass 3's 8 Codex-driven fixes) still present at its current
+line by direct grep — 11 `with_for_update()` sites (corrected from an
+initial miscount of 12), including the quarterly-compliance rejection.
+Route inventory re-enumerated mechanically: 27/27, unchanged, one uniform
+permission string. Both deliberate "confirmed still open" product-decision
+items (unconditional SoD guard, resync growth without re-review)
+re-confirmed unchanged; cross-referenced in `docs/KNOWN_LIMITATIONS.md`.
 
 **Completion gate:** `flake8`/`black --check`/`isort --check-only` clean;
 `validate_migrations.py --strict` 443 revisions, single head; `pytest -k
 admin_hours` 88 passed, 1 pre-existing skip; `npm run typecheck` 0 errors;
-`npm run lint` 0 errors/0 warnings. No code changed — passes 1-3's existing
-guard-test suite is the coverage re-confirmed, not new coverage added.
+`npm run lint` 0 errors/0 warnings; `vitest run` against the module's 4
+guard-test files, 53 passed. No code changed — passes 1-3's existing
+guard-test suite is the coverage re-confirmed, not new coverage added. Two
+Codex review rounds on this PR caught 14 accuracy issues in the findings
+doc across both commits (miscounted/mislabeled lock sites, an impossible
+git chronology, "cosmetic" mischaracterizing two real functional changes,
+an incomplete caller inventory on both frontend and backend, an unrun
+frontend-test claim, and a missing migration-content sweep) — all verified
+and fixed; none changed the pass's zero-fixes/zero-flagged conclusion.
 Full write-up: `docs/security-review/AH-21-admin-hours.md` → Pass 4. PR
 opened and subscribed. Next: 22 Grants & fundraising, once this PR merges.
 

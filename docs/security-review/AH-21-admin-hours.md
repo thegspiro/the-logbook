@@ -30,18 +30,38 @@ git diff --stat 4ba836420..HEAD -- \
 
 **All four backend files (endpoint, service, model, schema) are
 byte-identical to pass 3's merge — zero backend diff.** Eight frontend files
-changed; none touch admin-hours logic, but one is a real, unrelated
-functional change rather than cosmetic, and this pass's first draft
-mislabeled it (caught by Codex review) — corrected here: `aria-label`
-additions on two filter `<select>`s (`AllEntriesTab.tsx`, `AdminHoursPage.tsx`),
-a contrast-token bump on two badges (`AdminHoursManagePage.tsx`,
-`bg-blue-500`→`bg-blue-600` and `bg-red-500`→`bg-red-800`), a `Breadcrumbs`
-rollout on `CheckInStationPage.tsx` and `ComplianceRequirementsConfigPage.tsx`
-(navigation chrome, verified the admin-hours-reading code path on each page
-is untouched by reading both diffs directly), and single-line contrast bumps
-on `MemberProfilePage.tsx`'s photo-remove button and
-`HourTrackingSection.tsx`'s add-mapping button (both outside any admin-hours
-data path) — all cosmetic. **`Dashboard.tsx` is not:** alongside a
+changed; none touch admin-hours _logic_ (no data-fetching, validation, or
+write-path code changed), but two are real behavioral changes rather than
+cosmetic chrome, and this pass's first draft mislabeled both (caught by
+Codex review across two rounds) — corrected here:
+
+- `aria-label` additions on **four** filter `<select>`s, not two (both the
+  status and category selects in each of `AllEntriesTab.tsx` and
+  `AdminHoursPage.tsx`) — genuinely cosmetic (an accessibility label, no
+  behavior change).
+- A contrast-token bump on two badges (`AdminHoursManagePage.tsx`,
+  `bg-blue-500`→`bg-blue-600` and `bg-red-500`→`bg-red-800`) — cosmetic.
+- Single-line contrast bumps on `MemberProfilePage.tsx`'s photo-remove
+  button — cosmetic. **`HourTrackingSection.tsx`'s add-mapping button is
+  not** the "outside any admin-hours data path" case the first draft
+  claimed: the button's `onClick` invokes `handleAddMapping()`, which calls
+  `eventHourMappingService.create(...)` — a real admin-hours write path
+  (`create_event_hour_mapping`, AH-11's percentage-locking fix). The diff
+  itself only changes the button's class name; it leaves that existing
+  write path unchanged rather than sitting outside it, which is the
+  accurate claim.
+- A `Breadcrumbs` rollout on `CheckInStationPage.tsx` and
+  `ComplianceRequirementsConfigPage.tsx` is **not cosmetic either**:
+  `Breadcrumbs` renders real `<Link>` navigation (a Home crumb and, via its
+  `underHub` prop, a conditional link to the relevant administration hub,
+  gated by a live permission check) — new navigation behavior, even though
+  it changes no admin-hours data handling. Verified the admin-hours-reading
+  code path on each page (the category list read on `CheckInStationPage.tsx`,
+  the read-only requirement config on `ComplianceRequirementsConfigPage.tsx`)
+  is untouched by reading both diffs directly — inspected, unrelated
+  UI-navigation drift, not a cosmetic label.
+
+**`Dashboard.tsx` is functional drift too, in a third way:** alongside a
 `<main>`→`<div data-page-main>` semantic-landmark change (cosmetic), its
 inventory tile's issued-gear count changed from
 `data.issued_items.reduce((total, item) => total + item.quantity_issued,
@@ -53,9 +73,15 @@ counting quantity). This is inventory-feature drift, not admin-hours
 drift — the admin-hours summary card on the same page (the
 `getSummary({ userId: currentUser?.id })` call and the `reportingRange.ts`
 UTC-day-bounds helper pass 3 reviewed) is unchanged, confirmed by reading
-the diff — but it is inspected, unrelated functional drift, not a cosmetic
-change, and this pass's "zero drift" conclusion is about admin-hours scope
-specifically, not a claim that nothing in the diff has behavioral effect.
+the diff.
+
+None of these three (the mapping button's unchanged write path, the
+Breadcrumbs navigation rollout, or the Dashboard inventory count) touch
+admin-hours _logic_ — but "zero drift" in this pass's conclusion means
+zero drift in admin-hours behavior specifically, not that nothing in the
+diff has any behavioral effect. Two of the three are real functional
+changes in adjacent features, correctly out of this pass's fix-or-flag
+scope but wrongly folded into "all cosmetic" by the first draft.
 
 **Checked external backend callers too, not only the module's own files.**
 `grep -rln "admin_hours_service\|AdminHoursService\|from app.services.admin_hours"`
@@ -82,21 +108,94 @@ type_labels` call) — unrelated to `run_admin_hours_auto_close` (the AH-2
 caller, defined at line 5837, referenced at 388/6006/6055), and outside
 both of `scheduled_tasks.py`'s changed hunks (2677-2690 and 3517-3995).
 
+**The caller sweep above only found services that import `AdminHoursService`
+or `admin_hours_service` — too narrow, the same class of gap as the
+frontend consumer sweep (caught by Codex review):** several backend paths
+read admin-hours data by querying `AdminHoursEntry`/`AdminHoursCategory`
+directly, never going through the service at all.
+`grep -rln "AdminHoursEntry\|AdminHoursCategory" app/` outside the module's
+own two files and the already-checked `event_service.py` finds five:
+`reports_service.py`, `dashboard.py` (endpoint),
+`compliance_officer_service.py`, `compliance_config_service.py`,
+`data_export_service.py`. `compliance_config_service.py` and
+`data_export_service.py` have zero diff since `4ba836420`. The other three
+changed — verified by line number, not by the commit message, the same
+method used above:
+
+- `reports_service.py`'s diff (five hunks, lines 1281-1450ish) is entirely
+  the same call-type label-resolution feature found in `scheduled_tasks.py`
+  above (a new `CallTrackingService.type_labels` import and its use in
+  `_generate_shift_reports`) — `_generate_admin_hours`, the method that
+  actually queries `AdminHoursEntry`, starts well past line 1700, outside
+  every changed hunk.
+- `dashboard.py`'s diff (one hunk, lines 226-256, `get_asset_widgets`) is
+  unrelated inventory-widget code — its `AdminHoursEntry` query (the
+  pending-count widget) is at line 827+, outside the changed hunk.
+- `compliance_officer_service.py`'s diff (four hunks, lines 813-1024) is
+  this rotation's own Feature 20 (Compliance) pass 4 fix
+  (`generate_annual_report`'s applicability filter, PR #2476) — its
+  `AdminHoursEntry` query (a member's approved-hours sum) is at line 707,
+  before every changed hunk.
+
+None of the three changed files' diffs overlap their own admin-hours query
+lines. This closes the gap the caller sweep above left open: every path
+that reads `AdminHoursEntry`/`AdminHoursCategory`, service-mediated or
+direct, is now accounted for.
+
+**Migration content, not just chain hygiene, checked against the declared
+scope** (CHECKLIST.md's schema-and-migration dimension — `validate_migrations.py
+--strict` only proves a single head with no duplicate revisions, it says
+nothing about what a migration touches). `git diff --stat 4ba836420..HEAD --
+backend/alembic/versions/` shows 45 changed migration files. Grepped every
+one of the 45 for `admin_hours`/`AdminHours` (case-insensitive, content not
+filename): zero matches. No migration in this pass's scope touches an
+admin-hours table, column, or seeded grant — the zero-backend-diff
+conclusion extends to the schema layer too, not just the four application
+files.
+
 **Re-ran the frontend consumer sweep from scratch** (not trusting pass 2/3's
 recorded list): `grep -rln "admin-hours/services/api\|adminHoursService\|AdminHours"
 frontend/src`, excluding the module itself and `.test.` files, returns 13
 matches. Seven are the six already-tracked outside consumers plus
-`App.tsx` (route registration only, `getAdminHoursRoutes()`). The other six
-(`modules/reports/types/index.ts`, `modules/reports/components/renderers/index.ts`,
-`modules/reports/components/renderers/AdminHoursRenderer.tsx`,
-`modules/reports/pages/ReportsPage.tsx`, `types/training.ts`,
-`constants/nfc.ts`) were individually grepped for an actual import of the
-module's service (`admin-hours/services/api`, `adminHoursService`, or `from
-... admin-hours`) — zero matches in all six; the string match was on the
-name "AdminHours" alone (the reports feature's own, unrelated
-`AdminHoursReport`/`AdminHoursRenderer` type, matching pass 2's AH21-2
-finding that this file does not import the module). No new consumer found;
-the 6-file list from pass 2/3 remains complete.
+`App.tsx` (route registration only, `getAdminHoursRoutes()`). **The first
+draft dismissed the other six as non-consumers because none imports the
+module's service directly — too narrow a test (caught by Codex review):**
+a page can consume admin-hours behavior indirectly, through a shared report
+pipeline or a URL contract, without ever importing
+`admin-hours/services/api`. Inspected each of the six on that basis:
+
+- `modules/reports/components/renderers/AdminHoursRenderer.tsx` renders the
+  `AdminHoursReport` shape the **reports endpoint** returns (a separate
+  data path from the module's own service, matching pass 2's AH21-2
+  finding) — a real, indirect consumer, just not one reachable through the
+  module's service exports. Zero diff since `4ba836420`.
+- `modules/reports/pages/ReportsPage.tsx` maps a report category to
+  `AdminHoursRenderer` and, like every other category, drives it through a
+  shared category-button row and a shared custom-date-range control — **and
+  this file changed** (a `btn-md`/`btn-sm` class-utility swap and a
+  mobile-layout fix widening the date inputs to fill the row on narrow
+  screens, both applied identically to every report category, not an
+  admin-hours-specific hunk). Read the diff directly: it touches only
+  shared button/date-input styling, nothing that branches on report type or
+  changes what data is requested — no admin-hours-specific behavior change.
+- `modules/reports/types/index.ts` and
+  `modules/reports/components/renderers/index.ts` are the type/barrel files
+  behind the renderer above — zero diff since `4ba836420`.
+- `types/training.ts`'s "AdminHours" match is the unrelated
+  `AdminHoursComplianceItem`/training-compliance shape, not this module —
+  zero diff since `4ba836420`.
+- `constants/nfc.ts` builds/parses the `/admin-hours/{categoryId}/clock-in`
+  URL that `AdminHoursQRCodePage.tsx` encodes onto a physical NFC tag and
+  that `nfc_tag_service.py` (an already-checked external backend caller,
+  zero diff) resolves on scan — a real, indirect consumer via a URL
+  contract rather than a service import. Zero diff since `4ba836420`.
+
+All six are genuine or namesake matches, correctly distinguished; only one
+(`ReportsPage.tsx`) changed, and its change doesn't touch admin-hours
+behavior. No new admin-hours-behavioral finding; the 6-file
+directly-imports list from pass 2/3 is still accurate for what it claims
+(direct service imports), it just isn't the complete set of _indirect_
+consumers, which is now recorded above instead of asserted away.
 
 **Spot-verified every backend fix from passes 1-3 is still present at its
 current line**, by direct grep against the file content (not inferred from
@@ -147,22 +246,26 @@ silence.
 
 ## Completion gate (pass 4)
 
-| Check                                             | Result                             |
-| ------------------------------------------------- | ---------------------------------- |
-| `flake8 app/ tests/ alembic/`                     | clean (0 violations)               |
-| `black --check app/ tests/ alembic/`              | clean                              |
-| `isort --check-only app/ tests/ alembic/`         | clean (isort, CI's pinned version) |
-| `python3 scripts/validate_migrations.py --strict` | PASSED — single head               |
-| backend tests, scope (`-k "admin_hours"`)         | 88 passed, 1 pre-existing skip     |
-| `npm run typecheck` (frontend)                    | 0 errors                           |
-| `npm run lint` (frontend)                         | 0 errors, 0 warnings               |
+| Check                                                                                                                        | Result                             |
+| ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                | clean (0 violations)               |
+| `black --check app/ tests/ alembic/`                                                                                         | clean                              |
+| `isort --check-only app/ tests/ alembic/`                                                                                    | clean (isort, CI's pinned version) |
+| `python3 scripts/validate_migrations.py --strict`                                                                            | PASSED — single head               |
+| backend tests, scope (`-k "admin_hours"`)                                                                                    | 88 passed, 1 pre-existing skip     |
+| `npm run typecheck` (frontend)                                                                                               | 0 errors                           |
+| `npm run lint` (frontend)                                                                                                    | 0 errors, 0 warnings               |
+| `vitest run` — `entryTimes.test.ts`, `moduleFetchIntegrity.test.ts`, `createApiClient.test.ts`, `exportCsv.behavior.test.ts` | 4 files, 53 passed                 |
 
-No code changed this pass, so no new or updated guard tests — passes 1-3's
-existing suite (`tests/test_admin_hours_service.py`,
-`moduleFetchIntegrity.test.ts`, `entryTimes.test.ts`,
-`createApiClient.test.ts`'s blob-error block, `exportCsv.behavior.test.ts`)
-is the coverage this pass re-confirmed still passes, not new coverage this
-pass added.
+**Correction (Codex review on this pass's own second commit):** the first
+two drafts claimed passes 1-3's frontend guard-test suite was
+"re-confirmed still passing," but the recorded gate only ran `npm run
+typecheck`/`npm run lint` — neither executes Vitest, so that claim
+described a validation that was never performed. Actually run above
+(`npx vitest run` against the four files pass 3's own guard tests live in):
+4 files, 53 tests, all pass. No code changed this pass, so these are not
+new tests — passes 1-3's existing suite, now genuinely re-confirmed rather
+than assumed from an unrelated command's exit code.
 
 ---
 
