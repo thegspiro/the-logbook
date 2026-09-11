@@ -126,12 +126,23 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // severity badges already sit. Call sites are held to AA by policy.
   '/admin/audit-log': 2,
   '/events/1/monitoring': 1,
-  // The past-day date in the phone month grid. Raised from opacity-45
-  // (2.92:1, AA-failing once the calendar rolled a date into the dimmed
-  // state) to opacity-65 (5.57:1) to clear AA — which moved it into this
-  // AAA-only count, the same move the audit log's amber-800 badges made
-  // three entries above. Call sites are held to AA by policy.
-  '/scheduling': 1,
+  // The past-day date in the phone week view (PhoneMonth.tsx, `today` is
+  // real wall-clock time, not mocked). Raised from opacity-45 (2.92:1,
+  // AA-failing once the calendar rolled a date into the dimmed state) to
+  // opacity-65 (5.57:1) to clear AA — which moved it into this AAA-only
+  // count, the same move the audit log's amber-800 badges made three
+  // entries above.
+  //
+  // This route defaults to the week view (`SchedulingPage`'s `viewMode`),
+  // and `weekDates()` snaps to the calendar Sunday-Saturday week
+  // containing today, so the number of prior (dimmed) days in view is
+  // calendar-dependent: 0 on a Sunday, up to 6 on a Saturday. A tight
+  // budget measured on one CI run would fail on a different day of the
+  // week, so this is set to the mathematical maximum (today itself is
+  // never dimmed, so at most 6 of the other 6 days in its week can be)
+  // rather than the day-of-week-specific count any single run measures.
+  // Call sites are held to AA by policy.
+  '/scheduling': 6,
   '/scheduling/admin/closeout': 5,
   '/admin-hours': 2,
   '/notifications?tab=inbox': 3,

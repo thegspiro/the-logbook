@@ -57,8 +57,10 @@ four more findings before this one — triaged, none merged as code changes:
   added a cross-reference from TR4-4 to this pass instead of a duplicate
   entry.
 - **CMP4-2 (MED, FLAGGED)** — `required_positions` is a fourth, unhandled
-  applicability dimension on `TrainingRequirement` (position _slugs_,
-  distinct from `required_roles`'s position _ids_) that
+  applicability dimension on `TrainingRequirement` (position _slugs_, a
+  third representation distinct from both `required_roles` (itself rank
+  _slugs_, matched against `user.rank` — not position ids; see CMP4-5)
+  and `User.positions`/`roles` (position UUIDs)) that
   `requirement_applies_to_member` has never handled, in any of its five
   callers including this pass's two. Pre-existing gap in shared
   Feature-17-owned infrastructure; flagged for a cross-feature fix rather
