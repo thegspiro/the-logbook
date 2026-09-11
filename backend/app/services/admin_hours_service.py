@@ -1534,7 +1534,23 @@ class AdminHoursService:
         if not mapping:
             raise ValueError("Mapping not found")
 
-        if percentage is not None:
+        # An inactive-to-active transition is a percentage change in
+        # everything but name: it adds this mapping's percentage back onto
+        # the source's active total exactly as a fresh `percentage=` write
+        # would. Validating only when the caller passed `percentage`
+        # let a manager deactivate a 100% mapping, create a second 100%
+        # mapping for the same source (the now-inactive first mapping no
+        # longer counts toward `create_event_hour_mapping`'s own total), then
+        # reactivate the first with a bare `{"is_active": true}` — no
+        # `percentage` in that payload, so this method skipped the lock and
+        # total check entirely and the source ended up with two active 100%
+        # mappings, crediting 200% of an attendee's duration across
+        # categories at finalization (Codex review, this PR).
+        reactivating = is_active is True and not mapping.is_active
+        if percentage is not None or reactivating:
+            effective_percentage = (
+                percentage if percentage is not None else mapping.percentage
+            )
             # Lock the complete set of mappings for this source — including
             # the target row itself — in one query, ordered consistently by
             # id, before reading or writing any of them. Locking only the
@@ -1569,13 +1585,14 @@ class AdminHoursService:
                 for m in source_mappings
                 if m.id != mapping_id and m.is_active
             )
-            if other_total + percentage > 100:
+            if other_total + effective_percentage > 100:
                 raise ValueError(
-                    f"Total percentage would be {other_total + percentage}%. "
+                    f"Total percentage would be {other_total + effective_percentage}%. "
                     f"Maximum is 100% (currently {other_total}% allocated "
                     f"by other mappings)."
                 )
-            mapping.percentage = percentage
+            if percentage is not None:
+                mapping.percentage = percentage
 
         if is_active is not None:
             mapping.is_active = is_active

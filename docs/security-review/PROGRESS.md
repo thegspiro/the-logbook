@@ -18,6 +18,31 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 21 (Admin hours), pass 4** — PR
 [#2481](https://github.com/thegspiro/the-logbook/pull/2481), branch
+`claude/security-review-admin-hours`, tending. The declared-scope diff
+against pass 3's merge commit (`4ba836420`, PR #2247) found zero backend
+diff and only cosmetic/unrelated frontend drift, as the superseded note
+below describes — but a fourth Codex review round, on code this pass
+re-verified directly rather than the diff, caught a real **P1 bug**:
+`update_event_hour_mapping` skipped its entire percentage-lock-and-validate
+block on a bare `{"is_active": true}` reactivation (no `percentage` in the
+payload), letting a manager deactivate a 100% event-hour mapping, create a
+second 100% mapping for the same source, then reactivate the first —
+leaving two active 100% mappings crediting 200% of an attendee's duration
+at event finalization. **Fixed:** the lock-and-validate block now also
+runs on an inactive→active transition, using the mapping's existing
+percentage when the caller didn't send a new one; deactivation and a
+no-op reactivate-when-already-active still skip it. 3 new guard tests.
+Also **flagged** (carried forward from pass 2, never previously tracked):
+`export_entries_csv` remains unbounded/non-streaming, same shape as two
+sibling exports — needs a shared page-size/streaming decision, not a
+drive-by fix. **1 fixed (P1), 1 flagged.** Full write-up:
+`docs/security-review/AH-21-admin-hours.md` → Pass 4.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 4, before the fourth Codex round found AH-15/AH-16), preserved for history</summary>
+
+**Feature 21 (Admin hours), pass 4** — PR
+[#2481](https://github.com/thegspiro/the-logbook/pull/2481), branch
 `claude/security-review-admin-hours`, tending. Diff-scoped
 against pass 3's merge commit (`4ba836420`, PR #2247) across the full
 declared scope (all four backend files, the 26-file frontend module, all 6
@@ -31,6 +56,8 @@ direct grep, not inferred from the diff's silence. Route inventory
 re-enumerated mechanically: 27/27, unchanged. **0 fixes, 0 flagged.** Full
 write-up:
 `docs/security-review/AH-21-admin-hours.md` → Pass 4.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2476's merge, Feature 20 pass 4), preserved for history</summary>
@@ -208,7 +235,7 @@ that were an artifact of the worktree layout, not the code). Rotation row
 
 </details>
 
-### 2026-09-11 — Feature 21 (Admin hours), pass 4 — 0 fixes, 0 flagged
+### 2026-09-11 — Feature 21 (Admin hours), pass 4 — 1 fixed (P1), 1 flagged
 
 Diff-scoped against `4ba836420` (pass 3's merge commit, PR #2247), verified
 via `git merge-base --is-ancestor` — the first check failed against this
@@ -248,20 +275,44 @@ permission string. Both deliberate "confirmed still open" product-decision
 items (unconditional SoD guard, resync growth without re-review)
 re-confirmed unchanged; cross-referenced in `docs/KNOWN_LIMITATIONS.md`.
 
+**A fourth Codex review round, on code re-read directly rather than the
+diff, caught a real bug the "zero drift" framing above had no way to
+surface: AH-15 (P1, FIXED)** — `update_event_hour_mapping` ran its
+percentage-lock-and-validate block only when the caller passed
+`percentage`. A bare `{"is_active": true}` reactivation (a payload the
+schema explicitly allows) skipped it entirely: deactivate a 100%
+event-hour mapping, create a second 100% mapping for the same source (the
+first no longer counts toward the total while inactive), reactivate the
+first — two active 100% mappings, 200% of an attendee's duration credited
+at event finalization. Fixed by running the same lock-and-validate check
+on an inactive→active transition, using the mapping's existing percentage
+when none was sent; deactivation and a no-op reactivate stay cheap. 3 new
+guard tests (`test_reactivation_is_a_locking_read`,
+`test_reactivation_rejects_when_total_would_exceed_100`,
+`test_deactivation_skips_the_locking_check`). **AH-16 (MED, FLAGGED,
+carried forward)** — `export_entries_csv` remains unbounded/non-streaming,
+known since pass 2 but never previously tracked in this file or
+`docs/KNOWN_LIMITATIONS.md`; needs a page-size/streaming decision shared
+with two sibling exports, not a drive-by fix.
+
 **Completion gate:** `flake8`/`black --check`/`isort --check-only` clean;
 `validate_migrations.py --strict` 443 revisions, single head; `pytest -k
-admin_hours` 88 passed, 1 pre-existing skip; `npm run typecheck` 0 errors;
-`npm run lint` 0 errors/0 warnings; `vitest run` against the module's 4
-guard-test files, 53 passed. No code changed — passes 1-3's existing
-guard-test suite is the coverage re-confirmed, not new coverage added. Two
-Codex review rounds on this PR caught 14 accuracy issues in the findings
-doc across both commits (miscounted/mislabeled lock sites, an impossible
-git chronology, "cosmetic" mischaracterizing two real functional changes,
-an incomplete caller inventory on both frontend and backend, an unrun
-frontend-test claim, and a missing migration-content sweep) — all verified
-and fixed; none changed the pass's zero-fixes/zero-flagged conclusion.
-Full write-up: `docs/security-review/AH-21-admin-hours.md` → Pass 4. PR
-opened and subscribed. Next: 22 Grants & fundraising, once this PR merges.
+admin_hours` 91 passed (88 + 3 new), 1 pre-existing skip; full backend
+suite 12364 passed, 21 pre-existing skips (AH-15 touches a shared locking
+pattern — extra diligence); `npm run typecheck` 0 errors; `npm run lint` 0
+errors/0 warnings; `vitest run` against the module's 4 guard-test files
+plus `apiCache.test.ts` (found by widening the frontend consumer sweep),
+53 + 89 passed. Four Codex review rounds on this PR caught 17 accuracy
+issues in the findings doc across three doc-only commits (miscounted/
+mislabeled lock sites, an impossible git chronology, "cosmetic"
+mischaracterizing real functional changes, an incomplete caller inventory
+on both frontend and backend across two further rounds, an unrun
+frontend-test claim, a missing migration-content sweep that itself missed
+a second table name, and a wrong same-feature attribution) — all verified
+and fixed before the fourth round's own code-level finding (AH-15) landed
+the pass's actual fix. Full write-up: `docs/security-review/AH-21-admin-hours.md`
+→ Pass 4. PR opened and subscribed. Next: 22 Grants & fundraising, once
+this PR merges.
 
 ---
 

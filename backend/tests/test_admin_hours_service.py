@@ -1083,6 +1083,120 @@ class TestEventHourMappingPercentageLocking:
         ), "the target's own id must not be excluded from the locked set"
         assert "ORDER BY" in str(locking_query).upper()
 
+    async def test_reactivation_is_a_locking_read(self):
+        """A bare {"is_active": true} with no percentage must still lock
+        and validate the source total — the omitted percentage argument
+        used to skip the whole check entirely (Codex review, this PR)."""
+        mapping = SimpleNamespace(
+            id="map-1",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=100,
+            is_active=False,
+        )
+        captured = []
+
+        def _scalars(items):
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = items
+            return r
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                return _one(mapping)
+            return _scalars([mapping])
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        await AdminHoursService(db).update_event_hour_mapping(
+            mapping_id="map-1", organization_id="org-1", is_active=True
+        )
+
+        assert "FOR UPDATE" in str(captured[-1])
+        assert mapping.is_active is True
+
+    async def test_reactivation_rejects_when_total_would_exceed_100(self):
+        """The exact bug scenario: deactivate a 100% mapping, create a
+        second active 100% mapping for the same source, then reactivate the
+        first with a bare {"is_active": true}. Must raise rather than leave
+        two active 100% mappings crediting 200% of duration at finalization."""
+        target = SimpleNamespace(
+            id="map-1",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=100,
+            is_active=False,
+        )
+        other_active = SimpleNamespace(
+            id="map-2",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=100,
+            is_active=True,
+        )
+
+        def _scalars(items):
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = items
+            return r
+
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                return _one(target)
+            return _scalars([target, other_active])
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        with pytest.raises(ValueError, match="Maximum is 100%"):
+            await AdminHoursService(db).update_event_hour_mapping(
+                mapping_id="map-1", organization_id="org-1", is_active=True
+            )
+
+        assert target.is_active is False, "must not reactivate on rejection"
+
+    async def test_deactivation_skips_the_locking_check(self):
+        """Deactivating can never push a source over 100%, so it should not
+        pay for (or be blocked by) the locking read the reactivation path
+        needs."""
+        mapping = SimpleNamespace(
+            id="map-1",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=100,
+            is_active=True,
+        )
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            return _one(mapping)
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        await AdminHoursService(db).update_event_hour_mapping(
+            mapping_id="map-1", organization_id="org-1", is_active=False
+        )
+
+        assert len(captured) == 1, "only the initial mapping fetch, no locking query"
+        assert mapping.is_active is False
+
 
 class TestUserHoursComplianceOrgScoped:
     """The target user fetch and the hours-sum query previously carried no
