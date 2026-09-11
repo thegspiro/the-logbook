@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2485](https://github.com/thegspiro/the-logbook/pull/2485)
+(Feature 22, Grants & fundraising, pass 4's Codex-review follow-up) merged
+clean via merge commit `ee5188ff509`, `mergeable_state: clean`, all CI
+green, both Codex Code Review and Security Review completed with no new
+findings on the final (post-merge-conflict-resolution) commit, and the one
+outstanding P1 thread (the opportunity-merge fetch's error handling)
+replied to and resolved before merging. Merged directly by this watchdog
+session once fully green, per this rotation's own precedent for an idle,
+clean PR. This closes out the three-round Codex tail on Feature 22's pass
+4 (GF-36/GF-38, extended twice) that PR #2483's premature "rotation
+complete" note (superseded below) predated. Rotation row 22 is genuinely
+`✅` now. Next: Feature 23 (Medical supplies).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, pass 4 tend, PR #2485, before it merged), preserved for history</summary>
+
 **Feature 22 (Grants & fundraising), pass 4 tend** — PR
 [#2485](https://github.com/thegspiro/the-logbook/pull/2485), branch
 `claude/security-review-grants-fundraising-codex-followup`, tending.
@@ -59,6 +75,8 @@ single head); 611/611 grant/fundraising-scoped backend tests pass;
 frontend `tsc`/`eslint` clean; `vitest run src/modules/grants-fundraising`
 5 files, 12 passed. All CI green on the current head; both Codex rounds
 resolved with no outstanding threads.
+
+</details>
 
 <details>
 <summary>Superseded — a concurrent watchdog's premature "rotation complete" note (PR #2483, before PR #2485's Codex-found fixes were discovered), preserved for history</summary>
