@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, X, Pencil, ChevronUp, ChevronDown } from 'lucide-react';
+import TagChip from './TagChip';
 
 interface EditingState {
   index: number;
@@ -94,46 +95,44 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
           const title = getTagTitle ? getTagTitle(item) : undefined;
 
           return (
-            <span
+            <TagChip
               key={i}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${className}`}
+              item={item}
+              className={className}
               title={title}
-            >
-              {item}
-              {reorderable && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => moveItem(i, -1)}
-                    disabled={i === 0}
-                    className="hover:text-violet-500 disabled:opacity-30"
-                    title="Move up"
-                  >
-                    <ChevronUp className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveItem(i, 1)}
-                    disabled={i === items.length - 1}
-                    className="hover:text-violet-500 disabled:opacity-30"
-                    title="Move down"
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={() => setEditing({ index: i, value: item })}
-                className="hover:text-violet-500"
-                title="Edit"
-              >
-                <Pencil className="h-3 w-3" />
-              </button>
-              <button type="button" onClick={() => removeItem(i)} className="hover:text-red-500">
-                <X className="h-3 w-3" />
-              </button>
-            </span>
+              actions={[
+                ...(reorderable
+                  ? [
+                      {
+                        icon: ChevronUp,
+                        onClick: () => moveItem(i, -1),
+                        label: `Move ${item} up`,
+                        disabled: i === 0,
+                        className: 'hover:text-violet-500',
+                      },
+                      {
+                        icon: ChevronDown,
+                        onClick: () => moveItem(i, 1),
+                        label: `Move ${item} down`,
+                        disabled: i === items.length - 1,
+                        className: 'hover:text-violet-500',
+                      },
+                    ]
+                  : []),
+                {
+                  icon: Pencil,
+                  onClick: () => setEditing({ index: i, value: item }),
+                  label: `Edit ${item}`,
+                  className: 'hover:text-violet-500',
+                },
+                {
+                  icon: X,
+                  onClick: () => removeItem(i),
+                  label: `Remove ${item}`,
+                  className: 'hover:text-red-500',
+                },
+              ]}
+            />
           );
         })}
       </div>
@@ -156,7 +155,7 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
           type="button"
           onClick={() => addItem(newValue)}
           disabled={!newValue.trim()}
-          className="bg-theme-surface-hover text-theme-text-secondary hover:bg-theme-surface-secondary inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition-colors disabled:opacity-40"
+          className="bg-theme-surface-hover text-theme-text-secondary hover:bg-theme-surface-secondary mobile-touch-target gap-1 rounded-lg px-3 text-sm transition-colors disabled:opacity-40"
         >
           <Plus className="h-3.5 w-3.5" /> Add
         </button>
@@ -166,7 +165,7 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
         <button
           type="button"
           onClick={() => onItemsChange([...defaultSuggestions])}
-          className="mt-2 text-xs text-violet-600 hover:underline dark:text-violet-400"
+          className="mobile-touch-target mt-2 text-xs text-violet-600 hover:underline dark:text-violet-400"
         >
           {suggestionsLabel || `Copy from defaults (${defaultSuggestions.length} items)`}
         </button>

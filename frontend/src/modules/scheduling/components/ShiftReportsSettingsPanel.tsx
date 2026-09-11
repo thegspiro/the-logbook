@@ -36,6 +36,7 @@ import { trainingModuleConfigService } from '../../../services/trainingServices'
 import { schedulingService } from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import EditableTagList from './EditableTagList';
+import TagChip from './TagChip';
 import {
   SAMPLE_CALL_TYPES,
   SAMPLE_SKILLS,
@@ -388,7 +389,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               <p className="text-theme-text-muted text-sm italic">Configuration is not available.</p>
             ) : (
               <div className="space-y-4">
-                <label className="flex cursor-pointer items-center gap-3">
+                <label className="mobile-touch-row cursor-pointer gap-3">
                   <input
                     type="checkbox"
                     checked={trainingConfig.shift_reports_enabled ?? true}
@@ -417,7 +418,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   </div>
                 </label>
                 <label
-                  className={`flex cursor-pointer items-center gap-3 ${!(trainingConfig.shift_reports_enabled ?? true) ? 'pointer-events-none opacity-50' : ''}`}
+                  className={`mobile-touch-row cursor-pointer gap-3 ${!(trainingConfig.shift_reports_enabled ?? true) ? 'pointer-events-none opacity-50' : ''}`}
                 >
                   <input
                     type="checkbox"
@@ -460,7 +461,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
             </p>
 
             <div className="space-y-4">
-              <label className="flex cursor-pointer items-center gap-3">
+              <label className="mobile-touch-row cursor-pointer gap-3">
                 <input
                   type="checkbox"
                   checked={settings.post_shift_validation.enabled}
@@ -478,7 +479,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
 
               {settings.post_shift_validation.enabled && (
                 <>
-                  <label className="flex cursor-pointer items-center gap-3">
+                  <label className="mobile-touch-row cursor-pointer gap-3">
                     <input
                       type="checkbox"
                       checked={settings.post_shift_validation.require_officer_report}
@@ -589,7 +590,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                     <button
                       onClick={() => void saveTrainingDefaults()}
                       disabled={savingTraining}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                      className="mobile-touch-target gap-1.5 rounded-lg bg-violet-600 px-4 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
                     >
                       {savingTraining && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                       Save Training Defaults
@@ -616,7 +617,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                 <button
                   key={t}
                   onClick={() => setSelectedAppType(t)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium capitalize transition-colors ${
+                  className={`mobile-touch-target rounded-lg px-3 text-sm font-medium capitalize transition-colors ${
                     selectedAppType === t
                       ? 'bg-violet-600 text-white'
                       : 'bg-theme-surface-hover text-theme-text-muted hover:text-theme-text-primary'
@@ -692,7 +693,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   <button
                     onClick={() => void saveAppTypeMapping(appTypeSkills, appTypeTasks)}
                     disabled={savingAppType}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                    className="mobile-touch-target gap-1.5 rounded-lg bg-violet-600 px-4 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
                   >
                     {savingAppType && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     Save Apparatus Skills &amp; Tasks
@@ -749,7 +750,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   desc: 'Track tasks completed during the shift.',
                 },
               ].map(({ field, label, desc }) => (
-                <label key={field} className="flex cursor-pointer items-center gap-3">
+                <label key={field} className="mobile-touch-row cursor-pointer gap-3">
                   <input
                     type="checkbox"
                     checked={trainingConfig[field] ?? true}
@@ -785,7 +786,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
             </p>
 
             <div className="space-y-4">
-              <label className="flex cursor-pointer items-center gap-3">
+              <label className="mobile-touch-row cursor-pointer gap-3">
                 <input
                   type="checkbox"
                   checked={trainingConfig.report_review_required}
@@ -870,7 +871,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                       );
                     }}
                     disabled={savingRating}
-                    className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    className={`mobile-touch-target rounded-lg border px-3 text-sm font-medium transition-colors ${
                       trainingConfig.rating_scale_type === st
                         ? 'border-violet-600 bg-violet-600 text-white'
                         : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30'
@@ -946,7 +947,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                             setRatingLabels(renumbered);
                           }}
                           disabled={Object.keys(ratingLabels).length <= 2}
-                          className="text-theme-text-muted p-1.5 transition-colors hover:text-red-500 disabled:opacity-30"
+                          className="text-theme-text-muted mobile-touch-target transition-colors hover:text-red-500 disabled:opacity-30"
                           title="Remove level"
                         >
                           <X className="h-4 w-4" />
@@ -964,7 +965,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                       [nextKey]: '',
                     }));
                   }}
-                  className="mt-2 inline-flex items-center gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
+                  className="mobile-touch-target mt-2 gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
                 >
                   <Plus className="h-3 w-3" /> Add level
                 </button>
@@ -988,7 +989,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                       savingRating ||
                       JSON.stringify(ratingLabels) === JSON.stringify(trainingConfig?.rating_scale_labels ?? {})
                     }
-                    className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`mobile-touch-target gap-1.5 rounded-lg px-4 text-sm font-medium transition-colors ${
                       JSON.stringify(ratingLabels) === JSON.stringify(trainingConfig?.rating_scale_labels ?? {})
                         ? 'cursor-default bg-violet-600 text-white'
                         : 'bg-violet-600 text-white hover:bg-violet-700'
@@ -1035,7 +1036,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               <button
                 key={key}
                 onClick={() => setActiveSection(key)}
-                className={`mobile-touch-target gap-2 rounded-lg px-3 text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`mobile-touch-target shrink-0 gap-2 rounded-lg px-3 text-sm font-medium whitespace-nowrap transition-colors ${
                   isActive
                     ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
                     : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
@@ -1121,42 +1122,37 @@ const TagListEditor: React.FC<TagListEditorProps> = ({
     {items.length > 0 && (
       <div className="mb-2 flex flex-wrap gap-1.5">
         {items.map((item, i) => (
-          <span
+          <TagChip
             key={i}
-            className="inline-flex items-center gap-1 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-400"
-          >
-            {item}
-            {onMove && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => onMove(i, -1)}
-                  disabled={i === 0}
-                  className="rounded-full p-0.5 transition-colors hover:bg-violet-500/20 disabled:opacity-30"
-                  aria-label="Move up"
-                >
-                  <ChevronUp className="h-3 w-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onMove(i, 1)}
-                  disabled={i === items.length - 1}
-                  className="rounded-full p-0.5 transition-colors hover:bg-violet-500/20 disabled:opacity-30"
-                  aria-label="Move down"
-                >
-                  <ChevronDown className="h-3 w-3" />
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => onRemove(i)}
-              className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-violet-500/20"
-              aria-label={`Remove ${item}`}
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
+            item={item}
+            className="border border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-400"
+            actions={[
+              ...(onMove
+                ? [
+                    {
+                      icon: ChevronUp,
+                      onClick: () => onMove(i, -1),
+                      label: `Move ${item} up`,
+                      disabled: i === 0,
+                      className: 'hover:bg-violet-500/20',
+                    },
+                    {
+                      icon: ChevronDown,
+                      onClick: () => onMove(i, 1),
+                      label: `Move ${item} down`,
+                      disabled: i === items.length - 1,
+                      className: 'hover:bg-violet-500/20',
+                    },
+                  ]
+                : []),
+              {
+                icon: X,
+                onClick: () => onRemove(i),
+                label: `Remove ${item}`,
+                className: 'hover:bg-violet-500/20',
+              },
+            ]}
+          />
         ))}
       </div>
     )}
