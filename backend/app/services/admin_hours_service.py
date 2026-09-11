@@ -1563,7 +1563,7 @@ class AdminHoursService:
             # them from the row this query just waited to lock, so a
             # reactivation's `effective_percentage` (below) could still read
             # a value another transaction changed and committed while this
-            # one was blocked on the lock (Codex review, this PR).
+            # one was blocked on the lock.
             source_query = (
                 select(EventHourMapping)
                 .where(

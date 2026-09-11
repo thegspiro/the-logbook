@@ -130,7 +130,7 @@ seen. Only after that did `git rev-parse --is-shallow-repository` report
 reported `yes`.
 
 ```
-git diff --stat 4ba836420..HEAD -- \
+git diff --stat 4ba836420..009fb1309 -- \
   backend/app/api/v1/endpoints/admin_hours.py backend/app/services/admin_hours_service.py \
   backend/app/models/admin_hours.py backend/app/schemas/admin_hours.py \
   frontend/src/modules/admin-hours frontend/src/pages/MemberProfilePage.tsx \
@@ -139,15 +139,25 @@ git diff --stat 4ba836420..HEAD -- \
   frontend/src/modules/membership/pages/CheckInStationPage.tsx
 ```
 
-**All four backend files (endpoint, service, model, schema) are
-byte-identical to pass 3's merge — zero backend diff.** (**Pre-fix
-snapshot, caught by Codex review:** true only against `4ba836420`, this
-pass's declared-scope baseline — `admin_hours_service.py` is no longer
-byte-identical to pass 3 once AH-15's fix, below, lands as this PR's own
-commit. That fix is not part of the declared-scope diff and does not
-change this statement's truth against its stated baseline; it means a
-future pass diffing against _this_ pass's merge will correctly see
-`admin_hours_service.py` as changed.) Eight frontend files
+`009fb1309` is this PR's last commit before AH-15's fix landed — a fixed,
+reproducible endpoint, not `HEAD` (caught by Codex review: the command
+originally read `4ba836420..HEAD`, which stops being reproducible the
+moment any later commit changes the four backend files, exactly what
+AH-15's own fix commit then did — a command that changes its own answer
+depending on when it's run is not evidence). Run against that pinned
+commit, the result below is exactly reproducible.
+
+**All four backend files (endpoint, service, model, schema) were
+byte-identical to pass 3's merge at `009fb1309` — zero backend diff at
+that point.** `admin_hours_service.py` is **not** byte-identical to pass 3
+at this PR's actual final `HEAD`: `git diff --stat 4ba836420..HEAD --
+backend/app/services/admin_hours_service.py` shows 36 insertions/6
+deletions once AH-15's fix (below) and its two follow-up corrections are
+included. Both statements are true, pinned to different endpoints — the
+declared-scope sweep found zero drift at `009fb1309`; the fix an
+unrelated re-read of the same file then surfaced is this PR's own commit,
+not part of that sweep's result, and is fully reflected in the diff
+against the final `HEAD`. Eight frontend files
 changed; none touch admin-hours _logic_ (no data-fetching, validation, or
 write-path code changed), but two are real behavioral changes rather than
 cosmetic chrome, and this pass's first draft mislabeled both (caught by

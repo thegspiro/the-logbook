@@ -295,11 +295,13 @@ service-import greps, plus all 4 external backend callers of
 
 **Zero backend diff (against the declared-scope baseline), zero
 admin-hours-behavioral frontend diff.** All four backend files (endpoint,
-service, model, schema) were byte-identical to pass 3's merge at the
-`4ba836420` baseline — a pre-fix snapshot: `admin_hours_service.py` is no
-longer byte-identical to pass 3 once AH-15's fix (below) lands as this
-PR's own commit, found by re-reading the code directly rather than by
-this diff. Eight frontend files changed; two are real functional changes in
+service, model, schema) were byte-identical to pass 3's merge at
+`009fb1309` (this PR's last commit before AH-15 landed — a fixed,
+reproducible endpoint, not a moving `HEAD`). `admin_hours_service.py` is
+not byte-identical to pass 3 at this PR's actual final `HEAD`: AH-15's fix
+(below) and its two follow-up corrections show as a real 36-line diff
+there, found by re-reading the code directly rather than by this sweep.
+Eight frontend files changed; two are real functional changes in
 adjacent features (a `Breadcrumbs` navigation rollout, and `Dashboard.tsx`'s
 inventory-tile count changing from a quantity sum to a row count) — neither
 touches admin-hours logic, but neither is merely cosmetic either, and both
