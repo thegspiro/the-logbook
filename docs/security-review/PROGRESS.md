@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2489](https://github.com/thegspiro/the-logbook/pull/2489)** —
+Feature 23 (Medical supplies), a fresh rotation-lap review (this feature's
+own findings file is at "pass 11," continuing the cumulative numbering
+from its prior lap's ten Codex-review rounds; this is the first pass of
+the _current_ lap). Branch `claude/security-review-medical-supplies`.
+Re-verified all 15 routes' auth/permission coverage and every fix from
+MSUP-1 through MSUP-27 against current code (`inventory_service.py` grew
+to 11,169 L since the prior lap, from unrelated inventory work and the
+Inventory feature's own pass 4 — none of it touched anything this router
+or its domain-pinning helpers depend on) — all hold, no regression. Also
+read the frontend module in full for the first time at this depth
+(prior passes' own stated scope was backend-only) — no new finding; the
+medical-domain-specific item form (`MedicalItemFormModal.tsx`) already has
+the lot-stocked awareness the general inventory module's equivalent
+(MSUP-15) still lacks, confirmed by direct file comparison. **0 code
+fixes, 0 new findings.** Two documentation corrections instead: this
+file's own KNOWN_LIMITATIONS.md had MSUP-11's row mislabeled MSUP-10 (a
+citation pointing a reader at the wrong, already-fixed finding), and
+MSUP-15/MSUP-25 — both genuine owner-decision items, open since the
+prior lap's passes 4 and 9/10 — had never been mirrored into
+KNOWN_LIMITATIONS.md at all. Both fixed. MSUP-4, MSUP-11, MSUP-15, and
+MSUP-25 remain open/flagged, unchanged. Completion gate clean: flake8/
+black/isort clean; migrations unchanged (443 revisions, single head); 180
+scoped + 849 `inventory or medical_supplies` backend tests pass (1
+pre-existing skip); frontend `tsc`/`eslint` clean (no frontend source
+changed — the module was read, not edited). Full write-up:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 11.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, pass 4's Codex-review follow-up, PR #2485, merged; before Feature 23 pass 11 started), preserved for history</summary>
+
 **None.** PR [#2485](https://github.com/thegspiro/the-logbook/pull/2485)
 (Feature 22, Grants & fundraising, pass 4's Codex-review follow-up) merged
 clean via merge commit `ee5188ff509`, `mergeable_state: clean`, all CI
@@ -28,6 +59,8 @@ clean PR. This closes out the three-round Codex tail on Feature 22's pass
 4 (GF-36/GF-38, extended twice) that PR #2483's premature "rotation
 complete" note (superseded below) predated. Rotation row 22 is genuinely
 `✅` now. Next: Feature 23 (Medical supplies).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, pass 4 tend, PR #2485, before it merged), preserved for history</summary>
@@ -13606,7 +13639,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
