@@ -271,6 +271,20 @@ test.describe('mobile presentation', () => {
 
       // Drive the route's other states, if it has any. See `states` in
       // mobile-routes.ts for why arrival alone is not the whole of a screen.
+      //
+      // One set for the whole route, not one per group. Per-group, the
+      // duplicate-state guard below was dead exactly where it was needed: the
+      // two apparatus groups are capped at one control each, so the set was
+      // always empty when its only entry was checked, and a resource click that
+      // left the apparatus form on screen would have been recorded as a
+      // successful resource measurement.
+      //
+      // The arrival measurement is deliberately *not* seeded into it. A tab
+      // strip opens on its first subsection, so clicking that tab legitimately
+      // reproduces the arrival screen; seeding it would fail a route that is
+      // behaving correctly.
+      const seen = new Set<string>();
+
       for (const group of route.states ?? []) {
         const { selector, label: stateLabel, max } = group;
         // Only what a phone can actually see. These panels ship a `md:hidden`
@@ -296,7 +310,6 @@ test.describe('mobile presentation', () => {
           missingStates.push(`${route.path} [${stateLabel}]: selector "${selector}" matched no visible control`);
         }
 
-        const seen = new Set<string>();
         for (const [i, control] of chosen.entries()) {
           // Whichever of the two actually identifies the row. A tab strip's
           // buttons name themselves ("Rating Scale") and the group label

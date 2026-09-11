@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, X, Pencil, ChevronUp, ChevronDown } from 'lucide-react';
 import TagChip from './TagChip';
+import { tagChipKeys } from './tagChipKeys';
 
 interface EditingState {
   index: number;
@@ -57,13 +58,21 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
   const commitEdit = () => {
     if (!editing) return;
     const trimmed = editing.value.trim();
-    if (trimmed) {
+    // A rename onto another entry's value is dropped the same way an empty one
+    // already was: the editor closes and the item keeps what it had. `addItem`
+    // has always refused a duplicate silently, and this is the same list — it
+    // was only the edit path that let one through, which is how a list ends up
+    // holding one value twice.
+    const duplicate = items.some((existing, i) => existing === trimmed && i !== editing.index);
+    if (trimmed && !duplicate) {
       const updated = [...items];
       updated[editing.index] = trimmed;
       onItemsChange(updated);
     }
     setEditing(null);
   };
+
+  const keys = tagChipKeys(items);
 
   return (
     <div>
@@ -72,7 +81,7 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
           if (editing?.index === i) {
             return (
               <input
-                key={item}
+                key={keys[i]}
                 autoFocus
                 type="text"
                 value={editing.value}
@@ -96,7 +105,7 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
 
           return (
             <TagChip
-              key={item}
+              key={keys[i]}
               item={item}
               className={className}
               title={title}

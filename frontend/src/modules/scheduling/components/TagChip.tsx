@@ -16,6 +16,9 @@
  * `useMediaQuery` rather than `hidden md:inline-flex`, on that hook's own
  * advice: rendering both and hiding one puts every action into the
  * accessibility tree twice.
+ *
+ * Because the chip owns state, the list that renders it has to key it by
+ * something stable. That rule is `tagChipKeys` in ./tagChipKeys.
  */
 
 import React, { useState } from 'react';

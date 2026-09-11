@@ -37,6 +37,7 @@ import { schedulingService } from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import EditableTagList from './EditableTagList';
 import TagChip from './TagChip';
+import { tagChipKeys } from './tagChipKeys';
 import {
   SAMPLE_CALL_TYPES,
   SAMPLE_SKILLS,
@@ -1114,74 +1115,78 @@ const TagListEditor: React.FC<TagListEditorProps> = ({
   onInputChange,
   onAdd,
   placeholder,
-}) => (
-  <div>
-    <label className="text-theme-text-primary mb-0.5 block text-sm font-medium">{label}</label>
-    <p className="text-theme-text-muted mb-2 text-xs">{description}</p>
+}) => {
+  const keys = tagChipKeys(items);
 
-    {items.length > 0 && (
-      <div className="mb-2 flex flex-wrap gap-1.5">
-        {items.map((item, i) => (
-          <TagChip
-            key={item}
-            item={item}
-            className="border border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-400"
-            actions={[
-              ...(onMove
-                ? [
-                    {
-                      icon: ChevronUp,
-                      onClick: () => onMove(i, -1),
-                      label: `Move ${item} up`,
-                      disabled: i === 0,
-                      className: 'hover:bg-violet-500/20',
-                    },
-                    {
-                      icon: ChevronDown,
-                      onClick: () => onMove(i, 1),
-                      label: `Move ${item} down`,
-                      disabled: i === items.length - 1,
-                      className: 'hover:bg-violet-500/20',
-                    },
-                  ]
-                : []),
-              {
-                icon: X,
-                onClick: () => onRemove(i),
-                label: `Remove ${item}`,
-                className: 'hover:bg-violet-500/20',
-              },
-            ]}
-          />
-        ))}
+  return (
+    <div>
+      <label className="text-theme-text-primary mb-0.5 block text-sm font-medium">{label}</label>
+      <p className="text-theme-text-muted mb-2 text-xs">{description}</p>
+
+      {items.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {items.map((item, i) => (
+            <TagChip
+              key={keys[i]}
+              item={item}
+              className="border border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-400"
+              actions={[
+                ...(onMove
+                  ? [
+                      {
+                        icon: ChevronUp,
+                        onClick: () => onMove(i, -1),
+                        label: `Move ${item} up`,
+                        disabled: i === 0,
+                        className: 'hover:bg-violet-500/20',
+                      },
+                      {
+                        icon: ChevronDown,
+                        onClick: () => onMove(i, 1),
+                        label: `Move ${item} down`,
+                        disabled: i === items.length - 1,
+                        className: 'hover:bg-violet-500/20',
+                      },
+                    ]
+                  : []),
+                {
+                  icon: X,
+                  onClick: () => onRemove(i),
+                  label: `Remove ${item}`,
+                  className: 'hover:bg-violet-500/20',
+                },
+              ]}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={inputValue}
+          onChange={(e) => onInputChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onAdd();
+            }
+          }}
+          placeholder={placeholder}
+          className="form-input-sm flex-1 rounded-lg"
+        />
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={!inputValue.trim()}
+          className="btn-secondary text-theme-text-secondary inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add
+        </button>
       </div>
-    )}
-
-    <div className="flex gap-2">
-      <input
-        type="text"
-        value={inputValue}
-        onChange={(e) => onInputChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            onAdd();
-          }
-        }}
-        placeholder={placeholder}
-        className="form-input-sm flex-1 rounded-lg"
-      />
-      <button
-        type="button"
-        onClick={onAdd}
-        disabled={!inputValue.trim()}
-        className="btn-secondary text-theme-text-secondary inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium disabled:opacity-40"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        Add
-      </button>
     </div>
-  </div>
-);
+  );
+};
 
 export default ShiftReportsSettingsPanel;
