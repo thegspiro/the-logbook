@@ -1700,8 +1700,12 @@ Verified to fail before the fix (`select.value` read `''`) and pass after.
 ### Revised after Codex review
 
 Codex's automated review on PR #2483 caught two real gaps in the pass's own
-work, both fixed in the same PR before merge — the same pattern as pass 1's
-own "Revised after Codex review" section.
+work — the same pattern as pass 1's own "Revised after Codex review"
+section. PR #2483 merged before the fix commit landed, so both fixes
+shipped instead in a follow-up PR (#2485), cherry-picked onto a fresh
+branch off `main` per this repo's "never stack commits on an
+already-merged branch" rule; see the `PROGRESS.md` "Open PR" entry for
+that detail.
 
 **GF-38, extended — P2 — the linked opportunity can be outside the
 dropdown's own unfiltered fetch.** `GrantApplicationFormPage.tsx`'s

@@ -16,28 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 22 (Grants & fundraising), pass 4** — PR
-[#2483](https://github.com/thegspiro/the-logbook/pull/2483), branch
-`claude/security-review-grants-fundraising`, tending. Two rounds of Codex
-review on the original commit caught two real P2 gaps in the pass's own
-fixes, both closed in the same PR: GF-38 extended (the opportunities-page
-"Apply" link could point at an opportunity outside the dropdown's own
-unfiltered first-100 fetch — now fetched directly via `getOpportunity` and
-merged in) and GF-36 extended (`update_application`'s own "reload with
-fresh relationships" call didn't, on a status change — SQLAlchemy's
-identity map skipped re-loading `grant_notes`/`compliance_tasks` collections
-already marked loaded earlier in the same request, so the note/tasks the
-request itself just created were absent from the PUT response, not merely
-unattributed; fixed with `populate_existing=True` on `get_application()`).
-Full write-up: `docs/security-review/GF-22-grants-fundraising.md` → Pass 4,
-"Revised after Codex review." Completion gate re-run green: flake8/black/
-isort clean; migrations unchanged (443 revisions, single head); 611/611
-grant/fundraising-scoped and 12,369/12,369 full backend suite pass;
+**Feature 22 (Grants & fundraising), pass 4 tend** — PR
+[#2485](https://github.com/thegspiro/the-logbook/pull/2485), branch
+`claude/security-review-grants-fundraising-codex-followup`, tending.
+PR #2483 (pass 4's own PR) was merged by the repo owner directly at
+2026-09-11T11:46 UTC — before this session's push landed carrying two
+real P2 fixes Codex had found on that PR's commit, so that push landed on
+an already-merged branch rather than in `main`. Per this repo's "never
+stack new commits on an already-merged branch" rule, cherry-picked that
+commit (`4bb57d2d5`) onto a fresh branch off `main` and opened #2485 in
+its place: GF-38 extended (the opportunities-page "Apply" link could point
+at an opportunity outside the dropdown's own unfiltered first-100 fetch —
+now fetched directly via `getOpportunity` and merged in) and GF-36
+extended (`update_application`'s own "reload with fresh relationships"
+call didn't, on a status change — SQLAlchemy's identity map skipped
+re-loading `grant_notes`/`compliance_tasks` collections already marked
+loaded earlier in the same request, so the note/tasks the request itself
+just created were absent from the PUT response, not merely unattributed;
+fixed with `populate_existing=True` on `get_application()`). Full
+write-up: `docs/security-review/GF-22-grants-fundraising.md` → Pass 4,
+"Revised after Codex review." Completion gate re-run clean on the new
+branch: flake8/black/isort clean; migrations unchanged (443 revisions,
+single head); 611/611 grant/fundraising-scoped backend tests pass;
 frontend `tsc`/`eslint` clean; `vitest run src/modules/grants-fundraising`
 5 files, 10 passed.
 
 <details>
-<summary>Superseded — prior Open PR note (Feature 22, pass 4, PR #2483, before the two Codex-review rounds), preserved for history</summary>
+<summary>Superseded — prior Open PR note (Feature 22, pass 4, PR #2483, before it merged out from under the Codex-review fixes), preserved for history</summary>
 
 **Feature 22 (Grants & fundraising), pass 4** — PR
 [#2483](https://github.com/thegspiro/the-logbook/pull/2483), branch
