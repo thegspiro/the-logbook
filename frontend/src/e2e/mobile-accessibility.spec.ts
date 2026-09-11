@@ -126,6 +126,12 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // severity badges already sit. Call sites are held to AA by policy.
   '/admin/audit-log': 2,
   '/events/1/monitoring': 1,
+  // The past-day date in the phone month grid. Raised from opacity-45
+  // (2.92:1, AA-failing once the calendar rolled a date into the dimmed
+  // state) to opacity-65 (5.57:1) to clear AA — which moved it into this
+  // AAA-only count, the same move the audit log's amber-800 badges made
+  // three entries above. Call sites are held to AA by policy.
+  '/scheduling': 1,
   '/scheduling/admin/closeout': 5,
   '/admin-hours': 2,
   '/notifications?tab=inbox': 3,
