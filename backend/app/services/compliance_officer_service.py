@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
 from app.core.utils import generate_uuid
@@ -814,9 +815,13 @@ class AnnualComplianceReportService:
             self.db, organization_id
         )
 
-        # Get active members (exclude compliance-exempt)
+        # Get active members (exclude compliance-exempt). `roles` (a synonym
+        # for `positions`) is eager-loaded so the applicability filter below
+        # can pass each member's role ids without an N+1 lazy-load per member.
         members_result = await self.db.execute(
-            select(User).where(
+            select(User)
+            .options(selectinload(User.roles))
+            .where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
                 User.compliance_exempt.is_(False),
@@ -899,10 +904,13 @@ class AnnualComplianceReportService:
             # the org-wide compliance percentage this report exists to state
             # authoritatively.
             member_membership_type = member.membership_type or "active"
+            member_role_ids = [str(r.id) for r in member.roles] if member.roles else []
             applicable_reqs = [
                 req
                 for req in requirements
-                if requirement_applies_to_member(req, member_membership_type)
+                if requirement_applies_to_member(
+                    req, member_membership_type, member_role_ids
+                )
             ]
 
             met_count = 0
@@ -993,7 +1001,9 @@ class AnnualComplianceReportService:
                 member
                 for member in members
                 if requirement_applies_to_member(
-                    req, member.membership_type or "active"
+                    req,
+                    member.membership_type or "active",
+                    [str(r.id) for r in member.roles] if member.roles else [],
                 )
             ]
             for member in applicable_members:

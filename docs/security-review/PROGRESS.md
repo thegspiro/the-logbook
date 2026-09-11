@@ -18,6 +18,28 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 20 (Compliance), pass 4** — PR
 [#2476](https://github.com/thegspiro/the-logbook/pull/2476), branch
+`claude/security-review-compliance`, tending. Codex's review caught a real
+gap in CMP4-1's own fix (P1): the fix filtered both loops through
+`requirement_applies_to_member` but omitted its `role_ids` argument,
+reasoning that no requirement in this codebase is `required_roles`-only —
+the helper returns `False` outright for such a requirement when `role_ids`
+isn't passed (`if req.required_roles and role_ids:`), so it silently
+matched nobody, member loop or requirement-analysis loop alike, same failure
+shape as CMP4-1 itself. Fixed by eager-loading `User.roles` (`selectinload`,
+a synonym for `positions`) on the member query and passing each member's
+role ids into both calls, matching the existing single-member pattern at
+`training.py:1507`. Three new guard tests
+(`TestGenerateAnnualReportRoleScopedRequirements`) added to the same file.
+Full backend suite re-run clean: 12361 passed (was 12358 + 3 new tests), 21
+skipped; flake8/black/isort clean across `app/ tests/ alembic/`. See
+`docs/security-review/CMP-20-compliance.md` → CMP4-1's "Correction" note for
+detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 4, PR #2476, before the Codex role_ids correction), preserved for history</summary>
+
+**Feature 20 (Compliance), pass 4** — PR
+[#2476](https://github.com/thegspiro/the-logbook/pull/2476), branch
 `claude/security-review-compliance`. Diff-scoped against
 `062464a` (pass 3's merge, PR #2245): the six declared backend files are
 byte-identical to pass 3; `training_compliance.py` (shared, in this
@@ -54,7 +76,9 @@ why the very first `npm run lint` attempt reported 1,382 phantom warnings
 that were an artifact of the worktree layout, not the code). Rotation row
 20 → `✅` (pending merge). Next: Feature 21 (Admin hours).
 
-### 2026-09-11 — Feature 20 (Compliance), pass 4 — 1 fixed (MED), 0 flagged
+</details>
+
+### 2026-09-11 — Feature 20 (Compliance), pass 4 — 1 fixed (MED), 0 flagged, 1 review-round correction
 
 Diff-scoped against `062464a` (pass 3's merge commit, PR #2245): all six
 declared backend files (`compliance_config.py`, `compliance_officer.py`,
@@ -99,6 +123,26 @@ own `node_modules`, which produced 1,382 phantom type-resolution warnings
 unrelated to any code; recorded in the findings doc, not a real finding).
 Findings doc: `docs/security-review/CMP-20-compliance.md` → **Pass 4**. Next:
 21 Admin hours, once this PR merges.
+
+**Correction (same day, Codex review round on PR #2476):** CMP4-1's own fix
+had a gap Codex (P1) caught — it filtered both loops through
+`requirement_applies_to_member` but never passed the helper's `role_ids`
+argument, on the reasoning that no requirement in this codebase is
+`required_roles`-only. The helper's `required_roles` branch
+(`if req.required_roles and role_ids:`) returns `False` whenever `role_ids`
+is falsy, so a role-scoped requirement matched **nobody** — the same failure
+shape CMP4-1 fixed for `required_membership_types`, just uncaught for the
+role branch, since the member query never eager-loaded `User.positions`.
+Fixed by adding `selectinload(User.roles)` to the member query and passing
+`[str(r.id) for r in member.roles]` into both `requirement_applies_to_member`
+calls, matching the resolution pattern `training.py:1507` already uses for a
+single member. Three new guard tests
+(`TestGenerateAnnualReportRoleScopedRequirements`, in the same test file).
+Full backend suite re-run: 12361 passed (12358 + 3 new), 21 skipped;
+flake8/black/isort clean across `app/ tests/ alembic/`; the six files
+touching `compliance_officer_service.py`/`generate_annual_report` (138 tests)
+all still pass. See `docs/security-review/CMP-20-compliance.md` → CMP4-1's
+"Correction" note for the full write-up.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 4, PR #2473, merged), preserved for history</summary>

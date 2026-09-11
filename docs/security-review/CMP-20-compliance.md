@@ -102,18 +102,36 @@ its emailed executive summary.
 
 **Fix:** both loops now filter through the same
 `requirement_applies_to_member` helper `training_compliance.py` already
-exports (membership-type check; `role_ids` intentionally omitted, matching
-`compute_org_compliance_pct`'s own call — the org query here doesn't eager-load
-`User.positions`, and adding that is a separate, larger change this fix
-doesn't need to make since no known requirement in this codebase is
-`required_roles`-only with no `required_membership_types` fallback). The
-per-member loop's `req_total`/`met_count` are now computed only over
-requirements applicable to that member; the requirement-analysis loop's
+exports. The per-member loop's `req_total`/`met_count` are now computed only
+over requirements applicable to that member; the requirement-analysis loop's
 `members_total`/`members_compliant` are computed only over members the
 requirement applies to. The zero-denominator fallback for a requirement that
 (rare edge case) currently applies to no active member is left at the
 pre-existing `0.0`, unchanged — redefining that as "not applicable" is a
 product-level display decision beyond this fix's scope.
+
+**Correction, same review round (Codex, PR #2476):** the fix as first pushed
+omitted the helper's third `role_ids` argument, reasoning (wrongly) that no
+requirement in this codebase is `required_roles`-only with no
+`required_membership_types` fallback. `requirement_applies_to_member` returns
+`False` outright when `required_roles` is set but `role_ids` is falsy (see its
+body: `if req.required_roles and role_ids:`) — so a `required_roles`-only
+requirement (reachable: the requirement-config UI lets an admin name roles
+without also naming membership types) matched **nobody**, member loop or
+requirement-analysis loop alike. That is the same failure shape as CMP4-1
+itself, just for the role branch instead of the membership-type branch: a
+role-scoped requirement silently dropped out of every member's denominator
+(inflating their `compliance_pct`) while its own "Requirement Analysis" row
+showed zero applicable members — including for a member who actually held the
+role. Fixed by eager-loading `User.roles` (`selectinload`, a synonym for
+`positions`) on the member query and passing each member's role ids
+(`[str(r.id) for r in member.roles]`) into both `requirement_applies_to_member`
+calls, matching the pattern already used at `training.py:1507` (`GET
+/compliance-summary/{user_id}`, the one other call site that resolves a
+single member's role ids the same way). Guard tests:
+`TestGenerateAnnualReportRoleScopedRequirements` (new, 3 tests) in the same
+file, covering a role-holder being graded, a non-holder being excluded, and
+the requirement-analysis denominator counting only role holders.
 
 Guard test: `tests/test_annual_report_membership_scoped_requirements.py` (new)
 — a member outside a requirement's scope is graded against nothing
@@ -126,16 +144,17 @@ the org.
 
 ## Completion gate (pass 4)
 
-| Check                                                                                  | Result                                                                    |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                          | ✅ 0 violations                                                           |
-| `black --check app/ tests/ alembic/`                                                   | ✅ 1579 files unchanged                                                   |
-| `isort --check-only app/ tests/ alembic/`                                              | ✅ clean (`isort==9.0.1`, CI's pin, already installed)                    |
-| `python3 scripts/validate_migrations.py --strict`                                      | ✅ 443 revisions, single head `0533644945cd`                              |
-| `pytest tests/ -q -k "compliance"`                                                     | ✅ 381 passed, 1 skipped (pre-existing optional-dependency skip)          |
-| `pytest tests/ -q` (full backend suite, extra diligence — shared service file touched) | ✅ 12358 passed, 21 skipped (pre-existing Docker/no-MySQL/optional skips) |
-| `cd frontend && npm run typecheck`                                                     | ✅ 0 errors                                                               |
-| `cd frontend && npm run lint`                                                          | ✅ 0 errors, 0 warnings                                                   |
+| Check                                                                                                                                                                                                                                                               | Result                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                       | ✅ 0 violations                                                                                                                                               |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                | ✅ 1579 files unchanged                                                                                                                                       |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                           | ✅ clean (`isort==9.0.1`, CI's pin, already installed)                                                                                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                   | ✅ 443 revisions, single head `0533644945cd`                                                                                                                  |
+| `pytest tests/ -q -k "compliance"`                                                                                                                                                                                                                                  | ✅ 381 passed, 1 skipped (pre-existing optional-dependency skip; the guard-test file's name doesn't match this keyword — see the 138-test targeted run below) |
+| `pytest tests/test_iso_readiness_framing.py tests/test_iso_readiness_user_scoping.py tests/test_compliance_config_service.py tests/test_compliance_officer.py tests/test_compliance_report_period.py tests/test_annual_report_membership_scoped_requirements.py -q` | ✅ 138 passed (every test file touching `compliance_officer_service.py` or `generate_annual_report`)                                                          |
+| `pytest tests/ -q` (full backend suite, re-run after the role_ids follow-up fix)                                                                                                                                                                                    | ✅ 12361 passed, 21 skipped (pre-existing Docker/no-MySQL/optional skips)                                                                                     |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                  | ✅ 0 errors                                                                                                                                                   |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                       | ✅ 0 errors, 0 warnings                                                                                                                                       |
 
 No frontend file was modified this pass (`ComplianceRequirementsConfigPage.tsx`'s
 only diff since pass 3 is the unrelated cosmetic change noted above), so the
