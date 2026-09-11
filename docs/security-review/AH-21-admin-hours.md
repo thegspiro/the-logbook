@@ -6,11 +6,17 @@
 
 **Scope confirmed via `git merge-base --is-ancestor` against pass 3's merge
 commit** (`4ba836420`, PR #2247) — not assumed, and not skipped the way pass
-3's own first attempt was: this environment's clone was not shallow this
-time (`git rev-parse --is-shallow-repository` → `false`), and
-`git merge-base --is-ancestor 4ba836420 HEAD` succeeds after `git fetch
---unshallow` brought in a few branches this session's earlier clone hadn't
-seen.
+3's own first attempt was. **Corrected sequence (caught by Codex review on
+this pass's own first commit — the first draft's chronology was
+self-contradictory):** the first `git merge-base --is-ancestor 4ba836420
+HEAD` reported "no" against this session's initial, shallow clone. Running
+`git fetch --unshallow` succeeded (a fetch that fails with `fatal:
+--unshallow on a complete repository does not make sense` against an
+already-complete clone — its success is itself evidence the clone was
+shallow beforehand) and brought in a few branches the shallow clone hadn't
+seen. Only after that did `git rev-parse --is-shallow-repository` report
+`false`, and the ancestor check, re-run against the now-complete history,
+reported `yes`.
 
 ```
 git diff --stat 4ba836420..HEAD -- \
@@ -24,22 +30,32 @@ git diff --stat 4ba836420..HEAD -- \
 
 **All four backend files (endpoint, service, model, schema) are
 byte-identical to pass 3's merge — zero backend diff.** Eight frontend files
-changed, all cosmetic, none touching admin-hours logic: `aria-label`
+changed; none touch admin-hours logic, but one is a real, unrelated
+functional change rather than cosmetic, and this pass's first draft
+mislabeled it (caught by Codex review) — corrected here: `aria-label`
 additions on two filter `<select>`s (`AllEntriesTab.tsx`, `AdminHoursPage.tsx`),
 a contrast-token bump on two badges (`AdminHoursManagePage.tsx`,
 `bg-blue-500`→`bg-blue-600` and `bg-red-500`→`bg-red-800`), a `Breadcrumbs`
 rollout on `CheckInStationPage.tsx` and `ComplianceRequirementsConfigPage.tsx`
 (navigation chrome, verified the admin-hours-reading code path on each page
-is untouched by reading both diffs directly), a `<main>`→`<div
-data-page-main>` semantic-landmark change and an inventory-tile
-relabeling/counting fix on `Dashboard.tsx` (its own admin-hours summary
-card — the `getSummary({ userId: currentUser?.id })` call and the
-`reportingRange.ts` UTC-day-bounds helper pass 3 reviewed — is unchanged;
-confirmed by reading the diff, which touches only the unrelated inventory
-tile, the heading tag, and a badge color), and single-line contrast bumps on
-`MemberProfilePage.tsx`'s photo-remove button and
+is untouched by reading both diffs directly), and single-line contrast bumps
+on `MemberProfilePage.tsx`'s photo-remove button and
 `HourTrackingSection.tsx`'s add-mapping button (both outside any admin-hours
-data path).
+data path) — all cosmetic. **`Dashboard.tsx` is not:** alongside a
+`<main>`→`<div data-page-main>` semantic-landmark change (cosmetic), its
+inventory tile's issued-gear count changed from
+`data.issued_items.reduce((total, item) => total + item.quantity_issued,
+0)` to `data.issued_items.length` — a real behavior change (the displayed
+number now differs whenever an issued row's `quantity_issued` exceeds 1,
+per that diff's own comment: matching the "Issued to Me" list's own
+row-count convention on `/inventory/my-equipment` instead of double-
+counting quantity). This is inventory-feature drift, not admin-hours
+drift — the admin-hours summary card on the same page (the
+`getSummary({ userId: currentUser?.id })` call and the `reportingRange.ts`
+UTC-day-bounds helper pass 3 reviewed) is unchanged, confirmed by reading
+the diff — but it is inspected, unrelated functional drift, not a cosmetic
+change, and this pass's "zero drift" conclusion is about admin-hours scope
+specifically, not a claim that nothing in the diff has behavioral effect.
 
 **Checked external backend callers too, not only the module's own files.**
 `grep -rln "admin_hours_service\|AdminHoursService\|from app.services.admin_hours"`
@@ -48,16 +64,23 @@ outside the module's own two files finds four callers:
 `nfc_tag_service.py`. `training_session_service.py` and `nfc_tag_service.py`
 have zero diff since `4ba836420`. `event_service.py` and `scheduled_tasks.py`
 both changed, but neither diff touches an admin-hours call site — verified
-by line number, not by the commit message alone: `event_service.py`'s diff
-(EV-24, a waitlist queue-jump fix) sits at lines 1475-1694, while its three
-admin-hours call sites (`AdminHoursService(self.db)`,
-`delete_event_attendance_entries`, `credit_event_attendance`,
-`_revoke_event_attendance_credit`) are at lines 45, 915, 1105, 2145, 2543,
-2556, 2579-2601 — outside every changed hunk.
-`scheduled_tasks.py`'s diff (CRON3-31-1, an inactive-org message/email
-filter) sits at lines 2677-3995, while `run_admin_hours_auto_close` (the
-AH-2 caller) is defined at line 5837 and referenced at 388/6006/6055 — also
-outside every changed hunk.
+by line number, not by the commit message alone. **Caller inventory
+corrected (caught by Codex review on this pass's own first commit — the
+first draft's four-call-site list for `event_service.py` omitted a fifth):**
+`event_service.py`'s admin-hours call sites are `AdminHoursService(self.db)`
+constructions and calls at lines 45, 915, 1105, 2145, 2543, 2556, 2579-2601
+— **and** `_annotate_list_items`'s `get_active_mappings_by_source(...)` call
+at line 596, which derives the credited-hours figure shown on event cards
+and was missed by the first draft's search despite matching the same grep
+pattern used to find the other four. All five sit outside `event_service.py`'s
+changed hunk (EV-24, a waitlist queue-jump fix, lines 1475-1694).
+`scheduled_tasks.py`'s diff is not only CRON3-31-1 (an inactive-org
+message/email filter): a second, separately unrelated hunk around lines
+2677-2690 changes `run_end_of_shift_summary`'s call-type reporting from raw
+slugs to resolved human-readable labels (via a new `CallTrackingService.
+type_labels` call) — unrelated to `run_admin_hours_auto_close` (the AH-2
+caller, defined at line 5837, referenced at 388/6006/6055), and outside
+both of `scheduled_tasks.py`'s changed hunks (2677-2690 and 3517-3995).
 
 **Re-ran the frontend consumer sweep from scratch** (not trusting pass 2/3's
 recorded list): `grep -rln "admin-hours/services/api\|adminHoursService\|AdminHours"
@@ -80,12 +103,21 @@ current line**, by direct grep against the file content (not inferred from
 "the diff is empty"): the AH-7 org filter on `get_user_hours_compliance`'s
 target-user fetch (`UserModel.organization_id == organization_id`, line
 1850); every `with_for_update()` call site from AH-10/AH-11 and pass 3's
-Codex-fixed locking findings 2/4/7 (12 call sites: `clock_in`'s `User` lock
-at 226, entry lock at 380, `create_manual_entry`'s `User` lock at 539,
-`edit_pending_entry`'s locks at 772/788, `bulk_approve`'s member-then-entry
-locks at 1072/1092, `approve_or_reject`'s lock at 1347, the event-hour-mapping
-percentage locks at 1487/1561); and the quarterly-compliance rejection logic
-from pass 3's finding 8 (lines 1893-1936, the `ValueError` raised before any
+Codex-fixed locking findings 2/4/7. **Corrected count and labels (caught by
+Codex review on this pass's own first commit):** the executable
+`with_for_update()` sites are **11**, not 12, and two were mislabeled —
+line 884 is `approve_or_reject`'s own lock (omitted from the first draft),
+and line 1347 is `_check_overlap`'s conditional lock (`for_update=True`,
+called from `create_manual_entry`/`edit_pending_entry`), not
+`approve_or_reject`'s. The corrected inventory: `clock_in`'s `User` lock at
+226, `_get_active_session`'s entry lock at 380, `create_manual_entry`'s
+`User` lock at 539, `edit_pending_entry`'s locks at 772/788,
+`approve_or_reject`'s lock at 884, `bulk_approve`'s member-then-entry locks
+at 1072/1092, `_check_overlap`'s conditional lock at 1347, and the
+event-hour-mapping percentage locks at 1487/1561 — 11 sites, re-verified by
+mapping each line number to its enclosing `async def` rather than trusting
+the first draft's labels; and the quarterly-compliance rejection logic from
+pass 3's finding 8 (lines 1893-1936, the `ValueError` raised before any
 per-requirement query runs when a quarterly requirement is requested for a
 non-current year).
 
@@ -121,7 +153,7 @@ silence.
 | `black --check app/ tests/ alembic/`              | clean                              |
 | `isort --check-only app/ tests/ alembic/`         | clean (isort, CI's pinned version) |
 | `python3 scripts/validate_migrations.py --strict` | PASSED — single head               |
-| backend tests, scope (`-k "admin_hours"`)         | see below                          |
+| backend tests, scope (`-k "admin_hours"`)         | 88 passed, 1 pre-existing skip     |
 | `npm run typecheck` (frontend)                    | 0 errors                           |
 | `npm run lint` (frontend)                         | 0 errors, 0 warnings               |
 

@@ -22,13 +22,14 @@ feature. The rotation cannot outrun its own review queue.
 against pass 3's merge commit (`4ba836420`, PR #2247) across the full
 declared scope (all four backend files, the 26-file frontend module, all 6
 outside consumers, and all 4 external backend callers of
-`admin_hours_service`). Zero backend diff; the only frontend changes were
-cosmetic (aria-labels, contrast bumps, a `Breadcrumbs` rollout) and none
-touch admin-hours logic. Every prior fix (AH-7 through AH-14, AH21-1
-through AH21-4, and pass 3's 8 Codex-driven fixes) spot-verified still
-present at its current line by direct grep, not inferred from the diff's
-silence. Route inventory re-enumerated mechanically: 27/27, unchanged. **0
-fixes, 0 flagged.** Full write-up:
+`admin_hours_service`). Zero backend diff; the frontend changes (aria-labels,
+contrast bumps, a `Breadcrumbs` rollout, and one unrelated inventory-count
+behavior change on `Dashboard.tsx`) none touch admin-hours logic. Every
+prior fix (AH-7 through AH-14, AH21-1 through AH21-4, and pass 3's 8
+Codex-driven fixes) spot-verified still present at its current line by
+direct grep, not inferred from the diff's silence. Route inventory
+re-enumerated mechanically: 27/27, unchanged. **0 fixes, 0 flagged.** Full
+write-up:
 `docs/security-review/AH-21-admin-hours.md` → Pass 4.
 
 <details>
