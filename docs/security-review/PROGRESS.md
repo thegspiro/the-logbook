@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 22 (Grants & fundraising), pass 4** — branch
+`claude/security-review-grants-fundraising`, PR pending creation.
+**Watchdog iteration:** PR #2482 closed out Feature 21 (Admin hours) at
+2026-09-11T08:40 UTC; by 10:46 UTC — over two hours later, past the
+~90-minute stall threshold documented on Feature 19 (PR #2473) — no branch
+or PR existed for Feature 22 despite this file already naming it "Next."
+This watchdog session started the pass directly. Diff-scoped against pass
+3's merge (`849afee`, verified reachable from `HEAD`): backend
+byte-identical, two frontend files changed cosmetically only. **3 fixed
+(all LOW/NIT), 0 flagged (new)** — GF-36 (create/update application
+responses left their own new note unattributed), GF-37 (dead phantom
+`approved_by` FK check on `GrantApplication`, cleaned up), GF-38 (the
+opportunities page's "Apply" link silently dropped the opportunity id).
+GF-7/8/9/27a/33 re-confirmed still open, unchanged. Full write-up:
+`docs/security-review/GF-22-grants-fundraising.md` → Pass 4. Completion
+gate green: flake8/black/isort clean; migrations validated (443 revisions,
+single head, no new migration); 609/609 grant/fundraising-scoped and
+12,367/12,367 full backend suite pass; frontend `tsc`/`eslint` clean;
+`vitest run src/modules/grants-fundraising` 5 files, 9 passed.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2482's merge, Feature 21 pass 4 docs-recording), preserved for history</summary>
+
 **None.** PR [#2481](https://github.com/thegspiro/the-logbook/pull/2481)
 (Feature 21, Admin hours, pass 4) merged clean via squash, merge commit
 `1fb968938ce2`, all 17 CI checks green (CI Success, both MySQL/MariaDB
@@ -28,6 +51,8 @@ fifth/sixth-round TOCTOU and test-quality follow-ups) resolved with no
 outstanding findings on the final commit. Merged directly once fully green
 with `mergeable_state: clean` and no unresolved threads. Rotation row 21 is
 now `✅`. Next: Feature 22 (Grants & fundraising).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 4, PR #2481, before the merge), preserved for history</summary>
@@ -295,6 +320,49 @@ that were an artifact of the worktree layout, not the code). Rotation row
 20 → `✅` (pending merge). Next: Feature 21 (Admin hours).
 
 </details>
+
+### 2026-09-11 — Feature 22 (Grants & fundraising), pass 4 — watchdog iteration, 3 fixed (LOW/NIT), 0 flagged (new)
+
+PR #2482 closed out Feature 21 (Admin hours) at 08:40 UTC; by 10:46 UTC —
+over two hours later, past the ~90-minute stall threshold documented on
+Feature 19 (PR #2473) — no branch or PR existed for Feature 22 despite
+this file already naming it "Next." This watchdog session started the
+pass directly on its own designated branch rather than leave the rotation
+stalled.
+
+Diff-scoped against pass 3's merge (`849afee`, PR #2251), verified
+reachable from `HEAD` via `git merge-base --is-ancestor` before trusting
+it. All six declared backend files came back byte-identical; two frontend
+files changed, both cosmetic (a `<main>`→`<div data-page-main>` swap and a
+mobile touch-target/contrast class update on three links), confirmed by
+reading the diff directly. Re-verified GF-13 through GF-35 intact via a
+full independent re-read (two parallel background agents, one per
+surface) rather than trusting the clean diff alone — the same shape as
+Feature 21's own pass 4, which found a real bug by re-reading code
+directly. 45/45 endpoint permission enumeration re-confirmed, no Pitfall
+#23 baseline-grant leak.
+
+Three new findings, all fixed: **GF-36** (LOW) — `create_application`/
+`update_application` each generate a `GrantNote` in the same request but
+returned the raw ORM object instead of resolving note author names the
+way `GET /applications/{id}` does, so the note the request itself just
+created always came back unattributed until a follow-up GET. **GF-37**
+(NIT) — `_validate_application_fks` validated a phantom `approved_by`
+field that has never existed on `GrantApplication` (dead code, removed).
+**GF-38** (LOW, functional not security) — the opportunities page's
+"Apply" link passed `?opportunity_id=` but the new-application form never
+read it, silently dropping the link; fixed by seeding the form's initial
+state from the URL on create. GF-7/8/9/27a/33 re-confirmed still open,
+unchanged, all correctly flagged product/design decisions. Full write-up:
+`docs/security-review/GF-22-grants-fundraising.md` → Pass 4.
+
+Completion gate green: flake8/black/isort clean against `app/`, `tests/`,
+`alembic/`; migrations validated (443 revisions, single head, no new
+migration); 609/609 grant/fundraising-scoped and 12,367/12,367 full
+backend suite pass; frontend `tsc --noEmit`/`eslint` clean;
+`vitest run src/modules/grants-fundraising` 5 files, 9 passed (2 new
+files, 4 new cases). Rotation row 22 → ⏳ pending PR. Next: open the PR,
+tend it to green, then 23 Medical supplies.
 
 ### 2026-09-11 — Feature 21 (Admin hours), pass 4 — 1 fixed (P1), 1 flagged
 
@@ -13451,7 +13519,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⏳     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |

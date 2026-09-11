@@ -1,8 +1,8 @@
 # Security Review — Grants & Fundraising
 
 **Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-30 (pass 2), 2026-09-05 (pass 3) · **PR:** [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
-(pass 1)
+2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4) · **PR:**
+[#1904](https://github.com/thegspiro/the-logbook/pull/1904) (pass 1)
 
 ---
 
@@ -1427,7 +1427,7 @@ cut of this fix, all confirmed and fixed in the same PR before merge:
    routes. Replaced with a new `_application_in_org()` helper that runs a
    bare `select(GrantApplication.id).where(id ==, organization_id ==)` with
    no loader options, raising the same `ValueError("Application not
-   found")` as before when it finds nothing. `get_application()` itself is
+found")` as before when it finds nothing. `get_application()` itself is
    unchanged and still used by callers that need the full eager-loaded
    object (`update_application`, `delete_application`, `create_budget_item`,
    etc.).
@@ -1525,3 +1525,198 @@ confirm the org-scoping guarantee (Pitfall #14) survived the swap from
 No frontend files were touched this pass (diff-confirmed zero drift, and no
 new frontend finding), so no `vitest` run is reported separately from the
 full-suite gate above.
+
+---
+
+## Pass 4 (2026-09-11)
+
+**Watchdog iteration.** PR #2482 closed out Feature 21 (Admin hours) at
+2026-09-11T08:40 UTC. By 10:46 UTC — over two hours later, well past the
+~90-minute stall threshold documented on Feature 19 (PR #2473) — no branch
+or PR existed for Feature 22 despite `PROGRESS.md` already naming it
+"Next." This watchdog session started the pass directly on its own
+designated branch, rather than leave the rotation stalled.
+
+**Backend:** `app/api/v1/endpoints/grants.py` (1,897 L, 45 endpoints),
+`app/services/grant_service.py` (1,235 L), `app/services/fundraising_service.py`
+(765 L), `app/models/grant.py`, `app/schemas/grant.py`,
+`app/services/dashboard_widget_service.py` (its `fundraising()` method only).
+**Frontend:** `frontend/src/modules/grants-fundraising/` (all 8 pages,
+services, store, routes, types) — full re-read, not diff-scoped, matching
+pass 3's own methodology.
+**Migrations:** none touching a grants/fundraising table since pass 3.
+
+### Diff-scoping methodology
+
+Verified pass 3's merge commit (`849afee`) is reachable from `HEAD` via
+`git merge-base --is-ancestor 849afee HEAD` (no shallow-clone issue this
+time — the repository was already a full clone). `git diff 849afee HEAD
+--stat` against all six declared backend files came back **empty —
+byte-identical** to pass 3's merged state. Two frontend files changed:
+`GrantDetailPage.tsx` (a `<main>` → `<div data-page-main>` swap, unrelated
+to this module's own logic) and `GrantsDashboardPage.tsx` (mobile
+touch-target sizing and a red-600→theme-accent-red contrast class swap on
+three `Link` elements) — both read directly and confirmed cosmetic, no
+behavior change.
+
+**Conclusion: effectively zero code drift since pass 3.** This pass is a
+full independent re-verification of unchanged code plus a fresh checklist
+sweep, run via two parallel background agents (one per surface) per this
+pass's own instructions to enumerate rather than spot-check, mirroring how
+Feature 21 (Admin hours)'s own pass 4 found a real bug by re-reading code
+directly rather than trusting a clean diff.
+
+### Re-verification of GF-13 through GF-35
+
+All prior fixes re-confirmed intact via full independent re-read (not
+cited from this doc): GF-13 (opportunity→application cascade), GF-14
+(idempotent compliance-task generation), GF-15 (locked aggregate
+recomputes, lock-before-flush ordering), GF-16 (`apply_updates` on all ten
+update methods), GF-17 (`_notes_with_authors` org filter), GF-18
+(`_update_budget_item_spent`'s org-scoped fetch), GF-24/24a (end-of-day UTC
+report boundary, hard-coded-UTC limitation unchanged), GF-35 (all 11
+`list_*` methods still carry `.offset(skip).limit(limit)` plus an
+`id.asc()` tie-breaker, and `list_budget_items`/`list_expenditures`/
+`list_notes`/`list_applications` still avoid eager-loading full child
+collections ahead of the page limit). Endpoint count re-confirmed at
+**45/45** by three independent methods (decorator count, permission-string
+grep, decorator-to-handler pairing), every one still `.view` on `GET` /
+`.manage` on `POST`/`PUT`/`DELETE` with no exception, and neither
+permission string appears in `DEFAULT_POSITIONS["member"]` or
+`"firefighter"` (Pitfall #23 — clean). `DashboardWidgetService.fundraising()`
+re-read in full again: still org-filters all four queries (both sides of
+the `Donation`⋈`FundraisingCampaign` join included) and still gates behind
+both `"grants" in enabled_modules` and `fundraising.view`.
+
+On the frontend: permission gating (routes + `canManage` control-wrapping),
+the banned-patterns sweep, form payload discipline, outbound-URL safety,
+and the GF-31/32/33/34 status-filter/pagination/race-condition chain all
+re-verified intact with fresh file:line citations. The module's four test
+files were also checked against two CLAUDE.md pitfalls that postdate pass
+3 (#28 mock-config leakage, #28a un-pinned viewport assertions): all four
+use `mockReset()` before setting a mock implementation in `beforeEach`
+(not a bare `vi.clearAllMocks()`), and none assert viewport-dependent
+output — clean on both.
+
+**Re-confirmed still open (unchanged, per every prior pass):** GF-7
+(state-machine/overspend guards), GF-8 (`is_anonymous` not enforced), GF-9
+(float money math in both report methods), GF-27a (dashboard KPI
+multi-status aggregate vs. single-status link), GF-33 (applications page
+still capped at 1,000, no real pagination UI). All product/design
+decisions, unchanged, already in `KNOWN_LIMITATIONS.md`.
+
+### New this pass
+
+#### GF-36 — LOW — create/update application responses left their own new note unattributed — ✅ FIXED
+
+**What:** `create_application` and `update_application` (`grants.py`) each
+generate a `GrantNote` in the same request — an "Application created…" note
+on create, a status-change note whenever `application_status` changes on
+update — then reload the application via `service.get_application(...)`
+and returned the raw ORM object directly. Only the dedicated
+`GET /applications/{id}` handler called `_notes_with_authors()` to resolve
+`GrantNoteResponse.created_by_name`; the other two did not. GF-17 (pass 1)
+fixed the helper's own missing org filter but never checked that all three
+call sites actually used it — it turned out only one of three did.
+
+**Failure scenario:** an officer submits a grant-application status change
+via the edit form. The UI's activity-log panel, fed directly by the PUT
+response, shows the new "Status changed from Submitted to Awarded" entry
+with a blank/unattributed author; a page refresh (which hits the GET
+handler) shows the identical entry correctly attributed. Not a security
+leak — it under-populates a display field, never over-exposes one — but a
+real, reproducible inconsistency between what two different calls to "the
+same application" render.
+
+**Where:** `app/api/v1/endpoints/grants.py`, `create_application` and
+`update_application`.
+
+**Fix:** both now build their response the same way `get_application`
+already does — `GrantApplicationResponse.model_validate(application)`
+followed by `payload.grant_notes = await _notes_with_authors(db,
+application.grant_notes, str(current_user.organization_id))` — instead of
+returning the raw ORM object.
+
+**Guard tests added:** `tests/test_grants_application_note_authors.py`
+(new file, 2 cases) calls `create_application`/`update_application`
+directly with a mocked `GrantService` and a mocked `_notes_with_authors`,
+and asserts the endpoint's returned payload carries `_notes_with_authors`'
+result rather than the unresolved raw notes. Verified both fail before the
+fix (0 awaits recorded against the mock — the helper was never called) and
+pass after.
+
+#### GF-37 — NIT (dead-code / doc accuracy) — `_validate_application_fks` checked a phantom `approved_by` field that has never existed on `GrantApplication` — ✅ FIXED
+
+**What:** `grant_service.py`'s `_validate_application_fks` (added by GF-6,
+pass 1) validated `data.get("approved_by")` as a `User` FK "on
+applications." `GrantApplication` has no `approved_by` column at all —
+`approved_by` exists only on `GrantExpenditure`, and is response-only there
+(`GrantExpenditureResponse`, not `GrantExpenditureCreate`/`Update`).
+Neither `GrantApplicationCreate` nor `GrantApplicationUpdate` declares an
+`approved_by` field, so `data.get("approved_by")` was always `None` and the
+check was permanently a no-op — not a missing validation (nothing can ever
+reach it), but dead code asserting a guarantee about a field that isn't
+real. The module-audit and app-review docs' GF-6 write-ups have described
+this same phantom field since pass 1; not corrected here (those are a
+separate, frozen audit lineage), but flagged so a future reader of this
+doc isn't misled by the original description either.
+
+**Where:** `app/services/grant_service.py`, `_validate_application_fks`.
+
+**Fix:** removed the dead `approved_by` validation block and its docstring
+reference; the two real stored-only FKs (`linked_campaign_id`,
+`assigned_to`) are unchanged. No test previously exercised `approved_by` on
+an application (confirmed by grep), so no test needed updating beyond a
+docstring correction in `tests/test_grant_service.py`'s
+`TestApplicationFkValidation`.
+
+#### GF-38 — LOW (functional bug, not security) — the opportunities page's "Apply" link silently dropped the opportunity — ✅ FIXED
+
+**What:** `GrantOpportunitiesPage.tsx` links "Apply" to
+`` `/grants/applications/new?opportunity_id=${opp.id}` ``, but
+`GrantApplicationFormPage.tsx` never called `useSearchParams()` or read
+that query param anywhere — confirmed by grep before concluding this was a
+real gap, not a naming mismatch. An officer clicking "Apply" on a specific
+funding opportunity landed on a completely blank new-application form; if
+they forgot to re-select the opportunity from the dropdown by hand, the
+application was created with `opportunityId: null`, silently losing the
+link the "Apply" flow implied.
+
+**Where:** `frontend/src/modules/grants-fundraising/pages/GrantApplicationFormPage.tsx`.
+
+**Fix:** the form's initial state now reads `opportunity_id` from
+`useSearchParams()` when creating (not editing) an application, seeding
+`formData.opportunityId` from it. Editing an existing application is
+unaffected — its `opportunityId` still comes from the loaded record, as
+before.
+
+**Guard test added:**
+`GrantApplicationFormPage.opportunityId.test.tsx` (new file, 2 cases) —
+renders the page with `initialEntries={['/grants/applications/new?opportunity_id=opp-123']}`
+and asserts the Opportunity ID `<select>` resolves to that value once the
+matching opportunity loads, and that it stays blank with no query param.
+Verified to fail before the fix (`select.value` read `''`) and pass after.
+
+### Guard tests added
+
+3 new files total this pass: `tests/test_grants_application_note_authors.py`
+(2 cases, GF-36), `GrantApplicationFormPage.opportunityId.test.tsx` (2
+cases, GF-38); plus a docstring-only correction in
+`tests/test_grant_service.py` (GF-37, no behavior change).
+
+### Completion gate (pass 4)
+
+| Check                                                   | Result                               |
+| ------------------------------------------------------- | ------------------------------------ |
+| `flake8 app/ tests/ alembic/`                           | 0 violations                         |
+| `black --check app/ tests/ alembic/`                    | 1,580 files unchanged                |
+| `isort --check-only app/ tests/ alembic/`               | clean                                |
+| `python3 scripts/validate_migrations.py --strict`       | PASSED — 443 revisions, single head  |
+| `python3 -m pytest tests/ -q -k "grant or fundraising"` | 609 passed, 1 pre-existing skip      |
+| `python3 -m pytest tests/ -q` (full backend suite)      | 12,367 passed, 21 pre-existing skips |
+| `npx tsc --noEmit` / `npm run typecheck`                | 0 errors                             |
+| `npx eslint src/modules/grants-fundraising`             | 0 errors, 0 warnings                 |
+| `npx vitest run src/modules/grants-fundraising`         | 5 files, 9 passed                    |
+
+Rotation row 22 (Grants & fundraising) → ✅ (pending merge). Next: Feature
+23 (Medical supplies).
