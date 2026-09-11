@@ -130,7 +130,18 @@ class OnboardingService:
     Manages the onboarding process for first-time system setup
     """
 
-    # Define onboarding steps - aligned with frontend flow
+    # The wizard's step order, mirroring frontend `config/steps.ts`.
+    #
+    # Ordered by what a department can answer, not by what the system wants to
+    # store. Identity is second so the remainder of setup belongs to a real
+    # account rather than to an anonymous 30-minute session; what the
+    # department uses (modules, ranks, stations, apparatus) precedes the
+    # external integrations (email, storage, sign-in), which are the steps that
+    # send an operator away to find credentials and are all skippable.
+    #
+    # `name` values are persisted in `OnboardingStatus.steps_completed` and one
+    # of them is load-bearing in `complete_onboarding`'s `required_steps`, so
+    # they are stable identifiers: reorder the ids, never rename a step.
     STEPS = [
         {
             "id": 1,
@@ -141,79 +152,79 @@ class OnboardingService:
         },
         {
             "id": 2,
-            "name": "stations",
-            "title": "Stations",
-            "description": "Add the stations beyond headquarters",
-            "required": False,
-        },
-        {
-            "id": 3,
-            "name": "apparatus",
-            "title": "Apparatus",
-            "description": "Add your engines, trucks, and ambulances",
-            "required": False,
-        },
-        {
-            "id": 4,
-            "name": "navigation",
-            "title": "Navigation Layout",
-            "description": "Choose your preferred navigation layout",
-            "required": False,
-        },
-        {
-            "id": 5,
-            "name": "email_platform",
-            "title": "Email Platform",
-            "description": "Select your email service provider",
-            "required": False,
-        },
-        {
-            "id": 6,
-            "name": "email_config",
-            "title": "Email Configuration",
-            "description": "Configure email settings",
-            "required": False,
-        },
-        {
-            "id": 7,
-            "name": "file_storage",
-            "title": "File Storage",
-            "description": "Choose your file storage solution",
-            "required": False,
-        },
-        {
-            "id": 8,
-            "name": "authentication",
-            "title": "Authentication",
-            "description": "Select authentication method",
-            "required": False,
-        },
-        {
-            "id": 9,
             "name": "admin_user",
             "title": "Create System Owner",
             "description": "Create the first admin user with secure credentials",
             "required": True,
         },
         {
-            "id": 10,
-            "name": "it_team",
-            "title": "IT Team & Backup Access",
-            "description": "Configure IT team and backup access",
+            "id": 3,
+            "name": "modules",
+            "title": "Select Modules",
+            "description": "Choose which modules to enable for your organization",
             "required": False,
         },
         {
-            "id": 11,
+            "id": 4,
             "name": "roles",
             "title": "Ranks & Positions",
             "description": "Configure the rank ladder, positions and permissions",
             "required": False,
         },
         {
+            "id": 5,
+            "name": "stations",
+            "title": "Stations",
+            "description": "Add the stations beyond headquarters",
+            "required": False,
+        },
+        {
+            "id": 6,
+            "name": "apparatus",
+            "title": "Apparatus",
+            "description": "Add your engines, trucks, and ambulances",
+            "required": False,
+        },
+        {
+            "id": 7,
+            "name": "it_team",
+            "title": "IT Team & Backup Access",
+            "description": "Configure IT team and backup access",
+            "required": False,
+        },
+        {
+            "id": 8,
+            "name": "email_platform",
+            "title": "Email Platform",
+            "description": "Select your email service provider",
+            "required": False,
+        },
+        {
+            "id": 9,
+            "name": "email_config",
+            "title": "Email Configuration",
+            "description": "Configure email settings",
+            "required": False,
+        },
+        {
+            "id": 10,
+            "name": "file_storage",
+            "title": "File Storage",
+            "description": "Choose your file storage solution",
+            "required": False,
+        },
+        {
+            "id": 11,
+            "name": "authentication",
+            "title": "Authentication",
+            "description": "Select authentication method",
+            "required": False,
+        },
+        {
             "id": 12,
-            "name": "modules",
-            "title": "Select Modules",
-            "description": "Choose which modules to enable for your organization",
+            "name": "navigation",
+            "title": "Navigation Layout",
+            "description": "Choose your preferred navigation layout",
             "required": False,
         },
     ]

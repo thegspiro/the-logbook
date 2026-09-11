@@ -36,19 +36,19 @@ export const getOnboardingRoutes = () => {
       {/* Onboarding flow */}
       <Route path="/onboarding" element={<OnboardingCheck />} />
 
-      {/* Onboarding wizard - Step 1: Organization Setup (comprehensive) */}
+      {/* Step 1 - Organization Setup. Order lives in config/steps.ts. */}
       <Route path="/onboarding/start" element={<OrganizationSetup />} />
 
       {/* Legacy route redirect: the old department-info step is now folded into OrganizationSetup */}
       <Route path="/onboarding/department" element={<Navigate to="/onboarding/start" replace />} />
 
-      {/* Onboarding wizard - Step 2: Stations beyond headquarters */}
+      {/* Stations beyond headquarters */}
       <Route path="/onboarding/stations" element={<StationSetup />} />
 
-      {/* Onboarding wizard - Step 3: Apparatus */}
+      {/* Apparatus */}
       <Route path="/onboarding/apparatus" element={<ApparatusSetup />} />
 
-      {/* Onboarding wizard - Step 4: Navigation Choice */}
+      {/* Navigation Choice - last step; a preference, not a prerequisite */}
       <Route path="/onboarding/navigation-choice" element={<NavigationChoice />} />
 
       {/* Onboarding wizard - Email Platform */}
@@ -79,15 +79,15 @@ export const getOnboardingRoutes = () => {
 
       {/* Legacy route redirect: the per-module configuration step is gone. It
           collected manage positions into the wizard's store and submitted
-          nothing; the Positions step, one step earlier, owns that decision and
-          saves it. Kept as a redirect because a restored session can still hold
+          nothing; the Positions step, which now follows this one, owns that
+          decision and saves it. Kept as a redirect because a restored session can still hold
           the old URL. */}
       <Route path="/onboarding/modules/:moduleId/config" element={<Navigate to="/onboarding/modules" replace />} />
 
       {/* Legacy route redirect */}
       <Route path="/onboarding/module-selection" element={<ModuleOverview />} />
 
-      {/* Onboarding wizard - System Owner Creation */}
+      {/* Step 2 - System Owner Creation. Identity before the rest of setup. */}
       <Route path="/onboarding/system-owner" element={<SystemOwnerCreation />} />
       {/* Legacy route redirect for admin-user */}
       <Route path="/onboarding/admin-user" element={<Navigate to="/onboarding/system-owner" replace />} />

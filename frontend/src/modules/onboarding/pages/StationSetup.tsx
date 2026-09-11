@@ -12,6 +12,7 @@ import {
 import { useOnboardingStore, type OnboardingStationDraft } from '../store';
 import { useApiRequest } from '../hooks';
 import { apiClient } from '../services/api-client';
+import { nextStepPath } from '../config/steps';
 
 const inputClass = 'form-input px-3';
 const labelClass = 'form-label-sm';
@@ -113,7 +114,7 @@ const StationSetup: React.FC = () => {
     if (namedRows.length > 0) {
       toast.success(`${namedRows.length} station${namedRows.length === 1 ? '' : 's'} added`);
     }
-    void navigate('/onboarding/apparatus');
+    void navigate(nextStepPath('stations'));
   };
 
   const handleSkip = async () => {
@@ -122,7 +123,7 @@ const StationSetup: React.FC = () => {
     // Persist the empty list so a previous pass's stations are cleared if the
     // admin came back and decided against them.
     if (!(await persist([]))) return;
-    void navigate('/onboarding/apparatus');
+    void navigate(nextStepPath('stations'));
   };
 
   return (

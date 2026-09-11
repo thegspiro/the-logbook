@@ -7,6 +7,7 @@ import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 import { isValidEmail } from '../utils/validation';
+import { nextStepPath, previousStepPath } from '../config/steps';
 
 const SystemOwnerCreation: React.FC = () => {
   const navigate = useNavigate();
@@ -215,7 +216,7 @@ const SystemOwnerCreation: React.FC = () => {
         }
 
         // Continue to IT Team & Backup Access step
-        void navigate('/onboarding/it-team');
+        void navigate(nextStepPath('system_owner'));
 
         return response;
       },
@@ -256,7 +257,7 @@ const SystemOwnerCreation: React.FC = () => {
         <div className="w-full max-w-2xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
-            <BackButton to="/onboarding/authentication" />
+            <BackButton to={previousStepPath('system_owner')} />
             <ResetProgressButton />
           </div>
 

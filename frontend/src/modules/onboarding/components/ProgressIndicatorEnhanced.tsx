@@ -1,31 +1,19 @@
 import React from 'react';
 import { Check, ChevronRight } from 'lucide-react';
 
-/**
- * The onboarding flow in order, matching routes.tsx.
- *
- * Pages name their step with a key instead of a hardcoded number. When this
- * list held numbers that each page repeated, the two drifted: NavigationChoice
- * passed currentStep={2} against a list whose second entry was "Organization
- * Setup", so the wizard's own progress bar mislabeled the step the user was
- * looking at. A key can't drift — inserting a step here renumbers everything.
- */
-const ONBOARDING_STEPS = [
-  { key: 'organization', name: 'Organization Setup', shortName: 'Organization' },
-  { key: 'stations', name: 'Stations', shortName: 'Stations' },
-  { key: 'apparatus', name: 'Apparatus', shortName: 'Apparatus' },
-  { key: 'navigation', name: 'Navigation Choice', shortName: 'Navigation' },
-  { key: 'email_platform', name: 'Email Platform', shortName: 'Email' },
-  { key: 'email_config', name: 'Email Configuration', shortName: 'Config' },
-  { key: 'file_storage', name: 'File Storage', shortName: 'Storage' },
-  { key: 'authentication', name: 'Authentication', shortName: 'Auth' },
-  { key: 'system_owner', name: 'System Owner', shortName: 'Owner' },
-  { key: 'it_team', name: 'IT Team Backup', shortName: 'IT Backup' },
-  { key: 'positions', name: 'Ranks & Positions', shortName: 'Positions' },
-  { key: 'modules', name: 'Module Selection', shortName: 'Modules' },
-] as const;
+import { ONBOARDING_STEPS } from '../config/steps';
+import type { OnboardingStepKey } from '../config/steps';
 
-export type OnboardingStepKey = (typeof ONBOARDING_STEPS)[number]['key'];
+/**
+ * The step order now lives in `config/steps.ts` and is imported, not restated.
+ *
+ * It was declared here as well as in the route table and in every page's
+ * hardcoded next-link, and the copies drifted: NavigationChoice once passed
+ * currentStep={2} against a list whose second entry was "Organization Setup",
+ * so the wizard's own progress bar mislabeled the step being looked at.
+ */
+
+export type { OnboardingStepKey };
 
 interface ProgressIndicatorProps {
   step: OnboardingStepKey;

@@ -13,6 +13,7 @@ import {
 import { useOnboardingStore, type OnboardingApparatusDraft } from '../store';
 import { useApiRequest } from '../hooks';
 import { apiClient } from '../services/api-client';
+import { nextStepPath, previousStepPath } from '../config/steps';
 
 const inputClass = 'form-input px-3';
 const labelClass = 'form-label-sm';
@@ -145,14 +146,14 @@ const ApparatusSetup: React.FC = () => {
     if (namedRows.length > 0) {
       toast.success(`${namedRows.length} apparatus added`);
     }
-    void navigate('/onboarding/navigation-choice');
+    void navigate(nextStepPath('apparatus'));
   };
 
   const handleSkip = async () => {
     clearError();
     setApparatus([]);
     if (!(await persist([]))) return;
-    void navigate('/onboarding/navigation-choice');
+    void navigate(nextStepPath('apparatus'));
   };
 
   return (
@@ -389,7 +390,7 @@ const ApparatusSetup: React.FC = () => {
           </div>
 
           <div className="mt-6 flex items-center justify-between">
-            <BackButton to="/onboarding/stations" />
+            <BackButton to={previousStepPath('apparatus')} />
             <ResetProgressButton />
           </div>
 

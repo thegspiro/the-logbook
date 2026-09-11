@@ -12,6 +12,7 @@ import {
 import { useOnboardingStore } from '../store';
 import { useApiRequest } from '../hooks';
 import { apiClient } from '../services/api-client';
+import { ONBOARDING_CONFIG_PATHS, nextStepPath, previousStepPath } from '../config/steps';
 
 // Email platform logos (using simple SVG icons)
 const GmailIcon = () => (
@@ -118,10 +119,10 @@ const EmailPlatformChoice: React.FC = () => {
         },
         { step: 'Email Platform Choice', action: 'Skip email configuration' }
       );
-      if (data) void navigate('/onboarding/file-storage');
+      if (data) void navigate(nextStepPath('email'));
     } else {
       // Go to email configuration page
-      void navigate('/onboarding/email-config');
+      void navigate(ONBOARDING_CONFIG_PATHS.email);
     }
   };
 
@@ -141,7 +142,7 @@ const EmailPlatformChoice: React.FC = () => {
         <div className="w-full max-w-5xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
-            <BackButton to="/onboarding/navigation-choice" />
+            <BackButton to={previousStepPath('email')} />
             <ResetProgressButton />
           </div>
 
@@ -270,7 +271,7 @@ const EmailPlatformChoice: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          <ProgressIndicator step="email_platform" className="border-theme-nav-border mt-6 border-t pt-6" />
+          <ProgressIndicator step="email" className="border-theme-nav-border mt-6 border-t pt-6" />
 
           {/* Auto-Save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
