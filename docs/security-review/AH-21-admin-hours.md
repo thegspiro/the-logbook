@@ -110,17 +110,25 @@ both of `scheduled_tasks.py`'s changed hunks (2677-2690 and 3517-3995).
 
 **The caller sweep above only found services that import `AdminHoursService`
 or `admin_hours_service` — too narrow, the same class of gap as the
-frontend consumer sweep (caught by Codex review):** several backend paths
-read admin-hours data by querying `AdminHoursEntry`/`AdminHoursCategory`
-directly, never going through the service at all.
-`grep -rln "AdminHoursEntry\|AdminHoursCategory" app/` outside the module's
-own two files and the already-checked `event_service.py` finds five:
-`reports_service.py`, `dashboard.py` (endpoint),
+frontend consumer sweep (caught by Codex review, two rounds — the first
+correction's own five-file inventory was itself incomplete):** several
+backend paths read admin-hours data by querying
+`AdminHoursEntry`/`AdminHoursCategory` directly, never going through the
+service at all. `grep -rln "AdminHoursEntry\|AdminHoursCategory" app/`
+outside the module's own two files, `event_service.py`, and
+non-source noise (`__pycache__`, `app/models/__init__.py`'s re-export
+barrel, `reports.py`'s one comment-only mention with no actual query)
+finds **seven**, not five: `reports_service.py`, `dashboard.py` (endpoint),
 `compliance_officer_service.py`, `compliance_config_service.py`,
-`data_export_service.py`. `compliance_config_service.py` and
-`data_export_service.py` have zero diff since `4ba836420`. The other three
-changed — verified by line number, not by the commit message, the same
-method used above:
+`data_export_service.py`, **and, missed by the first correction's own
+search, `app/core/seed_admin_hours.py`** (queries and creates
+`AdminHoursCategory`/`EventHourMapping` for onboarding seed data) **and
+`app/services/org_template_registry.py`** (registers `AdminHoursCategory`
+for org-template import/export). `compliance_config_service.py`,
+`data_export_service.py`, `seed_admin_hours.py`, and
+`org_template_registry.py` all have zero diff since `4ba836420`. The other
+three changed — verified by line number, not by the commit message, the
+same method used above:
 
 - `reports_service.py`'s diff (five hunks, lines 1281-1450ish) is entirely
   the same call-type label-resolution feature found in `scheduled_tasks.py`
@@ -140,7 +148,9 @@ method used above:
 None of the three changed files' diffs overlap their own admin-hours query
 lines. This closes the gap the caller sweep above left open: every path
 that reads `AdminHoursEntry`/`AdminHoursCategory`, service-mediated or
-direct, is now accounted for.
+direct, is now accounted for — verified by actually re-running the grep
+fresh against the full `app/` tree rather than trusting the first
+correction's own recorded count.
 
 **Migration content, not just chain hygiene, checked against the declared
 scope** (CHECKLIST.md's schema-and-migration dimension — `validate_migrations.py
@@ -178,9 +188,16 @@ pipeline or a URL contract, without ever importing
   admin-hours-specific hunk). Read the diff directly: it touches only
   shared button/date-input styling, nothing that branches on report type or
   changes what data is requested — no admin-hours-specific behavior change.
-- `modules/reports/types/index.ts` and
-  `modules/reports/components/renderers/index.ts` are the type/barrel files
-  behind the renderer above — zero diff since `4ba836420`.
+- `modules/reports/types/index.ts` — **not zero diff (the first correction's
+  own claim was wrong, caught by a third Codex round):** it adds an
+  eight-line `call_type_labels?: Record<string, string>` field to
+  `CallVolumeReport` — the same call-type label-resolution feature found in
+  `reports_service.py`/`scheduled_tasks.py` above. `AdminHoursReport`
+  (defined ~28 lines below the changed hunk) is untouched — confirmed by
+  reading the diff, not by re-asserting the file's earlier "zero diff"
+  status.
+- `modules/reports/components/renderers/index.ts` is the barrel file behind
+  the renderer above — zero diff since `4ba836420`.
 - `types/training.ts`'s "AdminHours" match is the unrelated
   `AdminHoursComplianceItem`/training-compliance shape, not this module —
   zero diff since `4ba836420`.
@@ -190,12 +207,33 @@ pipeline or a URL contract, without ever importing
   zero diff) resolves on scan — a real, indirect consumer via a URL
   contract rather than a service import. Zero diff since `4ba836420`.
 
-All six are genuine or namesake matches, correctly distinguished; only one
-(`ReportsPage.tsx`) changed, and its change doesn't touch admin-hours
-behavior. No new admin-hours-behavioral finding; the 6-file
-directly-imports list from pass 2/3 is still accurate for what it claims
-(direct service imports), it just isn't the complete set of _indirect_
-consumers, which is now recorded above instead of asserted away.
+All six are genuine or namesake matches; two changed
+(`ReportsPage.tsx`, `modules/reports/types/index.ts`), both for the same
+unrelated call-type-label feature, neither touching admin-hours behavior.
+The 6-file directly-imports list from pass 2/3 is still accurate for what
+it claims (direct service imports), it just isn't the complete set of
+_indirect_ consumers, which is now recorded above instead of asserted away.
+
+**One more indirect path, outside the six above (caught by the same Codex
+round): the API-cache exclusion itself.** The original grep excluded
+`.test.` files, which hid `frontend/src/utils/apiCache.ts` and
+`apiCache.test.ts` — both changed since `4ba836420`, and both are a real
+admin-hours security control (Pitfall/CLAUDE.md's `UNCACHEABLE_PREFIXES`
+— the list that keeps one member's hours out of the shared-cache blast
+radius for the next caller). `apiCache.ts`'s diff is entirely new entries
+for other modules (apparatus, inventory, training); the existing
+`'/admin-hours/'` line itself is an unchanged context line. `apiCache.test.ts`'s
+diff **is** admin-hours-relevant: it replaces a single assertion against
+`/admin-hours/report` — not a route this app has anywhere — with eleven
+assertions against the client's actual GET paths (`/summary` with its real
+query string, `/entries/my`, `/entries`, `/entries/export`, `/active`,
+`/active-sessions`, `/pending-count`, `/compliance/{id}`, `/categories`,
+`/categories/{id}/qr-data`, `/event-mappings`), so a narrowed prefix could
+no longer pass this block while leaving a real path cacheable. Ran it:
+`npx vitest run src/utils/apiCache.test.ts` — 89 passed. A genuine,
+positive strengthening of an admin-hours-adjacent guard test, not a
+finding, but it belongs in the record rather than being hidden by a
+test-file exclusion in the sweep that found it.
 
 **Spot-verified every backend fix from passes 1-3 is still present at its
 current line**, by direct grep against the file content (not inferred from
@@ -256,6 +294,7 @@ silence.
 | `npm run typecheck` (frontend)                                                                                               | 0 errors                           |
 | `npm run lint` (frontend)                                                                                                    | 0 errors, 0 warnings               |
 | `vitest run` — `entryTimes.test.ts`, `moduleFetchIntegrity.test.ts`, `createApiClient.test.ts`, `exportCsv.behavior.test.ts` | 4 files, 53 passed                 |
+| `vitest run` — `apiCache.test.ts` (admin-hours-relevant guard, found by widening the consumer sweep)                         | 89 passed                          |
 
 **Correction (Codex review on this pass's own second commit):** the first
 two drafts claimed passes 1-3's frontend guard-test suite was
