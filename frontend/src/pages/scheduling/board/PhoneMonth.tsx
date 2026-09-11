@@ -91,19 +91,37 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
               const dimmed = isPastDay(day, today) || !dayMatchesFilter(summary, filter);
               const selected = isSameDay(day, selectedDate);
 
-              // The dim applies to the whole cell, including the date, and
-              // opacity multiplies contrast against the page behind it. So the
-              // value is set by the one piece of text on the cell a member
-              // reads: `text-theme-text-primary` measures 2.92:1 at 45% and
-              // 5.57:1 at 65%, against a 4.5:1 AA floor and a 7:1 AAA one.
+              // A past day, or one the filter excludes, reads quieter through
+              // weight and through its bars — never by dimming the cell.
               //
-              // 75% measures 7.95:1 in all three themes, and clearing AAA here
-              // rather than only AA is what makes the accessibility pass
-              // independent of the date. axe declines to judge text it calls
-              // too short, so a single-digit past day is never measured and a
-              // two-digit one always is: anything short of 7:1 gives a count
-              // that changes as the month advances, and a budget recording it
-              // is only ever true on the day it was taken.
+              // Fading the whole cell was the obvious version and it cost this
+              // grid three rounds of contrast bugs. Opacity multiplies the
+              // date's contrast against the page behind it, so the strength of
+              // the cue and the legibility of the text were one number:
+              // `text-theme-text-primary` measured 2.92:1 at 45%, 5.57:1 at
+              // 65% and 7.95:1 at 75%, against a 4.5:1 AA floor and 7:1 for
+              // AAA. Every step that made the date safe made the cue weaker,
+              // and anything under 7:1 also made the accessibility pass
+              // date-dependent — axe declines to judge text it calls too
+              // short, so a single-digit past day is never measured and a
+              // two-digit one always is.
+              //
+              // Colour cannot carry it either, which is worth stating because
+              // it is the first thing anyone reaches for. The text tokens are
+              // all `#ffffff` in dark mode on purpose (see the AAA uplift note
+              // in index.css): no tint of grey clears 7:1 against a 6%
+              // surface, so a muted tier would be a no-op in one theme of the
+              // three, and hardcoding a grey past the tokens re-introduces
+              // exactly the failure that uplift removed. The surface tiers sit
+              // within a hair of each other in every theme, so a background
+              // tint is out for the same reason.
+              //
+              // What is left is what index.css already says dark mode uses:
+              // size and weight. The date keeps full `text-primary` in every
+              // theme, so it is no longer measured against the cue at all, and
+              // the bars — decorative, with the legend carrying their meaning
+              // in words — take an opacity no contrast rule applies to, which
+              // is why they can be dimmed harder than the cell ever could be.
               return (
                 <button
                   key={key}
@@ -111,15 +129,19 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
                   role="gridcell"
                   aria-selected={selected}
                   onClick={() => onSelect(day)}
-                  className={`bg-theme-surface border-theme-surface-border flex min-h-[46px] flex-col items-center gap-[3px] rounded-md border px-0.5 py-1.5 transition-opacity duration-200 ease-out ${
+                  className={`bg-theme-surface border-theme-surface-border flex min-h-[46px] flex-col items-center gap-[3px] rounded-md border px-0.5 py-1.5 ${
                     selected ? 'border-2 border-red-600 dark:border-red-500' : ''
-                  } ${dimmed ? 'opacity-75' : ''}`}
+                  }`}
                 >
-                  <span className="text-theme-text-primary font-mono text-xs font-bold">{day.getDate()}</span>
+                  <span className={`text-theme-text-primary font-mono text-xs ${dimmed ? 'font-normal' : 'font-bold'}`}>
+                    {day.getDate()}
+                  </span>
                   {shifts.slice(0, MAX_BARS).map((shift) => (
                     <span
                       key={shift.id}
-                      className={`h-1 w-[18px] rounded-full ${STATUS_STYLES[shiftStatusInfo(shift, currentUserId, new Date(), signupWindow).status].bar}`}
+                      className={`h-1 w-[18px] rounded-full transition-opacity duration-200 ease-out ${
+                        dimmed ? 'opacity-50' : ''
+                      } ${STATUS_STYLES[shiftStatusInfo(shift, currentUserId, new Date(), signupWindow).status].bar}`}
                     />
                   ))}
                   <span className="sr-only">
