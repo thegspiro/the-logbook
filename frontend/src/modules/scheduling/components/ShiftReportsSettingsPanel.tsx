@@ -1123,7 +1123,7 @@ const TagListEditor: React.FC<TagListEditorProps> = ({
       <div className="mb-2 flex flex-wrap gap-1.5">
         {items.map((item, i) => (
           <TagChip
-            key={i}
+            key={item}
             item={item}
             className="border border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-400"
             actions={[

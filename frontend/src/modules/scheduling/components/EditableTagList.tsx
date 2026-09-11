@@ -72,7 +72,7 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
           if (editing?.index === i) {
             return (
               <input
-                key={i}
+                key={item}
                 autoFocus
                 type="text"
                 value={editing.value}
@@ -96,7 +96,7 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
 
           return (
             <TagChip
-              key={i}
+              key={item}
               item={item}
               className={className}
               title={title}

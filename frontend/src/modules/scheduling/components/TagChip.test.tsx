@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -96,5 +97,52 @@ describe('TagChip on a pointer', () => {
 
     await user.click(screen.getByRole('button', { name: 'Remove Structure Fire' }));
     expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The disclosure is per-chip state, so which chip it belongs to is decided by
+ * the key its list gives it. Every test above renders one chip, which is
+ * precisely why an index key survived them: with `key={i}`, removing an earlier
+ * item shifts the later ones down, React reuses the instance sitting at that
+ * index, and the open row reappears on a chip nobody touched.
+ */
+describe('TagChip in a list', () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'matchMedia', { writable: true, value: matchMedia(true) });
+  });
+
+  const List: React.FC<{ initial: string[] }> = ({ initial }) => {
+    const [items, setItems] = React.useState(initial);
+    return (
+      <>
+        {items.map((item) => (
+          <TagChip
+            key={item}
+            item={item}
+            actions={[
+              { icon: X, onClick: () => setItems((rest) => rest.filter((x) => x !== item)), label: `Remove ${item}` },
+            ]}
+          />
+        ))}
+      </>
+    );
+  };
+
+  it('keeps the open row on the chip it was opened on when an earlier chip goes', async () => {
+    const user = userEvent.setup();
+    render(<List initial={['Alpha', 'Bravo', 'Charlie']} />);
+
+    // Open Bravo, then remove Alpha from in front of it.
+    await user.click(screen.getByRole('button', { name: 'Actions for Bravo' }));
+    expect(screen.getByRole('button', { name: 'Remove Bravo' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Alpha' }));
+    await user.click(screen.getByRole('button', { name: 'Remove Alpha' }));
+
+    // Bravo is still the open one, and Charlie — which has taken Bravo's old
+    // index — has not inherited its disclosure.
+    expect(screen.getByRole('button', { name: 'Actions for Bravo' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Actions for Charlie' })).toHaveAttribute('aria-expanded', 'false');
   });
 });

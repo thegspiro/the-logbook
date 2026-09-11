@@ -65,6 +65,7 @@ test.describe('mobile presentation', () => {
     const crashed: string[] = [];
     const wrongPage: string[] = [];
     const unchangedStates: string[] = [];
+    const missingStates: string[] = [];
     const overflowed: string[] = [];
     const invalidScrollRegions: string[] = [];
     const tapBudgetBusted: string[] = [];
@@ -270,18 +271,41 @@ test.describe('mobile presentation', () => {
 
       // Drive the route's other states, if it has any. See `states` in
       // mobile-routes.ts for why arrival alone is not the whole of a screen.
-      if (route.states) {
-        const { selector, label: stateLabel, max } = route.states;
+      for (const group of route.states ?? []) {
+        const { selector, label: stateLabel, max } = group;
         // Only what a phone can actually see. These panels ship a `md:hidden`
         // strip and a desktop `<aside>` holding the same controls, and the
         // hidden copy is still in the DOM — enumerating both drives the loop
         // into elements that will never become clickable.
-        const controls = page.locator(selector).filter({ visible: true });
-        const count = Math.min(await controls.count(), max ?? Number.MAX_SAFE_INTEGER);
+        //
+        // Resolved to handles up front rather than driven through `nth(i)`. A
+        // locator resolves at action time, and some of these controls destroy
+        // their own match: an apparatus card's Edit button is replaced by the
+        // form it opens, so after the first click there is one fewer match and
+        // `nth(1)` is the element that *was* at index 2. The loop then walked
+        // past the card it was supposed to reach.
+        const handles = await page.locator(selector).filter({ visible: true }).elementHandles();
+        const chosen = handles.slice(0, max ?? handles.length);
+
+        // A selector that matches nothing is not "no states to drive", it is a
+        // route whose extra coverage silently disappeared — after a markup
+        // change, a fixture change or a typo. Same shape as `expectText` and
+        // `unchangedStates`: the quiet version of this failure is the one worth
+        // asserting on.
+        if (chosen.length === 0) {
+          missingStates.push(`${route.path} [${stateLabel}]: selector "${selector}" matched no visible control`);
+        }
+
         const seen = new Set<string>();
-        for (let i = 0; i < count; i++) {
-          const control = controls.nth(i);
-          const name = (await control.innerText().catch(() => '')).trim() || `${stateLabel} ${i + 1}`;
+        for (const [i, control] of chosen.entries()) {
+          // Whichever of the two actually identifies the row. A tab strip's
+          // buttons name themselves ("Rating Scale") and the group label
+          // ("subsection") says nothing; a group that names one control is the
+          // other way round — both apparatus cards' buttons read "Edit", so the
+          // group's own label is what distinguishes the apparatus form from the
+          // resource one in the output.
+          const text = (await control.innerText().catch(() => '')).trim();
+          const name = chosen.length === 1 ? stateLabel : text || `${stateLabel} ${i + 1}`;
           // Dispatched on the element, not aimed at a point on the screen.
           // These strips scroll smoothly, so an ordinary click never passes the
           // stability check, and `{ force: true }` is worse than it looks: force
@@ -322,6 +346,7 @@ test.describe('mobile presentation', () => {
     // below it a statement about somewhere else.
     expect(wrongPage, 'routes that did not render the page their entry names').toEqual([]);
     expect(unchangedStates, 'driven states that rendered content already measured').toEqual([]);
+    expect(missingStates, 'declared states whose selector matched nothing').toEqual([]);
     expect(overflowed, 'routes with visible elements extending outside the viewport').toEqual([]);
     expect(invalidScrollRegions, 'intentional scroll regions that break the accessibility contract').toEqual([]);
     expect(tapBudgetBusted, `routes that grew tap targets under ${MIN_TAP}px`).toEqual([]);

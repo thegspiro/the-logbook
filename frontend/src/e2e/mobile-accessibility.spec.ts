@@ -126,12 +126,6 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // severity badges already sit. Call sites are held to AA by policy.
   '/admin/audit-log': 2,
   '/events/1/monitoring': 1,
-  // The date on a past day in the phone month view. The cell is dimmed as a
-  // whole, so its opacity multiplies the date's contrast down; at the 45% it
-  // used to carry that was 2.92:1 and an AA failure, and at 65% it is 5.57:1 —
-  // out of the asserted count and into this one, the same move the audit log's
-  // amber-800 badges made two entries above.
-  '/scheduling': 1,
   '/scheduling/admin/closeout': 5,
   '/admin-hours': 2,
   '/notifications?tab=inbox': 3,
