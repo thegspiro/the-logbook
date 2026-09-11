@@ -16,6 +16,226 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 20 (Compliance), pass 4** — PR
+[#2476](https://github.com/thegspiro/the-logbook/pull/2476), branch
+`claude/security-review-compliance`, tending. Latest: the CI-health fix for
+`/scheduling`'s AAA contrast budget (see below) went through two more
+review rounds — a fixed budget of 1 (this branch's own measured count) was
+first widened to the mathematical worst case (6), which Codex correctly
+called out as defeating the ratchet on every day but the worst one. Fixed
+properly: `page.clock.setFixedTime()` now freezes `/scheduling`'s render
+to a fixed Monday (exactly one dimmed prior day, every run, real calendar
+date irrelevant), reset to a fresh real timestamp right after so no other
+route inherits it. Budget back to 1, this time deterministic rather than
+measured-once. Full detail in `mobile-accessibility.spec.ts`'s own
+`AAA_CONTRAST_BUDGET['/scheduling']` comment.
+
+A fourth Codex review round before that caught a real, deeper issue in
+CMP4-1's own role_ids follow-up: **CMP4-5
+(MED, FLAGGED)** — `required_roles` is documented and written as **rank
+slugs** everywhere it's persisted (the model's own column comment, the
+training-program requirements schema, and `scheduling_service.py`'s working
+match against `user.rank`), but my role_ids fix — and the canonical
+`TrainingService.get_applicable_requirements` precedent it deliberately
+matched — compares it against **position UUIDs** instead. Since nothing
+ever writes a position id into `required_roles`, this means a
+`required_roles`-only requirement has apparently never correctly applied to
+anyone through any of six call sites, including the member-facing
+`/my-training` endpoint itself — a pre-existing gap in the canonical
+definition, not introduced by this pass, and not fixed here: the correct
+resolution (match `user.rank` instead, or migrate `required_roles` to
+position ids) changes behavior at `/my-training` and five other callers,
+well outside this feature's declared scope. My own guard tests
+(`TestGenerateAnnualReportRoleScopedRequirements`) correctly pin
+`requirement_applies_to_member`'s current contract but construct a
+`required_roles` value no real admin action would ever produce — noted in
+the findings doc so they aren't misread as proof the feature works
+end-to-end. Documented as CMP4-5 in
+`docs/security-review/CMP-20-compliance.md` and
+`docs/KNOWN_LIMITATIONS.md`.
+
+A third round of Codex review (on the role_ids fix's own commit) surfaced
+four more findings before this one — triaged, none merged as code changes:
+
+- **Confirmed as already-known, not a new bug:** Codex suggested excluding a
+  member with zero applicable requirements from `fully_compliant`/
+  `overall_compliance_pct`. Checked against `docs/KNOWN_LIMITATIONS.md`'s
+  existing TR4-4 entry (2026-09-10, one day before this pass) — the
+  "compliant"/100% convention for an empty requirement list is the
+  established, shared definition `classify_standing`/
+  `_evaluate_member_compliance` already use everywhere, and this pass's
+  CMP4-1 fix deliberately matches it. Changing only the annual report would
+  create a fourth disagreeing definition, not fix anything. No change made;
+  added a cross-reference from TR4-4 to this pass instead of a duplicate
+  entry.
+- **CMP4-2 (MED, FLAGGED)** — `required_positions` is a fourth, unhandled
+  applicability dimension on `TrainingRequirement` (position _slugs_, a
+  third representation distinct from both `required_roles` (itself rank
+  _slugs_, matched against `user.rank` — not position ids; see CMP4-5)
+  and `User.positions`/`roles` (position UUIDs)) that
+  `requirement_applies_to_member` has never handled, in any of its five
+  callers including this pass's two. Pre-existing gap in shared
+  Feature-17-owned infrastructure; flagged for a cross-feature fix rather
+  than guessed at here.
+- **CMP4-3 (MED, FLAGGED, pre-existing)** — `generate_annual_report` has
+  never been compliance-profile-aware (confirmed absent before and after
+  CMP4-1), unlike `compute_org_compliance_pct`, which resolves each member's
+  matching profile and its `required_requirement_ids` override first. An org
+  using profiles gets disagreeing percentages between the annual report and
+  the compliance dashboard/matrix. Predates this pass entirely; flagged for
+  a dedicated fix.
+- **CMP4-4 (LOW, FLAGGED)** — the per-requirement counterpart to TR4-4: a
+  requirement with zero currently-applicable members now (post-CMP4-1)
+  renders as a red, failing 0% in `ComplianceOfficerDashboard.tsx` instead of
+  "not applicable." This codebase already draws exactly this distinction at
+  the requirement level elsewhere (`complianceMatrixModel.ts`'s
+  `rollUpRequirements` returns `null` for the same shape) — working
+  in-repo precedent for a future fix, not implemented here since it needs a
+  frontend type change (`compliance_pct: number | null`).
+
+All four triaged with a reply on their PR review thread and the thread
+resolved; full detail in `docs/security-review/CMP-20-compliance.md`
+(CMP4-2 through CMP4-4, plus the "Considered, not changed" note) and
+`docs/KNOWN_LIMITATIONS.md`'s new "Compliance — The Annual Report's New
+Applicability Filter Has Two More Gaps" section (and the TR4-4 addendum). No
+code changed this round — findings/docs only.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 4, PR #2476, before this round's Codex triage), preserved for history</summary>
+
+**Feature 20 (Compliance), pass 4** — PR
+[#2476](https://github.com/thegspiro/the-logbook/pull/2476), branch
+`claude/security-review-compliance`, tending. Codex's review caught a real
+gap in CMP4-1's own fix (P1): the fix filtered both loops through
+`requirement_applies_to_member` but omitted its `role_ids` argument,
+reasoning that no requirement in this codebase is `required_roles`-only —
+the helper returns `False` outright for such a requirement when `role_ids`
+isn't passed (`if req.required_roles and role_ids:`), so it silently
+matched nobody, member loop or requirement-analysis loop alike, same failure
+shape as CMP4-1 itself. Fixed by eager-loading `User.roles` (`selectinload`,
+a synonym for `positions`) on the member query and passing each member's
+role ids into both calls, matching the existing single-member pattern at
+`training.py:1507`. Three new guard tests
+(`TestGenerateAnnualReportRoleScopedRequirements`) added to the same file.
+Full backend suite re-run clean: 12361 passed (was 12358 + 3 new tests), 21
+skipped; flake8/black/isort clean across `app/ tests/ alembic/`. See
+`docs/security-review/CMP-20-compliance.md` → CMP4-1's "Correction" note for
+detail.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 4, PR #2476, before the Codex role_ids correction), preserved for history</summary>
+
+**Feature 20 (Compliance), pass 4** — PR
+[#2476](https://github.com/thegspiro/the-logbook/pull/2476), branch
+`claude/security-review-compliance`. Diff-scoped against
+`062464a` (pass 3's merge, PR #2245): the six declared backend files are
+byte-identical to pass 3; `training_compliance.py` (shared, in this
+feature's declared scope) changed substantially but entirely under Feature
+17's own pass 4 (PR #2455) — re-verified intact, not re-derived; one
+frontend file changed cosmetically only (a `Breadcrumbs` rollout + a
+contrast bump, unrelated). **1 fix (MED), 0 newly flagged.**
+
+**CMP4-1 (MED, FIXED)** — `AnnualComplianceReportService.generate_annual_report`
+graded every active member against every active org requirement and
+computed each requirement's "members_compliant / members_total" against the
+whole org roster, with no check for `applies_to_all` /
+`required_membership_types` / `required_roles` — a fifth, independent
+reimplementation of an applicability check that Feature 17's own pass 4
+(`requirement_applies_to_member`, `training_compliance.py`) had just
+centralized after finding it reimplemented, incompletely, at four other
+call sites. A membership- or role-scoped requirement (e.g. "officers only")
+was graded against every member regardless of scope, understating both that
+member's own compliance percentage and the requirement's own row in the
+report's "Requirement Analysis" section — numbers this report, its CSV
+export, and its emailed executive summary all state to a compliance officer
+as authoritative. Fixed by filtering both loops through the same shared
+helper. Guard test:
+`tests/test_annual_report_membership_scoped_requirements.py` (new, 3
+tests). Full write-up: `docs/security-review/CMP-20-compliance.md` → Pass 4.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` clean;
+`validate_migrations.py --strict` 443 revisions, single head; `pytest -k
+compliance` 381 passed, 1 skipped; full backend suite 12358 passed, 21
+skipped (all pre-existing Docker/no-MySQL/optional-dependency skips); `npm
+run typecheck` 0 errors; `npm run lint` 0 errors/0 warnings (after `npm ci`
+materialized this worktree's own `node_modules` — see the findings doc for
+why the very first `npm run lint` attempt reported 1,382 phantom warnings
+that were an artifact of the worktree layout, not the code). Rotation row
+20 → `✅` (pending merge). Next: Feature 21 (Admin hours).
+
+</details>
+
+### 2026-09-11 — Feature 20 (Compliance), pass 4 — 1 fixed (MED), 0 flagged, 1 review-round correction
+
+Diff-scoped against `062464a` (pass 3's merge commit, PR #2245): all six
+declared backend files (`compliance_config.py`, `compliance_officer.py`,
+`compliance_config_service.py`, `compliance_officer_service.py`, the model,
+the schema) byte-identical to pass 3. `training_compliance.py` (shared, in
+this feature's declared scope) changed substantially, but entirely under
+Feature 17's own pass 4 (PR #2455) — the `requirement_applies_to_member`
+extraction and a real `_find_matching_profile` fix (`role_id` → `Position.id`,
+which had silently broken every compliance profile's `role_ids` matching);
+re-verified both intact by direct code read, not re-derived as new findings.
+One frontend file (`ComplianceRequirementsConfigPage.tsx`) changed
+cosmetically only (a `Breadcrumbs` rollout, a contrast bump) — confirmed by
+reading the diff directly.
+
+**CMP4-1 (MED, FIXED)** — `generate_annual_report`'s per-member and
+per-requirement loops graded every active member against every active org
+requirement with no applicability filter (`applies_to_all` /
+`required_membership_types` / `required_roles`) — the fifth, independent
+reimplementation of the exact check Feature 17's own pass 4 had just
+centralized into `requirement_applies_to_member` after finding it
+reimplemented, incompletely, at four other call sites; this file's annual
+report wasn't one of the four TR-17 found. A membership- or role-scoped
+requirement was graded against every member regardless of scope, understating
+both that member's compliance percentage and the requirement's own row in the
+report's "Requirement Analysis" section — figures a compliance officer's
+annual report, CSV export, and emailed executive summary all state as
+authoritative. Fixed by filtering both loops through the same shared helper.
+Guard test: `tests/test_annual_report_membership_scoped_requirements.py`
+(new, 3 tests, real `db_session`).
+
+Route inventory re-enumerated (12 + 8 = 20, all `require_permission`-gated,
+unchanged from pass 1-3); org-scoping, CSV export (`SafeCsvWriter`), and
+report-email escaping (`html.escape`) all re-verified unchanged (byte-identical
+files). CS-8 (attestation dual-control), CS-9 (monthly windowing), and CMP2-1
+(notify settings stored/unread) re-confirmed still open by design, unchanged.
+Full local completion gate green: flake8/black/isort clean at CI's pinned
+versions (`isort==9.0.1`), `validate_migrations.py --strict` 443
+revisions/single head, 381/381 compliance-scoped and 12358/12358 full backend
+suite pass (21 pre-existing skips), `npm run typecheck` 0 errors, `npm run
+lint` 0 errors/0 warnings (after `npm ci` — this worktree initially lacked its
+own `node_modules`, which produced 1,382 phantom type-resolution warnings
+unrelated to any code; recorded in the findings doc, not a real finding).
+Findings doc: `docs/security-review/CMP-20-compliance.md` → **Pass 4**. Next:
+21 Admin hours, once this PR merges.
+
+**Correction (same day, Codex review round on PR #2476):** CMP4-1's own fix
+had a gap Codex (P1) caught — it filtered both loops through
+`requirement_applies_to_member` but never passed the helper's `role_ids`
+argument, on the reasoning that no requirement in this codebase is
+`required_roles`-only. The helper's `required_roles` branch
+(`if req.required_roles and role_ids:`) returns `False` whenever `role_ids`
+is falsy, so a role-scoped requirement matched **nobody** — the same failure
+shape CMP4-1 fixed for `required_membership_types`, just uncaught for the
+role branch, since the member query never eager-loaded `User.positions`.
+Fixed by adding `selectinload(User.roles)` to the member query and passing
+`[str(r.id) for r in member.roles]` into both `requirement_applies_to_member`
+calls, matching the resolution pattern `training.py:1507` already uses for a
+single member. Three new guard tests
+(`TestGenerateAnnualReportRoleScopedRequirements`, in the same test file).
+Full backend suite re-run: 12361 passed (12358 + 3 new), 21 skipped;
+flake8/black/isort clean across `app/ tests/ alembic/`; the six files
+touching `compliance_officer_service.py`/`generate_annual_report` (138 tests)
+all still pass. See `docs/security-review/CMP-20-compliance.md` → CMP4-1's
+"Correction" note for the full write-up.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 4, PR #2473, merged), preserved for history</summary>
+
 **None.** PR [#2473](https://github.com/thegspiro/the-logbook/pull/2473)
 (Feature 19, Skills testing, pass 4) merged clean via squash, merge commit
 `4c4253cc0c77`, all CI checks green (CI Success, both MySQL/MariaDB
@@ -27,6 +247,8 @@ validation error length) was already fixed and its thread resolved before
 this check. Merged directly by a 30-minute watchdog check (fully green,
 `mergeable_state: clean`, idle ~30-50 minutes since the last push and CI
 completion). Rotation row 19 is now `✅`. Next: Feature 20 (Compliance).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 4, PR #2473, before the merge), preserved for history</summary>
@@ -12984,7 +13206,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⏳     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
