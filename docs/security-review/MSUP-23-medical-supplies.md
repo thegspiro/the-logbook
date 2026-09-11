@@ -2,7 +2,8 @@
 
 **Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 (pass 1, PR
 #1905), 2026-08-30 (pass 2, PR #2075; audit-trail follow-up, PR #2076),
-2026-09-06 (pass 3)
+2026-09-06 (pass 3 through pass 10, all on PR #2301), 2026-09-11 (pass 11, PR
+#TBD)
 
 **Backend:** `app/api/v1/endpoints/medical_supplies.py` (pass 1: 667 L, 15
 endpoints; pass 2: 670 L, 14 routes — no route added or removed). No
@@ -1440,3 +1441,201 @@ MSUP-4, MSUP-11, MSUP-15, and MSUP-25 (now covering a second concrete
 instance, the maintenance-completion path) are the only open, flagged
 items. MSUP-26 and MSUP-27 are new fixes; MSUP-1 through MSUP-24 all
 re-verified intact.
+
+## Pass 11 — 2026-09-11
+
+Routine rotation re-verification, not triggered by a Codex round on an open
+PR — pass 10 closed out its own PR (#2301) five days prior, and the general
+inventory feature's own security review (INV-11 pass 4, PR #2422, merged
+2026-09-08) already independently re-verified this same fix chain from its
+side. This pass re-reads the router, every `InventoryService` method it
+calls, and the frontend module against current code, rather than trusting
+either prior write-up.
+
+### Scope
+
+Read in full: `backend/app/api/v1/endpoints/medical_supplies.py` (still 763
+L, still 15 routes — up one route from pass 3's 14, per MSUP-16's retire
+route added at pass 5). Re-read directly against current line numbers
+(`inventory_service.py` grew again, ~9,995 L at pass 3/4 to 11,169 L now,
+from unrelated inventory features and INV-11's own pass 4 fixes landing
+since): `create_category`/`get_categories`/`update_category` (:798-957),
+`get_item_by_id`/`_get_item_locked`/`update_item`/
+`_deactivation_block_reason`/`retire_item` (:2560-2897),
+`get_low_stock_items_for_alerts`/`category_in_domain`/`item_in_domain`/
+`items_in_domain`/`lot_in_domain`/`list_lots`/
+`_carry_forward_column_stock`/`add_lot`/`add_lots_bulk`/`update_lot`/
+`delete_lot`/`get_expiring_lots` (:7329-8001). Also read, for the first time
+at this depth in this rotation's own MSUP-23 file (prior passes covered the
+backend only, per each pass's own stated scope): the five frontend files
+under `frontend/src/modules/medical-supplies/` plus
+`frontend/src/services/medicalSuppliesService.ts`.
+
+Every route enumerated for its auth dependency and permission string (not
+spot-checked) — all 15 still carry `Depends(get_db)` +
+`Depends(require_permission(...))`, still domain-first
+(`inventory.view_medical`/`inventory.manage_medical` OR'd against the broad
+`inventory.view`/`inventory.manage`), matching the router's own module
+docstring.
+
+### Re-verified against current code — all fixes hold
+
+Every prior fix (MSUP-1 through MSUP-24, MSUP-26, MSUP-27) was re-read at
+its current location, not assumed from the line numbers in earlier passes:
+
+- **MSUP-1** (`apply_updates`, not `setattr` loops) — `update_category`
+  (:915), `update_item` (:2763), `update_lot` (:7933) all still route
+  through it.
+- **Domain pinning** (`category_in_domain`/`item_in_domain`/
+  `items_in_domain`/`lot_in_domain`, :7405-7548) — all four still
+  org-scoped on both sides of their join, fail closed.
+- **MSUP-2/9** — `items_in_domain`'s bulk one-query domain check (:605 in
+  the router) and `get_categories`' `limit: int = 5000` default (:834)
+  both unchanged.
+- **MSUP-3** — `medical_supply_summary`'s `low_stock`/`total_items` split
+  (router :752-758) still reads `low_stock` from
+  `get_low_stock_items_for_alerts` (uncapped,
+  `reorder_point IS NOT NULL`-filtered before any row loads) and
+  `total_items` from a separate `limit=1` call — neither depends on a
+  page-size cap.
+- **MSUP-5/6** — `update_medical_category`/`update_medical_item` still
+  audit on success (router :228, :443), and the `fields_updated` snapshot
+  in `update_medical_category` (:213) is still taken _before_
+  `service.update_category()`'s in-place `metadata` → `extra_data` rename.
+- **MSUP-7/12/13/27** — `update_item` (:2629) still rejects `active`, a
+  `status`/`condition` RETIRED pair, and (MSUP-27) any `status`/`condition`
+  change on an already-inactive item (:2702-2722); `retire_item` alone sets
+  the triple (`status`/`condition`/`active`) together (:2875-2877).
+- **MSUP-8/14** — `get_item_by_id`'s `attach_lot_stock` parameter (:2564)
+  still defaults `False` and `get_medical_item` still passes `True`
+  (router :334); confirmed the frontend companion (MSUP-14,
+  `ItemDetailPage.tsx`'s `onHandQuantity()` call) separately, see below.
+- **MSUP-10/18** — `_carry_forward_column_stock`'s locking SELECT (:7623)
+  still locks unconditionally (`quantity > 0` filtered in Python _after_
+  the lock, :7635) with `populate_existing=True` (:7630).
+- **MSUP-16/22** — `retire_medical_item` (router :458) still exists,
+  still domain-checked via `_require_medical_item` plus
+  `required_item_types=MEDICAL_ITEM_TYPES` passed to `retire_item`
+  (:490-496); `medicalSuppliesService.retireItem` and
+  `MedicalSuppliesPage.tsx`'s Retire action (confirmed directly, see
+  below) still call the medical-domain route, not the general one.
+- **MSUP-19** — both blocker counts in `_deactivation_block_reason`
+  (:2797, :2813) still add `.with_for_update()`.
+- **MSUP-20/21** — `retire_item`'s domain re-check (:2863-2869) still
+  passes `for_update=True` into `category_in_domain` (:7410), which still
+  defaults `for_update=False` for every other (stateless-preflight)
+  caller.
+- **MSUP-23** — `assign_item_to_user` (confirmed at :2921) still calls
+  `_get_item_locked`, not a duplicated inline `SELECT ... FOR UPDATE`.
+- **MSUP-24** — the pool-issuance blocker count (:2813-2819) still runs
+  unconditionally, with no `tracking_type == POOL` gate in its source.
+- **MSUP-26** — not independently re-verified this pass (frontend files
+  outside this module's own directory were not re-read); no reason to
+  suspect drift, since nothing in `inventory_service.py`'s diff since pass
+  10 touches `ItemStatus`/`ItemCondition` option lists.
+
+No regression, no drift, and — checking the one commit that landed in
+`inventory_service.py` between pass 10 and today
+(`4648783098`, "only an inspection may move an item's inspection clock",
+2026-09-11) — no interaction with anything this router or its domain-pinning
+helpers depend on: that fix is confined to `create_maintenance_record`'s
+inspection-date logic, a different method entirely.
+
+### Frontend module, read for the first time at this depth
+
+`medical_supplies.py`'s own docstring and prior passes' "Frontend: not
+reviewed this pass — backend only" note left the module's five component/
+page files and its service wrapper unread by this rotation's own findings
+file until now (MSUP-14/22 touched specific frontend files as fixes, but
+neither pass read the whole module). All read in full this pass:
+
+- **`services/medicalSuppliesService.ts`** — every method goes through the
+  shared, cached `apiClient` (not a bespoke instance missing the auth/CSRF
+  interceptors, the shape Pitfall #7 warns about). Its own header comment
+  states the caching rationale correctly and consistently with the
+  domain's own "Verified good" note above: this is department stock (item
+  names, lot numbers, quantities), not PHI, unlike the similarly-named
+  `/medical-screening/` endpoints — confirmed against
+  `frontend/src/utils/apiCache.ts`'s `UNCACHEABLE_PREFIXES`, which excludes
+  `/medical-screening/` but not `/medical-supplies/`, matching the stated
+  design.
+- **`MedicalItemFormModal.tsx`** — uses `blankToNull`/`numberOrNull` on the
+  update path and `|| undefined` on the create path (Pitfall #1, both
+  directions correct). **Already lot-stocked-aware**: `isLotStocked` hides
+  the editable Quantity input behind a read-only "N from stock lots" note
+  and omits `quantity` from the update payload entirely when the item is
+  lot-stocked (`...(isLotStocked ? {} : { quantity: numberOrNull(...) })`).
+  This is the medical-domain-specific counterpart to MSUP-15's flagged gap
+  in the _general_ inventory module's `ItemFormModal.tsx` — confirmed by
+  direct comparison that the general file (`modules/inventory/components/
+ItemFormModal.tsx`) has no `is_lot_stocked`/`isLotStocked` reference
+  anywhere in it, so MSUP-15's gap is real and unchanged there, but does
+  **not** reach a medical item through this module's own screens
+  (`MedicalSuppliesPage.tsx` renders only this file's modal, never the
+  general one). It is still reachable for a medical item through the
+  _general_ Inventory page, since a broad `inventory.manage` holder's
+  `ItemDetailPage.tsx`/`ItemFormModal.tsx` flow is not domain-filtered
+  (`GET /inventory/items/{id}` and `PATCH /inventory/items/{id}` both take
+  `inventory.manage`/`inventory.view` alone, with no
+  `exclude_item_types=MEDICAL_ITEM_TYPES` the _list_ routes carry) —
+  additive by the router's own stated design (`inventory.manage` covers
+  medical stock too), not a new gap, but worth stating precisely since
+  MSUP-15's original write-up did not scope which module the risk actually
+  lives in. KNOWN_LIMITATIONS.md's MSUP-15 row, added this pass (it was
+  never mirrored there before), records this precisely.
+- **`MedicalCategoriesPage.tsx`**, **`MedicalSupplyItemPicker.tsx`**,
+  **`ReceiveDeliveryModal.tsx`**, **`MedicalSuppliesPage.tsx`** — all use
+  `blankToNull`/`numberOrNull` or `|| undefined` correctly per their
+  create/update distinction; retirement goes through `useConfirm()` (never
+  `window.confirm`, Pitfall #16); every manage-gated control checks
+  `checkPermission('inventory.manage_medical') ||
+checkPermission('inventory.manage')`, matching the backend's OR-gate
+  exactly; `ReceiveDeliveryModal.tsx`'s "blank row vs. incomplete row"
+  validation matches the backend's own all-or-nothing delivery semantics.
+  No new finding in any of the four.
+
+### Documentation drift found and corrected — not a code finding
+
+**`docs/KNOWN_LIMITATIONS.md`'s row for MSUP-11 was labeled MSUP-10.** The
+row (added at pass 3) describes `list_lots` having no row cap — which pass
+3's own findings doc numbers **MSUP-11** — but its trailing citation and
+inline "see ... MSUP-10" both said MSUP-10, which is pass 3's _other_,
+already-fixed finding (the `add_lot` opening-balance race in
+`_carry_forward_column_stock`). A reader following the KNOWN_LIMITATIONS
+citation to "MSUP-10" would land on the wrong section and could
+mistakenly conclude `list_lots`'s cap gap was fixed. Corrected in place;
+no code or behavior change.
+
+**MSUP-15 and MSUP-25 were never mirrored into `KNOWN_LIMITATIONS.md` at
+all**, across passes 4 (MSUP-15) and 9/10 (MSUP-25) — both are genuine
+owner-decision items per CLAUDE.md's step 6/7 instructions ("mirror any
+owner-decision items into KNOWN_LIMITATIONS.md"), and this pass adds them
+(see the two new rows described above, and their exact text in the diff).
+
+### Findings
+
+None. This pass found no new code defect, confirmed every prior fix
+(MSUP-1 through MSUP-27) still holds against current code with no drift,
+and confirmed the four still-open flagged items (MSUP-4, MSUP-11, MSUP-15,
+MSUP-25) remain accurately described. The only changes this pass makes are
+the two `KNOWN_LIMITATIONS.md` corrections above — both documentation
+accuracy, not security fixes.
+
+### Completion gate (pass 11)
+
+| Check                                                                                                                                                                            | Result                                             |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                    | clean                                              |
+| `black --check app/ tests/ alembic/`                                                                                                                                             | clean — 1581 files unchanged                       |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                        | clean                                              |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                | PASSED — 443 revisions, single head `0533644945cd` |
+| `test_medical_supplies_domain.py` + `test_inventory_service.py` + `test_capacity_locking.py` + `test_inventory_identity_map_staleness.py` + `test_inventory_lot_stock_levels.py` | 180 passed                                         |
+| `test_endpoint_auth_coverage.py`                                                                                                                                                 | 1 passed                                           |
+| `pytest -k "inventory or medical_supplies"` (full scoped run)                                                                                                                    | 849 passed, 1 pre-existing skip                    |
+| Frontend: `npm run typecheck`                                                                                                                                                    | clean                                              |
+| Frontend: `npm run lint`                                                                                                                                                         | clean — exit 0                                     |
+
+No migration, no schema change, no source-code change. Only
+`docs/KNOWN_LIMITATIONS.md` (two corrections/additions) and this findings
+file changed. MSUP-4, MSUP-11, MSUP-15, and MSUP-25 remain the only open,
+flagged items; MSUP-1 through MSUP-27 all re-verified intact.
