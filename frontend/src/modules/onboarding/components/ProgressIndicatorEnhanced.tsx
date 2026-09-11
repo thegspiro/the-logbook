@@ -1,31 +1,19 @@
 import React from 'react';
 import { Check, ChevronRight } from 'lucide-react';
 
-/**
- * The onboarding flow in order, matching routes.tsx.
- *
- * Pages name their step with a key instead of a hardcoded number. When this
- * list held numbers that each page repeated, the two drifted: NavigationChoice
- * passed currentStep={2} against a list whose second entry was "Organization
- * Setup", so the wizard's own progress bar mislabeled the step the user was
- * looking at. A key can't drift — inserting a step here renumbers everything.
- */
-const ONBOARDING_STEPS = [
-  { key: 'organization', name: 'Organization Setup', shortName: 'Organization' },
-  { key: 'stations', name: 'Stations', shortName: 'Stations' },
-  { key: 'apparatus', name: 'Apparatus', shortName: 'Apparatus' },
-  { key: 'navigation', name: 'Navigation Choice', shortName: 'Navigation' },
-  { key: 'email_platform', name: 'Email Platform', shortName: 'Email' },
-  { key: 'email_config', name: 'Email Configuration', shortName: 'Config' },
-  { key: 'file_storage', name: 'File Storage', shortName: 'Storage' },
-  { key: 'authentication', name: 'Authentication', shortName: 'Auth' },
-  { key: 'system_owner', name: 'System Owner', shortName: 'Owner' },
-  { key: 'it_team', name: 'IT Team Backup', shortName: 'IT Backup' },
-  { key: 'positions', name: 'Ranks & Positions', shortName: 'Positions' },
-  { key: 'modules', name: 'Module Selection', shortName: 'Modules' },
-] as const;
+import { ONBOARDING_STEPS } from '../config/steps';
+import type { OnboardingStepKey } from '../config/steps';
 
-export type OnboardingStepKey = (typeof ONBOARDING_STEPS)[number]['key'];
+/**
+ * The step order now lives in `config/steps.ts` and is imported, not restated.
+ *
+ * It was declared here as well as in the route table and in every page's
+ * hardcoded next-link, and the copies drifted: NavigationChoice once passed
+ * currentStep={2} against a list whose second entry was "Organization Setup",
+ * so the wizard's own progress bar mislabeled the step being looked at.
+ */
+
+export type { OnboardingStepKey };
 
 interface ProgressIndicatorProps {
   step: OnboardingStepKey;
@@ -38,6 +26,13 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
   const totalSteps = ONBOARDING_STEPS.length;
   const percentage = Math.round((currentStep / totalSteps) * 100);
   const currentStepInfo = ONBOARDING_STEPS[stepIndex];
+
+  // "Step 4 of 11" overstates what is left when seven of those eleven are
+  // skippable, and a department that intends to skip them has no way to tell
+  // from the bar. Saying which steps are optional is the honest version of
+  // that number, and it comes from the step's own flag rather than a second
+  // list here.
+  const requiredRemaining = ONBOARDING_STEPS.filter((s, index) => !s.optional && index + 1 > currentStep).length;
 
   return (
     <div className={`mx-auto w-full max-w-2xl ${className}`}>
@@ -61,6 +56,14 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
           aria-label={`Setup progress: ${percentage} percent complete`}
         />
       </div>
+
+      <p className="text-theme-text-muted mb-4 text-xs">
+        {currentStepInfo?.optional
+          ? requiredRemaining === 0
+            ? 'This step is optional — Skip is a complete answer, and setup can be finished from here.'
+            : 'This step is optional — Skip is a complete answer.'
+          : 'This step is required to finish setup.'}
+      </p>
 
       {/* Breadcrumb-Style Step Indicators (Mobile: Scrollable, Desktop: All visible) */}
       {/* Already built to scroll on a phone; the marker is what says so to the
@@ -115,6 +118,23 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
                   <span className={`text-xs whitespace-nowrap ${isCurrent ? 'font-semibold' : 'font-medium'}`}>
                     <span className="hidden sm:inline">{listStep.name}</span>
                     <span className="sm:hidden">{listStep.shortName}</span>
+                    {/* Marked on the step itself rather than in a legend: a
+                        legend is one more thing to read, and the strip scrolls
+                        on a phone so a legend may not be on screen with it. */}
+                    {/* No opacity and no colour of its own. `opacity-70` here
+                        put nine serious axe color-contrast failures on
+                        /onboarding/start — one per optional step — because it
+                        thins the text against all three chip backgrounds.
+                        Inheriting the parent outright means this renders in
+                        exactly the colour the step name beside it already
+                        passes in. Per the palette rule, de-emphasis comes from
+                        size and weight, never from colour or opacity. */}
+                    {listStep.optional && (
+                      <span className="ml-1">
+                        <span aria-hidden="true">(optional)</span>
+                        <span className="sr-only">, optional</span>
+                      </span>
+                    )}
                   </span>
                 </div>
 

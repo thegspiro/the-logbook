@@ -38,9 +38,15 @@ The health check includes auto-retry with exponential backoff (up to 20 attempts
 
 ### 3. Onboarding Steps
 
-The progress indicator contains 12 steps. Email configuration and file-storage
+The progress indicator contains 11 steps. Email configuration and file-storage
 configuration are conditional sub-pages within their respective steps, so the
 number of screens a user sees depends on the services they select.
+
+Only the first two — Organization Setup and System Owner Creation — are
+required; `complete_onboarding` enforces exactly those, and every other step
+has a Skip. The order puts identity second so the rest of setup runs against a
+real signed-in account, and leaves the steps that need credentials from
+elsewhere (email, file storage, sign-in) until the end.
 
 #### Step 1: Organization Setup
 
@@ -54,59 +60,27 @@ number of screens a user sees depends on the services they select.
   System Owner and IT team are created later in this same wizard.
 - **Commits to database immediately**
 
-#### Step 2: Stations
-
-- Confirm the headquarters created from the organization mailing address
-- Add any additional stations (optional)
-
-#### Step 3: Apparatus
-
-- Add apparatus and minimum staffing requirements (optional)
-
-#### Step 4: Navigation Choice
-
-- Choose between Top Bar or Left Sidebar navigation layout
-
-#### Step 5: Email Platform Choice
-
-- Select email service: Gmail, Microsoft 365, Cloudflare Email, Self-Hosted (SMTP), or Skip
-- If a service is selected, proceeds to email configuration
-
-#### Step 6: File Storage Choice
-
-- Select file storage: Local, Amazon S3, Google Drive, OneDrive / SharePoint, or Other
-
-> **The choice is recorded but not yet acted on** (2026-09-10). Uploads write to
-> the server's own filesystem whatever is selected here — no code outside the
-> settings screen reads the stored credentials. A department that picks S3 or
-> Drive so its files sit somewhere the server is not should treat that as still
-> to do after setup, not done by it.
-
-#### Step 7: Authentication Choice
-
-- Select authentication method: Local passwords, Google, Microsoft, or Authentik
-
-> **Do not choose Authentik yet** (2026-09-10). It is accepted and stored, but
-> no Authentik sign-in flow exists — the login page offers Google and Microsoft
-> only, so the SSO you selected is not there. Passwords still work, but the
-> setting switches the organization off self-service password resets: a member
-> who forgets theirs needs an administrator to reset it. Choose Local unless
-> you are setting up Google or Microsoft.
-
-#### Step 8: System Owner Creation
+#### Step 2: System Owner Creation
 
 - Create the first administrator account
 - Enforces strong password requirements (12+ characters with complexity rules)
 - Membership Number is optional — all other fields are required
 - Automatically assigns Super Admin access
 
-#### Step 9: IT Team & Backup Access
+#### Step 3: Module Selection
 
-- Configure IT team contacts and backup access information
-- Each contact may be given an operational rank, applied when their account is
-  created at completion
+- Choose which modules to enable:
+  - **Core** (always on): Member Management, Events & RSVP, Documents & Files, Custom Forms
+  - **Operations**: Training & Certifications, Inventory, Medical Supplies, Shift Scheduling, Apparatus & Fleet, Facilities Management, Department Store
+  - **Governance**: Elections & Voting, Meeting Minutes, Reports & Analytics
+  - **Communication**: Email Notifications, Mobile App Access
+  - **Advanced**: External Integrations
+  - **Membership**: Prospective Members Pipeline
+- Modules the wizard does not ask about — Communications, Finance, Grants &
+  Fundraising, HR & Payroll, Incidents, Medical Screening, Public Information and
+  the Testing Checklist — are turned on later under **Settings → Modules**
 
-#### Step 10: Ranks & Positions
+#### Step 4: Ranks & Positions
 
 - Set the membership ladder — the stages a member progresses through, the years
   each takes, and what each one confers: voting in elections, holding office,
@@ -120,20 +94,52 @@ number of screens a user sees depends on the services they select.
 - A position left unselected is not created — except the System Owner's own and
   the baseline Member position, which are always kept
 
-#### Step 11: Module Selection
+#### Step 5: Stations
 
-- Choose which modules to enable:
-  - **Core** (always on): Member Management, Events & RSVP, Documents & Files, Custom Forms
-  - **Operations**: Training & Certifications, Inventory, Medical Supplies, Shift Scheduling, Apparatus & Fleet, Facilities Management, Department Store
-  - **Governance**: Elections & Voting, Meeting Minutes, Reports & Analytics
-  - **Communication**: Email Notifications, Mobile App Access
-  - **Advanced**: External Integrations
-  - **Membership**: Prospective Members Pipeline
-- Modules the wizard does not ask about — Communications, Finance, Grants &
-  Fundraising, HR & Payroll, Incidents, Medical Screening, Public Information and
-  the Testing Checklist — are turned on later under **Settings → Modules**
+- Confirm the headquarters created from the organization mailing address
+- Add any additional stations (optional)
 
-#### Step 12: Complete
+#### Step 6: Apparatus
+
+- Add apparatus and minimum staffing requirements (optional)
+
+#### Step 7: IT Team & Backup Access
+
+- Configure IT team contacts and backup access information
+- Each contact may be given an operational rank, applied when their account is
+  created at completion
+
+#### Step 8: Email Platform Choice
+
+- Select email service: Gmail, Microsoft 365, Cloudflare Email, Self-Hosted (SMTP), or Skip
+- If a service is selected, proceeds to email configuration
+
+#### Step 9: File Storage Choice
+
+- Select file storage: Local, Amazon S3, Google Drive, OneDrive / SharePoint, or Other
+
+> **The choice is recorded but not yet acted on** (2026-09-10). Uploads write to
+> the server's own filesystem whatever is selected here — no code outside the
+> settings screen reads the stored credentials. A department that picks S3 or
+> Drive so its files sit somewhere the server is not should treat that as still
+> to do after setup, not done by it.
+
+#### Step 10: Authentication Choice
+
+- Select authentication method: Local passwords, Google, Microsoft, or Authentik
+
+> **Do not choose Authentik yet** (2026-09-10). It is accepted and stored, but
+> no Authentik sign-in flow exists — the login page offers Google and Microsoft
+> only, so the SSO you selected is not there. Passwords still work, but the
+> setting switches the organization off self-service password resets: a member
+> who forgets theirs needs an administrator to reset it. Choose Local unless
+> you are setting up Google or Microsoft.
+
+#### Step 11: Navigation Choice
+
+- Choose between Top Bar or Left Sidebar navigation layout
+
+#### Finishing up
 
 - Finalizes onboarding and hands off to the Department Setup checklist at `/setup`
 - The checklist derives each step from live entity counts rather than a stored list
@@ -299,21 +305,29 @@ The onboarding module is designed to be integrated with a frontend wizard:
 ### Frontend Component Structure
 
 ```
-/                              → Welcome page (animated intro, "Get Started" button)
-/onboarding                    → Service health check (auto-retries, then redirects)
-/onboarding/start              → Step 1: Organization Setup (comprehensive form)
-/onboarding/navigation-choice  → Step 2: Top Bar vs Left Sidebar
-/onboarding/email-platform     → Step 3: Email Platform Choice
-/onboarding/email-config       → Step 3a: Email Configuration (if service selected)
-/onboarding/file-storage       → Step 4: File Storage Choice
-/onboarding/file-storage-config → Step 4a: File Storage Config (placeholder)
-/onboarding/authentication     → Step 5: Authentication Choice
-/onboarding/it-team            → Step 6: IT Team & Backup Access
-/onboarding/positions           → Step 7: Role Setup (two-tier permissions)
-/onboarding/modules            → Step 8: Module Selection
-/onboarding/modules/:id/config → Step 8a: Per-Module Configuration
-/onboarding/system-owner       → Step 9: Admin User Creation
-→ On completion, redirects to /dashboard
+/                               → Welcome page (animated intro, "Get Started" button)
+/onboarding                     → Service health check (auto-retries, then redirects)
+/onboarding/prepare             → What setup will ask for (pre-flight, collects nothing)
+/onboarding/start               → Step 1: Organization Setup      (required)
+/onboarding/system-owner        → Step 2: System Owner Creation   (required)
+/onboarding/modules             → Step 3: Module Selection
+/onboarding/positions           → Step 4: Ranks & Positions
+/onboarding/stations            → Step 5: Stations
+/onboarding/apparatus           → Step 6: Apparatus
+/onboarding/it-team             → Step 7: IT Team & Backup Access
+/onboarding/email-platform      → Step 8: Email Platform Choice
+/onboarding/email-config        → Step 8a: Email Configuration (if a service is selected)
+/onboarding/file-storage        → Step 9: File Storage Choice
+/onboarding/file-storage-config → Step 9a: File Storage Configuration (if a cloud service is selected)
+/onboarding/authentication      → Step 10: Authentication Choice
+/onboarding/navigation-choice   → Step 11: Navigation Choice — last step, so it
+                                  calls POST /onboarding/complete
+/onboarding/complete            → Summary, then → /setup (Department Setup checklist)
+
+The order above is declared once, in
+frontend/src/modules/onboarding/config/steps.ts. Pages ask it for their
+neighbours rather than naming them, and OnboardingService.STEPS mirrors it
+under a parity test.
 ```
 
 ### Data Persistence

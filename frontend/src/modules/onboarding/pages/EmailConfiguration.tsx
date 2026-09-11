@@ -16,6 +16,7 @@ import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { MicrosoftAuthMethod } from '@/constants/enums';
+import { nextStepPath, stepPath } from '../config/steps';
 
 interface EmailConfig {
   // Cloudflare Email Service
@@ -293,13 +294,13 @@ const EmailConfiguration: React.FC = () => {
       toast.success('Email configuration saved securely');
 
       // Navigate to next step (file storage selection)
-      void navigate('/onboarding/file-storage');
+      void navigate(nextStepPath('email'));
     }
   };
 
   const handleSkip = () => {
     toast.success('Email configuration skipped. You can set this up later.');
-    void navigate('/onboarding/file-storage');
+    void navigate(nextStepPath('email'));
   };
 
   const currentYear = new Date().getFullYear();
@@ -688,7 +689,7 @@ const EmailConfiguration: React.FC = () => {
         <div className="w-full max-w-3xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
-            <BackButton to="/onboarding/email-platform" />
+            <BackButton to={stepPath('email')} />
             <ResetProgressButton />
           </div>
 
@@ -811,7 +812,7 @@ const EmailConfiguration: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          <ProgressIndicator step="email_config" className="border-theme-nav-border mt-6 border-t pt-6" />
+          <ProgressIndicator step="email" className="border-theme-nav-border mt-6 border-t pt-6" />
 
           {/* Auto-Save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />

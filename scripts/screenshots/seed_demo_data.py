@@ -3926,11 +3926,20 @@ class Seeder:
             item_id = pick(item, "id")
             if not item_id or pick(item, "category_id", "categoryId") not in tracked:
                 continue
-            if items(
-                self.api.get(f"/inventory/items/{item_id}/maintenance"), "records"
-            ):
-                continue
+            # Per RECORD, not per item. "Has any history at all" is the wrong
+            # question on a database left behind by a half-finished run: the
+            # first item's inspection landed before the cleaning 422'd, so an
+            # item-level guard skipped it for good and the two missing records
+            # were never backfilled however many times the seeder was re-run.
+            existing_types = {
+                pick(record, "maintenance_type", "maintenanceType")
+                for record in items(
+                    self.api.get(f"/inventory/items/{item_id}/maintenance"), "records"
+                )
+            }
             for kind, days_ago, description, cost in blueprint:
+                if kind in existing_types:
+                    continue
                 completed = TODAY - timedelta(days=days_ago)
                 payload = {
                     "item_id": item_id,

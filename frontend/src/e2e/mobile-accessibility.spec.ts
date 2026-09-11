@@ -272,6 +272,22 @@ test.describe('mobile accessibility', () => {
     for (const route of ROUTES) {
       granted = await signInForRoute(page, route, granted);
 
+      // PhoneMonth's past-day dimming (`isPastDay`) reads the real wall-clock
+      // date, so how much of this route renders dimmed depends on the day the
+      // suite happens to run on — none on a Sunday, up to six on a Saturday.
+      // Freezing to a fixed Monday makes it exactly one prior day, every run.
+      //
+      // This and the dim's own contrast arrived as two answers to one defect,
+      // on separate branches, and both are kept because they cover different
+      // ground. The dim measures 7.95:1 (opacity-75 in PhoneMonth), so no date
+      // fails AAA whatever the calendar says, which is why there is
+      // deliberately no /scheduling entry in AAA_CONTRAST_BUDGET. Freezing the
+      // clock is what stops any *other* finding on this route from moving with
+      // the date — a budget is a ratchet only while what it counts holds still.
+      if (route.path === '/scheduling') {
+        await page.clock.setFixedTime(new Date('2026-01-12T12:00:00'));
+      }
+
       await page.setViewportSize(PHONE);
       let aaCount = 0;
       let aaaCount = 0;
@@ -443,6 +459,13 @@ test.describe('mobile accessibility', () => {
           perTheme.join(' '),
         ].join('  ')
       );
+
+      if (route.path === '/scheduling') {
+        // No true "uninstall" in Playwright's Clock API (setFixedTime/
+        // setSystemTime only) — reset to a fresh real timestamp so later
+        // routes in this same loop don't inherit the frozen Jan 2026 date.
+        await page.clock.setFixedTime(new Date());
+      }
     }
 
     console.log(

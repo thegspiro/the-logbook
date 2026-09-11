@@ -15,6 +15,7 @@ import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 import { isValidEmail, isValidPhoneNumber } from '../utils/validation';
 import { useRanks } from '../../../hooks/useRanks';
+import { nextStepPath, previousStepPath } from '../config/steps';
 
 interface ITTeamMember {
   id: string;
@@ -211,7 +212,7 @@ const ITTeamBackupAccess: React.FC = () => {
         }
 
         toast.success('IT team and backup access information saved securely');
-        void navigate('/onboarding/positions');
+        void navigate(nextStepPath('it_team'));
         return response;
       },
       {
@@ -239,7 +240,7 @@ const ITTeamBackupAccess: React.FC = () => {
         <div className="w-full max-w-4xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
-            <BackButton to="/onboarding/system-owner" />
+            <BackButton to={previousStepPath('it_team')} />
             <ResetProgressButton />
           </div>
 

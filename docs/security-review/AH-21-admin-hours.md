@@ -1,6 +1,508 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), pass 3 (this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), pass 4 (this PR)
+
+## Pass 4 (2026-09-11) — 1 fixed (P1), 1 flagged, zero admin-hours-behavioral drift
+
+**AH-15 — P1 — `update_event_hour_mapping` skipped its own percentage
+validation on an inactive-to-active transition — ✅ FIXED**
+
+**What:** the method's locking-and-total-validation block ran only when
+the caller passed `percentage`. A bare `PATCH /admin-hours/event-mappings/{id}`
+with `{"is_active": true}` and no `percentage` (a payload
+`EventHourMappingUpdate` — both fields `Optional` — explicitly allows)
+reactivated the mapping directly, with no lock and no check against the
+source's other active mappings.
+
+**Failure scenario:** a manager deactivates a 100% mapping for a source
+(`{"is_active": false}` — no validation needed here, deactivating can only
+lower a total). They create a second 100% mapping for the same source
+(`create_event_hour_mapping` sums only `is_active.is_(True)` mappings, so
+the now-inactive first mapping doesn't count — 0% + 100% passes). They
+reactivate the first mapping (`{"is_active": true}`, no `percentage` —
+skips the check entirely). The source now has two active mappings at 100%
+each. Event finalization (`credit_event_attendance`) walks every active
+mapping for the source and credits each one's percentage of the attendee's
+duration, so the member is credited 200% of their actual time, split
+across two categories. This is the exact class of bug AH-11 and this
+pass's own re-verification of it were meant to have closed — the fix just
+never reached this one code path into the same invariant.
+
+**Fix:** the lock-and-validate block now also runs when `is_active is True
+and not mapping.is_active` (an inactive→active transition), using the
+target mapping's existing `percentage` as the effective value when the
+caller didn't also send a new one. A no-op `is_active: true` on an
+already-active mapping, and any `is_active: false`, still skip it —
+neither can push a source over 100%, and the second (deactivation) is the
+common, harmless case that shouldn't pay for a lock it doesn't need.
+
+**Correction (Codex review on this fix's own first commit):** the first
+version read `effective_percentage` from the `mapping` reference captured
+by the initial, unlocked fetch — before the source set's `FOR UPDATE`
+lock was taken. SQLAlchemy's identity map returns that same Python object
+for a second query against the same primary key within one session and
+does not refresh its already-loaded attributes by default, so a
+concurrent transaction that changed this mapping's own percentage while
+it was inactive (which needs no validation, so nothing blocks it) between
+the initial fetch and the lock would leave `effective_percentage` reading
+the stale, pre-lock value even after the lock resolved — the exact TOCTOU
+gap the surrounding lock exists to close, just moved one step earlier.
+Fixed two ways together: the locking query now carries
+`.execution_options(populate_existing=True)`, which forces SQLAlchemy to
+overwrite the identity-mapped object's attributes from the row the lock
+just waited on rather than leaving the pre-lock snapshot in place; and
+`effective_percentage` is now read from the target's own row inside the
+freshly locked `source_mappings` result, not from the `mapping` reference
+captured before the lock. Also trimmed the fix's own code comment, which
+Codex separately flagged as a transient PR narrative
+(`AGENTS.md`'s "Avoid adding transient debugging narratives to production
+source comments") rather than a durable statement of the invariant.
+
+**Where:** `app/services/admin_hours_service.py`, `update_event_hour_mapping`
+(the reactivation branch and its locking query).
+
+**Guard tests** (new, `TestEventHourMappingPercentageLocking` in
+`tests/test_admin_hours_service.py`): `test_reactivation_is_a_locking_read`
+(a bare reactivation issues the `FOR UPDATE` query),
+`test_reactivation_rejects_when_total_would_exceed_100` (reproduces the
+scenario in "Failure scenario" above and asserts `ValueError` plus that
+the mapping is left inactive on rejection), `test_deactivation_skips_the_locking_check`
+(confirms deactivation issues no locking query at all — the fix doesn't
+regress the cheap path), and
+`test_reactivation_reads_percentage_from_the_locked_row` (the TOCTOU
+correction's own guard: models the pre-lock and post-lock rows as two
+distinct objects with different percentages and asserts validation uses
+the post-lock one — the one case where using the pre-lock value would
+wrongly pass a total that the post-lock value correctly rejects).
+
+**Second correction (Codex review on the TOCTOU test itself):** that test's
+mock `db.execute` returns the hand-constructed `locked_fresh` object
+unconditionally, regardless of what execution options the captured query
+actually carried — a real `Session`'s identity map, by contrast, would
+keep returning the _same_ stale, pre-lock `mapping` instance for a second
+query against the same primary key unless `populate_existing=True` forces
+a refresh. The mock's unconditional substitution meant the test still
+passed with `.execution_options(populate_existing=True)` deleted from the
+source — verified directly by temporarily removing it and re-running the
+test, which failed only after adding the missing assertion below, not
+before. **Fixed:** the test now also asserts
+`locking_query.get_execution_options().get("populate_existing") is True`
+on the captured statement, so a regression that drops the option fails
+this test even though the mock can't reproduce the identity-map behavior
+that makes the option necessary in production.
+
+**AH-16 — MED — `export_entries_csv` remains unbounded/non-streaming — 🚩 FLAGGED (carried forward, not newly introduced)**
+
+**What:** `GET /admin-hours/entries/export` runs one org-scoped query with
+no `.limit()` and builds the full CSV in memory before the response
+starts. For a long-tenured department's complete, unfiltered history, this
+can be a large synchronous query and a large in-memory string.
+
+**Where:** `app/services/admin_hours_service.py`, `export_entries_csv`.
+
+**Why not newly fixed here:** this was already known and explicitly
+recorded as out-of-scope by pass 2 (AH21-1's "Follow-up, round 2": _"The
+backend query itself remains unbounded/non-streaming, matching the two
+other export endpoints with the same shape; still out of this PR's
+scope"_) — but pass 2 never carried it into this doc's "Confirmed still
+open" list, so it read as resolved by omission once pass 3 and this pass's
+own first draft both said "0 flagged." It is not: the query is unchanged,
+verified by reading it directly. Bounding it is the same shape as this
+codebase's own established pattern for shared, cross-cutting export limits
+(`docs/KNOWN_LIMITATIONS.md`'s MSUP-4/MSUP-10, GF-33) — it needs a
+page-size or streaming decision shared with the sibling exports
+(`reportExportService.exportReport`, the storefront order export) that
+have the identical shape, not a drive-by limit on this one caller alone.
+Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+**Scope confirmed via `git merge-base --is-ancestor` against pass 3's merge
+commit** (`4ba836420`, PR #2247) — not assumed, and not skipped the way pass
+3's own first attempt was. **Corrected sequence (caught by Codex review on
+this pass's own first commit — the first draft's chronology was
+self-contradictory):** the first `git merge-base --is-ancestor 4ba836420
+HEAD` reported "no" against this session's initial, shallow clone. Running
+`git fetch --unshallow` succeeded (a fetch that fails with `fatal:
+--unshallow on a complete repository does not make sense` against an
+already-complete clone — its success is itself evidence the clone was
+shallow beforehand) and brought in a few branches the shallow clone hadn't
+seen. Only after that did `git rev-parse --is-shallow-repository` report
+`false`, and the ancestor check, re-run against the now-complete history,
+reported `yes`.
+
+```
+git diff --stat 4ba836420..009fb1309 -- \
+  backend/app/api/v1/endpoints/admin_hours.py backend/app/services/admin_hours_service.py \
+  backend/app/models/admin_hours.py backend/app/schemas/admin_hours.py \
+  frontend/src/modules/admin-hours frontend/src/pages/MemberProfilePage.tsx \
+  frontend/src/pages/ComplianceRequirementsConfigPage.tsx frontend/src/pages/Dashboard.tsx \
+  frontend/src/components/member-profile frontend/src/pages/events-settings \
+  frontend/src/modules/membership/pages/CheckInStationPage.tsx
+```
+
+`009fb1309` is this PR's last commit before AH-15's fix landed — a fixed,
+reproducible endpoint, not `HEAD` (caught by Codex review: the command
+originally read `4ba836420..HEAD`, which stops being reproducible the
+moment any later commit changes the four backend files, exactly what
+AH-15's own fix commit then did — a command that changes its own answer
+depending on when it's run is not evidence). Run against that pinned
+commit, the result below is exactly reproducible.
+
+**All four backend files (endpoint, service, model, schema) were
+byte-identical to pass 3's merge at `009fb1309` — zero backend diff at
+that point.** `admin_hours_service.py` is **not** byte-identical to pass 3
+at this PR's actual final `HEAD`: `git diff --stat 4ba836420..HEAD --
+backend/app/services/admin_hours_service.py` shows 36 insertions/6
+deletions once AH-15's fix (below) and its two follow-up corrections are
+included. Both statements are true, pinned to different endpoints — the
+declared-scope sweep found zero drift at `009fb1309`; the fix an
+unrelated re-read of the same file then surfaced is this PR's own commit,
+not part of that sweep's result, and is fully reflected in the diff
+against the final `HEAD`. Eight frontend files
+changed; none touch admin-hours _logic_ (no data-fetching, validation, or
+write-path code changed), but two are real behavioral changes rather than
+cosmetic chrome, and this pass's first draft mislabeled both (caught by
+Codex review across two rounds) — corrected here:
+
+- `aria-label` additions on **four** filter `<select>`s, not two (both the
+  status and category selects in each of `AllEntriesTab.tsx` and
+  `AdminHoursPage.tsx`) — genuinely cosmetic (an accessibility label, no
+  behavior change).
+- A contrast-token bump on two badges (`AdminHoursManagePage.tsx`,
+  `bg-blue-500`→`bg-blue-600` and `bg-red-500`→`bg-red-800`) — cosmetic.
+- Single-line contrast bumps on `MemberProfilePage.tsx`'s photo-remove
+  button — cosmetic. **`HourTrackingSection.tsx`'s add-mapping button is
+  not** the "outside any admin-hours data path" case the first draft
+  claimed: the button's `onClick` invokes `handleAddMapping()`, which calls
+  `eventHourMappingService.create(...)` — a real admin-hours write path
+  (`create_event_hour_mapping`, AH-11's percentage-locking fix). The diff
+  itself only changes the button's class name; it leaves that existing
+  write path unchanged rather than sitting outside it, which is the
+  accurate claim.
+- A `Breadcrumbs` rollout on `CheckInStationPage.tsx` and
+  `ComplianceRequirementsConfigPage.tsx` is **not cosmetic either**:
+  `Breadcrumbs` renders real `<Link>` navigation (a Home crumb and, via its
+  `underHub` prop, a conditional link to the relevant administration hub,
+  gated by a live permission check) — new navigation behavior, even though
+  it changes no admin-hours data handling. **Both pages carry a real
+  admin-hours write path, not only a read (caught by Codex review on the
+  same round):** `CheckInStationPage.submitSerial()` posts a tap through
+  `nfcCardService.stationCheckIn()` when the station targets
+  `NfcCheckInTarget.ADMIN_HOURS` — a clock-in/out write, not a read;
+  `ComplianceRequirementsConfigPage.handleSaveProfile()` sends
+  `profileHoursReqs` as `admin_hours_requirements` in the compliance
+  profile create/update payload — also a write, not the read-only config
+  screen the first draft described. Verified both write paths, and the
+  category-list read each page also makes, are all untouched by reading
+  the diffs directly — inspected, unrelated UI-navigation drift, not a
+  cosmetic label, and the pages' own admin-hours reads and writes are both
+  unchanged, not only their reads.
+
+**`Dashboard.tsx` is functional drift too, in a third way:** alongside a
+`<main>`→`<div data-page-main>` semantic-landmark change (cosmetic), its
+inventory tile's issued-gear count changed from
+`data.issued_items.reduce((total, item) => total + item.quantity_issued,
+0)` to `data.issued_items.length` — a real behavior change (the displayed
+number now differs whenever an issued row's `quantity_issued` exceeds 1,
+per that diff's own comment: matching the "Issued to Me" list's own
+row-count convention on `/inventory/my-equipment` instead of double-
+counting quantity). This is inventory-feature drift, not admin-hours
+drift — the admin-hours summary card on the same page (the
+`getSummary({ userId: currentUser?.id })` call and the `reportingRange.ts`
+UTC-day-bounds helper pass 3 reviewed) is unchanged, confirmed by reading
+the diff.
+
+None of these three (the mapping button's unchanged write path, the
+Breadcrumbs navigation rollout, or the Dashboard inventory count) touch
+admin-hours _logic_ — but "zero drift" in this pass's conclusion means
+zero drift in admin-hours behavior specifically, not that nothing in the
+diff has any behavioral effect. Two of the three are real functional
+changes in adjacent features, correctly out of this pass's fix-or-flag
+scope but wrongly folded into "all cosmetic" by the first draft.
+
+**Checked external backend callers too, not only the module's own files.**
+`grep -rln "admin_hours_service\|AdminHoursService\|from app.services.admin_hours"`
+outside the module's own two files finds four callers:
+`training_session_service.py`, `scheduled_tasks.py`, `event_service.py`,
+`nfc_tag_service.py`. `training_session_service.py` and `nfc_tag_service.py`
+have zero diff since `4ba836420`. `event_service.py` and `scheduled_tasks.py`
+both changed, but neither diff touches an admin-hours call site — verified
+by line number, not by the commit message alone. **Caller inventory
+corrected (caught by Codex review on this pass's own first commit — the
+first draft's four-call-site list for `event_service.py` omitted a fifth):**
+`event_service.py`'s admin-hours call sites are `AdminHoursService(self.db)`
+constructions and calls at lines 45, 915, 1105, 2145, 2543, 2556, 2579-2601
+— **and** `_annotate_list_items`'s `get_active_mappings_by_source(...)` call
+at line 596, which derives the credited-hours figure shown on event cards
+and was missed by the first draft's search despite matching the same grep
+pattern used to find the other four. All five sit outside `event_service.py`'s
+changed hunk (EV-24, a waitlist queue-jump fix, lines 1475-1694).
+`scheduled_tasks.py`'s diff is not only CRON3-31-1 (an inactive-org
+message/email filter): a second, separately unrelated hunk around lines
+2677-2690 changes `run_end_of_shift_summary`'s call-type reporting from raw
+slugs to resolved human-readable labels (via a new `CallTrackingService.
+type_labels` call) — unrelated to `run_admin_hours_auto_close` (the AH-2
+caller, defined at line 5837, referenced at 388/6006/6055), and outside
+both of `scheduled_tasks.py`'s changed hunks (2677-2690 and 3517-3995).
+
+**The caller sweep above only found services that import `AdminHoursService`
+or `admin_hours_service` — too narrow, the same class of gap as the
+frontend consumer sweep (caught by Codex review, two rounds — the first
+correction's own five-file inventory was itself incomplete):** several
+backend paths read admin-hours data by querying
+`AdminHoursEntry`/`AdminHoursCategory` directly, never going through the
+service at all. `grep -rln "AdminHoursEntry\|AdminHoursCategory" app/`
+outside the module's own two files, `event_service.py`, and
+non-source noise (`__pycache__`, `app/models/__init__.py`'s re-export
+barrel, `reports.py`'s one comment-only mention with no actual query)
+finds **seven**, not five: `reports_service.py`, `dashboard.py` (endpoint),
+`compliance_officer_service.py`, `compliance_config_service.py`,
+`data_export_service.py`, **and, missed by the first correction's own
+search, `app/core/seed_admin_hours.py`** (queries and creates
+`AdminHoursCategory`/`EventHourMapping` for onboarding seed data) **and
+`app/services/org_template_registry.py`** (registers `AdminHoursCategory`
+for org-template import/export). `compliance_config_service.py`,
+`data_export_service.py`, `seed_admin_hours.py`, and
+`org_template_registry.py` all have zero diff since `4ba836420`. The other
+three changed — verified by line number, not by the commit message, the
+same method used above:
+
+- `reports_service.py`'s diff (five hunks, lines 1281-1450ish) is entirely
+  the same call-type label-resolution feature found in `scheduled_tasks.py`
+  above (a new `CallTrackingService.type_labels` import and its use in
+  `_generate_shift_reports`) — `_generate_admin_hours`, the method that
+  actually queries `AdminHoursEntry`, starts well past line 1700, outside
+  every changed hunk.
+- `dashboard.py`'s diff (one hunk, lines 226-256, `get_asset_widgets`) is
+  unrelated inventory-widget code — its `AdminHoursEntry` query (the
+  pending-count widget) is at line 827+, outside the changed hunk.
+- `compliance_officer_service.py`'s diff (four hunks, lines 813-1024) is
+  this rotation's own Feature 20 (Compliance) pass 4 fix
+  (`generate_annual_report`'s applicability filter, PR #2476) — its
+  `AdminHoursEntry` query (a member's approved-hours sum) is at line 707,
+  before every changed hunk.
+
+None of the three changed files' diffs overlap their own admin-hours query
+lines. This closes the gap the caller sweep above left open: every path
+that reads `AdminHoursEntry`/`AdminHoursCategory`, service-mediated or
+direct, is now accounted for — verified by actually re-running the grep
+fresh against the full `app/` tree rather than trusting the first
+correction's own recorded count.
+
+**Two more indirect backend consumers, found the same way as the frontend's
+API-cache guard above — a caller that doesn't reference the model or the
+service by name at all (caught by Codex review):**
+`app/services/onboarding.py` imports and calls `seed_admin_hours_data()`
+(from `app/core/seed_admin_hours.py`, already in the direct-model inventory
+above) during first-run setup — a real, indirect trigger of an
+admin-hours-writing function. `app/api/v1/endpoints/reports.py` gates the
+`admin_hours` report type at `admin_hours.manage` via its
+`PII_REPORT_PERMISSIONS` map (RPT-3's fix, feature 29). Both files changed
+since `4ba836420` — `onboarding.py`'s diff (18 hunks, an onboarding-step
+renumbering fix among other changes) sits well before the
+`seed_admin_hours_data()` call site (line 1556, outside every hunk);
+`reports.py`'s diff (three hunks: two import-statement additions and an
+`update_saved_report` blind-`setattr`→`apply_updates` fix at line 242) sits
+outside the `PII_REPORT_PERMISSIONS` map (lines 51-65) and its lookup
+(lines 65-100). Neither diff touches its admin-hours-relevant lines.
+
+**Two cross-cutting authorization/monitoring files also reference
+admin-hours without importing the module at all (caught by Codex review):**
+`app/core/security_middleware.py` special-cases
+`/api/v1/admin-hours/entries/export` (line 1587) for exfiltration
+monitoring; `app/core/permissions.py` defines
+`ADMIN_HOURS_VIEW`/`ADMIN_HOURS_LOG`/`ADMIN_HOURS_MANAGE` (lines 620-631)
+and lists them in `ALL_PERMISSIONS` (lines 782-784) — the permissions
+every route in this module enforces. Both files changed substantially
+since `4ba836420` (`security_middleware.py`: +438/-84 across four hunks
+spanning lines 10-480; `permissions.py`: +247/-84 across six hunks
+spanning lines 16-2463) — verified by line number that none of the
+changed hunks in either file overlaps its admin-hours-relevant lines: the
+export special-case sits well past `security_middleware.py`'s last
+changed hunk (which ends around line 480), and the permission
+definitions/list entries sit in the gaps between `permissions.py`'s
+hunks (before line 590 and again before line 799).
+
+**Migration content, not just chain hygiene, checked against the declared
+scope** (CHECKLIST.md's schema-and-migration dimension — `validate_migrations.py
+--strict` only proves a single head with no duplicate revisions, it says
+nothing about what a migration touches). `git diff --stat 4ba836420..HEAD --
+backend/alembic/versions/` shows 45 changed migration files. Grepped every
+one of the 45 for `admin_hours`/`AdminHours` (case-insensitive, content not
+filename): zero matches. **The first pass of this grep missed the module's
+own second table (caught by Codex review):** `EventHourMapping` maps to
+`event_hour_mappings`, neither an `admin_hours`/`AdminHours` substring — a
+changed migration altering its percentage constraint, indexes, or defaults
+would have passed the narrower grep silently. Re-ran including
+`event_hour_mappings`/`EventHourMapping`: also zero matches. No migration
+in this pass's scope touches either admin-hours table, a column on either,
+or a seeded grant.
+
+**Re-ran the frontend consumer sweep from scratch** (not trusting pass 2/3's
+recorded list): `grep -rln "admin-hours/services/api\|adminHoursService\|AdminHours"
+frontend/src`, excluding the module itself and `.test.` files, returns 13
+matches. Seven are the six already-tracked outside consumers plus
+`App.tsx` (route registration only, `getAdminHoursRoutes()`). **The first
+draft dismissed the other six as non-consumers because none imports the
+module's service directly — too narrow a test (caught by Codex review):**
+a page can consume admin-hours behavior indirectly, through a shared report
+pipeline or a URL contract, without ever importing
+`admin-hours/services/api`. Inspected each of the six on that basis:
+
+- `modules/reports/components/renderers/AdminHoursRenderer.tsx` renders the
+  `AdminHoursReport` shape the **reports endpoint** returns (a separate
+  data path from the module's own service, matching pass 2's AH21-2
+  finding) — a real, indirect consumer, just not one reachable through the
+  module's service exports. Zero diff since `4ba836420`.
+- `modules/reports/pages/ReportsPage.tsx` maps a report category to
+  `AdminHoursRenderer` and, like every other category, drives it through a
+  shared category-button row and a shared custom-date-range control — **and
+  this file changed** (a `btn-md`/`btn-sm` class-utility swap and a
+  mobile-layout fix widening the date inputs to fill the row on narrow
+  screens, both applied identically to every report category, not an
+  admin-hours-specific hunk). Read the diff directly: it touches only
+  shared button/date-input styling, nothing that branches on report type or
+  changes what data is requested — no admin-hours-specific behavior change.
+- `modules/reports/types/index.ts` — **not zero diff (the first correction's
+  own claim was wrong, caught by a third Codex round):** it adds an
+  eight-line `call_type_labels?: Record<string, string>` field to
+  `CallVolumeReport` — the same call-type label-resolution feature found in
+  `reports_service.py`/`scheduled_tasks.py` above. `AdminHoursReport`
+  (defined ~28 lines below the changed hunk) is untouched — confirmed by
+  reading the diff, not by re-asserting the file's earlier "zero diff"
+  status.
+- `modules/reports/components/renderers/index.ts` is the barrel file behind
+  the renderer above — zero diff since `4ba836420`.
+- `types/training.ts`'s "AdminHours" match is the unrelated
+  `AdminHoursComplianceItem`/training-compliance shape, not this module —
+  zero diff since `4ba836420`.
+- `constants/nfc.ts` builds/parses the `/admin-hours/{categoryId}/clock-in`
+  URL that `AdminHoursQRCodePage.tsx` encodes onto a physical NFC tag and
+  that `nfc_tag_service.py` (an already-checked external backend caller,
+  zero diff) resolves on scan — a real, indirect consumer via a URL
+  contract rather than a service import. Zero diff since `4ba836420`.
+
+All six are genuine or namesake matches; two changed
+(`ReportsPage.tsx`, `modules/reports/types/index.ts`), for two different
+unrelated reasons, not one — **corrected (caught by Codex review, the
+prior draft wrongly attributed both to the same feature):**
+`ReportsPage.tsx`'s change is the shared button/date-input styling
+described above; `modules/reports/types/index.ts`'s change is the
+call-type-label feature. Neither touches admin-hours behavior. The 6-file
+directly-imports list from pass 2/3 is still accurate for what it claims
+(direct service imports), it just isn't the complete set of _indirect_
+consumers, which is now recorded above instead of asserted away.
+
+**One more indirect path, outside the six above (caught by the same Codex
+round): the API-cache exclusion itself.** The original grep excluded
+`.test.` files, which hid `frontend/src/utils/apiCache.ts` and
+`apiCache.test.ts` — both changed since `4ba836420`, and both are a real
+admin-hours security control (Pitfall/CLAUDE.md's `UNCACHEABLE_PREFIXES`
+— the list that keeps one member's hours out of the shared-cache blast
+radius for the next caller). `apiCache.ts`'s diff is entirely new entries
+for other modules (apparatus, inventory, training); the existing
+`'/admin-hours/'` line itself is an unchanged context line. `apiCache.test.ts`'s
+diff **is** admin-hours-relevant: it replaces a single assertion against
+`/admin-hours/report` — not a route this app has anywhere — with eleven
+assertions against the client's actual GET paths (`/summary` with its real
+query string, `/entries/my`, `/entries`, `/entries/export`, `/active`,
+`/active-sessions`, `/pending-count`, `/compliance/{id}`, `/categories`,
+`/categories/{id}/qr-data`, `/event-mappings`), so a narrowed prefix could
+no longer pass this block while leaving a real path cacheable. Ran it:
+`npx vitest run src/utils/apiCache.test.ts` — 89 passed. A genuine,
+positive strengthening of an admin-hours-adjacent guard test, not a
+finding, but it belongs in the record rather than being hidden by a
+test-file exclusion in the sweep that found it.
+
+**Spot-verified every backend fix from passes 1-3 is still present at its
+current line**, by direct grep against the file content (not inferred from
+"the diff is empty"): the AH-7 org filter on `get_user_hours_compliance`'s
+target-user fetch (`UserModel.organization_id == organization_id`, line
+1880 — see the line-number note at the end of this paragraph); every
+`with_for_update()` call site from AH-10/AH-11 and pass 3's Codex-fixed
+locking findings 2/4/7. **Corrected count and labels (caught by Codex
+review on this pass's own first commit):** the executable
+`with_for_update()` sites are **11**, not 12, and two were mislabeled —
+`approve_or_reject`'s own lock (omitted from the first draft) and
+`_check_overlap`'s conditional lock (`for_update=True`, called from
+`create_manual_entry`/`edit_pending_entry`) were transposed. The corrected
+inventory, by function rather than by line number (see the note below for
+why): `clock_in`'s `User` lock, `_get_active_session`'s entry lock,
+`create_manual_entry`'s `User` lock, `edit_pending_entry`'s two locks,
+`approve_or_reject`'s lock, `bulk_approve`'s member-then-entry locks,
+`_check_overlap`'s conditional lock, and the two event-hour-mapping
+percentage locks (`create_event_hour_mapping` and
+`update_event_hour_mapping`) — 11 sites, re-verified by
+mapping each line number to its enclosing `async def` rather than trusting
+the first draft's labels; and the quarterly-compliance rejection logic from
+pass 3's finding 8 (the `ValueError` raised before any per-requirement
+query runs when a quarterly requirement is requested for a non-current
+year).
+
+**Line-number note:** this pass's own code changes (AH-15, then its
+TOCTOU follow-up below) shifted every line number after them in the file
+twice within this same pass — the first draft's "1561," the second
+draft's "1577," and Codex's own "1587" were each correct only against the
+commit they were written against. Rather than publish a fourth set of
+citations equally likely to go stale against a fifth commit, this
+paragraph and the ones above name functions; the two places below that
+still cite line numbers (AH-15's own `Where`, and the AH-7 org filter at
+line 1880) are checked against the final commit on this PR and are not
+expected to shift again, since no further code changes are planned.
+
+**Route inventory re-enumerated mechanically** (`grep -c "^@router\."` plus a
+`Depends(...)` extraction, not a manual count): **27/27**, matching every
+prior pass. 11 routes carry `Depends(get_current_user)`, 16 carry
+`Depends(require_permission("admin_hours.manage"))`, 27 carry
+`Depends(get_db)` — no ungated route, one uniform permission string (no
+`.view`/`.manage` mix to check for the XC-2 pattern), consistent with pass
+1-3's identical finding.
+
+**Confirmed still open, unchanged:** both deliberate product-decision items
+from pass 1 (the unconditional per-org SoD self-approval guard, and
+`credit_event_attendance`'s resync path growing an already-`APPROVED` entry
+without re-review) — re-verified against the current, now-modified
+`admin_hours_service.py`; neither sits inside `update_event_hour_mapping`
+(AH-15's fix) or `export_entries_csv` (AH-16's flag), and both functions'
+own code is unchanged. Cross-referenced and dated in
+`docs/KNOWN_LIMITATIONS.md`'s "Admin hours" row, alongside the new AH-16
+entry.
+
+**One backend fix and one carried-forward flag this pass, not "no code
+changed."** The declared-scope diff against `4ba836420` genuinely found
+nothing (all four application files were byte-identical at that point);
+AH-15 and AH-16 were found by re-reading `admin_hours_service.py`'s own
+code directly — the same re-verification step that spot-checked every
+prior fix above — not by the diff, which cannot surface a bug that
+predates the diff's own baseline. A "zero diff" scope check is not a
+substitute for reading the code it's re-verifying.
+
+## Completion gate (pass 4)
+
+| Check                                                                                                                        | Result                                      |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                | clean (0 violations)                        |
+| `black --check app/ tests/ alembic/`                                                                                         | clean                                       |
+| `isort --check-only app/ tests/ alembic/`                                                                                    | clean (isort, CI's pinned version)          |
+| `python3 scripts/validate_migrations.py --strict`                                                                            | PASSED — single head                        |
+| backend tests, scope (`-k "admin_hours"`)                                                                                    | 92 passed (88 + 4 new), 1 pre-existing skip |
+| backend tests, full suite (AH-15 touches a shared locking pattern — extra diligence)                                         | 12365 passed, 21 pre-existing skips         |
+| `npm run typecheck` (frontend)                                                                                               | 0 errors                                    |
+| `npm run lint` (frontend)                                                                                                    | 0 errors, 0 warnings                        |
+| `vitest run` — `entryTimes.test.ts`, `moduleFetchIntegrity.test.ts`, `createApiClient.test.ts`, `exportCsv.behavior.test.ts` | 4 files, 53 passed                          |
+| `vitest run` — `apiCache.test.ts` (admin-hours-relevant guard, found by widening the consumer sweep)                         | 89 passed                                   |
+
+**Correction (Codex review on this pass's second commit, before AH-15/AH-16
+were found):** the first two drafts claimed passes 1-3's frontend
+guard-test suite was "re-confirmed still passing," but the recorded gate
+only ran `npm run typecheck`/`npm run lint` — neither executes Vitest, so
+that claim described a validation that was never performed. Actually run
+(`npx vitest run` against the four files pass 3's own guard tests live
+in): 4 files, 53 tests, all pass — genuinely re-confirmed rather than
+assumed from an unrelated command's exit code. These four files are
+unaffected by AH-15's backend-only fix, so their count is unchanged from
+passes 1-3; AH-15's own new tests are counted in the backend rows above.
+
+---
 
 ## Pass 3 (2026-09-05)
 

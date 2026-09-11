@@ -13,6 +13,7 @@ import {
 } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
+import { nextStepPath, stepPath } from '../config/steps';
 
 const inputClass = 'form-input px-3';
 const labelClass = 'form-label-sm';
@@ -139,7 +140,7 @@ const FileStorageConfiguration: React.FC = () => {
   // A platform with no credential form has nothing to ask for.
   useEffect(() => {
     if (departmentName && !spec) {
-      void navigate('/onboarding/authentication');
+      void navigate(nextStepPath('file_storage'));
     }
   }, [departmentName, spec, navigate]);
 
@@ -187,7 +188,7 @@ const FileStorageConfiguration: React.FC = () => {
 
     if (!(await save(cleaned))) return;
     toast.success(`${spec?.title} configured`);
-    void navigate('/onboarding/authentication');
+    void navigate(nextStepPath('file_storage'));
   };
 
   const handleSkip = async () => {
@@ -199,7 +200,7 @@ const FileStorageConfiguration: React.FC = () => {
     toast('Saved without credentials — finish in Settings before uploading files.', {
       icon: '⚠️',
     });
-    void navigate('/onboarding/authentication');
+    void navigate(nextStepPath('file_storage'));
   };
 
   if (!spec) return null;
@@ -284,7 +285,7 @@ const FileStorageConfiguration: React.FC = () => {
           </div>
 
           <div className="mt-6 flex items-center justify-between">
-            <BackButton to="/onboarding/file-storage" />
+            <BackButton to={stepPath('file_storage')} />
             <ResetProgressButton />
           </div>
 

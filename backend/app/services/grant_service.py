@@ -222,6 +222,19 @@ class GrantService:
     async def get_application(
         self, application_id: str, organization_id: str
     ) -> Optional[GrantApplication]:
+        """Fetch a single application with every child collection eager-loaded.
+
+        ``populate_existing=True`` is required, not cosmetic: ``update_application``
+        calls this once to load the application, mutates it (adding a status-change
+        note and, on award, generating compliance tasks via a bare ``application_id=``
+        assignment rather than a relationship append), then the endpoint calls this
+        again to "reload with fresh relationships." Without ``populate_existing``,
+        the identity map hands back the same Python object with its ``grant_notes``/
+        ``compliance_tasks`` collections already marked loaded from the *first* call
+        — ``selectinload`` does not re-run for a collection already populated on an
+        identity-mapped object — so the response would silently omit the note/tasks
+        this same request just created.
+        """
         result = await self.db.execute(
             select(GrantApplication)
             .where(
@@ -235,6 +248,7 @@ class GrantService:
                 selectinload(GrantApplication.grant_notes),
                 selectinload(GrantApplication.opportunity),
             )
+            .execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
 
@@ -284,10 +298,13 @@ class GrantService:
     ) -> None:
         """GF-6: client-supplied FK ids on an application must be in the org.
 
-        ``opportunity_id`` was already validated (GF-4, read-leak); these three
-        are stored-only FKs — a foreign ``linked_campaign_id`` /
-        ``assigned_to`` / ``approved_by`` would persist a dangling/mis-attributed
-        reference. ``allow_none`` so clearing or omitting a field is fine.
+        ``opportunity_id`` was already validated (GF-4, read-leak); these two
+        are stored-only FKs — a foreign ``linked_campaign_id`` / ``assigned_to``
+        would persist a dangling/mis-attributed reference. ``allow_none`` so
+        clearing or omitting a field is fine. (``GrantApplication`` has no
+        ``approved_by`` column — that field exists only on
+        ``GrantExpenditure``, and is response-only there — so it is not
+        checked here.)
         """
         await assert_in_org(
             self.db,
@@ -304,14 +321,6 @@ class GrantService:
             organization_id,
             allow_none=True,
             label="Assigned user",
-        )
-        await assert_in_org(
-            self.db,
-            User,
-            data.get("approved_by"),
-            organization_id,
-            allow_none=True,
-            label="Approver",
         )
 
     async def create_application(

@@ -5,13 +5,14 @@
  * on the presence of an :id route parameter.
  */
 
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { grantsService } from '../services/api';
 import type { GrantApplication, GrantOpportunity } from '../types';
 import { ApplicationStatus, GrantPriority } from '../types';
+import { toAppError } from '@/utils/errorHandling';
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
@@ -95,8 +96,16 @@ export const GrantApplicationFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditing = Boolean(id);
+  const [searchParams] = useSearchParams();
+  // Read once at mount, not from state — the mount effect below needs this
+  // exact value without re-running every time formData.opportunityId changes
+  // (e.g. as the user picks a different one from the dropdown).
+  const initialOpportunityIdRef = useRef(isEditing ? '' : (searchParams.get('opportunity_id') ?? ''));
 
-  const [formData, setFormData] = useState<FormData>(EMPTY_FORM);
+  const [formData, setFormData] = useState<FormData>(() => ({
+    ...EMPTY_FORM,
+    opportunityId: initialOpportunityIdRef.current,
+  }));
   const [opportunities, setOpportunities] = useState<GrantOpportunity[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -107,6 +116,31 @@ export const GrantApplicationFormPage: React.FC = () => {
     const loadOpportunities = async () => {
       try {
         const data = await grantsService.listOpportunities();
+        const linkedId = initialOpportunityIdRef.current;
+        // An org with more than 100 opportunities may have linked one from
+        // outside this unfiltered first page (the opportunities page's own
+        // search/filter can reach it, this dropdown's default fetch can't).
+        // Fetch it directly so the "Apply" flow's link stays visible and
+        // selected instead of silently showing "-- None --".
+        if (linkedId && !data.some((opp) => opp.id === linkedId)) {
+          try {
+            const linked = await grantsService.getOpportunity(linkedId);
+            setOpportunities([linked, ...data]);
+            return;
+          } catch (err: unknown) {
+            // A 404 means the id is stale/foreign — fall through silently,
+            // matching "no opportunity selected". Any other failure (a
+            // network blip, a 500) is not the same thing: leaving the
+            // dropdown on "-- None --" while formData.opportunityId still
+            // held the id would submit an id the user can no longer see.
+            // Clear it so what's displayed is what would be sent, and say
+            // why for anything other than "it doesn't exist".
+            if (toAppError(err).status !== 404) {
+              toast.error('Could not load the linked funding opportunity — please reselect it.');
+            }
+            setFormData((prev) => ({ ...prev, opportunityId: '' }));
+          }
+        }
         setOpportunities(data);
       } catch {
         // Silently fail — the dropdown will just be empty

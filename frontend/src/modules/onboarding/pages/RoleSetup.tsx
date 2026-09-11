@@ -51,6 +51,7 @@ import {
 import { apiClient } from '../services/api-client';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildPositionTemplates } from './positionTemplates';
+import { nextStepPath, previousStepPath } from '../config/steps';
 
 /**
  * Build permission categories dynamically from the module registry.
@@ -687,7 +688,7 @@ const PositionSetup: React.FC = () => {
           { duration: 8000 }
         );
       }
-      void navigate('/onboarding/modules');
+      void navigate(nextStepPath('positions'));
     } catch (error: unknown) {
       // Show specific error message from backend
       const errorMessage = getErrorMessage(error, 'Failed to save position configuration. Please try again.');
@@ -708,7 +709,7 @@ const PositionSetup: React.FC = () => {
 
       <main id="main-content" tabIndex={-1} className="flex-1 p-4 py-8">
         <div className="mx-auto w-full max-w-6xl">
-          <BackButton to="/onboarding/it-team" className="mb-6" />
+          <BackButton to={previousStepPath('positions')} className="mb-6" />
 
           {/* Header */}
           <div className="mb-8 text-center">

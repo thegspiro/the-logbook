@@ -295,8 +295,10 @@ class TestSubresourceOrgScoping:
 
 
 class TestApplicationFkValidation:
-    """GF-6: linked_campaign_id / assigned_to / approved_by on an application
-    must be in the caller's org (stored-only FKs — dangling/mis-attributed)."""
+    """GF-6: linked_campaign_id / assigned_to on an application must be in
+    the caller's org (stored-only FKs — dangling/mis-attributed).
+    ``approved_by`` is not an application field (only ``GrantExpenditure``
+    has one, and it's response-only there), so it is not validated here."""
 
     async def test_create_rejects_foreign_assigned_to(self):
         # opportunity_id + linked_campaign_id absent (skipped); assigned_to

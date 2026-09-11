@@ -2871,11 +2871,27 @@ class SchedulingService:
     async def update_shift_call(
         self, call_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Tuple[Optional[ShiftCall], Optional[str]]:
-        """Update a shift call record"""
+        """Update a shift call record.
+
+        Gated on the same tracking mode as :meth:`create_shift_call`. Without
+        it a department that has turned per-incident logging off cannot create
+        a row but can still rewrite every row it already holds — the same
+        write reached by a different verb.
+
+        Deletion (:meth:`delete_shift_call`) deliberately stays open: rows
+        stranded by a mode switch have to remain clearable, and clearing one
+        cannot manufacture incident detail the department has opted out of.
+        """
         try:
             call = await self.get_shift_call_by_id(call_id, organization_id)
             if not call:
                 return None, "Shift call not found"
+
+            tracking = await CallTrackingService(self.db).get_settings(
+                str(organization_id)
+            )
+            if tracking.get("mode") != CallTrackingMode.DETAILED:
+                return None, "Detailed call records are disabled for this organization"
 
             if "responding_members" in update_data:
                 if not await self._all_users_in_org(
@@ -7599,6 +7615,23 @@ class SchedulingService:
                 else False
             )
 
+            # Refuse the close-out call figures rather than ignoring them.
+            # Outside count-only tracking the snapshot below is
+            # COUNT(ShiftCall), so a number an officer typed used to vanish
+            # behind a 200 with nothing on screen saying which value won —
+            # the worst shape for a figure that ends up in a grant
+            # application. Checked before anything is written so the refusal
+            # leaves no half-applied finalize behind.
+            if not count_only and (
+                reported_call_count is not None
+                or reported_call_types
+                or attach_call_ids
+                or member_call_counts_in
+            ):
+                return None, (
+                    "This organization does not record a call count at close-out"
+                )
+
             # Enforce end-of-shift equipment checks when the org requires it.
             if not override_incomplete_checks:
                 require_checks = bool(
@@ -8091,6 +8124,18 @@ class SchedulingService:
             return None, "Shift is already finalized — reopen it to make changes"
 
         call_service = CallTrackingService(self.db)
+
+        # This step belongs to count-only tracking and to nothing else.
+        # Ungated, a department on detailed tracking could write
+        # OrgCall/OrgCallResponse rows here that no report ever reads —
+        # ``ReportsService.get_call_volume_report`` picks its source from the
+        # org's current mode — while ``type_usage_counts`` *does* read them,
+        # so those invisible rows would lock a call type against deletion on
+        # the settings screen. A tab left open across a mode switch is the
+        # realistic way in, and it needs no attacker.
+        mode = (await call_service.get_settings(str(organization_id))).get("mode")
+        if mode != CallTrackingMode.COUNT_ONLY:
+            return None, "This organization does not record a call count at close-out"
 
         # SCH-13 round 4 (Codex review of PR #2437) — same fix and reasoning
         # as finalize_shift's own call-tracking block above: lock the
