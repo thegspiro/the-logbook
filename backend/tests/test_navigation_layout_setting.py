@@ -22,8 +22,6 @@ from app.api.v1.endpoints.auth import get_login_branding
 from app.schemas.organization import AppearanceSettings, OrganizationSettings
 from app.services.onboarding import OnboardingService
 
-pytestmark = pytest.mark.unit
-
 
 def _db_returning(row):
     db = MagicMock()
@@ -37,6 +35,7 @@ def _org(settings):
     return SimpleNamespace(name="Engine Co.", logo=None, settings=settings)
 
 
+@pytest.mark.unit
 class TestAppearanceSettings:
     def test_defaults_to_the_left_sidebar(self):
         # The layout every install has had; an absent setting must not move it.
@@ -52,6 +51,7 @@ class TestAppearanceSettings:
             AppearanceSettings(navigation_layout="diagonal")
 
 
+@pytest.mark.unit
 class TestBrandingServesTheLayout:
     async def test_reports_the_departments_choice(self):
         db = _db_returning(_org({"appearance": {"navigation_layout": "top"}}))
@@ -106,6 +106,11 @@ async def _create_org(db_session: AsyncSession):
     return org
 
 
+# Real rows, so a real database. The no-DB job selects on this marker;
+# without it these run there and fail on `db_session` rather than on
+# anything they assert.
+@pytest.mark.integration
+@pytest.mark.onboarding
 class TestCompletionCarriesTheAnswerOntoTheOrganization:
     async def test_the_wizards_choice_reaches_the_organization(
         self, db_session: AsyncSession
