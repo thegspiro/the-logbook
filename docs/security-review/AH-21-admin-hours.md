@@ -2,7 +2,7 @@
 
 **Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), pass 4 (this PR)
 
-## Pass 4 (2026-09-11) — 1 fixed (P1), 1 flagged, zero unrelated drift
+## Pass 4 (2026-09-11) — 1 fixed (P1), 1 flagged, zero admin-hours-behavioral drift
 
 **AH-15 — P1 — `update_event_hour_mapping` skipped its own percentage
 validation on an inactive-to-active transition — ✅ FIXED**
