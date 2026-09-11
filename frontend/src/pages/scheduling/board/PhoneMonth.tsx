@@ -100,7 +100,7 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
                   onClick={() => onSelect(day)}
                   className={`bg-theme-surface border-theme-surface-border flex min-h-[46px] flex-col items-center gap-[3px] rounded-md border px-0.5 py-1.5 transition-opacity duration-200 ease-out ${
                     selected ? 'border-2 border-red-600 dark:border-red-500' : ''
-                  } ${dimmed ? 'opacity-45' : ''}`}
+                  } ${dimmed ? 'opacity-65' : ''}`}
                 >
                   <span className="text-theme-text-primary font-mono text-xs font-bold">{day.getDate()}</span>
                   {shifts.slice(0, MAX_BARS).map((shift) => (
