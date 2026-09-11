@@ -121,8 +121,16 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
                     {/* Marked on the step itself rather than in a legend: a
                         legend is one more thing to read, and the strip scrolls
                         on a phone so a legend may not be on screen with it. */}
+                    {/* No opacity and no colour of its own. `opacity-70` here
+                        put nine serious axe color-contrast failures on
+                        /onboarding/start — one per optional step — because it
+                        thins the text against all three chip backgrounds.
+                        Inheriting the parent outright means this renders in
+                        exactly the colour the step name beside it already
+                        passes in. Per the palette rule, de-emphasis comes from
+                        size and weight, never from colour or opacity. */}
                     {listStep.optional && (
-                      <span className="ml-1 opacity-70" title="Optional">
+                      <span className="ml-1">
                         <span aria-hidden="true">(optional)</span>
                         <span className="sr-only">, optional</span>
                       </span>
