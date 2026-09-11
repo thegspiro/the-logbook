@@ -90,6 +90,24 @@ MaintenanceTypeLiteral = Literal[
     "decontamination",
 ]
 
+#: The maintenance types that ARE an inspection.
+#:
+#: Two rules read this and they must not drift apart: the create validator,
+#: which requires a pass/fail result on a completed inspection and forbids one
+#: anywhere else, and InventoryService.create_maintenance_record, which lets
+#: only these advance an item's ``last_inspection_date`` and the
+#: ``next_inspection_due`` derived from it. A repair is service, not an
+#: inspection, and must not move an NFPA deadline (CLAUDE.md pitfall #29 — one
+#: definition, and the duplicate is a reference to it).
+INSPECTION_MAINTENANCE_TYPES = frozenset(
+    {
+        "inspection",
+        "routine_inspection",
+        "advanced_inspection",
+        "independent_inspection",
+    }
+)
+
 AssignmentTypeLiteral = Literal["permanent", "temporary"]
 
 TrackingTypeLiteral = Literal["individual", "pool"]
@@ -1027,12 +1045,7 @@ class MaintenanceRecordCreate(MaintenanceRecordBase):
     @model_validator(mode="after")
     def validate_maintenance_workflow(self):
         """Keep scheduling, inspection, and completion records internally consistent."""
-        inspection_types = {
-            "inspection",
-            "routine_inspection",
-            "advanced_inspection",
-            "independent_inspection",
-        }
+        inspection_types = INSPECTION_MAINTENANCE_TYPES
         maintenance_type = str(self.maintenance_type)
         if hasattr(self.maintenance_type, "value"):
             maintenance_type = self.maintenance_type.value

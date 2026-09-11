@@ -84,6 +84,7 @@ from app.models.user import (
     UserStatus,
     user_positions,
 )
+from app.schemas.inventory import INSPECTION_MAINTENANCE_TYPES
 from app.schemas.user import resolve_profile_visibility
 from app.utils.color_names import canonical_color, normalize_color
 from app.utils.garment_styles import (
@@ -4025,7 +4026,17 @@ class InventoryService:
                     if maintenance_data.get("condition_after"):
                         item.condition = maintenance_data["condition_after"]
                     completed = maintenance_data.get("completed_date")
-                    if completed:
+                    # Only an INSPECTION may move the inspection clock. This
+                    # ran for any completed record, so a repair or a cleaning
+                    # rewrote last_inspection_date and pushed
+                    # next_inspection_due out by a whole interval -- a coat
+                    # repaired in August had its annual NFPA 1851 inspection
+                    # silently rescheduled from April, and the department read
+                    # as compliant four months longer than it was. Nothing
+                    # raised, nothing logged: the only sign was two dates on
+                    # the item page disagreeing.
+                    record_type = str(maintenance_data.get("maintenance_type") or "")
+                    if completed and record_type in INSPECTION_MAINTENANCE_TYPES:
                         item.last_inspection_date = completed
                         # Auto-calculate next_inspection_due from interval
                         if item.inspection_interval_days:
