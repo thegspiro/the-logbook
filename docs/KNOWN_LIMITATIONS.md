@@ -289,6 +289,55 @@ piece of work rather than riding along with the setup editor.
 about what the department uses, not a constraint the API enforces. Nothing in
 the UI offers a deleted seed rank, so reaching this needs a direct write.
 
+## ONBOARD-5 — Navigation Layout Is a Per-Browser Preference Wearing an Org Setting's Clothes (2026-09-11)
+
+The setup wizard's last step asks whether the department wants top or left
+navigation, and it does take effect — `onboardingStore` writes the answer to
+`localStorage` under `navigationLayout`, and `AppLayout` reads it from there.
+
+That is the whole of the mechanism, and it is per-browser. The chief who ran
+setup sees the layout they chose; every other member, and the chief on their
+phone, gets the `'left'` default, because nothing about the choice reaches
+them. The step also POSTs `navigation_layout` to the backend, where it is
+stored on the organization and read by nothing — Pitfall #19's "a switch wired
+to nothing", with the twist that the half that is wired is wired to the wrong
+scope.
+
+**Not changed here.** Making it an organization setting means a reader in
+`AppLayout` backed by org settings, a migration path for installs whose only
+answer lives in one person's browser, and a decision about whether a member may
+override the department's choice for themselves — which is a product question,
+not a wiring one. The 2026-09-11 reorder moved the step to the end of the
+wizard, where a cosmetic preference belongs, and deliberately left the
+mechanism alone: removing the step would have taken away the only way to set
+the layout at all.
+
+**What it means in practice:** the layout answer given during setup applies to
+the browser that gave it. Treat it as a personal preference that happens to be
+collected during setup, not as a department-wide decision.
+
+## ONBOARD-6 — Setup Configures Permissions for Modules the Department Did Not Enable (2026-09-11)
+
+The Ranks & Positions step builds its permission matrix from the whole
+`MODULE_REGISTRY`, so a department sees View/Manage rows for every module the
+application has, including the ones it just declined on the step before.
+
+Before the 2026-09-11 reorder this was invisible: positions came _before_
+module selection, so there was no answer to filter against. Now that modules
+are chosen first, the mismatch is on screen — a department that enabled six
+modules still scrolls a matrix covering all of them.
+
+**Not changed here.** Filtering the matrix to the enabled set is the obvious
+move and it changes what gets stored: a position configured while a module was
+off has no grants for it, so enabling that module later would leave every
+position silently unable to use it until someone revisits the position editor.
+That wants either a backfill on module enable or a documented "new modules
+start ungranted" rule, and either is its own piece of work.
+
+**What it means in practice:** the matrix is longer than it needs to be, and
+the extra rows are harmless — grants for a disabled module gate nothing,
+because the module's routes are not registered for that organization.
+
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
 A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported

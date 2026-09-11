@@ -13,6 +13,7 @@ import {
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
+import { ONBOARDING_CONFIG_PATHS, nextStepPath, stepPath } from '../config/steps';
 
 interface FileStoragePlatform {
   id: string;
@@ -168,7 +169,7 @@ const FileStorageChoice: React.FC = () => {
     // Saving an empty config here used to overwrite already-entered secrets
     // when a user went Back from a later step and continued again.
     if (fileStoragePlatform !== 'other') {
-      void navigate('/onboarding/file-storage-config');
+      void navigate(ONBOARDING_CONFIG_PATHS.fileStorage);
       return;
     }
 
@@ -196,12 +197,12 @@ const FileStorageChoice: React.FC = () => {
 
     if (data) {
       toast.success('File storage will be configured later');
-      void navigate('/onboarding/authentication');
+      void navigate(nextStepPath('file_storage'));
     }
   };
 
   const currentYear = new Date().getFullYear();
-  const previousRoute = emailPlatform === 'other' ? '/onboarding/email-platform' : '/onboarding/email-config';
+  const previousRoute = emailPlatform === 'other' ? stepPath('email') : ONBOARDING_CONFIG_PATHS.email;
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">

@@ -13,6 +13,7 @@ import {
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
+import { nextStepPath, previousStepPath } from '../config/steps';
 
 interface AuthPlatform {
   id: string;
@@ -191,7 +192,7 @@ const AuthenticationChoice: React.FC = () => {
       toast.success('Authentication platform saved');
 
       // Route to System Owner account creation
-      void navigate('/onboarding/system-owner');
+      void navigate(nextStepPath('authentication'));
     }
   };
 
@@ -207,7 +208,7 @@ const AuthenticationChoice: React.FC = () => {
         <div className="w-full max-w-5xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
-            <BackButton to="/onboarding/file-storage" />
+            <BackButton to={previousStepPath('authentication')} />
             <ResetProgressButton />
           </div>
 

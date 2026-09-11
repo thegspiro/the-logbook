@@ -13,6 +13,7 @@ import {
 import { useOnboardingStore } from '../store';
 import { useApiRequest } from '../hooks';
 import { apiClient } from '../services/api-client';
+import { nextStepPath, previousStepPath } from '../config/steps';
 
 const NavigationChoice: React.FC = () => {
   const navigate = useNavigate();
@@ -64,15 +65,47 @@ const NavigationChoice: React.FC = () => {
 
     setIsSaving(false);
 
-    if (data) {
-      // Store navigation preference (backward compatibility)
-      sessionStorage.setItem('navigationLayout', navigationLayout);
+    if (!data) {
+      if (error) {
+        // Display the actual error message from the backend
+        toast.error(error);
+      }
+      return;
+    }
 
-      toast.success('Department information saved');
-      // Navigate to email platform choice
-      void navigate('/onboarding/email-platform');
+    // Store navigation preference (backward compatibility)
+    sessionStorage.setItem('navigationLayout', navigationLayout);
+
+    // This is the wizard's last step, so it is the one that finalizes setup.
+    // Finalization lived on Module Selection while that was last; it follows
+    // the final step rather than any particular step's subject matter.
+    setIsSaving(true);
+    const { data: completed } = await execute(
+      async () => {
+        const response = await apiClient.completeOnboarding();
+
+        if (response.error) {
+          throw new Error('Setup could not be finalized. Please contact support.');
+        }
+
+        // Load the authenticated user before navigating — the completion
+        // screen links straight into the protected /setup route.
+        const { useAuthStore } = await import('../../../stores/authStore');
+        await useAuthStore.getState().loadUser();
+
+        return response;
+      },
+      {
+        step: 'Navigation Choice',
+        action: 'Finalize onboarding',
+      }
+    );
+    setIsSaving(false);
+
+    if (completed) {
+      toast.success('Setup complete!');
+      void navigate(nextStepPath('navigation'));
     } else if (error) {
-      // Display the actual error message from the backend
       toast.error(error);
     }
   };
@@ -92,7 +125,7 @@ const NavigationChoice: React.FC = () => {
         <div className="w-full max-w-4xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
-            <BackButton to="/onboarding/apparatus" />
+            <BackButton to={previousStepPath('navigation')} />
             <ResetProgressButton />
           </div>
 

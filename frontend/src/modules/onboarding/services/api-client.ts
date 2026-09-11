@@ -238,8 +238,12 @@ class SecureApiClient {
         };
       }
       case 403:
+        // Two different 403s reach here and they need different remedies: a
+        // stale CSRF token, which a refresh fixes, and "you are not the System
+        // Owner", which it never will. Both ship a usable detail from the
+        // server, so prefer it over the blanket refresh advice.
         return {
-          error: 'Security validation failed. Please refresh the page and try again.',
+          error: detail || 'Security validation failed. Please refresh the page and try again.',
           statusCode: 403,
         };
       case 422: {

@@ -15,6 +15,7 @@ import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { getUserFacingModules, type ModuleDefinition } from '../config';
 import { FeatureStatus } from '../../../constants/enums';
+import { nextStepPath, previousStepPath } from '../config/steps';
 
 const ModuleOverview: React.FC = () => {
   const navigate = useNavigate();
@@ -83,28 +84,14 @@ const ModuleOverview: React.FC = () => {
           throw new Error(response.error);
         }
 
-        toast.success('Module configuration saved! Finalizing setup...');
+        toast.success('Module configuration saved');
 
-        // Complete onboarding
-        const completeResponse = await apiClient.completeOnboarding();
-
-        if (completeResponse.error) {
-          throw new Error('Modules saved but setup could not be finalized. Please contact support.');
-        }
-
-        toast.success('Setup complete!');
-
-        // Ensure auth store is loaded before navigating — the completion
-        // screen links straight into the protected /setup route.
-        const { useAuthStore } = await import('../../../stores/authStore');
-        await useAuthStore.getState().loadUser();
-
-        void navigate('/onboarding/complete');
+        void navigate(nextStepPath('modules'));
         return response;
       },
       {
         step: 'Module Selection',
-        action: 'Save modules and complete onboarding',
+        action: 'Save modules',
       }
     );
 
@@ -160,7 +147,7 @@ const ModuleOverview: React.FC = () => {
         <div className="mx-auto w-full max-w-6xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
-            <BackButton to="/onboarding/positions" />
+            <BackButton to={previousStepPath('modules')} />
             <ResetProgressButton />
           </div>
 

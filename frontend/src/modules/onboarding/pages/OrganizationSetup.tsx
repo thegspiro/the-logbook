@@ -27,6 +27,7 @@ import { HelpLink } from '../../../components/HelpLink';
 // have to be one union.
 import { useOnboardingStore, type OrganizationType } from '../store';
 import { membershipIdPayload } from './memberNumbering';
+import { nextStepPath } from '../config/steps';
 
 // Types
 type IdentifierType = 'fdid' | 'state_id' | 'department_id';
@@ -440,7 +441,7 @@ const OrganizationSetup: React.FC = () => {
       const status = response.data as { organization_name?: string | null } | undefined;
       if (!status) return; // status unreachable: keep the form usable
       if (status.organization_name) {
-        void navigate('/onboarding/stations', { replace: true });
+        void navigate(nextStepPath('organization'), { replace: true });
       } else {
         setDepartmentName('');
       }
@@ -721,7 +722,7 @@ const OrganizationSetup: React.FC = () => {
       toast.success('Organization created successfully!');
 
       // Navigate to next step (navigation choice)
-      void navigate('/onboarding/stations');
+      void navigate(nextStepPath('organization'));
     } catch (err: unknown) {
       console.error('Failed to save organization:', err);
       // Show the actual error message from the backend (includes validation details)

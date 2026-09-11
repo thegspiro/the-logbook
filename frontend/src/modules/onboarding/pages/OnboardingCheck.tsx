@@ -357,7 +357,7 @@ const OnboardingCheck: React.FC = () => {
       const status = response.data as { needs_onboarding?: boolean } | undefined;
 
       if (status?.needs_onboarding) {
-        void navigate('/onboarding/start');
+        void navigate('/onboarding/prepare');
       } else {
         void navigate('/login');
       }

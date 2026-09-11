@@ -1,18 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import {
-  PartyPopper,
-  CheckCircle2,
-  Users,
-  MapPin,
-  FileText,
-  Calendar,
-  ArrowRight,
-  LayoutDashboard,
-} from 'lucide-react';
+import { PartyPopper, CheckCircle2, Circle, ArrowRight, LayoutDashboard, Loader2 } from 'lucide-react';
 import { OnboardingHeader } from '../components';
 import { useOnboardingStore } from '../store';
 import { getUserFacingModules } from '../config';
+import { organizationService } from '../../../services/api';
+import type { SetupChecklistItem } from '../../../services/api';
 
 /**
  * Final onboarding screen.
@@ -22,6 +15,13 @@ import { getUserFacingModules } from '../config';
  * events. This screen closes the wizard by naming what was configured and
  * pointing at the department setup checklist, which is where the remaining
  * work actually lives.
+ *
+ * "What's left" is read from that checklist rather than restated here. It used
+ * to be a hardcoded list that named stations and apparatus as outstanding —
+ * two steps the wizard had just collected — so the screen contradicted the
+ * page its own button leads to. The backend already computes completion from
+ * real counts (`GET /organization/setup-checklist`); this reports that
+ * decision instead of re-deriving it.
  */
 const SetupComplete: React.FC = () => {
   const navigate = useNavigate();
@@ -33,6 +33,33 @@ const SetupComplete: React.FC = () => {
   const authPlatform = useOnboardingStore((state) => state.authPlatform);
   const fileStoragePlatform = useOnboardingStore((state) => state.fileStoragePlatform);
   const itTeamMembers = useOnboardingStore((state) => state.itTeamMembers);
+
+  const [remaining, setRemaining] = useState<SetupChecklistItem[] | null>(null);
+  const [checklistState, setChecklistState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRemaining = async () => {
+      try {
+        const data = await organizationService.getSetupChecklist();
+        if (cancelled) return;
+        // Essentials only: this screen is a send-off, not the whole checklist,
+        // and the per-module items would bury the roster behind twenty rows.
+        setRemaining(data.items.filter((item) => item.category === 'essential' && !item.is_complete));
+        setChecklistState('ready');
+      } catch {
+        // Never block the send-off on it. The Department Setup button below
+        // goes to the authoritative list either way.
+        if (!cancelled) setChecklistState('unavailable');
+      }
+    };
+
+    void loadRemaining();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const modules = useMemo(() => getUserFacingModules(), []);
 
@@ -98,7 +125,7 @@ const SetupComplete: React.FC = () => {
             )}
           </section>
 
-          {/* What is left */}
+          {/* What is left — read from the checklist, never restated here */}
           <section className="card p-6" aria-labelledby="next-steps-heading">
             <h3 id="next-steps-heading" className="text-theme-text-primary mb-1 text-sm font-semibold">
               What&apos;s left
@@ -106,19 +133,48 @@ const SetupComplete: React.FC = () => {
             <p className="text-theme-text-muted mb-4 text-xs">
               Department Setup tracks these for you and marks each one done as the data lands.
             </p>
-            <ul className="space-y-3">
-              {NEXT_STEPS.map((step) => (
-                <li key={step.title} className="flex items-start gap-3">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-500">
-                    {step.icon}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-theme-text-primary text-sm font-medium">{step.title}</p>
-                    <p className="text-theme-text-muted text-xs">{step.description}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+
+            {checklistState === 'loading' && (
+              <p className="text-theme-text-muted flex items-center gap-2 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Checking what still needs your department&apos;s data…
+              </p>
+            )}
+
+            {checklistState === 'unavailable' && (
+              <p className="text-theme-text-muted text-sm">
+                The remaining steps could not be loaded just now. Department Setup below has the current list.
+              </p>
+            )}
+
+            {checklistState === 'ready' && remaining?.length === 0 && (
+              <p className="text-theme-text-secondary flex items-start gap-2 text-sm">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
+                Every essential step is done. Department Setup has the optional ones for the modules you enabled.
+              </p>
+            )}
+
+            {checklistState === 'ready' && remaining && remaining.length > 0 && (
+              <ul className="space-y-3">
+                {remaining.map((item) => (
+                  <li key={item.key} className="flex items-start gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-500">
+                      <Circle className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => void navigate(item.path)}
+                        className="text-theme-text-primary hover:text-theme-accent-red text-left text-sm font-medium underline-offset-2 hover:underline"
+                      >
+                        {item.title}
+                      </button>
+                      <p className="text-theme-text-muted text-xs">{item.description}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           {/* Actions */}
@@ -143,29 +199,6 @@ const SetupComplete: React.FC = () => {
     </div>
   );
 };
-
-const NEXT_STEPS: Array<{ title: string; description: string; icon: React.ReactNode }> = [
-  {
-    title: 'Add your roster and get members signed in',
-    description: 'Import members or add them manually, then send their logins.',
-    icon: <Users className="h-4 w-4" aria-hidden="true" />,
-  },
-  {
-    title: 'Add your stations and apparatus',
-    description: 'Needed for event check-in, scheduling, and shift staffing.',
-    icon: <MapPin className="h-4 w-4" aria-hidden="true" />,
-  },
-  {
-    title: 'Upload SOPs and policies',
-    description: 'Give members one place to find department documents.',
-    icon: <FileText className="h-4 w-4" aria-hidden="true" />,
-  },
-  {
-    title: 'Schedule your first event',
-    description: 'A drill or business meeting members can RSVP to.',
-    icon: <Calendar className="h-4 w-4" aria-hidden="true" />,
-  },
-];
 
 const AUTH_LABELS: Record<string, string> = {
   google: 'Google',
