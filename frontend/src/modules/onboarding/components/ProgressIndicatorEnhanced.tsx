@@ -27,6 +27,13 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
   const percentage = Math.round((currentStep / totalSteps) * 100);
   const currentStepInfo = ONBOARDING_STEPS[stepIndex];
 
+  // "Step 4 of 11" overstates what is left when seven of those eleven are
+  // skippable, and a department that intends to skip them has no way to tell
+  // from the bar. Saying which steps are optional is the honest version of
+  // that number, and it comes from the step's own flag rather than a second
+  // list here.
+  const requiredRemaining = ONBOARDING_STEPS.filter((s, index) => !s.optional && index + 1 > currentStep).length;
+
   return (
     <div className={`mx-auto w-full max-w-2xl ${className}`}>
       {/* Current Step Label */}
@@ -49,6 +56,14 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
           aria-label={`Setup progress: ${percentage} percent complete`}
         />
       </div>
+
+      <p className="text-theme-text-muted mb-4 text-xs">
+        {currentStepInfo?.optional
+          ? requiredRemaining === 0
+            ? 'This step is optional — Skip is a complete answer, and setup can be finished from here.'
+            : 'This step is optional — Skip is a complete answer.'
+          : 'This step is required to finish setup.'}
+      </p>
 
       {/* Breadcrumb-Style Step Indicators (Mobile: Scrollable, Desktop: All visible) */}
       {/* Already built to scroll on a phone; the marker is what says so to the
@@ -103,6 +118,15 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
                   <span className={`text-xs whitespace-nowrap ${isCurrent ? 'font-semibold' : 'font-medium'}`}>
                     <span className="hidden sm:inline">{listStep.name}</span>
                     <span className="sm:hidden">{listStep.shortName}</span>
+                    {/* Marked on the step itself rather than in a legend: a
+                        legend is one more thing to read, and the strip scrolls
+                        on a phone so a legend may not be on screen with it. */}
+                    {listStep.optional && (
+                      <span className="ml-1 opacity-70" title="Optional">
+                        <span aria-hidden="true">(optional)</span>
+                        <span className="sr-only">, optional</span>
+                      </span>
+                    )}
                   </span>
                 </div>
 

@@ -3,7 +3,7 @@
  *
  * The order used to live in three places that each restated it: this list's
  * predecessor inside ProgressIndicatorEnhanced, the route table, and a
- * hardcoded `navigate('/onboarding/<next>')` in all thirteen pages. They
+ * hardcoded next-step path passed to navigate() in all thirteen pages. They
  * drifted, which is what the progress indicator's own history records. A page
  * now names only itself and asks for its successor, so inserting or moving a
  * step is an edit to this array alone.

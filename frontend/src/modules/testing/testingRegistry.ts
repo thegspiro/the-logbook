@@ -148,6 +148,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     checklistSection: '16. Organization & Settings',
     pages: [
       { path: '/onboarding', label: 'Onboarding entry / status check', isPublic: true },
+      { path: '/onboarding/prepare', label: 'Setup prerequisites', isPublic: true },
       { path: '/onboarding/start', label: 'Organization setup', isPublic: true },
       {
         path: '/onboarding/department',

@@ -17,6 +17,7 @@ import {
   ModuleOverview,
   SystemOwnerCreation,
   SetupComplete,
+  SetupPrerequisites,
 } from './pages';
 import { SecurityCheckPlaceholder } from './components/PlaceholderPages';
 
@@ -35,6 +36,11 @@ export const getOnboardingRoutes = () => {
 
       {/* Onboarding flow */}
       <Route path="/onboarding" element={<OnboardingCheck />} />
+
+      {/* Pre-flight, not a step: nothing is collected or saved here. It says
+          what the flow will ask for, so nobody starts and then leaves to go
+          hunting for an SMTP password. */}
+      <Route path="/onboarding/prepare" element={<SetupPrerequisites />} />
 
       {/* Step 1 - Organization Setup. Order lives in config/steps.ts. */}
       <Route path="/onboarding/start" element={<OrganizationSetup />} />

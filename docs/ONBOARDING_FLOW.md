@@ -6,6 +6,12 @@ This document describes the complete onboarding flow for The Logbook application
 
 ## Onboarding Flow Diagram
 
+The order below is the single source of truth in
+`frontend/src/modules/onboarding/config/steps.ts`; the backend mirrors it in
+`OnboardingService.STEPS` and a parity test fails if the two drift. The
+page-by-page sections that follow are keyed by route, not numbered, so they
+cannot fall out of step with this.
+
 ```
   /  Welcome
   │      "Get Started"
@@ -14,7 +20,11 @@ This document describes the complete onboarding flow for The Logbook application
   │      GET /api/v1/onboarding/status
   │      needs_onboarding = false → /login
   v
-┌─ 1. Organization Setup ──────────────── /onboarding/start
+  /onboarding/prepare  Setup Prerequisites
+  │      Pre-flight, not a step: nothing is collected or saved.
+  │      Says what the flow will ask for and what can be skipped.
+  v
+┌─ 1. Organization Setup ──────────────── /onboarding/start          REQUIRED
 │  POST /onboarding/session/organization
 │  Name, type, timezone, contact info, mailing + physical address,
 │  department identifiers (FDID / State ID / Dept ID), member
@@ -22,50 +32,19 @@ This document describes the complete onboarding flow for The Logbook application
 │  COMMITS the organization, and creates the HQ Facility + Location
 │  from the department address.
 └─ v
-┌─ 2. Stations ────────────────────────── /onboarding/stations
-│  POST /onboarding/session/stations
-│  Stations beyond HQ. Skippable — many departments have one.
-│  CREATES Facility + Location per station.
-└─ v
-┌─ 3. Apparatus ───────────────────────── /onboarding/apparatus
-│  POST /onboarding/session/apparatus
-│  Unit number, type, minimum staffing, riding positions. Skippable.
-│  CREATES BasicApparatus per unit.
-└─ v
-┌─ 4. Navigation Choice ───────────────── /onboarding/navigation-choice
-│  Top bar or left sidebar. Stored in the Zustand store.
-└─ v
-┌─ 5. Email Platform ──────────────────── /onboarding/email-platform
-│  None / Google Workspace / Microsoft 365 / SMTP / Cloudflare
-│  "None" skips ahead to file storage.
-└─ v
-┌─ 5a. Email Configuration ────────────── /onboarding/email-config
-│  POST /onboarding/session/email  (credentials encrypted server-side)
-│  POST /onboarding/test/email     (verifies the connection)
-└─ v
-┌─ 6. File Storage Choice ─────────────── /onboarding/file-storage
-│  Local / Google Drive / OneDrive / S3
-└─ v
-┌─ 6a. File Storage Configuration ─────── /onboarding/file-storage-config
-│  POST /onboarding/session/file-storage  (secrets encrypted server-side)
-│  Per-platform credential form. Skipping stores the platform choice
-│  without credentials rather than discarding the step.
-└─ v
-┌─ 7. Authentication Choice ───────────── /onboarding/authentication
-│  Local password / Google / Microsoft / Authentik
-└─ v
-┌─ 8. System Owner ────────────────────── /onboarding/system-owner
+┌─ 2. System Owner ────────────────────── /onboarding/system-owner   REQUIRED
 │  POST /onboarding/system-owner
 │  Username, email, password (12+ chars), name, membership number.
-│  Sets the auth cookies — the admin is signed in from here on.
+│  Sets the auth cookies — the admin is signed in from here on, so
+│  every step below runs against a real account rather than an
+│  anonymous session, and a lapsed session is recoverable.
 └─ v
-┌─ 9. IT Team & Backup Access ─────────── /onboarding/it-team
-│  POST /onboarding/session/it-team
-│  IT contacts and backup access, each with an optional operational rank.
-│  Contacts become user accounts at completion, with must_change_password
-│  set and the rank applied if it still resolves.
+┌─ 3. Module Overview ─────────────────── /onboarding/modules
+│  POST /onboarding/session/modules
+│  Per module: "Enable" (in place), "Configure Later", or "Ignore".
+│  Asked before positions so permissions are set against a known set.
 └─ v
-┌─ 10. Ranks & Positions ──────────────── /onboarding/positions
+┌─ 4. Ranks & Positions ───────────────── /onboarding/positions
 │  GET/POST/PATCH/DELETE /operational-ranks   (the rank ladder)
 │  PATCH /users/{id}/profile                  (the System Owner's own rank)
 │  POST /onboarding/session/roles             (the positions)
@@ -74,25 +53,66 @@ This document describes the complete onboarding flow for The Logbook application
 │  (view / manage) across position templates: leadership, officers,
 │  administrative, specialized, member.
 └─ v
-┌─ 11. Module Overview ────────────────── /onboarding/modules
-│  POST /onboarding/session/modules, then POST /onboarding/complete
-│  Per module: "Enable" (in place), "Configure Later", or "Ignore".
+┌─ 5. Stations ────────────────────────── /onboarding/stations
+│  POST /onboarding/session/stations
+│  Stations beyond HQ. Skippable — many departments have one.
+│  CREATES Facility + Location per station.
 └─ v
-┌─ 12. Setup Complete ─────────────────── /onboarding/complete
-│  Summary of what was configured, plus what still needs the
-│  department's real data.
+┌─ 6. Apparatus ───────────────────────── /onboarding/apparatus
+│  POST /onboarding/session/apparatus
+│  Unit number, type, minimum staffing, riding positions. Skippable.
+│  CREATES BasicApparatus per unit.
+└─ v
+┌─ 7. IT Team & Backup Access ─────────── /onboarding/it-team
+│  POST /onboarding/session/it-team
+│  IT contacts and backup access, each with an optional operational rank.
+│  Contacts become user accounts at completion, with must_change_password
+│  set and the rank applied if it still resolves.
+└─ v
+┌─ 8. Email Platform ──────────────────── /onboarding/email-platform
+│  None / Google Workspace / Microsoft 365 / SMTP / Cloudflare
+│  "None" skips ahead to file storage.
+└─ v
+┌─ 8a. Email Configuration ────────────── /onboarding/email-config
+│  POST /onboarding/session/email  (credentials encrypted server-side)
+│  POST /onboarding/test/email     (verifies the connection)
+└─ v
+┌─ 9. File Storage Choice ─────────────── /onboarding/file-storage
+│  Local / Google Drive / OneDrive / S3
+└─ v
+┌─ 9a. File Storage Configuration ─────── /onboarding/file-storage-config
+│  POST /onboarding/session/file-storage  (secrets encrypted server-side)
+│  Per-platform credential form. Skipping stores the platform choice
+│  without credentials rather than discarding the step.
+└─ v
+┌─ 10. Authentication Choice ──────────── /onboarding/authentication
+│  Local password / Google / Microsoft / Authentik
+└─ v
+┌─ 11. Navigation Choice ──────────────── /onboarding/navigation-choice
+│  Top bar or left sidebar. Stored per-browser in localStorage
+│  (see KNOWN_LIMITATIONS ONBOARD-5).
+│  Last step, so this is where POST /onboarding/complete is called.
+└─ v
+┌─ Setup Complete ─────────────────────── /onboarding/complete
+│  Summary of what was configured, plus the steps the backend's own
+│  checklist reports as still outstanding (GET
+│  /organization/setup-checklist) — not a fixed list.
 │  Primary action → /setup (Department Setup checklist)
 │  Secondary     → /dashboard
 └─ done
 ```
 
-> **Step ordering:** the System Owner is created at step 8, right after the
-> authentication choice — not at the end. The IT team, positions, and module
-> steps all run against an authenticated session.
+> **Step ordering.** Two things drive it. The System Owner is created second,
+> so everything after it runs authenticated — `create_system_owner` sets the
+> auth cookies, which is what makes a setup whose 30-minute onboarding session
+> lapsed recoverable rather than terminal. And the steps that need credentials
+> from elsewhere (email, file storage, sign-in) sit at the end, because those
+> are the ones that send an operator away mid-flow. Only steps 1 and 2 are
+> required; `complete_onboarding` enforces exactly those two.
 
 ## Page-by-Page Navigation Details
 
-### 1. Welcome Page (`/`)
+### Welcome Page (`/`)
 
 **Purpose**: First landing page with animated introduction
 
@@ -106,7 +126,7 @@ This document describes the complete onboarding flow for The Logbook application
 
 ---
 
-### 2. Onboarding Check (`/onboarding`)
+### Onboarding Check (`/onboarding`)
 
 **Purpose**: Checks if onboarding is needed
 
@@ -124,7 +144,7 @@ Response: {
 
 **Navigation**:
 
-- If `needs_onboarding = true` → `/onboarding/start`
+- If `needs_onboarding = true` → `/onboarding/prepare`
 - If `needs_onboarding = false` → `/login`
 
 > **Login page guard (2026-06-25):** `/login` enforces the same check itself, so
@@ -136,7 +156,27 @@ Response: {
 
 ---
 
-### 3. Organization Setup (`/onboarding/start`)
+### Setup Prerequisites (`/onboarding/prepare`)
+
+**Purpose**: say what the flow will ask for, before it starts asking.
+
+Not a step: nothing is collected, nothing is saved, and it has no entry in
+`ONBOARDING_STEPS`. It exists because the health screen told an operator the
+database was up but nothing told them the wizard would want SMTP credentials,
+an OAuth client secret and a storage key — so they started, met a step they
+could not answer, and left to go and find it. Walking away is what used to end
+the install.
+
+Its two lists are derived from `ONBOARDING_STEPS` (`optional: false` vs
+`optional: true`), so a step that changes its flag changes this screen with it.
+
+**Navigation**:
+
+- Button: "Start setup" → `/onboarding/start`
+
+---
+
+### Organization Setup (`/onboarding/start`)
 
 **Purpose**: Collect comprehensive organization information and commit to database
 
@@ -236,7 +276,7 @@ Response: {
 
 **Navigation**:
 
-- Button: "Continue" → `/onboarding/stations`
+- Button: "Continue" → `/onboarding/system-owner`
 
 **Data Storage**:
 
@@ -245,7 +285,7 @@ Response: {
 
 ---
 
-### 4. Stations (`/onboarding/stations`)
+### Stations (`/onboarding/stations`)
 
 **Purpose**: Capture stations beyond headquarters
 
@@ -291,7 +331,7 @@ instead of appending duplicates.
 
 ---
 
-### 5. Apparatus (`/onboarding/apparatus`)
+### Apparatus (`/onboarding/apparatus`)
 
 **Purpose**: Capture apparatus for shift staffing
 
@@ -324,12 +364,12 @@ history and inventory on top of these.
 
 **Navigation**:
 
-- Button: "Continue" → `/onboarding/navigation-choice`
-- Button: "Skip for now" → `/onboarding/navigation-choice`
+- Button: "Continue" → `/onboarding/it-team`
+- Button: "Skip for now" → `/onboarding/it-team`
 
 ---
 
-### 6. Navigation Choice (`/onboarding/navigation-choice`)
+### Navigation Choice (`/onboarding/navigation-choice`)
 
 **Purpose**: Choose navigation layout
 
@@ -340,7 +380,7 @@ history and inventory on top of these.
 
 **Navigation**:
 
-- Button: "Continue" → `/onboarding/email-platform`
+- Button: "Continue" → `/onboarding/complete` (finalizes setup first)
 
 **Data Storage**: Zustand store (persisted to localStorage)
 
@@ -348,7 +388,7 @@ history and inventory on top of these.
 
 ---
 
-### 7. Email Platform Choice (`/onboarding/email-platform`)
+### Email Platform Choice (`/onboarding/email-platform`)
 
 **Purpose**: Select email service provider
 
@@ -371,7 +411,7 @@ history and inventory on top of these.
 
 ---
 
-### 7a. Email Configuration (`/onboarding/email-config`)
+### Email Configuration (`/onboarding/email-config`)
 
 **Purpose**: Configure selected email service
 
@@ -446,7 +486,7 @@ Body: {
 
 ---
 
-### 8. File Storage Choice (`/onboarding/file-storage`)
+### File Storage Choice (`/onboarding/file-storage`)
 
 **Purpose**: Choose file storage backend
 
@@ -484,7 +524,7 @@ Azure Blob Storage and Google Cloud Storage are **not** options and never were;
 
 ---
 
-### 8a. File Storage Configuration (`/onboarding/file-storage-config`)
+### File Storage Configuration (`/onboarding/file-storage-config`)
 
 **Purpose**: Collect cloud storage credentials
 
@@ -555,7 +595,7 @@ the same way as the broken one.
 
 ---
 
-### 9. Authentication Choice (`/onboarding/authentication`)
+### Authentication Choice (`/onboarding/authentication`)
 
 **Purpose**: Choose authentication method
 
@@ -614,7 +654,7 @@ altogether.
 
 **Navigation**:
 
-- Button: "Continue" → `/onboarding/it-team`
+- Button: "Continue" → `/onboarding/navigation-choice`
 
 **Data Storage**: Zustand store (persisted to localStorage)
 
@@ -622,7 +662,7 @@ altogether.
 
 ---
 
-### 10. System Owner (`/onboarding/system-owner`)
+### System Owner (`/onboarding/system-owner`)
 
 **Purpose**: Create the first administrator account
 
@@ -666,11 +706,11 @@ tells the frontend to set `has_session`.
 
 **Navigation**:
 
-- Button: "Continue" → `/onboarding/it-team`
+- Button: "Continue" → `/onboarding/modules`
 
 ---
 
-### 11. IT Team & Backup Access (`/onboarding/it-team`)
+### IT Team & Backup Access (`/onboarding/it-team`)
 
 **Purpose**: Configure IT team contact and backup access
 
@@ -697,11 +737,11 @@ Body: {
 
 **Navigation**:
 
-- Button: "Continue" → `/onboarding/roles`
+- Button: "Continue" → `/onboarding/email-platform`
 
 ---
 
-### 12. Positions (`/onboarding/positions`)
+### Positions (`/onboarding/positions`)
 
 **Purpose**: Describe the department's membership ladder, rank ladder and positions
 
@@ -880,11 +920,11 @@ positions are protected by the handler rather than by an empty request.
 
 **Navigation**:
 
-- Button: "Continue to Module Selection" → `/onboarding/modules`
+- Button: "Continue to Stations" → `/onboarding/stations`
 
 ---
 
-### 13. Module Overview (`/onboarding/modules`)
+### Module Overview (`/onboarding/modules`)
 
 **Purpose**: Select and configure optional modules
 
@@ -964,12 +1004,12 @@ team, email, file storage, auth, and module settings into
 
 **Navigation**:
 
-- Button: "Continue" → `/onboarding/complete` (after the auth store reloads,
+- Button: "Continue" → `/onboarding/positions` (after the module choices save,
   so the completion screen can link into the protected `/setup` route)
 
 ---
 
-### 13a. Module Configuration Template — removed
+### Module Configuration Template — removed
 
 `/onboarding/modules/{moduleId}/config` collected "who may manage this module"
 into the wizard's Zustand store, reported **"permissions configured!"** and
@@ -985,7 +1025,7 @@ redirect to `/onboarding/modules` for a session restored from an older client.
 
 ---
 
-### 14. Setup Complete (`/onboarding/complete`)
+### Setup Complete (`/onboarding/complete`)
 
 **Purpose**: Close the wizard and hand off to the department setup checklist
 
