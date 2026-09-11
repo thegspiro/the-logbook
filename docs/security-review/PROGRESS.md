@@ -18,6 +18,56 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 20 (Compliance), pass 4** — PR
 [#2476](https://github.com/thegspiro/the-logbook/pull/2476), branch
+`claude/security-review-compliance`, tending. A third round of Codex review
+(on the role_ids fix's own commit) surfaced four more findings — triaged,
+none merged as code changes this round:
+
+- **Confirmed as already-known, not a new bug:** Codex suggested excluding a
+  member with zero applicable requirements from `fully_compliant`/
+  `overall_compliance_pct`. Checked against `docs/KNOWN_LIMITATIONS.md`'s
+  existing TR4-4 entry (2026-09-10, one day before this pass) — the
+  "compliant"/100% convention for an empty requirement list is the
+  established, shared definition `classify_standing`/
+  `_evaluate_member_compliance` already use everywhere, and this pass's
+  CMP4-1 fix deliberately matches it. Changing only the annual report would
+  create a fourth disagreeing definition, not fix anything. No change made;
+  added a cross-reference from TR4-4 to this pass instead of a duplicate
+  entry.
+- **CMP4-2 (MED, FLAGGED)** — `required_positions` is a fourth, unhandled
+  applicability dimension on `TrainingRequirement` (position _slugs_,
+  distinct from `required_roles`'s position _ids_) that
+  `requirement_applies_to_member` has never handled, in any of its five
+  callers including this pass's two. Pre-existing gap in shared
+  Feature-17-owned infrastructure; flagged for a cross-feature fix rather
+  than guessed at here.
+- **CMP4-3 (MED, FLAGGED, pre-existing)** — `generate_annual_report` has
+  never been compliance-profile-aware (confirmed absent before and after
+  CMP4-1), unlike `compute_org_compliance_pct`, which resolves each member's
+  matching profile and its `required_requirement_ids` override first. An org
+  using profiles gets disagreeing percentages between the annual report and
+  the compliance dashboard/matrix. Predates this pass entirely; flagged for
+  a dedicated fix.
+- **CMP4-4 (LOW, FLAGGED)** — the per-requirement counterpart to TR4-4: a
+  requirement with zero currently-applicable members now (post-CMP4-1)
+  renders as a red, failing 0% in `ComplianceOfficerDashboard.tsx` instead of
+  "not applicable." This codebase already draws exactly this distinction at
+  the requirement level elsewhere (`complianceMatrixModel.ts`'s
+  `rollUpRequirements` returns `null` for the same shape) — working
+  in-repo precedent for a future fix, not implemented here since it needs a
+  frontend type change (`compliance_pct: number | null`).
+
+All four triaged with a reply on their PR review thread and the thread
+resolved; full detail in `docs/security-review/CMP-20-compliance.md`
+(CMP4-2 through CMP4-4, plus the "Considered, not changed" note) and
+`docs/KNOWN_LIMITATIONS.md`'s new "Compliance — The Annual Report's New
+Applicability Filter Has Two More Gaps" section (and the TR4-4 addendum). No
+code changed this round — findings/docs only.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 4, PR #2476, before this round's Codex triage), preserved for history</summary>
+
+**Feature 20 (Compliance), pass 4** — PR
+[#2476](https://github.com/thegspiro/the-logbook/pull/2476), branch
 `claude/security-review-compliance`, tending. Codex's review caught a real
 gap in CMP4-1's own fix (P1): the fix filtered both loops through
 `requirement_applies_to_member` but omitted its `role_ids` argument,
@@ -34,6 +84,8 @@ Full backend suite re-run clean: 12361 passed (was 12358 + 3 new tests), 21
 skipped; flake8/black/isort clean across `app/ tests/ alembic/`. See
 `docs/security-review/CMP-20-compliance.md` → CMP4-1's "Correction" note for
 detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 4, PR #2476, before the Codex role_ids correction), preserved for history</summary>

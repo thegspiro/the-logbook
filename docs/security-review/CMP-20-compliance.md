@@ -142,6 +142,138 @@ every requirement unconditionally); and the requirement-analysis row's
 `members_total` counts only the in-scope member, not every active member in
 the org.
 
+### CMP4-2 — MED — OPEN — `required_positions` is a third, unhandled applicability dimension
+
+**What:** `TrainingRequirement` has three independent applicability columns —
+`applies_to_all`, `required_membership_types`, `required_roles` — plus a
+fourth, `required_positions` (`app/models/training.py:566-568`, "positions:
+probationary, driver_candidate, officer, aic, etc."), a JSON array of
+**position slugs** the training-program requirements API
+(`training_program_service.py:599-601`) already lets an admin populate on its
+own, independent of `required_roles` (which stores position _ids_, not
+slugs — see `training_compliance.py`'s own docstring). `requirement_applies_to_member`
+has no `required_positions` branch at all — it was never one of the three
+dimensions its docstring names — so a requirement scoped only through
+`required_positions` (`applies_to_all=False`, no `required_membership_types`,
+no `required_roles`) matches **nobody**, in every caller of this shared
+helper, not just this one: `get_compliance_matrix`, `compute_org_compliance_pct`,
+`get_member_period_status`, `get_compliance_summary`, and now this pass's two
+`generate_annual_report` loops.
+
+**Not this pass's to fix.** `requirement_applies_to_member` lives in
+`training_compliance.py`, shared infrastructure Feature 17 (Training core)
+extracted; this pass's own two call sites are consistent with — and no worse
+than — its four pre-existing siblings, all of which share this same gap.
+Confirmed by direct code read: `scheduling_service.py:7342-7345` is the one
+place `required_positions` currently _is_ matched against a member (comparing
+`req.required_positions` against that member's own position **slugs**, for
+shift-eligibility, an unrelated purpose) — that comparison shape is the
+template a fix should follow, but writing it correctly, and re-verifying it
+across all five now-shared call sites, is a cross-feature change beyond a
+single pass's scope. Flagged rather than guessed at, per this rotation's own
+rule against a wrong fix in an ambiguous area.
+
+**Where:** `app/services/training_compliance.py:699-730`
+(`requirement_applies_to_member`, needs a fourth branch); every caller listed
+above inherits the gap unchanged.
+
+### CMP4-3 — MED — OPEN — `generate_annual_report` never considers compliance profiles (pre-existing, not this pass's regression)
+
+**What:** `AnnualComplianceReportService.generate_annual_report` has never
+looked up `ComplianceProfile` rows or called `_find_matching_profile` —
+confirmed by `grep` for `profile`/`ComplianceProfile` in
+`compliance_officer_service.py`: no matches, before or after this pass's
+fix. `compute_org_compliance_pct` (`training_compliance.py:935-959`), by
+contrast, resolves each member's matching profile first and — when the
+profile sets `required_requirement_ids` — grades that member against only
+those named requirements, plus applies any `compliant_threshold_override`/
+`at_risk_threshold_override`. An org using compliance profiles (e.g. a
+"recruit" profile requiring only CPR out of the org's full requirement set)
+gets a different, disagreeing percentage from the annual report than from
+the compliance dashboard or matrix for the exact same members — the
+cross-surface disagreement CLAUDE.md's "A screen reports what the backend
+decided" pitfall exists to name. Both this pass's new filters (the per-member
+loop and the requirement-analysis loop) inherit the gap identically, since
+neither derives its working requirement set through
+`_find_matching_profile` first.
+
+**Pre-existing, not introduced by CMP4-1/CMP4-1's role_ids follow-up.** This
+gap predates every pass of this feature — `generate_annual_report` never had
+profile awareness even before any applicability filtering existed. This
+pass's fix is narrower in scope (making the report agree with
+`requirement_applies_to_member`'s intrinsic scoping) and does not claim to
+close this separate, larger gap, which requires deriving each member's
+requirement set through `_find_matching_profile` and its override before
+applying `requirement_applies_to_member` — a genuine second filtering pass,
+not a one-line addition, and one that changes the report's numbers for every
+org currently using profiles. Flagged for a dedicated fix rather than folded
+into this pass.
+
+**Where:** `app/services/compliance_officer_service.py:882-919` (member
+loop), `:983-1030` (requirement-analysis loop); the profile-aware reference
+implementation is `app/services/training_compliance.py:831` (function start)
+`:935-959` (the profile-resolution block)
+(`compute_org_compliance_pct`).
+
+### CMP4-4 — LOW — OPEN — a requirement with zero currently-applicable members renders as a red 0% instead of "not applicable"
+
+**What:** `ComplianceOfficerDashboard.tsx:433-438` colors a `requirement_analysis`
+row's `compliance_pct` red below 50%, including the `0.0` this pass's fix
+now emits whenever an active, scoped requirement currently applies to zero
+active members (e.g. an "officers only" requirement in an org with no
+current officers) — a real, if uncommon, state this pass's applicability
+filter newly makes reachable (before the filter, `members_total` was always
+the org's whole roster, never zero, unless the org had no active members at
+all). The row reads as a failed cohort rather than as "nobody to grade."
+
+**Deliberately flagged, not fixed, this pass** — this is the same
+"rare edge case" the fix's own write-up above already named and deferred:
+representing "not applicable" distinctly from "0% compliant" needs a
+frontend decision (a nullable `compliance_pct` type change in
+`frontend/src/types/training.ts`'s `AnnualReportRequirement`, plus a
+`null`-safe muted rendering to replace the hard-coded red/yellow/green
+thresholds) that a backend-only security-review pass shouldn't make
+unilaterally. That said, this is not uncharted territory: per
+`docs/KNOWN_LIMITATIONS.md`'s TR4-4 entry, this codebase's own
+`complianceMatrixModel.ts` already draws exactly this distinction —
+`rollUpRequirements`'s per-_requirement_ percentage returns `null` ("not
+applicable") for an empty cohort, while `evaluateMember`'s per-_member_
+percentage uses the "0 total is 100%" convention — so a future fix here has
+a working, in-repo precedent to follow rather than a novel design. The two
+levels (member vs. requirement) are not symmetric for exactly that reason:
+`member_compliance` rows keep `"compliant"`/`100%` on purpose (see the
+"Considered, not changed" note below), while `requirement_analysis` rows are
+the level this codebase already treats as needing "not applicable" instead.
+
+**Where:** `app/services/compliance_officer_service.py:1038` (the
+`compliance_pct` computation), `frontend/src/pages/ComplianceOfficerDashboard.tsx:433-438`
+(the rendering), `frontend/src/types/training.ts:2585` (`AnnualReportRequirement.compliance_pct: number`,
+would need to widen to `number | null`).
+
+### Considered, not changed — a member with zero applicable requirements reads `compliant`/`100%`, matching the rest of the app on purpose
+
+Codex additionally suggested excluding a member with `requirements_total == 0`
+from `fully_compliant`/`overall_compliance_pct`, since counting them
+"compliant" can inflate the org-wide percentage (e.g. every regular member in
+an org whose only requirement is officers-only). **This is not a new question
+this pass discovered** — it is already tracked as
+`docs/KNOWN_LIMITATIONS.md` → "Training — A Member With No Applicable
+Requirements Counts As 'Compliant'" (TR-17 pass 4, TR4-4, 2026-09-10, one day
+before this pass): `training_compliance.py`'s `classify_standing`
+(`:751-752`, `if total_count <= 0: return "compliant", 100.0`) and
+`_evaluate_member_compliance` (`:782-783`, `if not member_reqs: return
+"compliant", 100.0`) are the canonical definitions `compute_org_compliance_pct`
+and `get_compliance_matrix` already use for this exact situation, org-wide,
+today, and that entry already concludes changing it is "a product decision
+spanning every caller of `classify_standing`," not a drive-by fix.
+`generate_annual_report`'s per-member loop (this pass's own CMP4-1 fix)
+intentionally mirrors that same convention — its own write-up above says so
+("matching `compute_org_compliance_pct`'s own call") — so changing only the
+annual report here would **create** a fourth caller disagreeing with the
+other three, the exact cross-surface split TR4-4 and CMP4-3 above both warn
+against, rather than resolve anything. Added a cross-reference from TR4-4 to
+this pass, below, rather than a duplicate entry.
+
 ## Completion gate (pass 4)
 
 | Check                                                                                                                                                                                                                                                               | Result                                                                                                                                                        |

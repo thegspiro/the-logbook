@@ -3306,6 +3306,80 @@ right. First reported by a Codex review of TR-17 pass 4
 (`docs/security-review/TR-17-training-core.md`, PR #2455). (Security review
 TR-17 pass 4, TR4-4.)
 
+**A fourth caller now shares this convention (2026-09-11):** Feature 20
+(Compliance) pass 4's own applicability fix
+(`AnnualComplianceReportService.generate_annual_report`, CMP4-1,
+`docs/security-review/CMP-20-compliance.md`) filters its per-member loop
+through the same `requirement_applies_to_member` helper this entry
+describes, and — checked against this entry before merging, not
+independently rediscovered — intentionally left the zero-requirement case at
+`"compliant"`/`100%` to match `compute_org_compliance_pct` rather than
+diverge into a fifth definition. The per-_requirement_ side of the same
+report (its "Requirement Analysis" section) is the newer, distinct
+CMP4-4 finding below, not this one.
+
+## Compliance — The Annual Report's New Applicability Filter Has Two More Gaps, Plus a Display Nit (2026-09-11)
+
+Feature 20 (Compliance) pass 4 (`docs/security-review/CMP-20-compliance.md`,
+PR #2476) fixed `AnnualComplianceReportService.generate_annual_report`
+grading every member against every requirement regardless of scope (CMP4-1),
+by filtering through the shared `requirement_applies_to_member` helper
+(`training_compliance.py`). Two rounds of Codex review on that same PR
+surfaced three further gaps in the fix, all flagged rather than fixed in the
+same pass:
+
+- **`required_positions` is a fourth, unhandled applicability dimension
+  (CMP4-2, MED).** `TrainingRequirement.required_positions`
+  (`app/models/training.py:566-568`) is a JSON array of **position slugs**,
+  independent of `required_roles` (position _ids_) and populated by the
+  training-program requirements API
+  (`training_program_service.py:599-601`). `requirement_applies_to_member`
+  has no branch for it at all — not a regression from this pass, since none
+  of its four pre-existing callers (`get_compliance_matrix`,
+  `compute_org_compliance_pct`, `get_member_period_status`,
+  `get_compliance_summary`) handle it either. A requirement scoped only by
+  `required_positions` matches nobody, everywhere this helper is called.
+  `scheduling_service.py:7342-7345` is the one place a member's position
+  slugs already get compared against `req.required_positions` (for shift
+  eligibility, an unrelated purpose) and is the template a real fix should
+  follow. Fixing it means adding a branch to shared infrastructure Feature
+  17 owns and re-verifying all five now-shared call sites — a cross-feature
+  change, not a same-commit fix for the Compliance feature alone.
+- **The annual report has never been compliance-profile-aware (CMP4-3,
+  MED, pre-existing).** `generate_annual_report` has never called
+  `_find_matching_profile` or consulted `ComplianceProfile.required_requirement_ids`/
+  threshold overrides — confirmed absent before and after CMP4-1.
+  `compute_org_compliance_pct` (`training_compliance.py:831`, profile
+  resolution at `:935-959`) does. An org using a compliance profile (e.g. a
+  "recruit" profile requiring only CPR) gets a different percentage from the
+  annual report than from the compliance dashboard/matrix for the same
+  members — the cross-surface disagreement CLAUDE.md's "A screen reports
+  what the backend decided" pitfall names. This gap predates CMP4-1 entirely
+  (the report had no applicability awareness of any kind before this pass);
+  CMP4-1 does not claim to close it. Fixing it means deriving each member's
+  requirement set through `_find_matching_profile` before applying
+  `requirement_applies_to_member`, a second filtering pass that changes
+  numbers for every org currently using profiles — a dedicated fix, not a
+  drive-by.
+- **A requirement with zero currently-applicable members renders as a
+  failing 0% (CMP4-4, LOW).** `ComplianceOfficerDashboard.tsx:433-438`
+  colors `requirement_analysis.compliance_pct` red below 50%, including the
+  `0.0` CMP4-1 now emits whenever a scoped requirement currently applies to
+  no active member. This is the per-_requirement_ counterpart to TR4-4 above
+  (which is about the per-_member_ side) — and per that entry's own
+  precedent, `complianceMatrixModel.ts`'s `rollUpRequirements` already
+  returns `null` ("not applicable") for exactly this shape at the
+  requirement level, so a fix here has working in-repo precedent to follow:
+  widen `AnnualReportRequirement.compliance_pct`
+  (`frontend/src/types/training.ts:2585`) to `number | null` and render a
+  muted "N/A" instead of a red percentage.
+
+Full detail, line citations, and the "considered, not changed" rationale for
+why CMP4-1 deliberately left the per-member zero-denominator case alone (see
+TR4-4 above) are in `docs/security-review/CMP-20-compliance.md`'s CMP4-2
+through CMP4-4 entries. (Security review CMP-20 pass 4, PR #2476, Codex
+review rounds 2-3.)
+
 ## RPT2-29-2 — Saved Report Scheduling Is Stored and API-Writable, but Nothing Reads It (2026-08-27)
 
 `POST /reports/saved` and `PATCH /reports/saved/{id}` fully accept and
