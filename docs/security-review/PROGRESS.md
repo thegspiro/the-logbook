@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2476](https://github.com/thegspiro/the-logbook/pull/2476)
+(Feature 20, Compliance, pass 4) merged clean via squash, merge commit
+`36c160f4c106`, all 17 CI checks green (CI Success, both MySQL/MariaDB
+integration and contract suites, Migration Chain, Docker Image Build &
+Container Tests, Frontend Tests, Frontend Lint/Typecheck/Build, Frontend
+E2E/Playwright, Backend Unit Tests, Backend Lint, Backend Security Scan,
+Docs Link Check, Trivy, Gitleaks, SBOM). Thirteen review threads (four
+rounds of Codex review) all resolved with no outstanding findings on the
+final commit — the last two threads (both doc-staleness nits: the
+findings-doc paragraph still describing the superseded AAA-budget-widening
+approach instead of the final clock-freeze fix) were fixed and resolved
+before this check. Merged directly once fully green with `mergeable_state:
+clean` and no unresolved threads. Rotation row 20 is now `✅`. Next: Feature
+21 (Admin hours).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 4, PR #2476, before the merge), preserved for history</summary>
+
 **Feature 20 (Compliance), pass 4** — PR
 [#2476](https://github.com/thegspiro/the-logbook/pull/2476), branch
 `claude/security-review-compliance`, tending. Latest: the CI-health fix for
@@ -99,6 +117,8 @@ resolved; full detail in `docs/security-review/CMP-20-compliance.md`
 `docs/KNOWN_LIMITATIONS.md`'s new "Compliance — The Annual Report's New
 Applicability Filter Has Two More Gaps" section (and the TR4-4 addendum). No
 code changed this round — findings/docs only.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 4, PR #2476, before this round's Codex triage), preserved for history</summary>
@@ -13206,7 +13226,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⏳     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
