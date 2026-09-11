@@ -39,6 +39,7 @@ Complete reference of all pages in the application, organized by module.
 | URL                                    | Page                     | Description                                                                                    |
 | -------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
 | `/onboarding`                          | Onboarding Check         | Entry point / status check                                                                     |
+| `/onboarding/prepare`                  | Setup Prerequisites      | What setup will ask for — pre-flight, collects nothing                                         |
 | `/onboarding/start`                    | Organization Setup       | Step 1 - create organization                                                                   |
 | `/onboarding/navigation-choice`        | Navigation Choice        | Choose navigation layout                                                                       |
 | `/onboarding/email-platform`           | Email Platform           | Select email provider (Gmail, Microsoft 365, Self-Hosted SMTP, Cloudflare, Other/Skip)         |
