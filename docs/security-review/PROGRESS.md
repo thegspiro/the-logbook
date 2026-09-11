@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 21 (Admin hours), pass 4** — branch
-`claude/security-review-admin-hours`, PR pending creation. Diff-scoped
+**Feature 21 (Admin hours), pass 4** — PR
+[#2481](https://github.com/thegspiro/the-logbook/pull/2481), branch
+`claude/security-review-admin-hours`, tending. Diff-scoped
 against pass 3's merge commit (`4ba836420`, PR #2247) across the full
 declared scope (all four backend files, the 26-file frontend module, all 6
 outside consumers, and all 4 external backend callers of
