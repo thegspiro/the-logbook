@@ -91,6 +91,13 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
               const dimmed = isPastDay(day, today) || !dayMatchesFilter(summary, filter);
               const selected = isSameDay(day, selectedDate);
 
+              // The dim is `opacity-65`, not lower, because it applies to the
+              // whole cell including the date. Opacity multiplies against the
+              // page behind it, so `text-theme-text-primary` at 45% measures
+              // 2.92:1 — below the 4.5:1 AA floor for the one piece of text on
+              // the cell a member actually reads. 65% measures 5.57:1 in all
+              // three themes; 60% clears at 4.68:1, which is too little room to
+              // leave for a future palette change.
               return (
                 <button
                   key={key}
@@ -100,7 +107,7 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
                   onClick={() => onSelect(day)}
                   className={`bg-theme-surface border-theme-surface-border flex min-h-[46px] flex-col items-center gap-[3px] rounded-md border px-0.5 py-1.5 transition-opacity duration-200 ease-out ${
                     selected ? 'border-2 border-red-600 dark:border-red-500' : ''
-                  } ${dimmed ? 'opacity-45' : ''}`}
+                  } ${dimmed ? 'opacity-65' : ''}`}
                 >
                   <span className="text-theme-text-primary font-mono text-xs font-bold">{day.getDate()}</span>
                   {shifts.slice(0, MAX_BARS).map((shift) => (

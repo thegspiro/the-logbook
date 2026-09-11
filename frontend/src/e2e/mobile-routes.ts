@@ -69,6 +69,35 @@ export interface RouteCheck {
    * measured General twice and called one of them Platoons.
    */
   expectText?: string;
+  /**
+   * Controls that switch the route into another state, driven and measured
+   * after the arrival render.
+   *
+   * The budgets above describe whatever a route puts on screen when you land on
+   * it, and for most routes that is the whole page. For some it is a fraction:
+   * /scheduling/admin/settings/shift-reports keeps seven subsections behind an
+   * in-page tab strip held in `useState`, so six sevenths of it had never been
+   * looked at, and the apparatus cards' edit forms are one click from a list
+   * that measured clean. A budget of 0 over the visible seventh is not wrong,
+   * but it is not what a reader takes it to mean either.
+   *
+   * `selector` must be scoped tightly enough to match only the intended
+   * controls. `[data-mobile-scroll-region] button` is the cautionary example: it
+   * also matches SettingsLayout's own section nav, so driving it navigates away
+   * and the pass measures a different route under this one's name.
+   *
+   * Only the presentation pass drives these. The accessibility pass runs three
+   * themes and an axe pass per route and already takes fifteen minutes; it
+   * measures arrival only.
+   */
+  states?: {
+    /** Scoped selector for the controls that switch state. */
+    selector: string;
+    /** Names the group in failure output: "/route [Rating Scale]". */
+    label: string;
+    /** Cap, so a data-driven strip cannot inflate the pass without warning. */
+    max?: number;
+  };
 }
 
 /** Granted for every route; see the per-route `permissions` note above. */
@@ -263,6 +292,11 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxTinyText: 0,
     permissions: SCHEDULING_ADMIN,
     expectText: 'Apparatus Type Defaults',
+    // Edit opens an inline form on the card, and the form is where this screen
+    // keeps most of its controls; the card list measures clean without it. Two,
+    // not fifteen: the apparatus card and the resource card render the same
+    // form, so driving one of each covers both and the rest are repetition.
+    states: { selector: 'button:text-is("Edit")', label: 'Edit', max: 2 },
   },
   // The first version of this entry carried neither `fixture` nor `expectText`
   // and a comment saying general and platoons "render the same panel today".
@@ -295,32 +329,29 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: SCHEDULING_ADMIN,
     expectText: 'Scheduling Notifications',
   },
-  // This one's body is seven subsections behind an in-page tab strip held in
-  // `useState`, so what follows is measured for the subsection
-  // `ShiftReportsSettingsPanel` initialises to and nothing else. Behind the
-  // strip, unmeasured and unpaid: 38, 6, 6, 9 and 9 controls under 44px in
-  // Feedback Defaults, Apparatus Skills, Form Sections, Review Workflow and
-  // Rating Scale — apparatus-type chips at 32px, a 12x12 icon pair, checkbox
-  // labels at 40px, an "Add level" link at 16px, four Saves at 34-36px.
-  // Post-Shift Validation is clean.
+  // Seven subsections behind an in-page tab strip, all seven now driven and
+  // measured. Six of them had never been looked at, and the debt they held was
+  // 143 controls under 44px: 99 in Feedback Defaults, 38 in Apparatus Skills, 6
+  // in Form Sections, 9 in Rating Scale, 0 in Post-Shift Validation and Review
+  // Workflow. Almost all of the 99 were the three or four 12x12 icon buttons a
+  // tag chip carries; the rest were apparatus-type chips at 32px, checkbox rows
+  // at 40px, an "Add level" link at 16px and four Saves at 34-36px.
   //
-  // Recorded here rather than acted on, because the sweep and the coverage are
-  // one job: with no way to drive the strip, fixing those would be asserted by
-  // inspection and never measured. Teach the pass to cycle the strip, then
-  // sweep what it reports.
-  //
-  // What this entry is *not* is a reason to drop the route. The check is
-  // incomplete, not wrong — the reachable subsection is measured, and dropping
-  // it would take the crash, overflow, reflow and AA checks with it for the one
-  // seventh that does render. `expectText` names copy from that body rather
-  // than a label in the strip, which renders whichever subsection is active and
-  // would pass no matter what was on screen.
+  // An earlier hand count put those at 38/6/6/9/9 and it was wrong for the same
+  // reason the strip needed a mechanism: clicks aimed at a coordinate on a
+  // smooth-scrolling strip land on the neighbouring tab, so the count was taken
+  // against the wrong screens. `unchangedStates` in the presentation pass exists
+  // because of that, and fails a driven state that renders content already
+  // measured.
   {
     path: '/scheduling/admin/settings/shift-reports',
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: SCHEDULING_ADMIN,
     expectText: 'Control whether shift reports are available for your department and which features are included.',
+    // The strip, scoped by its own label. The panel's <nav> and SettingsLayout's
+    // are both `data-mobile-scroll-region`, and the outer one navigates.
+    states: { selector: '[aria-label="Shift report settings sections"] button', label: 'subsection' },
   },
   // Two remain unlisted, each measured rather than assumed:
   //

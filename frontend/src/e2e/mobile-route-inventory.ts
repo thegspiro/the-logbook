@@ -1125,7 +1125,7 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     source: 'src/modules/scheduling/routes.tsx',
     coverage: 'ratchet',
     detail:
-      'fast route-level mobile presentation ratchet, over the subsection the panel opens on; six siblings sit behind an in-page tab strip the pass cannot drive and carry debt of their own — see the note in mobile-routes.ts',
+      'fast route-level mobile presentation ratchet, over all seven subsections: the presentation pass drives the in-page tab strip and measures each one',
   },
   {
     path: '/inventory/checklists/my',

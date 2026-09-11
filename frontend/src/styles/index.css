@@ -1128,6 +1128,14 @@
 @utility mobile-touch-target {
   /* #21 Guaranteed mobile touch target size */
   @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center;
+  /* Pair this with `shrink-0` on a flex child in a row that does not wrap.
+     A flex item defaults to `min-width: auto`, which is what stops it shrinking
+     below its own content; the explicit `min-width` here replaces that, so the
+     item becomes shrinkable to 44px and any `whitespace-nowrap` label inside it
+     spills over its neighbours. It is the same `min-width: auto` rule the
+     truncate note in CLAUDE.md is about, running in the opposite direction, and
+     it cannot be seen by the mobile ratchet: the overflow happens inside a
+     `data-mobile-scroll-region`, which that pass deliberately exempts. */
 }
 
 @utility mobile-touch-row {

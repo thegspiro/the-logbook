@@ -109,7 +109,7 @@ export const PositionListEditor: React.FC<PositionListEditorProps> = (props) => 
                   </option>
                 ))}
               </select>
-              <label className="mobile-touch-row text-theme-text-secondary flex cursor-pointer items-center gap-1 text-xs whitespace-nowrap select-none">
+              <label className="mobile-touch-row text-theme-text-secondary shrink-0 cursor-pointer gap-1 text-xs whitespace-nowrap select-none">
                 <input
                   type="checkbox"
                   checked={slot.required}
@@ -118,7 +118,7 @@ export const PositionListEditor: React.FC<PositionListEditorProps> = (props) => 
                 />
                 Req
               </label>
-              <label className="mobile-touch-row text-theme-text-secondary flex cursor-pointer items-center gap-1 text-xs whitespace-nowrap select-none">
+              <label className="mobile-touch-row text-theme-text-secondary shrink-0 cursor-pointer gap-1 text-xs whitespace-nowrap select-none">
                 <input
                   type="checkbox"
                   checked={slot.allow_administrative_members}
