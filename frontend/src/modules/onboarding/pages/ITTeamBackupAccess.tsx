@@ -15,7 +15,7 @@ import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 import { isValidEmail, isValidPhoneNumber } from '../utils/validation';
 import { useRanks } from '../../../hooks/useRanks';
-import { nextStepPath, previousStepPath } from '../config/steps';
+import { nextStepName, nextStepPath, previousStepPath } from '../config/steps';
 
 interface ITTeamMember {
   id: string;
@@ -563,7 +563,7 @@ const ITTeamBackupAccess: React.FC = () => {
                     : 'transform bg-linear-to-r from-red-700 to-orange-700 text-white shadow-lg hover:scale-105 hover:from-red-800 hover:to-orange-800 hover:shadow-xl'
                 }`}
               >
-                {isSaving ? 'Saving Securely...' : 'Continue to Module Selection'}
+                {isSaving ? 'Saving Securely...' : `Continue to ${nextStepName('it_team')}`}
               </button>
             </div>
 

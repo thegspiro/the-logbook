@@ -51,7 +51,7 @@ import {
 import { apiClient } from '../services/api-client';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildPositionTemplates } from './positionTemplates';
-import { nextStepPath, previousStepPath } from '../config/steps';
+import { nextStepName, nextStepPath, previousStepPath } from '../config/steps';
 
 /**
  * Build permission categories dynamically from the module registry.
@@ -802,7 +802,7 @@ const PositionSetup: React.FC = () => {
                     : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
               >
-                {isSaving ? 'Saving...' : 'Continue to Modules'}
+                {isSaving ? 'Saving...' : `Continue to ${nextStepName('positions')}`}
               </button>
             </div>
           </div>

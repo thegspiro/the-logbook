@@ -158,3 +158,18 @@ export const previousStepPath = (key: OnboardingStepKey): string => {
   if (index <= 0) return '/';
   return ONBOARDING_STEPS[index - 1]?.path ?? '/';
 };
+
+/**
+ * The name of the step after `key`, for a button that says where it goes.
+ *
+ * Two buttons named their successor as a literal and the 2026-09-11 reorder
+ * left both lying: Ranks & Positions offered "Continue to Modules" while
+ * going to Stations, and IT Contacts offered "Continue to Module Selection"
+ * while going to Email. A label is a promise about navigation, so it comes
+ * from the same array the navigation does.
+ */
+export const nextStepName = (key: OnboardingStepKey): string => {
+  const index = stepIndex(key);
+  if (index < 0) return 'the next step';
+  return ONBOARDING_STEPS[index + 1]?.name ?? 'Finish';
+};

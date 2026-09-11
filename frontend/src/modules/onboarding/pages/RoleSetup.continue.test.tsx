@@ -97,7 +97,7 @@ describe('the unedited Continue', () => {
     const user = userEvent.setup();
     renderStep();
 
-    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+    await user.click(screen.getByRole('button', { name: /continue to stations/i }));
 
     await waitFor(() => expect(savePositionsConfig).toHaveBeenCalled());
     const sent = savePositionsConfig.mock.calls[0]?.[0] as { positions: { id: string }[] };
@@ -117,7 +117,7 @@ describe('the unedited Continue', () => {
     renderStep();
 
     await user.click(screen.getByRole('checkbox', { name: /^Lieutenant - / }));
-    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+    await user.click(screen.getByRole('button', { name: /continue to stations/i }));
 
     await waitFor(() => expect(savePositionsConfig).toHaveBeenCalled());
     const sent = savePositionsConfig.mock.calls[0]?.[0] as { positions: { id: string }[] };
@@ -131,7 +131,7 @@ describe('unsaved membership ladder edits', () => {
     const user = userEvent.setup();
     renderStep();
 
-    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+    await user.click(screen.getByRole('button', { name: /continue to stations/i }));
 
     expect(savePositionsConfig).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining('membership tier changes'));
@@ -148,7 +148,7 @@ describe('a ladder the department has never stored', () => {
     const user = userEvent.setup();
     renderStep();
 
-    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+    await user.click(screen.getByRole('button', { name: /continue to stations/i }));
 
     expect(savePositionsConfig).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining('have not been stored yet'));
@@ -161,7 +161,7 @@ describe('a ladder the department has never stored', () => {
     const user = userEvent.setup();
     renderStep();
 
-    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+    await user.click(screen.getByRole('button', { name: /continue to stations/i }));
 
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining('Save or discard'));
   });
@@ -179,7 +179,7 @@ describe('a membership ladder that has not finished loading', () => {
     const user = userEvent.setup();
     renderStep();
 
-    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+    await user.click(screen.getByRole('button', { name: /continue to stations/i }));
 
     expect(savePositionsConfig).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining('still loading'));
@@ -194,7 +194,7 @@ describe('a membership ladder that has not finished loading', () => {
     const user = userEvent.setup();
     renderStep();
 
-    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+    await user.click(screen.getByRole('button', { name: /continue to stations/i }));
 
     await waitFor(() => expect(savePositionsConfig).toHaveBeenCalled());
   });
@@ -218,7 +218,7 @@ describe('a draft saved before unticking meant deletion', () => {
     const user = userEvent.setup();
     renderStep();
 
-    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+    await user.click(screen.getByRole('button', { name: /continue to stations/i }));
 
     await waitFor(() => expect(savePositionsConfig).toHaveBeenCalled());
     const sent = savePositionsConfig.mock.calls[0]?.[0] as { positions: { id: string }[] };
@@ -241,7 +241,7 @@ describe('a draft saved before unticking meant deletion', () => {
     const user = userEvent.setup();
     renderStep();
 
-    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+    await user.click(screen.getByRole('button', { name: /continue to stations/i }));
 
     await waitFor(() => expect(savePositionsConfig).toHaveBeenCalled());
     const sent = savePositionsConfig.mock.calls[0]?.[0] as { positions: { id: string }[] };
@@ -258,7 +258,7 @@ describe('a tier name typed but never added', () => {
     const user = userEvent.setup();
     renderStep();
 
-    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+    await user.click(screen.getByRole('button', { name: /continue to stations/i }));
 
     expect(savePositionsConfig).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining('tier you are typing'));
@@ -273,7 +273,7 @@ describe('an unsaved rank edit', () => {
     const user = userEvent.setup();
     renderStep();
 
-    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+    await user.click(screen.getByRole('button', { name: /continue to stations/i }));
 
     expect(savePositionsConfig).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining('rank you are editing'));

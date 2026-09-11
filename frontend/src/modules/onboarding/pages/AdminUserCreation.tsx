@@ -215,7 +215,7 @@ const SystemOwnerCreation: React.FC = () => {
           // Non-fatal — cookies are set, auth will resolve on next load
         }
 
-        // Continue to IT Team & Backup Access step
+        // On to the next step — Modules, since the reorder.
         void navigate(nextStepPath('system_owner'));
 
         return response;
