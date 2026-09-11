@@ -1755,11 +1755,35 @@ asserted present on the very next `get_application()` call in the same
 session. Verified both fail before the fix (`len(...) == 0`) and pass
 after.
 
+**GF-38, extended again — P1 — a failed opportunity lookup silently
+submitted the id the dropdown could no longer show.** Caught by Codex
+review on PR #2485 (the follow-up carrying the two fixes above): the merge-
+fetch's `catch` block treated every `getOpportunity` failure identically —
+a genuine 404 (the linked opportunity doesn't exist, or isn't in this org)
+and an operational failure (a network blip, a 500) both fell through to
+the unfiltered list with `formData.opportunityId` left unchanged. The
+dropdown then displayed "-- None --" (no matching `<option>`), but
+submitting the form still sent the invisible, retained id — reintroducing
+GF-38's original failure mode (displayed vs. submitted disagreeing) on this
+one failure path, and doing so silently for a transient error a retry
+might have fixed. **Fix:** `toAppError(err).status` distinguishes a 404
+(fall through silently — an expected "this id no longer means anything")
+from any other failure (toast an explanation) — and **both** branches now
+clear `formData.opportunityId` to `''`, so what's displayed always matches
+what would be submitted. Guard tests: the existing merge-fetch test file
+gained two cases, rewritten to submit the form and assert on the actual
+`createApplication` payload (`opportunityId: null`) rather than the
+`<select>`'s own DOM value — a `<select>` whose value doesn't match any
+`<option>` reads back as `''` regardless of whether the underlying state
+was actually cleared, which is exactly the gap that let the original bug
+through untested. Verified both fail before this fix (payload carried the
+stale id) and pass after.
+
 ### Guard tests added
 
 5 new files total this pass: `tests/test_grants_application_note_authors.py`
-(2 cases, GF-36), `GrantApplicationFormPage.opportunityId.test.tsx` (3
-cases after the Codex-review extension, GF-38),
+(2 cases, GF-36), `GrantApplicationFormPage.opportunityId.test.tsx` (5
+cases after two rounds of Codex-review extension, GF-38),
 `tests/test_grants_update_application_reload_db.py` (2 cases, real DB,
 GF-36's Codex-review extension); plus a docstring-only correction in
 `tests/test_grant_service.py` (GF-37, no behavior change).
@@ -1776,7 +1800,7 @@ GF-36's Codex-review extension); plus a docstring-only correction in
 | `python3 -m pytest tests/ -q` (full backend suite)      | 12,369 passed, 21 pre-existing skips |
 | `npx tsc --noEmit` / `npm run typecheck`                | 0 errors                             |
 | `npx eslint src/modules/grants-fundraising`             | 0 errors, 0 warnings                 |
-| `npx vitest run src/modules/grants-fundraising`         | 5 files, 10 passed                   |
+| `npx vitest run src/modules/grants-fundraising`         | 5 files, 12 passed                   |
 
 Rotation row 22 (Grants & fundraising) → ✅ (pending merge). Next: Feature
 23 (Medical supplies).

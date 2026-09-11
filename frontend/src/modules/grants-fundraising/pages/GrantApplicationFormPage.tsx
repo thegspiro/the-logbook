@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { grantsService } from '../services/api';
 import type { GrantApplication, GrantOpportunity } from '../types';
 import { ApplicationStatus, GrantPriority } from '../types';
+import { toAppError } from '@/utils/errorHandling';
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
@@ -126,9 +127,18 @@ export const GrantApplicationFormPage: React.FC = () => {
             const linked = await grantsService.getOpportunity(linkedId);
             setOpportunities([linked, ...data]);
             return;
-          } catch {
-            // The linked opportunity doesn't exist or isn't in this org —
-            // fall through to the unfiltered list.
+          } catch (err: unknown) {
+            // A 404 means the id is stale/foreign — fall through silently,
+            // matching "no opportunity selected". Any other failure (a
+            // network blip, a 500) is not the same thing: leaving the
+            // dropdown on "-- None --" while formData.opportunityId still
+            // held the id would submit an id the user can no longer see.
+            // Clear it so what's displayed is what would be sent, and say
+            // why for anything other than "it doesn't exist".
+            if (toAppError(err).status !== 404) {
+              toast.error('Could not load the linked funding opportunity — please reselect it.');
+            }
+            setFormData((prev) => ({ ...prev, opportunityId: '' }));
           }
         }
         setOpportunities(data);
