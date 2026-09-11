@@ -289,7 +289,7 @@ piece of work rather than riding along with the setup editor.
 about what the department uses, not a constraint the API enforces. Nothing in
 the UI offers a deleted seed rank, so reaching this needs a direct write.
 
-## ONBOARD-5 — Navigation Layout Is a Per-Browser Preference Wearing an Org Setting's Clothes (2026-09-11)
+## ONBOARD-5 — Navigation Layout Was a Per-Browser Preference (resolved 2026-09-11)
 
 The setup wizard's last step asks whether the department wants top or left
 navigation, and it does take effect — `onboardingStore` writes the answer to
@@ -303,20 +303,27 @@ stored on the organization and read by nothing — Pitfall #19's "a switch wired
 to nothing", with the twist that the half that is wired is wired to the wrong
 scope.
 
-**Not changed here.** Making it an organization setting means a reader in
-`AppLayout` backed by org settings, a migration path for installs whose only
-answer lives in one person's browser, and a decision about whether a member may
-override the department's choice for themselves — which is a product question,
-not a wiring one. The 2026-09-11 reorder moved the step to the end of the
-wizard, where a cosmetic preference belongs, and deliberately left the
-mechanism alone: removing the step would have taken away the only way to set
-the layout at all.
+**Fixed 2026-09-11.** The answer is now stored on the organization
+(`settings.appearance.navigation_layout`), served beside the name and logo by
+`GET /auth/branding` so the shell paints in the right shape on first load, and
+editable at Settings → Organization → Profile. `AppLayout` reconciles against
+the server on every mount rather than only on a first visit — a departmental
+setting has to reach members whose browsers already hold a value, which the old
+first-visit-only fetch could never do.
 
-**What it means in practice:** the layout answer given during setup applies to
-the browser that gave it. Treat it as a personal preference that happens to be
-collected during setup, not as a department-wide decision.
+**Scope deliberately stopped at department-wide.** A per-member override was
+considered and not built: `users` has no general preferences column, so it
+would need a migration, an API field and a profile control, and no one had
+asked for the ability to disagree with the department's choice. If that comes
+up, the org setting is the default it would layer over.
 
-## ONBOARD-6 — Setup Configures Permissions for Modules the Department Did Not Enable (2026-09-11)
+**One upgrade consequence**, recorded in `docs/UPGRADING.md`: an existing
+install has no stored `appearance` block, so every member — including the
+officer whose browser held `top` — now sees the `left` default until somebody
+sets it in Settings. The old value lived in one browser's `localStorage` and
+was not reachable from the server, so there was nothing to migrate.
+
+## ONBOARD-6 — Setup Configured Permissions for Modules the Department Did Not Enable (resolved 2026-09-11)
 
 The Ranks & Positions step builds its permission matrix from the whole
 `MODULE_REGISTRY`, so a department sees View/Manage rows for every module the
@@ -327,16 +334,23 @@ module selection, so there was no answer to filter against. Now that modules
 are chosen first, the mismatch is on screen — a department that enabled six
 modules still scrolls a matrix covering all of them.
 
-**Not changed here.** Filtering the matrix to the enabled set is the obvious
-move and it changes what gets stored: a position configured while a module was
-off has no grants for it, so enabling that module later would leave every
-position silently unable to use it until someone revisits the position editor.
-That wants either a backfill on module enable or a documented "new modules
-start ungranted" rule, and either is its own piece of work.
+**Fixed 2026-09-11, and the fix is display-only.** The grid renders rows for
+the enabled modules plus the two `System` ones (`positions`, `settings`) that
+gate real permissions but are never offered as a choice. What is _stored_ is
+unchanged: `generateDefaultPermissions` and `buildPositionTemplates` still run
+across the whole registry, so a module enabled months later already carries its
+template's grants.
 
-**What it means in practice:** the matrix is longer than it needs to be, and
-the extra rows are harmless — grants for a disabled module gate nothing,
-because the module's routes are not registered for that organization.
+That distinction is the whole design. Narrowing the stored set — the reading
+this entry originally assumed was necessary — is what would have needed a
+backfill on module enable or a documented "new modules start ungranted" rule.
+`RoleSetup.moduleFilter.test.tsx`'s last test asserts the full set still
+reaches the wire, so the cheaper-looking trade cannot be made by accident.
+
+An unanswered module step fails open to the full grid, and hidden rows are
+named ("N modules you did not enable are hidden") with a control to reveal
+them, so a department that cannot find Inventory learns it is off rather than
+concluding the permission does not exist.
 
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 

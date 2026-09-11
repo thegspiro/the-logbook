@@ -822,6 +822,24 @@ class SetupProgressSettings(BaseModel):
     )
 
 
+class AppearanceSettings(BaseModel):
+    """How the application presents itself to every member of the department.
+
+    `navigation_layout` is a department-wide decision, not a personal one. The
+    setup wizard has asked for it since the beginning, but the answer only ever
+    reached the browser that gave it — the wizard wrote `localStorage`, which is
+    where AppLayout still reads it, so the officer who ran setup saw their
+    choice and nobody else did. The copy POSTed to the server was stored on the
+    onboarding session and read by nothing. Recorded here so the answer means
+    what the question implies.
+    """
+
+    navigation_layout: Literal["top", "left"] = Field(
+        default="left",
+        description="Where the primary navigation sits for every member",
+    )
+
+
 class ModuleSettings(BaseModel):
     """Settings for module enablement across the organization.
 
@@ -1006,6 +1024,10 @@ class OrganizationSettings(BaseModel):
         default_factory=SetupProgressSettings,
         description="Department setup checklist acknowledgment state",
     )
+    appearance: AppearanceSettings = Field(
+        default_factory=AppearanceSettings,
+        description="Department-wide presentation settings",
+    )
 
     # Allow additional settings
     model_config = ConfigDict(extra="allow")
@@ -1053,6 +1075,7 @@ class OrganizationSettingsUpdate(BaseModel):
     membership_id: Optional[MembershipIdSettings] = None
     department_email: Optional[DepartmentEmailSettings] = None
     setup: Optional[SetupProgressSettings] = None
+    appearance: Optional[AppearanceSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra="allow")
@@ -1116,6 +1139,7 @@ class OrganizationSettingsResponse(BaseModel):
     it_team: ITTeamSettings = Field(default_factory=ITTeamSettings)
     modules: ModuleSettings = Field(default_factory=ModuleSettings)
     membership_id: MembershipIdSettings = Field(default_factory=MembershipIdSettings)
+    appearance: AppearanceSettings = Field(default_factory=AppearanceSettings)
 
     model_config = ConfigDict(from_attributes=True, extra="allow")
 

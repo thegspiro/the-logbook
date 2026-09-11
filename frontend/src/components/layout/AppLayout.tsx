@@ -41,7 +41,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const logout = useAuthStore((s) => s.logout);
   const [departmentName, setDepartmentName] = useState('Fire Department');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [navigationLayout, _setNavigationLayout] = useState<'top' | 'left'>(
+  // Seeded from the last known value so the shell paints in the right shape
+  // immediately, then reconciled against the department's setting below.
+  const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>(
     () => (localStorage.getItem('navigationLayout') as 'top' | 'left') || 'left'
   );
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -88,32 +90,47 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       setLogoPreview(savedLogo);
     }
 
-    // If localStorage is empty (first visit), fetch branding from backend
-    if (!savedDepartmentName) {
-      // Through the shared service rather than a bare axios call, so this and
-      // the dashboard's own first-visit fetch collapse into one request.
-      void dashboardService
-        .getBranding()
-        .then(({ name, logo }) => {
-          if (name) {
-            setDepartmentName(name);
-            localStorage.setItem('departmentName', name);
-          }
-          if (logo && isValidLogoUrl(logo)) {
-            setLogoPreview(logo);
-            localStorage.setItem('logoData', logo);
-          }
-        })
-        .catch(() => {
-          // Branding is non-critical — keep defaults
-        });
-    }
+    // Always reconcile against the server, not only on a first visit.
+    //
+    // This used to be skipped whenever a department name was already cached,
+    // which was survivable for a name but not for `navigation_layout`: that is
+    // a department-wide decision, so an officer changing it in Settings has to
+    // reach members whose browsers already hold a value. Without this, they
+    // never would. The request is deduped with the dashboard's own, so the
+    // common case is still one call.
+    void dashboardService
+      .getBranding()
+      .then(({ name, logo, navigation_layout: layout }) => {
+        if (name) {
+          setDepartmentName(name);
+          localStorage.setItem('departmentName', name);
+        }
+        if (logo && isValidLogoUrl(logo)) {
+          setLogoPreview(logo);
+          localStorage.setItem('logoData', logo);
+        }
+        if (layout === 'top' || layout === 'left') {
+          setNavigationLayout(layout);
+          localStorage.setItem('navigationLayout', layout);
+        }
+      })
+      .catch(() => {
+        // Branding is non-critical — keep whatever is already painted
+      });
 
     // Listen for branding updates from the Settings page (same-tab)
     const onBrandingUpdate = (e: Event) => {
-      const { name, logo } = (e as CustomEvent<{ name?: string; logo?: string }>).detail;
+      const {
+        name,
+        logo,
+        navigationLayout: layout,
+      } = (e as CustomEvent<{ name?: string; logo?: string; navigationLayout?: 'top' | 'left' }>).detail;
       if (name) setDepartmentName(name);
       setLogoPreview(logo || null);
+      if (layout === 'top' || layout === 'left') {
+        setNavigationLayout(layout);
+        localStorage.setItem('navigationLayout', layout);
+      }
     };
     window.addEventListener('branding-updated', onBrandingUpdate);
     return () => window.removeEventListener('branding-updated', onBrandingUpdate);

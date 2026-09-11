@@ -915,6 +915,18 @@ async def _persist_session_data_to_org(
 
     org_settings = copy.deepcopy(organization.settings or {})
 
+    # Carry the navigation layout the wizard asked for onto the organization.
+    # Until now the answer reached only the browser that gave it: the wizard
+    # wrote localStorage, the server stored the value on the ephemeral session,
+    # and nothing read it back — so every other member got the default. See
+    # KNOWN_LIMITATIONS ONBOARD-5.
+    department_data = session_data.get("department") or {}
+    layout = department_data.get("navigation_layout")
+    if layout in ("top", "left"):
+        appearance = dict(org_settings.get("appearance") or {})
+        appearance["navigation_layout"] = layout
+        org_settings["appearance"] = appearance
+
     # Persist IT team data and create user accounts for IT team members
     it_team_data = session_data.get("it_team")
     if it_team_data:

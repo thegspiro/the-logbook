@@ -150,6 +150,18 @@ export interface FileStorageSettings {
   local_storage_path?: string;
 }
 
+/**
+ * How the application presents itself to every member of the department.
+ *
+ * `navigationLayout` is a department-wide decision. Setup has always asked for
+ * it, but the answer used to reach only the browser that gave it — see
+ * KNOWN_LIMITATIONS ONBOARD-5. Snake case matches the wire, which this group
+ * is sent and received as.
+ */
+export interface AppearanceSettings {
+  navigation_layout: 'top' | 'left';
+}
+
 export interface AuthSettings {
   provider: string;
   // Google OAuth

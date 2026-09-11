@@ -6,6 +6,7 @@ import api from './apiClient';
 import { dedupeInFlight } from '../utils/inFlight';
 import type { Permission, PermissionCategory, Role, UserRoleResponse, UserWithRoles } from '../types/role';
 import type {
+  AppearanceSettings,
   AuthSettings,
   ContactInfoSettings,
   ContactInfoUpdate,
@@ -431,6 +432,7 @@ export const organizationService = {
     auth?: AuthSettings;
     membership_id?: import('../types/user').MembershipIdSettings;
     department_email?: import('../types/user').DepartmentEmailSettings;
+    appearance?: AppearanceSettings;
   }> {
     const response = await api.get<{
       contact_info_visibility: ContactInfoSettings;
@@ -439,6 +441,7 @@ export const organizationService = {
       auth?: AuthSettings;
       membership_id?: import('../types/user').MembershipIdSettings;
       department_email?: import('../types/user').DepartmentEmailSettings;
+      appearance?: AppearanceSettings;
     }>('/organization/settings');
     return response.data;
   },
@@ -481,6 +484,18 @@ export const organizationService = {
    */
   async updateAuthSettings(settings: AuthSettings): Promise<AuthSettings> {
     const response = await api.patch<AuthSettings>('/organization/settings/auth', settings);
+    return response.data;
+  },
+
+  /**
+   * Update department-wide presentation settings.
+   *
+   * The navigation layout is department-wide, not per-browser: every member
+   * gets what is set here. See KNOWN_LIMITATIONS ONBOARD-5 for what it used
+   * to be.
+   */
+  async updateAppearanceSettings(settings: AppearanceSettings): Promise<AppearanceSettings> {
+    const response = await api.patch<AppearanceSettings>('/organization/settings/appearance', settings);
     return response.data;
   },
 

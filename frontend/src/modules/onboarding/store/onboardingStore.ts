@@ -291,7 +291,9 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
 
       setNavigationLayout: (layout) => {
         set({ navigationLayout: layout });
-        // Also write directly so AppLayout can read it via localStorage.getItem('navigationLayout')
+        // Seeds the value AppLayout paints with before its first branding
+        // fetch returns. The authority is the organization setting this answer
+        // is written to at completion, not this key.
         localStorage.setItem('navigationLayout', layout);
         get().triggerAutoSave();
       },

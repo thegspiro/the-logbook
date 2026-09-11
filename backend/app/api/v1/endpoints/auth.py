@@ -66,7 +66,7 @@ from app.schemas.auth import (
     UserRegister,
     ValidateResetToken,
 )
-from app.schemas.organization import AuthSettings
+from app.schemas.organization import AppearanceSettings, AuthSettings
 from app.services import mfa_service
 from app.services.auth_service import RESET_TOKEN_EXPIRY_MINUTES, AuthService
 from app.services.security_monitoring import security_monitor
@@ -236,23 +236,38 @@ async def get_login_branding(
     Returns the organization name and logo so the login page can display
     them without requiring authentication. Returns empty values if no
     organization exists yet (pre-onboarding).
+
+    Also carries `navigation_layout`, which the authenticated shell applies on
+    first paint. It is served here, beside the name and logo, so a member does
+    not watch the navigation move after login, and because it is the same kind
+    of fact: how the department presents itself. It reveals nothing — whether a
+    site uses a sidebar is visible to anyone who opens it — and is far less
+    identifying than the organization name this endpoint already returns.
     """
+    default_layout = AppearanceSettings().navigation_layout
     try:
         result = await db.execute(
-            select(Organization.name, Organization.logo)
-            .where(Organization.active == True)  # noqa: E712
+            select(Organization.name, Organization.logo, Organization.settings)
+            .where(Organization.active.is_(True))
             .order_by(Organization.created_at.asc())
             .limit(1)
         )
         row = result.first()
 
         if not row:
-            return {"name": None, "logo": None}
+            return {"name": None, "logo": None, "navigation_layout": default_layout}
 
-        return {"name": row.name, "logo": row.logo}
+        # settings is free-form JSON, so an absent or malformed appearance
+        # block degrades to the default rather than failing the login page.
+        appearance = (row.settings or {}).get("appearance")
+        layout = (appearance or {}).get("navigation_layout")
+        if layout not in ("top", "left"):
+            layout = default_layout
+
+        return {"name": row.name, "logo": row.logo, "navigation_layout": layout}
     except Exception:
         # Pre-onboarding or DB not ready — return empty branding gracefully
-        return {"name": None, "logo": None}
+        return {"name": None, "logo": None, "navigation_layout": default_layout}
 
 
 @router.get("/captcha-config")
