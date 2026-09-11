@@ -126,32 +126,6 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // severity badges already sit. Call sites are held to AA by policy.
   '/admin/audit-log': 2,
   '/events/1/monitoring': 1,
-  // The past-day date in the phone week view (PhoneMonth.tsx, `today` is
-  // real wall-clock time, not mocked, and the route defaults to the week
-  // view — `SchedulingPage`'s `viewMode` — whose `weekDates()` snaps to
-  // the calendar Sunday-Saturday week containing today). Raised from
-  // opacity-45 (2.92:1, AA-failing once the calendar rolled a date into
-  // the dimmed state) to opacity-65 (5.57:1) to clear AA — which moved it
-  // into this AAA-only count, the same move the audit log's amber-800
-  // badges made three entries above.
-  //
-  // A first attempt at this entry used the mathematical worst case (up to
-  // 6 dimmed prior days in a Saturday's week) as a fixed budget — Codex
-  // correctly flagged that as defeating the ratchet on every day but the
-  // worst one (a Sunday run has 0 real findings and 6 slots of headroom
-  // for an unrelated regression to hide in). Fixed properly instead: the
-  // test now freezes this route's clock (`page.clock.setFixedTime`, just
-  // after the route loop's `signInForRoute` call, reset to a fresh real
-  // timestamp right after this route's own iteration so it can't affect
-  // any other route — Playwright's Clock API has no explicit "uninstall")
-  // to a fixed Monday, so exactly one prior day (Sunday) is ever dimmed,
-  // every run, regardless of real calendar date. Budgeted at 1 to match —
-  // dark and high-contrast both render this text at full white
-  // (`--text-primary: #ffffff`) against their own dark surfaces, which
-  // stays clear of 7:1 even at this opacity, so only the light theme's
-  // near-black-on-white token (`#0f172a` on `#ffffff`) is expected to
-  // contribute. Call sites are held to AA by policy.
-  '/scheduling': 1,
   '/scheduling/admin/closeout': 5,
   '/admin-hours': 2,
   '/notifications?tab=inbox': 3,
@@ -298,12 +272,18 @@ test.describe('mobile accessibility', () => {
     for (const route of ROUTES) {
       granted = await signInForRoute(page, route, granted);
 
-      // PhoneMonth's past-day dimming (`isPastDay`) reads the real
-      // wall-clock date, so /scheduling's below-AAA contrast node count
-      // varies by day of the week the suite happens to run on (0 on a
-      // Sunday, up to 6 on a Saturday — see the AAA_CONTRAST_BUDGET entry
-      // below). Freezing to a fixed Monday makes it exactly one prior
-      // (dimmed) day, every run, regardless of real calendar date.
+      // PhoneMonth's past-day dimming (`isPastDay`) reads the real wall-clock
+      // date, so how much of this route renders dimmed depends on the day the
+      // suite happens to run on — none on a Sunday, up to six on a Saturday.
+      // Freezing to a fixed Monday makes it exactly one prior day, every run.
+      //
+      // This and the dim's own contrast arrived as two answers to one defect,
+      // on separate branches, and both are kept because they cover different
+      // ground. The dim measures 7.95:1 (opacity-75 in PhoneMonth), so no date
+      // fails AAA whatever the calendar says, which is why there is
+      // deliberately no /scheduling entry in AAA_CONTRAST_BUDGET. Freezing the
+      // clock is what stops any *other* finding on this route from moving with
+      // the date — a budget is a ratchet only while what it counts holds still.
       if (route.path === '/scheduling') {
         await page.clock.setFixedTime(new Date('2026-01-12T12:00:00'));
       }

@@ -97,7 +97,18 @@ export interface RouteCheck {
     label: string;
     /** Cap, so a data-driven strip cannot inflate the pass without warning. */
     max?: number;
-  };
+    /**
+     * Set only where a control in this group legitimately renders the screen the
+     * route arrived on. A tab strip opens on its first subsection, so pressing
+     * that tab reproduces arrival exactly and is not a failure.
+     *
+     * Everywhere else the first control *must* change the page — an Edit button
+     * opens a form — so a state measuring the same as arrival means the click
+     * did nothing and the coverage is being claimed without being taken. That is
+     * the default, which is why this is opt-in rather than the other way round.
+     */
+    mayRepeatArrival?: boolean;
+  }[];
 }
 
 /** Granted for every route; see the per-route `permissions` note above. */
@@ -293,10 +304,27 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: SCHEDULING_ADMIN,
     expectText: 'Apparatus Type Defaults',
     // Edit opens an inline form on the card, and the form is where this screen
-    // keeps most of its controls; the card list measures clean without it. Two,
-    // not fifteen: the apparatus card and the resource card render the same
-    // form, so driving one of each covers both and the rest are repetition.
-    states: { selector: 'button:text-is("Edit")', label: 'Edit', max: 2 },
+    // keeps most of its controls; the card list measures clean without it.
+    //
+    // One group per card, rather than one `button:text-is("Edit")` group capped
+    // at two. Both cards render the same form from opposite arms of
+    // PositionListEditor, so one of each is the coverage worth having and the
+    // other thirteen apparatus rows are repetition — but an unscoped selector
+    // cannot express that. It also cannot survive being driven: opening a row
+    // replaces its own Edit button, so the second click lands on whatever moved
+    // into that index and the resource card is never reached at all.
+    states: [
+      {
+        selector: '.card-secondary:has(h3:text-is("Apparatus Type Defaults")) button:text-is("Edit")',
+        label: 'Edit apparatus type',
+        max: 1,
+      },
+      {
+        selector: '.card-secondary:has(h3:text-is("Event Resource Defaults")) button:text-is("Edit")',
+        label: 'Edit resource type',
+        max: 1,
+      },
+    ],
   },
   // The first version of this entry carried neither `fixture` nor `expectText`
   // and a comment saying general and platoons "render the same panel today".
@@ -351,7 +379,16 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: 'Control whether shift reports are available for your department and which features are included.',
     // The strip, scoped by its own label. The panel's <nav> and SettingsLayout's
     // are both `data-mobile-scroll-region`, and the outer one navigates.
-    states: { selector: '[aria-label="Shift report settings sections"] button', label: 'subsection' },
+    states: [
+      {
+        selector: '[aria-label="Shift report settings sections"] button',
+        label: 'subsection',
+        // The panel opens on "What's turned on", so the first tab in this strip
+        // renders exactly what arrival rendered. Measured, not assumed: both
+        // come out at tap 0/22 and 1291 characters.
+        mayRepeatArrival: true,
+      },
+    ],
   },
   // Two remain unlisted, each measured rather than assumed:
   //
