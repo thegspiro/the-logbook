@@ -654,6 +654,79 @@ class SessionDataResponse(BaseModel):
 SESSION_EXPIRY_HOURS = 0.5  # 30 minutes
 
 
+async def _rehydrate_department_org_id(
+    session: OnboardingSessionModel, db: AsyncSession
+) -> None:
+    """Point a freshly minted session at the organization setup already created.
+
+    /session/stations and /session/apparatus resolve their target org from
+    ``session.data["department"]["organization_id"]``. A session minted after
+    the original one lapsed starts with empty data, so without this those two
+    steps reject a setup whose organization demonstrably exists, with a
+    precondition error naming a step the operator already finished.
+
+    Single-instance onboarding provisions exactly one organization (see
+    ``OnboardingService.create_organization``), so the oldest row is
+    unambiguous.
+    """
+    from app.models.user import Organization
+
+    data = session.data or {}
+    if (data.get("department") or {}).get("organization_id"):
+        return
+
+    org_result = await db.execute(
+        select(Organization.id).order_by(Organization.created_at.asc()).limit(1)
+    )
+    organization_id = org_result.scalar_one_or_none()
+    if organization_id is None:
+        return
+
+    department = dict(data.get("department") or {})
+    department["organization_id"] = organization_id
+    # Reassign the whole mapping rather than mutating in place: MutableDict
+    # tracks top-level key changes only, so a nested write would leave the JSON
+    # column clean and the UPDATE would never be issued.
+    session.data = {**data, "department": department}
+    await db.commit()
+
+
+async def _require_owner_authority(
+    db: AsyncSession, current_user: Optional[User], detail: str
+) -> None:
+    """Restrict an in-progress-setup operation to the System Owner, once one exists.
+
+    Before the owner is minted the whole wizard is unauthenticated by design,
+    so the operation is open. After it, possession of an onboarding session is
+    no longer sufficient authority over the tenant -- the same boundary /reset
+    applies, and the reason resuming a lapsed setup cannot be used to seize a
+    half-provisioned install.
+
+    The owner is identified by the wildcard position ``create_system_owner``
+    grants; creation timestamps can tie at database precision and are not an
+    authority boundary. Fails closed when users exist but none carries that
+    grant, so a damaged owner row never promotes an arbitrary first user.
+    """
+    owner_result = await db.execute(
+        select(User)
+        .options(selectinload(User.positions))
+        .order_by(User.created_at, User.id)
+    )
+    users = owner_result.scalars().all()
+    owner = find_system_owner(users)
+
+    if users and owner is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="System-owner role is missing; onboarding cannot proceed safely.",
+        )
+
+    if owner is not None and (
+        current_user is None or str(current_user.id) != str(owner.id)
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
 async def get_or_create_session(
     request: Request, db: AsyncSession
 ) -> OnboardingSessionModel:
@@ -670,13 +743,19 @@ async def get_or_create_session(
     Raises:
         HTTPException: If session is invalid or expired
     """
-    # Guard: if an organization already exists, block new onboarding sessions
-    from app.models.user import Organization
-
-    org_result = await db.execute(
-        select(Organization).order_by(Organization.created_at.asc()).limit(1)
-    )
-    if org_result.scalar_one_or_none() is not None:
+    # Guard on completion, never on the mere existence of an organization.
+    #
+    # Step 1 of the wizard creates the real Organization row, so an
+    # org-existence guard here made every subsequent session un-mintable: once
+    # the 30-minute session lapsed mid-setup, /start returned 403, /reset
+    # needed that same dead session to authenticate, and no System Owner
+    # existed yet to log in as -- leaving the install recoverable only by
+    # dropping the database. Completion is the state that must refuse a new
+    # session; an in-progress setup has to stay resumable. Authority over an
+    # in-progress setup is bounded separately, by _require_owner_authority()
+    # in the /start handler.
+    service = OnboardingService(db)
+    if not await service.needs_onboarding():
         raise CodedHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Onboarding has already been completed",
@@ -718,6 +797,8 @@ async def get_or_create_session(
     db.add(new_session)
     await db.commit()
     await db.refresh(new_session)
+
+    await _rehydrate_department_org_id(new_session, db)
 
     return new_session
 
@@ -1057,13 +1138,20 @@ async def get_onboarding_status(db: AsyncSession = Depends(get_db)):
     dependencies=[Depends(_rate_limit_onboarding_start)],
 )
 async def start_onboarding(
-    request: Request, response: Response, db: AsyncSession = Depends(get_db)
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     """
     Start the onboarding process
 
     Initializes onboarding tracking, creates a server-side session,
     and returns session ID and CSRF token for secure form submissions.
+
+    Also the resume path: an operator whose session lapsed mid-setup calls
+    this to mint a new one, which is why it must not refuse merely because
+    step 1 already created the organization.
     """
     service = OnboardingService(db)
 
@@ -1074,6 +1162,15 @@ async def start_onboarding(
             detail="Onboarding has already been completed",
             error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
+
+    # Once setup has minted its System Owner, resuming it is that owner's
+    # right alone -- otherwise a lapsed session on a half-provisioned install
+    # would be an open invitation to take it over.
+    await _require_owner_authority(
+        db,
+        current_user,
+        "System-owner authentication is required to resume onboarding.",
+    )
 
     # Get client info
     ip_address = get_client_ip(request)
@@ -2647,31 +2744,12 @@ async def reset_onboarding(
 
     # Once setup has created its system owner, possession of the resumable
     # onboarding cookie is no longer sufficient authority to erase the tenant.
-    # Identify that owner by the wildcard position granted by create_system_owner;
-    # creation timestamps can tie at database precision and are not an authority
-    # boundary.
-    owner_result = await db.execute(
-        select(User)
-        .options(selectinload(User.positions))
-        .order_by(User.created_at, User.id)
+    # Shared with /start's resume path so the two cannot drift apart.
+    await _require_owner_authority(
+        db,
+        current_user,
+        "System-owner authentication is required to reset onboarding.",
     )
-    users = owner_result.scalars().all()
-    owner = find_system_owner(users)
-    # Fail closed if users exist but setup state is inconsistent and none has
-    # the system-owner grant. An arbitrary first user must never gain reset
-    # authority merely because the intended owner row/position is damaged.
-    if users and owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="System-owner role is missing; onboarding cannot be reset safely.",
-        )
-    if owner is not None and (
-        current_user is None or str(current_user.id) != str(owner.id)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="System-owner authentication is required to reset onboarding.",
-        )
 
     try:
         # Log the reset BEFORE deletion to ensure we capture it
