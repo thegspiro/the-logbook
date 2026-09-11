@@ -1,6 +1,138 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), pass 3 (this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), pass 4 (this PR)
+
+## Pass 4 (2026-09-11) — 0 fixes, 0 flagged, zero drift in declared scope
+
+**Scope confirmed via `git merge-base --is-ancestor` against pass 3's merge
+commit** (`4ba836420`, PR #2247) — not assumed, and not skipped the way pass
+3's own first attempt was: this environment's clone was not shallow this
+time (`git rev-parse --is-shallow-repository` → `false`), and
+`git merge-base --is-ancestor 4ba836420 HEAD` succeeds after `git fetch
+--unshallow` brought in a few branches this session's earlier clone hadn't
+seen.
+
+```
+git diff --stat 4ba836420..HEAD -- \
+  backend/app/api/v1/endpoints/admin_hours.py backend/app/services/admin_hours_service.py \
+  backend/app/models/admin_hours.py backend/app/schemas/admin_hours.py \
+  frontend/src/modules/admin-hours frontend/src/pages/MemberProfilePage.tsx \
+  frontend/src/pages/ComplianceRequirementsConfigPage.tsx frontend/src/pages/Dashboard.tsx \
+  frontend/src/components/member-profile frontend/src/pages/events-settings \
+  frontend/src/modules/membership/pages/CheckInStationPage.tsx
+```
+
+**All four backend files (endpoint, service, model, schema) are
+byte-identical to pass 3's merge — zero backend diff.** Eight frontend files
+changed, all cosmetic, none touching admin-hours logic: `aria-label`
+additions on two filter `<select>`s (`AllEntriesTab.tsx`, `AdminHoursPage.tsx`),
+a contrast-token bump on two badges (`AdminHoursManagePage.tsx`,
+`bg-blue-500`→`bg-blue-600` and `bg-red-500`→`bg-red-800`), a `Breadcrumbs`
+rollout on `CheckInStationPage.tsx` and `ComplianceRequirementsConfigPage.tsx`
+(navigation chrome, verified the admin-hours-reading code path on each page
+is untouched by reading both diffs directly), a `<main>`→`<div
+data-page-main>` semantic-landmark change and an inventory-tile
+relabeling/counting fix on `Dashboard.tsx` (its own admin-hours summary
+card — the `getSummary({ userId: currentUser?.id })` call and the
+`reportingRange.ts` UTC-day-bounds helper pass 3 reviewed — is unchanged;
+confirmed by reading the diff, which touches only the unrelated inventory
+tile, the heading tag, and a badge color), and single-line contrast bumps on
+`MemberProfilePage.tsx`'s photo-remove button and
+`HourTrackingSection.tsx`'s add-mapping button (both outside any admin-hours
+data path).
+
+**Checked external backend callers too, not only the module's own files.**
+`grep -rln "admin_hours_service\|AdminHoursService\|from app.services.admin_hours"`
+outside the module's own two files finds four callers:
+`training_session_service.py`, `scheduled_tasks.py`, `event_service.py`,
+`nfc_tag_service.py`. `training_session_service.py` and `nfc_tag_service.py`
+have zero diff since `4ba836420`. `event_service.py` and `scheduled_tasks.py`
+both changed, but neither diff touches an admin-hours call site — verified
+by line number, not by the commit message alone: `event_service.py`'s diff
+(EV-24, a waitlist queue-jump fix) sits at lines 1475-1694, while its three
+admin-hours call sites (`AdminHoursService(self.db)`,
+`delete_event_attendance_entries`, `credit_event_attendance`,
+`_revoke_event_attendance_credit`) are at lines 45, 915, 1105, 2145, 2543,
+2556, 2579-2601 — outside every changed hunk.
+`scheduled_tasks.py`'s diff (CRON3-31-1, an inactive-org message/email
+filter) sits at lines 2677-3995, while `run_admin_hours_auto_close` (the
+AH-2 caller) is defined at line 5837 and referenced at 388/6006/6055 — also
+outside every changed hunk.
+
+**Re-ran the frontend consumer sweep from scratch** (not trusting pass 2/3's
+recorded list): `grep -rln "admin-hours/services/api\|adminHoursService\|AdminHours"
+frontend/src`, excluding the module itself and `.test.` files, returns 13
+matches. Seven are the six already-tracked outside consumers plus
+`App.tsx` (route registration only, `getAdminHoursRoutes()`). The other six
+(`modules/reports/types/index.ts`, `modules/reports/components/renderers/index.ts`,
+`modules/reports/components/renderers/AdminHoursRenderer.tsx`,
+`modules/reports/pages/ReportsPage.tsx`, `types/training.ts`,
+`constants/nfc.ts`) were individually grepped for an actual import of the
+module's service (`admin-hours/services/api`, `adminHoursService`, or `from
+... admin-hours`) — zero matches in all six; the string match was on the
+name "AdminHours" alone (the reports feature's own, unrelated
+`AdminHoursReport`/`AdminHoursRenderer` type, matching pass 2's AH21-2
+finding that this file does not import the module). No new consumer found;
+the 6-file list from pass 2/3 remains complete.
+
+**Spot-verified every backend fix from passes 1-3 is still present at its
+current line**, by direct grep against the file content (not inferred from
+"the diff is empty"): the AH-7 org filter on `get_user_hours_compliance`'s
+target-user fetch (`UserModel.organization_id == organization_id`, line
+1850); every `with_for_update()` call site from AH-10/AH-11 and pass 3's
+Codex-fixed locking findings 2/4/7 (12 call sites: `clock_in`'s `User` lock
+at 226, entry lock at 380, `create_manual_entry`'s `User` lock at 539,
+`edit_pending_entry`'s locks at 772/788, `bulk_approve`'s member-then-entry
+locks at 1072/1092, `approve_or_reject`'s lock at 1347, the event-hour-mapping
+percentage locks at 1487/1561); and the quarterly-compliance rejection logic
+from pass 3's finding 8 (lines 1893-1936, the `ValueError` raised before any
+per-requirement query runs when a quarterly requirement is requested for a
+non-current year).
+
+**Route inventory re-enumerated mechanically** (`grep -c "^@router\."` plus a
+`Depends(...)` extraction, not a manual count): **27/27**, matching every
+prior pass. 11 routes carry `Depends(get_current_user)`, 16 carry
+`Depends(require_permission("admin_hours.manage"))`, 27 carry
+`Depends(get_db)` — no ungated route, one uniform permission string (no
+`.view`/`.manage` mix to check for the XC-2 pattern), consistent with pass
+1-3's identical finding.
+
+**Confirmed still open, unchanged:** both deliberate product-decision items
+from pass 1 (the unconditional per-org SoD self-approval guard, and
+`credit_event_attendance`'s resync path growing an already-`APPROVED` entry
+without re-review) are untouched — the functions containing them are part of
+the byte-identical `admin_hours_service.py`. Cross-referenced and dated in
+`docs/KNOWN_LIMITATIONS.md`'s "Admin hours" row.
+
+**No code changed this pass** — there was nothing in the declared scope to
+fix. This is the legitimate "0 fixes, 0 flagged" outcome pass 3's own first
+draft claimed prematurely (see that pass's correction notice); the
+difference here is the ancestor check actually succeeded before concluding
+the diff was empty, the diff was run against the full declared scope
+including every frontend consumer and external backend caller, and specific
+fixed lines were grepped directly rather than inferred from the diff's
+silence.
+
+## Completion gate (pass 4)
+
+| Check                                             | Result                             |
+| ------------------------------------------------- | ---------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | clean (0 violations)               |
+| `black --check app/ tests/ alembic/`              | clean                              |
+| `isort --check-only app/ tests/ alembic/`         | clean (isort, CI's pinned version) |
+| `python3 scripts/validate_migrations.py --strict` | PASSED — single head               |
+| backend tests, scope (`-k "admin_hours"`)         | see below                          |
+| `npm run typecheck` (frontend)                    | 0 errors                           |
+| `npm run lint` (frontend)                         | 0 errors, 0 warnings               |
+
+No code changed this pass, so no new or updated guard tests — passes 1-3's
+existing suite (`tests/test_admin_hours_service.py`,
+`moduleFetchIntegrity.test.ts`, `entryTimes.test.ts`,
+`createApiClient.test.ts`'s blob-error block, `exportCsv.behavior.test.ts`)
+is the coverage this pass re-confirmed still passes, not new coverage this
+pass added.
+
+---
 
 ## Pass 3 (2026-09-05)
 

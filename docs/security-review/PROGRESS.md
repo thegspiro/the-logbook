@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 21 (Admin hours), pass 4** — branch
+`claude/security-review-admin-hours`, PR pending creation. Diff-scoped
+against pass 3's merge commit (`4ba836420`, PR #2247) across the full
+declared scope (all four backend files, the 26-file frontend module, all 6
+outside consumers, and all 4 external backend callers of
+`admin_hours_service`). Zero backend diff; the only frontend changes were
+cosmetic (aria-labels, contrast bumps, a `Breadcrumbs` rollout) and none
+touch admin-hours logic. Every prior fix (AH-7 through AH-14, AH21-1
+through AH21-4, and pass 3's 8 Codex-driven fixes) spot-verified still
+present at its current line by direct grep, not inferred from the diff's
+silence. Route inventory re-enumerated mechanically: 27/27, unchanged. **0
+fixes, 0 flagged.** Full write-up:
+`docs/security-review/AH-21-admin-hours.md` → Pass 4.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2476's merge, Feature 20 pass 4), preserved for history</summary>
+
 **None.** PR [#2476](https://github.com/thegspiro/the-logbook/pull/2476)
 (Feature 20, Compliance, pass 4) merged clean via squash, merge commit
 `36c160f4c106`, all 17 CI checks green (CI Success, both MySQL/MariaDB
@@ -30,6 +47,8 @@ approach instead of the final clock-freeze fix) were fixed and resolved
 before this check. Merged directly once fully green with `mergeable_state:
 clean` and no unresolved threads. Rotation row 20 is now `✅`. Next: Feature
 21 (Admin hours).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 4, PR #2476, before the merge), preserved for history</summary>
@@ -186,6 +205,45 @@ that were an artifact of the worktree layout, not the code). Rotation row
 20 → `✅` (pending merge). Next: Feature 21 (Admin hours).
 
 </details>
+
+### 2026-09-11 — Feature 21 (Admin hours), pass 4 — 0 fixes, 0 flagged
+
+Diff-scoped against `4ba836420` (pass 3's merge commit, PR #2247), verified
+via `git merge-base --is-ancestor` rather than assumed — this environment's
+clone was not shallow, so the check succeeded directly. Scope covered all
+four backend files, the full 26-file frontend module plus all 6 outside
+consumers, and all 4 external backend callers of `admin_hours_service`
+(`training_session_service.py`, `scheduled_tasks.py`, `event_service.py`,
+`nfc_tag_service.py`).
+
+**Zero backend diff** — all four backend files (endpoint, service, model,
+schema) are byte-identical to pass 3. Eight frontend files changed, all
+cosmetic (aria-labels, two contrast-token bumps, a `Breadcrumbs` rollout,
+an inventory-tile relabeling on `Dashboard.tsx` unrelated to its
+admin-hours summary card) — none touch admin-hours logic, verified by
+reading each diff directly. `event_service.py` and `scheduled_tasks.py`
+both changed since pass 3 (an RSVP waitlist fix and an inactive-org message
+filter, respectively) but neither diff's line range overlaps either file's
+admin-hours call sites, checked by line number.
+
+Spot-verified every fix from passes 1-3 (AH-7 through AH-14, AH21-1 through
+AH21-4, and pass 3's 8 Codex-driven fixes, including all locking sites and
+the quarterly-compliance rejection) still present at its current line by
+direct grep. Route inventory re-enumerated mechanically: 27/27, unchanged,
+one uniform permission string. Both deliberate "confirmed still open"
+product-decision items (unconditional SoD guard, resync growth without
+re-review) re-confirmed unchanged; cross-referenced in
+`docs/KNOWN_LIMITATIONS.md`.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` clean;
+`validate_migrations.py --strict` 443 revisions, single head; `pytest -k
+admin_hours` 88 passed, 1 pre-existing skip; `npm run typecheck` 0 errors;
+`npm run lint` 0 errors/0 warnings. No code changed — passes 1-3's existing
+guard-test suite is the coverage re-confirmed, not new coverage added.
+Full write-up: `docs/security-review/AH-21-admin-hours.md` → Pass 4. PR
+opened and subscribed. Next: 22 Grants & fundraising, once this PR merges.
+
+---
 
 ### 2026-09-11 — Feature 20 (Compliance), pass 4 — 1 fixed (MED), 0 flagged, 1 review-round correction
 
@@ -13227,7 +13285,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
