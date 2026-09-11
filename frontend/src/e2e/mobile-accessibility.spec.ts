@@ -127,22 +127,32 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   '/admin/audit-log': 2,
   '/events/1/monitoring': 1,
   // The past-day date in the phone week view (PhoneMonth.tsx, `today` is
-  // real wall-clock time, not mocked). Raised from opacity-45 (2.92:1,
-  // AA-failing once the calendar rolled a date into the dimmed state) to
-  // opacity-65 (5.57:1) to clear AA — which moved it into this AAA-only
-  // count, the same move the audit log's amber-800 badges made three
-  // entries above.
+  // real wall-clock time, not mocked, and the route defaults to the week
+  // view — `SchedulingPage`'s `viewMode` — whose `weekDates()` snaps to
+  // the calendar Sunday-Saturday week containing today). Raised from
+  // opacity-45 (2.92:1, AA-failing once the calendar rolled a date into
+  // the dimmed state) to opacity-65 (5.57:1) to clear AA — which moved it
+  // into this AAA-only count, the same move the audit log's amber-800
+  // badges made three entries above.
   //
-  // This route defaults to the week view (`SchedulingPage`'s `viewMode`),
-  // and `weekDates()` snaps to the calendar Sunday-Saturday week
-  // containing today, so the number of prior (dimmed) days in view is
-  // calendar-dependent: 0 on a Sunday, up to 6 on a Saturday. A tight
-  // budget measured on one CI run would fail on a different day of the
-  // week, so this is set to the mathematical maximum (today itself is
-  // never dimmed, so at most 6 of the other 6 days in its week can be)
-  // rather than the day-of-week-specific count any single run measures.
-  // Call sites are held to AA by policy.
-  '/scheduling': 6,
+  // A first attempt at this entry used the mathematical worst case (up to
+  // 6 dimmed prior days in a Saturday's week) as a fixed budget — Codex
+  // correctly flagged that as defeating the ratchet on every day but the
+  // worst one (a Sunday run has 0 real findings and 6 slots of headroom
+  // for an unrelated regression to hide in). Fixed properly instead: the
+  // test now freezes this route's clock (`page.clock.setFixedTime`, just
+  // after the route loop's `signInForRoute` call, reset to a fresh real
+  // timestamp right after this route's own iteration so it can't affect
+  // any other route — Playwright's Clock API has no explicit "uninstall")
+  // to a fixed Monday, so exactly one prior day (Sunday) is ever dimmed,
+  // every run, regardless of real calendar date. Budgeted at 1 to match —
+  // dark and
+  // high-contrast both render this text at full white
+  // (`--text-primary: #ffffff`) against their own dark surfaces, which
+  // stays clear of 7:1 even at this opacity, so only the light theme's
+  // near-black-on-white token (`#0f172a` on `#ffffff`) is expected to
+  // contribute. Call sites are held to AA by policy.
+  '/scheduling': 1,
   '/scheduling/admin/closeout': 5,
   '/admin-hours': 2,
   '/notifications?tab=inbox': 3,
@@ -280,6 +290,16 @@ test.describe('mobile accessibility', () => {
 
     for (const route of ROUTES) {
       granted = await signInForRoute(page, route, granted);
+
+      // PhoneMonth's past-day dimming (`isPastDay`) reads the real
+      // wall-clock date, so /scheduling's below-AAA contrast node count
+      // varies by day of the week the suite happens to run on (0 on a
+      // Sunday, up to 6 on a Saturday — see the AAA_CONTRAST_BUDGET entry
+      // below). Freezing to a fixed Monday makes it exactly one prior
+      // (dimmed) day, every run, regardless of real calendar date.
+      if (route.path === '/scheduling') {
+        await page.clock.setFixedTime(new Date('2026-01-12T12:00:00'));
+      }
 
       await page.setViewportSize(PHONE);
       let aaCount = 0;
@@ -452,6 +472,13 @@ test.describe('mobile accessibility', () => {
           perTheme.join(' '),
         ].join('  ')
       );
+
+      if (route.path === '/scheduling') {
+        // No true "uninstall" in Playwright's Clock API (setFixedTime/
+        // setSystemTime only) — reset to a fresh real timestamp so later
+        // routes in this same loop don't inherit the frozen Jan 2026 date.
+        await page.clock.setFixedTime(new Date());
+      }
     }
 
     console.log(

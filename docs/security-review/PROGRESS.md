@@ -18,8 +18,20 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 20 (Compliance), pass 4** — PR
 [#2476](https://github.com/thegspiro/the-logbook/pull/2476), branch
-`claude/security-review-compliance`, tending. A fourth Codex review round
-caught a real, deeper issue in CMP4-1's own role_ids follow-up: **CMP4-5
+`claude/security-review-compliance`, tending. Latest: the CI-health fix for
+`/scheduling`'s AAA contrast budget (see below) went through two more
+review rounds — a fixed budget of 1 (this branch's own measured count) was
+first widened to the mathematical worst case (6), which Codex correctly
+called out as defeating the ratchet on every day but the worst one. Fixed
+properly: `page.clock.setFixedTime()` now freezes `/scheduling`'s render
+to a fixed Monday (exactly one dimmed prior day, every run, real calendar
+date irrelevant), reset to a fresh real timestamp right after so no other
+route inherits it. Budget back to 1, this time deterministic rather than
+measured-once. Full detail in `mobile-accessibility.spec.ts`'s own
+`AAA_CONTRAST_BUDGET['/scheduling']` comment.
+
+A fourth Codex review round before that caught a real, deeper issue in
+CMP4-1's own role_ids follow-up: **CMP4-5
 (MED, FLAGGED)** — `required_roles` is documented and written as **rank
 slugs** everywhere it's persisted (the model's own column comment, the
 training-program requirements schema, and `scheduling_service.py`'s working
