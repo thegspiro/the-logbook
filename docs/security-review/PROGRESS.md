@@ -31,12 +31,55 @@ leaving two active 100% mappings crediting 200% of an attendee's duration
 at event finalization. **Fixed:** the lock-and-validate block now also
 runs on an inactive→active transition, using the mapping's existing
 percentage when the caller didn't send a new one; deactivation and a
+no-op reactivate-when-already-active still skip it.
+
+A fifth round then caught a real gap in that fix: `effective_percentage`
+was read from the pre-lock `mapping` reference, not the row the lock
+itself just refreshed — a concurrent transaction could raise the
+mapping's own percentage while it was inactive (nothing blocks that) and
+the stale pre-lock value would survive the lock. **Fixed:**
+`.execution_options(populate_existing=True)` on the locking query, and
+`effective_percentage` now reads from the freshly locked result set. A
+sixth round then caught that this fix's own regression test couldn't have
+caught the regression it claimed to — the mock returns its "locked" object
+unconditionally, independent of the execution options a real session
+would need — verified by removing the option and watching the test still
+pass. **Fixed:** the test now asserts `populate_existing` directly on the
+captured statement.
+
+4 new guard tests total. Also **flagged** (carried forward from pass 2,
+never previously tracked): `export_entries_csv` remains
+unbounded/non-streaming, same shape as two sibling exports — needs a
+shared page-size/streaming decision, not a drive-by fix. **1 fixed (P1), 1
+flagged.** Full write-up: `docs/security-review/AH-21-admin-hours.md` →
+Pass 4.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 4, before the fifth/sixth Codex rounds found the TOCTOU gap and its test-quality follow-up), preserved for history</summary>
+
+**Feature 21 (Admin hours), pass 4** — PR
+[#2481](https://github.com/thegspiro/the-logbook/pull/2481), branch
+`claude/security-review-admin-hours`, tending. The declared-scope diff
+against pass 3's merge commit (`4ba836420`, PR #2247) found zero backend
+diff and only cosmetic/unrelated frontend drift, as the further-superseded
+note below describes — but a fourth Codex review round, on code this pass
+re-verified directly rather than the diff, caught a real **P1 bug**:
+`update_event_hour_mapping` skipped its entire percentage-lock-and-validate
+block on a bare `{"is_active": true}` reactivation (no `percentage` in the
+payload), letting a manager deactivate a 100% event-hour mapping, create a
+second 100% mapping for the same source, then reactivate the first —
+leaving two active 100% mappings crediting 200% of an attendee's duration
+at event finalization. **Fixed:** the lock-and-validate block now also
+runs on an inactive→active transition, using the mapping's existing
+percentage when the caller didn't send a new one; deactivation and a
 no-op reactivate-when-already-active still skip it. 3 new guard tests.
 Also **flagged** (carried forward from pass 2, never previously tracked):
 `export_entries_csv` remains unbounded/non-streaming, same shape as two
 sibling exports — needs a shared page-size/streaming decision, not a
 drive-by fix. **1 fixed (P1), 1 flagged.** Full write-up:
 `docs/security-review/AH-21-admin-hours.md` → Pass 4.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 4, before the fourth Codex round found AH-15/AH-16), preserved for history</summary>
@@ -290,31 +333,58 @@ first no longer counts toward the total while inactive), reactivate the
 first — two active 100% mappings, 200% of an attendee's duration credited
 at event finalization. Fixed by running the same lock-and-validate check
 on an inactive→active transition, using the mapping's existing percentage
-when none was sent; deactivation and a no-op reactivate stay cheap. 3 new
-guard tests (`test_reactivation_is_a_locking_read`,
+when none was sent; deactivation and a no-op reactivate stay cheap.
+
+**A fifth round found a real gap in that fix itself:** `effective_percentage`
+was read from the `mapping` reference captured by the initial, unlocked
+fetch — before the source set's own `FOR UPDATE` lock. SQLAlchemy's
+identity map returns that same pre-lock Python object for a second query
+against the same primary key unless told to refresh it, so a concurrent
+transaction that raised the mapping's own percentage while it was inactive
+(no validation blocks that) between the fetch and the lock left
+`effective_percentage` reading the stale value even after the lock
+resolved — the same TOCTOU shape moved one step earlier. Fixed two ways:
+the locking query now carries `.execution_options(populate_existing=True)`,
+and `effective_percentage` is read from the target's own row inside the
+freshly locked result set, not the pre-lock reference.
+
+**A sixth round found the new regression test for that fix couldn't
+actually catch the regression it claimed to:** the test's mocked
+`db.execute` returns a hand-built "locked" object unconditionally,
+regardless of what execution options the captured query carried — unlike a
+real session's identity map, which is exactly what `populate_existing`
+matters against. Verified by temporarily deleting the option from the
+source and re-running the test: it still passed. Fixed by asserting
+`populate_existing` directly on the captured statement
+(`locking_query.get_execution_options().get("populate_existing") is True`),
+confirmed to fail without the option and pass with it.
+
+4 new guard tests total (`test_reactivation_is_a_locking_read`,
 `test_reactivation_rejects_when_total_would_exceed_100`,
-`test_deactivation_skips_the_locking_check`). **AH-16 (MED, FLAGGED,
-carried forward)** — `export_entries_csv` remains unbounded/non-streaming,
-known since pass 2 but never previously tracked in this file or
-`docs/KNOWN_LIMITATIONS.md`; needs a page-size/streaming decision shared
-with two sibling exports, not a drive-by fix.
+`test_deactivation_skips_the_locking_check`,
+`test_reactivation_reads_percentage_from_the_locked_row`).
+**AH-16 (MED, FLAGGED, carried forward)** — `export_entries_csv` remains
+unbounded/non-streaming, known since pass 2 but never previously tracked
+in this file or `docs/KNOWN_LIMITATIONS.md`; needs a page-size/streaming
+decision shared with two sibling exports, not a drive-by fix.
 
 **Completion gate:** `flake8`/`black --check`/`isort --check-only` clean;
 `validate_migrations.py --strict` 443 revisions, single head; `pytest -k
-admin_hours` 91 passed (88 + 3 new), 1 pre-existing skip; full backend
-suite 12364 passed, 21 pre-existing skips (AH-15 touches a shared locking
+admin_hours` 92 passed (88 + 4 new), 1 pre-existing skip; full backend
+suite 12365 passed, 21 pre-existing skips (AH-15 touches a shared locking
 pattern — extra diligence); `npm run typecheck` 0 errors; `npm run lint` 0
 errors/0 warnings; `vitest run` against the module's 4 guard-test files
 plus `apiCache.test.ts` (found by widening the frontend consumer sweep),
-53 + 89 passed. Four Codex review rounds on this PR caught 17 accuracy
-issues in the findings doc across three doc-only commits (miscounted/
-mislabeled lock sites, an impossible git chronology, "cosmetic"
-mischaracterizing real functional changes, an incomplete caller inventory
-on both frontend and backend across two further rounds, an unrun
-frontend-test claim, a missing migration-content sweep that itself missed
-a second table name, and a wrong same-feature attribution) — all verified
-and fixed before the fourth round's own code-level finding (AH-15) landed
-the pass's actual fix. Full write-up: `docs/security-review/AH-21-admin-hours.md`
+53 + 89 passed. Six Codex review rounds on this PR: four caught 24
+doc-accuracy issues (miscounted/mislabeled lock sites, an impossible git
+chronology, "cosmetic" mischaracterizing real functional changes, an
+incomplete caller inventory on both frontend and backend across several
+rounds, an unrun frontend-test claim, a missing migration-content sweep
+that itself missed a second table name, a wrong same-feature attribution,
+and stale line-number/test-count references after each code fix shifted
+them) — all verified and fixed; the other two caught real code-level gaps
+in AH-15's own fix (the TOCTOU read-before-lock bug, and a regression test
+that couldn't have caught it). Full write-up: `docs/security-review/AH-21-admin-hours.md`
 → Pass 4. PR opened and subscribed. Next: 22 Grants & fundraising, once
 this PR merges.
 

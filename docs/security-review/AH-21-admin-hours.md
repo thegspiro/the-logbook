@@ -75,6 +75,22 @@ distinct objects with different percentages and asserts validation uses
 the post-lock one — the one case where using the pre-lock value would
 wrongly pass a total that the post-lock value correctly rejects).
 
+**Second correction (Codex review on the TOCTOU test itself):** that test's
+mock `db.execute` returns the hand-constructed `locked_fresh` object
+unconditionally, regardless of what execution options the captured query
+actually carried — a real `Session`'s identity map, by contrast, would
+keep returning the _same_ stale, pre-lock `mapping` instance for a second
+query against the same primary key unless `populate_existing=True` forces
+a refresh. The mock's unconditional substitution meant the test still
+passed with `.execution_options(populate_existing=True)` deleted from the
+source — verified directly by temporarily removing it and re-running the
+test, which failed only after adding the missing assertion below, not
+before. **Fixed:** the test now also asserts
+`locking_query.get_execution_options().get("populate_existing") is True`
+on the captured statement, so a regression that drops the option fails
+this test even though the mock can't reproduce the identity-map behavior
+that makes the option necessary in production.
+
 **AH-16 — MED — `export_entries_csv` remains unbounded/non-streaming — 🚩 FLAGGED (carried forward, not newly introduced)**
 
 **What:** `GET /admin-hours/entries/export` runs one org-scoped query with
@@ -458,8 +474,8 @@ substitute for reading the code it's re-verifying.
 | `black --check app/ tests/ alembic/`                                                                                         | clean                                       |
 | `isort --check-only app/ tests/ alembic/`                                                                                    | clean (isort, CI's pinned version)          |
 | `python3 scripts/validate_migrations.py --strict`                                                                            | PASSED — single head                        |
-| backend tests, scope (`-k "admin_hours"`)                                                                                    | 91 passed (88 + 3 new), 1 pre-existing skip |
-| backend tests, full suite (AH-15 touches a shared locking pattern — extra diligence)                                         | 12364 passed, 21 pre-existing skips         |
+| backend tests, scope (`-k "admin_hours"`)                                                                                    | 92 passed (88 + 4 new), 1 pre-existing skip |
+| backend tests, full suite (AH-15 touches a shared locking pattern — extra diligence)                                         | 12365 passed, 21 pre-existing skips         |
 | `npm run typecheck` (frontend)                                                                                               | 0 errors                                    |
 | `npm run lint` (frontend)                                                                                                    | 0 errors, 0 warnings                        |
 | `vitest run` — `entryTimes.test.ts`, `moduleFetchIntegrity.test.ts`, `createApiClient.test.ts`, `exportCsv.behavior.test.ts` | 4 files, 53 passed                          |

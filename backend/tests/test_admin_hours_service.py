@@ -1230,6 +1230,17 @@ class TestEventHourMappingPercentageLocking:
 
         assert stale.is_active is False, "must not reactivate on rejection"
 
+        # The mock above can't reproduce a real Session's identity map --
+        # `db.execute` just returns whatever object list a test hands it,
+        # regardless of query options, so it would still return
+        # `locked_fresh` even if `populate_existing=True` were removed from
+        # the source. A real session would instead return the *same*
+        # already-loaded `mapping` instance (still reading percentage=10)
+        # for a query missing that option, silently reintroducing this exact
+        # bug. Assert the option directly so removing it fails this test too.
+        locking_query = captured[-1]
+        assert locking_query.get_execution_options().get("populate_existing") is True
+
     async def test_deactivation_skips_the_locking_check(self):
         """Deactivating can never push a source over 100%, so it should not
         pay for (or be blocked by) the locking read the reactivation path
