@@ -16,6 +16,95 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 21 (Admin hours), pass 4** — PR
+[#2481](https://github.com/thegspiro/the-logbook/pull/2481), branch
+`claude/security-review-admin-hours`, tending. The declared-scope diff
+against pass 3's merge commit (`4ba836420`, PR #2247) found zero backend
+diff and only cosmetic/unrelated frontend drift, as the superseded note
+below describes — but a fourth Codex review round, on code this pass
+re-verified directly rather than the diff, caught a real **P1 bug**:
+`update_event_hour_mapping` skipped its entire percentage-lock-and-validate
+block on a bare `{"is_active": true}` reactivation (no `percentage` in the
+payload), letting a manager deactivate a 100% event-hour mapping, create a
+second 100% mapping for the same source, then reactivate the first —
+leaving two active 100% mappings crediting 200% of an attendee's duration
+at event finalization. **Fixed:** the lock-and-validate block now also
+runs on an inactive→active transition, using the mapping's existing
+percentage when the caller didn't send a new one; deactivation and a
+no-op reactivate-when-already-active still skip it.
+
+A fifth round then caught a real gap in that fix: `effective_percentage`
+was read from the pre-lock `mapping` reference, not the row the lock
+itself just refreshed — a concurrent transaction could raise the
+mapping's own percentage while it was inactive (nothing blocks that) and
+the stale pre-lock value would survive the lock. **Fixed:**
+`.execution_options(populate_existing=True)` on the locking query, and
+`effective_percentage` now reads from the freshly locked result set. A
+sixth round then caught that this fix's own regression test couldn't have
+caught the regression it claimed to — the mock returns its "locked" object
+unconditionally, independent of the execution options a real session
+would need — verified by removing the option and watching the test still
+pass. **Fixed:** the test now asserts `populate_existing` directly on the
+captured statement.
+
+4 new guard tests total. Also **flagged** (carried forward from pass 2,
+never previously tracked): `export_entries_csv` remains
+unbounded/non-streaming, same shape as two sibling exports — needs a
+shared page-size/streaming decision, not a drive-by fix. **1 fixed (P1), 1
+flagged.** Full write-up: `docs/security-review/AH-21-admin-hours.md` →
+Pass 4.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 4, before the fifth/sixth Codex rounds found the TOCTOU gap and its test-quality follow-up), preserved for history</summary>
+
+**Feature 21 (Admin hours), pass 4** — PR
+[#2481](https://github.com/thegspiro/the-logbook/pull/2481), branch
+`claude/security-review-admin-hours`, tending. The declared-scope diff
+against pass 3's merge commit (`4ba836420`, PR #2247) found zero backend
+diff and only cosmetic/unrelated frontend drift, as the further-superseded
+note below describes — but a fourth Codex review round, on code this pass
+re-verified directly rather than the diff, caught a real **P1 bug**:
+`update_event_hour_mapping` skipped its entire percentage-lock-and-validate
+block on a bare `{"is_active": true}` reactivation (no `percentage` in the
+payload), letting a manager deactivate a 100% event-hour mapping, create a
+second 100% mapping for the same source, then reactivate the first —
+leaving two active 100% mappings crediting 200% of an attendee's duration
+at event finalization. **Fixed:** the lock-and-validate block now also
+runs on an inactive→active transition, using the mapping's existing
+percentage when the caller didn't send a new one; deactivation and a
+no-op reactivate-when-already-active still skip it. 3 new guard tests.
+Also **flagged** (carried forward from pass 2, never previously tracked):
+`export_entries_csv` remains unbounded/non-streaming, same shape as two
+sibling exports — needs a shared page-size/streaming decision, not a
+drive-by fix. **1 fixed (P1), 1 flagged.** Full write-up:
+`docs/security-review/AH-21-admin-hours.md` → Pass 4.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 4, before the fourth Codex round found AH-15/AH-16), preserved for history</summary>
+
+**Feature 21 (Admin hours), pass 4** — PR
+[#2481](https://github.com/thegspiro/the-logbook/pull/2481), branch
+`claude/security-review-admin-hours`, tending. Diff-scoped
+against pass 3's merge commit (`4ba836420`, PR #2247) across the full
+declared scope (all four backend files, the 26-file frontend module, all 6
+outside consumers, and all 4 external backend callers of
+`admin_hours_service`). Zero backend diff; the frontend changes (aria-labels,
+contrast bumps, a `Breadcrumbs` rollout, and one unrelated inventory-count
+behavior change on `Dashboard.tsx`) none touch admin-hours logic. Every
+prior fix (AH-7 through AH-14, AH21-1 through AH21-4, and pass 3's 8
+Codex-driven fixes) spot-verified still present at its current line by
+direct grep, not inferred from the diff's silence. Route inventory
+re-enumerated mechanically: 27/27, unchanged. **0 fixes, 0 flagged.** Full
+write-up:
+`docs/security-review/AH-21-admin-hours.md` → Pass 4.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2476's merge, Feature 20 pass 4), preserved for history</summary>
+
 **None.** PR [#2476](https://github.com/thegspiro/the-logbook/pull/2476)
 (Feature 20, Compliance, pass 4) merged clean via squash, merge commit
 `36c160f4c106`, all 17 CI checks green (CI Success, both MySQL/MariaDB
@@ -30,6 +119,8 @@ approach instead of the final clock-freeze fix) were fixed and resolved
 before this check. Merged directly once fully green with `mergeable_state:
 clean` and no unresolved threads. Rotation row 20 is now `✅`. Next: Feature
 21 (Admin hours).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 4, PR #2476, before the merge), preserved for history</summary>
@@ -186,6 +277,120 @@ that were an artifact of the worktree layout, not the code). Rotation row
 20 → `✅` (pending merge). Next: Feature 21 (Admin hours).
 
 </details>
+
+### 2026-09-11 — Feature 21 (Admin hours), pass 4 — 1 fixed (P1), 1 flagged
+
+Diff-scoped against `4ba836420` (pass 3's merge commit, PR #2247), verified
+via `git merge-base --is-ancestor` — the first check failed against this
+session's initial shallow clone; `git fetch --unshallow` succeeded (itself
+evidence the clone had been shallow, since that command errors on an
+already-complete repo), and only then did the check succeed. Scope covered
+all four backend files, the full 26-file frontend module plus all 6 direct
+outside consumers, plus every _indirect_ frontend consumer and every
+_direct-model_ backend caller found by widening the sweep past
+service-import greps, plus all 4 external backend callers of
+`admin_hours_service` (`training_session_service.py`, `scheduled_tasks.py`,
+`event_service.py`, `nfc_tag_service.py`), plus a migration-content sweep
+(not just chain hygiene) of the 45 migration files changed since pass 3.
+
+**Zero backend diff (against the declared-scope baseline), zero
+admin-hours-behavioral frontend diff.** All four backend files (endpoint,
+service, model, schema) were byte-identical to pass 3's merge at
+`009fb1309` (this PR's last commit before AH-15 landed — a fixed,
+reproducible endpoint, not a moving `HEAD`). `admin_hours_service.py` is
+not byte-identical to pass 3 at this PR's actual final `HEAD`: AH-15's fix
+(below) and its two follow-up corrections show as a real 36-line diff
+there, found by re-reading the code directly rather than by this sweep.
+Eight frontend files changed; two are real functional changes in
+adjacent features (a `Breadcrumbs` navigation rollout, and `Dashboard.tsx`'s
+inventory-tile count changing from a quantity sum to a row count) — neither
+touches admin-hours logic, but neither is merely cosmetic either, and both
+are recorded as such rather than folded into "all cosmetic." `event_service.py`
+and `scheduled_tasks.py` both changed since pass 3 (an RSVP waitlist fix and
+two unrelated changes — an inactive-org message filter and a call-type
+label resolution) but neither diff's line range overlaps either file's
+admin-hours call sites, checked by line number; same result for the three
+direct-model backend consumers found by widening the caller sweep
+(`reports_service.py`, `dashboard.py`, `compliance_officer_service.py`) that
+changed since pass 3. None of the 45 changed migration files reference
+`admin_hours`/`AdminHours` (grepped by content, not filename).
+
+Spot-verified every fix from passes 1-3 (AH-7 through AH-14, AH21-1 through
+AH21-4, and pass 3's 8 Codex-driven fixes) still present at its current
+line by direct grep — 11 `with_for_update()` sites (corrected from an
+initial miscount of 12), including the quarterly-compliance rejection.
+Route inventory re-enumerated mechanically: 27/27, unchanged, one uniform
+permission string. Both deliberate "confirmed still open" product-decision
+items (unconditional SoD guard, resync growth without re-review)
+re-confirmed unchanged; cross-referenced in `docs/KNOWN_LIMITATIONS.md`.
+
+**A fourth Codex review round, on code re-read directly rather than the
+diff, caught a real bug the "zero drift" framing above had no way to
+surface: AH-15 (P1, FIXED)** — `update_event_hour_mapping` ran its
+percentage-lock-and-validate block only when the caller passed
+`percentage`. A bare `{"is_active": true}` reactivation (a payload the
+schema explicitly allows) skipped it entirely: deactivate a 100%
+event-hour mapping, create a second 100% mapping for the same source (the
+first no longer counts toward the total while inactive), reactivate the
+first — two active 100% mappings, 200% of an attendee's duration credited
+at event finalization. Fixed by running the same lock-and-validate check
+on an inactive→active transition, using the mapping's existing percentage
+when none was sent; deactivation and a no-op reactivate stay cheap.
+
+**A fifth round found a real gap in that fix itself:** `effective_percentage`
+was read from the `mapping` reference captured by the initial, unlocked
+fetch — before the source set's own `FOR UPDATE` lock. SQLAlchemy's
+identity map returns that same pre-lock Python object for a second query
+against the same primary key unless told to refresh it, so a concurrent
+transaction that raised the mapping's own percentage while it was inactive
+(no validation blocks that) between the fetch and the lock left
+`effective_percentage` reading the stale value even after the lock
+resolved — the same TOCTOU shape moved one step earlier. Fixed two ways:
+the locking query now carries `.execution_options(populate_existing=True)`,
+and `effective_percentage` is read from the target's own row inside the
+freshly locked result set, not the pre-lock reference.
+
+**A sixth round found the new regression test for that fix couldn't
+actually catch the regression it claimed to:** the test's mocked
+`db.execute` returns a hand-built "locked" object unconditionally,
+regardless of what execution options the captured query carried — unlike a
+real session's identity map, which is exactly what `populate_existing`
+matters against. Verified by temporarily deleting the option from the
+source and re-running the test: it still passed. Fixed by asserting
+`populate_existing` directly on the captured statement
+(`locking_query.get_execution_options().get("populate_existing") is True`),
+confirmed to fail without the option and pass with it.
+
+4 new guard tests total (`test_reactivation_is_a_locking_read`,
+`test_reactivation_rejects_when_total_would_exceed_100`,
+`test_deactivation_skips_the_locking_check`,
+`test_reactivation_reads_percentage_from_the_locked_row`).
+**AH-16 (MED, FLAGGED, carried forward)** — `export_entries_csv` remains
+unbounded/non-streaming, known since pass 2 but never previously tracked
+in this file or `docs/KNOWN_LIMITATIONS.md`; needs a page-size/streaming
+decision shared with two sibling exports, not a drive-by fix.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` clean;
+`validate_migrations.py --strict` 443 revisions, single head; `pytest -k
+admin_hours` 92 passed (88 + 4 new), 1 pre-existing skip; full backend
+suite 12365 passed, 21 pre-existing skips (AH-15 touches a shared locking
+pattern — extra diligence); `npm run typecheck` 0 errors; `npm run lint` 0
+errors/0 warnings; `vitest run` against the module's 4 guard-test files
+plus `apiCache.test.ts` (found by widening the frontend consumer sweep),
+53 + 89 passed. Six Codex review rounds on this PR: four caught 24
+doc-accuracy issues (miscounted/mislabeled lock sites, an impossible git
+chronology, "cosmetic" mischaracterizing real functional changes, an
+incomplete caller inventory on both frontend and backend across several
+rounds, an unrun frontend-test claim, a missing migration-content sweep
+that itself missed a second table name, a wrong same-feature attribution,
+and stale line-number/test-count references after each code fix shifted
+them) — all verified and fixed; the other two caught real code-level gaps
+in AH-15's own fix (the TOCTOU read-before-lock bug, and a regression test
+that couldn't have caught it). Full write-up: `docs/security-review/AH-21-admin-hours.md`
+→ Pass 4. PR opened and subscribed. Next: 22 Grants & fundraising, once
+this PR merges.
+
+---
 
 ### 2026-09-11 — Feature 20 (Compliance), pass 4 — 1 fixed (MED), 0 flagged, 1 review-round correction
 
@@ -13227,7 +13432,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |

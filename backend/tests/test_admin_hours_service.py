@@ -1083,6 +1083,194 @@ class TestEventHourMappingPercentageLocking:
         ), "the target's own id must not be excluded from the locked set"
         assert "ORDER BY" in str(locking_query).upper()
 
+    async def test_reactivation_is_a_locking_read(self):
+        """A bare {"is_active": true} with no percentage must still lock
+        and validate the source total — the omitted percentage argument
+        used to skip the whole check entirely (Codex review, this PR)."""
+        mapping = SimpleNamespace(
+            id="map-1",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=100,
+            is_active=False,
+        )
+        captured = []
+
+        def _scalars(items):
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = items
+            return r
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                return _one(mapping)
+            return _scalars([mapping])
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        await AdminHoursService(db).update_event_hour_mapping(
+            mapping_id="map-1", organization_id="org-1", is_active=True
+        )
+
+        assert "FOR UPDATE" in str(captured[-1])
+        assert mapping.is_active is True
+
+    async def test_reactivation_rejects_when_total_would_exceed_100(self):
+        """The exact bug scenario: deactivate a 100% mapping, create a
+        second active 100% mapping for the same source, then reactivate the
+        first with a bare {"is_active": true}. Must raise rather than leave
+        two active 100% mappings crediting 200% of duration at finalization."""
+        target = SimpleNamespace(
+            id="map-1",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=100,
+            is_active=False,
+        )
+        other_active = SimpleNamespace(
+            id="map-2",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=100,
+            is_active=True,
+        )
+
+        def _scalars(items):
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = items
+            return r
+
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                return _one(target)
+            return _scalars([target, other_active])
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        with pytest.raises(ValueError, match="Maximum is 100%"):
+            await AdminHoursService(db).update_event_hour_mapping(
+                mapping_id="map-1", organization_id="org-1", is_active=True
+            )
+
+        assert target.is_active is False, "must not reactivate on rejection"
+
+    async def test_reactivation_reads_percentage_from_the_locked_row(self):
+        """A concurrent transaction can change the target mapping's own
+        percentage (while it's inactive, so no validation is triggered)
+        between this method's initial unlocked fetch and its lock. The
+        pre-lock `mapping` reference must not be trusted for
+        `effective_percentage` -- only the row returned by the locked,
+        `populate_existing=True` query reflects what's true once the lock
+        is actually held."""
+        stale = SimpleNamespace(
+            id="map-1",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=10,  # the pre-lock snapshot
+            is_active=False,
+        )
+        # Same mapping, but the row a concurrent transaction committed
+        # while this call was blocked on the lock: percentage raised to 50.
+        locked_fresh = SimpleNamespace(
+            id="map-1",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=50,
+            is_active=False,
+        )
+        other_active = SimpleNamespace(
+            id="map-2",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=90,
+            is_active=True,
+        )
+
+        def _scalars(items):
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = items
+            return r
+
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                return _one(stale)
+            return _scalars([locked_fresh, other_active])
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        # other_active (90) + the stale percentage (10) = 100, which would
+        # wrongly pass. other_active (90) + the locked-fresh percentage
+        # (50) = 140, which must reject.
+        with pytest.raises(ValueError, match="Maximum is 100%"):
+            await AdminHoursService(db).update_event_hour_mapping(
+                mapping_id="map-1", organization_id="org-1", is_active=True
+            )
+
+        assert stale.is_active is False, "must not reactivate on rejection"
+
+        # The mock above can't reproduce a real Session's identity map --
+        # `db.execute` just returns whatever object list a test hands it,
+        # regardless of query options, so it would still return
+        # `locked_fresh` even if `populate_existing=True` were removed from
+        # the source. A real session would instead return the *same*
+        # already-loaded `mapping` instance (still reading percentage=10)
+        # for a query missing that option, silently reintroducing this exact
+        # bug. Assert the option directly so removing it fails this test too.
+        locking_query = captured[-1]
+        assert locking_query.get_execution_options().get("populate_existing") is True
+
+    async def test_deactivation_skips_the_locking_check(self):
+        """Deactivating can never push a source over 100%, so it should not
+        pay for (or be blocked by) the locking read the reactivation path
+        needs."""
+        mapping = SimpleNamespace(
+            id="map-1",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=100,
+            is_active=True,
+        )
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            return _one(mapping)
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        await AdminHoursService(db).update_event_hour_mapping(
+            mapping_id="map-1", organization_id="org-1", is_active=False
+        )
+
+        assert len(captured) == 1, "only the initial mapping fetch, no locking query"
+        assert mapping.is_active is False
+
 
 class TestUserHoursComplianceOrgScoped:
     """The target user fetch and the hours-sum query previously carried no

@@ -1534,7 +1534,15 @@ class AdminHoursService:
         if not mapping:
             raise ValueError("Mapping not found")
 
-        if percentage is not None:
+        # An inactive-to-active transition must be validated exactly like
+        # adding a new active percentage: it adds this mapping's percentage
+        # back onto the source's active total, the same as a fresh
+        # `percentage=` write would. Skipping validation whenever the caller
+        # omits `percentage` — including on a bare `{"is_active": true}` —
+        # would let the source's active total exceed 100%, over-crediting an
+        # attendee's duration at event finalization.
+        reactivating = is_active is True and not mapping.is_active
+        if percentage is not None or reactivating:
             # Lock the complete set of mappings for this source — including
             # the target row itself — in one query, ordered consistently by
             # id, before reading or writing any of them. Locking only the
@@ -1547,8 +1555,21 @@ class AdminHoursService:
             # full set in the same order on every call means the second
             # transaction to reach it simply queues behind the first, rather
             # than each holding what the other needs.
-            source_query = select(EventHourMapping).where(
-                EventHourMapping.organization_id == organization_id,
+            #
+            # `populate_existing()` matters here specifically because
+            # `mapping` is already in this Session's identity map from the
+            # fetch above: without it, SQLAlchemy returns the same Python
+            # object with its pre-lock attributes rather than refreshing
+            # them from the row this query just waited to lock, so a
+            # reactivation's `effective_percentage` (below) could still read
+            # a value another transaction changed and committed while this
+            # one was blocked on the lock.
+            source_query = (
+                select(EventHourMapping)
+                .where(
+                    EventHourMapping.organization_id == organization_id,
+                )
+                .execution_options(populate_existing=True)
             )
             if mapping.event_type:
                 source_query = source_query.where(
@@ -1564,18 +1585,27 @@ class AdminHoursService:
             source_result = await self.db.execute(source_query)
             source_mappings = source_result.scalars().all()
 
+            # The target's own row out of the just-locked, just-refreshed
+            # set — not the `mapping` reference captured before the lock —
+            # is what `effective_percentage` must read for a reactivation.
+            locked_mapping = next(m for m in source_mappings if m.id == mapping_id)
+            effective_percentage = (
+                percentage if percentage is not None else locked_mapping.percentage
+            )
+
             other_total = sum(
                 m.percentage
                 for m in source_mappings
                 if m.id != mapping_id and m.is_active
             )
-            if other_total + percentage > 100:
+            if other_total + effective_percentage > 100:
                 raise ValueError(
-                    f"Total percentage would be {other_total + percentage}%. "
+                    f"Total percentage would be {other_total + effective_percentage}%. "
                     f"Maximum is 100% (currently {other_total}% allocated "
                     f"by other mappings)."
                 )
-            mapping.percentage = percentage
+            if percentage is not None:
+                mapping.percentage = percentage
 
         if is_active is not None:
             mapping.is_active = is_active
