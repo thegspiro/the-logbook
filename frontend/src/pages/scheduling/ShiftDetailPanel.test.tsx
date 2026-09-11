@@ -76,7 +76,10 @@ const schedulingStoreState = vi.hoisted(() => ({
   loadMembers: vi.fn(),
   platoonsEnabled: false,
   requireEndOfShiftChecks: true,
-  callTrackingMode: 'incidents',
+  // 'incidents' is not one of the three real modes (detailed | count_only |
+  // off). It passed only because the panel compared against 'count_only' and
+  // nothing else, so it would have gone green under a broken gate too.
+  callTrackingMode: 'detailed',
   signupClosesMinutesBefore: 0,
   lateSignupGraceMinutes: 60,
   settingsLoaded: true,
