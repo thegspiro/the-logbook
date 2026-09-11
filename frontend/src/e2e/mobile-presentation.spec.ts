@@ -46,6 +46,13 @@ interface Measurement {
   tinyText: number;
 }
 
+/**
+ * What "this is the same screen again" means. Length of the rendered text and
+ * the number of tap targets on it — coarse enough to survive a re-render, and
+ * specific enough that no two of these subsections have ever collided.
+ */
+const fingerprintOf = (m: Measurement) => `${m.textLength}:${m.totalTargets}`;
+
 test.describe('mobile presentation', () => {
   test('every feature is presentable at phone width', async ({ page }) => {
     // ~30 routes, each with a settle delay and a full render.
@@ -267,7 +274,8 @@ test.describe('mobile presentation', () => {
         );
       };
 
-      record(route.path, await measure());
+      const arrival = await measure();
+      record(route.path, arrival);
 
       // Drive the route's other states, if it has any. See `states` in
       // mobile-routes.ts for why arrival alone is not the whole of a screen.
@@ -279,14 +287,18 @@ test.describe('mobile presentation', () => {
       // left the apparatus form on screen would have been recorded as a
       // successful resource measurement.
       //
-      // The arrival measurement is deliberately *not* seeded into it. A tab
-      // strip opens on its first subsection, so clicking that tab legitimately
-      // reproduces the arrival screen; seeding it would fail a route that is
-      // behaving correctly.
+      // Arrival is compared against separately rather than seeded into the set,
+      // because whether a state may reproduce it is a property of the group and
+      // not of the route: a tab strip's first tab legitimately renders what
+      // arrival rendered, while an Edit button that leaves the page unchanged
+      // has plainly done nothing. Seeding would have to pick one answer for
+      // both; `mayRepeatArrival` lets the strip opt out and leaves every other
+      // group held to the stricter one.
       const seen = new Set<string>();
+      const arrivalFingerprint = fingerprintOf(arrival);
 
       for (const group of route.states ?? []) {
-        const { selector, label: stateLabel, max } = group;
+        const { selector, label: stateLabel, max, mayRepeatArrival } = group;
         // Only what a phone can actually see. These panels ship a `md:hidden`
         // strip and a desktop `<aside>` holding the same controls, and the
         // hidden copy is still in the DOM — enumerating both drives the loop
@@ -338,9 +350,11 @@ test.describe('mobile presentation', () => {
           // the bug above stayed silent: a subsection never reached still gets a
           // row and a green budget, which is the whole failure this pass exists
           // to stop, one level in.
-          const fingerprint = `${m.textLength}:${m.totalTargets}`;
+          const fingerprint = fingerprintOf(m);
           if (seen.has(fingerprint)) {
             unchangedStates.push(`${route.path} [${name}]: rendered the same content as an earlier state`);
+          } else if (!mayRepeatArrival && fingerprint === arrivalFingerprint) {
+            unchangedStates.push(`${route.path} [${name}]: rendered the same content as the route's arrival screen`);
           }
           seen.add(fingerprint);
 

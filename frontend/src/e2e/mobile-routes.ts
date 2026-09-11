@@ -97,6 +97,17 @@ export interface RouteCheck {
     label: string;
     /** Cap, so a data-driven strip cannot inflate the pass without warning. */
     max?: number;
+    /**
+     * Set only where a control in this group legitimately renders the screen the
+     * route arrived on. A tab strip opens on its first subsection, so pressing
+     * that tab reproduces arrival exactly and is not a failure.
+     *
+     * Everywhere else the first control *must* change the page — an Edit button
+     * opens a form — so a state measuring the same as arrival means the click
+     * did nothing and the coverage is being claimed without being taken. That is
+     * the default, which is why this is opt-in rather than the other way round.
+     */
+    mayRepeatArrival?: boolean;
   }[];
 }
 
@@ -368,7 +379,16 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: 'Control whether shift reports are available for your department and which features are included.',
     // The strip, scoped by its own label. The panel's <nav> and SettingsLayout's
     // are both `data-mobile-scroll-region`, and the outer one navigates.
-    states: [{ selector: '[aria-label="Shift report settings sections"] button', label: 'subsection' }],
+    states: [
+      {
+        selector: '[aria-label="Shift report settings sections"] button',
+        label: 'subsection',
+        // The panel opens on "What's turned on", so the first tab in this strip
+        // renders exactly what arrival rendered. Measured, not assumed: both
+        // come out at tap 0/22 and 1291 characters.
+        mayRepeatArrival: true,
+      },
+    ],
   },
   // Two remain unlisted, each measured rather than assumed:
   //

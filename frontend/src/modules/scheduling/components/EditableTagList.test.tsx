@@ -56,36 +56,44 @@ describe('EditableTagList disclosure state', () => {
     expect(screen.getByRole('button', { name: 'Actions for Charlie' })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('gives two entries of the same value their own identity', async () => {
+  /**
+   * Not a hypothetical list: these are stored as a plain JSON array with no
+   * uniqueness constraint, and the edit path used to accept a rename onto
+   * another entry's value, so a saved list can already look like this.
+   */
+  it('removes one copy of a repeated value and renders what is left', async () => {
     const user = userEvent.setup();
-    const duplicateKeyWarnings: string[] = [];
-    const consoleError = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
-      const message = typeof args[0] === 'string' ? args[0] : '';
-      if (message.includes('same key')) duplicateKeyWarnings.push(message);
-    });
+    render(<ControlledList initial={['Alpha', 'Bravo', 'Alpha']} />);
 
-    try {
-      // Not a hypothetical list: these are stored as a plain JSON array with no
-      // uniqueness constraint, and the edit path used to accept a rename onto
-      // another entry's value, so a saved list can already look like this.
-      render(<ControlledList initial={['Alpha', 'Bravo', 'Alpha']} />);
+    const alphas = () => screen.getAllByRole('button', { name: 'Actions for Alpha' });
+    expect(alphas()).toHaveLength(2);
 
-      const triggers = () => screen.getAllByRole('button', { name: 'Actions for Alpha' });
-      expect(triggers()).toHaveLength(2);
+    await user.click((alphas()[1] ?? null) as HTMLElement);
+    await user.click((alphas()[0] ?? null) as HTMLElement);
+    await user.click((screen.getAllByRole('button', { name: 'Remove Alpha' })[0] ?? null) as HTMLElement);
 
-      await user.click((triggers()[1] ?? null) as HTMLElement);
-      expect(triggers()[0]).toHaveAttribute('aria-expanded', 'false');
-      expect(triggers()[1]).toHaveAttribute('aria-expanded', 'true');
+    // One Alpha left, and Bravo untouched. Keyed by value alone React has two
+    // children under one key: it leaves *both* Alphas on screen, so the list
+    // shows an entry the data no longer holds.
+    expect(alphas()).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Actions for Bravo' })).toBeInTheDocument();
+  });
 
-      // The assertion that does the work is this one. Keyed by value, React
-      // warns that it is reconciling two children under one key — and where it
-      // warns, it has stopped promising which chip the disclosure belongs to.
-      // The interaction above happens to come out right either way, which is
-      // exactly why it is not left to carry the test on its own.
-      expect(duplicateKeyWarnings).toEqual([]);
-    } finally {
-      consoleError.mockRestore();
-    }
+  it('closes the survivor of a repeated value rather than moving its row somewhere else', async () => {
+    const user = userEvent.setup();
+    render(<ControlledList initial={['Alpha', 'Bravo', 'Alpha']} />);
+
+    const alphas = () => screen.getAllByRole('button', { name: 'Actions for Alpha' });
+    await user.click((alphas()[1] ?? null) as HTMLElement);
+    await user.click((alphas()[0] ?? null) as HTMLElement);
+    await user.click((screen.getAllByRole('button', { name: 'Remove Alpha' })[0] ?? null) as HTMLElement);
+
+    // Pinned because it is the ceiling, not because it is desirable: a string[]
+    // says nothing about which of two identical entries was removed, so the
+    // survivor is remounted and its open row closes. See tagChipKeys. If this
+    // ever needs to survive, the fix is identity in the data, not a cleverer
+    // key — and this assertion is where that change will announce itself.
+    expect(alphas()[0]).toHaveAttribute('aria-expanded', 'false');
   });
 });
 
