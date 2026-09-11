@@ -494,6 +494,14 @@ PATCH  /api/v1/scheduling/calls/{call_id}           # Update a call
 DELETE /api/v1/scheduling/calls/{call_id}           # Delete a call
 ```
 
+**Create and update require `call_tracking.mode` to be `detailed`** — the same
+gate, because they are one write reached by two verbs. Gating only the create
+left a department that had turned per-incident logging off unable to add a row
+and free to rewrite every row it already held. `DELETE` is deliberately
+ungated: rows stranded by a mode switch have to remain clearable, and clearing
+one cannot manufacture incident detail the department has opted out of. Reads
+stay open in every mode, so history survives the switch.
+
 ### Shift Close-Out _(2026-08-19)_
 
 ```
@@ -538,6 +546,20 @@ count it never mentioned.
 `POST …/finalize` additionally accepts `manual_hours`, `member_call_counts`,
 `override_incomplete_checks` + `override_reason` (audited as
 `shift_finalized_check_override`), and `pass_down_notes`.
+
+**The call figures belong to `count_only` tracking and are refused elsewhere.**
+`PATCH …/closeout/calls` returns 400 unless the mode is `count_only`, and
+`POST …/finalize` returns 400 if `reported_call_count`, `reported_call_types`,
+`attach_call_ids` or `member_call_counts` arrive in any other mode, rather than
+dropping them. Both used to be accepted from every mode. The close-out step
+wrote `OrgCall` rows that `GET /reports/call-volume` never reads — it picks its
+source from the org's current mode — while `CallTrackingService.type_usage_counts`
+does read them, so those invisible rows could lock a call type against deletion
+on the settings screen. Finalize ignored the figures outright and overwrote
+`call_count` with `COUNT(ShiftCall)`, so a number an officer typed disappeared
+behind a success response. A tab left open across a mode switch is the
+realistic way either was reached; no shipped client sends these fields outside
+the count-only wizard.
 
 > **`attachable_calls` is deliberately empty.** Claiming another unit's call has
 > no UI yet, so nothing can send `attach_call_ids` from the browser, and

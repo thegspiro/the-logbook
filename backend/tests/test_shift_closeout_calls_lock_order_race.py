@@ -52,7 +52,16 @@ async def two_sessions(_initialize_database):
 
 
 async def _make_org_user_shift(session, slug):
-    org = Organization(name="Race Test VFD", slug=slug)
+    # Count-only tracking, because ``save_closeout_calls`` is that mode's step
+    # and refuses outright anywhere else. The org used to be left on the
+    # ``detailed`` default and the lock-ordering assertion under test still
+    # held, which only meant the step was reachable from a mode that never
+    # reads what it writes.
+    org = Organization(
+        name="Race Test VFD",
+        slug=slug,
+        settings={"scheduling": {"call_tracking": {"mode": "count_only"}}},
+    )
     session.add(org)
     await session.flush()
     user = User(

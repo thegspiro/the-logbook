@@ -76,6 +76,39 @@ async def test_detailed_shift_call_rejected_outside_detailed_mode(monkeypatch, m
     db.add.assert_not_called()
 
 
+@pytest.mark.parametrize("mode", [CallTrackingMode.COUNT_ONLY, CallTrackingMode.OFF])
+@pytest.mark.asyncio
+async def test_shift_call_update_rejected_outside_detailed_mode(monkeypatch, mode):
+    """Create and update are one write reached by two verbs.
+
+    Gating only the create left a department that had turned per-incident
+    logging off unable to add a row and free to rewrite every row it already
+    held — including dropping a narrative into one.
+    """
+    db = MagicMock()
+    db.rollback = AsyncMock()
+    db.commit = AsyncMock()
+    service = SchedulingService(db)
+    existing = SimpleNamespace(id="call-1", incident_type="medical", notes=None)
+    service.get_shift_call_by_id = AsyncMock(return_value=existing)
+    monkeypatch.setattr(
+        CallTrackingService,
+        "get_settings",
+        AsyncMock(return_value={"mode": mode, "call_types": []}),
+    )
+
+    call, error = await service.update_shift_call(
+        "33333333-3333-3333-3333-333333333333",
+        "11111111-1111-1111-1111-111111111111",
+        {"notes": "Patient details must not be stored"},
+    )
+
+    assert call is None
+    assert error == "Detailed call records are disabled for this organization"
+    assert existing.notes is None
+    db.commit.assert_not_called()
+
+
 # ======================================================================
 # Type-slot expansion
 # ======================================================================
@@ -842,7 +875,9 @@ class TestCloseoutStepSchemas:
 # ======================================================================
 
 
-async def _make_org(db_session, name="Call Tracking Test"):
+async def _make_org(
+    db_session, name="Call Tracking Test", mode=CallTrackingMode.COUNT_ONLY
+):
     from app.core.utils import generate_uuid
     from app.models.user import Organization
 
@@ -851,9 +886,7 @@ async def _make_org(db_session, name="Call Tracking Test"):
         name=name,
         slug=f"cts-{generate_uuid()[:8]}",
         organization_type="fire_department",
-        settings={
-            "scheduling": {"call_tracking": {"mode": CallTrackingMode.COUNT_ONLY}}
-        },
+        settings={"scheduling": {"call_tracking": {"mode": mode}}},
     )
     db_session.add(org)
     await db_session.flush()
@@ -2107,3 +2140,78 @@ class TestTheCapIsARatchet:
         ]
         with pytest.raises(ValueError, match="at most"):
             await self._save(MAX_CALL_TYPES + 1, 0, stored_entries=legacy)
+
+
+@pytest.mark.integration
+class TestCloseoutCallStepBelongsToCountOnlyTracking:
+    """The close-out call figures are refused outright, never dropped.
+
+    Two distinct failures closed here. Writing through ``save_closeout_calls``
+    from another mode left ``OrgCall`` rows that no report reads —
+    ``ReportsService.get_call_volume_report`` picks its source from the org's
+    current mode — while ``type_usage_counts`` does read them, so those
+    invisible rows locked a call type against deletion on the settings screen.
+    Passing the same figures to ``finalize_shift`` dropped them in silence,
+    the snapshot overwrote ``call_count`` with ``COUNT(ShiftCall)``, and the
+    number an officer typed disappeared behind a success response.
+    """
+
+    @pytest.mark.parametrize("mode", [CallTrackingMode.DETAILED, CallTrackingMode.OFF])
+    async def test_save_closeout_calls_is_refused_and_writes_nothing(
+        self, db_session, mode
+    ):
+        org = await _make_org(db_session, mode=mode)
+        shift = await _make_shift(db_session, org, "engine-5")
+
+        state, error = await SchedulingService(db_session).save_closeout_calls(
+            shift_id=shift.id,
+            organization_id=org.id,
+            reported_call_count=3,
+            count_provided=True,
+        )
+
+        assert state is None
+        assert error == "This organization does not record a call count at close-out"
+        recorded = await CallTrackingService(db_session).shift_response_count(
+            str(shift.id)
+        )
+        assert recorded == 0
+
+    @pytest.mark.parametrize("mode", [CallTrackingMode.DETAILED, CallTrackingMode.OFF])
+    async def test_finalize_refuses_call_figures_rather_than_dropping_them(
+        self, db_session, mode
+    ):
+        org = await _make_org(db_session, mode=mode)
+        shift = await _make_shift(db_session, org, "engine-5")
+
+        result, error = await SchedulingService(db_session).finalize_shift(
+            shift_id=shift.id,
+            organization_id=org.id,
+            finalized_by_user_id="11111111-1111-1111-1111-111111111111",
+            reported_call_count=4,
+        )
+
+        assert result is None
+        assert error == "This organization does not record a call count at close-out"
+        # Refused before any write, so the shift is untouched rather than
+        # left half-finalized for the caller to discover later.
+        assert not shift.is_finalized
+
+    async def test_count_only_still_records_the_close_out_count(self, db_session):
+        """The gate narrows who may write, not what count-only tracking does."""
+        org = await _make_org(db_session, mode=CallTrackingMode.COUNT_ONLY)
+        shift = await _make_shift(db_session, org, "engine-5")
+
+        state, error = await SchedulingService(db_session).save_closeout_calls(
+            shift_id=shift.id,
+            organization_id=org.id,
+            reported_call_count=3,
+            count_provided=True,
+        )
+
+        assert error is None
+        assert state is not None
+        recorded = await CallTrackingService(db_session).shift_response_count(
+            str(shift.id)
+        )
+        assert recorded == 3
