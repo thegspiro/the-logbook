@@ -387,9 +387,11 @@ export const dashboardService = {
    * fall back on the response cache: `/auth/` is excluded from caching for
    * credential endpoints, and this public endpoint is caught by that prefix.
    */
-  async getBranding(): Promise<{ name?: string; logo?: string }> {
+  async getBranding(): Promise<{ name?: string; logo?: string; navigation_layout?: 'top' | 'left' }> {
     return dedupeInFlight('auth/branding', async () => {
-      const response = await api.get<{ name?: string; logo?: string }>('/auth/branding');
+      const response = await api.get<{ name?: string; logo?: string; navigation_layout?: 'top' | 'left' }>(
+        '/auth/branding'
+      );
       return response.data;
     });
   },

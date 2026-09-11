@@ -4,6 +4,7 @@ import {
   ONBOARDING_COMPLETE_PATH,
   ONBOARDING_CONFIG_PATHS,
   ONBOARDING_STEPS,
+  nextStepName,
   nextStepPath,
   previousStepPath,
   stepPath,
@@ -118,5 +119,19 @@ describe('previousStepPath', () => {
 
   it('sends the first step back to the welcome screen', () => {
     expect(previousStepPath('organization')).toBe('/');
+  });
+});
+
+describe('nextStepName', () => {
+  it('names the step the flow actually goes to next', () => {
+    const names = ONBOARDING_STEPS.map((s) => s.name);
+
+    expect(ONBOARDING_STEPS.map((s) => nextStepName(s.key))).toEqual([...names.slice(1), 'Finish']);
+  });
+
+  it('answers for the two steps whose buttons name their destination', () => {
+    // Both were wrong after the reorder — see stepLabelIntegrity.test.ts.
+    expect(nextStepName('positions')).toBe('Stations');
+    expect(nextStepName('it_team')).toBe('Email');
   });
 });

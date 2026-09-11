@@ -57,7 +57,7 @@ const ModuleOverview: React.FC = () => {
       // Enabling is the whole action. Most modules used to navigate on to a
       // per-module permission step instead, which reported success and
       // submitted nothing; who may manage a module is settled on the Positions
-      // step before this one.
+      // step, which now follows this one.
       setModuleStatus(moduleId, 'enabled');
       toast.success(`${module?.name} enabled`);
     } else if (action === 'skip') {

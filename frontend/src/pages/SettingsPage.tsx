@@ -291,6 +291,12 @@ const ADDITIONAL_MODULES: ConfigurableModule[] = [
   },
 ];
 
+/** The two navigation arrangements AppLayout can render. */
+const NAVIGATION_LAYOUTS: Array<{ value: 'top' | 'left'; label: string; hint: string }> = [
+  { value: 'left', label: 'Left sidebar', hint: 'Navigation down the side. The default.' },
+  { value: 'top', label: 'Top bar', hint: 'Navigation across the top, leaving the full width for content.' },
+];
+
 // ── Timezone helper ──
 
 const COMMON_TIMEZONES = [
@@ -494,6 +500,11 @@ export const SettingsPage: React.FC = () => {
         if (settingsData.email_service) setEmailSettings(settingsData.email_service);
         if (settingsData.file_storage) setStorageSettings(settingsData.file_storage);
         if (settingsData.auth) setAuthSettings(settingsData.auth);
+        const layout = settingsData.appearance?.navigation_layout;
+        if (layout === 'top' || layout === 'left') {
+          setNavigationLayout(layout);
+          navigationLayoutRef.current = layout;
+        }
         setModuleSettings(modulesData.module_settings);
         setProfile(profileData);
         profileRef.current = profileData;
@@ -530,6 +541,42 @@ export const SettingsPage: React.FC = () => {
         detail: { name: updated.name, logo: updated.logo },
       })
     );
+  }, []);
+
+  /**
+   * The department's navigation layout.
+   *
+   * Department-wide, not per-browser: this writes the organization setting
+   * that every member's shell reads on load. Saved on change rather than
+   * through the profile debounce — it is one finished choice from a pair of
+   * radios, not a field somebody is still typing into.
+   */
+  const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('left');
+  /** Read inside the saver, which must not re-create itself on every change. */
+  const navigationLayoutRef = useRef<'top' | 'left'>('left');
+  const [savingLayout, setSavingLayout] = useState(false);
+
+  const changeNavigationLayout = useCallback(async (layout: 'top' | 'left') => {
+    const previous = navigationLayoutRef.current;
+    setNavigationLayout(layout);
+    navigationLayoutRef.current = layout;
+    setSavingLayout(true);
+    try {
+      await organizationService.updateAppearanceSettings({ navigation_layout: layout });
+      localStorage.setItem('navigationLayout', layout);
+      // Same channel the name and logo use, so the shell re-arranges without
+      // a reload for the person who made the change.
+      window.dispatchEvent(new CustomEvent('branding-updated', { detail: { navigationLayout: layout } }));
+      toast.success(layout === 'top' ? 'Navigation moved to the top bar' : 'Navigation moved to the sidebar');
+    } catch {
+      // Put the radio back where it was rather than leaving it showing a
+      // choice the department did not get.
+      setNavigationLayout(previous);
+      navigationLayoutRef.current = previous;
+      toast.error('Could not save the navigation layout.');
+    } finally {
+      setSavingLayout(false);
+    }
   }, []);
 
   /**
@@ -932,6 +979,41 @@ export const SettingsPage: React.FC = () => {
                 </select>
               </div>
             </div>
+
+            {/* Navigation layout */}
+            <fieldset className="border-theme-surface-border mt-6 border-t pt-6">
+              <legend className="sr-only">Navigation layout</legend>
+              <p className="text-theme-text-primary text-sm font-medium">Navigation Layout</p>
+              <p className="text-theme-text-muted mb-3 text-xs">
+                Applies to everyone in the department, not just this browser.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {NAVIGATION_LAYOUTS.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`mobile-touch-target flex flex-1 cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 transition-colors ${
+                      navigationLayout === option.value
+                        ? 'border-theme-accent-green/30 bg-theme-accent-green-muted'
+                        : 'border-theme-surface-border bg-theme-surface-secondary/30'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="navigation-layout"
+                      value={option.value}
+                      checked={navigationLayout === option.value}
+                      disabled={savingLayout}
+                      onChange={() => void changeNavigationLayout(option.value)}
+                      className="form-checkbox mt-0.5"
+                    />
+                    <span className="min-w-0">
+                      <span className="text-theme-text-primary block text-sm font-medium">{option.label}</span>
+                      <span className="text-theme-text-muted block text-xs">{option.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           </div>
         );
 

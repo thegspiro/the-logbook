@@ -32,6 +32,7 @@ from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.user import Role, User
 from app.schemas.organization import (
+    AppearanceSettings,
     AuthSettings,
     ContactInfoSettings,
     EmailConnectionTestResponse,
@@ -566,6 +567,47 @@ async def update_auth_settings(
         # Redact secrets in the response, matching the email/file-storage
         # siblings — never echo SSO client secrets back in a response body/log.
         return auth_settings.redacted()
+
+
+@router.patch("/settings/appearance", response_model=AppearanceSettings)
+async def update_appearance_settings(
+    appearance_settings: AppearanceSettings,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """
+    Update department-wide presentation settings
+
+    Currently the navigation layout, which applies to every member rather than
+    to the browser that set it.
+
+    **Authentication and admin permission required**
+    """
+    org_service = OrganizationService(db)
+
+    settings_dict = {"appearance": appearance_settings.model_dump(exclude_unset=False)}
+
+    async with handle_service_errors("Failed to update appearance settings"):
+        await org_service.update_organization_settings(
+            current_user.organization_id, settings_dict
+        )
+
+        await log_audit_event(
+            db=db,
+            event_type="organization_settings_updated",
+            event_category="administration",
+            severity="info",
+            event_data={
+                "settings_changed": ["appearance"],
+                "navigation_layout": appearance_settings.navigation_layout,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return appearance_settings
 
 
 @router.patch("/settings/membership-id", response_model=MembershipIdSettings)

@@ -51,7 +51,8 @@ import {
 import { apiClient } from '../services/api-client';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildPositionTemplates } from './positionTemplates';
-import { nextStepPath, previousStepPath } from '../config/steps';
+import { nextStepName, nextStepPath, previousStepPath } from '../config/steps';
+import { FeatureStatus } from '../../../constants/enums';
 
 /**
  * Build permission categories dynamically from the module registry.
@@ -269,6 +270,7 @@ const PositionSetup: React.FC = () => {
   const organizationType = useOnboardingStore((state) => state.organizationType);
   const reconciledSeededSlugs = useOnboardingStore((state) => state.reconciledSeededSlugs);
   const markSeededSlugsReconciled = useOnboardingStore((state) => state.markSeededSlugsReconciled);
+  const moduleStatuses = useOnboardingStore((state) => state.moduleStatuses);
 
   // Which stale slugs this mount reconciles: present in the saved config and
   // not recorded as done. Latched on first render rather than recomputed,
@@ -303,7 +305,61 @@ const PositionSetup: React.FC = () => {
 
   // Build permission categories and position templates from the module registry
   // This ensures new modules automatically appear in position configuration
+  /** Reveals the permission rows for modules the department did not enable. */
+  const [showAllModules, setShowAllModules] = useState(false);
+
   const permissionCategories = useMemo(() => buildPermissionCategories(MODULE_REGISTRY), []);
+
+  /**
+   * Which module rows the permission grid shows.
+   *
+   * The grid is built from the whole registry and always was, so a department
+   * that enabled six modules still scrolled permission rows for all twenty.
+   * Before the 2026-09-11 reorder that was invisible — positions came before
+   * module selection, so there was no answer to filter against.
+   *
+   * This filters what is DISPLAYED and deliberately not what is STORED:
+   * `generateDefaultPermissions` and `buildPositionTemplates` still run across
+   * the full registry below, so a module enabled months later already carries
+   * its template's grants instead of silently having none. Filtering the
+   * stored set is the version of this change that would need a backfill.
+   */
+  const enabledModuleIds = useMemo(
+    () =>
+      new Set(
+        Object.entries(moduleStatuses)
+          .filter(([, status]) => status === FeatureStatus.ENABLED)
+          .map(([id]) => id)
+      ),
+    [moduleStatuses]
+  );
+
+  /**
+   * Position Management and Organization Settings are `System` modules: they
+   * gate real permissions but are never offered as a choice, so they never
+   * appear in `moduleStatuses` and must not be filtered out by its absence.
+   */
+  const systemModuleIds = useMemo(
+    () => new Set(MODULE_REGISTRY.filter((m) => m.category === 'System').map((m) => m.id)),
+    []
+  );
+
+  const visibleCategoryIds = useMemo(() => {
+    const all = Object.keys(permissionCategories);
+    // Fail open. An empty answer means the module step has not been reached —
+    // a deep link, or a session restored from before it ran — and showing an
+    // empty permission grid is worse than showing a long one.
+    if (showAllModules || enabledModuleIds.size === 0) return new Set(all);
+    return new Set(all.filter((id) => systemModuleIds.has(id) || enabledModuleIds.has(id)));
+  }, [permissionCategories, enabledModuleIds, systemModuleIds, showAllModules]);
+
+  const hiddenModuleCount = Object.keys(permissionCategories).length - visibleCategoryIds.size;
+
+  /** Filtered out here rather than inside the JSX, to keep the grid's body unindented. */
+  const visibleCategories = useMemo(
+    () => Object.entries(permissionCategories).filter(([catId]) => visibleCategoryIds.has(catId)),
+    [permissionCategories, visibleCategoryIds]
+  );
   const positionTemplates = useMemo(
     () => buildPositionTemplates(MODULE_REGISTRY, organizationType),
     [organizationType]
@@ -802,7 +858,7 @@ const PositionSetup: React.FC = () => {
                     : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
               >
-                {isSaving ? 'Saving...' : 'Continue to Modules'}
+                {isSaving ? 'Saving...' : `Continue to ${nextStepName('positions')}`}
               </button>
             </div>
           </div>
@@ -971,8 +1027,26 @@ const PositionSetup: React.FC = () => {
                                 ? 'IT Manager has full access to all features.'
                                 : 'Click to toggle permissions for each module:'}
                             </p>
+                            {/* Naming the hidden rows rather than just hiding
+                                them: a department that cannot find Inventory
+                                here should learn it is off, not conclude the
+                                permission does not exist. */}
+                            {!isITManager && (hiddenModuleCount > 0 || showAllModules) && (
+                              <p className="text-theme-text-muted mb-3 text-xs">
+                                {showAllModules
+                                  ? 'Showing every module, including the ones this department did not enable.'
+                                  : `${hiddenModuleCount} module${hiddenModuleCount === 1 ? '' : 's'} you did not enable ${hiddenModuleCount === 1 ? 'is' : 'are'} hidden.`}{' '}
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAllModules((shown) => !shown)}
+                                  className="text-theme-text-primary underline underline-offset-2"
+                                >
+                                  {showAllModules ? 'Show enabled modules only' : 'Show all modules'}
+                                </button>
+                              </p>
+                            )}
                             <div className="grid grid-cols-1 gap-2">
-                              {Object.entries(permissionCategories).map(([catId, cat]) => {
+                              {visibleCategories.map(([catId, cat]) => {
                                 const perms = position.permissions[catId] || { view: false, manage: false };
                                 // A tier another module's checkbox also opens
                                 // is read off the grid being edited, not off a

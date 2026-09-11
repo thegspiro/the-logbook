@@ -138,6 +138,33 @@ The flag previously gated nothing. Production and staging now refuse to start
 with it disabled, since turning it off removes brute-force protection from
 every authentication and public endpoint at once.
 
+## Changes you will notice after an upgrade
+
+Newest first. Nothing here blocks a restart — these are changes an operator
+should not have to discover by being surprised.
+
+### Navigation layout became a department setting (2026-09-11)
+
+Setup has always asked whether a department wants navigation across the top or
+down the side. Until now the answer reached only the browser that gave it: the
+wizard wrote `localStorage`, which is where the app read it, and the copy sent
+to the server was stored on the onboarding session and read by nothing. So the
+officer who ran setup saw their choice and every other member saw the default,
+with no screen anywhere to change it.
+
+The answer is now stored on the organization and applies to everyone.
+
+**What you will see on the first load after upgrading:** an existing
+installation has no stored layout, so every member — including the officer
+whose browser held `top` — gets the `left` default. The old value lived in one
+browser's local storage and was not reachable from the server, so there was
+nothing to migrate.
+
+**What to do:** if the department wants the top bar, set it once at
+**Settings → Organization → Profile → Navigation Layout**. It applies to every
+member from their next page load. Departments already on the default need do
+nothing.
+
 ## When adding a change that can block startup
 
 Anything that can stop an existing deployment from booting — a new critical, a
