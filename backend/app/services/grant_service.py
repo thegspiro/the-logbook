@@ -284,10 +284,13 @@ class GrantService:
     ) -> None:
         """GF-6: client-supplied FK ids on an application must be in the org.
 
-        ``opportunity_id`` was already validated (GF-4, read-leak); these three
-        are stored-only FKs — a foreign ``linked_campaign_id`` /
-        ``assigned_to`` / ``approved_by`` would persist a dangling/mis-attributed
-        reference. ``allow_none`` so clearing or omitting a field is fine.
+        ``opportunity_id`` was already validated (GF-4, read-leak); these two
+        are stored-only FKs — a foreign ``linked_campaign_id`` / ``assigned_to``
+        would persist a dangling/mis-attributed reference. ``allow_none`` so
+        clearing or omitting a field is fine. (``GrantApplication`` has no
+        ``approved_by`` column — that field exists only on
+        ``GrantExpenditure``, and is response-only there — so it is not
+        checked here.)
         """
         await assert_in_org(
             self.db,
@@ -304,14 +307,6 @@ class GrantService:
             organization_id,
             allow_none=True,
             label="Assigned user",
-        )
-        await assert_in_org(
-            self.db,
-            User,
-            data.get("approved_by"),
-            organization_id,
-            allow_none=True,
-            label="Approver",
         )
 
     async def create_application(

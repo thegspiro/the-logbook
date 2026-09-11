@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { grantsService } from '../services/api';
@@ -95,8 +95,11 @@ export const GrantApplicationFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditing = Boolean(id);
+  const [searchParams] = useSearchParams();
 
-  const [formData, setFormData] = useState<FormData>(EMPTY_FORM);
+  const [formData, setFormData] = useState<FormData>(() =>
+    isEditing ? EMPTY_FORM : { ...EMPTY_FORM, opportunityId: searchParams.get('opportunity_id') ?? '' }
+  );
   const [opportunities, setOpportunities] = useState<GrantOpportunity[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
