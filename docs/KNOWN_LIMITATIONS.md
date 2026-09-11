@@ -3318,21 +3318,47 @@ diverge into a fifth definition. The per-_requirement_ side of the same
 report (its "Requirement Analysis" section) is the newer, distinct
 CMP4-4 finding below, not this one.
 
-## Compliance — The Annual Report's New Applicability Filter Has Two More Gaps, Plus a Display Nit (2026-09-11)
+## Compliance — The Annual Report's New Applicability Filter Has Four More Gaps, Plus a Display Nit (2026-09-11)
 
 Feature 20 (Compliance) pass 4 (`docs/security-review/CMP-20-compliance.md`,
 PR #2476) fixed `AnnualComplianceReportService.generate_annual_report`
 grading every member against every requirement regardless of scope (CMP4-1),
 by filtering through the shared `requirement_applies_to_member` helper
-(`training_compliance.py`). Two rounds of Codex review on that same PR
-surfaced three further gaps in the fix, all flagged rather than fixed in the
-same pass:
+(`training_compliance.py`). Four rounds of Codex review on that same PR
+surfaced further gaps, all flagged rather than fixed in the same pass:
 
+- **`required_roles` is written as rank slugs everywhere, but matched as
+  position UUIDs everywhere it's read (CMP4-5, MED).** CMP4-1's own
+  role_ids follow-up passes `[str(r.id) for r in member.roles]` (position
+  UUIDs), matching the canonical precedent it cites
+  (`TrainingService.get_applicable_requirements`,
+  `training_service.py:1446`). But every real writer of
+  `TrainingRequirement.required_roles` stores **rank slugs**: the model's
+  own column comment (`app/models/training.py:565`, "List of role slugs"),
+  the training-program requirements schema explicitly ("`required_roles`
+  holds role slugs, not UUIDs", `app/schemas/training_program.py:49-54`),
+  and the one caller that already reads it correctly for its own purpose,
+  `scheduling_service.py:7336-7339`, which matches it against `user.rank`
+  (a plain string column, `app/models/user.py:312`) — not against
+  `User.positions`/`roles` at all. Since nothing ever writes a position id
+  into `required_roles`, this means a `required_roles`-only requirement has
+  apparently never correctly applied to anyone through **any** of the six
+  places that compare it the "position id" way — `/my-training` itself,
+  `get_compliance_matrix`, `compute_org_compliance_pct`,
+  `get_member_period_status`, `get_compliance_summary`, and now
+  `generate_annual_report` — only `scheduling_service.py`'s unrelated
+  shift-eligibility check has ever matched it correctly. This predates
+  CMP4-1 and this pass entirely; fixing it means deciding whether the
+  canonical definition should switch to matching `user.rank` (aligning with
+  the model/schema's own stated intent) or `required_roles` should migrate
+  to position ids — a decision affecting the member-facing `/my-training`
+  endpoint and five other callers, well outside this feature's scope.
 - **`required_positions` is a fourth, unhandled applicability dimension
   (CMP4-2, MED).** `TrainingRequirement.required_positions`
   (`app/models/training.py:566-568`) is a JSON array of **position slugs**,
-  independent of `required_roles` (position _ids_) and populated by the
-  training-program requirements API
+  a third representation distinct from both `required_roles` (rank slugs,
+  see CMP4-5) and `User.positions`/`roles` (position UUIDs), populated by
+  the training-program requirements API
   (`training_program_service.py:599-601`). `requirement_applies_to_member`
   has no branch for it at all — not a regression from this pass, since none
   of its four pre-existing callers (`get_compliance_matrix`,
@@ -3377,8 +3403,8 @@ same pass:
 Full detail, line citations, and the "considered, not changed" rationale for
 why CMP4-1 deliberately left the per-member zero-denominator case alone (see
 TR4-4 above) are in `docs/security-review/CMP-20-compliance.md`'s CMP4-2
-through CMP4-4 entries. (Security review CMP-20 pass 4, PR #2476, Codex
-review rounds 2-3.)
+through CMP4-5 entries. (Security review CMP-20 pass 4, PR #2476, Codex
+review rounds 2-4.)
 
 ## RPT2-29-2 — Saved Report Scheduling Is Stored and API-Writable, but Nothing Reads It (2026-08-27)
 

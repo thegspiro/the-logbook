@@ -250,6 +250,74 @@ the level this codebase already treats as needing "not applicable" instead.
 (the rendering), `frontend/src/types/training.ts:2585` (`AnnualReportRequirement.compliance_pct: number`,
 would need to widen to `number | null`).
 
+### CMP4-5 — MED — OPEN — `required_roles` is stored as rank **slugs** everywhere it's written, but matched as position **UUIDs** everywhere the role_ids fix (and its canonical precedent) compares it
+
+**What:** a fourth Codex round on this same PR caught that CMP4-1's own
+role_ids follow-up — passing `[str(r.id) for r in member.roles]` (position
+UUIDs) into `requirement_applies_to_member`'s `role_ids` parameter — cannot
+match a real `required_roles` value, because every place that _writes_
+`required_roles` stores **rank slugs**, not position ids:
+
+- The model's own column comment: `required_roles = Column(JSON)  # List of
+role slugs this applies to (if not all)` (`app/models/training.py:565`).
+- The training-program requirements schema, explicitly: `required_courses /
+required_skills / required_roles are stored as JSON arrays of scalar
+id/slug strings ... required_roles holds role slugs, not UUIDs — a UUID
+type here would fail to serialize a slug-based value`
+  (`app/schemas/training_program.py:49-54`).
+- The one place that already _reads_ `required_roles` correctly for its own
+  purpose, `scheduling_service.py:7336-7339`, matches it against
+  `user.rank` (a plain string column, `app/models/user.py:312`, e.g.
+  `"fire_chief"`, `"captain"`, `"firefighter"`) — not against `User.positions`/
+  `roles` (the UUID-keyed org-chart Position relationship) at all.
+
+**This is not specific to CMP4-1's fix or this pass.** `requirement_applies_to_member`'s
+own docstring says it matches `TrainingService.get_applicable_requirements`
+(the canonical, member-facing `/my-training` path) "exactly" — and it does:
+`get_applicable_requirements` (`training_service.py:1446`,
+`user_role_ids = [str(role.id) for role in user.roles]`) and the one other
+real call site passing real ids, `training.py:1507`
+(`GET /compliance-summary/{user_id}`), both compare `required_roles` against
+position UUIDs the identical, wrong way. Since `required_roles` is only ever
+_written_ as slugs (confirmed above — there is no creation path that writes
+position ids into it), this means a `required_roles`-only requirement has
+apparently never correctly applied to anyone through **any** of these six
+call sites (`/my-training` itself, `get_compliance_matrix`,
+`compute_org_compliance_pct`, `get_member_period_status`,
+`get_compliance_summary`, and now this pass's `generate_annual_report`) —
+only `scheduling_service.py`'s unrelated shift-eligibility check has ever
+compared it correctly. My CMP4-1 role_ids follow-up is internally
+consistent with the (apparently long-mistaken) canonical precedent it cites,
+and its own guard tests (`TestGenerateAnnualReportRoleScopedRequirements`)
+pass — but only because they construct a `required_roles` value
+(`[position.id]`) that no real admin action in this codebase would ever
+produce. The tests correctly pin `requirement_applies_to_member`'s current
+contract; they do not prove `required_roles`-only targeting works
+end-to-end against real data, and should not be read as doing so.
+
+**Not fixed here.** Determining the _correct_ fix — whether the canonical
+definition should switch to matching `user.rank` against `required_roles`
+(aligning with the model/schema's own stated intent and
+`scheduling_service.py`'s working implementation), or whether `required_roles`
+itself should be migrated to store position ids consistently with how
+`get_applicable_requirements` already reads it — is a decision that changes
+behavior at the member-facing `/my-training` endpoint and every one of the
+five other callers, all outside this feature's declared scope
+(`compliance_config.py`/`compliance_officer.py`). Guessing wrong here is
+worse than leaving it flagged: CLAUDE.md's own guidance is to prefer an
+accurate finding over a wrong fix in an ambiguous area, and this is that
+area.
+
+**Where:** `app/models/training.py:565` (column comment),
+`app/schemas/training_program.py:49-54` (schema comment),
+`app/services/training_service.py:1446` (`get_applicable_requirements`),
+`app/api/v1/endpoints/training.py:1507` (`GET /compliance-summary/{user_id}`),
+`app/services/training_compliance.py:699-730` (`requirement_applies_to_member`),
+`app/services/scheduling_service.py:7336-7339` (the one caller that already
+matches it correctly, against `user.rank`),
+`app/services/compliance_officer_service.py:882-919,983-1030` (this pass's
+own two call sites, no worse than their five siblings).
+
 ### Considered, not changed — a member with zero applicable requirements reads `compliant`/`100%`, matching the rest of the app on purpose
 
 Codex additionally suggested excluding a member with `requirements_total == 0`

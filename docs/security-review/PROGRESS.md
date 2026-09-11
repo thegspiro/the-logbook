@@ -18,9 +18,32 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 20 (Compliance), pass 4** — PR
 [#2476](https://github.com/thegspiro/the-logbook/pull/2476), branch
-`claude/security-review-compliance`, tending. A third round of Codex review
-(on the role_ids fix's own commit) surfaced four more findings — triaged,
-none merged as code changes this round:
+`claude/security-review-compliance`, tending. A fourth Codex review round
+caught a real, deeper issue in CMP4-1's own role_ids follow-up: **CMP4-5
+(MED, FLAGGED)** — `required_roles` is documented and written as **rank
+slugs** everywhere it's persisted (the model's own column comment, the
+training-program requirements schema, and `scheduling_service.py`'s working
+match against `user.rank`), but my role_ids fix — and the canonical
+`TrainingService.get_applicable_requirements` precedent it deliberately
+matched — compares it against **position UUIDs** instead. Since nothing
+ever writes a position id into `required_roles`, this means a
+`required_roles`-only requirement has apparently never correctly applied to
+anyone through any of six call sites, including the member-facing
+`/my-training` endpoint itself — a pre-existing gap in the canonical
+definition, not introduced by this pass, and not fixed here: the correct
+resolution (match `user.rank` instead, or migrate `required_roles` to
+position ids) changes behavior at `/my-training` and five other callers,
+well outside this feature's declared scope. My own guard tests
+(`TestGenerateAnnualReportRoleScopedRequirements`) correctly pin
+`requirement_applies_to_member`'s current contract but construct a
+`required_roles` value no real admin action would ever produce — noted in
+the findings doc so they aren't misread as proof the feature works
+end-to-end. Documented as CMP4-5 in
+`docs/security-review/CMP-20-compliance.md` and
+`docs/KNOWN_LIMITATIONS.md`.
+
+A third round of Codex review (on the role_ids fix's own commit) surfaced
+four more findings before this one — triaged, none merged as code changes:
 
 - **Confirmed as already-known, not a new bug:** Codex suggested excluding a
   member with zero applicable requirements from `fully_compliant`/
