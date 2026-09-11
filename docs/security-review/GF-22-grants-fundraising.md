@@ -1697,11 +1697,95 @@ and asserts the Opportunity ID `<select>` resolves to that value once the
 matching opportunity loads, and that it stays blank with no query param.
 Verified to fail before the fix (`select.value` read `''`) and pass after.
 
+### Revised after Codex review
+
+Codex's automated review on PR #2483 caught two real gaps in the pass's own
+work — the same pattern as pass 1's own "Revised after Codex review"
+section. PR #2483 merged before the fix commit landed, so both fixes
+shipped instead in a follow-up PR (#2485), cherry-picked onto a fresh
+branch off `main` per this repo's "never stack commits on an
+already-merged branch" rule; see the `PROGRESS.md` "Open PR" entry for
+that detail.
+
+**GF-38, extended — P2 — the linked opportunity can be outside the
+dropdown's own unfiltered fetch.** `GrantApplicationFormPage.tsx`'s
+opportunities dropdown calls `listOpportunities()` with no filter, which
+defaults to the first 100. An organization with more than 100 active
+opportunities that finds one through the opportunities page's own
+server-side search or category filter can link an "Apply" URL to an
+opportunity outside that unfiltered first page: the form's state correctly
+retained the URL's id (GF-38's original fix), but with no matching
+`<option>` the `<select>` displayed `-- None --` while submission still
+silently sent the hidden id — visually indistinguishable from "no
+opportunity selected" while actually submitting one. **Fix:** when the
+linked id isn't in the fetched list, fetch it directly via the existing
+`getOpportunity` API and prepend it to the options, so the Apply flow
+stays visible and selected regardless of the org's opportunity count.
+Guard test: a third case in `GrantApplicationFormPage.opportunityId.test.tsx`
+mocks an empty `listOpportunities()` result and asserts `getOpportunity` is
+called with the linked id and the select still resolves to it; verified to
+fail before the fix (`getOpportunity` never called) and pass after.
+
+**GF-36, extended — P2 — `update_application`'s own "reload with fresh
+relationships" didn't, on a status change.** `update_application`
+(`grant_service.py`) loads the application once at the top (populating its
+`grant_notes`/`compliance_tasks` collections in the session's identity
+map), then — on a status change — adds a new `GrantNote` and, on award,
+generates compliance tasks, both via a bare `application_id=` assignment
+rather than a relationship append. The endpoint's second `get_application()`
+call (added by GF-36's own fix, to build the response) returns the _same_
+identity-mapped Python object: SQLAlchemy's `selectinload` does not re-run
+for a collection already marked loaded, so without intervention the
+"reload" silently kept the pre-mutation collections — the very note or
+tasks the request just created were **absent** from the PUT response
+entirely, a step further than GF-36's original "present but unattributed"
+finding. **Fix:** `get_application()` now runs with
+`.execution_options(populate_existing=True)`, forcing every call to
+overwrite the identity-mapped object's collections from the query results
+rather than trusting whatever was loaded earlier in the same session —
+matching the established pattern in `quorum_service.py`/`auth_service.py`/
+`shift_eligibility_service.py`. Applies to every caller of
+`get_application()`, not just `update_application`'s own reload, which is
+strictly more correct: a method named "get" returning a possibly-stale
+object was the actual defect. **Guard tests added (new file, real DB —
+a mocked session cannot observe identity-map/collection-loading state at
+all):** `tests/test_grants_update_application_reload_db.py`, 2 cases —
+a status change's note, and an award's generated compliance tasks, both
+asserted present on the very next `get_application()` call in the same
+session. Verified both fail before the fix (`len(...) == 0`) and pass
+after.
+
+**GF-38, extended again — P1 — a failed opportunity lookup silently
+submitted the id the dropdown could no longer show.** Caught by Codex
+review on PR #2485 (the follow-up carrying the two fixes above): the merge-
+fetch's `catch` block treated every `getOpportunity` failure identically —
+a genuine 404 (the linked opportunity doesn't exist, or isn't in this org)
+and an operational failure (a network blip, a 500) both fell through to
+the unfiltered list with `formData.opportunityId` left unchanged. The
+dropdown then displayed "-- None --" (no matching `<option>`), but
+submitting the form still sent the invisible, retained id — reintroducing
+GF-38's original failure mode (displayed vs. submitted disagreeing) on this
+one failure path, and doing so silently for a transient error a retry
+might have fixed. **Fix:** `toAppError(err).status` distinguishes a 404
+(fall through silently — an expected "this id no longer means anything")
+from any other failure (toast an explanation) — and **both** branches now
+clear `formData.opportunityId` to `''`, so what's displayed always matches
+what would be submitted. Guard tests: the existing merge-fetch test file
+gained two cases, rewritten to submit the form and assert on the actual
+`createApplication` payload (`opportunityId: null`) rather than the
+`<select>`'s own DOM value — a `<select>` whose value doesn't match any
+`<option>` reads back as `''` regardless of whether the underlying state
+was actually cleared, which is exactly the gap that let the original bug
+through untested. Verified both fail before this fix (payload carried the
+stale id) and pass after.
+
 ### Guard tests added
 
-3 new files total this pass: `tests/test_grants_application_note_authors.py`
-(2 cases, GF-36), `GrantApplicationFormPage.opportunityId.test.tsx` (2
-cases, GF-38); plus a docstring-only correction in
+5 new files total this pass: `tests/test_grants_application_note_authors.py`
+(2 cases, GF-36), `GrantApplicationFormPage.opportunityId.test.tsx` (5
+cases after two rounds of Codex-review extension, GF-38),
+`tests/test_grants_update_application_reload_db.py` (2 cases, real DB,
+GF-36's Codex-review extension); plus a docstring-only correction in
 `tests/test_grant_service.py` (GF-37, no behavior change).
 
 ### Completion gate (pass 4)
@@ -1709,14 +1793,14 @@ cases, GF-38); plus a docstring-only correction in
 | Check                                                   | Result                               |
 | ------------------------------------------------------- | ------------------------------------ |
 | `flake8 app/ tests/ alembic/`                           | 0 violations                         |
-| `black --check app/ tests/ alembic/`                    | 1,580 files unchanged                |
+| `black --check app/ tests/ alembic/`                    | 1,581 files unchanged                |
 | `isort --check-only app/ tests/ alembic/`               | clean                                |
 | `python3 scripts/validate_migrations.py --strict`       | PASSED — 443 revisions, single head  |
-| `python3 -m pytest tests/ -q -k "grant or fundraising"` | 609 passed, 1 pre-existing skip      |
-| `python3 -m pytest tests/ -q` (full backend suite)      | 12,367 passed, 21 pre-existing skips |
+| `python3 -m pytest tests/ -q -k "grant or fundraising"` | 611 passed, 1 pre-existing skip      |
+| `python3 -m pytest tests/ -q` (full backend suite)      | 12,369 passed, 21 pre-existing skips |
 | `npx tsc --noEmit` / `npm run typecheck`                | 0 errors                             |
 | `npx eslint src/modules/grants-fundraising`             | 0 errors, 0 warnings                 |
-| `npx vitest run src/modules/grants-fundraising`         | 5 files, 9 passed                    |
+| `npx vitest run src/modules/grants-fundraising`         | 5 files, 12 passed                   |
 
 Rotation row 22 (Grants & fundraising) → ✅ (pending merge). Next: Feature
 23 (Medical supplies).

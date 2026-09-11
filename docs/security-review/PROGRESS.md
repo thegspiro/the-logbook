@@ -16,6 +16,53 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 22 (Grants & fundraising), pass 4 tend** — PR
+[#2485](https://github.com/thegspiro/the-logbook/pull/2485), branch
+`claude/security-review-grants-fundraising-codex-followup`, tending.
+**Correction: a concurrent watchdog session's docs commit (below) marked
+Rotation row 22 `✅` and "Next: Feature 23" while PR #2485 — carrying two
+real, Codex-found P2 fixes on Feature 22's own work — was already open.**
+That commit's claim about PR #2483 itself is accurate (that PR's own final
+commit was Codex-clean); it just predates #2485's existence. The rotation
+is not actually done with Feature 22 until #2485 merges — this row stands
+corrected here so the next iteration tends #2485 rather than starting
+Feature 23 early, per this file's own "one PR at a time" rule.
+
+PR #2483 (pass 4's own PR) was merged by the repo owner directly at
+2026-09-11T11:46 UTC — before this session's push landed carrying two
+real P2 fixes Codex had found on that PR's commit, so that push landed on
+an already-merged branch rather than in `main`. Per this repo's "never
+stack new commits on an already-merged branch" rule, cherry-picked that
+commit (`4bb57d2d5`) onto a fresh branch off `main` and opened #2485 in
+its place: GF-38 extended (the opportunities-page "Apply" link could point
+at an opportunity outside the dropdown's own unfiltered first-100 fetch —
+now fetched directly via `getOpportunity` and merged in) and GF-36
+extended (`update_application`'s own "reload with fresh relationships"
+call didn't, on a status change — SQLAlchemy's identity map skipped
+re-loading `grant_notes`/`compliance_tasks` collections already marked
+loaded earlier in the same request, so the note/tasks the request itself
+just created were absent from the PUT response, not merely unattributed;
+fixed with `populate_existing=True` on `get_application()`). A third Codex
+round then caught a P1 in the frontend fix itself (the merge-fetch's
+`catch` block didn't distinguish a 404 from an operational failure, and
+neither branch cleared `formData.opportunityId` — so a failed lookup could
+still silently submit an id the dropdown no longer displayed); fixed by
+branching on `toAppError(err).status` and clearing the field in both
+branches, with guard tests rewritten to assert on the actual submitted
+payload rather than the `<select>`'s own DOM value (which reads back as
+`''` whenever no `<option>` matches, regardless of whether state was truly
+cleared — the gap that let the original bug through untested). Full
+write-up: `docs/security-review/GF-22-grants-fundraising.md` → Pass 4,
+"Revised after Codex review." Completion gate re-run clean on the new
+branch: flake8/black/isort clean; migrations unchanged (443 revisions,
+single head); 611/611 grant/fundraising-scoped backend tests pass;
+frontend `tsc`/`eslint` clean; `vitest run src/modules/grants-fundraising`
+5 files, 12 passed. All CI green on the current head; both Codex rounds
+resolved with no outstanding threads.
+
+<details>
+<summary>Superseded — a concurrent watchdog's premature "rotation complete" note (PR #2483, before PR #2485's Codex-found fixes were discovered), preserved for history</summary>
+
 **None.** PR [#2483](https://github.com/thegspiro/the-logbook/pull/2483)
 (Feature 22, Grants & fundraising, pass 4) merged clean via merge commit,
 merge SHA `b44bf7921d90`, all 17 CI checks green (CI Success, both
@@ -29,8 +76,10 @@ and no unresolved threads — another 30-minute watchdog check, per the same
 pattern that opened this PR in the first place. Rotation row 22 is now
 `✅`. Next: Feature 23 (Medical supplies).
 
+</details>
+
 <details>
-<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 4, PR #2483, before the merge), preserved for history</summary>
+<summary>Superseded — prior Open PR note (Feature 22, pass 4, PR #2483, before it merged out from under the Codex-review fixes), preserved for history</summary>
 
 **Feature 22 (Grants & fundraising), pass 4** — PR
 [#2483](https://github.com/thegspiro/the-logbook/pull/2483), branch
