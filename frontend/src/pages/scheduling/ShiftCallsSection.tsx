@@ -4,6 +4,19 @@
  * Lets shift officers log, review, edit, and remove the calls/incidents a crew
  * responded to during a shift. Surfaces the backend shift-call endpoints
  * (create/list/update/delete) that feed each shift's call count.
+ *
+ * **Logging is gated on the department's call-tracking mode** (`canLog`), which
+ * mirrors the backend: `create_shift_call` and `update_shift_call` refuse
+ * unless the mode is `detailed`. Without the gate this rendered its full form
+ * to a count-only department, whose officers got "Detailed call records are
+ * disabled for this organization" as a red toast on save — an affordance that
+ * could only ever fail.
+ *
+ * Reading is *not* gated, and deleting stays available to anyone who could
+ * manage the shift, both deliberately and both matching the backend: rows
+ * written before a mode switch are still the department's history, so they
+ * stay visible, and they must stay clearable — removing one cannot manufacture
+ * incident detail the department has opted out of.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -17,6 +30,12 @@ import { getErrorMessage } from '../../utils/errorHandling';
 interface ShiftCallsSectionProps {
   shiftId: string;
   canManage: boolean;
+  /**
+   * Whether the department logs individual calls at all — i.e. its
+   * `call_tracking.mode` is `detailed`. False hides every write affordance
+   * except delete, and hides the section outright when nothing is on record.
+   */
+  canLog: boolean;
   tz: string;
   /** Called after a call is added/edited/removed so the parent can refresh counts. */
   onChange?: () => void;
@@ -76,7 +95,7 @@ const callToForm = (call: ShiftCallRecord, timezone: string): CallForm => ({
   notes: call.notes ?? '',
 });
 
-export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, canManage, tz, onChange }) => {
+export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, canManage, canLog, tz, onChange }) => {
   const [calls, setCalls] = useState<ShiftCallRecord[]>([]);
   const [loading, setLoading] = useState(true);
   // null = form hidden, 'new' = adding, otherwise the id of the call being edited
@@ -272,6 +291,14 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
     </div>
   );
 
+  // Adding and editing need both the permission and the department's mode;
+  // deleting needs only the permission (see the docblock).
+  const canWrite = canManage && canLog;
+
+  // Nothing to show and nothing that could be added: a count-only department
+  // should not carry an empty "Calls" heading on every shift panel it opens.
+  if (!canLog && !loading && calls.length === 0) return null;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -284,7 +311,7 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
             <span className="text-theme-text-muted text-xs font-normal">({calls.length})</span>
           )}
         </h3>
-        {canManage && formMode === null && (
+        {canWrite && formMode === null && (
           <button
             onClick={openAdd}
             className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
@@ -294,7 +321,17 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
         )}
       </div>
 
-      {canManage && formMode === 'new' && renderForm()}
+      {canWrite && formMode === 'new' && renderForm()}
+
+      {/* Says why the Log Call button is gone rather than leaving an officer
+          to conclude the screen is broken. Only shown when there is something
+          on record — with nothing to explain, the section does not render. */}
+      {canManage && !canLog && !loading && calls.length > 0 && (
+        <p className="text-theme-text-muted text-xs">
+          Your department no longer logs individual calls. These are earlier records &mdash; they can be removed, but
+          not added to or edited.
+        </p>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-4" role="status" aria-live="polite">
@@ -337,14 +374,16 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
                 </div>
                 {canManage && (
                   <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      onClick={() => openEdit(call)}
-                      className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-violet-500/10 hover:text-violet-500"
-                      title="Edit call"
-                      aria-label="Edit call"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
+                    {canLog && (
+                      <button
+                        onClick={() => openEdit(call)}
+                        className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-violet-500/10 hover:text-violet-500"
+                        title="Edit call"
+                        aria-label="Edit call"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         void handleDelete(call.id);

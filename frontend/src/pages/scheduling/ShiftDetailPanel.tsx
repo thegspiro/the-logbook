@@ -2838,6 +2838,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 <ShiftCallsSection
                   shiftId={shift.id}
                   canManage={canManageShift && !shift.is_finalized}
+                  // Only a department on `detailed` tracking logs individual
+                  // calls; count-only records a number in the close-out wizard
+                  // above, and `off` records none. The backend has always
+                  // refused the write in the other two modes, so rendering the
+                  // form there offered an action that could only 400.
+                  canLog={callTrackingMode === 'detailed'}
                   tz={tz}
                   onChange={() => {
                     void refreshAssignments();

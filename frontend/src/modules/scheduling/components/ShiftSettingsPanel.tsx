@@ -406,6 +406,14 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                     apparatus ran when they close the shift out, and the crew&apos;s call credit comes from that number.
                     Leave this off to keep logging calls one at a time.
                   </p>
+                  {/* This switch adds a question to close-out and removes a
+                      section from every shift panel, and the old copy only
+                      mentioned the first. An admin turning it on had no way to
+                      know the crew's call log was about to disappear. */}
+                  <p className="text-theme-text-muted mt-1.5 text-xs">
+                    Turning this on also removes the <span className="font-medium">Calls</span> log from the shift
+                    panel. Calls already recorded stay visible and can still be removed &mdash; no history is lost.
+                  </p>
                 </div>
                 <button
                   type="button"

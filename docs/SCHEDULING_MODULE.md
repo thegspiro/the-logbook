@@ -880,7 +880,7 @@ A slide-out panel that appears when clicking a shift on the calendar:
 - **Shift info**: Date, time, apparatus, station, notes
 - **Crew roster**: List of assigned members with positions and status
 - **Open positions**: Available positions members can sign up for
-- **Calls/incidents**: Calls that occurred during the shift
+- **Calls/incidents**: Calls that occurred during the shift. **Only shown when `call_tracking.mode` is `detailed`** — the other modes hide the log, and the section disappears entirely when the department has nothing on record. Rows written before a mode switch stay visible and stay removable, so no history is lost by turning logging off
 - **Actions**: Sign up (members), assign members (admins), remove assignments (admins)
 - **Check-in QR + NFC** _(2026-08-18)_: the apparatus check-in code, built by
   `buildShiftCheckInUrl({ apparatusId })` so it resolves to whichever shift is
@@ -897,11 +897,19 @@ One organization setting decides which close-out screen opens:
 at close-out**, stored as `scheduling.call_tracking.mode` in the organization's
 settings JSON alongside `scheduling.call_tracking.call_types`.
 
-| Mode                 | Close-out screen                            | Where call volume comes from       |
-| -------------------- | ------------------------------------------- | ---------------------------------- |
-| `detailed` (default) | Single finalize checklist                   | Per-incident `ShiftCall` rows      |
-| `count_only`         | Three-step wizard                           | `org_calls` / `org_call_responses` |
-| `off`                | Single finalize checklist, no call question | Not tracked                        |
+| Mode                 | Close-out screen                            | Shift panel's Calls log | Where call volume comes from       |
+| -------------------- | ------------------------------------------- | ----------------------- | ---------------------------------- |
+| `detailed` (default) | Single finalize checklist                   | Shown, editable         | Per-incident `ShiftCall` rows      |
+| `count_only`         | Three-step wizard                           | Read-only history only  | `org_calls` / `org_call_responses` |
+| `off`                | Single finalize checklist, no call question | Read-only history only  | Not tracked                        |
+
+"Read-only history only" means the log renders existing rows with Remove but no
+Log Call and no Edit, and renders nothing at all when the department has no rows
+— so a count-only department does not carry an empty **Calls** heading on every
+shift panel. Deleting stays available in every mode, matching the backend:
+`delete_shift_call` is deliberately ungated, because rows stranded by a mode
+switch have to remain clearable and removing one cannot manufacture incident
+detail the department has opted out of.
 
 **A missing setting reads as `detailed`, never `off`.** Defaulting absence to
 disabled would silently stop call logging for every existing installation on
