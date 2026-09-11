@@ -146,8 +146,7 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // any other route — Playwright's Clock API has no explicit "uninstall")
   // to a fixed Monday, so exactly one prior day (Sunday) is ever dimmed,
   // every run, regardless of real calendar date. Budgeted at 1 to match —
-  // dark and
-  // high-contrast both render this text at full white
+  // dark and high-contrast both render this text at full white
   // (`--text-primary: #ffffff`) against their own dark surfaces, which
   // stays clear of 7:1 even at this opacity, so only the light theme's
   // near-black-on-white token (`#0f172a` on `#ffffff`) is expected to
@@ -190,10 +189,18 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // platoons off and the page substituted a section. `fixture` and `expectText`
   // in mobile-routes.ts are what stop that, and the real Platoons body has no
   // AAA shortfall at all.
+  //
+  // Shift Reports is one node counted twice — the active subsection tab,
+  // text-violet-700 on bg-violet-500/10, measuring 6.43:1 in the light and
+  // high-contrast themes and clean in dark. It appeared without anyone touching
+  // a colour: the tab labels used to overlap each other, which axe reports as
+  // partially obscured and declines to judge, and laying them out properly is
+  // what let it measure them at all.
   '/scheduling/admin/settings/general': 6,
   '/scheduling/admin/settings/apparatus': 123,
   '/scheduling/admin/settings/eligibility': 3,
   '/scheduling/admin/settings/notifications': 17,
+  '/scheduling/admin/settings/shift-reports': 2,
   '/admin/analytics': 1,
   '/grants': 12,
   '/reports': 8,

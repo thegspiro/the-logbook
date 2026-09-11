@@ -91,6 +91,13 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
               const dimmed = isPastDay(day, today) || !dayMatchesFilter(summary, filter);
               const selected = isSameDay(day, selectedDate);
 
+              // The dim is `opacity-65`, not lower, because it applies to the
+              // whole cell including the date. Opacity multiplies against the
+              // page behind it, so `text-theme-text-primary` at 45% measures
+              // 2.92:1 — below the 4.5:1 AA floor for the one piece of text on
+              // the cell a member actually reads. 65% measures 5.57:1 in all
+              // three themes; 60% clears at 4.68:1, which is too little room to
+              // leave for a future palette change.
               return (
                 <button
                   key={key}
