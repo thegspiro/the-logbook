@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2483](https://github.com/thegspiro/the-logbook/pull/2483)
+(Feature 22, Grants & fundraising, pass 4) merged clean via merge commit,
+merge SHA `b44bf7921d90`, all 17 CI checks green (CI Success, both
+MySQL/MariaDB integration and contract suites, Migration Chain, Docker
+Image Build & Container Tests, Frontend Tests, Frontend Lint/Typecheck/
+Build, Frontend E2E/Playwright, Backend Unit Tests, Backend Lint, Backend
+Security Scan, Docs Link Check, Trivy, Gitleaks, SBOM). Codex Code Review
+and Security Review both completed with no findings/comments on the final
+commit. Merged directly once fully green with `mergeable_state: clean`
+and no unresolved threads — another 30-minute watchdog check, per the same
+pattern that opened this PR in the first place. Rotation row 22 is now
+`✅`. Next: Feature 23 (Medical supplies).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 4, PR #2483, before the merge), preserved for history</summary>
+
 **Feature 22 (Grants & fundraising), pass 4** — PR
 [#2483](https://github.com/thegspiro/the-logbook/pull/2483), branch
 `claude/security-review-grants-fundraising`, tending.
@@ -36,6 +52,8 @@ gate green: flake8/black/isort clean; migrations validated (443 revisions,
 single head, no new migration); 609/609 grant/fundraising-scoped and
 12,367/12,367 full backend suite pass; frontend `tsc`/`eslint` clean;
 `vitest run src/modules/grants-fundraising` 5 files, 9 passed.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2482's merge, Feature 21 pass 4 docs-recording), preserved for history</summary>
@@ -13520,7 +13538,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⏳     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
