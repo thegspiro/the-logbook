@@ -849,6 +849,121 @@ class TestNFPAInspectionWritePath:
         assert detail.recommendation is not None
 
 
+# ── Inspection Clock ───────────────────────────────────────────────
+
+
+class TestInspectionClock:
+    """Only an inspection may move an item's inspection dates.
+
+    `create_maintenance_record` advanced `last_inspection_date` for ANY
+    completed record, so a repair rewrote it and pushed `next_inspection_due`
+    out by a whole interval -- a coat repaired in August had its annual NFPA
+    1851 inspection silently rescheduled from April, and nothing raised.
+    """
+
+    async def _coat(self, svc, org_id, user_id):
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Turnout Coat",
+                "condition": "good",
+                "status": "available",
+                "inspection_interval_days": 365,
+            },
+            created_by=uuid.UUID(user_id),
+        )
+        return item
+
+    async def _record(self, svc, item, org_id, user_id, kind, completed, **extra):
+        record, err = await svc.create_maintenance_record(
+            item_id=uuid.UUID(item.id),
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+            maintenance_data={
+                "maintenance_type": kind,
+                "is_completed": True,
+                "completed_date": completed,
+                **extra,
+            },
+        )
+        assert err is None, err
+        return record
+
+    @pytest.mark.asyncio
+    async def test_inspection_sets_the_dates(self, db_session, setup_org_and_user):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await self._coat(svc, org_id, user_id)
+
+        await self._record(
+            svc, item, org_id, user_id, "routine_inspection", date(2026, 4, 13)
+        )
+        await db_session.refresh(item)
+
+        assert item.last_inspection_date == date(2026, 4, 13)
+        assert item.next_inspection_due == date(2027, 4, 13)
+
+    @pytest.mark.asyncio
+    async def test_repair_does_not_move_the_inspection_clock(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await self._coat(svc, org_id, user_id)
+
+        await self._record(
+            svc, item, org_id, user_id, "routine_inspection", date(2026, 4, 13)
+        )
+        # Service four months later. It is work on the coat, not an inspection
+        # of it, so the April inspection and its April-2027 deadline stand.
+        await self._record(svc, item, org_id, user_id, "repair", date(2026, 8, 1))
+        await db_session.refresh(item)
+
+        assert item.last_inspection_date == date(2026, 4, 13)
+        assert item.next_inspection_due == date(2027, 4, 13)
+
+    @pytest.mark.asyncio
+    async def test_advanced_cleaning_does_not_move_it_either(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await self._coat(svc, org_id, user_id)
+
+        await self._record(
+            svc, item, org_id, user_id, "routine_inspection", date(2026, 4, 13)
+        )
+        await self._record(
+            svc, item, org_id, user_id, "advanced_cleaning", date(2026, 6, 7)
+        )
+        await db_session.refresh(item)
+
+        assert item.last_inspection_date == date(2026, 4, 13)
+
+    @pytest.mark.asyncio
+    async def test_a_repair_still_records_its_other_effects(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await self._coat(svc, org_id, user_id)
+
+        # Gating the dates must not cost a repair the rest of what it does.
+        await self._record(
+            svc,
+            item,
+            org_id,
+            user_id,
+            "repair",
+            date(2026, 8, 1),
+            condition_after="fair",
+        )
+        await db_session.refresh(item)
+
+        assert item.condition.value == "fair"
+        assert item.last_inspection_date is None
+
+
 # ── Category Soft-Delete ───────────────────────────────────────────
 
 
