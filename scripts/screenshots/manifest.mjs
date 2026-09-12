@@ -3958,7 +3958,11 @@ export const SHOTS = [
     beforeNavigate: async (page) => {
       await page.route("**/api/v1/auth/branding", async (route) => {
         const response = await route.fetch();
-        const body = await response.json().catch(() => ({}));
+        // Deliberately unguarded: if branding cannot be read, this shot must
+        // fail rather than capture a top-bar page with the department's name
+        // and logo missing. The per-shot try/catch records that as a failure,
+        // which is the whole point of forcing the layout here.
+        const body = await response.json();
         await route.fulfill({
           status: 200,
           contentType: "application/json",
