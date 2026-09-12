@@ -188,3 +188,58 @@ class TestWaivedCriticalCriteria:
         test = _test([{"criterion_id": "criterion-0-0", "passed": False}])
 
         assert waived_critical_criteria(test, template) == []
+
+
+class TestTheStarterLibraryCanBeCompleted:
+    """Every seeded sheet, scored the way the seeders score it, passes the guard.
+
+    ``scripts/seed_skills_testing.py`` and the screenshot harness both post
+    completions built from ``criterion_result``, and a demo environment that
+    cannot file a result is a broken demo. This ties the three together: a new
+    sheet in the library, or a criterion type ``criterion_result`` does not
+    know how to mark, fails here rather than in a seeding run nobody watches.
+    """
+
+    def _fully_scored(self, sheet):
+        from app.data.skill_sheet_library import (
+            criterion_id,
+            criterion_result,
+            section_id,
+        )
+
+        return SimpleNamespace(
+            section_results=[
+                {
+                    "section_id": section_id(si),
+                    "section_name": section["name"],
+                    "criteria_results": [
+                        {
+                            "criterion_id": criterion_id(si, ci),
+                            "criterion_label": criterion["label"],
+                            **criterion_result(criterion, True),
+                        }
+                        for ci, criterion in enumerate(section["criteria"])
+                    ],
+                }
+                for si, section in enumerate(sheet["sections"])
+            ]
+        )
+
+    def test_every_sheet_completes_once_scored(self):
+        from app.data.skill_sheet_library import SKILL_SHEETS
+
+        assert SKILL_SHEETS, "the starter library is empty"
+        for sheet in SKILL_SHEETS:
+            template = SimpleNamespace(sections=sheet["sections"])
+            left = unresolved_criteria(self._fully_scored(sheet), template)
+            assert left == [], (
+                f"{sheet['name']} still has unresolved steps after a full "
+                f"scoring pass: {[row['label'] for row in left]}"
+            )
+
+    def test_no_seeded_result_waives_a_critical_step(self):
+        from app.data.skill_sheet_library import SKILL_SHEETS
+
+        for sheet in SKILL_SHEETS:
+            template = SimpleNamespace(sections=sheet["sections"])
+            assert waived_critical_criteria(self._fully_scored(sheet), template) == []
