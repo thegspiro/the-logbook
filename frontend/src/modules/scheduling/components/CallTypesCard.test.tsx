@@ -59,6 +59,16 @@ describe('CallTypesCard', () => {
   it('says so when the mode means none of this is in effect yet', () => {
     renderCard({ mode: 'detailed' });
     expect(screen.getByText(/Record a call count at close-out/)).toBeInTheDocument();
+    expect(screen.getByText(/logs individual calls instead/)).toBeInTheDocument();
+  });
+
+  it('names the right reason under off, not the detailed one', () => {
+    // Both modes leave this list inert, for opposite reasons. A notice that
+    // names the wrong one sends an admin to change a setting that was never
+    // the problem.
+    renderCard({ mode: 'off' });
+    expect(screen.getByText(/not tracking calls/)).toBeInTheDocument();
+    expect(screen.queryByText(/logs individual calls instead/)).not.toBeInTheDocument();
   });
 });
 

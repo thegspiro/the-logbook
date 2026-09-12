@@ -1,5 +1,30 @@
 # Screenshot currency
 
+## Disposition for September 12, 2026 - call tracking became a three-way choice
+
+**Re-shot, so this adds no queue.** `call_tracking.mode` has always had three
+values, but the settings control was a two-state switch that could only reach
+two of them; it is now a radio group, and `off` is selectable for the first
+time.
+
+| Image                                    | Re-shot | What had changed                                                              |
+| ---------------------------------------- | ------- | ----------------------------------------------------------------------------- |
+| `03-74-settings-call-count-toggle.png`   | 09-12   | The switch became three radio options under a **How calls are recorded** heading |
+
+The id still says "toggle". It is a filename, and renaming it would rewrite
+every reference to it here, in guide 03 and in the manifest for no reader's
+benefit; the alt text describes what the picture now shows.
+
+**The seeder needed a fix before this could be captured at all**, which is
+worth recording because nothing else would have caught it. Since 2026-09-11
+`PATCH /scheduling/shifts/{id}/closeout/calls` refuses a count from any mode
+but count-only, and `seed_count_only_calls` had always written its history
+from the `detailed` default — which is precisely the accident that gate
+exists to stop. It now switches the mode for the duration of its writes and
+restores it afterwards. Without that, the count-only Call Volume shots have no
+data behind them and the seeder reports the failure only in its blocked list,
+where a capture run does not look.
+
 ## Disposition for September 7-8, 2026 - the items list gained pinning and grouping
 
 **Everything this change invalidated has been re-shot, so this section adds no

@@ -893,9 +893,23 @@ A slide-out panel that appears when clicking a shift on the calendar:
 ### Call volume tracking and the close-out wizard _(2026-08-19)_
 
 One organization setting decides which close-out screen opens:
-**Scheduling → Settings → General → Shift close-out rules → Record a call count
-at close-out**, stored as `scheduling.call_tracking.mode` in the organization's
+**Scheduling → Settings → General → Shift close-out rules → How calls are
+recorded**, stored as `scheduling.call_tracking.mode` in the organization's
 settings JSON alongside `scheduling.call_tracking.call_types`.
+
+It is a three-option radio group, not a toggle. Until 2026-09-12 it was a
+two-state **Record a call count at close-out** switch, which could only reach
+`detailed` and `count_only` — so `off` was a valid, documented mode, honoured
+by every reader, and selectable by nobody. A department that records calls in
+an RMS, or does not run them, carried a call log it never used. The modes are
+mutually exclusive, so a second toggle was not the answer: two switches admit a
+fourth state ("log individual calls" **and** "don't track calls") that means
+nothing and that the backend rejects.
+
+Switching modes never deletes anything. The payload replaces the whole
+`call_tracking` object, so the UI sends the department's configured
+`call_types` back untouched on every change — under `off` they are inert rather
+than gone, and return intact when count-only is selected again.
 
 | Mode                 | Close-out screen                            | Shift panel's Calls log | Where call volume comes from       |
 | -------------------- | ------------------------------------------- | ----------------------- | ---------------------------------- |

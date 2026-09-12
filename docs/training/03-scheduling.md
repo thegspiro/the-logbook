@@ -321,10 +321,12 @@ Calls logged against a shift contribute to **call-based training requirements** 
 
 ![Inline log call form with incident type and times](./images/03-09-log-call-form.png)
 
-> **This section describes the department default.** A department that has
-> switched on **Record a call count at close-out** does not use Calls / Runs at
-> all — see [Counting Calls Without an RMS](#counting-calls-without-an-rms-2026-08-18)
-> immediately below.
+> **This section describes the department default.** The Calls section appears
+> only while **How calls are recorded** is set to **Log individual calls**. On
+> either other setting it is hidden — see
+> [Counting Calls Without an RMS](#counting-calls-without-an-rms-2026-08-18)
+> immediately below. Calls already logged are not deleted: they stay visible and
+> can still be removed, they just cannot be added to.
 
 ---
 
@@ -340,10 +342,22 @@ reports a number when they close the shift out, and nothing else is collected.
 
 ### Turning it on
 
-**Scheduling → Settings → General → Shift close-out rules → Record a call count
-at close-out.**
+**Scheduling → Settings → General → Shift close-out rules → How calls are
+recorded**, then choose **Record a call count at close-out**.
 
-![Scheduling Settings, General section — the Shift close-out rules block with 'Record a call count at close-out' switched on](./images/03-74-settings-call-count-toggle.png)
+The three choices are:
+
+| Choice                                | What officers get                                                                                           |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Log individual calls** _(default)_  | The Calls section on the shift panel. Each call is recorded with type, incident number, times and responders |
+| **Record a call count at close-out**  | The three-step close-out wizard asks for a number, with an optional breakdown by type. No call log           |
+| **Don't track calls**                 | No call log and no close-out question — for a department that records calls in an RMS, or does not run them  |
+
+Switching between them never deletes anything. Calls already recorded stay
+visible and removable, and your configured call types survive a trip through
+either other setting.
+
+![Scheduling Settings, General section — the 'How calls are recorded' choices, with 'Record a call count at close-out' selected](./images/03-74-settings-call-count-toggle.png)
 
 It takes effect immediately **in your own browser** — no reload, no restart.
 **Tell your officers before you flip it**, because it changes what they see at

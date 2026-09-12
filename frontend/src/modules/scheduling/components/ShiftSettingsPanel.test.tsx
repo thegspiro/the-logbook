@@ -250,7 +250,6 @@ describe('ShiftSettingsPanel switches with the flags absent from the response', 
     'Platoon scheduling',
     'Automatic shift generation',
     'Require end-of-shift equipment checks',
-    'Record a call count at close-out',
     'Enforce EVOC for drivers',
     'Restrict check-in to assigned members',
   ];
@@ -280,5 +279,93 @@ describe('ShiftSettingsPanel switches with the flags absent from the response', 
       // confident "off" from the same undefined.
       expect(screen.getByRole('switch', { name })).toHaveAttribute('aria-checked', 'false');
     }
+  });
+
+  // Call tracking is a radio group rather than a switch: three mutually
+  // exclusive modes, one of which (`off`) the old two-state toggle could not
+  // reach at all. It needs the same guarantee the switches above get — the
+  // group is named, and every option announces a state rather than none.
+  it('names the call-tracking group and gives every mode a state', async () => {
+    renderPanel('general');
+    await screen.findByRole('switch', { name: 'Enforce EVOC for drivers' });
+
+    const group = screen.getByRole('radiogroup', { name: 'How calls are recorded' });
+    expect(group).toBeInTheDocument();
+    for (const name of ['Log individual calls', 'Record a call count at close-out', /Don.t track calls/]) {
+      expect(screen.getByRole('radio', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('can select off, which the old two-state toggle could not reach', async () => {
+    // The whole point of the radio group. `off` was a valid, documented mode
+    // with backend readers from the day call tracking shipped; the toggle it
+    // replaced only ever flipped detailed <-> count_only, so a department
+    // that records calls in an RMS had no way to say so.
+    const user = userEvent.setup();
+    mockUpdateFeatureSettings.mockReset();
+    mockUpdateFeatureSettings.mockResolvedValue({
+      call_tracking: { mode: 'off', call_types: [] },
+    });
+    renderPanel('general');
+    await screen.findByRole('switch', { name: 'Enforce EVOC for drivers' });
+
+    await user.click(screen.getByRole('radio', { name: /Don.t track calls/ }));
+
+    await waitFor(() =>
+      expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({
+        call_tracking: { mode: 'off', call_types: [] },
+      })
+    );
+  });
+
+  it('reads an absent call_tracking setting as detailed, never off', async () => {
+    // CLAUDE.md pitfall #19: absence means "what this department has always
+    // done". Defaulting to `off` here would silently stop call logging for
+    // every installation that has never opened this screen, and nobody
+    // connects a missing year of call volume back to a deploy.
+    renderPanel('general');
+    await screen.findByRole('switch', { name: 'Enforce EVOC for drivers' });
+
+    expect(screen.getByRole('radio', { name: 'Log individual calls' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Don.t track calls/ })).not.toBeChecked();
+  });
+});
+
+describe('ShiftSettingsPanel call-tracking mode preserves the configured call types', () => {
+  const TYPES = [
+    { slug: 'fire', label: 'Fire', active: true },
+    { slug: 'ems', label: 'EMS', active: true },
+  ];
+
+  beforeEach(() => {
+    mockLoadShiftSettings.mockReset();
+    mockLoadShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
+    vi.mocked(schedulingService.getFeatureSettings).mockReset();
+    vi.mocked(schedulingService.getFeatureSettings).mockResolvedValue({
+      enforce_evoc: true,
+      call_tracking: { mode: 'count_only', call_types: TYPES },
+    } as unknown as SchedulingFeatureSettings);
+    mockUpdateFeatureSettings.mockReset();
+    mockUpdateFeatureSettings.mockResolvedValue({
+      call_tracking: { mode: 'off', call_types: TYPES },
+    });
+  });
+
+  it('sends the existing type list back when switching to off', async () => {
+    // The payload replaces the whole call_tracking object, so omitting the
+    // list would wipe every type the department has named. Under `off` they
+    // are inert rather than gone, and have to come back intact the moment
+    // count-only is selected again.
+    const user = userEvent.setup();
+    renderPanel('general');
+    await screen.findByRole('switch', { name: 'Enforce EVOC for drivers' });
+
+    await user.click(screen.getByRole('radio', { name: /Don.t track calls/ }));
+
+    await waitFor(() =>
+      expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({
+        call_tracking: { mode: 'off', call_types: TYPES },
+      })
+    );
   });
 });

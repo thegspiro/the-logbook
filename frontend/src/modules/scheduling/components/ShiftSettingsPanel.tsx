@@ -31,6 +31,44 @@ import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';
 
+/**
+ * The three ways a department can record call volume.
+ *
+ * A radio group rather than the pair of toggles this replaced: the modes are
+ * mutually exclusive, and two switches would admit a fourth state
+ * ("log individual calls" AND "don't track calls") that means nothing and
+ * that the backend would reject.
+ *
+ * `off` was a valid, documented mode with backend readers from the day call
+ * tracking shipped, but the old two-state toggle could only reach `detailed`
+ * and `count_only` — so a department that runs no calls, or records them in an
+ * RMS, had no way to say so and carried a call log it never used.
+ *
+ * Each summary states what the mode does to *both* surfaces it governs, the
+ * close-out question and the shift panel's call log, because changing this
+ * silently adds or removes a section an officer uses every tour.
+ */
+const CALL_TRACKING_MODE_OPTIONS = [
+  {
+    value: 'detailed',
+    label: 'Log individual calls',
+    summary:
+      'Officers record each call on the shift panel — type, incident number, times, who responded. The shift’s call count is the number of those records.',
+  },
+  {
+    value: 'count_only',
+    label: 'Record a call count at close-out',
+    summary:
+      'The officer is asked how many calls the apparatus ran, with an optional breakdown by type. No incident detail is collected, and the shift panel carries no call log.',
+  },
+  {
+    value: 'off',
+    label: 'Don’t track calls',
+    summary:
+      'No call log and no close-out question. For a department that records calls in an RMS, or does not run them.',
+  },
+] as const;
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 interface ShiftSettingsPanelProps {
@@ -398,48 +436,77 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   />
                 </button>
               </div>
-              <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
-                <div>
-                  <p className="text-theme-text-primary text-sm font-medium">Record a call count at close-out</p>
-                  <p className="text-theme-text-muted mt-0.5 text-sm">
-                    For departments that don&apos;t log individual incidents. The officer is asked how many calls the
-                    apparatus ran when they close the shift out, and the crew&apos;s call credit comes from that number.
-                    Leave this off to keep logging calls one at a time.
-                  </p>
-                  {/* This switch adds a question to close-out and removes a
-                      section from every shift panel, and the old copy only
-                      mentioned the first. An admin turning it on had no way to
-                      know the crew's call log was about to disappear. */}
-                  <p className="text-theme-text-muted mt-1.5 text-xs">
-                    Turning this on also removes the <span className="font-medium">Calls</span> log from the shift
-                    panel. Calls already recorded stay visible and can still be removed &mdash; no history is lost.
-                  </p>
+              <div className="border-theme-surface-border/60 border-t pt-4">
+                <p className="text-theme-text-primary text-sm font-medium">How calls are recorded</p>
+                <p className="text-theme-text-muted mt-0.5 text-sm">
+                  Decides what an officer is asked when closing a shift out, and whether the shift panel carries a call
+                  log at all. Switching between these never deletes anything: calls already recorded stay visible and
+                  can still be removed.
+                </p>
+                <div role="radiogroup" aria-label="How calls are recorded" className="mt-3 space-y-2">
+                  {CALL_TRACKING_MODE_OPTIONS.map((option) => {
+                    // A missing setting reads as `detailed`, never `off` — the
+                    // absence of a stored mode means "what this department has
+                    // always done", not "stop tracking" (CLAUDE.md pitfall #19).
+                    const selected = (feature.call_tracking?.mode ?? 'detailed') === option.value;
+                    return (
+                      <label
+                        key={option.value}
+                        className={`flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors ${
+                          selected
+                            ? 'border-violet-600 bg-violet-500/5'
+                            : 'border-theme-surface-border hover:bg-theme-surface-hover'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="call-tracking-mode"
+                          value={option.value}
+                          checked={selected}
+                          // Named by the option alone, described by the
+                          // summary. Wrapping both in the <label> — the shape
+                          // this card pattern is usually written in — makes the
+                          // control's accessible name the label *and* the whole
+                          // explanatory paragraph, so a screen reader reads a
+                          // sentence where it should read "Log individual
+                          // calls, radio button, 1 of 3".
+                          aria-labelledby={`call-mode-${option.value}-label`}
+                          aria-describedby={`call-mode-${option.value}-summary`}
+                          disabled={savingFeature}
+                          onChange={() => {
+                            // Send the existing type list back untouched: the
+                            // payload replaces the whole call_tracking object,
+                            // so omitting it would wipe the department's own
+                            // call types — including under `off`, where they
+                            // are inert rather than gone and come back intact
+                            // the moment count-only is selected again.
+                            void saveFeature({
+                              call_tracking: {
+                                mode: option.value,
+                                call_types: feature.call_tracking?.call_types ?? [],
+                              },
+                            });
+                          }}
+                          className="mt-0.5 shrink-0"
+                        />
+                        <span className="min-w-0">
+                          <span
+                            id={`call-mode-${option.value}-label`}
+                            className="text-theme-text-primary block text-sm font-medium"
+                          >
+                            {option.label}
+                          </span>
+                          <span
+                            id={`call-mode-${option.value}-summary`}
+                            className="text-theme-text-secondary block text-xs"
+                          >
+                            {option.summary}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-label="Record a call count at close-out"
-                  aria-checked={feature.call_tracking?.mode === 'count_only'}
-                  disabled={savingFeature}
-                  onClick={() => {
-                    const next = feature.call_tracking?.mode === 'count_only' ? 'detailed' : 'count_only';
-                    // Send the existing type list back untouched: the payload
-                    // replaces the whole call_tracking object, so omitting it
-                    // would wipe the department's own call types.
-                    void saveFeature({
-                      call_tracking: { mode: next, call_types: feature.call_tracking?.call_types ?? [] },
-                    });
-                  }}
-                  className={`toggle-track-sm ${
-                    feature.call_tracking?.mode === 'count_only' ? 'bg-violet-600' : 'bg-theme-surface-border'
-                  }`}
-                >
-                  <span
-                    className={`toggle-knob-sm ${
-                      feature.call_tracking?.mode === 'count_only' ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
               </div>
               <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
                 <div>

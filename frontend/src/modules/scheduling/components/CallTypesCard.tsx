@@ -192,10 +192,17 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, lock
         anything not broken down is recorded as &ldquo;Not categorised&rdquo;.
       </p>
 
+      {/* Which mode it is matters, not merely that it is not count-only: the
+          list is equally inert under `detailed` and `off`, but for opposite
+          reasons, and a notice that names the wrong one sends an admin to
+          change a setting that was never the problem. */}
       {mode !== 'count_only' && (
         <div className="alert-info mt-3 text-sm">
-          These take effect when <strong>Record a call count at close-out</strong> is on. It is currently off, so
-          close-out logs calls one at a time instead.
+          These take effect when <strong>How calls are recorded</strong> is set to{' '}
+          <strong>Record a call count at close-out</strong>.{' '}
+          {mode === 'off'
+            ? 'Your department is not tracking calls, so nothing tallies against them.'
+            : 'Your department logs individual calls instead, so close-out never offers these rows.'}
         </div>
       )}
 
