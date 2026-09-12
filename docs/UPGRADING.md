@@ -185,6 +185,27 @@ could previously save either, and both are silent at scoring time — the first
 is a step nobody can pass, the second a step that appears scored out of
 something and carries no points. Existing stored templates are untouched.
 
+### A setup wizard stuck on a 500 is fixed by this upgrade (2026-09-12)
+
+Only relevant if you have an installation whose **first-run setup never
+finished**, returning a 500 from the setup screen with no way past it. If your
+department is already set up, this changes nothing you will notice.
+
+`onboarding_status` is meant to hold exactly one row and nothing enforced it.
+Two concurrent first-run requests — which the wizard's own page load issues in
+parallel — could each create one, and the reader then raised on finding two, so
+`GET /api/v1/onboarding/status` returned 500 **permanently**. Recovery needed
+direct database access at the one moment no account exists to sign in with.
+
+Migration `6ab7d903fae5` **collapses the duplicate rows and adds a unique
+index** so they cannot recur. The surviving row is the completed one if there
+is one, otherwise the furthest-progressed — so setup resumes where it actually
+got to, not where an accidental twin did. Duplicate rows are deleted; they were
+partial copies of a singleton, and the survivor carries the progress.
+
+**What to do:** nothing. If setup was stuck, reload it after upgrading and it
+will continue.
+
 ### Navigation layout became a department setting (2026-09-11)
 
 Setup has always asked whether a department wants navigation across the top or
