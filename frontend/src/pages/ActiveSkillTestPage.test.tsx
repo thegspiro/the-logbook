@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
@@ -310,8 +310,8 @@ describe('ActiveSkillTestPage', () => {
       currentMockTest = mockCompletedTest;
       renderWithRouter(<ActiveSkillTestPage />);
 
-      expect(screen.getByText('Passed')).toBeInTheDocument();
-      expect(screen.getByText('Overall Score: 95%')).toBeInTheDocument();
+      expect(screen.getByText(/Passed/)).toBeInTheDocument();
+      expect(screen.getByText('95%')).toBeInTheDocument();
     });
 
     it('should show candidate name', () => {
@@ -764,9 +764,12 @@ describe('ActiveSkillTestPage', () => {
 
       await user.click(screen.getByRole('button', { name: /^finish$/i }));
 
-      expect(await screen.findByText('Some steps have no score')).toBeInTheDocument();
-      expect(screen.getByText(/2 steps still have no Pass or Fail/)).toBeInTheDocument();
+      expect(await screen.findByText('Some steps have no result')).toBeInTheDocument();
+      expect(screen.getByText(/2 steps still have no result/)).toBeInTheDocument();
       expect(screen.getByText(/1 of them is marked Critical, which scores the same as a fail/)).toBeInTheDocument();
+      // The test cannot be filed with blanks, so the dialog must not imply it
+      // can be pushed past — it routes to the review screen, which lists them.
+      expect(screen.getByText(/cannot be submitted until every step has one/)).toBeInTheDocument();
     });
 
     it('should leave the examiner on the scoring screen when they choose to keep scoring', async () => {
@@ -777,7 +780,7 @@ describe('ActiveSkillTestPage', () => {
       await user.click(screen.getByRole('button', { name: /^finish$/i }));
       await user.click(await screen.findByRole('button', { name: /keep scoring/i }));
 
-      expect(screen.queryByText('Some steps have no score')).not.toBeInTheDocument();
+      expect(screen.queryByText('Some steps have no result')).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: /^finish$/i })).toBeInTheDocument();
       expect(mockUpdateTest).not.toHaveBeenCalled();
     });
@@ -792,7 +795,146 @@ describe('ActiveSkillTestPage', () => {
       await user.click(screen.getByRole('button', { name: /finish & review/i }));
 
       expect(await screen.findByText('Check the scorecard')).toBeInTheDocument();
-      expect(screen.queryByText('Some steps have no score')).not.toBeInTheDocument();
+      expect(screen.queryByText('Some steps have no result')).not.toBeInTheDocument();
+    });
+  });
+
+  // A blank step is not a neutral omission: a point-carrying one enlarges the
+  // denominator and earns nothing, and a blank critical step already scores as
+  // a failure. The review screen is the last point at which the person who
+  // watched the evolution can still fix it, so the scorecard cannot be filed
+  // until every step carries a judgement.
+  describe('Blocking a scorecard with blanks', () => {
+    beforeEach(() => {
+      // Section 0 of 2, so the action bar reads "Finish" rather than
+      // "Finish & Review". Set explicitly rather than inherited — see
+      // CLAUDE.md Pitfall #28.
+      mockSectionIndex = 0;
+      mockUpdateTest.mockReset();
+      mockUpdateCriterionResult.mockReset();
+    });
+
+    /** Reach the review screen with two steps still blank.
+     *
+     *  Returns the blocking panel, which is where the assertions belong: every
+     *  blank step also appears in the scorecard below it, so an unscoped query
+     *  matches twice. */
+    async function reachReview(user: ReturnType<typeof userEvent.setup>, official = false) {
+      const test = official ? { ...mockTestWithSections, is_practice: false } : mockTestWithSections;
+      currentMockTest = test;
+      mockUpdateTest.mockResolvedValue(test);
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /^finish$/i }));
+      await user.click(await screen.findByRole('button', { name: /review them/i }));
+      await screen.findByText('Check the scorecard');
+      return screen.getByRole('alert');
+    }
+
+    it('names every blank step rather than counting them', async () => {
+      const user = userEvent.setup();
+      const panel = await reachReview(user);
+
+      // A count told the examiner how many were missing and left them to find
+      // which — on a forty-step sheet that is the whole sheet, re-read.
+      expect(within(panel).getByText(/2 steps have no result yet/)).toBeInTheDocument();
+      expect(within(panel).getByText('Straps tightened')).toBeInTheDocument();
+      expect(within(panel).getByText('Mask stowed')).toBeInTheDocument();
+      // The statement is not the examiner's to resolve — it marks itself.
+      expect(within(panel).queryByText('Read this to the candidate')).toBeNull();
+    });
+
+    it('refuses to submit an official test while a step is blank', async () => {
+      const user = userEvent.setup();
+      await reachReview(user, true);
+
+      expect(screen.getByRole('button', { name: /submit test/i })).toBeDisabled();
+    });
+
+    // A practice scorecard the candidate then reviews has to add up the same
+    // way an official one does, so it is gated identically.
+    it('refuses to score a practice attempt while a step is blank', async () => {
+      const user = userEvent.setup();
+      await reachReview(user);
+
+      expect(screen.getByRole('button', { name: /view results/i })).toBeDisabled();
+    });
+
+    // The way out for a step that genuinely could not be watched — the
+    // evolution never reached the hydrant, the prop failed.
+    it('records a step as not observed, with a reason', async () => {
+      const user = userEvent.setup();
+      await reachReview(user);
+
+      await user.click(screen.getByRole('button', { name: /^not observed$/i }));
+      await user.type(
+        await screen.findByLabelText(/why could this step not be observed/i),
+        'The evolution never reached the hydrant'
+      );
+      await user.click(screen.getByRole('button', { name: /record as not observed/i }));
+
+      // The evidence is cleared with the verdict: a score left behind would
+      // print in the CSV export beside an outcome of "waived".
+      expect(mockUpdateCriterionResult).toHaveBeenCalledWith(
+        'section-1',
+        'criterion-1-0',
+        {
+          waived: true,
+          waive_reason: 'The evolution never reached the hydrant',
+          passed: null,
+          score: undefined,
+          time_seconds: undefined,
+          checklist_completed: undefined,
+        },
+        'Doffing',
+        'Mask stowed'
+      );
+    });
+
+    // `waived` outranks the verdict everywhere it is read, and the store merges
+    // shallowly — so without this a step marked after being waived would stay
+    // out of the point pool, scored but not counted.
+    it('clears the waiver when the step is marked after all', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /^pass$/i }));
+
+      expect(mockUpdateCriterionResult).toHaveBeenCalledWith(
+        'section-0',
+        'criterion-0-1',
+        expect.objectContaining({ passed: true, waived: undefined, waive_reason: undefined }),
+        'Donning',
+        'Straps tightened'
+      );
+    });
+
+    // A skill the candidate must demonstrate is never "not applicable", and
+    // the API rejects the waiver — so offering the button would only fail at
+    // submission, after the examiner has left the drill ground.
+    it('never offers the waiver on a critical step', async () => {
+      const user = userEvent.setup();
+      const panel = await reachReview(user);
+
+      // Two blank steps are listed, and only the non-critical one may be
+      // waived — so exactly one button, and it is not the critical step's.
+      expect(within(panel).getByText('Straps tightened')).toBeInTheDocument();
+      expect(within(panel).getByText('(Critical)')).toBeInTheDocument();
+      expect(within(panel).getAllByRole('button', { name: /^not observed$/i })).toHaveLength(1);
+
+      await user.click(within(panel).getByRole('button', { name: /^not observed$/i }));
+      await user.type(await screen.findByLabelText(/why could this step not be observed/i), 'never reached it');
+      await user.click(screen.getByRole('button', { name: /record as not observed/i }));
+
+      // The waiver landed on 'Mask stowed', not on the critical step above it.
+      expect(mockUpdateCriterionResult).toHaveBeenCalledWith(
+        'section-1',
+        'criterion-1-0',
+        expect.objectContaining({ waived: true }),
+        'Doffing',
+        'Mask stowed'
+      );
     });
   });
 

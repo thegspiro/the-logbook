@@ -192,4 +192,63 @@ describe('computeSectionTally', () => {
       expect(computeSectionTally(criteria, [{ criterion_id: 'criterion-0-0', passed: false }]).deducted).toBe(0);
     });
   });
+
+  // Mirrors build_score_breakdown: a waived step leaves the pool in BOTH
+  // directions. Counting it in the denominator alone would charge the candidate
+  // full marks for something the examiner recorded as unobservable.
+  describe('waived steps', () => {
+    it('takes a waived step out of the point pool entirely', () => {
+      const criteria = [
+        criterion({ id: 'criterion-0-0', score_mode: 'points' }),
+        criterion({ id: 'criterion-0-1', score_mode: 'points' }),
+      ];
+      const results: CriterionResult[] = [
+        { criterion_id: 'criterion-0-0', passed: true },
+        { criterion_id: 'criterion-0-1', passed: null, waived: true, waive_reason: 'prop failed' },
+      ];
+
+      const tally = computeSectionTally(criteria, results);
+
+      // One point out of one, not one out of two — the waived step is not a
+      // mark the candidate missed.
+      expect(tally.available).toBe(1);
+      expect(tally.earned).toBe(1);
+      expect(tally.waived).toBe(1);
+    });
+
+    it('never charges a deduction against a waived step', () => {
+      const criteria = [criterion({ id: 'criterion-0-0', score_mode: 'deduct', deduction_points: 3 })];
+      const results: CriterionResult[] = [
+        { criterion_id: 'criterion-0-0', passed: false, waived: true, waive_reason: 'never reached' },
+      ];
+
+      expect(computeSectionTally(criteria, results).deducted).toBe(0);
+    });
+
+    it('counts a waived step as neither passed, failed nor unscored', () => {
+      const criteria = [criterion({ id: 'criterion-0-0' })];
+      const results: CriterionResult[] = [
+        { criterion_id: 'criterion-0-0', passed: null, waived: true, waive_reason: 'not observed' },
+      ];
+
+      const tally = computeSectionTally(criteria, results);
+
+      expect(tally.waived).toBe(1);
+      expect(tally.passed).toBe(0);
+      expect(tally.failed).toBe(0);
+      expect(tally.notScored).toBe(0);
+    });
+  });
+
+  // The API accepts any non-negative score, so an over-max value would push
+  // the numerator past the denominator and report above 100%.
+  it('clamps a scored step to what it is worth', () => {
+    const criteria = [criterion({ id: 'criterion-0-0', type: 'score', max_score: 5, required: true })];
+    const results: CriterionResult[] = [{ criterion_id: 'criterion-0-0', passed: true, score: 9 }];
+
+    const tally = computeSectionTally(criteria, results);
+
+    expect(tally.available).toBe(5);
+    expect(tally.earned).toBe(5);
+  });
 });

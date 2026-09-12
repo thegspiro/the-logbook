@@ -139,8 +139,18 @@ describe('SkillTestScorecardPrintPage', () => {
     expect(within(rowFor('Seal quality')).getByText('4 / 5')).toBeInTheDocument();
     expect(within(rowFor('In time')).getByText(/48s/)).toBeInTheDocument();
     expect(within(rowFor('PPE')).getByText(/1\/2/)).toBeInTheDocument();
-    expect(within(rowFor('Brief')).getByText('read aloud')).toBeInTheDocument();
     expect(within(rowFor('Checks cylinder')).getByText('Clean check.')).toBeInTheDocument();
+  });
+
+  // A statement is scripted text the examiner reads aloud — never judged, and
+  // accounted for by no number on the scorecard. It belongs on the sheet the
+  // examiner works from, not on the record of what the candidate did.
+  it('leaves statements off the printed record', async () => {
+    renderAt();
+    await screen.findByText('Checks cylinder');
+
+    expect(screen.queryByText('Brief')).not.toBeInTheDocument();
+    expect(screen.queryByText('read aloud')).not.toBeInTheDocument();
   });
 
   it('says plainly when a step was never marked', async () => {
