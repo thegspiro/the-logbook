@@ -8515,16 +8515,20 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 272,
     anchor: "Scheduling → Settings → General, scrolled to the",
-    alt: "Scheduling Settings, General section — the Shift close-out rules block with 'Record a call count at close-out' switched on",
+    alt: "Scheduling Settings, General section — the 'How calls are recorded' choices, with 'Record a call count at close-out' selected",
     route: "/scheduling/admin/settings/general",
     prepare: async (page) => {
-      // Set through the API rather than by clicking the toggle: the shot is of
-      // the settled on-state, and a click leaves the control mid-transition and
+      // Set through the API rather than by clicking the option: the shot is of
+      // the settled state, and a click leaves the control mid-transition and
       // the section's save state ambiguous.
       await setCallTracking("count_only")(page);
       await page.reload({ waitUntil: "domcontentloaded" });
+      // Frame on the group heading, not on the selected option's label. The
+      // control became a three-option radio group on 2026-09-12, and scrolling
+      // to the middle option centred the viewport on it — cropping the choice
+      // above out of a picture whose whole subject is that there are three.
       await page
-        .getByText(/Record a call count at close-out/i)
+        .getByText(/How calls are recorded/i)
         .first()
         .scrollIntoViewIfNeeded();
     },

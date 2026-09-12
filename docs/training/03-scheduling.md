@@ -357,11 +357,7 @@ Switching between them never deletes anything. Calls already recorded stay
 visible and removable, and your configured call types survive a trip through
 either other setting.
 
-> **The screenshot below predates 2026-09-12**, when this was a two-state
-> **Record a call count at close-out** switch rather than the three choices
-> above. The block's position on the page is unchanged. Pending re-capture.
-
-![Scheduling Settings, General section — the Shift close-out rules block with 'Record a call count at close-out' switched on](./images/03-74-settings-call-count-toggle.png)
+![Scheduling Settings, General section — the 'How calls are recorded' choices, with 'Record a call count at close-out' selected](./images/03-74-settings-call-count-toggle.png)
 
 It takes effect immediately **in your own browser** — no reload, no restart.
 **Tell your officers before you flip it**, because it changes what they see at

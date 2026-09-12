@@ -3314,7 +3314,46 @@ class Seeder:
         Recording counts does **not** finalize anything. Step 2 saves and the
         shift stays open, so this neither spends the close-out fixture nor
         changes any shift's finalized state.
+
+        **The organization has to be in count-only mode while this runs.**
+        Since 2026-09-11 the endpoint refuses a close-out count from any other
+        mode — the rows it writes are invisible to a report that picks its
+        source from the org's current mode, while the call-type deletion guard
+        still reads them. This used to work from the `detailed` default, which
+        is exactly the accident the gate exists to stop. The mode is restored
+        afterwards so the seeder's net effect on settings stays zero:
+        `seed_shift_calls` above needs `detailed` to write its per-incident
+        rows, and every screenshot that cares forces its own mode anyway.
         """
+        settings = self.api.get("/scheduling/settings") or {}
+        tracking = settings.get("call_tracking") or {}
+        previous_mode = tracking.get("mode") or "detailed"
+        call_types = tracking.get("call_types") or []
+
+        def set_mode(mode: str) -> bool:
+            try:
+                self.api.put(
+                    "/scheduling/settings",
+                    # The payload replaces the whole call_tracking object, so
+                    # the type list has to travel with it or the department's
+                    # own types are wiped.
+                    {"call_tracking": {"mode": mode, "call_types": call_types}},
+                )
+                return True
+            except ApiError as exc:
+                self.blocked.append(f"count-only calls: setting mode {mode}: {exc}")
+                return False
+
+        if previous_mode != "count_only" and not set_mode("count_only"):
+            return
+        try:
+            self._record_count_only_calls()
+        finally:
+            if previous_mode != "count_only":
+                set_mode(previous_mode)
+
+    def _record_count_only_calls(self) -> None:
+        """Write the counts themselves. Caller owns the tracking mode."""
         shifts = [
             s
             for s in items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
