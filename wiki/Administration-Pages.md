@@ -153,7 +153,7 @@ every gate above it also opens.**
 ## Members settings moved onto the sectioned frame _(2026-09-06 → 09-11)_
 
 Five settings that lived in three different places are now sections of one
-screen at `/members/admin/settings`, on the same section-sidebar frame as
+screen at `/members/admin/settings`, on the same shared settings frame as
 Scheduling's and Organization's settings.
 
 | Section            | Route                                | What it sets                            | Permission the **endpoint** wants                                                         |

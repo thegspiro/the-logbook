@@ -4357,6 +4357,171 @@ export const SHOTS = [
     // check is Total Active.
     allowEmptyState: true,
   },
+  // ── 20 September release: the setup wizard ──────────────────────────
+  //
+  // These run against a department that does NOT exist yet. The wizard only
+  // serves while `needs_onboarding` is true; once bootstrap_demo.py creates the
+  // organization, /onboarding redirects to sign-in and these capture the login
+  // page instead. So they are taken FIRST, against an empty database, before
+  // the bootstrap step -- the reverse of every other shot here.
+  {
+    id: "20-01-onboarding-prepare",
+    doc: "20-september-2026-release-changes.md",
+    line: 1022,
+    anchor:
+      "`/onboarding/prepare` showing both lists — what setup requires and what it",
+    alt: "Setup Prerequisites — the two lists: what setup requires, and what it will ask for but can skip",
+    route: "/onboarding/prepare",
+    auth: "anonymous",
+    // Against the seeded department this captures the LOGIN page: once an
+    // organization exists, needs_onboarding() is false and /onboarding/*
+    // redirects to sign-in. capture.mjs would fail it on the pathname change,
+    // which is the good outcome -- but it would also never produce the image.
+    capturedElsewhere: "scripts/screenshots/wizard-walk.mjs",
+    fullPage: true,
+  },
+  {
+    id: "20-02-onboarding-progress-order",
+    doc: "20-september-2026-release-changes.md",
+    line: 1052,
+    anchor:
+      "The onboarding progress indicator on a mid-flow step, showing the new",
+    alt: "The setup progress strip on step 3 — Step 3 of 11: Modules, with steps 1 and 2 ticked and the optional steps marked",
+    route: "/onboarding/modules",
+    // Needs a live onboarding session, not just an empty database: a fresh
+    // browser at /onboarding/modules has none, so the strip resets to "Step 1
+    // of 11" and the completed ticks the caption is about disappear.
+    capturedElsewhere: "scripts/screenshots/wizard-walk.mjs",
+  },
+  {
+    id: "20-03-onboarding-rank-ladder",
+    doc: "20-september-2026-release-changes.md",
+    line: 1074,
+    anchor:
+      "Step 4 with the rank ladder editor open — a renamed rank, a reordered",
+    alt: "Step 4's rank ladder — each rank with the shift seats it may fill, an Edit control per rank, and Add Rank",
+    route: "/onboarding/positions",
+    // Same session requirement as 20-02; a fresh browser here is redirected to
+    // /onboarding/start.
+    capturedElsewhere: "scripts/screenshots/wizard-walk.mjs",
+  },
+  // ── 20 September release: reachable from the seeded department ──────
+  {
+    id: "20-04-org-profile-navigation-layout",
+    doc: "20-september-2026-release-changes.md",
+    line: 940,
+    anchor:
+      "Settings → Organization → Profile with the Navigation Layout control",
+    alt: "The Navigation Layout control in Settings → General → Profile, noting that it applies to everyone in the department",
+    route: "/settings",
+    expect: "Navigation Layout",
+    // Clipped to the fieldset. The settings page is long, and the subject is
+    // one control -- a fullPage shot of it pictures the department profile.
+    selector: 'fieldset:has(legend:text-is("Navigation layout"))',
+    prepare: async (page) => {
+      // Checked explicitly rather than with a swallowing .catch: the settings
+      // page may already open on Profile, so a missing button is expected --
+      // but a missing FIELDSET is not, and that has to be allowed to throw.
+      const profile = page.getByRole("button", { name: /^Profile$/ }).first();
+      if (await profile.count()) {
+        await profile.click({ timeout: 15_000 });
+        await page.waitForTimeout(1200);
+      }
+      await page
+        .locator('fieldset:has(legend:text-is("Navigation layout"))')
+        .scrollIntoViewIfNeeded();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    id: "20-05-members-settings-ranks",
+    doc: "20-september-2026-release-changes.md",
+    line: 1110,
+    anchor:
+      "The Members Administration → Settings screen with the section sidebar",
+    // "across the top", not "in the sidebar": SettingsLayout renders top-level
+    // sections as a segmented strip -- its own comment says the hint text "no
+    // longer sits in a sidebar that this shell does not have". Only SUB-sections
+    // get the md:w-52 rail.
+    alt: "Members Administration → Settings with its five sections across the top and Operational Ranks open",
+    route: "/members/admin/settings/ranks",
+    expect: "Operational Ranks",
+    fullPage: true,
+  },
+  {
+    id: "20-06-scheduling-closeout-queue",
+    doc: "20-september-2026-release-changes.md",
+    line: 1158,
+    anchor:
+      "`/scheduling/admin/closeout` with several shifts in the queue, oldest",
+    alt: "The shift close-out queue — ended shifts that were never closed out, oldest first, beside the close-out settings",
+    route: "/scheduling/admin/closeout",
+    expect: "Close-out",
+    fullPage: true,
+  },
+  {
+    id: "20-07-applicant-place-on-stage",
+    doc: "20-september-2026-release-changes.md",
+    line: 1180,
+    anchor:
+      "The applicant board with the place-on-a-stage action open on an applicant,",
+    // The stage list itself cannot be pictured: it is a native <select>, and an
+    // open native dropdown is drawn by the OS, outside the page Playwright
+    // captures. The closed picker and the Place button are the whole control.
+    alt: "The Not on a stage panel in an applicant's drawer — the stage picker and the Place button",
+    route: "/prospective-members",
+    // "Prospective Members" would be satisfied by the board alone -- it is the
+    // page heading, present whether or not the subject is on screen. The panel's
+    // own wording is the only thing absent from the screen you would land on by
+    // mistake.
+    expect: "Not on a stage",
+    prepare: async (page) => {
+      // The panel renders only for an applicant with no current stage
+      // (`canPlaceOnStage = !applicant.current_stage_id`). Every seeded
+      // applicant is placed on one, so the board alone can never show it --
+      // the demo database needs one applicant left unassigned.
+      const card = page.getByText("Marcus Webb", { exact: true }).first();
+      await card.waitFor({ timeout: 30_000 });
+      await card.click();
+      await page.locator("select#place-on-stage").waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+    },
+    selector: 'div:has(> p:text-is("Not on a stage"))',
+  },
+  // ── 08 Admin & Reports: the members settings sections ────────────────
+  {
+    id: "08-79-members-settings-ranks",
+    doc: "08-admin-reports.md",
+    line: 240,
+    anchor:
+      "`/members/admin/settings/ranks` with the section sidebar showing all five",
+    alt: "The Operational Ranks section — the rank ladder with each rank's fillable shift seats",
+    route: "/members/admin/settings/ranks",
+    // Not "Operational Ranks": that string is also the section's TAB label,
+    // which sits above the clip, so the frame check failed on a subject it had
+    // deliberately cropped out. This sentence exists only inside the card.
+    expect: "Customize rank and position choices",
+    // Clipped to the card. 20-05 already pictures this whole screen for the
+    // release lesson, and a second fullPage of the same route came back
+    // byte-identical -- 277 KB of duplicate binary in git for no added meaning.
+    // The admin guide wants the ladder itself; the release lesson wants the
+    // five sections around it.
+    // `div.card` and not a `:has()` chain over bare divs: capture.mjs resolves
+    // `selector` with .first(), which on a nested-div selector is the OUTERMOST
+    // match -- the page wrapper -- so the shot came back as the whole viewport.
+    selector: 'div.card:has(h2:text-is("Operational Ranks"))',
+  },
+  {
+    id: "08-80-members-settings-tiers",
+    doc: "08-admin-reports.md",
+    line: 245,
+    anchor:
+      "`/members/admin/settings/tiers` with the tier ladder open, showing the",
+    alt: "The Membership Tiers section — the tier ladder and what each tier confers",
+    route: "/members/admin/settings/tiers",
+    expect: "Membership Tiers",
+    fullPage: true,
+  },
   // ── 00 Getting Started ──────────────────────────────────────────────
   {
     id: "00-01-login-page",

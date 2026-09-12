@@ -97,7 +97,7 @@ IP Security, Platform Analytics.]**
 
 ### WHERE THE REST OF THE SETTINGS LIVE (ADDED 2026-09-12)
 
-**[SCREEN: Settings → Organization → Profile, scrolled to Navigation Layout]**
+**[SCREEN: Settings → General → Profile, scrolled to Navigation Layout]**
 
 > "Two things are worth knowing before you go hunting for a setting that isn't
 > on this screen."
@@ -107,7 +107,7 @@ IP Security, Platform Analytics.]**
 > That's newer than it looks; until September eleventh the choice only ever
 > reached the browser that made it."
 
-**[SCREEN: Members → Administration → Settings, section sidebar visible]**
+**[SCREEN: Members → Administration → Settings, the five-section strip visible]**
 
 > "And five settings that used to be scattered are now one screen at
 > **Members, Administration, Settings** — contact visibility, membership ID
@@ -1396,7 +1396,7 @@ written."]**
 > nothing. So the officer who ran setup saw their choice, and every other
 > member saw the default, and there was no screen anywhere to change it."
 
-**[CALLOUT: "Settings → Organization → Profile → Navigation Layout"]**
+**[CALLOUT: "Settings → General → Profile → Navigation Layout"]**
 
 > "It's a department setting now, which is the fix. But an upgraded install has
 > no stored value, so on the first page load **everyone gets the left sidebar**

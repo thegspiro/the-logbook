@@ -20,6 +20,7 @@ import { getCachedShiftSettings, loadShiftSettings, shiftSettingsService } from 
 import type { SettingsTab } from './schedulingSettingsSections';
 import { LOCALLY_SAVED_SECTIONS, SCHEDULING_SETTINGS_SECTIONS } from './schedulingSettingsSections';
 import SettingsPanelHead from '../../../components/settings/SettingsPanelHead';
+import { getErrorMessage } from '../../../utils/errorHandling';
 import { SchedulingNotificationsPanel } from './SchedulingNotificationsPanel';
 import { TemplatesOverviewCard } from './TemplatesOverviewCard';
 import { ApparatusTypeDefaultsCard } from './ApparatusTypeDefaultsCard';
@@ -71,8 +72,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       setPlatoonsEnabled(enabled);
       toast.success(`Platoon scheduling ${enabled ? 'enabled' : 'disabled'}`);
       if (!enabled && activeTab === 'platoons') onTabChange('general');
-    } catch {
-      toast.error('Failed to update platoon setting');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to update platoon setting'));
     } finally {
       setSavingPlatoonToggle(false);
     }
@@ -121,8 +122,15 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         settingsLoaded: true,
       });
       toast.success('Settings saved');
-    } catch {
-      toast.error('Failed to save settings');
+    } catch (err) {
+      // `PUT /scheduling/settings` refuses a call-type list for reasons only it
+      // can see — a type a filed shift report still names, or a list over the
+      // cap — and names which one. The editor hides delete for a locked type,
+      // but from a `call_type_locked` snapshot the browser may have held for an
+      // hour, which is the whole reason the server re-checks. Replacing that
+      // sentence with "Failed to save settings" left the chief with a refusal
+      // and no way to tell which type was blocking it.
+      toast.error(getErrorMessage(err, 'Failed to save settings'));
     } finally {
       setSavingFeature(false);
     }
@@ -172,8 +180,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       setSettings(persisted);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {
-      toast.error('Failed to save settings');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to save settings'));
     } finally {
       setSaving(false);
     }
@@ -184,8 +192,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     try {
       const defaults = await shiftSettingsService.resetShiftSettings();
       setSettings(defaults);
-    } catch {
-      toast.error('Failed to reset settings');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to reset settings'));
     } finally {
       setSaving(false);
     }

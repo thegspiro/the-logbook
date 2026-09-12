@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
@@ -72,7 +72,9 @@ vi.mock('./ShiftReportsSettingsPanel', () => ({
   ShiftReportsSettingsPanel: () => <div>ShiftReportsSettingsPanel</div>,
 }));
 vi.mock('./PlatoonRosterPanel', () => ({ PlatoonRosterPanel: () => <div>PlatoonRosterPanel</div> }));
+vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
+import toast from 'react-hot-toast';
 import { ShiftSettingsPanel } from './ShiftSettingsPanel';
 import { schedulingService } from '../services/api';
 import type { SchedulingFeatureSettings } from '../services/api';
@@ -280,5 +282,128 @@ describe('ShiftSettingsPanel switches with the flags absent from the response', 
       // confident "off" from the same undefined.
       expect(screen.getByRole('switch', { name })).toHaveAttribute('aria-checked', 'false');
     }
+  });
+});
+
+/**
+ * A refused write says what the server said.
+ *
+ * Both settings endpoints refuse with a sentence naming the cause — a call
+ * type a filed shift report still refers to, a list past the cap. Four
+ * handlers here caught those with a bare `catch` and printed a fixed string,
+ * which leaves an officer holding a refusal with nothing to act on and no way
+ * to tell which value is blocking the save.
+ */
+describe('ShiftSettingsPanel when the server refuses a write', () => {
+  const refusal = (detail: string) => ({ response: { status: 400, data: { detail } } });
+
+  const BASE_FEATURE: SchedulingFeatureSettings = {
+    platoons_enabled: false,
+    max_hours_per_window: 0,
+    hours_window_days: 7,
+    auto_generate_enabled: false,
+    auto_generate_weeks: 4,
+    require_end_of_shift_checks: false,
+    restrict_checkin_to_assigned: false,
+    signup_closes_minutes_before: 0,
+    late_signup_grace_minutes: 60,
+    enforce_evoc: true,
+  };
+
+  beforeEach(() => {
+    mockLoadShiftSettings.mockReset();
+    mockLoadShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
+    mockSaveShiftSettings.mockReset();
+    mockSaveShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
+    mockResetShiftSettings.mockReset();
+    mockResetShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
+    mockUpdateFeatureSettings.mockReset();
+    mockUpdateFeatureSettings.mockResolvedValue(BASE_FEATURE);
+    vi.mocked(schedulingService.getFeatureSettings).mockReset();
+    vi.mocked(schedulingService.getFeatureSettings).mockResolvedValue(BASE_FEATURE);
+    vi.mocked(toast.error).mockReset();
+  });
+
+  afterEach(() => {
+    vi.mocked(schedulingService.getFeatureSettings).mockReset();
+    vi.mocked(schedulingService.getFeatureSettings).mockResolvedValue(BASE_FEATURE);
+  });
+
+  it('names the call type the server refused to drop', async () => {
+    const user = userEvent.setup();
+    const detail = 'Cannot delete a call type that history still refers to: Structure Fire';
+    vi.mocked(schedulingService.getFeatureSettings).mockResolvedValue({
+      ...BASE_FEATURE,
+      call_tracking: {
+        mode: 'detailed',
+        call_types: [
+          { slug: 'structure_fire', label: 'Structure Fire', active: true },
+          { slug: 'ems', label: 'EMS', active: true },
+        ],
+      },
+      // Empty on purpose. This is the stale snapshot the server exists to
+      // re-check: the editor offers the delete precisely because the browser's
+      // copy of `call_type_locked` predates the report that now names the type.
+      call_type_locked: [],
+      call_type_usage: {},
+    });
+    mockUpdateFeatureSettings.mockRejectedValue(refusal(detail));
+
+    renderPanel('general');
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Structure Fire' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    await user.click(screen.getByRole('button', { name: 'Save call types' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(detail));
+  });
+
+  it('reports why the platoon toggle was refused', async () => {
+    const user = userEvent.setup();
+    const detail = 'Platoon scheduling cannot be switched off while shifts are assigned to a platoon.';
+    mockUpdateFeatureSettings.mockRejectedValue(refusal(detail));
+
+    renderPanel('general');
+
+    await user.click(await screen.findByRole('switch', { name: 'Platoon scheduling' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(detail));
+  });
+
+  it('reports why the Save Settings footer was refused', async () => {
+    const user = userEvent.setup();
+    const detail = 'A shift cannot default to longer than 24 hours.';
+    mockSaveShiftSettings.mockRejectedValue(refusal(detail));
+
+    renderPanel('general');
+
+    await user.click(screen.getByRole('button', { name: 'Save Settings' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(detail));
+  });
+
+  it('reports why a reset to defaults was refused', async () => {
+    const user = userEvent.setup();
+    const detail = 'Default shift settings cannot be reset while a generation run is in progress.';
+    mockResetShiftSettings.mockRejectedValue(refusal(detail));
+
+    renderPanel('general');
+
+    await user.click(screen.getByRole('button', { name: 'Reset to defaults' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(detail));
+  });
+
+  it('still falls back to a fixed string when the failure carries no message', async () => {
+    const user = userEvent.setup();
+    // A request that never got an answer has nothing to report but the action
+    // that failed, so the fallback has to survive the change.
+    mockSaveShiftSettings.mockRejectedValue(new Error(''));
+
+    renderPanel('general');
+
+    await user.click(screen.getByRole('button', { name: 'Save Settings' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to save settings'));
   });
 });

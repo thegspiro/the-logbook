@@ -237,15 +237,9 @@ promotes by vote, by application, or on its own date.
 It is the same editor the setup wizard shows at step 4, so a department that
 set its ladder during installation is looking at its own answers here.
 
-> **Screenshot needed:**
-> _[`/members/admin/settings/ranks` with the section sidebar showing all five
-> sections and the rank ladder open — a renamed rank, the reorder control, and
-> the seat assignment for one rank.]_
+![The Operational Ranks section — the rank ladder with each rank's fillable shift seats](./images/08-79-members-settings-ranks.png)
 
-> **Screenshot needed:**
-> _[`/members/admin/settings/tiers` with the tier ladder open, showing the
-> per-tier voting / office / attendance-threshold controls and the automatic
-> advancement switch.]_
+![The Membership Tiers section — the tier ladder and what each tier confers](./images/08-80-members-settings-tiers.png)
 
 ---
 

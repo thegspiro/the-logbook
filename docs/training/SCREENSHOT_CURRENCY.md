@@ -3,9 +3,21 @@
 ## Disposition for September 6-12, 2026 - setup was rebuilt, and one shot broke silently
 
 Audit: [`CHANGE_AUDIT_2026-09-06_TO_09-12.md`](../CHANGE_AUDIT_2026-09-06_TO_09-12.md).
-Nothing below has been shot yet; this is the queue. The inventory items list is
-**not** in it -- that was closed by the September 7-8 disposition immediately
-below, which re-shot five images, added two, and verified one.
+
+**Nine of these have now been shot** (2026-09-12), taking the library from
+518/560 to **527/569**. What remains queued is listed as such below. The
+inventory items list is **not** in this window at all -- that was closed by the
+September 7-8 disposition immediately below, which re-shot five images, added
+two, and verified one.
+
+**The three wizard shots are `capturedElsewhere`.** They are taken by
+`scripts/screenshots/wizard-walk.mjs`, not by `capture.mjs`, and the manifest
+says so -- see [The wizard cannot be shot by
+capture.mjs](#the-wizard-cannot-be-shot-by-capturemjs). `apply_placeholders.py`
+only applies shots the capture report marks `ok`, so a `capturedElsewhere`
+image has to be placed into the guide by hand, in the applier's own
+`![alt](./images/id.png)` form. That is how the `05-7x` inventory-setup shots
+got there too.
 
 **Read the fixed shot first.** It is the only item here that was already
 producing a wrong image rather than merely lacking one.
@@ -58,49 +70,100 @@ in the library needs a department that exists. The two requirements are
 mutually exclusive in one run, which is why the library has never held a wizard
 capture and why `08-admin-reports.md` says so in prose.
 
-So these need a **scratch install captured separately** and copied in. Shoot
-them in one sitting while the wizard is open:
+### The wizard cannot be shot by capture.mjs
 
-| Shot | What must be in frame | Why |
-| ---- | --------------------- | --- |
-| `/onboarding/prepare` | **Both lists** -- required and optional | The split is the entire point of the screen; one list teaches nothing |
-| Progress indicator, mid-flow | The eleven steps in the new order, with optional markers | Any older frame showing Stations at step 2 or the administrator at step 9 is **wrong, not stale** |
-| `/onboarding/start`, member-numbering block | The switch, prefix, and starting number | New in step 1 |
-| `/onboarding/positions`, tier ladder | One stage expanded, showing the voting / office / attendance controls **and** the automatic-advancement switch | The switch is on by default and acts monthly -- the training lesson leans on this frame |
-| `/onboarding/positions`, rank ladder | A renamed rank, the reorder control, one rank's seat assignment | New in setup |
-| `/onboarding/positions`, permission rows | Rows for a **deliberately small** module selection | The filtering is only visible by contrast; enable three modules, not twenty |
+`wizard-walk.mjs` runs against an **empty** database, before
+`bootstrap_demo.py`, and drives the real wizard. Three constraints made this
+harder than "point a capture at a route", and all three are encoded in the
+script:
+
+1. **An empty database is not enough for two of the three.** The progress strip
+   and the rank ladder need a live onboarding *session*. A fresh browser at
+   `/onboarding/modules` has none, so the strip resets to "Step 1 of 11" and the
+   completed ticks vanish; at `/onboarding/positions` it is redirected to
+   `/onboarding/start` outright. Both clips are therefore taken **inside** the
+   walk's own session, not by revisiting the route afterwards.
+2. **Both subjects are panels on very tall pages.** Step 4 is ~5,200px and the
+   modules step ~3,400px; a `fullPage` shot of either renders its subject as a
+   thin band and pictures the position templates or the module grid instead.
+   Both are clipped, and the script asserts on the clip's own text before
+   writing.
+3. **A duplicate-row race can brick the wizard mid-run** -- see the note at the
+   end of this section. `POST /onboarding/start` once, serially, before opening
+   a browser.
+
+| Shot | Status | Notes |
+| ---- | ------ | ----- |
+| `20-01` `/onboarding/prepare` | **shot** | Both lists in frame; the footer reads "9 of the 11 steps are optional" |
+| `20-02` progress strip, mid-flow | **shot** | Clipped. "Step 3 of 11: Modules", steps 1-2 ticked, Modules marked optional |
+| `20-03` step 4 rank ladder | **shot** | Clipped to the card: each rank's fillable seats, per-rank Edit, Add Rank |
+| `/onboarding/start`, member-numbering block | **queued** | The switch, prefix and starting number. It sits in a collapsed section of the step-1 form, so it needs a `prepare` that expands that section first |
+| `/onboarding/positions`, tier ladder | **queued** | One tier expanded, showing the voting / office / attendance controls **and** the automatic-advancement switch. `08-80` pictures the same editor at its Settings address, which may be enough |
+| `/onboarding/positions`, permission rows | **queued** | Rows for a **deliberately small** module selection |
 
 **Capture the permission rows last** and with few modules enabled. Shot against
 a full module set the change is invisible, and the frame argues the opposite of
 the caption.
 
+**`20-03` does not show a renamed rank**, which the placeholder originally asked
+for. The ladder is pictured at its shipped defaults instead: staging a rename
+would picture something a reader cannot reproduce, and the controls that make
+renaming possible (per-rank **Edit**, the reorder arrows, **Add Rank**) are all
+in frame. The caption was changed to match the picture rather than the picture
+staged to match the caption.
+
 ### New captures -- reachable from the demo department
 
 These need no special environment and can go into the normal run:
 
-| Route | Disposition | Notes |
-| ----- | ----------- | ----- |
-| `/members/admin/settings` | **NEW** | The hub, with the section sidebar showing all five |
-| `/members/admin/settings/ranks` | **NEW** | Already has a manifest entry (`03-39`); the doc anchors are new |
-| `/members/admin/settings/tiers` | **NEW** | Ladder open, per-tier controls and the advancement switch visible |
-| `/members/admin/settings/evoc` | **NEW** | Caption the `apparatus.manage` gate -- it is the one section `members.manage` will not save |
-| `/members/admin/settings/visibility` | **REPLACE** | Same settings, now on the section-sidebar frame rather than the global settings page |
-| `/members/admin/settings/ids` | **REPLACE** | Same |
-| `/scheduling/admin/closeout` | **NEW** | Several shifts queued, oldest first; shoot on a department with call tracking on so the settings summary beside it is populated |
-| Shift panel -> **Calls** log | **REPLACE** | Now hidden unless the department's call-tracking mode has one. An existing frame showing it on a count-only department is fine; one showing it on a department that tracks nothing is wrong |
-| Applicant board -> place on a stage | **NEW** | The new coordinator action, with the stage list open |
-| Settings -> Organization -> Profile -> **Navigation Layout** | **NEW** | The control `UPGRADING.md` sends operators to. Shoot with **left** selected -- that is what every upgraded department sees |
+| Route | Status | Notes |
+| ----- | ------ | ----- |
+| `/members/admin/settings/ranks` | **shot** `20-05` | Full screen: all five sections across the top, Operational Ranks open |
+| `/members/admin/settings/ranks` | **shot** `08-79` | Clipped to the card, for the admin guide. See the duplicate note below |
+| `/members/admin/settings/tiers` | **shot** `08-80` | Ladder, the "decides who votes" warning, the advancement switch |
+| `/scheduling/admin/closeout` | **shot** `20-06` | 30 shifts oldest-first; the settings summary reads "Individual call records" |
+| Applicant board -> place on a stage | **shot** `20-07` | Clipped to the **Not on a stage** panel. See the seeding note below |
+| Settings -> General -> Profile -> **Navigation Layout** | **shot** `20-04` | Clipped to the fieldset, **left** selected -- what every upgraded department sees |
+| `/members/admin/settings/evoc` | **queued** | Caption the `apparatus.manage` gate -- the one section `members.manage` will not save |
+| `/members/admin/settings/visibility` | **queued, REPLACE** | Same settings, now on the shared settings frame rather than the global settings page |
+| `/members/admin/settings/ids` | **queued, REPLACE** | Same |
+| Shift panel -> **Calls** log | **queued, REPLACE** | Now hidden unless the department's call-tracking mode has one. An existing frame showing it on a count-only department is fine; one showing it on a department that tracks nothing is wrong |
 
-### Register two routes before capturing
+**Two shots of one route are not two shots of one picture.** `20-05` and
+`08-79` first came back **byte-identical** -- 277 KB of duplicate binary for no
+added meaning, because both were `fullPage` of `/members/admin/settings/ranks`.
+`08-79` is now clipped to the card: the admin guide wants the ladder, the
+release lesson wants the five sections around it. Check the md5 when two
+entries share a route.
 
-`scripts/screenshots/manifest.mjs` has **no entry** for `/onboarding/prepare` or
-`/scheduling/admin/closeout`. `/members/admin/settings/ranks` has one already.
+**`20-07` needs the seeder undone for one applicant.** The panel renders only
+when `canPlaceOnStage` -- `!applicant.current_stage_id` -- and
+`seed_demo_data.py` deliberately places every applicant on a stage ("one
+applicant per stage, wrapping"). The board alone can therefore never show it.
+One applicant was left unassigned to produce the state; a future capture needs
+the same, and `expect` is the panel's own "Not on a stage" rather than the page
+heading, which the board satisfies whether or not the subject is on screen.
 
-**A route with no manifest entry is simply never shot.** It fails by omission,
-which is quieter than the retired-route trap the previous disposition
-documented: there is no wrong image to notice, just a placeholder that stays
-empty and a count that never moves. Add the entries with the placeholders, in
-the same pass.
+**The stage list itself cannot be pictured.** It is a native `<select>`, and an
+open native dropdown is drawn by the OS outside the page Playwright captures --
+the same trap the README records for `<option>` visibility. The caption was
+changed to name the picker and the **Place** button, which is the whole control
+that can be photographed.
+
+### Registered, and two traps the manifest hit on the way
+
+All nine now have manifest entries. Two things cost a capture round each, and
+both are worth knowing before adding the next entry:
+
+- **`selector` resolves with `.first()`, which on a nested-div selector is the
+  OUTERMOST match.** `div:has(h2:text-is("Operational Ranks")):has(button:has-text("Add Rank"))`
+  matched ten nested divs and clipped to the page wrapper -- a shot that looks
+  like a plain full-page capture and betrays nothing. Anchor on a class that
+  identifies the card (`div.card:has(...)`), and check the returned box.
+- **`expect` is asserted inside the captured frame, so it must name text inside
+  the clip.** `08-79` failed on `Operational Ranks` because that string is also
+  the section's *tab label*, which sits above the card the shot had deliberately
+  cropped out. The check was right and the entry was wrong.
 
 **The thirteen `Screenshot needed` placeholders already in
 `20-september-2026-release-changes.md` have no manifest entries either**, and
