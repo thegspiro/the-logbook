@@ -95,6 +95,39 @@ IP Security, Platform Analytics.]**
 > "Individual members can choose their own theme preference, but the
 > organization-wide default is what new members see on first login."
 
+### WHERE THE REST OF THE SETTINGS LIVE (ADDED 2026-09-12)
+
+**[SCREEN: Settings → Organization → Profile, scrolled to Navigation Layout]**
+
+> "Two things are worth knowing before you go hunting for a setting that isn't
+> on this screen."
+
+> "**Navigation Layout** is here, under Profile. Top bar or left sidebar, and
+> it applies to the **whole department** — there's no per-member override.
+> That's newer than it looks; until September eleventh the choice only ever
+> reached the browser that made it."
+
+**[SCREEN: Members → Administration → Settings, section sidebar visible]**
+
+> "And five settings that used to be scattered are now one screen at
+> **Members, Administration, Settings** — contact visibility, membership ID
+> numbering, the operational rank ladder, the membership tier ladder, and EVOC
+> levels. Each one is its own address, so you can send an officer straight to
+> the one they need."
+
+**[CALLOUT: "Five sections, five different permissions — check before you
+delegate"]**
+
+> "One trap if you're delegating. Getting **onto** that screen takes the
+> members-management grant, but that grant doesn't save every section. Contact
+> visibility and membership IDs want a settings grant, and **EVOC levels want
+> the apparatus grant**, because those levels belong to Apparatus and moving
+> the page deliberately didn't widen that. Hand somebody `members.manage` alone
+> and they can open all five and successfully save two."
+
+> "The old addresses for contact visibility and membership IDs redirect, so
+> anything you've got bookmarked still lands."
+
 **[TRANSITION: Smooth cut to user management]**
 
 ---
@@ -1226,6 +1259,154 @@ delivery pass that compresses this chapter must not drop either.]**
 
 > "If you do not want it, do nothing. It is already off."
 
+### THE SEPTEMBER 12 UPGRADE: NOTHING MOVED, THREE THINGS CHANGED HANDS (ADDED 2026-09-12)
+
+**[SCREEN: Terminal — backup, `alembic heads`, `alembic upgrade head`]**
+
+> "The week to September twelfth carries **twelve** migrations. Same drill: back
+> up, run `alembic heads`, confirm you get exactly one, then upgrade. The head
+> you should land on is `0533644945cd`."
+
+**[CALLOUT: "Head: 0533644945cd — confirm it, don't assume it"]**
+
+> "And the first thing to say about this one is what it **doesn't** do. **No
+> module changed address. No URL was retired.** Nothing your department has
+> bookmarked breaks. After last window, that's worth saying out loud before
+> anyone goes hunting."
+
+**[BEAT]**
+
+> "One migration doesn't reverse, and it's a narrow one — it settles event
+> request preference values onto the fixed vocabulary the forms and the
+> coordinator's board are written against. The original free text isn't
+> recoverable, which is why it's one-way. Its scope is deliberately tight:
+> **only values outside the vocabulary get touched.** A request that says
+> 'specific dates' without naming one is left alone, and outreach types are
+> left alone entirely — a type that isn't in today's list might be one the
+> department genuinely offered and has since retired."
+
+> "One more reverses and you almost certainly don't want to. I'll come to it."
+
+**[CALLOUT: "3 changes take effect without anyone asking"]**
+
+> "Three things change what a department can do or see, and nobody requested
+> any of them. That's what this chapter is for."
+
+#### 1. THE TREASURER CAN NOW APPROVE PURCHASE REQUESTS
+
+**[SCREEN: The Treasurer position's finance permissions, before and after]**
+
+> "Two finance permissions — approve, and configure approvals — were defined,
+> and both gated real screens. **No position shipped holding either one.** The
+> only account that could reach them was the IT Manager, through its wildcard.
+> So the person with the keys to the server was the only person who could sign
+> off a purchase."
+
+> "Here's what that actually cost departments, and it's worse than it sounds.
+> With no approval chain configured at all, requests **skip approval
+> entirely** — they don't fail, they just go through. But build a chain, which
+> needed the configure permission, so in practice an IT manager did it — and
+> don't also grant approve — and **every submitted request lands in Pending
+> Approval with nobody able to action it.** The half-configured state is the
+> one that strands records."
+
+**[CALLOUT: "Gated grant — only where finance is exactly view + manage"]**
+
+> "The upgrade grants both to the Treasurer. And this is the part to pay
+> attention to: **it's gated.** It only applies where that position's finance
+> permissions are exactly view and manage — the combination that ships. Any
+> other shape and it's left alone."
+
+> "Which means: **if you deliberately limited your Treasurer to view and
+> manage, meaning 'no approval powers', go and look at that position after you
+> upgrade.** Nothing in the stored row distinguishes your decision from the
+> untouched default, so it gets treated as the default."
+
+> "It does **not** enable self-approval. That's refused whoever holds the
+> permission. Self-_denial_ is allowed on purpose — withdrawing your own
+> request isn't a conflict of interest."
+
+#### 2. PROPERTY-RETURN REPORTS WERE READABLE BY THE WHOLE DEPARTMENT
+
+**[SCREEN: The Reports folder's visibility, then the new member-separations
+folder]**
+
+> "When a member leaves and the system generates a property-return report, it
+> was filed into the **Reports** folder. That folder is visible to the whole
+> organization. So anyone with plain document access could read it."
+
+**[BEAT]**
+
+> "And that report names the departed member, quotes the **reason** for the
+> separation — involuntary ones included — and prints their home address, so
+> the letter can be posted to them."
+
+**[CALLOUT: "Now leadership-only. The migration moves the reports already
+written."]**
+
+> "They now go to a leadership-only folder. The migration creates it and
+> **moves the reports that are already sitting in Reports.** You don't have to
+> do anything."
+
+> "This is the one that reverses and you don't want to reverse. Its downgrade
+> puts the reports back in Reports — it restores the disclosure along with the
+> schema. That's for a rollback, not a decision."
+
+> "What I'd actually do is tell whoever handles separations where the reports
+> live now, and have a think about who's been able to read them until today."
+
+#### 3. PUBLISHED EVENT-REQUEST FORMS KEEP WORKING
+
+**[SCREEN: Events → Settings → Pipeline, the accept-public-requests toggle]**
+
+> "There's a setting called 'accept public event requests'. It worked on the
+> API path. It was **never read** by the Forms path — which is the one your own
+> 'Generate Event Request Form' button produces, and the one the settings
+> screen tells you to publish."
+
+> "This release makes both paths read it. Which, left alone, would have
+> **silently switched off community requests** at every department with a
+> published form — toggle already showing off, no error anywhere, and requests
+> just stop arriving."
+
+**[CALLOUT: "The migration writes down what was already true"]**
+
+> "So the migration turns the flag on for every department whose published form
+> was genuinely feeding the pipeline. It sets it **unconditionally** for those,
+> not only where the key is missing — because a stored 'false' can't have meant
+> 'don't take requests from my published form' when the toggle never controlled
+> that form in the first place."
+
+> "Departments with no such form are untouched and keep the default, which is
+> off."
+
+> "If you publish a request form and you **don't** want public submissions —
+> the toggle controls it properly now. Events, Settings, Pipeline."
+
+#### AND ONE THING EVERY MEMBER WILL NOTICE
+
+**[SCREEN: A department loading with the left sidebar]**
+
+> "Last one, and this is the one you'll get asked about on the day. **Everyone's
+> navigation moves to the left sidebar.**"
+
+> "Setup has always asked whether the department wants the menu across the top
+> or down the side. The answer only ever reached the browser that gave it — it
+> was saved in local storage, and the copy sent to the server was read by
+> nothing. So the officer who ran setup saw their choice, and every other
+> member saw the default, and there was no screen anywhere to change it."
+
+**[CALLOUT: "Settings → Organization → Profile → Navigation Layout"]**
+
+> "It's a department setting now, which is the fix. But an upgraded install has
+> no stored value, so on the first page load **everyone gets the left sidebar**
+> — including the officer whose browser was showing the top bar. There was
+> nothing to migrate; the old value was never reachable from the server."
+
+> "If your department wants the top bar, set it once: Settings, Organization,
+> Profile, Navigation Layout. It applies to everybody from their next page
+> load."
+
 ### ASK BEFORE YOU RESTART (31:00 – 32:15) — ADDED 2026-08-19
 
 > "The next section is about the app refusing to boot. Before we get there —
@@ -1656,7 +1837,21 @@ Two new sections are in the script body above:
   nothing" — this chapter exists to answer the member who asks whether an AI
   can read their phone number.
 
-**EDITOR:** ~4:30 total on top of everything above. Chapter 7's addition
+- **Chapter 14, "The September 12 upgrade: nothing moved, three things changed
+  hands"** (~4:00). Head `0533644945cd`, twelve migrations, one irreversible
+  and narrowly scoped. **Open with what it does not do** — no module changed
+  address, no URL retired, nothing bookmarked breaks — because the previous
+  chapter trained the audience to expect the opposite and that expectation is
+  the thing to clear first. Then the three unrequested changes, in this order:
+  the **Treasurer's two finance grants** (gated, and the "check it if you
+  deliberately limited that position" caveat is the beat that cannot be cut);
+  the **property-return reports** that the whole department could read, whose
+  downgrade restores the disclosure; and the **event-request backfill**, which
+  is a non-event for most viewers and needs to be framed as "this is why your
+  requests keep arriving". Close on the **navigation layout**, which is the one
+  every member notices and the one the IT manager gets asked about on the day.
+
+**EDITOR:** ~8:30 total on top of everything above (Chapter 14 adds ~4:00). Chapter 7's addition
 re-times Chapters 8 and 9 and the clip table; Chapter 9's re-times only its own
 tail. Final timecodes are a recording-production task.
 

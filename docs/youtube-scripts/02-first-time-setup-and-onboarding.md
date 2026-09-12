@@ -1,14 +1,33 @@
 # Script 2: First-Time Setup & Onboarding Walkthrough
 
 **Video Type:** Deep Dive
-**Estimated Length:** 15–20 minutes
+**Estimated Length:** 20–24 minutes
 **Target Audience:** Department leadership, IT admins, whoever is setting up the system
 **Prerequisites:** The Logbook is installed and running (see Script 1)
-**Chapters:** 8 (each cuttable as a standalone clip)
+**Chapters:** 11 (each cuttable as a standalone clip)
+
+> **PRODUCTION NOTE — 2026-09-11. This script was restructured, not edited.**
+> The setup wizard was reordered on 2026-09-11 and the chapter order here now
+> follows it. **Do not cut this from the previous take.** Five things in the
+> old script are wrong rather than stale:
+>
+> 1. The old Chapter 2 told viewers that closing the browser ends the run and
+>    that a refilled form is a dead session. **A lapsed setup is resumable
+>    now** — that whole caution block was replaced.
+> 2. Authentication was narrated at 6:30, third from the start. It is **step
+>    10**, near the end, and has moved to Chapter 9.
+> 3. The authentication beat listed **LDAP / Active Directory** and **SAML**.
+>    **Neither is implemented.** Do not reuse that footage.
+> 4. There were no chapters for **Stations** and **Apparatus** — steps 5 and 6.
+> 5. The navigation beat said individual members can set their own layout.
+>    **It is a department-wide setting.**
+>
+> Three beats are new: the **prerequisites screen**, **member numbering** in
+> step 1, and the **rank and tier ladders** in step 4.
 
 ---
 
-## CHAPTER 1: Introduction (0:00 – 1:00)
+## CHAPTER 1: Introduction (0:00 – 1:15)
 
 ### HOOK (0:00 – 0:20)
 
@@ -20,70 +39,77 @@ greeting screen with the logo and "Welcome to The Logbook" text.]**
 > by step, and in this video, I'm going to walk you through the wizard — with
 > tips on what to pick and why."
 
-### WHAT WE'RE DOING (0:20 – 1:00)
+### WHAT WE'RE DOING (0:20 – 1:15)
 
-**[CALLOUT: Numbered list of onboarding steps]**
+**[CALLOUT: Numbered list of the eleven onboarding steps]**
 
-> "Here's the onboarding flow: we'll set up your organization info, create the
-> system owner account, choose your authentication method, configure which
-> modules you need, set up positions and permissions, and configure email if you
-> want notifications. By the end, you'll have a fully configured platform ready
-> for your members to log in."
+> "Here's the flow, and the order matters because it was designed around what a
+> department can actually answer. First your organization. Then the
+> administrator account — second, so that everything after it belongs to a real
+> signed-in person. Then what your department _uses_: your modules, your ranks
+> and positions, your stations, your apparatus. Then the things that send you
+> off to find a credential — email, file storage, how people sign in — and
+> every one of those can be skipped and done later. Last, your navigation
+> layout."
 
-> "Let's start."
+**[CALLOUT: "11 steps · only 2 are required"]**
+
+> "Only two steps are actually required: the organization, and the
+> administrator account. Everything else is optional, the wizard tells you so
+> up front, and you can come back to any of it from Settings."
 
 **[TRANSITION: Click "Get Started" on the Welcome page]**
 
 ---
 
-## CHAPTER 2: Welcome & Organization Setup (1:00 – 4:00)
+## CHAPTER 2: Before You Start & Organization Setup (1:15 – 5:00)
 
-### WELCOME SCREEN (1:00 – 1:30)
+### WHAT SETUP WILL ASK FOR (1:15 – 2:15)
 
-**[SCREEN: The Welcome page of the onboarding wizard. Show the progress
-indicator at the top showing all steps.]**
+**[SCREEN: `/onboarding/prepare` — the Setup Prerequisites screen, showing both
+lists: what setup requires and what it will ask for but can skip.]**
 
-> "This is the Welcome page. You can see the progress indicator at the top —
-> it shows every step in the onboarding process."
+> "Before the wizard asks you anything, it tells you what it's going to ask
+> for. This screen collects nothing — it's a packing list."
 
-**[CALLOUT: Arrow pointing to progress indicator bar]**
+**[CALLOUT: Arrow to the two lists — "Required" and "Optional"]**
 
-> "Before we go further, one thing about how this wizard works — and it's the
-> thing most likely to cost you an afternoon if nobody tells you."
+> "The reason it exists is worth saying out loud. The install checks used to
+> tell you the database was up, and then nothing told you what was coming. So
+> people started setup, hit a step wanting an SMTP password or an OAuth client
+> secret, and left to go and find it. Walking away is what used to end the
+> install."
 
-> "Set up runs in **one browser tab, in one sitting**. The wizard is holding a
-> temporary credential that lets it create your department, and for good reason
-> that credential doesn't outlive the tab. Open a second tab to look something
-> up and that tab starts its own separate session — the step you were on will
-> refuse to save. Close the browser partway through and the run is over. Leave
-> it sitting for more than thirty minutes and it times out on its own."
+> "That's no longer true — and this is the other thing to know before you
+> start."
 
-**[CALLOUT: "One tab · one sitting · 30-minute idle limit"]**
+**[CALLOUT: "A lapsed setup is resumable (2026-09-11)"]**
 
-> "Here's the part that catches people. If you close the browser and come back,
-> **the form fills itself back in** — your answers are still there. It looks like
-> you can carry on. You can't. Those answers are a local draft; the session
-> behind them is gone, and nothing tells you until you try to move to the next
-> step and it fails."
+> "Setup used to run in one tab, in one sitting. Thirty idle minutes and the
+> run was over — the wizard would refuse to issue a new session once your
+> organization existed, and there was no way back short of dropping the
+> database. That's fixed. If you get called out on a job halfway through, you
+> can come back and pick it up."
 
-**[SCREEN: Optional two-shot insert — the wizard reopened with answers repainted,
-then the session-expired error on attempting to continue. If you show this, show
-**both** frames. A single frame of the refilled form teaches exactly the wrong
-lesson.]**
+> "Two things to know about resuming. Before the administrator account exists,
+> anyone who reaches the wizard can continue it — that's by design, there's
+> nobody to authenticate as yet. **After** that account exists, only that
+> person can resume. Your setup session stops being the thing that proves
+> you're allowed to finish, which is what stops a half-built department being
+> taken over by whoever finds it."
 
-> "So if that happens to you: don't re-type into it. Start the wizard over. And
-> if you instead see 'Onboarding has already been completed' — that's a different
-> message entirely. It means a department already exists on this install. Sign in
-> rather than setting up again."
+> "And if you see 'Onboarding has already been completed' — that's a different
+> message entirely. It means a department already exists on this install. Sign
+> in rather than setting up again."
 
-> "So before we click Get Started: have your department's address, your station
-> list, your apparatus list and the first administrator's details in front of
-> you, and give yourself an uninterrupted half hour. We'll be done well inside
-> that."
+> "So: have your department's address, your station list, your apparatus list
+> and the first administrator's details in front of you. Give yourself an
+> uninterrupted half hour if you can. But it's no longer a disaster if you
+> can't."
 
-**[SCREEN: Click "Get Started"]**
+**[SCREEN: Click "Start setup"]**
 
-### ORGANIZATION SETUP (1:30 – 4:00)
+### ORGANIZATION SETUP (2:15 – 5:00)
 
 **[SCREEN: The OrganizationSetup page loads with the form fields.]**
 
@@ -125,15 +151,41 @@ lesson.]**
 > SVG format works best. If you don't have one ready, you can always add it
 > later in Organization Settings."
 
+> "**Member numbers.** This one is easy to skim past and it's the reason this
+> question sits in step one rather than on a members screen later."
+
+**[SCREEN: The member numbering controls — the on/off switch, the prefix field,
+and the starting number.]**
+
+> "If your department gives members a number, switch this on here and say where
+> the sequence starts. The counter only numbers members created **after** it's
+> switched on — and this wizard is about to create your administrator account
+> in step two and your IT team in step seven."
+
+**[CALLOUT: "Set this now — the counter only numbers accounts created after it
+is on"]**
+
+> "Departments that answered this afterwards ended up with their first few
+> accounts holding no number at all, and then the roster import starting at the
+> number those accounts should have had. Nobody notices until somebody prints a
+> badge."
+
 **[SCREEN: Click "Next" to proceed]**
 
 **[TRANSITION: Page transition to next step]**
 
 ---
 
-## CHAPTER 3: System Owner Account (4:00 – 6:30)
+---
 
-### CREATING THE ADMIN (4:00 – 5:30)
+## CHAPTER 3: Administrator Account (5:00 – 7:30)
+
+> **EDITOR NOTE (2026-09-11):** this is **step 2** of eleven. The wizard puts
+> identity second on purpose — every step after it runs against a signed-in
+> session. The narration below is unchanged from the previous take, which
+> already had it in this position.
+
+### CREATING THE ADMIN (5:00 – 6:30)
 
 **[SCREEN: The AdminUserCreation (SystemOwnerCreation) page loads.]**
 
@@ -167,7 +219,7 @@ lesson.]**
 
 **[CALLOUT: "Use a password manager — you'll create this password once"]**
 
-### TWO-FACTOR AUTHENTICATION (5:30 – 6:30)
+### TWO-FACTOR AUTHENTICATION (6:30 – 7:30)
 
 > "After creating the account, you'll be prompted to set up two-factor
 > authentication. I _strongly_ recommend enabling this, especially for the
@@ -190,67 +242,15 @@ onboarding, or note that it can be enabled after first login.]**
 
 ---
 
-## CHAPTER 4: Authentication & Security Settings (6:30 – 8:30)
-
-### AUTHENTICATION CHOICE (6:30 – 7:30)
-
-**[SCREEN: The AuthenticationChoice page loads showing authentication method
-options.]**
-
-> "Next, choose how your members will log in. The Logbook supports several
-> authentication methods."
-
-**[SCREEN: Show each option with a brief highlight]**
-
-> "**Email and Password** — the simplest option. Members get an email address
-> and password. This is what most volunteer departments will use."
-
-> "**LDAP / Active Directory** — if your department already uses Active
-> Directory (maybe through your municipality), members can log in with their
-> existing network credentials. This requires some server configuration."
-
-> "**OAuth / Single Sign-On** — supports Microsoft Azure AD and Google OAuth.
-> If your department uses Microsoft 365 or Google Workspace, members can use
-> their existing Microsoft or Google account to log in."
-
-> "**SAML** — for organizations with enterprise identity providers."
-
-**[CALLOUT: "Most volunteer departments → Email & Password. Career departments
-with IT infrastructure → LDAP or OAuth."]**
-
-> "For this walkthrough, I'll go with Email and Password. You can add additional
-> authentication methods later from the Settings page without disrupting
-> existing accounts."
-
-**[SCREEN: Select "Email and Password" and click Next]**
-
-### IT TEAM & BACKUP ACCESS (7:30 – 8:30)
-
-**[SCREEN: The ITTeamBackupAccess page loads.]**
-
-> "This step lets you configure backup access — who gets emergency access if the
-> System Owner is unavailable. In a fire department context, think of this as
-> your succession plan for platform access."
-
-> "You can add additional email addresses that will receive a backup access code
-> during setup. These aren't full admin accounts — they're an emergency recovery
-> mechanism."
-
-**[SCREEN: Optionally add a backup email or skip]**
-
-> "If your department has a shared leadership email or a Deputy Chief who should
-> have recovery access, add their email here. Otherwise, you can skip this and
-> handle it through the normal role assignment process later."
-
-**[SCREEN: Click "Next"]**
-
-**[TRANSITION: Page transition]**
-
 ---
 
-## CHAPTER 5: Module Selection (8:30 – 12:00)
+## CHAPTER 4: Module Selection (7:30 – 11:00)
 
-### THE MODULE OVERVIEW (8:30 – 9:30)
+> **EDITOR NOTE (2026-09-11): this chapter moved.** Modules are now **step 3**,
+> ahead of positions — which is what makes the permission rows in the next
+> chapter meaningful, because they are filtered to the modules chosen here.
+
+### THE MODULE OVERVIEW (7:30 – 8:30)
 
 **[SCREEN: The ModuleOverview page loads — a grid/list of all available modules
 with toggle switches, organized by category.]**
@@ -282,7 +282,7 @@ with toggle switches, organized by category.]**
 > "**Advanced modules** include External Integrations and the Prospective
 > Members Pipeline."
 
-### CHOOSING YOUR MODULES (9:30 – 11:00)
+### CHOOSING YOUR MODULES (8:30 – 10:00)
 
 > "Let me give you some practical guidance on what to enable based on department
 > type."
@@ -310,7 +310,7 @@ Elections, Minutes]**
 > leaving off Facilities Management and some of the advanced modules — we can
 > always turn them on later."
 
-### WHAT ENABLING A MODULE DOES (11:00 – 12:00)
+### WHAT ENABLING A MODULE DOES (10:00 – 11:00)
 
 **[SCREEN: Stay on the module overview. Show the enabled cards with their green
 Enabled state.]**
@@ -335,9 +335,81 @@ Enabled state.]**
 
 ---
 
-## CHAPTER 6: Position & Permission Setup (12:00 – 15:00)
+---
 
-### UNDERSTANDING POSITIONS (12:00 – 13:00)
+## CHAPTER 5: Ranks, Tiers & Positions (11:00 – 15:30)
+
+### YOUR MEMBERSHIP LADDER (11:00 – 12:15)
+
+**[SCREEN: Step 4 opens on the membership tier ladder — the stages, with the
+per-stage controls beside each.]**
+
+> "Step four is three things, and the first one is new to setup. This is your
+> **membership ladder** — the stages a member moves through, and what each one
+> lets them do."
+
+**[SCREEN: Rename a stage; reorder two; add one]**
+
+> "Rename them to whatever your bylaws call them — Probationary, Active,
+> Senior, Life. Set the years each one requires. Reorder them, add your own,
+> remove any you don't have."
+
+**[SCREEN: Expand one stage to show its controls]**
+
+> "Per stage you decide: can these members vote in elections, can they hold
+> elected office, do they have to meet a meeting-attendance threshold before
+> they can vote — and what that threshold is, over what period — and are they
+> exempt from training."
+
+**[CALLOUT: "⚠️ Check this against your bylaws — it decides your ballot
+electorate"]**
+
+> "This is the one to check against your bylaws, and I'd stop the video and go
+> and get them. It decides who's in the electorate for every election you ever
+> run. Departments that leave the shipped arrangement alone usually find that
+> out at their first election, which is a bad time to find it out."
+
+**[SCREEN: The automatic advancement switch]**
+
+> "One more: automatic advancement is **on** by default, and a monthly job acts
+> on it. If your department promotes by vote, by application, or on a date of
+> its own choosing, turn it off here."
+
+> "The same editor lives at Members, Administration, Settings, Membership Tiers
+> after setup — so this isn't your only chance."
+
+### YOUR RANK LADDER (12:15 – 13:15)
+
+**[SCREEN: The rank ladder editor, pre-filled with the ranks the chosen agency
+type usually has.]**
+
+> "Next, your **rank ladder**. The Logbook starts you from the ranks your kind
+> of agency usually has, and you change them to match what you actually use."
+
+**[SCREEN: Rename a rank; reorder; remove one; add one]**
+
+> "Rename a rank to your own vocabulary — an EMS service calling it Driver or
+> Operator, a department whose Captain is really a Company Officer. Reorder the
+> ladder. Remove ranks you don't have. Add your own — Battalion Chief,
+> Firefighter Two."
+
+**[SCREEN: The seat assignment control on one rank]**
+
+> "And set which shift seats each rank can fill — including a seat your
+> department invented, which is new."
+
+**[CALLOUT: "A rank = where you sit and which seats you can fill. A position =
+what you can do."]**
+
+> "Keep these two apart in your head. A rank says where somebody sits and which
+> seats they can fill. What they can actually **do** in the software comes from
+> their position. That's why a rank you add yourself is marked **No default
+> permissions** — those members still need a position."
+
+> "This one also has a home after setup: Members, Administration, Settings,
+> Operational Ranks."
+
+### UNDERSTANDING POSITIONS (13:15 – 14:15)
 
 **[SCREEN: The RoleSetup (PositionSetup) page loads showing a list of default
 positions with permission toggles.]**
@@ -374,7 +446,7 @@ restore the flat list. **Honorary maps to the social class** — that is not a n
 judgement, it is what the system already did with honorary members when
 deciding shift access.]**
 
-### DEFAULT POSITIONS (13:00 – 14:00)
+### DEFAULT POSITIONS (14:15 – 15:00)
 
 > "The Logbook ships with default positions for common fire department roles.
 > Let me walk through the operational and administrative positions."
@@ -396,7 +468,7 @@ deciding shift access.]**
 > Officer, and Membership Coordinator. Each has permissions scoped to their
 > area."
 
-### CUSTOMIZING PERMISSIONS (14:00 – 15:00)
+### CUSTOMIZING PERMISSIONS (15:00 – 15:30)
 
 > "You can customize which positions get 'view' versus 'manage' access for each
 > module. 'View' means they can see the data but not change it. 'Manage' means
@@ -429,9 +501,106 @@ Management"]**
 
 ---
 
-## CHAPTER 7: Email & Navigation Configuration (15:00 – 17:00)
+**[SCREEN: The permission rows, showing only the modules enabled in step 3]**
 
-### EMAIL PLATFORM CHOICE (15:00 – 16:00)
+> "One thing you'll notice here that you wouldn't have seen before step three
+> moved ahead of this one: **you only get permission rows for the modules you
+> turned on.** If you didn't enable Grants and Fundraising, there's no row for
+> it. It's a much shorter, much more honest screen than it used to be."
+
+**[CALLOUT: "Permission rows are filtered to the modules you enabled"]**
+
+> "Two smaller things worth knowing. Every position starts ticked to exactly
+> what the system seeds it with — so if you press Continue without touching
+> anything, **nothing changes**. And if you untick a position you don't want,
+> it isn't created."
+
+---
+
+## CHAPTER 6: Stations & Apparatus (15:30 – 17:30)
+
+> **EDITOR NOTE (2026-09-11): this chapter is new.** Steps 5 and 6 have always
+> existed in the wizard and were never covered in this script — the previous
+> take only mentioned having the lists to hand.
+
+### STATIONS (15:30 – 16:30)
+
+**[SCREEN: The Stations step. The headquarters entry is already there, created
+from the address given in step 1.]**
+
+> "Step five is your stations. Notice that headquarters is already here — the
+> wizard created it from the address you gave in step one, along with its
+> facility and location records."
+
+**[SCREEN: Add a second station]**
+
+> "So this step is for the stations **beyond** headquarters. Plenty of
+> departments have exactly one and can skip straight through. If you run two or
+> three, add them here — each one becomes a facility and a location, which is
+> what lets you assign apparatus to a station, run shifts out of it, and track
+> inventory by where it physically is."
+
+**[CALLOUT: "One station? Skip it — headquarters is already created."]**
+
+### APPARATUS (16:30 – 17:30)
+
+**[SCREEN: The Apparatus step, adding a unit.]**
+
+> "Step six: your apparatus. Unit number, type, minimum staffing, and the
+> riding positions."
+
+**[SCREEN: Fill in a unit — Engine 1, minimum staffing, riding positions]**
+
+> "These are deliberately lightweight records — enough for shift staffing to
+> know that Engine One needs four people and what seats those four sit in. The
+> full fleet detail, maintenance history, inspections, all of that lives in the
+> Apparatus module afterwards. You're not doing fleet management here, you're
+> telling the scheduler what exists."
+
+**[CALLOUT: "Minimum staffing + riding positions = what the scheduler needs"]**
+
+> "If you enabled Shift Scheduling back in step three, this is the step that
+> makes it useful on day one. If you didn't, skip it — you can add apparatus
+> any time."
+
+**[SCREEN: Click "Next"]**
+
+---
+
+## CHAPTER 7: IT Team & Backup Access (17:30 – 18:30)
+
+> **EDITOR NOTE (2026-09-11): this chapter moved.** It is **step 7**, not step
+> 4 as the previous take had it. The narration is otherwise unchanged.
+
+### IT TEAM & BACKUP ACCESS (17:30 – 18:30)
+
+**[SCREEN: The ITTeamBackupAccess page loads.]**
+
+> "This step lets you configure backup access — who gets emergency access if the
+> System Owner is unavailable. In a fire department context, think of this as
+> your succession plan for platform access."
+
+> "You can add additional email addresses that will receive a backup access code
+> during setup. These aren't full admin accounts — they're an emergency recovery
+> mechanism."
+
+**[SCREEN: Optionally add a backup email or skip]**
+
+> "If your department has a shared leadership email or a Deputy Chief who should
+> have recovery access, add their email here. Otherwise, you can skip this and
+> handle it through the normal role assignment process later."
+
+**[SCREEN: Click "Next"]**
+
+**[TRANSITION: Page transition]**
+
+---
+
+---
+
+## CHAPTER 8: Email & File Storage (18:30 – 20:30)
+
+### EMAIL PLATFORM CHOICE (18:30 – 19:45)
 
 **[SCREEN: The EmailPlatformChoice page loads.]**
 
@@ -492,7 +661,7 @@ Password]**
 
 **[SCREEN: Click through or skip]**
 
-### FILE STORAGE (16:00 – 16:30)
+### FILE STORAGE (19:45 – 20:30)
 
 **[SCREEN: The FileStorageChoice page]**
 
@@ -506,26 +675,120 @@ Password]**
 
 **[SCREEN: Select local storage or appropriate option]**
 
-### NAVIGATION STYLE (16:30 – 17:00)
+**[EDITOR NOTE (2026-09-10): the file-storage choice is recorded but not yet
+acted on.** Uploads write to the server's own filesystem whatever is selected
+here — nothing outside the settings screen reads the stored credentials. **Do
+not narrate this step as though picking S3 or Drive moves the files.** If you
+keep a line about it at all, say the choice is saved and the move is still to
+do.]**
 
-**[SCREEN: The NavigationChoice page]**
+> "One caveat, and it's an important one. Right now this choice is **recorded**
+> rather than acted on — files go to the server's own disk whichever option you
+> pick. If you're choosing S3 or Drive specifically so your files sit somewhere
+> your server isn't, treat that as still on your list after setup, not done by
+> it."
 
-> "Finally, choose your navigation style. This controls how the sidebar and main
-> navigation appear. The options are designed for different screen sizes and
-> preferences — try each one and pick what feels best."
+**[SCREEN: Click "Next"]**
 
-> "Remember, individual users can customize their own navigation preference
-> later, so this just sets the default."
+---
 
-**[SCREEN: Select a navigation option and proceed]**
+## CHAPTER 9: Sign-In Method (20:30 – 21:45)
+
+> **EDITOR NOTE (2026-09-11): this chapter moved and was rewritten.** It was
+> narrated at 6:30 in the previous take; it is **step 10**. More importantly,
+> the old take listed **LDAP / Active Directory** and **SAML** as supported
+> options. **Neither is implemented** — LDAP has a config flag that gates
+> nothing and there is no SAML path at all. **Do not reuse that footage.**
+
+### SIGN-IN CHOICE (20:30 – 21:45)
+
+**[SCREEN: The AuthenticationChoice page, showing the four options.]**
+
+> "Step ten: how your members sign in. There are four options on this screen
+> and I want to be straight with you about what each one actually does today."
+
+**[SCREEN: Highlight each option in turn]**
+
+> "**Local Passwords.** Members get an email address and a password, hashed
+> with Argon2id. No external service, nothing to configure. This is what most
+> volunteer departments should pick, and it's what I'm picking here."
+
+> "**Sign in with Google.** If your department is on Google Workspace, members
+> use their Google account. **Sign in with Microsoft** does the same for
+> Microsoft 365, through Entra ID — single tenant."
+
+**[CALLOUT: "Google and Microsoft are link-existing-only — they never create
+accounts"]**
+
+> "One thing about both of those that surprises people: they are
+> **link-existing-only**. The verified email coming back from Google or
+> Microsoft has to match an active member you already created. Signing in with
+> Google does not create an account. That's deliberate — it means somebody with
+> a Google address can't let themselves into your department."
+
+> "**Authentik.** Don't pick this one yet."
+
+**[CALLOUT: "⚠️ Authentik: selectable, not yet usable"]**
+
+> "It's on the screen, and it is genuinely coming, but there's no sign-in flow
+> behind it today — the login page only offers Google and Microsoft. Passwords
+> will still work if you pick it, but selecting it **switches your department
+> off self-service password resets**, so a member who forgets theirs needs an
+> administrator to do it for them. Pick Local unless you're setting up Google
+> or Microsoft."
+
+> "And you can add methods later from Settings without disrupting any existing
+> account."
+
+**[SCREEN: Select "Local Passwords" and click Next]**
+
+---
+
+## CHAPTER 10: Navigation Layout (21:45 – 22:30)
+
+> **EDITOR NOTE (2026-09-11): rewritten.** The previous take said "individual
+> users can customize their own navigation preference later, so this just sets
+> the default". **That is wrong in both halves.** It is a department-wide
+> setting, and there is no per-member override.
+
+### NAVIGATION LAYOUT (21:45 – 22:30)
+
+**[SCREEN: The NavigationChoice page — top bar versus left sidebar.]**
+
+> "Last step. Navigation across the top, or down the left side. Pick whichever
+> your people will find easier."
+
+**[CALLOUT: "This applies to the whole department — there is no per-member
+override"]**
+
+> "This one is worth being clear about, because it used to work differently and
+> not in a good way. **This is a department-wide setting.** Whatever you pick
+> here is what every member sees."
+
+> "Until September eleventh, the answer only ever reached the browser that gave
+> it — it was saved in local storage, and the copy that went to the server was
+> read by nothing. So the officer running setup saw their choice, and everybody
+> else in the department got the default, and there was no screen anywhere to
+> change it. That's fixed."
+
+**[EDITOR NOTE: if this script is being re-cut for an audience with existing
+installations, add one line here — on upgrade, every department without a
+stored layout gets the **left sidebar**, including officers whose browser was
+showing the top bar. It is changed at Settings → Organization → Profile →
+Navigation Layout.]**
+
+> "And you can change it afterwards — Settings, Organization, Profile,
+> Navigation Layout. It applies to everyone from their next page load."
+
+**[SCREEN: Select a layout and proceed]**
 
 **[TRANSITION: Completion transition]**
 
 ---
 
-## CHAPTER 8: Completing Onboarding & Next Steps (17:00 – 19:00)
+## CHAPTER 11: Completing Onboarding & Next Steps (22:30 – 24:30)
 
-### ONBOARDING COMPLETE (17:00 – 17:30)
+### ONBOARDING COMPLETE (22:30 – 23:00)
 
 **[SCREEN: The onboarding completion page with a success message and summary
 of what was configured.]**
@@ -538,7 +801,7 @@ configured, etc.]**
 > "The Logbook is now configured for your department. Let's click through to the
 > dashboard and see what it looks like."
 
-### FIRST LOOK AT THE DASHBOARD (17:30 – 18:00)
+### FIRST LOOK AT THE DASHBOARD (23:00 – 23:30)
 
 **[SCREEN: Click "Go to Dashboard." The main dashboard loads with the sidebar
 navigation showing all enabled modules.]**
@@ -552,7 +815,7 @@ navigation showing all enabled modules.]**
 > "Right now everything is empty — no members, no events, no training records.
 > Let's talk about the first things you should do after onboarding."
 
-### RECOMMENDED FIRST STEPS (18:00 – 19:00)
+### RECOMMENDED FIRST STEPS (23:30 – 24:30)
 
 **[CALLOUT: Numbered list of first steps, appearing one at a time]**
 
@@ -593,28 +856,36 @@ link.]**
 
 ---
 
+---
+
 ## Clip Extraction Guide
 
-| Clip                    | Timecode    | Standalone Title                                    |
-| ----------------------- | ----------- | --------------------------------------------------- |
-| Organization Setup      | 1:30–4:00   | "Setting Up Your Organization in The Logbook"       |
-| Understanding Positions | 12:00–15:00 | "Fire Department Positions & Permissions Explained" |
-| Module Selection        | 8:30–12:00  | "Which Modules Should Your Department Enable?"      |
-| First Steps After Setup | 18:00–19:00 | "5 Things to Do After Setting Up The Logbook"       |
+| Clip                    | Timecode    | Standalone Title                                       |
+| ----------------------- | ----------- | ------------------------------------------------------ |
+| Before You Start Setup  | 1:15–2:15   | "What The Logbook's Setup Wizard Will Ask You For"     |
+| Organization Setup      | 2:15–5:00   | "Setting Up Your Organization in The Logbook"          |
+| Module Selection        | 7:30–11:00  | "Which Modules Should Your Department Enable?"         |
+| Your Membership Ladder  | 11:00–12:15 | "Membership Tiers: The Setting That Decides Who Votes" |
+| Your Rank Ladder        | 12:15–13:15 | "Building Your Department's Rank Ladder"               |
+| Understanding Positions | 13:15–15:30 | "Fire Department Positions & Permissions Explained"    |
+| Stations & Apparatus    | 15:30–17:30 | "Adding Your Stations and Apparatus During Setup"      |
+| Sign-In Method          | 20:30–21:45 | "How Should Your Members Sign In?"                     |
+| First Steps After Setup | 23:30–24:30 | "5 Things to Do After Setting Up The Logbook"          |
 
-> **EDITOR — re-time before publishing (2026-08-16).** The Welcome Screen
-> narration in Chapter 2 was rewritten: it previously told viewers the wizard
-> would resume after the browser closed, which stopped being true on 2026-08-15
-> and was misleading before that (the session has always expired after 30 minutes
-> idle). The replacement caution — one tab, one sitting, and the refilled-form
-> trap — adds roughly **45–70 seconds**, more if the optional two-shot insert
-> (repainted form, then the session-expired error) is used.
+> **EDITOR — re-time before publishing (2026-09-11).** Every timecode above and
+> in the chapter headings is a **target, not a measurement**. This script was
+> restructured for the reordered wizard and gained three chapters' worth of new
+> material (prerequisites, the two ladders, stations and apparatus), so the
+> running time moved from roughly 19 minutes to roughly 24. Set the real
+> chapter markers and clip timecodes from the recorded take — narration pacing
+> determines them.
 >
-> Consequently **every timecode in this script and in the table above shifts**
-> from Chapter 2 onward. Do not publish the chapter markers or clip timecodes as
-> written; set them from the recorded take, since narration pacing determines
-> them. The band labels in the headings are targets, not measurements.
+> **Do not cut any of this from the previous take.** The five corrections in
+> the production note at the top of this script are behavioural, not cosmetic:
+> footage of the old chapter order, the "one tab, one sitting" caution, the
+> LDAP/SAML authentication options, or the per-member navigation claim will all
+> teach something that is not true.
 >
-> A candidate new clip: **"Before You Start Setup"** (the caution block), which
-> stands alone well as a short and is the single most support-load-reducing
-> thing in this script.
+> **"Before You Start Setup" is the highest-value short in this script** and
+> now stands alone better than it did, because the prerequisites screen gives
+> it something to show rather than only something to warn about.

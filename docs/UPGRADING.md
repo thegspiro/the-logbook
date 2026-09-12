@@ -165,6 +165,85 @@ nothing to migrate.
 member from their next page load. Departments already on the default need do
 nothing.
 
+### Published event-request forms keep working (2026-09-09)
+
+`events.request_pipeline.accept_public_requests` shipped read by exactly one of
+the two intake paths. `POST /api/v1/event-requests/public` honoured it; the
+**Forms** path — the one your own "Generate Event Request Form" button
+produces, and the one the settings screen tells you to publish — never looked
+at it. The same release makes the Forms path honour it too.
+
+Left alone, that would have silently stopped community requests arriving at
+every installation with a published request form, **with the toggle already
+showing off and no error anywhere**.
+
+Migration `d19b2c2ae9b9` writes down what was already true: every organization
+with a **published, public** form that would actually create a request today is
+recorded as accepting public event requests. It sets the flag unconditionally
+for those organizations rather than only where the key is absent — a stored
+`false` on such an organization cannot have meant "do not take requests from my
+published form", because the toggle never controlled that form.
+
+**Organizations with no such form are untouched** and keep the shipped default
+of `false`.
+
+**What to check:** if you publish an event-request form and do _not_ want
+public submissions, the toggle now genuinely controls it — turn it off at
+**Events → Settings → Pipeline**.
+
+### Property-return reports are no longer readable department-wide (2026-09-07)
+
+`PropertyReturnService.save_as_document` filed each generated property-return
+report into the `Reports` system folder, which carries the default
+`organization` visibility. Every holder of plain `documents.view` could read a
+report that names a departed member, quotes the reason for the separation —
+involuntary ones included — and prints their home address so the letter can be
+posted.
+
+Reports now file into a `member-separations` folder with
+`FolderVisibility.LEADERSHIP`. Migration `b1e7c3a92f45` creates that folder for
+organizations whose system folders were already initialised (the service's own
+`initialize_system_folders` returns early for them) and moves the reports
+already written into `Reports`.
+
+**No action needed.** This is listed so you know what was exposed, and to whom,
+before the upgrade.
+
+**The downgrade restores the disclosure.** It moves the reports back to
+`Reports` and drops the folders the revision created, restoring the prior state
+exactly — which is correct for a schema rollback and wrong as a decision.
+
+### Your Treasurer can now approve purchase requests (2026-09-06)
+
+`finance.approve` and `finance.configure_approvals` are both defined and both
+gate real endpoints, but **no seeded position held either**. Only `it_manager`
+could reach them, and only through its `*` wildcard — the IT administrator
+rather than a finance role.
+
+**What that cost a department.** With no chain configured,
+`submit_purchase_request` skips approval entirely, so requests quietly bypass
+the workflow rather than failing visibly. Configure a chain _without_ also
+granting `finance.approve`, and every submitted request lands in
+`PENDING_APPROVAL` with nobody able to action it. The half-configured state is
+the one that strands records, and the settings screen that produces it was
+itself unreachable.
+
+Migration `ee7390dcdf47` grants both to the Treasurer position.
+
+**What you will see after upgrading:** the Treasurer can action the approval
+chain. This does **not** enable self-approval — `FinanceService.approve_step`
+calls `assert_different_person` and refuses it whoever holds the permission.
+Denial is left unguarded on purpose: withdrawing your own request is not a
+conflict.
+
+**What to check.** The grant is **gated**, not unconditional: it applies only
+where the position's finance grants are exactly
+`{finance.view, finance.manage}` — what the registry seeded. A row already
+holding either new grant, or any other finance shape, is left alone. **If you
+deliberately curated your Treasurer to exactly view + manage, meaning "no
+approval powers", review that position after upgrading** — nothing in the
+stored row distinguishes that decision from the untouched seed.
+
 ## When adding a change that can block startup
 
 Anything that can stop an existing deployment from booting — a new critical, a

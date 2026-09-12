@@ -36,12 +36,59 @@ The system automatically detects if onboarding is needed by checking:
 
 ### 2. Onboarding Steps
 
-The wizard is twelve steps. Only two are required — the organization and the
-System Owner — and every other step can be skipped and set up later from
-Settings.
+The wizard is **eleven steps**. Only two are required — the organization and
+the administrator account — and every other step can be skipped and set up
+later from Settings.
 
-The System Owner is created at step 9, not at the end: the IT team, position
-and module steps all run against a signed-in session.
+**The order was rebuilt on 2026-09-11** to follow what a department can
+actually answer. Identity comes **second**, so everything after it belongs to a
+real signed-in account; what the department _uses_ (modules, ranks, stations,
+apparatus) comes before the _external integrations_ (email, storage, sign-in),
+which are the steps that send someone off to find credentials — and all of
+those are skippable.
+
+The order is declared once, in
+`frontend/src/modules/onboarding/config/steps.ts`. It previously lived in three
+places that each restated it — the progress indicator, the route table, and a
+hardcoded next-step path in every page — and they drifted.
+
+| #   | Step                  | Path                            | Required?              |
+| --- | --------------------- | ------------------------------- | ---------------------- |
+| —   | Setup Prerequisites   | `/onboarding/prepare`           | Not a step — see below |
+| 1   | Organization Setup    | `/onboarding/start`             | **Required**           |
+| 2   | Administrator Account | `/onboarding/system-owner`      | **Required**           |
+| 3   | Modules               | `/onboarding/modules`           | Optional               |
+| 4   | Ranks & Positions     | `/onboarding/positions`         | Optional               |
+| 5   | Stations              | `/onboarding/stations`          | Optional               |
+| 6   | Apparatus             | `/onboarding/apparatus`         | Optional               |
+| 7   | IT & Backup Contacts  | `/onboarding/it-team`           | Optional               |
+| 8   | Email                 | `/onboarding/email-platform`    | Optional               |
+| 9   | File Storage          | `/onboarding/file-storage`      | Optional               |
+| 10  | Sign-In Method        | `/onboarding/authentication`    | Optional               |
+| 11  | Navigation Layout     | `/onboarding/navigation-choice` | Optional               |
+
+**The provider-configuration screens are not steps of their own.**
+`/onboarding/email-config` and `/onboarding/file-storage-config` configure the
+provider the preceding step just chose. A department that picks SMTP has not
+reached a twelfth step — it is still on Email. They previously counted
+unevenly (email's config screen was a step, file storage's was not), which made
+the same kind of decision cost a different amount of visible progress depending
+on which one you were making.
+
+#### Before you start: Setup Prerequisites (`/onboarding/prepare`)
+
+Opens the flow and **collects nothing**. It lists what setup will ask for,
+split into what is required and what is optional, so an operator knows before
+starting that the wizard will want SMTP credentials, an OAuth client secret and
+a storage key.
+
+It exists because the health screen told an operator the database was up and
+nothing told them what came next — so they started, met a step they could not
+answer, and left to go and find it. **Walking away is what used to end the
+install.**
+
+Both lists are derived from the step list's own `optional` flags, so a step
+that changes its flag changes this screen with it.
 
 #### Step 1: Organization Setup
 
@@ -53,21 +100,121 @@ and module steps all run against a signed-in session.
 - Commits the organization, and creates the headquarters facility and location
   from the department address
 
-#### Step 2: Stations
+> **Member numbering has to be asked first.** The counter only numbers members
+> created _after_ it is switched on, and this wizard creates the administrator
+> account in step 2 and the IT team in step 7. A department that set this on a
+> members screen afterwards ended up with its first accounts holding no number
+> and the roster import starting at the number they should have had — an
+> off-by-a-few nobody notices until a badge is printed.
+
+#### Step 2: Administrator Account
+
+- Create the first administrator account: username, email, password (12+
+  characters), name and membership number
+- Optionally set this account's operational rank
+- Sets the authentication cookies — the administrator is signed in from here on
+
+> **This is why identity comes second.** Every step after it — modules,
+> positions, the IT team — runs against a signed-in session.
+
+#### Step 3: Modules
+
+- Choose which modules to enable:
+  - **Core:** Member Management, Events & RSVP, Documents & Files, Custom Forms
+    (always on)
+  - **Operations:** Training & Certifications, Inventory, Medical Supplies,
+    Shift Scheduling, Apparatus & Fleet, Facilities Management, Department Store
+  - **Governance:** Elections & Voting, Meeting Minutes, Reports & Analytics
+  - **Communication:** Email Notifications, Mobile App Access
+  - **Advanced:** External Integrations
+  - **Membership:** Prospective Members Pipeline
+- A module shows a clear **Enabled** state once turned on — the button turns
+  green with a checkmark and the card is highlighted — so it is obvious at a
+  glance which are active _(2026-06-25)_
+- Where enabling one module confers another, the screen says so — Inventory
+  confers Medical Supplies _(2026-09-10)_
+
+> **This step now comes before positions**, and that is what makes step 4's
+> permission rows meaningful: they are filtered to the modules chosen here.
+
+> Modules the wizard does not ask about — Communications, Finance, Grants &
+> Fundraising, HR & Payroll, Incidents, Medical Screening, Public Information
+> and the Testing Checklist — are turned on later under **Settings → Modules**.
+
+#### Step 4: Ranks & Positions
+
+**Your membership ladder** comes first — the stages a member progresses
+through, and what each one lets them do:
+
+- Rename the stages to your own (Probationary, Active, Senior, Life, or
+  whatever your bylaws call them), set the years each requires, reorder them,
+  add your own and remove any you do not have
+- Per stage: whether those members can vote in elections, whether they may hold
+  elected office, whether they must meet a meeting-attendance threshold to vote
+  (and what it is, over what period), and whether they are exempt from training
+- Turn off automatic advancement if your department promotes by vote, by
+  application, or on a date of its own choosing — it is on by default and a
+  monthly job acts on it
+
+> This is the one to check against your bylaws. It decides who is in the ballot
+> electorate, and a department that leaves the shipped arrangement in place
+> usually discovers it at its first election.
+
+> The same editor is available after setup at **Members → Administration →
+> Settings → Membership Tiers** _(2026-09-11)_.
+
+**Your rank ladder** comes next. The department starts from the ranks its
+agency type usually has and changes them to match what it actually uses:
+
+- Rename a rank to your own vocabulary — an EMS service's Driver / Operator, a
+  department whose Captain is a Company Officer
+- Reorder the ladder, remove ranks you do not have, and add your own
+  (Battalion Chief, Firefighter II)
+- Set which shift seats each rank can fill — **including a seat your department
+  invented** _(2026-09-11)_
+- Set your own rank as System Owner
+
+> A rank says where somebody sits and which seats they can fill; what they can
+> **do** comes from their position. A rank you add yourself is marked **No
+> default permissions** for that reason — those members need a position too.
+
+> The ladder is also editable after setup at **Members → Administration →
+> Settings → Operational Ranks**, which accepts `members.manage` _(2026-09-11)_.
+
+**Then positions**, with a two-tier permission model (View Access / Manage
+Access) per module:
+
+- Ready-made templates, narrowed and renamed to suit the agency type — an
+  EMS-only service has no Firefighter, and calls its Engineer a Driver /
+  Operator. The Leadership, Officer, Support and Member groups cover corporate
+  and administrative roles
+- **Permission rows are shown only for the modules enabled in step 3**
+  _(2026-09-11)_, and every checkbox grants a permission that exists
+- Each position starts ticked to exactly what the backend seeds it with, so
+  pressing Continue without editing anything changes no grants
+- Unticking a seeded position **removes** it _(2026-09-10)_
+- Leave a position unselected and it is not created. Your own System Owner
+  position and the baseline Member position are always kept
+
+#### Step 5: Stations
 
 - Add the stations beyond headquarters — skippable, and many departments have one
 - Creates a facility and location per station
 
-#### Step 3: Apparatus
+#### Step 6: Apparatus
 
 - Unit number, type, minimum staffing and riding positions
 - Creates the lightweight apparatus records shift staffing needs
 
-#### Step 4: Navigation Layout
+#### Step 7: IT Team & Backup Access
 
-- Choose a top bar or a left sidebar
+- Add IT team contact information, and optionally each contact's operational rank
+- Configure backup access email and phone
+- Set secondary admin email for emergencies
+- IT contacts become user accounts at completion, each required to change its
+  password on first sign-in
 
-#### Step 5: Email Platform
+#### Step 8: Email
 
 - Select email platform for notifications:
   - Gmail / Google Workspace
@@ -75,15 +222,13 @@ and module steps all run against a signed-in session.
   - Self-hosted email server (SMTP)
   - Cloudflare Email Service (REST API — no SMTP server needed)
   - Other / Skip
-
-#### Step 6: Email Configuration
-
-- Configure platform-specific settings (OAuth credentials, SMTP host/port, or
-  Cloudflare Account ID and API Token)
+- The following screen (`/onboarding/email-config`, not a step of its own)
+  takes the platform's settings — SMTP host/port and an app password, or
+  Cloudflare's Account ID and API Token
 - Send a test message to verify the connection; credentials are encrypted
   server-side
 
-#### Step 7: File Storage
+#### Step 9: File Storage
 
 - Choose a file storage solution:
   - Google Drive
@@ -91,8 +236,9 @@ and module steps all run against a signed-in session.
   - Amazon S3
   - Local storage
   - Configure Later
-- Enter the platform's credentials on the following screen. Skipping stores the
-  choice without credentials rather than discarding the step
+- Enter the platform's credentials on the following screen
+  (`/onboarding/file-storage-config`, not a step of its own). Skipping stores
+  the choice without credentials rather than discarding the step
 
 > **The choice is recorded but not yet acted on** (2026-09-10): uploads write to
 > the server's own filesystem whatever is selected here — no code outside the
@@ -100,7 +246,7 @@ and module steps all run against a signed-in session.
 > Drive so its files sit somewhere the server is not should treat that as still
 > to do after setup, not done by it.
 
-#### Step 8: Authentication Platform
+#### Step 10: Sign-In Method
 
 - Choose how users will authenticate:
   - **Google OAuth** - Sign in with Google accounts (recommended for Google Workspace users)
@@ -124,85 +270,22 @@ and module steps all run against a signed-in session.
 > administrator to reset it. Choose Local unless you are setting up Google or
 > Microsoft.
 
-#### Step 9: System Owner
+#### Step 11: Navigation Layout
 
-- Create the first administrator account: username, email, password (12+
-  characters), name and membership number
-- Sets the authentication cookies — the administrator is signed in from here on
+- Choose a top bar or a left sidebar
 
-#### Step 10: IT Team & Backup Access
+> **This is a department-wide setting, not a personal one** _(2026-09-11)_. The
+> answer is stored on the organization and applies to every member. It used to
+> be written to the browser's local storage, so only the officer who ran setup
+> ever saw their own choice.
+>
+> It can be changed afterwards at **Settings → Organization → Profile →
+> Navigation Layout**. An installation upgraded from before 2026-09-11 has no
+> stored value and gets the `left` default — see
+> [UPGRADING.md](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md#changes-you-will-notice-after-an-upgrade).
 
-- Add IT team contact information, and optionally each contact's operational rank
-- Configure backup access email and phone
-- Set secondary admin email for emergencies
-- IT contacts become user accounts at completion, each required to change its
-  password on first sign-in
-
-#### Step 11: Ranks & Positions
-
-**Your membership ladder** comes first — the stages a member progresses
-through, and what each one lets them do:
-
-- Rename the stages to your own (Probationary, Active, Senior, Life, or
-  whatever your bylaws call them), set the years each requires, reorder them,
-  add your own and remove any you do not have
-- Per stage: whether those members can vote in elections, whether they may hold
-  elected office, whether they must meet a meeting-attendance threshold to vote
-  (and what it is, over what period), and whether they are exempt from training
-- Turn off automatic advancement if your department promotes by vote, by
-  application, or on a date of its own choosing — it is on by default and a
-  monthly job acts on it
-
-> This is the one to check against your bylaws. It decides who is in the ballot
-> electorate, and a department that leaves the shipped arrangement in place
-> usually discovers it at its first election.
-
-**Your rank ladder** comes next. The department starts from the ranks its
-agency type usually has and changes them to match what it actually uses:
-
-- Rename a rank to your own vocabulary — an EMS service's Driver / Operator, a
-  department whose Captain is a Company Officer
-- Reorder the ladder, remove ranks you do not have, and add your own
-  (Battalion Chief, Firefighter II)
-- Set which shift seats each rank can fill
-- Set your own rank as System Owner
-
-> A rank says where somebody sits and which seats they can fill; what they can
-> **do** comes from their position. A rank you add yourself is marked **No
-> default permissions** for that reason — those members need a position too.
-
-**Then positions**, with a two-tier permission model (View Access / Manage
-Access) per module:
-
-- Ready-made templates, narrowed and renamed to suit the agency type — an
-  EMS-only service has no Firefighter, and calls its Engineer a Driver /
-  Operator. The Leadership, Officer, Support and Member groups cover corporate
-  and administrative roles
-- Each position starts ticked to exactly what the backend seeds it with, so
-  pressing Continue without editing anything changes no grants
-- Leave a position unselected and it is not created. Your own System Owner
-  position and the baseline Member position are always kept
-
-#### Step 12: Module Selection
-
-- Choose which modules to enable:
-  - **Core:** Member Management, Events & RSVP, Documents & Files, Custom Forms
-    (always on)
-  - **Operations:** Training & Certifications, Inventory, Medical Supplies,
-    Shift Scheduling, Apparatus & Fleet, Facilities Management, Department Store
-  - **Governance:** Elections & Voting, Meeting Minutes, Reports & Analytics
-  - **Communication:** Email Notifications, Mobile App Access
-  - **Advanced:** External Integrations
-  - **Membership:** Prospective Members Pipeline
-- A module shows a clear **Enabled** state once turned on — the button turns
-  green with a checkmark and the card is highlighted — so it is obvious at a
-  glance which are active _(2026-06-25)_
 - Continuing here finalizes setup and hands off to the Department Setup
   checklist at `/setup`
-
-> Modules the wizard does not ask about — Communications, Finance, Grants &
-> Fundraising, HR & Payroll, Incidents, Medical Screening, Public Information
-> and the Testing Checklist — are turned on later under **Settings → Modules**.
 
 ### 3. Reset Progress
 
@@ -365,20 +448,43 @@ The onboarding module is designed to be integrated with a frontend wizard:
    - Allow marking items as complete
    - Link to relevant documentation
 
-### Sample Frontend Component Structure
+### The onboarding routes
+
+The real route table, as registered in
+`frontend/src/modules/onboarding/routes.tsx`. Step routes are in wizard order;
+the rest are entry points, provider-configuration screens, or aliases kept so
+older links keep working.
 
 ```
-/onboarding
-  /welcome
-  /security-check
-  /organization
-  /admin-user
-  /modules
-  /notifications
-  /review
-/onboarding-complete
-/checklist
+/onboarding                          entry — decides whether setup is needed
+/onboarding/prepare                  Setup Prerequisites (not a step)
+
+/onboarding/start                    step 1   Organization Setup
+/onboarding/system-owner             step 2   Administrator Account
+/onboarding/modules                  step 3   Modules
+/onboarding/positions                step 4   Ranks & Positions
+/onboarding/stations                 step 5   Stations
+/onboarding/apparatus                step 6   Apparatus
+/onboarding/it-team                  step 7   IT & Backup Contacts
+/onboarding/email-platform           step 8   Email
+/onboarding/file-storage             step 9   File Storage
+/onboarding/authentication           step 10  Sign-In Method
+/onboarding/navigation-choice        step 11  Navigation Layout
+
+/onboarding/email-config             configures the platform step 8 chose
+/onboarding/file-storage-config      configures the platform step 9 chose
+/onboarding/complete                 Setup Complete
+/onboarding/security-check           security preconditions
+
+/onboarding/department          -->  /onboarding/start
+/onboarding/admin-user          -->  /onboarding/system-owner
+/onboarding/roles               -->  /onboarding/positions
+/onboarding/modules/:id/config  -->  /onboarding/modules
+/onboarding/module-selection         renders the Modules screen
 ```
+
+> `/onboarding/modules/:moduleId/config` **stopped being a step on 2026-09-10**
+> and now redirects. The screen it rendered reported success and saved nothing.
 
 ## Database Schema
 
