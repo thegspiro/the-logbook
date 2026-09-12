@@ -161,7 +161,7 @@ browser's local storage and was not reachable from the server, so there was
 nothing to migrate.
 
 **What to do:** if the department wants the top bar, set it once at
-**Settings → Organization → Profile → Navigation Layout**. It applies to every
+**Settings → General → Profile → Navigation Layout**. It applies to every
 member from their next page load. Departments already on the default need do
 nothing.
 

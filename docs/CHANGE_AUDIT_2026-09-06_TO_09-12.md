@@ -85,7 +85,7 @@ rather than only what they see:
    existing installation has no stored layout, so **everyone — including the
    officer whose browser held `top` — gets `left`**. Nothing was migrated
    because the old value was not reachable from the server. Set it once at
-   **Settings → Organization → Profile → Navigation Layout**. This is the one
+   **Settings → General → Profile → Navigation Layout**. This is the one
    item in this window already carried in
    [`UPGRADING.md`](./UPGRADING.md#changes-you-will-notice-after-an-upgrade).
 
@@ -295,11 +295,11 @@ Caption the layout on any re-shoot of a full-page frame.
 | `/members/admin/settings/ranks`                           | **NEW**     | The ladder's new address                                                             |
 | `/members/admin/settings/tiers`                           | **NEW**     | New section                                                                          |
 | `/members/admin/settings/evoc`                            | **NEW**     | Never captured; note the `apparatus.manage` gate in the caption                      |
-| `/members/admin/settings/visibility` and `/ids`           | **REPLACE** | Same settings, now on the section-sidebar frame                                      |
+| `/members/admin/settings/visibility` and `/ids`           | **REPLACE** | Same settings, now on the shared settings frame                                      |
 | `/scheduling/admin/closeout`                              | **NEW**     | New queue screen                                                                     |
 | Shift panel → **Calls** log                               | **REPLACE** | Now hidden unless the department is on a call-tracking mode that has one             |
 | Applicant board → place on a stage                        | **NEW**     | New coordinator action                                                               |
-| Settings → Organization → Profile → **Navigation Layout** | **NEW**     | The control the upgrade note sends operators to                                      |
+| Settings → General → Profile → **Navigation Layout**      | **NEW**     | The control the upgrade note sends operators to                                      |
 | Any full-page frame shot with the **top** bar             | **REPLACE** | Default is now `left` for every existing department                                  |
 
 Neither `/onboarding/prepare` nor `/scheduling/admin/closeout` has a

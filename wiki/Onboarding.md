@@ -279,7 +279,7 @@ Access) per module:
 > be written to the browser's local storage, so only the officer who ran setup
 > ever saw their own choice.
 >
-> It can be changed afterwards at **Settings → Organization → Profile →
+> It can be changed afterwards at **Settings → General → Profile →
 > Navigation Layout**. An installation upgraded from before 2026-09-11 has no
 > stored value and gets the `left` default — see
 > [UPGRADING.md](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md#changes-you-will-notice-after-an-upgrade).

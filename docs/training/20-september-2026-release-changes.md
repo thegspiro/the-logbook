@@ -937,10 +937,7 @@ because the old value was never reachable from the server.
 Organization → Profile → Navigation Layout**. It applies to every member from
 their next page load. If you were already on the left sidebar, do nothing.
 
-> **Screenshot needed:**
-> _[Settings → Organization → Profile with the Navigation Layout control
-> visible, showing the top / left choice. Capture with the left option
-> selected, since that is what every upgraded department will see.]_
+![The Navigation Layout control in Settings → General → Profile, noting that it applies to everyone in the department](./images/20-04-org-profile-navigation-layout.png)
 
 ### Your Treasurer can now approve purchase requests
 
@@ -1019,9 +1016,7 @@ then nothing told them what came next — so they started, hit a step they could
 not answer, and left to go and find it. **Walking away is what used to end the
 install.**
 
-> **Screenshot needed:**
-> _[`/onboarding/prepare` showing both lists — what setup requires and what it
-> will ask for but can skip. The split is the point of the screen.]_
+![Setup Prerequisites — the two lists: what setup requires, and what it will ask for but can skip](./images/20-01-onboarding-prepare.png)
 
 ### The order changed, and only two steps are required
 
@@ -1049,10 +1044,7 @@ and every one of those can be skipped.
 at a time, and an in-progress setup **stays resumable after its session
 lapses** instead of starting over.
 
-> **Screenshot needed:**
-> _[The onboarding progress indicator on a mid-flow step, showing the new
-> eleven-step order with the optional markers. Any capture showing Stations at
-> step 2 or the administrator account at step 9 is from the old order.]_
+![The setup progress strip on step 3 — Step 3 of 11: Modules, with steps 1 and 2 ticked and the optional steps marked](./images/20-02-onboarding-progress-order.png)
 
 ### Three things you can now answer during setup
 
@@ -1071,10 +1063,7 @@ shift seats each rank can fill — **including a seat your department invented**
 **Your membership tier ladder**, also in step 4. Same editor you get afterwards
 at Members → Administration → Settings → Membership Tiers.
 
-> **Screenshot needed:**
-> _[Step 4 with the rank ladder editor open — a renamed rank, a reordered
-> ladder, and the seat-assignment control. Capture a department-invented seat if
-> the demo data has one.]_
+![Step 4's rank ladder — each rank with the shift seats it may fill, an Edit control per rank, and Add Rank](./images/20-03-onboarding-rank-ladder.png)
 
 Also in step 4: the permission checkboxes now **show rows only for the modules
 you turned on** in step 3, which is why modules moved ahead of positions. Every
@@ -1107,10 +1096,7 @@ Apparatus, and widening that was a separate decision from moving the page.
 Contact Visibility and Membership IDs moved here on September 6 and **their old
 addresses redirect**, so existing links still arrive.
 
-> **Screenshot needed:**
-> _[The Members Administration → Settings screen with the section sidebar
-> visible and Operational Ranks selected, so the five sections and the ladder
-> editor are in one frame.]_
+![Members Administration → Settings with its five sections across the top and Operational Ranks open](./images/20-05-members-settings-ranks.png)
 
 ## For quartermasters: shape the items list
 
@@ -1155,10 +1141,7 @@ generated:
   now gated the same way. A department not tracking calls was being offered a
   log it could not meaningfully fill.
 
-> **Screenshot needed:**
-> _[`/scheduling/admin/closeout` with several shifts in the queue, oldest
-> first. Capture a department on a call-tracking mode so the close-out settings
-> summary beside it is populated.]_
+![The shift close-out queue — ended shifts that were never closed out, oldest first, beside the close-out settings](./images/20-06-scheduling-closeout-queue.png)
 
 ## For membership coordinators
 
@@ -1177,9 +1160,7 @@ where "advance" actually sent an applicant** depended on how the sort happened
 to break the tie, differently from one page load to the next. Stage positions
 are unique now, and the upgrade renumbers the ones you already have.
 
-> **Screenshot needed:**
-> _[The applicant board with the place-on-a-stage action open on an applicant,
-> showing the stage list it offers.]_
+![The Not on a stage panel in an applicant's drawer — the stage picker and the Place button](./images/20-07-applicant-place-on-stage.png)
 
 ## Smaller fixes members and officers will notice
 
@@ -1217,7 +1198,7 @@ readability along with the schema.
 Then, in order:
 
 1. **Decide your navigation layout.** Everyone is about to get the left
-   sidebar. Settings → Organization → Profile → Navigation Layout.
+   sidebar. Settings → General → Profile → Navigation Layout.
 2. **Check your Treasurer position** if you deliberately limited it to view and
    manage on finance. It is about to gain both approval permissions.
 3. **Check your finance approval chain** — if you built one and nobody could
