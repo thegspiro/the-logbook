@@ -1,5 +1,116 @@
 # Screenshot currency
 
+## Disposition for September 6-12, 2026 - setup was rebuilt, and one shot broke silently
+
+Audit: [`CHANGE_AUDIT_2026-09-06_TO_09-12.md`](../CHANGE_AUDIT_2026-09-06_TO_09-12.md).
+Nothing below has been shot yet; this is the queue. The inventory items list is
+**not** in it -- that was closed by the September 7-8 disposition immediately
+below, which re-shot five images, added two, and verified one.
+
+**Read the fixed shot first.** It is the only item here that was already
+producing a wrong image rather than merely lacking one.
+
+### `08-62-topnav-bell-badge` was capturing the wrong navigation
+
+The navigation layout stopped being a per-user `localStorage` preference on
+2026-09-11 and became a department setting served by `/auth/branding`.
+`AppLayout` seeds its state from `localStorage` and then **overwrites both the
+state and the key** with whatever branding returns.
+
+That defeated this shot's prepare step. It wrote `navigationLayout = "top"`,
+reloaded, and waited 1800ms -- and the branding fetch resolves well inside that
+window and repaints the left sidebar. **The shot still succeeded**, and captured
+a left sidebar under the caption "The top navigation bar". Exactly the silent
+failure this file exists to catch: nothing errors, and a reviewer glancing at a
+correct-looking dashboard has no reason to look twice.
+
+**Fixed in the manifest** by mocking `/auth/branding` in a `beforeNavigate`
+hook, layered over the real response so only `navigation_layout` is forced. The
+`localStorage` write is kept so the first paint is already right and the capture
+cannot catch a sidebar-to-top-bar flip. `capture.mjs`'s own comment about
+clearing the key was updated for the same reason -- it now governs only the
+first paint.
+
+**Re-shoot `08-62-topnav-bell-badge`** and check the result actually shows the
+top bar. **It has not been re-run here** -- capture needs a live app and a
+browser, neither of which was available -- so treat the fix as untested until
+the next capture run confirms it.
+
+### Everything showing navigation is a judgement call, not a sweep
+
+Tempting to call every full-page capture stale. It is not. The demo department
+has no stored layout, `AppLayout` falls back to `left`, and `left` is what the
+library has always been shot in. **Those captures are still correct.**
+
+What changed is what they *mean* for a reader on an upgraded installation --
+which is the same `left`, so the image still matches. **No bulk re-shoot.** The
+one genuine case is `08-62` above, and it is fixed rather than queued.
+
+Caption the layout on any *new* full-page frame, since the department setting
+now makes it a department fact rather than a photographer's accident.
+
+### New captures -- the setup wizard
+
+**These cannot be shot against the demo department, and that is a hard
+constraint, not a scheduling problem.** The wizard only runs when no department
+exists; with one on file `/onboarding` redirects to sign-in. Every other image
+in the library needs a department that exists. The two requirements are
+mutually exclusive in one run, which is why the library has never held a wizard
+capture and why `08-admin-reports.md` says so in prose.
+
+So these need a **scratch install captured separately** and copied in. Shoot
+them in one sitting while the wizard is open:
+
+| Shot | What must be in frame | Why |
+| ---- | --------------------- | --- |
+| `/onboarding/prepare` | **Both lists** -- required and optional | The split is the entire point of the screen; one list teaches nothing |
+| Progress indicator, mid-flow | The eleven steps in the new order, with optional markers | Any older frame showing Stations at step 2 or the administrator at step 9 is **wrong, not stale** |
+| `/onboarding/start`, member-numbering block | The switch, prefix, and starting number | New in step 1 |
+| `/onboarding/positions`, tier ladder | One stage expanded, showing the voting / office / attendance controls **and** the automatic-advancement switch | The switch is on by default and acts monthly -- the training lesson leans on this frame |
+| `/onboarding/positions`, rank ladder | A renamed rank, the reorder control, one rank's seat assignment | New in setup |
+| `/onboarding/positions`, permission rows | Rows for a **deliberately small** module selection | The filtering is only visible by contrast; enable three modules, not twenty |
+
+**Capture the permission rows last** and with few modules enabled. Shot against
+a full module set the change is invisible, and the frame argues the opposite of
+the caption.
+
+### New captures -- reachable from the demo department
+
+These need no special environment and can go into the normal run:
+
+| Route | Disposition | Notes |
+| ----- | ----------- | ----- |
+| `/members/admin/settings` | **NEW** | The hub, with the section sidebar showing all five |
+| `/members/admin/settings/ranks` | **NEW** | Already has a manifest entry (`03-39`); the doc anchors are new |
+| `/members/admin/settings/tiers` | **NEW** | Ladder open, per-tier controls and the advancement switch visible |
+| `/members/admin/settings/evoc` | **NEW** | Caption the `apparatus.manage` gate -- it is the one section `members.manage` will not save |
+| `/members/admin/settings/visibility` | **REPLACE** | Same settings, now on the section-sidebar frame rather than the global settings page |
+| `/members/admin/settings/ids` | **REPLACE** | Same |
+| `/scheduling/admin/closeout` | **NEW** | Several shifts queued, oldest first; shoot on a department with call tracking on so the settings summary beside it is populated |
+| Shift panel -> **Calls** log | **REPLACE** | Now hidden unless the department's call-tracking mode has one. An existing frame showing it on a count-only department is fine; one showing it on a department that tracks nothing is wrong |
+| Applicant board -> place on a stage | **NEW** | The new coordinator action, with the stage list open |
+| Settings -> Organization -> Profile -> **Navigation Layout** | **NEW** | The control `UPGRADING.md` sends operators to. Shoot with **left** selected -- that is what every upgraded department sees |
+
+### Register two routes before capturing
+
+`scripts/screenshots/manifest.mjs` has **no entry** for `/onboarding/prepare` or
+`/scheduling/admin/closeout`. `/members/admin/settings/ranks` has one already.
+
+**A route with no manifest entry is simply never shot.** It fails by omission,
+which is quieter than the retired-route trap the previous disposition
+documented: there is no wrong image to notice, just a placeholder that stays
+empty and a count that never moves. Add the entries with the placeholders, in
+the same pass.
+
+**The thirteen `Screenshot needed` placeholders already in
+`20-september-2026-release-changes.md` have no manifest entries either**, and
+the September 6-12 section adds seven more. That file reads **0 captured, 20
+remaining** and will keep reading zero until the manifest catches up -- it is a
+backlog, not a regression, but it is the largest single block of unfilled
+placeholders in the library. Two further placeholders were added to
+`08-admin-reports.md` for the ranks and tiers sections, taking the library from
+42 remaining to **51**.
+
 ## Disposition for September 7-8, 2026 - the items list gained pinning and grouping
 
 **Everything this change invalidated has been re-shot, so this section adds no

@@ -58,24 +58,57 @@ deliberate protection — on a shared or station-kiosk machine, a credential tha
 can finish creating a department should not still be sitting there tomorrow
 morning — and it changes how you should plan the install.
 
-| What you do                                               | What happens                                                                                       |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Finish the wizard in one tab without closing it           | Normal path. Nothing to think about                                                                |
-| Open `/onboarding` in a **second tab** to check something | That tab starts its own new session. The step you were on will refuse to save                      |
-| **Close the browser** partway through and come back       | The run is over. Restart the wizard                                                                |
-| Leave it sitting for **more than 30 minutes**             | The server session expires on its own. It always did — the timer resets on each action             |
-| See "Onboarding has already been completed"               | This is **not** an expired session. A department already exists; sign in instead of starting setup |
+> **Updated 2026-09-11: a lapsed session no longer ends the install.** The
+> paragraph above still describes the credential, but the consequence has
+> changed — see [A lapsed setup is now
+> resumable](#a-lapsed-setup-is-now-resumable-2026-09-11) below. The table
+> reflects the current behaviour.
 
-**The confusing part, and the thing to teach:** your typed answers are saved
-separately and are _not_ cleared. So if you close the browser and reopen the
-wizard, **the form comes back filled in — but the session behind it is gone.**
-Nothing tells you until you try to move to the next step, which then fails and
-asks you to start over. The filled-in form is a local draft, not a resumed
-session. **Do not re-type into it expecting it to save; restart the wizard.**
+| What you do                                               | What happens                                                                                                           |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Finish the wizard in one tab without closing it           | Normal path. Nothing to think about                                                                                    |
+| Open `/onboarding` in a **second tab** to check something | That tab starts its own new session. The step you were on will refuse to save                                          |
+| **Close the browser** partway through and come back       | **Resumable.** A fresh session is issued — but once the administrator account exists, **only that account may resume** |
+| Leave it sitting for **more than 30 minutes**             | **Resumable.** The server session still expires on its own; reopening the wizard issues a new one                      |
+| See "Onboarding has already been completed"               | This is **not** an expired session. A department already exists; sign in instead of starting setup                     |
+| See "you are not the System Owner"                        | Setup got as far as creating the administrator account. Sign in as that account and resume                             |
 
-Practically: block out an uninterrupted half hour, gather the department's
-address, station list, apparatus list and the first administrator's details
-_before_ you begin, and do not close the browser until you reach the dashboard.
+**The thing to teach:** your typed answers are saved separately and are _not_
+cleared, so the form comes back filled in. Until 2026-09-11 the session behind
+it was gone and nothing told you until the next step failed. **That trap is
+closed** — the filled-in draft and a working session now agree.
+
+Practically: still gather the department's address, station list, apparatus
+list and the first administrator's details _before_ you begin. It is a calmer
+install in one sitting, and the prerequisites screen at `/onboarding/prepare`
+now lists exactly what to have ready. But walking away to go and find an SMTP
+password no longer costs you the run.
+
+### A lapsed setup is now resumable _(2026-09-11)_
+
+Step 1 creates the real organization row, and the wizard used to refuse to
+issue any further session once an organization existed. **Thirty idle minutes
+mid-setup therefore ended the install outright** — and the steps most likely to
+make somebody walk away (SMTP credentials, OAuth client IDs, storage keys) sit
+in the middle of the flow, on exactly the screens whose auto-save banner
+promises their progress is safe.
+
+There was no way back. Starting over returned a permission error, the reset
+button needed the same dead session to authenticate itself, and the
+administrator account that could have signed in did not exist yet.
+**Recovery meant dropping the database.**
+
+Now the guard is keyed on setup being _complete_, not on an organization
+existing. Two consequences worth knowing:
+
+- **Before the administrator account is created** (step 2), the wizard is
+  unauthenticated by design — anyone reaching it can resume.
+- **After it**, only that System Owner may resume. Possession of a setup
+  session is no longer authority over the department, which is what stops a
+  half-provisioned install being seized by whoever finds it.
+
+If users exist but none of them carries the owner grant, setup **refuses to
+proceed** rather than promoting an arbitrary account.
 
 **Not pictured, and it is not a tooling limitation so much as a contradiction
 in what would have to be true.** Every other image in this library is taken
@@ -157,6 +190,64 @@ Configure how membership IDs are assigned:
 - Enable/disable automatic membership ID generation
 - Set the ID format (prefix, numeric pattern)
 - View and manage the next available ID number
+
+### The rest of Members Administration → Settings _(2026-09-11)_
+
+Contact Visibility and Membership IDs (above) are two of **five** sections on
+one screen at **Members → Administration → Settings**. The other three:
+
+| Section               | What it sets                                              | Permission                            |
+| --------------------- | --------------------------------------------------------- | ------------------------------------- |
+| **Operational Ranks** | The rank ladder, and which shift seats each rank may fill | `settings.manage` or `members.manage` |
+| **Membership Tiers**  | The membership ladder, and what each tier confers         | `members.manage`                      |
+| **EVOC Levels**       | The driver certification ladder                           | `apparatus.manage`                    |
+
+**Each section is its own address**, so an officer can be linked straight to the
+one they need — `/members/admin/settings/ranks`, `/tiers`, `/evoc`.
+
+**Read the permission column before assigning it to somebody.** Reaching the
+screen takes `members.manage`, but that grant is not what saves every section.
+Contact Visibility and Membership IDs need a settings grant; **EVOC needs
+`apparatus.manage`**, because those levels belong to the Apparatus module and
+moving the page here deliberately did not widen that. A members officer holding
+only `members.manage` can open all five and successfully save **two** of them —
+Operational Ranks and Membership Tiers.
+
+**Operational Ranks** is the ladder itself: rename a rank to your department's
+own vocabulary, reorder it, remove ranks you do not have, add your own, and set
+which shift seats each one may fill — including a seat your department
+invented. It accepts `members.manage` because the ladder moved here from the
+global settings screen and its gate moved with it.
+
+> A rank says where somebody sits and which seats they can fill. What they can
+> **do** comes from their position. A rank you add yourself is marked **No
+> default permissions** for that reason — those members need a position too.
+
+**Membership Tiers** is the progression ladder — the stages a member moves
+through and what each one confers: whether they can vote, whether they may hold
+elected office, whether a meeting-attendance threshold applies before they may
+vote, and whether they are exempt from training. Automatic advancement is **on
+by default** and a monthly job acts on it; turn it off if your department
+promotes by vote, by application, or on its own date.
+
+> ⚠️ **This is the one to check against your bylaws.** It decides who is in the
+> ballot electorate. A department that leaves the shipped arrangement in place
+> usually discovers this at its first election.
+
+It is the same editor the setup wizard shows at step 4, so a department that
+set its ladder during installation is looking at its own answers here.
+
+> **Screenshot needed:**
+> _[`/members/admin/settings/ranks` with the section sidebar showing all five
+> sections and the rank ladder open — a renamed rank, the reorder control, and
+> the seat assignment for one rank.]_
+
+> **Screenshot needed:**
+> _[`/members/admin/settings/tiers` with the tier ladder open, showing the
+> per-tier voting / office / attendance-threshold controls and the automatic
+> advancement switch.]_
+
+---
 
 ### Label Printers
 

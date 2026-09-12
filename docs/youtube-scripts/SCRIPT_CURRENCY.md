@@ -1,5 +1,101 @@
 # Script currency
 
+## Flagged by the 2026-09-06 → 09-12 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-09-06_TO_09-12.md`](../CHANGE_AUDIT_2026-09-06_TO_09-12.md#documentation-and-media-disposition).
+
+This window produced **five Wrong**, all five in script 02, and **all five are
+rewritten in-script**. As in every prior window, determinations were made by
+**reading the script files**, not by inferring from the change list.
+
+**Script 02 was restructured rather than edited, and none of it can be cut from
+the previous take.** The setup wizard was reordered on 2026-09-11 and the
+script's chapter order followed the old one. That alone would be a re-shoot;
+three of the other four are worse, because they narrate behaviour that has
+never been true or has stopped being true.
+
+**Nothing else in the series changed address.** Unlike the last window there
+are no retired URLs, so no beat anywhere is pointing at a dead path.
+
+### Rewritten in-script this window
+
+| Script | Beat                            | Was                                                                                                                                                                             | Now                                                                                                                                                                                                                                        |
+| ------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **02** | Chapter order                   | Org → System Owner → **Authentication** → IT Team → Modules → Positions → Email → Navigation                                                                                    | The wizard's actual order: Org → Administrator → Modules → Ranks/Tiers/Positions → Stations → Apparatus → IT Team → Email/Storage → **Sign-In** → Navigation. Eleven chapters, up from eight                                               |
+| **02** | `WELCOME SCREEN` caution        | "Set up runs in **one browser tab, in one sitting**… Close the browser partway through and **the run is over**… the form fills itself back in… the session behind them is gone" | **A lapsed setup is resumable** (2026-09-11). Replaced with the resume rules: open before the administrator account exists, owner-only after it. The refilled-form trap it warned about is closed                                          |
+| **02** | `AUTHENTICATION CHOICE` options | "**LDAP / Active Directory** … **SAML** — for organizations with enterprise identity providers"                                                                                 | **Neither is implemented.** `LDAP_ENABLED` gates nothing and there is no SAML path. Rewritten around the four real options, including Authentik's "selectable, not yet usable" warning and the link-existing-only rule on Google/Microsoft |
+| **02** | `NAVIGATION STYLE`              | "individual users can customize their own navigation preference later, so this just sets the default"                                                                           | **Wrong in both halves.** It is department-wide and there is no per-member override. Rewritten, with the upgrade default called out for existing installations                                                                             |
+| **02** | Missing chapters                | Stations and Apparatus were never covered — only "have your station list to hand"                                                                                               | New **Chapter 6: Stations & Apparatus**, covering that headquarters is already created from step 1's address, and that apparatus records here are what the scheduler needs rather than fleet management                                    |
+
+### New in script 02 (three beats, added in-script)
+
+- **`WHAT SETUP WILL ASK FOR`** (Chapter 2, ~1:00) — the `/onboarding/prepare`
+  screen. It carries the resumability rules too, because that is where an
+  operator needs them. **This is the strongest short in the script** and now
+  has something to show rather than only something to warn about.
+- **Member numbering** (Chapter 2, inside Organization Setup, ~45s) — why the
+  question sits in step 1 and not on a members screen: the counter only numbers
+  accounts created after it is on, and the wizard creates the administrator in
+  step 2 and the IT team in step 7.
+- **`YOUR MEMBERSHIP LADDER` / `YOUR RANK LADDER`** (Chapter 5, ~2:15 for the
+  pair) — both new to setup. The bylaws warning on the tier ladder is the beat
+  that cannot be cut: it decides the ballot electorate, and automatic
+  advancement is **on** by default.
+
+### New in script 03 (one chapter and one beat, added in-script)
+
+- **Chapter 14 — "The September 12 upgrade: nothing moved, three things changed
+  hands"** (~4:00). Head `0533644945cd`, twelve migrations. **It opens with
+  what the upgrade does not do** — no module changed address, no URL retired —
+  because Chapter 11 trained this audience to expect the opposite, and clearing
+  that expectation is worth the thirty seconds. Then the Treasurer's gated
+  finance grants (with the "check it if you deliberately limited that position"
+  caveat), the property-return reports whose downgrade restores the disclosure,
+  and the event-request backfill. It closes on the navigation-layout default,
+  which is the item every member notices.
+- **`WHERE THE REST OF THE SETTINGS LIVE`** (Chapter 2, ~1:00) — Navigation
+  Layout under Organization → Profile, and the five-section Members
+  Administration → Settings screen. The beat worth keeping is the delegation
+  trap: `members.manage` opens all five sections and saves **two** of them.
+
+### Verified clean — suspected and checked
+
+- **03 — Chapter 11's `d7c1b95e2a40`.** Left alone deliberately. That chapter
+  documents the September 6 upgrade and `d7c1b95e2a40` is the correct head
+  **for that upgrade**. A per-upgrade chapter is a historical record; only the
+  new chapter carries the new head.
+- **03 — Chapter 2, Organization Settings.** Walks General, Modules and
+  Branding. None of those moved, so the walkthrough is still correct — the new
+  beat was _added_ beside it rather than replacing anything.
+- **04 — Fire Chief / Leadership.** Its only `Treasurer` hit is a list of
+  offices in the elections chapter, not a finance beat. **Nothing in this
+  script is wrong.** A new beat on the Treasurer's approval grants would suit
+  this audience — the chief is who gets asked why a purchase is stuck — but
+  there is no finance-approval chapter to attach it to, so it is an addition to
+  commission rather than a correction to make.
+- **07 — Secretary / Administrative.** No beat names Contact Visibility or
+  Membership ID Settings, so those two settings moving to Members
+  Administration does not touch this script.
+- **05 / 16 — Training Officer.** Nothing in this window touches training.
+- **06 — Member Guide.** The navigation layout may change under a member on
+  upgrade, but no beat in this script names the layout. Clean.
+- **13 — Department Store.** Storefront changed only in how orders are
+  serialized under concurrency — invisible in a demo. Clean.
+
+### Available as new shorts (08)
+
+Four, none of which requires a correction elsewhere:
+
+- **Pin your working set** — the items list, up to 25, and the fact that pins
+  are yours rather than the department's.
+- **Group the items list by anything** — and why the grouped column disappears
+  from the rows.
+- **Set your rank ladder during setup** — including a seat your department
+  invented.
+- **Where the close-out queue lives** — Administration → Scheduling →
+  Close-out.
+
 ## Flagged by the 2026-08-31 → 09-06 changes
 
 Full reason/data-path context in

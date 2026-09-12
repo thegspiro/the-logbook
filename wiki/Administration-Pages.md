@@ -149,3 +149,47 @@ Two structural notes that came out of getting this right:
 `administrationDiscovery.test.tsx` renders the section for a scheduling-officer
 persona and a training-officer persona, because **a gate is only reachable if
 every gate above it also opens.**
+
+## Members settings moved onto the sectioned frame _(2026-09-06 → 09-11)_
+
+Five settings that lived in three different places are now sections of one
+screen at `/members/admin/settings`, on the same section-sidebar frame as
+Scheduling's and Organization's settings.
+
+| Section            | Route                                | What it sets                            | Permission the **endpoint** wants                                                         |
+| ------------------ | ------------------------------------ | --------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Contact Visibility | `/members/admin/settings/visibility` | What members see of each other          | `settings.manage`, `settings.manage_contact_visibility` or `organization.update_settings` |
+| Membership IDs     | `/members/admin/settings/ids`        | Numbering and prefixes                  | `settings.edit` or `organization.update_settings`                                         |
+| Operational Ranks  | `/members/admin/settings/ranks`      | The ladder, and who may fill which seat | `settings.manage` or `members.manage`                                                     |
+| Membership Tiers   | `/members/admin/settings/tiers`      | The ladder, and what each tier confers  | `members.manage`                                                                          |
+| EVOC Levels        | `/members/admin/settings/evoc`       | Driver certification ladder             | `apparatus.manage`                                                                        |
+
+`/members/admin/settings` itself redirects to the first section.
+
+**Each section is its own route, not a `?tab=`.** Same reason Scheduling's
+sections are: a settings screen an officer is _sent_ to — from a hub card, from
+another module, from their own bookmarks — has to be addressable, and a query
+parameter that only a client-side `useState` reads cannot be linked to,
+refreshed into, or reached with the back button. The paths are written down once
+in `membersSettingsSections.ts`, so the routes, the hub cards and the nav cannot
+drift into three spellings.
+
+**The per-section permission is the endpoint's, not the hub's**, and that
+distinction is the whole reason the list exists. Every route under
+`/members/admin` stands on `members.manage` — but neither Contact Visibility
+nor Membership IDs _saves_ through an endpoint that accepts it. Gating them on
+the hub's grant would put a members officer on a page where every toggle
+returns 403, which is exactly the defect that took six review rounds on the
+scheduling close-out queue.
+
+Ranks and EVOC are the clearest case: they sit side by side under one heading
+and are gated on entirely different modules. **Operational Ranks now accepts
+`members.manage`** because the ladder moved here and its gate moved with it.
+**EVOC deliberately does not** — it is served by the apparatus API, and widening
+that was not part of the move.
+
+Contact Visibility and Membership IDs came from the global Organization
+Settings screen and **their old addresses redirect**, so existing links and
+bookmarks still arrive. Operational Ranks and EVOC came from the same global
+screen; Membership Tiers is new, and shares its editor with the setup wizard's
+step 4.

@@ -2313,7 +2313,10 @@ export const SHOTS = [
       // Preset". The old prepare looked for a bare <select> on the page body
       // and timed out against zero of them: the only selects on this screen
       // are inside the drawer.
-      await page.getByRole("button", { name: /^Details$/ }).first().click();
+      await page
+        .getByRole("button", { name: /^Details$/ })
+        .first()
+        .click();
       const drawer = page.locator(
         '[role="dialog"][aria-labelledby="template-details-title"]',
       );
@@ -3942,9 +3945,30 @@ export const SHOTS = [
       "Screenshot of the top navigation bar showing the bell icon with a red badge",
     alt: "The top navigation bar with the bell icon carrying its unread-count badge",
     route: "/dashboard",
+    // The navigation layout stopped being a per-user localStorage preference on
+    // 2026-09-11 and became a department setting served by /auth/branding.
+    // AppLayout seeds its state from localStorage and then OVERWRITES both the
+    // state and the key with whatever branding returns, so the prepare step's
+    // localStorage write alone no longer holds: the fetch resolves well inside
+    // the 1800ms wait and repaints the left sidebar. The shot still succeeded
+    // and captured the wrong navigation, which is the silent-failure mode this
+    // manifest exists to avoid. Mocking branding is what actually decides it
+    // now; the localStorage write is kept so the first paint is already correct
+    // and the capture never catches a sidebar-to-top-bar flip.
+    beforeNavigate: async (page) => {
+      await page.route("**/api/v1/auth/branding", async (route) => {
+        const response = await route.fetch();
+        const body = await response.json().catch(() => ({}));
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ...body, navigation_layout: "top" }),
+        });
+      });
+    },
     prepare: async (page) => {
-      // The top bar is a per-user preference stored in localStorage; the
-      // default is the left sidebar, which has its own badge shot (08-31).
+      // Seeds the first paint; /auth/branding (mocked above) is what holds it.
+      // The default is the left sidebar, which has its own badge shot (08-31).
       await page.evaluate(() =>
         localStorage.setItem("navigationLayout", "top"),
       );
@@ -12515,8 +12539,8 @@ export const SHOTS = [
       "the other pass/fail rows further down. It is true of them and says " +
       "nothing about the two tamper-seal panels this shot is of, both of " +
       "which are fully populated: the Drug Bag matching its last tag and " +
-      "offering \"Seal intact — clear 1 check\", the Trauma Bag differing " +
-      "from it and offering only \"Record seal\". Same reason 03-75 carries " +
+      'offering "Seal intact — clear 1 check", the Trauma Bag differing ' +
+      'from it and offering only "Record seal". Same reason 03-75 carries ' +
       "the flag.",
     fullPage: false,
   },

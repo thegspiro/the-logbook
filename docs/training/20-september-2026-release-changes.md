@@ -1,13 +1,19 @@
-# August 31 – September 6, 2026 workflow updates
+# August 31 – September 12, 2026 workflow updates
 
-This lesson is the operator-facing companion to the
-[August 31 – September 6 change audit](../CHANGE_AUDIT_2026-08-31_TO_09-06.md).
-It explains what members and administrators now do differently. Permission
-names are included because a control that is absent is usually a permission or
-module-state issue, not a rendering failure.
+This lesson is the operator-facing companion to two change audits:
+[August 31 – September 6](../CHANGE_AUDIT_2026-08-31_TO_09-06.md) and
+[September 6–12](../CHANGE_AUDIT_2026-09-06_TO_09-12.md). It explains what
+members and administrators now do differently. Permission names are included
+because a control that is absent is usually a permission or module-state issue,
+not a rendering failure.
 
 Its predecessor is
 [19 — August 12–31 release changes](./19-august-2026-release-changes.md).
+
+**It covers two windows.** The first runs from the top of this file; the second
+starts at [September 6–12, 2026 changes](#september-612-2026-changes). The
+warning immediately below applies to the **first** window only — **nothing in
+the second window changed address, and no bookmark breaks there.**
 
 > **Two features changed address in this window, and fourteen addresses stop
 > working with no redirect.** Thirteen are retired paths and land on the
@@ -895,3 +901,341 @@ Then, in order:
 8. **Decide whether members may see who's going to an event.** It ships
    managers-only.
 9. **Leave the Claude (MCP) integration off** unless you want it.
+
+---
+
+# September 6–12, 2026 changes
+
+**Nothing moved address this window and no bookmark breaks.** That is worth
+saying first, because the previous section's headline was fourteen retired
+URLs. Everything here is additive.
+
+Three things change what somebody does at a keyboard: **first-run setup was
+rebuilt**, five member settings were **collected onto one screen**, and the
+**inventory items list can now be shaped** by the person who uses it most.
+Three more change what a department may do or see without anyone asking — the
+**Treasurer can approve purchase requests**, **property-return reports stop
+being department-readable**, and **everyone's menu may move to the left side**.
+
+## Read this first if you administer a department
+
+### Your menu is about to move to the left
+
+Setup has always asked whether you want navigation across the top or down the
+side. The answer only ever reached **the browser that gave it** — it was saved
+in that browser's local storage, and the copy sent to the server was read by
+nothing. So the officer who ran setup saw their choice, and every other member
+in the department saw the default.
+
+That is fixed: the answer is now stored on the department and applies to
+everyone. But an upgraded installation has **no stored value**, so on the first
+page load after upgrading **everyone gets the left sidebar** — including the
+officer whose browser was showing the top bar. There was nothing to migrate,
+because the old value was never reachable from the server.
+
+**If your department wants the top bar, set it once** at **Settings →
+Organization → Profile → Navigation Layout**. It applies to every member from
+their next page load. If you were already on the left sidebar, do nothing.
+
+> **Screenshot needed:**
+> _[Settings → Organization → Profile with the Navigation Layout control
+> visible, showing the top / left choice. Capture with the left option
+> selected, since that is what every upgraded department will see.]_
+
+### Your Treasurer can now approve purchase requests
+
+Two permissions — the one that lets somebody approve a step in a purchase
+approval chain, and the one that lets somebody build the chain — were defined
+and did gate real screens, but **no position shipped holding either**. Only the
+IT administrator could reach them, through a wildcard.
+
+Here is what that cost a department in practice. With no chain configured at
+all, requests **skip approval entirely** rather than failing visibly. Build a
+chain — which you needed the configure permission for, so in practice an IT
+administrator did it — without also granting approve, and **every submitted
+request lands in _Pending Approval_ with nobody able to action it.** The
+half-configured state is the one that strands records.
+
+The upgrade grants both to the **Treasurer** position.
+
+**This is a careful grant, not a blanket one.** It applies only where the
+Treasurer holds exactly view + manage on finance — the combination that ships.
+If you have curated that position at all, it is left alone.
+
+⚠️ **If you deliberately gave your Treasurer view and manage and nothing else,
+meaning "no approval powers", check that position after upgrading.** Nothing in
+the stored permissions distinguishes that decision from the untouched default,
+so it will be treated as the default and receive both grants.
+
+**It does not let a treasurer approve their own spending.** Self-approval is
+refused whoever holds the permission. (Self-_denial_ is deliberately allowed —
+withdrawing your own request is not a conflict of interest.)
+
+### Property-return reports were readable by your whole department
+
+When a member leaves and you generate a property-return report, it was filed
+into the **Reports** folder. That folder is visible to the whole organization,
+so **anyone with document access could read it** — and the report names the
+departed member, quotes the reason for the separation **including involuntary
+ones**, and prints their home address so the letter can be posted to them.
+
+They now file into a **leadership-only** folder called member-separations, and
+the upgrade both creates that folder and **moves the reports already written**.
+
+No action is needed. This is here so you know what was exposed and for how
+long — that is a conversation some departments will need to have.
+
+### If you publish a public event-request form, nothing changes
+
+There is a setting called "accept public event requests". It worked on the API
+path, and it was **never read by the Forms path** — the one your own "Generate
+Event Request Form" button produces, and the one the settings screen tells you
+to publish. Now both paths read it.
+
+On its own, that change would have **silently switched off community requests**
+at every department with a published form, with the toggle already showing off
+and no error anywhere to explain it. So the upgrade turns the flag on for every
+department whose published form was genuinely feeding the pipeline. Departments
+without such a form keep the default of off.
+
+**If you publish a request form and do _not_ want public submissions**, the
+toggle now genuinely controls it: **Events → Settings → Pipeline**.
+
+## For new installations: setup was rebuilt
+
+This only affects a **new** installation — your department has already been
+through it. It is here because it is what you demonstrate to the next
+department you help stand up.
+
+### It now tells you what it will ask for, before it asks
+
+A new **Setup Prerequisites** screen opens the flow. It collects nothing. It
+lists what setup is going to want, split into required and optional, so you
+know up front that it will ask for SMTP credentials, an OAuth client secret and
+a storage key.
+
+It exists because the health screen told operators the database was up, and
+then nothing told them what came next — so they started, hit a step they could
+not answer, and left to go and find it. **Walking away is what used to end the
+install.**
+
+> **Screenshot needed:**
+> _[`/onboarding/prepare` showing both lists — what setup requires and what it
+> will ask for but can skip. The split is the point of the screen.]_
+
+### The order changed, and only two steps are required
+
+| #   | Step                  | Required?    |
+| --- | --------------------- | ------------ |
+| 1   | Organization Setup    | **Required** |
+| 2   | Administrator Account | **Required** |
+| 3   | Modules               | Optional     |
+| 4   | Ranks & Positions     | Optional     |
+| 5   | Stations              | Optional     |
+| 6   | Apparatus             | Optional     |
+| 7   | IT & Backup Contacts  | Optional     |
+| 8   | Email                 | Optional     |
+| 9   | File Storage          | Optional     |
+| 10  | Sign-In Method        | Optional     |
+| 11  | Navigation Layout     | Optional     |
+
+The idea: **identity comes second**, so everything after it belongs to a real
+signed-in account. Then **what the department uses** — modules, ranks,
+stations, apparatus. Then the **external integrations** — email, storage,
+sign-in — which are the steps that send somebody off to hunt for credentials,
+and every one of those can be skipped.
+
+**Which steps are optional is now shown up front** rather than discovered one
+at a time, and an in-progress setup **stays resumable after its session
+lapses** instead of starting over.
+
+> **Screenshot needed:**
+> _[The onboarding progress indicator on a mid-flow step, showing the new
+> eleven-step order with the optional markers. Any capture showing Stations at
+> step 2 or the administrator account at step 9 is from the old order.]_
+
+### Three things you can now answer during setup
+
+**How you number members**, in step 1. This has to come first: the counter only
+numbers members created **after** it is switched on, and the wizard creates
+your administrator account in step 2 and your IT team in step 7. A department
+that set this on a members screen afterwards ended up with its first few
+accounts holding no number, and the roster import starting at the number those
+accounts should have had — an off-by-a-few nobody notices until a badge is
+printed.
+
+**Your rank ladder**, in step 4. You can rename ranks to your own vocabulary,
+reorder the ladder, remove ranks you do not have, add your own, and set which
+shift seats each rank can fill — **including a seat your department invented**.
+
+**Your membership tier ladder**, also in step 4. Same editor you get afterwards
+at Members → Administration → Settings → Membership Tiers.
+
+> **Screenshot needed:**
+> _[Step 4 with the rank ladder editor open — a renamed rank, a reordered
+> ladder, and the seat-assignment control. Capture a department-invented seat if
+> the demo data has one.]_
+
+Also in step 4: the permission checkboxes now **show rows only for the modules
+you turned on** in step 3, which is why modules moved ahead of positions. Every
+checkbox grants a permission that actually exists, unticking a seeded position
+removes it, and pressing Continue without editing anything **no longer deletes
+most of the roster**.
+
+## New: Members Administration → Settings
+
+Five settings that lived in three different places are now one screen, at
+**Members → Administration → Settings**. Each section has its own address, so
+an officer can be linked straight to the one they need.
+
+| Section                | What it sets                            |
+| ---------------------- | --------------------------------------- |
+| **Contact Visibility** | What members see of each other          |
+| **Membership IDs**     | Numbering and prefixes                  |
+| **Operational Ranks**  | The ladder, and who may fill which seat |
+| **Membership Tiers**   | The ladder, and what each tier confers  |
+| **EVOC Levels**        | Driver certification ladder             |
+
+**The permissions differ per section, on purpose.** Reaching the screen takes
+the members-management grant — but Contact Visibility and Membership IDs save
+through settings endpoints that do not accept it. If they were gated on the
+hub's grant, a members officer would land on a page where **every toggle
+fails**. Operational Ranks _does_ now accept the members grant, because the
+ladder moved here and its gate moved with it. **EVOC does not** — it belongs to
+Apparatus, and widening that was a separate decision from moving the page.
+
+Contact Visibility and Membership IDs moved here on September 6 and **their old
+addresses redirect**, so existing links still arrive.
+
+> **Screenshot needed:**
+> _[The Members Administration → Settings screen with the section sidebar
+> visible and Operational Ranks selected, so the five sections and the ladder
+> editor are in one frame.]_
+
+## For quartermasters: shape the items list
+
+The items list is alphabetical, and a handful of items — the Class B polos, the
+duty boots — carry nearly all the traffic while sitting scattered between
+things touched once a year.
+
+- **Pin** an item and it hoists to a **Pinned** section at the top. Pins are
+  **yours, not the department's** — two quartermasters running different supply
+  lines front different gear, and curating your list never reorders anybody
+  else's page. Drag pinned rows to reorder, or use the up/down arrows on a
+  phone where dragging does not work. **Up to 25 items.**
+- **Group by** — beside the filters — reorganises the list by Category, Item
+  Type, colour, or any other attribute. **Whatever you group by drops out of
+  the rows**, because repeating one value on every row inside its own group is
+  noise; the **Size** column is shown instead.
+- **A product's size variants fold into one expandable row**, so a coat in six
+  sizes is one line until you open it.
+
+Both of these are already covered with captures in
+[05 — Inventory](./05-inventory.md); this section does not repeat them.
+
+Two corrections underneath, worth knowing because they change what gets
+generated:
+
+- **A garment can record every style attribute it has.** Sleeve, fit, neckline
+  and closure are four independent things, and the field only held one — so a
+  men's long-sleeve polo could not be recorded at all. Variant generation
+  "resolved" that by creating **three separate items**. It no longer does.
+- **A member's fit preference is now read.** It used to save and change
+  nothing — the member picked Women's or Long Sleeve, saw it save, and was
+  offered exactly what they would have been offered anyway. (Boot width, in the
+  same form, was always read.) The requestable catalog now uses it to preselect
+  the right variant.
+
+## For officers: scheduling
+
+- **A close-out queue** at Administration → Scheduling → Close-out: every shift
+  that has ended and was never closed out, oldest first.
+- **The Calls log on the shift panel is hidden unless your department records
+  calls in a mode that has one.** Three call-entry paths that were ungated are
+  now gated the same way. A department not tracking calls was being offered a
+  log it could not meaningfully fill.
+
+> **Screenshot needed:**
+> _[`/scheduling/admin/closeout` with several shifts in the queue, oldest
+> first. Capture a department on a call-tracking mode so the close-out settings
+> summary beside it is populated.]_
+
+## For membership coordinators
+
+- **Place an applicant directly on a stage**, rather than advancing them one
+  step at a time.
+- **Applicants with no stage no longer vanish** from the board, and applicants
+  belonging to other pipelines no longer show up in _Unassigned_.
+- **Switching a pipeline drops the old pipeline's applicants** rather than
+  carrying them into stages that do not correspond to anything.
+- A stage that advances **on a meeting now requires real attendance** to be
+  recorded first.
+
+Underneath all of that: two stages could share a position in the order, and
+"the next stage" is an index into that order — so **both the column order and
+where "advance" actually sent an applicant** depended on how the sort happened
+to break the tie, differently from one page load to the next. Stage positions
+are unique now, and the upgrade renumbers the ones you already have.
+
+> **Screenshot needed:**
+> _[The applicant board with the place-on-a-stage action open on an applicant,
+> showing the stage list it offers.]_
+
+## Smaller fixes members and officers will notice
+
+- **A facility emergency contact can be saved with a name and no company.** The
+  form always allowed it — a facility's own on-call staff, with no vendor behind
+  them — and the database always rejected it.
+- **Equipment-check drafts survive leaving the page**, and a failed draft
+  recovery no longer throws a toast over whatever page you opened next.
+- **Only an inspection may move an item's inspection clock.**
+- **The items-list export matches the list you are looking at**, filters and
+  grouping included.
+- **Signing in is faster** — the token-refresh lookup is now indexed, and it is
+  the busiest query the session table takes.
+- Two scheduling settings sections **no longer crash** on a malformed response.
+- **Storefront orders placed at the same moment are serialized**, closing a race
+  where two could both pass the same stock check.
+
+## Upgrade notes for administrators (September 6–12)
+
+**Twelve migrations. Head is `0533644945cd`.** Back up, confirm `alembic heads`
+returns exactly one, then `alembic upgrade head`.
+
+**One migration does not reverse**, and it is the one that settles event-request
+preference values onto the canonical vocabulary — the original free text is not
+recoverable. Its scope is deliberately narrow: **only values outside the
+vocabulary are touched.** A request whose flexibility says "specific dates"
+without naming one is left alone, and outreach types are left alone entirely,
+because a type not in today's list may be one your department genuinely offered
+and has since retired.
+
+**One migration reverses and you probably do not want to reverse it** — the
+property-return folder change. Its downgrade restores the department-wide
+readability along with the schema.
+
+Then, in order:
+
+1. **Decide your navigation layout.** Everyone is about to get the left
+   sidebar. Settings → Organization → Profile → Navigation Layout.
+2. **Check your Treasurer position** if you deliberately limited it to view and
+   manage on finance. It is about to gain both approval permissions.
+3. **Check your finance approval chain** — if you built one and nobody could
+   action it, that is now fixed and there may be a backlog sitting in _Pending
+   Approval_.
+4. **Tell whoever handles separations** that property-return reports are now in
+   a leadership-only folder, not Reports.
+5. **Check the event-request toggle** if you publish a request form and do not
+   want public submissions. Events → Settings → Pipeline.
+6. **Re-check your applicant board** after the upgrade renumbers pipeline
+   stages — the column order may settle differently from what you were used to,
+   and that is the tie being broken deliberately rather than at random.
+
+## Not yet available — do not teach these
+
+Unchanged from the previous two windows:
+
+- The crew **Sweep** for equipment checks — built, visible only in the template
+  builder's preview.
+- The equipment-check **lap** — built, not wired.
+- **Qualification entry** — still only through a course's _Certifies_ field.

@@ -2,7 +2,8 @@
 
 **[🏠 Home](Home)**
 
-**[Recent changes (Aug 31 – Sep 6, 2026)](Recent-Changes-2026-08-31-to-09-06)**
+**[Recent changes (Sep 6–12, 2026)](Recent-Changes-2026-09-06-to-09-12)**
+[· Aug 31 – Sep 6 detail](Recent-Changes-2026-08-31-to-09-06)
 [· Aug 24–31 detail](Recent-Changes-2026-08-24-to-31)
 [· Aug 23–24 detail](Recent-Changes-2026-08-23-to-24)
 [· Aug 19–23 detail](Recent-Changes-2026-08-19-to-23)

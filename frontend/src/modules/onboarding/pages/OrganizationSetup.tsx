@@ -64,10 +64,10 @@ interface OrganizationFormData {
    * Whether members carry a number, and where the sequence starts.
    *
    * Asked in step 1 and not on a members screen because the counter only
-   * numbers members created after it is switched on. The System Owner arrives
-   * in step 9 and the IT team in step 10, so a department that answered this
-   * later ended up with its first accounts holding no number and the roster
-   * import starting at the number they should have had.
+   * numbers members created after it is switched on. The administrator account
+   * arrives in step 2 and the IT team in step 7, so a department that answered
+   * this later ended up with its first accounts holding no number and the
+   * roster import starting at the number they should have had.
    */
   memberNumbersEnabled: boolean;
   memberNumberPrefix: string;
