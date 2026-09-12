@@ -837,3 +837,174 @@ class TestPerCriterionScoreModes:
 
         assert breakdown["deducted"] == 3.0
         assert breakdown["percentage"] == 70.0
+
+
+class TestWaivedSteps:
+    """A step the examiner recorded as not observed.
+
+    The rule mirrors the one deductions have always followed: a judgement the
+    examiner did not make cannot cost the candidate anything. A blank step used
+    to enlarge the denominator and earn nothing — silently charging full marks
+    for something nobody watched — which is what the completion guard and this
+    outcome together replace.
+    """
+
+    def _sheet(self, **criterion_overrides):
+        criterion = {
+            "type": "pass_fail",
+            "label": "Charges the supply line",
+            "score_mode": "points",
+        }
+        criterion.update(criterion_overrides)
+        return _template(
+            [
+                {
+                    "name": "Water supply",
+                    "criteria": [
+                        {
+                            "type": "pass_fail",
+                            "label": "Sets the hydrant",
+                            "score_mode": "points",
+                        },
+                        criterion,
+                    ],
+                }
+            ]
+        )
+
+    def _results(self, waived_reason="the evolution never reached the hydrant"):
+        return _test(
+            [
+                {
+                    "section_id": "section-0",
+                    "criteria_results": [
+                        {"criterion_id": "criterion-0-0", "passed": True},
+                        {
+                            "criterion_id": "criterion-0-1",
+                            "passed": None,
+                            "waived": True,
+                            "waive_reason": waived_reason,
+                        },
+                    ],
+                }
+            ]
+        )
+
+    def test_leaves_the_point_pool_in_both_directions(self):
+        breakdown = build_score_breakdown(self._results(), self._sheet())
+
+        # One of one, not one of two: the waived step is not a mark the
+        # candidate missed, so it must not sit in the denominator alone.
+        assert breakdown["available"] == 1.0
+        assert breakdown["earned"] == 1.0
+        assert breakdown["percentage"] == 100.0
+
+    def test_is_tallied_apart_from_passed_failed_and_blank(self):
+        section = _section_of(
+            build_score_breakdown(self._results(), self._sheet()), "Water supply"
+        )
+
+        assert section["waived"] == 1
+        assert section["passed"] == 1
+        assert section["failed"] == 0
+        assert section["not_scored"] == 0
+
+    def test_never_charges_a_deduction(self):
+        sheet = self._sheet(score_mode="deduct", deduction_points=5)
+        # A stale failure left on the step before it was waived: the waiver is
+        # a statement about whether it was observed, so it outranks the mark.
+        results = _test(
+            [
+                {
+                    "section_id": "section-0",
+                    "criteria_results": [
+                        {"criterion_id": "criterion-0-0", "passed": True},
+                        {
+                            "criterion_id": "criterion-0-1",
+                            "passed": False,
+                            "waived": True,
+                            "waive_reason": "prop failed",
+                        },
+                    ],
+                }
+            ]
+        )
+
+        breakdown = build_score_breakdown(results, sheet)
+
+        assert breakdown["deducted"] == 0.0
+        assert breakdown["deductions"] == []
+
+    def test_is_not_reported_as_a_critical_failure(self):
+        # Belt and braces: the API refuses a waiver on a critical step, so this
+        # state should never reach the scorer. If it somehow does, a waiver
+        # must not read as a step the candidate failed.
+        sheet = _template(
+            [
+                {
+                    "name": "Airway",
+                    "criteria": [
+                        {
+                            "type": "pass_fail",
+                            "label": "Opens the airway",
+                            "required": True,
+                        }
+                    ],
+                }
+            ],
+            require_all_critical=True,
+        )
+        results = _test(
+            [
+                {
+                    "section_id": "section-0",
+                    "criteria_results": [
+                        {
+                            "criterion_id": "criterion-0-0",
+                            "passed": None,
+                            "waived": True,
+                            "waive_reason": "manikin unavailable",
+                        }
+                    ],
+                }
+            ]
+        )
+
+        assert build_score_breakdown(results, sheet)["critical_failures"] == []
+
+
+class TestScoreClamping:
+    """A recorded score above the step's ceiling.
+
+    ``CriterionResultSchema.score`` accepts any non-negative number, so an
+    over-max value would push the numerator past the denominator and report a
+    percentage above 100 — a figure no threshold comparison can act on.
+    """
+
+    def test_clamps_a_score_to_the_steps_maximum(self):
+        template = _template(
+            [
+                {
+                    "name": "Pump operations",
+                    "criteria": [
+                        {"type": "score", "label": "Sets the pressure", "max_score": 5}
+                    ],
+                }
+            ]
+        )
+        results = _test(
+            [
+                {
+                    "section_id": "section-0",
+                    "criteria_results": [
+                        {"criterion_id": "criterion-0-0", "score": 9, "passed": True}
+                    ],
+                }
+            ]
+        )
+
+        breakdown = build_score_breakdown(results, template)
+
+        assert breakdown["available"] == 5.0
+        assert breakdown["earned"] == 5.0
+        assert breakdown["percentage"] == 100.0

@@ -100,7 +100,10 @@ describe('ScoreBreakdownPanel', () => {
     expect(screen.queryByText(/Pass\/Fail steps are not worth points/)).not.toBeInTheDocument();
   });
 
-  it('names the critical step that failed a test the percentage would have passed', () => {
+  // Critical failures decide the verdict outright, so they are named beside it
+  // by ResultVerdictBanner rather than at the foot of the arithmetic they
+  // override. Asserted here so a reinstatement shows up as a duplicate.
+  it('leaves critical failures to the verdict banner', () => {
     render(
       <ScoreBreakdownPanel
         breakdown={breakdown({
@@ -112,22 +115,35 @@ describe('ScoreBreakdownPanel', () => {
       />
     );
 
-    expect(screen.getByText(/2 critical steps/)).toBeInTheDocument();
-    expect(screen.getByText(/Assess scene safety/)).toBeInTheDocument();
-    expect(screen.getByText(/left unscored/)).toBeInTheDocument();
+    expect(screen.queryByText(/Assess scene safety/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/regardless of the percentage/)).not.toBeInTheDocument();
   });
 
-  it('hides critical failures when the template does not require them', () => {
+  it('counts steps the examiner could not observe', () => {
     render(
       <ScoreBreakdownPanel
         breakdown={breakdown({
-          require_all_critical: false,
-          critical_failures: [{ section_name: 'Procedure', criterion_label: 'Scene safety', reason: 'failed' }],
+          sections: [section({ section_id: 'section-0', section_name: 'Airway', passed: 3, waived: 2 })],
         })}
       />
     );
 
-    expect(screen.queryByText(/regardless of the percentage/)).not.toBeInTheDocument();
+    expect(screen.getByText(/2 not observed/)).toBeInTheDocument();
+  });
+
+  // A statement is read aloud and never judged, so on a candidate's own result
+  // it is a count attached to no number on the page.
+  it('drops the statement tally when statements are hidden', () => {
+    const withStatements = breakdown({
+      sections: [section({ section_id: 'section-0', section_name: 'Scene', passed: 2, statements: 3 })],
+    });
+
+    const { rerender } = render(<ScoreBreakdownPanel breakdown={withStatements} />);
+    expect(screen.getByText(/3 statements/)).toBeInTheDocument();
+
+    rerender(<ScoreBreakdownPanel breakdown={withStatements} showStatements={false} />);
+    expect(screen.queryByText(/3 statements/)).not.toBeInTheDocument();
+    expect(screen.getByText(/2 passed/)).toBeInTheDocument();
   });
 
   it('explains a template with nothing scorable on it', () => {

@@ -16,23 +16,13 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import {
-  Calendar,
-  CheckCircle2,
-  ChevronLeft,
-  ClipboardCheck,
-  FileText,
-  Printer,
-  Timer,
-  Trash2,
-  User,
-  XCircle,
-} from 'lucide-react';
+import { Calendar, ChevronLeft, ClipboardCheck, FileText, Printer, Timer, Trash2, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { ReadOnlySectionView } from './ActiveSkillTestPage';
 import { ScoreBreakdownPanel } from '../components/training/ScoreBreakdownPanel';
+import { ResultVerdictBanner } from '../components/training/ResultVerdictBanner';
 import { hydrateTemplateSections } from '../utils/skillTemplateSections';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
@@ -166,39 +156,12 @@ export const MySkillTestResultPage: React.FC = () => {
       )}
 
       {isComplete ? (
-        <div
-          className={`flex items-center gap-3 rounded-xl p-4 ${
-            isVoided
-              ? 'bg-theme-surface border-theme-surface-border border'
-              : currentTest.result === 'pass'
-                ? 'border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
-                : 'border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-          }`}
-        >
-          {currentTest.result === 'pass' ? (
-            <CheckCircle2 className="h-10 w-10 shrink-0 text-green-500" />
-          ) : (
-            <XCircle className="h-10 w-10 shrink-0 text-red-500" />
-          )}
-          <div className="flex-1">
-            <p
-              className={`text-lg font-bold ${
-                isVoided
-                  ? 'text-theme-text-muted line-through'
-                  : currentTest.result === 'pass'
-                    ? 'text-green-700 dark:text-green-300'
-                    : 'text-red-700 dark:text-red-300'
-              }`}
-            >
-              {currentTest.result === 'pass' ? 'Passed' : 'Failed'}
-            </p>
-            {currentTest.overall_score != null && (
-              <p className="text-theme-text-secondary text-sm font-medium">
-                Overall score: {Math.round(currentTest.overall_score)}%
-              </p>
-            )}
-          </div>
-        </div>
+        <ResultVerdictBanner
+          result={currentTest.result}
+          breakdown={currentTest.score_breakdown}
+          overallScore={currentTest.overall_score}
+          isVoided={isVoided}
+        />
       ) : isPending ? (
         <div className="alert-purple">
           <p className="text-sm font-medium">Awaiting validation</p>
@@ -266,7 +229,9 @@ export const MySkillTestResultPage: React.FC = () => {
       {/* A member reading their own result is the person most owed an
           explanation of where the number came from — and the least able to ask
           the examiner about it after the fact. */}
-      {currentTest.score_breakdown && <ScoreBreakdownPanel breakdown={currentTest.score_breakdown} />}
+      {currentTest.score_breakdown && (
+        <ScoreBreakdownPanel breakdown={currentTest.score_breakdown} showStatements={false} />
+      )}
 
       <div className="space-y-4">
         {templateSections.map((section) => (
@@ -278,6 +243,7 @@ export const MySkillTestResultPage: React.FC = () => {
             )}
             breakdownSection={currentTest.score_breakdown?.sections.find((s) => s.section_id === section.id)}
             scorePassFailCriteria={currentTest.template_score_pass_fail_criteria}
+            showStatements={false}
           />
         ))}
       </div>

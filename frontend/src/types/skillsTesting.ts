@@ -228,6 +228,13 @@ export interface CriterionResult {
   time_seconds?: number | undefined;
   checklist_completed?: boolean[] | undefined;
   notes?: string | undefined;
+  /** The examiner could not observe this step and said so. Distinct from a
+   *  blank (which blocks completion) and from a failure: the step leaves the
+   *  point pool entirely, crediting and penalising nothing. Never set on a
+   *  critical step — the API rejects that. */
+  waived?: boolean | undefined;
+  /** Required whenever `waived` is true. */
+  waive_reason?: string | undefined;
 }
 
 /** Results for a section during a test */
@@ -260,6 +267,10 @@ export interface ScoreBreakdownSection {
   not_scored: number;
   /** Statements read aloud by the examiner — informational, never scored. */
   statements: number;
+  /** Steps the examiner recorded as not observed. Out of the point pool in
+   *  both directions, so they neither credit nor penalise the candidate.
+   *  Optional: results filed before waivers existed carry no such count. */
+  waived?: number | undefined;
 }
 
 /** How a test's overall percentage was arrived at.

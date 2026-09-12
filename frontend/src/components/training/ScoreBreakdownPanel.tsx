@@ -24,18 +24,21 @@ import React from 'react';
 import { AlertTriangle, Calculator } from 'lucide-react';
 
 import type { ScoreBreakdown } from '../../types/skillsTesting';
+import { formatPoints, formatScore } from '../../utils/skillScoreFormat';
 
-/** Trims float noise without hiding real fractions: 12 -> "12", 12.5 -> "12.5" */
-function formatPoints(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10);
-}
-
-const ScoredSectionRow: React.FC<{ section: ScoreBreakdown['sections'][number] }> = ({ section }) => {
+const ScoredSectionRow: React.FC<{
+  section: ScoreBreakdown['sections'][number];
+  showStatements: boolean;
+}> = ({ section, showStatements }) => {
+  const waived = section.waived ?? 0;
   const tallies: string[] = [];
   if (section.passed > 0) tallies.push(`${section.passed} passed`);
   if (section.failed > 0) tallies.push(`${section.failed} failed`);
   if (section.not_scored > 0) tallies.push(`${section.not_scored} not scored`);
-  if (section.statements > 0) tallies.push(`${section.statements} statement${section.statements === 1 ? '' : 's'}`);
+  if (waived > 0) tallies.push(`${waived} not observed`);
+  if (showStatements && section.statements > 0) {
+    tallies.push(`${section.statements} statement${section.statements === 1 ? '' : 's'}`);
+  }
 
   const deducted = section.deducted ?? 0;
   const hasPool = section.available != null && section.available > 0;
@@ -65,7 +68,13 @@ const ScoredSectionRow: React.FC<{ section: ScoreBreakdown['sections'][number] }
   );
 };
 
-export const ScoreBreakdownPanel: React.FC<{ breakdown: ScoreBreakdown }> = ({ breakdown }) => {
+export const ScoreBreakdownPanel: React.FC<{
+  breakdown: ScoreBreakdown;
+  /** Whether statement steps are counted in the per-section tallies. False on
+   *  candidate-facing surfaces, where a count of things nobody judged is noise
+   *  attached to no number. See ResultVerdictBanner for the same distinction. */
+  showStatements?: boolean;
+}> = ({ breakdown, showStatements = true }) => {
   const {
     method,
     earned,
@@ -73,8 +82,6 @@ export const ScoreBreakdownPanel: React.FC<{ breakdown: ScoreBreakdown }> = ({ b
     percentage,
     passing_percentage: passingPercentage,
     meets_threshold: meetsThreshold,
-    require_all_critical: requireAllCritical,
-    critical_failures: criticalFailures,
     score_pass_fail_criteria: scorePassFail,
     deducted = 0,
     deductions = [],
@@ -110,7 +117,7 @@ export const ScoreBreakdownPanel: React.FC<{ breakdown: ScoreBreakdown }> = ({ b
               deducted
             </>
           )}
-          {percentage != null && <> = {percentage}%</>}
+          {percentage != null && <> = {formatScore(percentage)}</>}
         </p>
       )}
       {method === 'section_average' && (
@@ -127,7 +134,7 @@ export const ScoreBreakdownPanel: React.FC<{ breakdown: ScoreBreakdown }> = ({ b
       <p className="text-theme-text-secondary mt-1 text-sm">
         {passingPercentage != null ? (
           <>
-            Passing mark is {passingPercentage}% — {meetsThreshold ? 'met' : 'not met'}.
+            Passing mark is {formatScore(passingPercentage)} — {meetsThreshold ? 'met' : 'not met'}.
           </>
         ) : (
           <>This template sets no passing percentage, so the score alone cannot fail the test.</>
@@ -136,7 +143,11 @@ export const ScoreBreakdownPanel: React.FC<{ breakdown: ScoreBreakdown }> = ({ b
 
       <div className="border-theme-surface-border divide-theme-surface-border mt-3 divide-y border-t pt-1">
         {sections.map((section, index) => (
-          <ScoredSectionRow key={`${section.section_name ?? 'section'}-${index}`} section={section} />
+          <ScoredSectionRow
+            key={`${section.section_name ?? 'section'}-${index}`}
+            section={section}
+            showStatements={showStatements}
+          />
         ))}
       </div>
 
@@ -212,24 +223,11 @@ export const ScoreBreakdownPanel: React.FC<{ breakdown: ScoreBreakdown }> = ({ b
         </div>
       )}
 
-      {requireAllCritical && criticalFailures.length > 0 && (
-        <div className="alert-warning mt-3">
-          <p className="flex items-center gap-1.5 text-sm font-medium">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            {criticalFailures.length === 1 ? 'A critical step' : `${criticalFailures.length} critical steps`} failed
-            this test regardless of the percentage
-          </p>
-          <ul className="mt-1 space-y-0.5 text-sm">
-            {criticalFailures.map((failure, index) => (
-              <li key={`${failure.criterion_label ?? 'criterion'}-${index}`}>
-                {failure.criterion_label || 'Unnamed step'}
-                {failure.section_name && <span className="text-xs"> ({failure.section_name})</span>}
-                {failure.reason === 'not_scored' && <span className="text-xs italic"> — left unscored</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Critical failures are deliberately NOT repeated here. They decide the
+          verdict outright, so they belong beside it — ResultVerdictBanner names
+          them directly under the Pass/Fail headline, where a candidate reads
+          first. Listing them again at the foot of the arithmetic implied they
+          were part of it, which is exactly backwards: they override it. */}
     </div>
   );
 };

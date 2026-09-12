@@ -36,6 +36,9 @@ export interface SectionTally {
   failed: number;
   notScored: number;
   statements: number;
+  /** Steps the examiner recorded as not observed — out of the point pool in
+   *  both directions, so they neither credit nor penalise the candidate. */
+  waived: number;
 }
 
 function findResult(results: CriterionResult[], criterion: SkillCriterion): CriterionResult | undefined {
@@ -76,11 +79,15 @@ export function deductionValue(criterion: SkillCriterion, scorePassFailCriteria 
   return points != null && points > 0 ? points : 1;
 }
 
-type Outcome = 'passed' | 'failed' | 'not_scored' | 'statement' | 'points';
+type Outcome = 'passed' | 'failed' | 'not_scored' | 'statement' | 'points' | 'waived';
 
 /** Mirrors _criterion_outcome in skills_testing_service.py. */
-function outcomeOf(criterion: SkillCriterion, result: CriterionResult | undefined): Outcome {
+export function outcomeOf(criterion: SkillCriterion, result: CriterionResult | undefined): Outcome {
   if (criterion.type === 'statement') return 'statement';
+
+  // Ahead of the 'points' shortcut below, as on the backend: a waiver says
+  // whether the step was observed at all, which outranks any mark on it.
+  if (result?.waived) return 'waived';
 
   const isCritical = criterion.required;
   if (criterion.type === 'score' && !isCritical) return 'points';
@@ -102,22 +109,27 @@ export function computeSectionTally(
   let earned = 0;
   let available = 0;
   let deducted = 0;
-  const counts = { passed: 0, failed: 0, notScored: 0, statements: 0 };
+  const counts = { passed: 0, failed: 0, notScored: 0, statements: 0, waived: 0 };
 
   for (const criterion of criteria) {
     const result = findResult(results, criterion);
+    const outcome = outcomeOf(criterion, result);
 
     const worth = pointValue(criterion, scorePassFailCriteria);
-    if (worth != null) {
+    // A waived step leaves the pool in both directions — counting it in the
+    // denominator alone would charge full marks for something the examiner
+    // recorded as unobservable.
+    if (worth != null && outcome !== 'waived') {
       available += worth;
       if (criterion.type === 'score') {
-        if (result?.score != null) earned += result.score;
+        // Clamped to what the step is worth, as the backend does: an over-max
+        // score would otherwise push the total past the denominator.
+        if (result?.score != null) earned += Math.min(result.score, worth);
       } else if (result?.passed === true) {
         earned += worth;
       }
     }
 
-    const outcome = outcomeOf(criterion, result);
     // Charged on a recorded failure only — a step the examiner never marked is
     // not a judgement, so it cannot cost the candidate points.
     if (outcome === 'failed') deducted += deductionValue(criterion, scorePassFailCriteria);
@@ -125,6 +137,9 @@ export function computeSectionTally(
     switch (outcome) {
       case 'statement':
         counts.statements += 1;
+        break;
+      case 'waived':
+        counts.waived += 1;
         break;
       case 'passed':
         counts.passed += 1;

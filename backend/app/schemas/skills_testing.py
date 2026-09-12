@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.skills_testing import ResultDisclosure, ResultRelease
 from app.schemas.base import UTCResponseBase
@@ -127,6 +127,40 @@ class SkillCriterionSchema(BaseModel):
                 + ", ".join(CRITERION_SCORE_MODES)
             )
         return v
+
+    @model_validator(mode="after")
+    def validate_scoring_bounds(self) -> "SkillCriterionSchema":
+        """Reject a criterion whose numbers cannot produce a meaningful mark.
+
+        The template builder already refuses both of these, but only in the
+        browser — so a sheet posted by a script, an import or a future client
+        could save a step that looks scorable and is not. Both failures are
+        silent at scoring time, which is why they are rejected at the write
+        rather than corrected at the read.
+        """
+        # A critical scored step passes at ``passing_score`` or above, so a
+        # threshold above the ceiling is a step nobody can pass.
+        if (
+            self.passing_score is not None
+            and self.max_score is not None
+            and self.passing_score > self.max_score
+        ):
+            raise ValueError(
+                f"Criterion '{self.label}': the passing score "
+                f"({self.passing_score}) cannot be higher than the maximum "
+                f"score ({self.max_score})."
+            )
+
+        # _criterion_point_value reads a scored step's worth entirely off
+        # max_score, so one without it carries no points and contributes
+        # nothing to the percentage it appears to be scored out of.
+        if self.type == "score" and (self.max_score is None or self.max_score <= 0):
+            raise ValueError(
+                f"Criterion '{self.label}': a scored step needs a maximum "
+                "score above 0, or it carries no points."
+            )
+
+        return self
 
 
 class SkillTemplateSectionSchema(BaseModel):
@@ -293,10 +327,28 @@ class CriterionResultSchema(BaseModel):
     criterion_id: Optional[str] = None
     criterion_label: Optional[str] = None
     passed: Optional[bool] = None
-    score: Optional[float] = None
+    score: Optional[float] = Field(None, ge=0)
     time_seconds: Optional[int] = None
     checklist_completed: Optional[List[bool]] = None
     notes: Optional[str] = None
+    # The examiner could not observe this step, and said so. Distinct from a
+    # blank (which now blocks completion) and from a failure: the candidate is
+    # neither credited nor penalised, and the step leaves the point pool
+    # entirely — the same treatment an unscored deduct step has always had.
+    waived: Optional[bool] = None
+    # Required whenever waived is true. A step dropped from a scorecard without
+    # a stated reason is indistinguishable from one the examiner skipped to
+    # save time, and the officer validating the result has no way to judge it.
+    waive_reason: Optional[str] = Field(None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_waiver(self) -> "CriterionResultSchema":
+        if self.waived and not (self.waive_reason or "").strip():
+            raise ValueError(
+                "A waived step needs a reason describing why it could not be "
+                "observed."
+            )
+        return self
 
 
 class SectionResultSchema(BaseModel):
