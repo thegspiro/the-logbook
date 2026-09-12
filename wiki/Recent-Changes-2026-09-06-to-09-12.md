@@ -33,7 +33,7 @@ load after upgrading.
   the left sidebar on their next page load**, including the officer whose
   browser held the top bar. There was nothing to migrate, because the old
   value was never reachable from the server.
-  **If you want the top bar, set it once at Settings → Organization → Profile →
+  **If you want the top bar, set it once at Settings → General → Profile →
   Navigation Layout.** It applies to every member from their next page load.
   Departments already on the default need do nothing.
 

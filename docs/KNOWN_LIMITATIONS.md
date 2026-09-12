@@ -263,6 +263,56 @@ Tier **ids** are not editable, for the reason rank codes are not: `id` is what
 not recognise — so a renamed id drops those members out of the operational body
 and the electorate at once.
 
+## ONBOARD-7 — Concurrent First-Run Requests Brick Setup With a 500 (2026-09-12)
+
+**Found while capturing the setup-wizard screenshots, reproduced twice on a
+freshly-migrated database.** Not a theoretical race: it fired on an ordinary
+first load of `/onboarding`, and recovery needed direct database access.
+
+`OnboardingService.start_onboarding` is a read-then-write with nothing
+serialising it:
+
+```python
+existing = await self.get_onboarding_status()
+if existing and not existing.is_completed:
+    return existing
+# ...otherwise create a new OnboardingStatus
+```
+
+Two concurrent `POST /api/v1/onboarding/start` calls therefore both read "none
+exists" and both insert. There is no unique constraint on
+`onboarding_status` to stop the second.
+
+`needs_onboarding()` then reads that table with `scalar_one_or_none()`
+(`app/services/onboarding.py:256`), which raises `MultipleResultsFound` the
+moment two in-progress rows exist. `GET /api/v1/onboarding/status` returns
+**500 `LB-SYS-001` permanently**, and the wizard cannot proceed.
+
+**Observed:** two rows written in the same second, `is_completed = 0`,
+`current_step = 1`. Deleting either one restores the endpoint immediately,
+which is what confirms the diagnosis.
+
+**Why it is reachable.** The wizard's own page load issues these calls in
+parallel, so no unusual behaviour is required. It is also exactly what
+`08-admin-reports.md` tells operators they may do — "Open `/onboarding` in a
+second tab … that tab starts its own new session".
+
+**Recovery today is manual and needs database access**, which on a first run is
+the worst time to need it: the System Owner does not exist yet, so there is no
+account to sign in as, and `/onboarding/reset` authenticates against the same
+broken state.
+
+**Not fixed here.** This was found during a screenshot-capture change set and a
+fix belongs in its own: it wants a uniqueness guarantee on the table plus a
+lock around the get-or-create (CLAUDE.md pitfall #27 is this exact shape), and
+`needs_onboarding()` should tolerate duplicates rather than 500 on them. Both
+touch first-run and authentication paths.
+
+**Working around it meanwhile:** issue one `POST /onboarding/start` serially
+before opening a browser. A pre-existing row makes every later call take the
+"return existing" branch, so the race cannot fire.
+`scripts/screenshots/wizard-walk.mjs` documents this as a prerequisite.
+
 ## ONBOARD-3 — A Deleted Seed Rank Is Still Accepted on a Write (2026-09-09)
 
 Setup now lets a department curate its rank ladder, and removing a rank does
@@ -306,7 +356,7 @@ scope.
 **Fixed 2026-09-11.** The answer is now stored on the organization
 (`settings.appearance.navigation_layout`), served beside the name and logo by
 `GET /auth/branding` so the shell paints in the right shape on first load, and
-editable at Settings → Organization → Profile. `AppLayout` reconciles against
+editable at Settings → General → Profile. `AppLayout` reconciles against
 the server on every mount rather than only on a first visit — a departmental
 setting has to reach members whose browsers already hold a value, which the old
 first-visit-only fetch could never do.

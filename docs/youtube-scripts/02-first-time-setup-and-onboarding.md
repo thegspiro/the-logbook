@@ -774,10 +774,10 @@ override"]**
 **[EDITOR NOTE: if this script is being re-cut for an audience with existing
 installations, add one line here — on upgrade, every department without a
 stored layout gets the **left sidebar**, including officers whose browser was
-showing the top bar. It is changed at Settings → Organization → Profile →
+showing the top bar. It is changed at Settings → General → Profile →
 Navigation Layout.]**
 
-> "And you can change it afterwards — Settings, Organization, Profile,
+> "And you can change it afterwards — Settings, General, Profile,
 > Navigation Layout. It applies to everyone from their next page load."
 
 **[SCREEN: Select a layout and proceed]**
