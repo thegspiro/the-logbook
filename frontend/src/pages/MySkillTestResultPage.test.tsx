@@ -75,9 +75,62 @@ describe('MySkillTestResultPage', () => {
     currentMockTest = { ...baseTest };
     renderWithRouter(<MySkillTestResultPage />);
 
-    expect(screen.getByText('Passed')).toBeInTheDocument();
-    expect(screen.getByText('Overall score: 95%')).toBeInTheDocument();
+    expect(screen.getByText(/Passed/)).toBeInTheDocument();
+    expect(screen.getByText('95%')).toBeInTheDocument();
     expect(screen.getByText('Official skills test')).toBeInTheDocument();
+  });
+
+  // The headline used to state the verdict and a number and leave the reason
+  // in an alert below the whole scorecard, so "Failed" beside a percentage over
+  // the passing mark read as an arithmetic error.
+  it('names the critical step that decided a failure, beside the verdict', () => {
+    currentMockTest = {
+      ...baseTest,
+      result: 'fail',
+      overall_score: 95,
+      score_breakdown: {
+        method: 'points',
+        score_pass_fail_criteria: false,
+        earned: 19,
+        available: 20,
+        percentage: 95,
+        passing_percentage: 80,
+        meets_threshold: true,
+        require_all_critical: true,
+        critical_failures: [{ section_name: 'Airway', criterion_label: 'Opens the airway', reason: 'failed' }],
+        sections: [],
+      },
+    };
+    renderWithRouter(<MySkillTestResultPage />);
+
+    expect(screen.getByText(/A critical step was not met/)).toBeInTheDocument();
+    expect(screen.getByText(/Opens the airway/)).toBeInTheDocument();
+  });
+
+  // 89.5 displayed as "90%" directly above "Passing mark is 90% — not met".
+  it('shows the same figure the breakdown was judged on', () => {
+    currentMockTest = {
+      ...baseTest,
+      result: 'fail',
+      overall_score: 89.5,
+      score_breakdown: {
+        method: 'points',
+        score_pass_fail_criteria: false,
+        earned: 17.9,
+        available: 20,
+        percentage: 89.5,
+        passing_percentage: 90,
+        meets_threshold: false,
+        require_all_critical: true,
+        critical_failures: [],
+        sections: [],
+      },
+    };
+    renderWithRouter(<MySkillTestResultPage />);
+
+    expect(screen.getByText('89.5%')).toBeInTheDocument();
+    expect(screen.queryByText('90%')).not.toBeInTheDocument();
+    expect(screen.getByText(/below the 90% passing mark/)).toBeInTheDocument();
   });
 
   it('marks a practice attempt as not recorded', () => {

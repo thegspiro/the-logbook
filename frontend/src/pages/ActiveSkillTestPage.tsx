@@ -24,8 +24,6 @@ import {
   Check,
   X,
   AlertTriangle,
-  CheckCircle2,
-  XCircle,
   MessageSquare,
   Timer,
   Save,
@@ -51,7 +49,10 @@ import { hydrateTemplateSections } from '../utils/skillTemplateSections';
 import { TestViewersPanel } from '../components/training/TestViewersPanel';
 import { SkillTestOfficerActions } from '../components/training/SkillTestOfficerActions';
 import { ScoreBreakdownPanel } from '../components/training/ScoreBreakdownPanel';
+import { formatScore } from '../utils/skillScoreFormat';
+import { ResultVerdictBanner } from '../components/training/ResultVerdictBanner';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
+import { PromptDialog } from '../components/ux/PromptDialog';
 import { getErrorMessage, toAppError } from '../utils/errorHandling';
 import { computeSectionTally, deductionValue } from '../utils/skillTestTallies';
 import type { SectionTally } from '../utils/skillTestTallies';
@@ -736,18 +737,33 @@ const CriterionResultDisplay: React.FC<{
   /** The template-wide Pass/Fail setting, which an unset per-step mode defers
    *  to — needed to tell a step that costs nothing from one that costs a point. */
   scorePassFailCriteria?: boolean | undefined;
-}> = ({ criterion, result, scorePassFailCriteria }) => {
+  /** Whether the template enforces its critical steps. The "(Critical)" tag
+   *  used to print regardless, labelling a step that decided nothing on a
+   *  template with require_all_critical off. */
+  requireAllCritical?: boolean | undefined;
+}> = ({ criterion, result, scorePassFailCriteria, requireAllCritical = true }) => {
   const passed = result?.passed;
   const isCritical = criterion.required;
+  const isWaived = !!result?.waived;
   // What this step took off the total. Shown beside the verdict because "Fail"
   // alone is exactly what left a failed step looking free on a 100% scorecard.
-  const deducted = passed === false ? deductionValue(criterion, scorePassFailCriteria ?? false) : 0;
+  // A waived step is out of the pool entirely, so it can never cost anything.
+  const deducted = !isWaived && passed === false ? deductionValue(criterion, scorePassFailCriteria ?? false) : 0;
 
   const statusBadge = () => {
     if (criterion.type === 'statement') {
       return (
         <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
           Statement
+        </span>
+      );
+    }
+    // Checked before every verdict below: a waiver says the step was never
+    // observed, so any mark left on it by an earlier pass is not the story.
+    if (isWaived) {
+      return (
+        <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-xs font-medium">
+          Not observed
         </span>
       );
     }
@@ -796,7 +812,17 @@ const CriterionResultDisplay: React.FC<{
       <div className="min-w-0 flex-1">
         <p className="text-theme-text-primary text-sm font-medium">
           {criterion.label}
-          {isCritical && <span className="ml-1 text-xs text-red-500">(Critical)</span>}
+          {/* "(Critical)" is a claim about the outcome — this step must pass or
+              the test fails — and that is only true when the template enforces
+              it. On a template with require_all_critical off it decided
+              nothing, so it is labelled as a key step instead of implying a
+              consequence that never applied. */}
+          {isCritical &&
+            (requireAllCritical ? (
+              <span className="ml-1 text-xs text-red-500">(Critical)</span>
+            ) : (
+              <span className="text-theme-text-muted ml-1 text-xs">(Key step)</span>
+            ))}
         </p>
         {criterion.type === 'score' && result?.score != null && isCritical && (
           <p className="text-theme-text-muted mt-0.5 text-xs">
@@ -819,10 +845,20 @@ const CriterionResultDisplay: React.FC<{
         {criterion.type === 'checklist' && result?.checklist_completed && (
           <p className="text-theme-text-muted mt-0.5 text-xs">
             {result.checklist_completed.filter(Boolean).length}/{criterion.checklist_items?.length ?? 0} items completed
+            {/* A checklist is all-or-nothing: every box must be ticked for the
+                step to be met. Without this, a row reading "9/10 items
+                completed" beside a red Fail looks like a scoring error rather
+                than the rule. */}
+            {!isWaived && passed === false && <span className="ml-1">&mdash; step not met</span>}
           </p>
         )}
         {criterion.type === 'statement' && criterion.statement_text && (
           <p className="text-theme-text-muted mt-0.5 line-clamp-2 text-xs italic">{criterion.statement_text}</p>
+        )}
+        {/* The substance of a waiver. Without the reason beside it, "Not
+            observed" is indistinguishable from a step skipped to save time. */}
+        {isWaived && result?.waive_reason && (
+          <p className="text-theme-text-muted mt-0.5 text-xs">Not observed: {result.waive_reason}</p>
         )}
         {result?.notes && <p className="text-theme-text-muted mt-1 text-xs italic">&ldquo;{result.notes}&rdquo;</p>}
       </div>
@@ -844,7 +880,10 @@ const CriterionResultDisplay: React.FC<{
  *  identically. Counts that are zero are omitted rather than shown as "0
  *  failed" — a clean section should look clean at a glance.
  */
-const SectionTallyBadges: React.FC<{ tally: SectionTally }> = ({ tally }) => (
+const SectionTallyBadges: React.FC<{ tally: SectionTally; showStatements?: boolean }> = ({
+  tally,
+  showStatements = true,
+}) => (
   <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
     {tally.available != null && (
       <span className="text-theme-text-primary font-bold">
@@ -861,9 +900,13 @@ const SectionTallyBadges: React.FC<{ tally: SectionTally }> = ({ tally }) => (
     {tally.notScored > 0 && (
       <span className="font-medium text-amber-600 dark:text-amber-400">{tally.notScored} not scored</span>
     )}
-    {/* Statements are not a score, but dropping them silently would leave rows
-        on the scorecard that no number above accounts for. */}
-    {tally.statements > 0 && (
+    {/* Reported even though it moves no number: a step out of the point pool
+        is the one tally a reader cannot reconcile from the marks alone. */}
+    {tally.waived > 0 && <span className="text-theme-text-muted">{tally.waived} not observed</span>}
+    {/* Statements are not a score, but on the examiner's own review dropping
+        them silently would leave rows no number above accounts for. On a
+        candidate's result they are hidden outright — nothing judged them. */}
+    {showStatements && tally.statements > 0 && (
       <span className="text-theme-text-muted">
         {tally.statements} statement{tally.statements === 1 ? '' : 's'}
       </span>
@@ -887,6 +930,8 @@ function tallyFromBreakdown(section: ScoreBreakdownSection): SectionTally {
     failed: section.failed,
     notScored: section.not_scored,
     statements: section.statements,
+    // Absent on results filed before waivers existed, which had none.
+    waived: section.waived ?? 0,
   };
 }
 
@@ -897,7 +942,8 @@ const ReviewSection: React.FC<{
   sectionNotes: string;
   onNotesChange: (notes: string) => void;
   scorePassFailCriteria?: boolean | undefined;
-}> = ({ section, sectionResult, sectionNotes, onNotesChange, scorePassFailCriteria }) => {
+  requireAllCritical?: boolean | undefined;
+}> = ({ section, sectionResult, sectionNotes, onNotesChange, scorePassFailCriteria, requireAllCritical }) => {
   const criteriaResults = sectionResult?.criteria_results ?? [];
   const tally = computeSectionTally(section.criteria, criteriaResults, scorePassFailCriteria ?? false);
 
@@ -922,6 +968,7 @@ const ReviewSection: React.FC<{
               criterion={criterion}
               result={result}
               scorePassFailCriteria={scorePassFailCriteria}
+              requireAllCritical={requireAllCritical}
             />
           );
         })}
@@ -953,7 +1000,21 @@ export const ReadOnlySectionView: React.FC<{
    *  Preferred over recomputing: it is the arithmetic that scored the test. */
   breakdownSection?: ScoreBreakdownSection | undefined;
   scorePassFailCriteria?: boolean | undefined;
-}> = ({ section, sectionResult, breakdownSection, scorePassFailCriteria }) => {
+  requireAllCritical?: boolean | undefined;
+  /** Whether statement steps appear at all. False on candidate-facing
+   *  surfaces: a statement is read aloud, never judged, and nothing on the
+   *  result accounts for it — so on a scorecard it is a row attached to no
+   *  number. The examiner's own review keeps them, since an officer
+   *  validating the result needs the sheet as it was administered. */
+  showStatements?: boolean | undefined;
+}> = ({
+  section,
+  sectionResult,
+  breakdownSection,
+  scorePassFailCriteria,
+  requireAllCritical,
+  showStatements = true,
+}) => {
   const criteriaResults = sectionResult?.criteria_results ?? [];
   // Filter out the special review-notes entry for display
   const actualCriteria = criteriaResults.filter((r) => !r.criterion_id.endsWith('-review-notes'));
@@ -961,6 +1022,7 @@ export const ReadOnlySectionView: React.FC<{
   const tally = breakdownSection
     ? tallyFromBreakdown(breakdownSection)
     : computeSectionTally(section.criteria, actualCriteria, scorePassFailCriteria ?? false);
+  const visibleCriteria = showStatements ? section.criteria : section.criteria.filter((c) => c.type !== 'statement');
 
   return (
     <div className="card overflow-hidden">
@@ -968,14 +1030,14 @@ export const ReadOnlySectionView: React.FC<{
       <div className="border-theme-surface-border bg-theme-surface-hover/50 border-b px-4 py-3">
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-theme-text-primary font-bold">{section.name}</h3>
-          <SectionTallyBadges tally={tally} />
+          <SectionTallyBadges tally={tally} showStatements={showStatements} />
         </div>
         {section.description && <p className="text-theme-text-muted mt-0.5 text-xs">{section.description}</p>}
       </div>
 
       {/* Criteria results */}
       <div className="divide-theme-surface-border divide-y px-4">
-        {section.criteria.map((criterion) => {
+        {visibleCriteria.map((criterion) => {
           const result = actualCriteria.find(
             (r) => r.criterion_id === criterion.id || r.criterion_label === criterion.label
           );
@@ -985,6 +1047,7 @@ export const ReadOnlySectionView: React.FC<{
               criterion={criterion}
               result={result}
               scorePassFailCriteria={scorePassFailCriteria}
+              requireAllCritical={requireAllCritical}
             />
           );
         })}
@@ -1020,6 +1083,28 @@ interface SectionProgress {
   scored: number;
   /** Steps still blank that are marked critical — these score as failures. */
   criticalUnscored: number;
+  /** The blank steps themselves, in sheet order, so the review screen can name
+   *  them rather than report a count the examiner then has to go hunting for. */
+  unresolved: SkillCriterion[];
+}
+
+/** Whether the examiner has made a call on this step.
+ *
+ *  Mirrors the backend's `unresolved_criteria`, which decides whether a
+ *  completion is accepted at all — so the two must agree on what "resolved"
+ *  means or the screen offers a Complete the API then rejects.
+ *
+ *  A waiver resolves a step without marking it: the examiner has said they
+ *  could not observe it, which is a judgement, just not a score.
+ */
+function isCriterionResolved(criterion: SkillCriterion, result: CriterionResult | undefined): boolean {
+  if (!result) return false;
+  if (result.waived) return true;
+  // A non-critical scored step is stamped `passed: true` whatever number is
+  // recorded, so `passed` cannot tell a scored one from a blank one — the
+  // number is its evidence.
+  if (criterion.type === 'score' && !criterion.required) return result.score != null;
+  return result.passed != null;
 }
 
 function buildSectionProgress(
@@ -1031,14 +1116,21 @@ function buildSectionProgress(
     const scorable = section.criteria.filter((c) => c.type !== 'statement');
     let scored = 0;
     let criticalUnscored = 0;
+    const unresolved: SkillCriterion[] = [];
     for (const criterion of scorable) {
-      if (results.find((r) => r.criterion_id === criterion.id)?.passed != null) {
+      if (
+        isCriterionResolved(
+          criterion,
+          results.find((r) => r.criterion_id === criterion.id)
+        )
+      ) {
         scored += 1;
-      } else if (criterion.required) {
-        criticalUnscored += 1;
+      } else {
+        unresolved.push(criterion);
+        if (criterion.required) criticalUnscored += 1;
       }
     }
-    return { id: section.id, name: section.name, total: scorable.length, scored, criticalUnscored };
+    return { id: section.id, name: section.name, total: scorable.length, scored, criticalUnscored, unresolved };
   });
 }
 
@@ -1128,6 +1220,12 @@ export const ActiveSkillTestPage: React.FC = () => {
   const [finishPrompt, setFinishPrompt] = useState(false);
   const [submitPrompt, setSubmitPrompt] = useState(false);
   const [discardPrompt, setDiscardPrompt] = useState(false);
+  /** The step the examiner is recording as not observed, and where it lives. */
+  const [waivePrompt, setWaivePrompt] = useState<{
+    sectionId: string;
+    sectionName: string;
+    criterion: SkillCriterion;
+  } | null>(null);
   // Nobody presses Save on a screen they are using with gloves on, so the
   // examiner needs to be told, without asking, that their scoring is safe.
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
@@ -1815,7 +1913,15 @@ export const ActiveSkillTestPage: React.FC = () => {
       criterionLabel?: string,
       options?: { autoMarked?: boolean }
     ) => {
-      updateCriterionResult(sectionId, criterionId, result, sectionName, criterionLabel);
+      // The store merges shallowly, so a waiver left on a step would survive a
+      // later mark — and `waived` outranks the verdict everywhere it is read,
+      // which would silently keep the step out of the pool after the examiner
+      // scored it. Marking a step is therefore also un-waiving it.
+      const payload: Partial<CriterionResult> = result.waived
+        ? result
+        : { ...result, waived: undefined, waive_reason: undefined };
+
+      updateCriterionResult(sectionId, criterionId, payload, sectionName, criterionLabel);
       // Recording a pass/fail, a score, a time, or a checklist tick means the
       // candidate is performing — so the clock starts here if the examiner
       // never pressed play. Statements mark themselves as the section renders,
@@ -1825,6 +1931,43 @@ export const ActiveSkillTestPage: React.FC = () => {
       }
     },
     [updateCriterionResult, autoStartTimer]
+  );
+
+  /** Record a step as not observed, with the examiner's reason.
+   *
+   * The way out of the completion block for a step that genuinely could not be
+   * watched — a hydrant the evolution never reached, a prop that failed. The
+   * step then leaves the point pool in both directions rather than costing the
+   * candidate full marks for something nobody saw.
+   *
+   * Never offered on a critical step: that is a skill the candidate must
+   * demonstrate, so "not applicable" is never the right answer, and the API
+   * rejects it. See waived_critical_criteria in skills_testing_service.py.
+   */
+  const handleWaive = useCallback(
+    (reason: string) => {
+      const target = waivePrompt;
+      setWaivePrompt(null);
+      if (!target) return;
+      handleUpdateCriterion(
+        target.sectionId,
+        target.criterion.id,
+        // The evidence is cleared alongside the verdict. A step marked and then
+        // waived would otherwise keep its score in the stored record, and the
+        // CSV export would print that number beside an outcome of "waived".
+        {
+          waived: true,
+          waive_reason: reason,
+          passed: null,
+          score: undefined,
+          time_seconds: undefined,
+          checklist_completed: undefined,
+        },
+        target.sectionName,
+        target.criterion.label
+      );
+    },
+    [waivePrompt, handleUpdateCriterion]
   );
 
   // Loading state
@@ -1935,7 +2078,7 @@ export const ActiveSkillTestPage: React.FC = () => {
                 <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
                   This result was withdrawn and counts toward nothing
                   {currentTest.overall_score != null
-                    ? ` (recorded ${currentTest.result === 'pass' ? 'pass' : 'fail'}, ${Math.round(currentTest.overall_score)}%)`
+                    ? ` (recorded ${currentTest.result === 'pass' ? 'pass' : 'fail'}, ${formatScore(currentTest.overall_score)})`
                     : ''}
                 </p>
               </div>
@@ -1955,32 +2098,12 @@ export const ActiveSkillTestPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div
-              className={`mb-4 flex items-center gap-3 rounded-xl p-4 ${
-                currentTest.result === 'pass'
-                  ? 'border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
-                  : 'border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-              }`}
-            >
-              {currentTest.result === 'pass' ? (
-                <CheckCircle2 className="h-10 w-10 shrink-0 text-green-500" />
-              ) : (
-                <XCircle className="h-10 w-10 shrink-0 text-red-500" />
-              )}
-              <div className="flex-1">
-                <p
-                  className={`text-lg font-bold ${currentTest.result === 'pass' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}
-                >
-                  {currentTest.result === 'pass' ? 'Passed' : 'Failed'}
-                </p>
-                {currentTest.overall_score != null && (
-                  <p
-                    className={`text-sm font-medium ${currentTest.result === 'pass' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
-                  >
-                    Overall Score: {Math.round(currentTest.overall_score)}%
-                  </p>
-                )}
-              </div>
+            <div className="mb-4">
+              <ResultVerdictBanner
+                result={currentTest.result}
+                breakdown={currentTest.score_breakdown}
+                overallScore={currentTest.overall_score}
+              />
             </div>
           )}
 
@@ -2183,25 +2306,83 @@ export const ActiveSkillTestPage: React.FC = () => {
 
         {/* Review Content */}
         <div ref={contentRef} className="flex-1 overflow-y-auto px-4 py-4">
-          {/* Last chance to fill in what was missed. The scorer treats an
-              unscored critical step as a failure, so this cannot be left as a
-              greyed-out count buried in a section header — it needs naming, and
-              it needs a way back to the step. */}
+          {/* The scorecard cannot be filed with blanks, and this is where that
+              is resolved. A blank is not a neutral omission: a point-carrying
+              step left unmarked enlarges the denominator and earns nothing, so
+              it costs the candidate full marks with nothing saying so, and a
+              blank critical step already scores as a failure.
+
+              Every step is named rather than counted. A count told the examiner
+              how many were missing and left them to find which — on a
+              forty-step NREMT sheet that is the whole sheet, re-read. */}
           {unscoredSteps > 0 && (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+            <div
+              role="alert"
+              className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20"
+            >
               <p className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-200">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                {steps(unscoredSteps)} {unscoredSteps === 1 ? 'has' : 'have'} no Pass or Fail yet
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {steps(unscoredSteps)} {unscoredSteps === 1 ? 'has' : 'have'} no result yet
               </p>
-              {requireAllCritical && criticalUnscored > 0 && (
-                <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
-                  {criticalUnscored} of {unscoredSteps === 1 ? 'them' : 'those'} {criticalUnscored === 1 ? 'is' : 'are'}{' '}
-                  marked Critical, which scores the same as a fail.
-                </p>
-              )}
+              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                {requireAllCritical && criticalUnscored > 0 ? (
+                  <>
+                    {criticalUnscored} of {unscoredSteps === 1 ? 'them' : 'those'}{' '}
+                    {criticalUnscored === 1 ? 'is' : 'are'} marked Critical, which scores the same as a fail. Mark each
+                    step before submitting.
+                  </>
+                ) : (
+                  <>Mark each step before submitting.</>
+                )}
+              </p>
+
+              <ul className="mt-3 space-y-2">
+                {sectionProgress
+                  .filter((s) => s.unresolved.length > 0)
+                  .map((section) => (
+                    <li key={section.id}>
+                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">{section.name}</p>
+                      <ul className="mt-1 space-y-1">
+                        {section.unresolved.map((criterion) => (
+                          <li
+                            key={criterion.id}
+                            className="flex items-start justify-between gap-2 text-sm text-amber-700 dark:text-amber-300"
+                          >
+                            <span className="min-w-0 flex-1">
+                              {criterion.label}
+                              {criterion.required && requireAllCritical && (
+                                <span className="ml-1 text-xs font-medium">(Critical)</span>
+                              )}
+                            </span>
+                            {/* Offered on everything except a critical step: a
+                                skill the candidate must demonstrate is never
+                                "not applicable", and the API refuses the
+                                waiver, so the button would only fail at
+                                submission. */}
+                            {!criterion.required && (
+                              <button
+                                onClick={() =>
+                                  setWaivePrompt({
+                                    sectionId: section.id,
+                                    sectionName: section.name,
+                                    criterion,
+                                  })
+                                }
+                                className="mobile-touch-target shrink-0 rounded-lg border border-amber-400 px-2 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                              >
+                                Not observed
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+              </ul>
+
               <button
                 onClick={goToFirstUnscored}
-                className="mt-2 min-h-[44px] rounded-lg bg-amber-700 px-4 text-sm font-medium text-white transition-colors hover:bg-amber-800"
+                className="mt-3 min-h-[44px] rounded-lg bg-amber-700 px-4 text-sm font-medium text-white transition-colors hover:bg-amber-800"
               >
                 Go back and score them
               </button>
@@ -2234,6 +2415,7 @@ export const ActiveSkillTestPage: React.FC = () => {
                   sectionNotes={reviewNotes[section.id] ?? ''}
                   onNotesChange={(notes) => setReviewNotes((prev) => ({ ...prev, [section.id]: notes }))}
                   scorePassFailCriteria={currentTest.template_score_pass_fail_criteria}
+                  requireAllCritical={requireAllCritical}
                 />
               );
             })}
@@ -2246,7 +2428,8 @@ export const ActiveSkillTestPage: React.FC = () => {
             <div className="space-y-2">
               <button
                 onClick={() => void handlePracticeViewResults()}
-                disabled={submitting}
+                disabled={submitting || unscoredSteps > 0}
+                title={unscoredSteps > 0 ? 'Every step needs a result first' : undefined}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
               >
                 <ClipboardCheck className="h-5 w-5" />
@@ -2264,7 +2447,8 @@ export const ActiveSkillTestPage: React.FC = () => {
           ) : (
             <button
               onClick={requestSubmit}
-              disabled={submitting}
+              disabled={submitting || unscoredSteps > 0}
+              title={unscoredSteps > 0 ? 'Every step needs a result first' : undefined}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-800 py-4 text-lg font-bold text-white transition-colors hover:bg-red-900 disabled:opacity-50"
             >
               <Save className="h-5 w-5" />
@@ -2283,6 +2467,32 @@ export const ActiveSkillTestPage: React.FC = () => {
           cancelLabel="Not yet"
           confirmLabel="Submit"
           loading={submitting}
+        />
+        {/* PromptDialog rather than window.prompt: a suppressed native dialog
+            returns null, which is indistinguishable from Cancel, and the
+            examiner would be left tapping a button that silently does nothing.
+            See Pitfall #16. */}
+        <PromptDialog
+          isOpen={waivePrompt !== null}
+          onClose={() => setWaivePrompt(null)}
+          onSubmit={handleWaive}
+          title="Record this step as not observed?"
+          message={
+            waivePrompt ? (
+              <>
+                <span className="font-medium">{waivePrompt.criterion.label}</span> leaves the score entirely — it will
+                neither credit nor penalise {currentTest.candidate_name}.
+              </>
+            ) : undefined
+          }
+          label="Why could this step not be observed?"
+          placeholder="e.g. the evolution never reached the hydrant"
+          hint="Shown on the scorecard and to the officer who validates this result."
+          confirmLabel="Record as not observed"
+          cancelLabel="Cancel"
+          confirmVariant="warning"
+          required
+          multiline
         />
       </div>
     );
@@ -2509,14 +2719,14 @@ export const ActiveSkillTestPage: React.FC = () => {
           setFinishPrompt(false);
           void enterReview();
         }}
-        title="Some steps have no score"
+        title="Some steps have no result"
         message={
           requireAllCritical && criticalUnscored > 0
-            ? `${steps(unscoredSteps)} still ${unscoredSteps === 1 ? 'has' : 'have'} no Pass or Fail. ${criticalUnscored} of ${criticalUnscored === 1 ? 'them is' : 'them are'} marked Critical, which scores the same as a fail.`
-            : `${steps(unscoredSteps)} still ${unscoredSteps === 1 ? 'has' : 'have'} no Pass or Fail. Sections with a green check are the ones you have finished.`
+            ? `${steps(unscoredSteps)} still ${unscoredSteps === 1 ? 'has' : 'have'} no result. ${criticalUnscored} of ${criticalUnscored === 1 ? 'them is' : 'them are'} marked Critical, which scores the same as a fail. The test cannot be submitted until every step has one, but the review screen lists them and can record a step as not observed.`
+            : `${steps(unscoredSteps)} still ${unscoredSteps === 1 ? 'has' : 'have'} no result. The test cannot be submitted until every step has one, but the review screen lists them and can record a step as not observed.`
         }
         cancelLabel="Keep scoring"
-        confirmLabel="Review anyway"
+        confirmLabel="Review them"
         variant="warning"
       />
     </div>

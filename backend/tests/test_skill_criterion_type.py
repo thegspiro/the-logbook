@@ -23,7 +23,13 @@ from app.schemas.skills_testing import (
 
 @pytest.mark.parametrize("criterion_type", CRITERION_TYPES)
 def test_accepts_every_known_type(criterion_type):
-    criterion = SkillCriterionSchema(label="Seals the facepiece", type=criterion_type)
+    # max_score is supplied for every type, not just "score": a scored step
+    # without one carries no points and is rejected on its own merits, which
+    # would fail this case for a reason that has nothing to do with the type
+    # whitelist these tests exist to hold closed. Every other type ignores it.
+    criterion = SkillCriterionSchema(
+        label="Seals the facepiece", type=criterion_type, max_score=5
+    )
     assert criterion.type == criterion_type
 
 

@@ -29,6 +29,7 @@ import { formatDate, formatDateTime } from '../../utils/dateFormatting';
 import { hydrateTemplateSections } from '../../utils/skillTemplateSections';
 import type { CriterionResult, SkillCriterion, SkillTest } from '../../types/skillsTesting';
 import PrintPageStyles from '../../components/print/PrintPageStyles';
+import { formatScore } from '../../utils/skillScoreFormat';
 
 const cellStyle: React.CSSProperties = {
   border: '1px solid #ccc',
@@ -69,6 +70,12 @@ const RecordedMark: React.FC<{ criterion: SkillCriterion; result: CriterionResul
 }) => {
   if (criterion.type === 'statement') {
     return <span style={{ fontSize: '8pt', color: '#888' }}>read aloud</span>;
+  }
+  // Ahead of every verdict below: a waiver says the step was never observed,
+  // which outranks any mark a previous pass left on it. It is out of the point
+  // pool in both directions, so it neither credits nor penalises.
+  if (result?.waived) {
+    return <span style={{ fontSize: '8.5pt', color: '#666' }}>not observed</span>;
   }
   if (!result) {
     return <span style={{ fontSize: '8.5pt', color: '#b00' }}>not scored</span>;
@@ -293,9 +300,9 @@ const SkillTestScorecardPrintPage: React.FC = () => {
                   </strong>
                 </td>
                 <td style={cellStyle}>
-                  <strong>Score:</strong> {test.overall_score != null ? `${test.overall_score}%` : '—'}
+                  <strong>Score:</strong> {test.overall_score != null ? formatScore(test.overall_score) : '—'}
                   {breakdown?.passing_percentage != null && (
-                    <span style={{ color: '#666' }}> (pass mark {breakdown.passing_percentage}%)</span>
+                    <span style={{ color: '#666' }}> (pass mark {formatScore(breakdown.passing_percentage)})</span>
                   )}
                 </td>
               </tr>
@@ -333,6 +340,9 @@ const SkillTestScorecardPrintPage: React.FC = () => {
                     <th style={{ ...headerCell, width: '48pt', textAlign: 'center' }}>Passed</th>
                     <th style={{ ...headerCell, width: '48pt', textAlign: 'center' }}>Failed</th>
                     <th style={{ ...headerCell, width: '64pt', textAlign: 'center' }}>Not scored</th>
+                    {/* A step out of the point pool is the one tally a reader
+                        cannot reconcile from the marks in the table below. */}
+                    <th style={{ ...headerCell, width: '70pt', textAlign: 'center' }}>Not observed</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -350,6 +360,7 @@ const SkillTestScorecardPrintPage: React.FC = () => {
                       <td style={{ ...cellStyle, textAlign: 'center' }}>{s.passed}</td>
                       <td style={{ ...cellStyle, textAlign: 'center' }}>{s.failed}</td>
                       <td style={{ ...cellStyle, textAlign: 'center' }}>{s.not_scored}</td>
+                      <td style={{ ...cellStyle, textAlign: 'center' }}>{s.waived ?? 0}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -389,28 +400,30 @@ const SkillTestScorecardPrintPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {section.criteria.map((criterion, ci) => {
-                    const result = resultFor(section.id, criterion);
-                    return (
-                      <tr key={criterion.id} style={{ pageBreakInside: 'avoid' }}>
-                        <td style={{ ...cellStyle, width: '22pt', textAlign: 'center', color: '#666' }}>{ci + 1}</td>
-                        <td style={cellStyle}>
-                          <span style={{ fontWeight: criterion.required ? 600 : 400 }}>{criterion.label}</span>
-                          {criterion.required && (
-                            <span style={{ color: '#b00', fontWeight: 700, fontSize: '8pt' }}> ★ CRITICAL</span>
-                          )}
-                        </td>
-                        <td style={{ ...cellStyle, textAlign: 'center' }}>
-                          <RecordedMark criterion={criterion} result={result} />
-                          <DeductionMark criterion={criterion} result={result} />
-                        </td>
-                        {/* Blank under `scores` disclosure — the API strips
+                  {section.criteria
+                    .filter((c) => c.type !== 'statement')
+                    .map((criterion, ci) => {
+                      const result = resultFor(section.id, criterion);
+                      return (
+                        <tr key={criterion.id} style={{ pageBreakInside: 'avoid' }}>
+                          <td style={{ ...cellStyle, width: '22pt', textAlign: 'center', color: '#666' }}>{ci + 1}</td>
+                          <td style={cellStyle}>
+                            <span style={{ fontWeight: criterion.required ? 600 : 400 }}>{criterion.label}</span>
+                            {criterion.required && (
+                              <span style={{ color: '#b00', fontWeight: 700, fontSize: '8pt' }}> ★ CRITICAL</span>
+                            )}
+                          </td>
+                          <td style={{ ...cellStyle, textAlign: 'center' }}>
+                            <RecordedMark criterion={criterion} result={result} />
+                            <DeductionMark criterion={criterion} result={result} />
+                          </td>
+                          {/* Blank under `scores` disclosure — the API strips
                             examiner notes for a candidate at that level, and
                             this column simply shows what arrived. */}
-                        <td style={cellStyle}>{result?.notes || ''}</td>
-                      </tr>
-                    );
-                  })}
+                          <td style={cellStyle}>{result?.notes || ''}</td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>

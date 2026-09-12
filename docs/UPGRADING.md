@@ -143,6 +143,48 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A skills test can no longer be filed with unmarked steps (2026-09-12)
+
+Completing a skills evaluation now requires a result against every step on the
+sheet. `POST /api/v1/skills-testing/tests/{id}/complete` returns **400** when
+any step is still blank, listing them in `detail.unresolved_criteria`, and the
+examiner screen will not offer Submit until they are resolved.
+
+**Why.** A blank step was never neutral. A point-carrying one enlarged the
+denominator and earned nothing, so it silently cost the candidate full marks,
+and under `require_all_critical` a blank critical step already scored exactly
+like a failure. Neither was visible anywhere on the filed result — and the two
+rules pointed opposite ways, because an unmarked _deduct_ step has always been
+charged nothing on the grounds that the examiner made no judgement. There was
+no way to tell, reading a finished scorecard, which of those had happened.
+
+**The way out for a step nobody could watch:** the review screen lists every
+blank step and offers **Not observed** on each, which records a required reason
+and takes the step out of the point pool in both directions — it credits and
+penalises nothing. A **critical** step cannot be waived: that is a skill the
+candidate must demonstrate, so "did not apply" is never the right answer, and
+the API rejects it. This takes nothing away from an examiner, since a blank
+critical step already scored as a failure.
+
+**What you will see:** nothing changes for a test that was already fully
+marked, and no stored result is re-scored. An evaluation left part-marked when
+you upgrade is not stranded — reopen it, and the review screen names the steps
+that still need a call.
+
+**If you drive the API directly** (a kiosk, an import, a script), a completion
+posted with blanks will now be rejected rather than filed. Send a mark for
+every non-statement step, or a `{"waived": true, "waive_reason": "..."}` on the
+ones that could not be observed. Statements are exempt — they are read aloud
+and mark themselves.
+
+**Also in this release, and worth knowing if you author sheets by API:** a
+criterion whose `passing_score` exceeds its `max_score`, and a `score`-type
+criterion with no `max_score`, are now rejected at the write. The template
+builder has always refused both in the browser; a sheet posted by a script
+could previously save either, and both are silent at scoring time — the first
+is a step nobody can pass, the second a step that appears scored out of
+something and carries no points. Existing stored templates are untouched.
+
 ### Navigation layout became a department setting (2026-09-11)
 
 Setup has always asked whether a department wants navigation across the top or

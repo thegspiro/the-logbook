@@ -81,7 +81,9 @@ from app.services.skills_testing_service import (
     resolve_result_view,
     resolve_test_template,
     revert_test_pass_from_pipeline,
+    unresolved_criteria,
     viewer_positions_for,
+    waived_critical_criteria,
 )
 from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
@@ -1686,6 +1688,11 @@ async def complete_test(
     - Checks if all critical (required) criteria passed when require_all_critical is enabled
     - Sets result to pass or fail accordingly
 
+    Rejects a scorecard that still has unmarked steps (400, listing them in
+    ``detail.unresolved_criteria``). Every step must carry a judgement before a
+    result is filed — a mark, or a waiver with a reason. Critical steps cannot
+    be waived.
+
     Officers may complete any test; anyone else may complete a test they are
     running as examiner, up until an officer has validated it.
 
@@ -1740,6 +1747,44 @@ async def complete_test(
             detail="Associated template not found",
         )
 
+    # A scorecard is judged against the structure the test was taken under, so
+    # every check below reads the snapshot rather than the live template.
+    scoring_template = resolve_test_template(test, template)
+
+    # A blank step is not a neutral omission: a point-carrying one enlarges the
+    # denominator and earns nothing, so it silently costs the candidate full
+    # marks, and a blank critical step is already scored as a failure. Refusing
+    # the completion is the only point at which that can still be corrected by
+    # the person who watched the evolution.
+    blanks = unresolved_criteria(test, scoring_template)
+    if blanks:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "message": (
+                    f"{len(blanks)} step{'' if len(blanks) == 1 else 's'} "
+                    "on this scorecard have no result. Mark each one, or "
+                    "record it as not observed with a reason."
+                ),
+                "unresolved_criteria": blanks,
+            },
+        )
+
+    # See waived_critical_criteria: a waiver is how an examiner says a step did
+    # not apply, and that is never true of a step the candidate must perform.
+    waived_critical = waived_critical_criteria(test, scoring_template)
+    if waived_critical:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "message": (
+                    "A critical step cannot be recorded as not observed. "
+                    "Mark it Pass or Fail."
+                ),
+                "waived_critical_criteria": waived_critical,
+            },
+        )
+
     # An officer's completion is also the sign-off, so the result counts from
     # here. A member's completion is a submission awaiting review.
     auto_validate = not test.is_practice and _can_manage_tests(current_user)
@@ -1762,9 +1807,7 @@ async def complete_test(
 
     # Score against the structure this test was taken under, not whatever the
     # template says now.
-    overall_score, test_result = calculate_test_result(
-        test, resolve_test_template(test, template)
-    )
+    overall_score, test_result = calculate_test_result(test, scoring_template)
 
     test.status = "completed"
     test.result = test_result
@@ -3459,6 +3502,10 @@ async def export_tests_csv(
                 "Time (s)",
                 "Checklist",
                 "Step Notes",
+                # The Outcome column already reports "waived"; without the
+                # reason beside it an auditor can see a step left the point
+                # pool and not why, which is the whole substance of a waiver.
+                "Not Observed Reason",
             ]
         )
         for t in tests:
@@ -3505,6 +3552,7 @@ async def export_tests_csv(
                             else ""
                         ),
                         row["notes"] or "",
+                        row["waive_reason"] or "",
                     ]
                 )
 

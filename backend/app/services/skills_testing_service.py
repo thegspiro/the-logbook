@@ -233,7 +233,10 @@ def _criterion_deduction(criterion: dict[str, Any], score_pass_fail: bool) -> fl
 
 
 def _criterion_outcome(criterion: dict[str, Any], result: dict[str, Any] | None) -> str:
-    """How one criterion should be tallied on a scorecard: pass, fail, or blank.
+    """How one criterion should be tallied on a scorecard.
+
+    One of ``statement``, ``waived``, ``points``, ``not_scored``, ``passed`` or
+    ``failed``.
 
     Non-critical ``score`` criteria are deliberately excluded ("points"). The
     examiner screen stamps ``passed: true`` on every one of them regardless of
@@ -244,6 +247,12 @@ def _criterion_outcome(criterion: dict[str, Any], result: dict[str, Any] | None)
     ctype = criterion.get("type")
     if ctype == "statement":
         return "statement"
+
+    # Checked ahead of everything else a result can say, including the "points"
+    # shortcut below: a waiver is a statement about whether the step was
+    # observed at all, so it outranks any mark left on it by an earlier pass.
+    if result is not None and result.get("waived"):
+        return "waived"
 
     is_critical = bool(criterion.get("required", False))
     if ctype == "score" and not is_critical:
@@ -297,26 +306,41 @@ def build_score_breakdown(test: SkillTest, template: SkillTemplate) -> dict[str,
         earned = 0.0
         available = 0.0
         deducted = 0.0
-        tally = {"passed": 0, "failed": 0, "not_scored": 0, "statements": 0}
+        tally = {
+            "passed": 0,
+            "failed": 0,
+            "not_scored": 0,
+            "statements": 0,
+            "waived": 0,
+        }
 
         for ci, criterion in enumerate(criteria):
             if not isinstance(criterion, dict):
                 continue
             cr_result = _find_criterion_result(sr_match, section_idx, ci, criterion)
+            outcome = _criterion_outcome(criterion, cr_result)
 
             point_value = _criterion_point_value(criterion, score_pass_fail)
-            if point_value is not None:
+            # A waived step leaves the pool in both directions. Counting it in
+            # the denominator alone would charge the candidate full marks for
+            # something the examiner recorded as unobservable, which is the
+            # same silent penalty a blank step used to carry.
+            if point_value is not None and outcome != "waived":
                 available += point_value
                 if criterion.get("type") == "score":
                     recorded = (cr_result or {}).get("score")
                     if recorded is not None:
-                        earned += recorded
+                        # Clamped to what the step is worth: the API accepts any
+                        # non-negative number, and an over-max score would push
+                        # the total past the denominator and report above 100%.
+                        earned += min(float(recorded), point_value)
                 elif (cr_result or {}).get("passed") is True:
                     earned += point_value
 
-            outcome = _criterion_outcome(criterion, cr_result)
             if outcome == "statement":
                 tally["statements"] += 1
+            elif outcome == "waived":
+                tally["waived"] += 1
             elif outcome in tally:
                 tally[outcome] += 1
 
@@ -500,7 +524,125 @@ def iter_criterion_rows(test: SkillTest, template: Any):
                 "checklist": checklist if isinstance(checklist, list) else None,
                 "checklist_items": criterion.get("checklist_items") or None,
                 "notes": recorded.get("notes"),
+                # Carried alongside the outcome so an export reader can tell a
+                # step that left the point pool from one that scored zero.
+                "waived": bool(recorded.get("waived")),
+                "waive_reason": recorded.get("waive_reason"),
             }
+
+
+def unresolved_criteria(test: SkillTest, template: Any) -> list[dict[str, Any]]:
+    """Every step on ``test`` the examiner has neither marked nor waived.
+
+    A scorecard filed with blanks is the quietest way this module can report a
+    wrong result: a point-carrying step left unmarked enlarges the denominator
+    and earns nothing, so it costs the candidate full marks with nothing on the
+    screen saying so — and it is the exact opposite of how an unmarked
+    ``deduct`` step is treated (:func:`_criterion_deduction`, which charges
+    nothing because the examiner made no judgement). Rather than pick one of
+    those two rules and leave the reader to guess which applied, completion
+    requires every step to carry a judgement: a mark, or an explicit waiver
+    with a reason.
+
+    Statements are excluded — they are read aloud and mark themselves, so there
+    is nothing for an examiner to resolve. Everything else counts, including
+    steps carrying no points: on the pass/fail sheets in the starter library
+    almost nothing carries points, and a blank there is just as unreadable on
+    the filed result.
+
+    Matching reuses the scorer's own helpers so this cannot drift from what
+    :func:`build_score_breakdown` considers scored. Callers must pass the
+    template :func:`resolve_test_template` returned.
+
+    Returns one dict per unresolved step with ``section_index``,
+    ``section_name``, ``criterion_index``, ``label`` and ``critical``, in sheet
+    order, so the caller can name them rather than report a count.
+    """
+    unresolved: list[dict[str, Any]] = []
+    section_results = getattr(test, "section_results", None) or []
+    template_sections = getattr(template, "sections", None) or []
+
+    for section_idx, section in enumerate(template_sections):
+        if not isinstance(section, dict):
+            continue
+        sr_match = _find_section_result(section_results, section_idx, section)
+
+        for ci, criterion in enumerate(section.get("criteria", []) or []):
+            if not isinstance(criterion, dict):
+                continue
+            if criterion.get("type") == "statement":
+                continue
+
+            cr_result = _find_criterion_result(sr_match, section_idx, ci, criterion)
+            outcome = _criterion_outcome(criterion, cr_result)
+
+            if outcome == "points":
+                # A non-critical scored step always reports "points", whatever
+                # is recorded against it, so the outcome alone cannot tell a
+                # blank one from a scored one. Its evidence is the number, and
+                # the absence of a number is what makes it unresolved.
+                if (cr_result or {}).get("score") is not None:
+                    continue
+            elif outcome != "not_scored":
+                continue
+
+            unresolved.append(
+                {
+                    "section_index": section_idx,
+                    "section_name": section.get("name") or f"Section {section_idx + 1}",
+                    "criterion_index": ci,
+                    "label": criterion.get("label") or f"Criterion {ci + 1}",
+                    "critical": bool(criterion.get("required", False)),
+                }
+            )
+
+    return unresolved
+
+
+def waived_critical_criteria(test: SkillTest, template: Any) -> list[dict[str, Any]]:
+    """Critical steps carrying a waiver, which is not a state this module allows.
+
+    A critical step is one the candidate must demonstrate to pass. Letting an
+    examiner waive it out of the point pool would produce a pass for someone who
+    never performed it, which is the one outcome ``require_all_critical`` exists
+    to prevent. Under today's rules an unobservable critical step is already a
+    failure (a blank one is reported as a critical failure), so refusing the
+    waiver takes nothing away from the examiner — it only stops the scorecard
+    claiming the step did not apply.
+
+    Returns the same row shape as :func:`unresolved_criteria`.
+    """
+    offenders: list[dict[str, Any]] = []
+    section_results = getattr(test, "section_results", None) or []
+    template_sections = getattr(template, "sections", None) or []
+
+    for section_idx, section in enumerate(template_sections):
+        if not isinstance(section, dict):
+            continue
+        sr_match = _find_section_result(section_results, section_idx, section)
+
+        for ci, criterion in enumerate(section.get("criteria", []) or []):
+            if not isinstance(criterion, dict):
+                continue
+            if not criterion.get("required", False):
+                continue
+            if criterion.get("type") == "statement":
+                continue
+
+            cr_result = _find_criterion_result(sr_match, section_idx, ci, criterion)
+            if not (cr_result or {}).get("waived"):
+                continue
+            offenders.append(
+                {
+                    "section_index": section_idx,
+                    "section_name": section.get("name") or f"Section {section_idx + 1}",
+                    "criterion_index": ci,
+                    "label": criterion.get("label") or f"Criterion {ci + 1}",
+                    "critical": True,
+                }
+            )
+
+    return offenders
 
 
 def calculate_test_result(
