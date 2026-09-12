@@ -140,6 +140,8 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **Seed migrations registered** — new seed data files added to `SEED_DATA_FILES`; org_id is nullable for system records
 - [ ] **No `CHANGELOG.md` entry in the diff** — the file is closed to new entries (see above). `docs/UPGRADING.md` carries upgrade-blocking changes instead; a release cut or archive move may still edit `CHANGELOG.md`, on its own branch
 - [ ] **JSON column deep copy** — code modifying nested keys in JSON columns uses `copy.deepcopy()` or `flag_modified()`, never `dict()` shallow copy
+- [ ] **New route registered in all three registries** — `APPLICATION_PAGES.md`, `testingRegistry.ts` and `e2e/mobile-route-inventory.ts`, policed by three different CI jobs (see Pitfall #30a)
+- [ ] **DB-backed tests marked `integration`** — a `db_session` test under a module-level `pytest.mark.unit` runs in the no-database job and fails on the fixture (see Pitfall #30b)
 
 ## Project Overview
 
@@ -1475,6 +1477,70 @@ client guess it.
 100%, and a member with no applicable requirements reading "every member meets
 this requirement", are the same bug: a denominator of nothing rendered as
 success. Say "not applicable" and mean it.
+
+### 30. A New Route Must Reach Three Registries, and a DB Test Must Say So _(2026-09-11)_
+
+Four CI gates that no obvious local command runs. Each took a build red on
+#2488 or #2491 after `tsc`, `eslint`, `flake8` and the module's own tests had
+all come back clean, because none of them is reachable from the commands a
+contributor actually runs.
+
+**30a — a new route needs three registry entries, enforced by three different
+jobs.** Adding a `<Route>` is not the end of it. Nothing shares a check, so
+missing one is a red build in a job whose name gives no hint of the cause:
+
+| Registry                             | Enforced by                      | Job              | Run it locally                                                                  |
+| ------------------------------------ | -------------------------------- | ---------------- | ------------------------------------------------------------------------------- |
+| `APPLICATION_PAGES.md`               | `check_route_permissions.py`     | **Backend Lint** | `python3 scripts/check_route_permissions.py --strict`                           |
+| `modules/testing/testingRegistry.ts` | `testingRegistry.test.ts`        | Frontend Tests   | `npx vitest run src/modules/testing/testingRegistry.test.ts`                    |
+| `e2e/mobile-route-inventory.ts`      | `mobile-route-integrity.spec.ts` | Frontend E2E     | `npx playwright test src/e2e/mobile-route-integrity.spec.ts --project=chromium` |
+
+Run the first from the repo root and the other two from `frontend/`.
+
+The first is also the trap: a frontend route is policed from the **Backend**
+Lint job, so every frontend check can be green while that one fails. The e2e spec
+reads files rather than driving a browser, so it finishes in about ten seconds
+— there is no reason to leave it to CI. Two of the three also check the
+reverse direction, and will fail on an entry whose route no longer exists.
+
+**30b — a backend test that touches the database must be marked
+`integration`.** The unit job runs
+`pytest tests/ -m "not integration and not slow and not docker"` **with no
+database**. A module-level `pytestmark = pytest.mark.unit` on a file whose
+tests use the `db_session` fixture therefore hands them to a job that cannot
+run them, and they fail on fixture setup rather than on anything they assert —
+which reads as a broken feature, not a mislabelled test.
+
+Mark per class when a file holds both kinds, as
+`test_navigation_layout_setting.py` does:
+
+```python
+@pytest.mark.unit
+class TestTheMockedPart: ...
+
+@pytest.mark.integration
+@pytest.mark.onboarding
+class TestTheRowsItWrites: ...
+```
+
+Check the split by collection, not by a local run — MySQL is available in most
+dev environments, so both halves pass locally either way:
+
+```bash
+pytest tests/<file> -m "not integration and not slow and not docker" --collect-only -q
+```
+
+**30c — `docs/DATABASE_SCHEMA.md` is generated and checked.** A change under
+`backend/app/models/` that alters the schema must regenerate it:
+`cd backend && python scripts/generate_schema_docs.py`. Committed as a
+separate concern from the model change is fine; leaving it stale fails the
+Backend Unit Tests job in a step that has nothing to do with tests.
+
+**When reading the failure, read the step conclusions and not the log tail.**
+A job's tail shows the last step that _ran_, which is routinely a later,
+successful one — the schema-docs step above was blamed for a failure two steps
+earlier for exactly this reason. `actions_list` with `list_workflow_jobs`
+gives a per-step conclusion; that names the failing step directly.
 
 ## Environment Variables
 
