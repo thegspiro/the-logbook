@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [claude/security-review-forms]** (Feature 26, Forms, pass 4) — branch
+**PR [#2506](https://github.com/thegspiro/the-logbook/pull/2506)** (Feature
+26, Forms, pass 4) — branch
 `claude/security-review-forms`, opened against `origin/main`. A separate,
 docs-only PR (#2505, branch `claude/security-review-record-msg25-merge`) was
 already open recording PRs #2503/#2504's merges and marking row 25 closed
