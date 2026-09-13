@@ -1,7 +1,8 @@
 # Security Review — Security, Audit & IP
 
 **Prefix:** `SEC2` · **Iteration:** 28 · **Reviewed:** 2026-08-27 (pass 1, PR
-#1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3) · **PR:** #1911 (pass 1)
+#1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4) · **PR:**
+#1911 (pass 1)
 
 **Backend:** `app/api/v1/endpoints/security_monitoring.py` (677 L),
 `app/api/v1/endpoints/ip_security.py` (555 L), `app/api/v1/endpoints/audit_logs.py`
@@ -712,3 +713,171 @@ scope correction). Ran the gate against the full repo, matching CI's scope.
 | backend tests, scope (audit/security_monitoring/ip_security/error_log/privilege_ceiling/middleware) | 335/335 passed, 1 skipped (env-only)                              |
 | backend tests, full suite                                                                           | 11,505 passed, 21 skipped (env-only, all pre-existing/documented) |
 | frontend `tsc`/`eslint`/`vitest`                                                                    | n/a — no frontend file touched this pass                          |
+
+---
+
+## Pass 4 (2026-09-13)
+
+**Full re-verification, no split needed this round** — the surface has had
+three prior passes plus the original module audit and 4-pass app-review, so
+this pass read every file end-to-end (not sampled) looking specifically for
+drift since pass 3, rather than re-deriving already-settled invariants.
+`services/security_monitoring.py` grew 1,073→1,338 L (+265, +25%) since pass
+3; every other file in scope is within a few lines of its pass-3 size. The
+growth is entirely explained by extensive inline comments documenting several
+rounds of Codex-review concurrency fixes to `detect_brute_force` and
+`detect_session_hijack` (read-after-evict / write-after-evict ordering
+around `_enforce_key_caps()`, and a same-session concurrent-request
+interleaving fix in `detect_session_hijack` that moved the tracker writes
+before the alert-dispatch `await`s) — no new endpoint, no new detector, no
+behavior change to re-audit beyond confirming the ordering the comments
+describe is what the code actually does (it is — traced by hand, all reads
+of `_session_ips`/`_session_trusted_ip`/`_login_attempts`/`_data_transfers`
+happen before their corresponding `_enforce_key_caps()` call, and all writes
+after).
+
+### Route inventory (all 13 `security_monitoring.py` endpoints, enumerated)
+
+| Method | Path                                   | Permission     | Org-scoped                                              | Notes |
+| ------ | -------------------------------------- | -------------- | ------------------------------------------------------- | ----- |
+| GET    | `/security/status`                     | `audit.view`   | ✅ (`organization_id` param)                            |       |
+| GET    | `/security/alerts`                     | `audit.view`   | ✅                                                      |       |
+| POST   | `/security/alerts/{id}/acknowledge`    | `audit.export` | ✅ (id + org filter, uniform 404)                       |       |
+| POST   | `/security/alerts/{id}/resolve`        | `audit.export` | ✅                                                      |       |
+| GET    | `/security/audit-log/integrity`        | `audit.view`   | n/a (chain-level, global by design)                     |       |
+| GET    | `/security/audit-log/status`           | `audit.view`   | n/a (chain-level)                                       |       |
+| POST   | `/security/audit-log/checkpoint`       | `audit.export` | n/a (chain-level)                                       |       |
+| POST   | `/security/audit-log/rehash`           | `audit.export` | n/a + `AUDIT_ALLOW_CHAIN_REHASH` break-glass gate       |       |
+| GET    | `/security/audit-log/entries`          | `audit.view`   | ✅ `AuditLog.organization_id`                           |       |
+| GET    | `/security/audit-log/export`           | `audit.export` | ✅ `AuditLog.organization_id`, session_id fingerprinted |       |
+| GET    | `/security/intrusion-detection/status` | `audit.view`   | ✅                                                      |       |
+| GET    | `/security/data-exfiltration/status`   | `audit.view`   | ✅                                                      |       |
+| POST   | `/security/manual-check`               | `audit.export` | ✅                                                      |       |
+
+`ip_security.py`'s 13 endpoints (exceptions CRUD/approve/reject/revoke,
+blocked-attempts, blocked-countries) re-enumerated against the current file:
+unchanged from pass 2/3's inventory — every mutation resolves its target
+through an org-scoped fetch (`IPException.id == … AND organization_id == …`)
+before acting, `security.manage`/`settings.manage` OR-gates every admin
+action, country-block mutations additionally gated behind
+`GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`. `audit_logs.py` (3 routes) and
+`error_logs.py` (6 routes) likewise re-confirmed unchanged and correctly
+gated/org-scoped by direct read.
+
+### Re-verified — all still hold, nothing regressed
+
+- **SEC-1 through SEC-9, SEC2-28-1 through SEC2-28-4, SEC2-28-9** (all
+  previously FIXED): traced again in the current file contents, not assumed —
+  `_enforce_key_caps()` still called from every hot-path detector including
+  the two that grew this pass; hash chain still at `_CURRENT_HASH_VERSION =
+4`; `add_blocked_country` still upserts by `country_code` instead of always
+  inserting; `audit_ship_service._get_or_create_state` still takes
+  `.with_for_update()`. All intact.
+- **SEC2-28-5** (HIGH, flagged) — `IPBlockingMiddleware.__call__` still calls
+  `geoip.is_ip_blocked(client_ip, set())` with a hardcoded empty set at the
+  only production call site (`security_middleware.py:1341`). Still needs the
+  owner decision from pass 1; `KNOWN_LIMITATIONS.md`'s row is accurate and
+  unchanged.
+- **SEC2-28-6** (LOW, flagged) — `request_ip_exception`'s duplicate-pending
+  check (`ip_security_service.py:90-106`) is still a plain read-then-insert
+  with no row lock or unique constraint. Same shape, not fixed.
+- **SEC2-28-7** (HIGH, flagged) — re-verified against the current
+  `security_monitoring.py`/`security_middleware.py`: `detect_brute_force`
+  still HIGH-only and still the only alert type whose `organization_id` can
+  be `NULL` (unknown-username and wrong-password failures both call it with
+  `user_id=None`), still invisible to every org-scoped alert query by
+  construction; `detect_data_exfiltration`'s escalation is still gated on a
+  `Content-Length` response header that `StreamingResponse` never sets
+  (confirmed again: every `StreamingResponse(` call site in
+  `app/api/v1/endpoints/` still omits it); the `destination`-escalation
+  branch is still unreachable (no production caller supplies it);
+  `security_monitoring.py`'s 13 endpoints still have zero frontend consumers
+  (`securityService` in `adminServices.ts` still unused — reconfirmed by
+  grep). No regression, no new angle found this pass.
+- **Dead detector code** (`analyze_request`, `_check_rate_limit`,
+  `_check_injection_patterns`, pass 3) — still zero production callers
+  (grepped `app/core/security_middleware.py` and the rest of `backend/app`
+  again this pass); only this file's own tests call them. Still flagged, not
+  fixed.
+- **Minor note — `/admin/errors` route permission mismatch** (pass 2) — still
+  present: `frontend/src/modules/admin/routes.tsx` gates the route on
+  `settings.manage` while `error_logs.py`'s own endpoints require
+  `audit.view`/`audit.export`/`audit.manage`. Both directions still fail
+  safe (confirmed again by reading every `error_logs.py` handler's
+  `require_permission`). Left as a flagged UX/consistency gap, matching pass
+  2's reasoning — changing the gate is a one-line change but decides who can
+  reach the screen, a product call, not a drive-by fix.
+- **Tangential `system.run_tasks` blast-radius note** (pass 1) — out of this
+  feature's file scope (`core/permissions.py`/positions), unchanged, left for
+  whichever pass covers that surface.
+
+### New this pass — SEC2-28-10 — LOW — stale "dead code removed" claim in the module-audit doc — ✅ FIXED (documentation only)
+
+**What:** `docs/module-audit/security-audit-ip.md`'s SEC-9 section claimed
+"the unused org-scoped `get_all_active_allowed_ips` service method was
+deleted (only the pre-auth `_global` variant is called)." Re-checked against
+the current `ip_security_service.py`: the org-scoped method is present
+(`ip_security_service.py:477-500`), correctly scoped
+(`organization_id`/`valid_from`/`valid_until` all filtered), and has its own
+passing unit tests (`test_ip_security_service.py::TestGetAllActiveAllowedIps`
+— confirmed by name/behavior, not just presence) — but grepping all of
+`backend/app` finds **zero production callers**, and there is no `_global`
+variant anywhere in the current codebase. The doc's claim was stale, not a
+new defect: it most likely described an intermediate state before PR #1544
+(SEC2-28-5) removed the middleware's allowlist union entirely rather than
+routing it through a safe per-tenant lookup.
+**Where:** `docs/module-audit/security-audit-ip.md` (doc only; no
+application code defect — the method is unreachable, not unsafe).
+**Impact:** none functionally (dead code opens nothing); a reviewer trusting
+the stale claim could wrongly assume this method no longer exists, which
+matters if/when SEC2-28-5's proposed fix (a) — a per-IP-only allowlist lookup
+— is ever built, since this method is exactly the building block that fix
+would adapt.
+**Fix:** corrected the module-audit doc in place to describe the current,
+re-verified state and cross-reference SEC2-28-5 and this entry, rather than
+silently leaving a wrong "resolved" claim standing next to accurate
+neighboring bullets. Not mirrored into `KNOWN_LIMITATIONS.md` — it is a
+documentation correction about existing, already-tracked findings
+(SEC2-28-5, and the same "written but not wired" shape as the pass-3
+dead-detector note), not a new open item.
+
+### No new code fixes this pass
+
+Every application-code invariant re-checked held; the one change this pass
+made is the documentation correction above. No new exploitable bug was
+found in `security_monitoring.py` (endpoint or service), `ip_security.py`
+(endpoint or service), `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`,
+`core/audit.py`, the IP-enforcement path of `core/security_middleware.py`, or
+`core/geoip.py`. Schemas re-checked for the create/approve/reject/revoke
+request bodies: none accepts a client-supplied `organization_id` (only the
+response schema carries it — server-stamped from `current_user`), so there is
+no XC-1 gap on this feature's one client-supplied-FK-shaped surface (IP
+exceptions have no other org-scoped foreign key). No `ondelete="SET NULL"`
+columns exist on any model in this feature's scope (checked
+`models/audit.py`, `models/security_alert.py`, `models/ip_security.py`,
+`models/error_log.py`), so Pitfall #2 is n/a here.
+
+### Guard tests added (Pass 4)
+
+None — no code defect found this pass to pin with a new regression test; the
+one change is a documentation correction with no executable behavior to
+guard.
+
+### Completion gate (Pass 4)
+
+No application code changed this pass (one docs-only correction). Ran the
+full gate anyway, matching CI's scope, per CLAUDE.md's standard (a
+documentation-only change still gets the cheap, already-run backend/frontend
+checks recorded here since this doc's own convention is to run them every
+pass rather than skip on "nothing changed").
+
+| Check                                                                                                                              | Result                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                      | clean                                                                                         |
+| `black --check app/ tests/ alembic/`                                                                                               | clean (1,589 files)                                                                           |
+| `isort --check-only app/ tests/ alembic/`                                                                                          | clean                                                                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                                                  | PASSED — 444 revisions, single head (no migration this pass)                                  |
+| backend tests, scope (privilege_ceiling/audit_hash_chain/audit_org_scoping/security_middleware/ip_security_service/audit_shipping) | 165/165 passed                                                                                |
+| backend tests, full suite (`-m "not slow"`)                                                                                        | 12,490 passed, 1 skipped (env-only: `pywebpush` not installed), 20 deselected (`slow`-marked) |
+| `npm run typecheck` (frontend)                                                                                                     | 0 errors                                                                                      |
+| `npm run lint` (frontend)                                                                                                          | 0 errors/warnings, exit 0                                                                     |

@@ -16,11 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 28 (Security, audit & IP), pass 4** — branch
+`claude/security-review-security-audit-ip`, findings/docs committed; PR being
+opened this iteration (this row is updated with the PR number/link in a
+follow-up commit on the same branch, per this tracker's own convention). No
+code fixes this pass beyond a documentation correction
+(`docs/module-audit/security-audit-ip.md`'s stale SEC-9 "dead code removed"
+claim) — see `docs/security-review/SEC2-28-security-audit-ip.md`'s Pass 4
+section for the full re-verification. Rotation row 28 is now `✅`.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2508's merge, Feature 27 pass 4), preserved for history</summary>
+
 **None.** PR [#2508](https://github.com/thegspiro/the-logbook/pull/2508)
 (Feature 27, Integrations, pass 4) merged clean via merge commit
 `3ab30172e7`, 17/17 CI green, `mergeable_state: clean`, no unresolved review
 threads (Codex hit its usage-limit cap, posting no findings). Rotation row
 27 is now `✅`. Next: Feature 28 (Security, audit & IP).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 4, PR #2508, before it merged), preserved for history</summary>
@@ -13877,7 +13891,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
@@ -18297,3 +18311,70 @@ backend suite pass (21 skipped, all environment-only); frontend `tsc
 finding, INT-11, is flagged rather than fixed). Findings doc:
 `docs/security-review/INT-27-integrations.md` (Pass 4). Rotation row 27 ->
 ✅. Next: Feature 28 (Security, audit & IP).
+
+### 2026-09-13 — Feature 28 (Security, audit & IP, pass 4)
+
+No security-review PR was open at the start (Feature 27's #2508 had already
+merged; row 27 read `✅`), so this iteration went straight to Feature 28 per
+the parent session's instruction, skipping the redundant Step 0 re-check.
+
+Loaded prior art in order — `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/security-audit-ip.md`, `docs/app-review/security-audit-ip.md`,
+this feature's own `SEC2-28-security-audit-ip.md` (passes 1-3, 714 lines),
+`KNOWN_LIMITATIONS.md`'s security/IP-related rows — before reading any
+application code. This is the most heavily pre-audited feature in the
+rotation (module audit + 4-pass app-review + 3 prior security-review passes),
+so this pass read every one of the nine files this doc covers in full,
+end-to-end, looking specifically for drift since pass 3 rather than
+re-deriving settled invariants. `services/security_monitoring.py` grew
+1,073→1,338 L (+25%) since pass 3; traced the growth to several rounds of
+Codex-review concurrency-ordering fixes (read-before-evict / write-after-evict
+around `_enforce_key_caps()`, plus a same-session concurrent-request
+interleave fix in `detect_session_hijack`) — no new endpoint, no new
+detector, and the ordering the extensive inline comments describe matches
+what the code actually does, hand-traced. Every other file in scope was
+within a few lines of pass 3's size.
+
+Enumerated all 13 `security_monitoring.py` endpoints and all 13
+`ip_security.py` endpoints against their `require_permission` gates and
+org-scoping (not sampled) — unchanged from the prior passes' inventory, all
+correctly gated. Re-verified SEC-1 through SEC-9, SEC2-28-1 through
+SEC2-28-4, and SEC2-28-9 (all previously FIXED) — all intact. Re-verified the
+three still-open flagged items (SEC2-28-5: approved IP-allowlist exceptions
+have no enforcement effect on geo-blocking, still needs an owner decision;
+SEC2-28-6: TOCTOU on the duplicate-pending-exception check, still LOW;
+SEC2-28-7: the `security_monitoring.py` alert surface's three-part visibility
+gap — no admin UI, brute-force alerts with `organization_id=NULL` invisible
+to every org-scoped query by construction, and the exfiltration detector's
+`Content-Length`-gated blind spot on every `StreamingResponse` export) —
+none regressed, none newly closed; all remain accurately described in
+`KNOWN_LIMITATIONS.md`. Also re-verified pass 3's dead-detector-code note
+(`analyze_request`/`_check_rate_limit`/`_check_injection_patterns`, zero
+production callers) and pass 2's `/admin/errors` route-permission-mismatch
+note (fails safe both directions, still a flagged UX gap not a bypass) —
+both unchanged.
+
+One documentation-only correction, **SEC2-28-10 (LOW)**: the module-audit
+doc's SEC-9 section claimed the org-scoped `get_all_active_allowed_ips`
+method "was deleted" — re-checked against the current
+`ip_security_service.py` and found it still present, still correctly
+org-scoped, still covered by its own passing unit tests, but with zero
+production callers (grepped `backend/app`) and no `_global` variant anywhere
+in the codebase. No application-code defect (dead code opens nothing);
+corrected the stale claim in `docs/module-audit/security-audit-ip.md` in
+place rather than leaving it standing. No new code fix this pass, no new
+guard test (nothing to pin), nothing new mirrored into
+`KNOWN_LIMITATIONS.md` (this is a correction about an already-tracked
+finding, SEC2-28-5, not a new open item).
+
+Full completion gate green: `flake8`/`black --check`/`isort --check-only`
+clean across `app/ tests/ alembic/`; `validate_migrations.py --strict`
+passed (444 revisions, single head, no migration this pass); scoped backend
+tests (privilege_ceiling/audit_hash_chain/audit_org_scoping/
+security_middleware/ip_security_service/audit_shipping) 165/165 passed; full
+backend suite (`-m "not slow"`) 12,490 passed, 1 skipped (env-only,
+`pywebpush` not installed), 20 deselected; frontend `npm run typecheck` 0
+errors, `npm run lint` exit 0 with no warnings (no frontend file touched
+this pass). Findings doc: `docs/security-review/SEC2-28-security-audit-ip.md`
+(Pass 4). Rotation row 28 -> ✅. PR: see the Open PR section above. Next:
+Feature 29 (Reports & analytics).

@@ -213,9 +213,26 @@ allowlist recovery paths under fail-closed. **Status:** fixed.
   `dangerouslySetInnerHTML` (the only two such sites are the unrelated
   link/markdown helpers). No stored-XSS path. `context` remains capped at 4 KB.
   (EL #6, PP-5)
-- **✅ dead code removed.** The unused org-scoped `get_all_active_allowed_ips`
-  service method was deleted (only the pre-auth `_global` variant is called);
-  the `IPExceptionType.BLOCKLIST` enum value is documented as a reserved
+- **Correction (security-review SEC2-28, pass 4, 2026-09-13):** the claim
+  directly below — that the org-scoped `get_all_active_allowed_ips` was
+  deleted — is no longer accurate and should not be re-derived as newly found:
+  the method is present in `ip_security_service.py` today, correctly
+  org-scoped, with its own unit tests (`test_ip_security_service.py`), but has
+  **zero production callers** (grepped across `backend/app`; only the test
+  file calls it directly) — there is no `_global` variant in the current
+  codebase at all. This is consistent with, not a regression from, SEC2-28-5
+  (`docs/security-review/SEC2-28-security-audit-ip.md`): PR #1544 removed the
+  cross-tenant allowlist union from `IPBlockingMiddleware` by passing a
+  hardcoded empty set rather than by routing through a safe per-tenant lookup,
+  so this method is exactly the org-scoped building block SEC2-28-5's
+  proposed fix (a) would adapt if that decision is made — kept, not
+  re-deleted. Same "written but not wired" shape as the dead
+  `analyze_request`/`_check_rate_limit`/`_check_injection_patterns` detectors
+  in `security_monitoring.py` (SEC2-28, pass 3); low severity, no exploit
+  path (the code is simply unreachable), not fixed here.
+  ~~The unused org-scoped `get_all_active_allowed_ips` service method was
+  deleted (only the pre-auth `_global` variant is called);~~ the
+  `IPExceptionType.BLOCKLIST` enum value is documented as a reserved
   placeholder (kept to avoid a needless enum-column migration when the
   explicit-blocklist feature lands). (IP #5)
 - **✅ Resolved 2026-07-30:** `audit_logs.organization_id` exists (migration
