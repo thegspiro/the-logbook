@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (Feature 28, Security, audit & IP, pass 4) — branch
+**PR [#2513](https://github.com/thegspiro/the-logbook/pull/2513)** (Feature
+28, Security, audit & IP, pass 4) — branch
 `claude/security-review-audit-ip`, opened against a fresh `origin/main` (no
 other security-review PR was open at the start of this iteration; row 28 was
 `⬜` and row 27's closure — PR #2508/#2509 — was already merged and
