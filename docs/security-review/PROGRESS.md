@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2525](https://github.com/thegspiro/the-logbook/pull/2525)
+(Feature 31, Scheduled tasks, pass 4) merged clean, 17/17 CI green (after one
+stale-superseded-run false failure on the prior commit — every job on that
+run showed `cancelled`, not `failed`, because the branch advanced mid-run;
+documented in a PR comment, resolved by waiting for the new head's own CI),
+no unresolved review threads. Delta-focused per the established convention:
+diffed pass 3's merge commit (`ff8cf35c0`, PR #2362) against `HEAD` for both
+target files — `scheduled.py` unchanged, `scheduled_tasks.py`'s only diff was
+an unrelated app-review fix closing the same CRON2-31-11/CRON-31-5/CRON3-31-1
+org-active-filter shape one function over (`_run_scheduled_emails_inner`),
+read in full and re-verified correct. Re-verified every prior finding
+(CRON2-31-1 through 13, CRON-31-1 through 8, CRON3-31-1/2) against current
+code — all holding, no regressions; registry sync still 44/44.
+
+One real, previously-unflagged LOW finding, fixed: **CRON4-31-1** — `POST
+/scheduled/run-task`, a platform-wide System-Owner-only endpoint that can
+fire any of the 44 org-spanning task runners, had no audit trail. Added
+`log_audit_event()` before invoking the runner, committed immediately (not
+left to the request-scoped session's end-of-request commit) so the record
+survives even a runner that raises; 3 new tests, each verified to fail
+against the pre-fix endpoint and pass after. One related LOW gap flagged, not
+fixed — **CRON4-31-2**: the manual endpoint has no per-task lock and can race
+the in-process scheduler's own run of the same task, a previously-unnamed
+instance of the dedup-flag double-send risk app-review's original pass
+already accepted, not a new risk class; closing it needs a lock shared
+between `main.py` and `scheduled.py`'s dispatch, an architecture call beyond
+a review-pass fix. Full account in `CRON4-31-scheduled-tasks.md`. Rotation
+row 31 is now `✅`. Next: Feature 32 (Locations & kiosk).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 4, PR #2525, before it merged), preserved for history</summary>
+
 **PR [#2525](https://github.com/thegspiro/the-logbook/pull/2525)** (Feature
 31, Scheduled tasks, pass 4) — branch `claude/security-review-scheduled-tasks`,
 opened against a fresh `origin/main` (no security-review PR was open at the
@@ -42,6 +74,8 @@ instance of the dedup-flag double-send risk app-review's original pass
 already accepted, not a new risk class; closing it needs a lock shared
 between `main.py` and `scheduled.py`'s dispatch, an architecture call beyond
 a review-pass fix. Full account in `CRON4-31-scheduled-tasks.md`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 4, PR #2521, after it merged), preserved for history</summary>
@@ -881,6 +915,16 @@ that were an artifact of the worktree layout, not the code). Rotation row
 20 → `✅` (pending merge). Next: Feature 21 (Admin hours).
 
 </details>
+
+### 2026-09-13 — Feature 31 (Scheduled tasks) — PR #2525 merged, watchdog recorded it
+
+PR #2525 (pass 4: CRON4-31-1 fixed — audit logging on the manual
+`/scheduled/run-task` trigger; CRON4-31-2 flagged, not fixed — no per-task
+lock against the in-process scheduler's own run; all prior findings
+re-verified, registry sync 44/44) merged clean after one stale-superseded-run
+false CI failure (every job `cancelled`, not `failed`, on the pre-bookkeeping
+commit — documented in a PR comment, resolved by waiting for the new head's
+own CI). Rotation row 31 → `✅`. Next: 32 Locations & kiosk.
 
 ### 2026-09-13 — Feature 31 (Scheduled tasks, pass 4)
 
@@ -14170,7 +14214,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⏳     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
