@@ -4,7 +4,16 @@ Onboarding System Models
 Tracks onboarding progress and stores initial setup information.
 """
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.sql import func
 
@@ -22,7 +31,24 @@ class OnboardingStatus(Base):
 
     __tablename__ = "onboarding_status"
 
+    # "Only one row should exist" was true as an intention and undefended as a
+    # constraint, and `start_onboarding` is a read-then-write: two concurrent
+    # first-run requests both read "none exists" and both insert. The second row
+    # then made `needs_onboarding`'s `scalar_one_or_none()` raise
+    # MultipleResultsFound, so GET /onboarding/status returned 500 forever and
+    # setup could not proceed -- at the one moment no account exists to sign in
+    # with and fix it. See ONBOARD-7 in docs/KNOWN_LIMITATIONS.md.
+    #
+    # `singleton` is always 1. The unique index on it is what turns that second
+    # INSERT into an IntegrityError the service can recover from, instead of a
+    # duplicate nothing notices until a reader falls over.
+    __table_args__ = (
+        UniqueConstraint("singleton", name="uq_onboarding_status_singleton"),
+    )
+
     id = Column(String(36), primary_key=True, default=generate_uuid)
+
+    singleton = Column(Integer, nullable=False, default=1, server_default="1")
 
     # Onboarding completion status
     is_completed = Column(Boolean, default=False, nullable=False, server_default="0")

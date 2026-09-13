@@ -387,13 +387,26 @@ class PushService:
         await self.db.refresh(sub)
         return sub
 
-    async def unsubscribe(self, organization_id: UUID, endpoint: str) -> bool:
-        """Remove a device endpoint. Org-scoped so one tenant cannot delete
-        another's subscription by submitting a known endpoint."""
+    async def unsubscribe(
+        self, organization_id: UUID, user_id: UUID, endpoint: str
+    ) -> bool:
+        """Remove a device endpoint.
+
+        Scoped to both the org and the caller: an endpoint is a long,
+        effectively-unguessable per-device URL, but it is still a client-
+        supplied id, and every other self-scoped route in this file (mark
+        read, pin, subscribe) filters on the caller's own id rather than
+        merely the org (CLAUDE.md's authorization checklist calls this out
+        by name). Without the user filter, any authenticated member who
+        obtained another member's endpoint — a shared device, a leaked log
+        line, a bug elsewhere — could silence their push notifications by
+        submitting it here.
+        """
         result = await self.db.execute(
             delete(PushSubscription).where(
                 PushSubscription.endpoint_hash == hash_endpoint(endpoint),
                 PushSubscription.organization_id == str(organization_id),
+                PushSubscription.user_id == str(user_id),
             )
         )
         await self.db.commit()

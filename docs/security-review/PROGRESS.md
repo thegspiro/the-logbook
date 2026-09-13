@@ -16,6 +16,237 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2508](https://github.com/thegspiro/the-logbook/pull/2508)
+(Feature 27, Integrations, pass 4) merged clean via merge commit
+`3ab30172e7`, 17/17 CI green, `mergeable_state: clean`, no unresolved review
+threads (Codex hit its usage-limit cap, posting no findings). Rotation row
+27 is now `✅`. Next: Feature 28 (Security, audit & IP).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 4, PR #2508, before it merged), preserved for history</summary>
+
+**PR [#2508](https://github.com/thegspiro/the-logbook/pull/2508)** (Feature 27, Integrations, pass 4) — branch
+`claude/security-review-integrations`, opened against a fresh `origin/main`
+(no other security-review PR was open at the start of this iteration; row 27
+was `⬜` and rotation row 26's closure — PR #2506/#2507 — was already merged
+and recorded). One fix, one flagged: **INT-10** (MED, fixed) —
+`documenso_service.py` was the one `create_integration_client`-family
+connector with no `assert_outbound_url_safe` re-validation at send time at
+all (found by an out-of-scope pass, TRX-18, and tracked in
+`KNOWN_LIMITATIONS.md`; closing it belonged to this feature's own rotation
+turn) — added the missing send-time check to `test_connection()` and
+`create_document()`, mirroring `calcom_service.py`'s identical shape; 2 guard
+tests added, both verified to fail against the pre-fix code (`AttributeError`
+on the not-yet-imported name) and pass after. **INT-11** (LOW-MED, flagged) —
+this pass's first frontend read of `IntegrationsPage.tsx` found that
+Salesforce's backend-documented "blank the refresh token to switch to client
+credentials" feature has no reachable UI control: the form sends `undefined`
+(dropped from the payload) rather than an explicit `""` when the field is
+blank, so an admin who clears it and saves changes nothing, silently.
+Flagged rather than fixed — needs a product decision on which of two UI
+shapes to build. Mirrored into `KNOWN_LIMITATIONS.md`. All 25 routes across
+6 files re-enumerated (up from pass 3's 21 across 4 — `mcp_keys.py`'s 4
+routes newly enumerated this pass, all correctly gated and org-scoped, no
+finding). INT-1 through INT-9 re-verified still holding.
+
+Completion gate: flake8/black/isort clean (isort 9.0.1, CI's pin); migrations
+unchanged (443 revisions, single head, no schema change this pass); 2690
+scoped + 12450 full-suite backend tests pass (21 skipped, all
+environment-only); frontend `tsc --noEmit` 0 errors; `eslint --max-warnings
+10` 0 errors/0 warnings (frontend was read, not edited, this pass).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 4, PR #2506, before it merged), preserved for history</summary>
+
+**None.** PR [#2506](https://github.com/thegspiro/the-logbook/pull/2506)
+(Feature 26, Forms, pass 4) merged clean via merge commit `8f9c3e6658`.
+Its branch had picked up a real, same-direction conflict with #2505 (both
+independently edited this file's "Open PR" section relative to a common
+ancestor); resolved by merging `origin/main` into the PR branch, keeping
+both notes in their documented supersession order, and re-validating —
+CI came back all 17/17 green on the merge commit, `mergeable_state: clean`,
+no unresolved review threads. Rotation row 26 is now `✅`. Next: Feature 27
+(Integrations).
+
+**PR [#2506](https://github.com/thegspiro/the-logbook/pull/2506)** (Feature
+26, Forms, pass 4) — branch
+`claude/security-review-forms`, opened against `origin/main`. A separate,
+docs-only PR (#2505, branch `claude/security-review-record-msg25-merge`) was
+already open recording PRs #2503/#2504's merges and marking row 25 closed
+when this review started. Per this file's own established precedent for two
+concurrent sessions landing on adjacent features (see the pass-4 MSG-25 Open
+PR note below, and the pass-2 MSG-25 log entry it in turn cites), this PR
+proceeds independently rather than waiting: #2505 is docs-only bookkeeping
+for the _previous_ feature's closure, not an open review PR _for_ Feature 26
+itself, and row 26 was already `⬜` (not `🔄`) on `origin/main` with no
+Forms-review PR open against it. This PR was branched directly from a fresh
+`git fetch origin main` (not off this session's own prior local branch,
+which carries #2505's unmerged commit) specifically to avoid dragging
+#2505's content into this diff. Whichever of #2505/this PR merges first, the
+other's overlapping "Open PR" section and rotation-table row text becomes a
+trivial, same-direction conflict for a future tend-PR iteration to resolve,
+not a disagreement about what happened.
+
+1 fix, 1 flagged (pass 4 — this feature's fourth lap; passes 1-3 already
+closed FORM-1 through FORM-10 and BXC-1, all re-verified still holding this
+pass): **FORM-11** (MEDIUM, fixed) — `_process_event_request` (added to
+`forms_service.py` between pass 3 and this pass, as part of the unrelated
+event-request/forms intake-parity hardening) carried
+`EventRequest.status_token` — a bearer credential that alone grants view
+**and self-service cancel** at the fully unauthenticated
+`/event-requests/status/{token}` endpoints — into the result dict persisted
+to `submission.integration_result`. That JSON column is serialized back by
+`FormSubmissionResponse` to any `forms.manage` holder (`get_submission`,
+`list_submissions`, `reprocess_submission_integrations`) and to any
+authenticated org member via `submit_form` — none of which requires
+`events.manage`, the permission `KNOWN_LIMITATIONS.md` documents as the
+intended gate on this token (a coordinator's "Copy status link" control).
+Fixed by dropping the key from the returned dict; guard test added
+(verified fail-before/pass-after). **FORM-12** (LOW/INFO, flagged, not
+fixed): `get_submission`/`delete_submission`/`reprocess_submission_integrations`
+accept `form_id` in the URL but never filter on it — org-scoped only. Not a
+security boundary (`forms.manage` is org-wide, so this grants no privilege
+beyond what the permission already carries), so left as a URL-correctness
+nit rather than an unreviewed behavior change; not mirrored to
+`KNOWN_LIMITATIONS.md` (no owner decision needed). All 22 `endpoints/forms.py`
+routes + both `public/forms.py` routes re-enumerated; auth/permission
+posture unchanged from every prior pass.
+
+Completion gate: flake8/black/isort clean (isort 9.0.1, CI's pin);
+migrations unchanged (443 revisions, single head, no new migration this
+pass); 482 scoped + 12,448 full-suite backend tests pass (21 skipped, all
+environment-only — `pywebpush`/`py_vapid`, Docker, opt-in contract suite);
+frontend `tsc --noEmit` 0 errors; `npm run lint` exit 0, no warnings (no
+frontend file touched — the finding and fix are backend-only). Full
+write-up: `docs/security-review/FORM-26-forms.md` → Pass 4. Rotation row 26
+-> ✅. Next: Feature 27 (Integrations).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 4, PR #2504, after it merged), preserved for history</summary>
+
+**None.** PR [#2503](https://github.com/thegspiro/the-logbook/pull/2503)
+(docs-only, recording PR #2502's merge and marking row 25 in progress) and
+PR [#2504](https://github.com/thegspiro/the-logbook/pull/2504) (Feature 25,
+Messaging & notifications, pass 4) both merged clean, in that order — merge
+commits `891bdb094e` and `0ad5d5bb0a`. Since #2504's branch was built
+directly on top of #2503's tip commit (both landed in the same working
+tree), #2503 merging first left #2504 a linear fast-forward with no actual
+conflict; its `mergeable_state` resolved to `clean` on its own once GitHub
+recomputed it against the new `main`, and both merged with all CI green
+(17/17 on #2504) and no open review threads (Codex had hit its usage-limit
+cap on both, posting no findings). Rotation row 25 is now `✅`. Next:
+Feature 26 (Forms).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 4, PR #2504, before it merged), preserved for history</summary>
+
+**PR [#2504](https://github.com/thegspiro/the-logbook/pull/2504)** (Feature
+25, Messaging & notifications, pass 4) — branch
+`claude/security-review-messaging-notifications`. A separate, docs-only PR
+(#2503, branch `claude/security-review-record-mm24-merge`) was already open
+recording PR #2502's merge and marking row 25 in progress when this review
+started; per this file's own established precedent for two concurrent
+sessions landing on the same feature (see the pass-2 MSG-25 log entry
+below), this PR proceeds independently rather than waiting, since #2503 is
+docs-only bookkeeping for the _previous_ feature's closure, not an open
+review PR _for_ Feature 25 itself — the rotation's "one PR at a time" rule
+is about not starting a new feature while its own review PR is open, and
+no such PR existed for Feature 25 before this one. Whichever of #2503/#2504
+merges first, the other's overlapping bookkeeping text becomes a trivial,
+same-direction conflict for a future tend-PR iteration to resolve, not a
+disagreement about what happened.
+
+1 fix: **MSG-16** (LOW-MED) — `PushService.unsubscribe` filtered a
+client-supplied push endpoint on `organization_id` only, not the caller's
+own id, unlike every sibling self-scoped route in the file — any member of
+the same org who obtained another member's endpoint could silently
+unsubscribe their push notifications. Fixed by adding a `user_id` filter;
+guard test added. 1 doc correction: this file's own MSG-12 write-up hadn't
+caught up to `KNOWN_LIMITATIONS.md` already recording its stranded-`pending`
+sub-case as fixed (2026-09-06, `run_recover_stranded_message_deliveries`) —
+corrected in the Pass 4 section, no code change. MSG-3/MSG-15/F4/MAIL-4 and
+the `NotificationRuleCreate.config` note re-verified unchanged, not
+re-flagged. All 48 routes across the four endpoint files enumerated fresh
+(table in the findings doc); every route carries an auth dependency, every
+by-id query is org- or self-scoped correctly.
+
+Completion gate: flake8/black/isort clean (isort 9.0.1, CI's pin);
+migrations unchanged (443 revisions, single head, no new migration this
+pass); 1,127 scoped + 12,447 full-suite backend tests pass (21 skipped, all
+environment-only — `pywebpush`/`py_vapid`, Docker, opt-in contract suite);
+frontend `tsc --noEmit` 0 errors; `npm run lint` exit 0, no output (no
+frontend file touched by this pass's fix). Full write-up:
+`docs/security-review/MSG-25-messaging-notifications.md` → Pass 4. Rotation
+row 25 -> ✅. Next feature (26, Forms) does not start until this PR merges.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 4, PR #2502, after it merged), preserved for history</summary>
+
+**None.** PR [#2502](https://github.com/thegspiro/the-logbook/pull/2502)
+(Feature 24, Meetings & minutes, pass 4) merged clean via merge commit
+`e2bdae89f5`, all 17 CI checks green (CI Success, both MySQL/MariaDB
+integration and contract suites, Migration Chain, Docker Image Build &
+Container Tests, Frontend Tests, Frontend Lint/Typecheck/Build, Frontend
+E2E/Playwright, Backend Unit Tests, Backend Lint, Backend Security Scan,
+Docs Link Check, Trivy, Gitleaks, SBOM), `mergeable_state: clean`, no open
+review threads. Codex Code Review had hit its usage-limit cap on this PR
+(posted "reached your Codex usage limits" rather than a review) — treated
+as idle/clean per this rotation's own precedent, same as prior PRs Codex
+could not reach. Merged directly by this 30-minute watchdog session. Rotation
+row 24 is now `✅`. Next: Feature 25 (Messaging & notifications).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 4, PR #2502, before it merged), preserved for history</summary>
+
+**PR [#2502](https://github.com/thegspiro/the-logbook/pull/2502)** (Feature
+24, Meetings & minutes, pass 4) — branch `claude/friendly-babbage-4ccnij`,
+continuing the same watchdog branch this file's own prior Log entry started
+Feature 24 on (not a new branch: the watchdog's docs-only commit had not yet
+opened a PR, so this is that same in-progress feature, not a reuse of a
+merged branch's name per Pitfall #24). 2 fixes (MM-15 non-finite/unbounded
+`quorum_threshold` validation, MM-16 missing org filter on
+`create_from_meeting`'s attendee-name lookup), 1 new flagged item (MM-17, no
+finalization guard on `set_meeting_quorum_config` — owner decision, mirrored
+into `KNOWN_LIMITATIONS.md`), MM-9 re-verified still open and unchanged.
+Completion gate: flake8/black/isort clean; migrations unchanged (443
+revisions, single head); 289 scoped + 12,447 full-suite backend tests pass
+(21 skipped, all environment-only); frontend `tsc` clean; `npm run lint`
+shows 0 errors and a large pre-existing, sandbox-local
+`@typescript-eslint/no-unsafe-*` warning count already covered by
+`KNOWN_LIMITATIONS.md`'s "Frontend — `typescript`'s declared version has
+drifted…" entry — not from this pass's diff, which touches no frontend file.
+Subscribed to PR activity. Full write-up:
+`docs/security-review/MM-24-meetings-minutes.md` → Pass 4. Next feature (25,
+Messaging & notifications) does not start until this PR merges.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 11, PR #2489, before it merged; and the watchdog note that closed it out and started Feature 24), preserved for history</summary>
+
+**None.** PR [#2489](https://github.com/thegspiro/the-logbook/pull/2489)
+(Feature 23, Medical supplies, pass 11 re-verification) merged clean via
+merge commit `0407246f5`, all 17 CI checks green (CI Success, both
+MySQL/MariaDB integration and contract suites, Migration Chain, Docker
+Image Build & Container Tests, Frontend Tests, Frontend Lint/Typecheck/
+Build, Frontend E2E/Playwright, Backend Unit Tests, Backend Lint, Backend
+Security Scan, Docs Link Check, Trivy, Gitleaks, SBOM). No open review
+threads. Rotation row 23 is now `✅` (the merged PR's own body had already
+updated the Rotation table; this entry closes the gap left when the Open
+PR row itself was not cleared afterward — this session found the rotation
+stalled here for over 36 hours with no follow-up docs commit and no
+Feature 24 branch or PR, and is closing it out and starting Feature 24
+directly, per this file's established watchdog precedent). Next: Feature
+24 (Meetings & minutes), pass 4.
+
 **PR [#2489](https://github.com/thegspiro/the-logbook/pull/2489)** —
 Feature 23 (Medical supplies), a fresh rotation-lap review (this feature's
 own findings file is at "pass 11," continuing the cumulative numbering
@@ -43,6 +274,8 @@ scoped + 849 `inventory or medical_supplies` backend tests pass (1
 pre-existing skip); frontend `tsc`/`eslint` clean (no frontend source
 changed — the module was read, not edited). Full write-up:
 `docs/security-review/MSUP-23-medical-supplies.md` → Pass 11.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, pass 4's Codex-review follow-up, PR #2485, merged; before Feature 23 pass 11 started), preserved for history</summary>
@@ -13640,10 +13873,10 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
@@ -13658,6 +13891,86 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-13 — Feature 24 (Meetings & minutes, pass 4) — 2 fixed (MM-15, MM-16), 1 flagged (MM-17), MM-9 re-confirmed unchanged
+
+Continued the watchdog's branch (`claude/friendly-babbage-4ccnij`) rather
+than opening a new one, per the orchestrating task's explicit instruction —
+the branch's only prior commit was a docs-only recording of PR #2489's merge
+with no PR of its own yet open, so this is not a reuse of an already-merged
+branch (Pitfall #24 does not apply).
+
+Loaded pass 1–3's findings (`MM-24-meetings-minutes.md`), `CHECKLIST.md`,
+and re-verified every fix those passes applied by reading the current code
+at its cited location, not by re-citing the doc. All six backend files
+(`meetings.py`, `minutes.py`, `meetings_service.py`, `minute_service.py`,
+`quorum_service.py`, `attendance_dashboard_service.py`) were unchanged since
+pass 3 (line counts match exactly; `git log --since=2026-09-06` on each
+turns up only unrelated merge commits) — read all six fresh in full rather
+than trusting the byte-count match alone. Re-enumerated all 42 routes
+(17 `meetings.py` + 25 `minutes.py`): every one still carries
+`require_permission(...)`, every by-id query still org-scopes or resolves
+through an org-scoped parent, LIKE-escaping and JSON-column handling both
+still correct, and MM-9 (`approve_meeting`/`update_meeting`'s missing
+approval state machine) is confirmed still open and unchanged, with no live
+frontend call site for `approveMeeting()`.
+
+Two new findings, both mechanical fixes verified against the real failure
+mode rather than inferred: **MM-15** — `PATCH /minutes/{id}/quorum-config`'s
+`quorum_threshold` accepted `inf`/`-inf`/`nan` (all pass a bare `<= 0`
+check) and any finite value including a percentage over 100; confirmed via a
+throwaway integration test that `inf` reaches pymysql's float encoder on
+commit as an unhandled `ProgrammingError`, and that `int(inf)` in
+`QuorumService.calculate_quorum` raises `OverflowError` independently. Fixed
+with an explicit `math.isfinite()` check plus type-specific bounds (≤100 for
+percentage, ≤100,000 for count). **MM-16** — `MinuteService.create_from_meeting`'s
+attendee-name lookup was the one `select(User)` call site across this
+feature's four files with no `organization_id` filter (grep-verified);
+fixed to match the convention MM-14 (pass 3) already established on the
+sibling service. **MM-17** — `set_meeting_quorum_config` has no finalization
+guard blocking it on `APPROVED` minutes, unlike every sibling mutation in the
+file; flagged (not fixed) since blocking it is a behavior change with no
+test asserting today's permissive behavior is unwanted, and mirrored into
+`KNOWN_LIMITATIONS.md`. Two guard tests added: a DB-free endpoint-level test
+asserting every non-finite/out-of-bounds `quorum_threshold` is rejected
+before any query runs (verified to fail on 4/9 cases against the pre-fix
+code), and a service-level test capturing the compiled `WHERE` clause of
+MM-16's fixed lookup (verified to fail against the reverted code with the
+actual captured SQL shown).
+
+Completion gate: `flake8`/`black`/`isort` (9.0.1, CI's pin) all clean;
+`validate_migrations.py --strict` passed (443 revisions, single head); scoped
+tests (`meeting or minute or quorum or attendance_dashboard`) 289 passed, 1
+pre-existing skip; full backend suite 12,447 passed, 21 skipped (all
+environment-only — py_vapid, Docker daemon/registry, the opt-in API contract
+suite), 0 failed; frontend `tsc --noEmit` 0 errors; `npm run lint` 0 errors
+but exits non-zero on 1,449 pre-existing `@typescript-eslint/no-unsafe-*`
+warnings from a sandbox `node_modules` type-resolution issue this pass's diff
+does not touch (0 frontend files changed) — the exact symptom
+`KNOWN_LIMITATIONS.md`'s existing "Frontend — `typescript`'s declared version
+has drifted…" entry already tracks from an unrelated pass, not re-escalated
+as a new entry. Full write-up: `docs/security-review/MM-24-meetings-minutes.md`
+→ Pass 4. Rotation row 24 → `✅` (pending PR merge). PR
+[#2502](https://github.com/thegspiro/the-logbook/pull/2502) opened and
+subscribed. Next: Feature 25 (Messaging & notifications), once this PR
+merges.
+
+### 2026-09-13 — Watchdog: closed out Feature 23 (PR #2489), starting Feature 24 (Meetings & minutes, pass 4)
+
+**Step 0 (watchdog):** PR #2489 (Feature 23, Medical supplies, pass 11)
+merged clean at 2026-09-11T17:11:45Z — all 17 CI checks green, no open
+review threads — but no follow-up commit ever cleared the Open PR row or
+recorded the merge, even though the PR's own body had already flipped the
+Rotation table's row 23 to `✅`. This scheduled watchdog check found the
+rotation stalled at that point for **over 36 hours** with no new
+`security-review-*` branch or PR opened for Feature 24, well past the
+~90-minute stall threshold this file's own prior watchdog entries (Feature
+18, Feature 19) used as their trigger. Re-checked live GitHub open PRs
+(`list_pull_requests`, state=open) before proceeding: only #2495, #2500,
+#2501 open, none security-review-shaped — confirmed clear. Recorded PR
+#2489's merge in the Open PR row and started Feature 24 directly, on this
+watchdog session's own designated branch (`claude/friendly-babbage-4ccnij`),
+per the same precedent Feature 18 and Feature 19's watchdog passes used.
 
 ### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 3 fixed (SKT4-4/5/6, SKT4-5 in three steps, SKT4-6 in three), 4 flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), SKT3-2 scope widened three times, across seven Codex review rounds
 
@@ -17761,3 +18074,226 @@ components/CallTypeChips.tsx`, not touched this pass). Full writeup:
   touched). Findings doc: `docs/security-review/FORM-26-forms.md` (Pass 3).
   Rotation row 26 -> ⏳ pending PR. Next: open the PR, tend it to green,
   then 27 Integrations.
+
+### 2026-09-13 — Feature 25 (Messaging & notifications, pass 4)
+
+Fourth-lap pass (row 25 was ⬜ at the start of this lap; row 26 Forms is
+still ⬜ too, so this is not the tail of an already-reset lap). Loaded prior
+art in order (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/messaging.md`, `docs/app-review/messaging.md`, this
+feature's own passes 1-3) before reading any code. Re-verified MSG-4
+through MSG-9, MSG-13, MSG-14, the recipient-materialization/revocation
+architecture, and the SMS allowlist against current source — all still
+hold, nothing regressed. Enumerated all 48 routes across the four endpoint
+files (table in the findings doc): every route carries an auth dependency,
+every by-id query is org-scoped (or self-scoped where the route is
+self-service), and no permission string reads as under-gated for its
+data's sensitivity.
+
+One new finding, fixed: **MSG-16 (LOW-MED)** — `PushService.unsubscribe`
+filtered a client-supplied endpoint on `organization_id` only, unlike every
+sibling self-scoped route in the file (`subscribe`, `mark_as_read`'s `/my/`
+path, `toggle_pin`), which also filter on the caller's own id — CLAUDE.md's
+own authorization checklist names this exact "self-scoped routes ... filter
+on the caller's own id, not merely the org" shape. Impact is bounded (an
+endpoint URL is a long, effectively unguessable per-device secret, and the
+only consequence is the victim's push notifications going quiet — they
+still get the same notice by email, the channel of record), but it is a
+real same-org authorization gap with a one-line fix. Fixed by adding a
+`user_id` filter to the query and its one caller; the pre-existing
+cross-org guard test's signature was updated, and a new same-org
+cross-user guard test was added. Could not run in this sandbox — the whole
+`test_push_service.py` module is `importorskip`-skipped without the
+optional `pywebpush`/`py_vapid` dependency, a pre-existing, previously
+documented sandbox limitation, not something this pass introduced; the new
+test mirrors the shape of the adjacent cross-org test that already passes
+in CI.
+
+One doc correction, no code change: this findings file's own MSG-12
+write-up (written pass 2, carried forward unmodified through pass 3's
+"confirmed still open" note) never picked up that its stranded-`pending`
+sub-case was already fixed on `main` on 2026-09-06
+(`run_recover_stranded_message_deliveries` in `scheduled_tasks.py`, tested
+in `test_message_delivery_claim_recovery.py`) — `KNOWN_LIMITATIONS.md`'s
+own MSG-12 entry already said so correctly, this file just hadn't caught
+up. Added a Pass 4 "Doc correction" section pointing at the current state;
+the `failed` and throttled sub-cases remain genuinely open, unchanged, and
+still need the product decision prior passes described. MSG-3, MSG-15,
+`email_service.py`'s F4, MAIL-4, and the `NotificationRuleCreate.config`
+unbounded-JSON note are all re-verified unchanged and not re-flagged;
+nothing new needed mirroring into `KNOWN_LIMITATIONS.md` (MSG-16 was fixed,
+not flagged, and MSG-12's current state there was already accurate).
+
+Full completion gate green: flake8/black/isort clean (isort 9.0.1,
+matching CI's pin); `validate_migrations.py --strict` passed (443
+revisions, single head, no new migration this pass); 1127/1127 scoped and
+12,447/12,447 full backend suite pass (21 skipped, all environment-only —
+`pywebpush`/`py_vapid`, Docker daemon/registry, the opt-in API-contract
+flag); frontend `tsc --noEmit` 0 errors and `eslint --max-warnings 10` exit
+0 with no output (no frontend file touched by this pass's fix). Findings
+doc: `docs/security-review/MSG-25-messaging-notifications.md` (Pass 4).
+Rotation row 25 -> ✅. Next: 26 Forms.
+
+### 2026-09-13 — Feature 26 (Forms, pass 4)
+
+Fourth-lap pass. A separate, docs-only PR (#2505) was already open
+recording Features 25's PRs (#2503/#2504) as merged when this review
+started; row 26 was already `⬜` on `origin/main` with no Forms-review PR
+open against it, so — per this file's own established precedent for a
+docs-only bookkeeping PR not blocking the next feature (see the Feature 25
+pass-4 entry above) — this review proceeded independently rather than
+waiting, and branched directly off a fresh `git fetch origin main` (this
+session's working tree started on #2505's own branch, so its uncommitted
+Forms-review edits were stashed, moved to the new branch, and reapplied
+there specifically to avoid dragging #2505's unmerged commit into this
+diff).
+
+Loaded prior art in order (`CHECKLIST.md`,
+`SEC-00-cross-cutting-baseline.md`, `docs/module-audit/forms.md`,
+`docs/app-review/forms.md`, this feature's own passes 1-3,
+`KNOWN_LIMITATIONS.md`'s two FORM-10-related entries) before reading any
+code. `endpoints/forms.py` (784 L), `public/forms.py` (236 L),
+`models/forms.py` (347 L) and `schemas/forms.py` (424 L) are all unchanged
+since pass 3 (line counts match exactly, and `git log` on each turns up no
+commit that actually diffs the file). `forms_service.py` grew
+2,628 → 2,985 L across nine commits between pass 3 and this pass — an
+unrelated hardening pass ("Close three gaps in the public outreach request
+pipeline" through "Store an aware datetime as UTC...") that gave
+`_process_event_request` its own `event_request_service.py` module of
+shared helpers. Re-verified FORM-1 through FORM-10 and BXC-1 against
+current code — all hold, nothing regressed, including FORM-10's locking
+duplicate-check read and the (separately, deliberately unfixed)
+authenticated `submit_form` path's lack of an `allow_multiple_submissions`
+check. All 22 `endpoints/forms.py` routes + both `public/forms.py` routes
+re-enumerated; auth/permission posture unchanged from every prior pass.
+
+One new finding, fixed: **FORM-11 (MEDIUM)** — the growth above introduced
+a leak the first three passes' review couldn't have caught, since the code
+didn't exist yet. `_process_event_request`'s result dict carried
+`EventRequest.status_token` verbatim. That token is a bearer credential:
+alone, it grants view **and self-service cancel** at the fully
+unauthenticated `/event-requests/status/{token}` endpoints — no
+organization check, no permission, just possession of the string.
+`KNOWN_LIMITATIONS.md` already documents this as deliberate: the token is
+meant to reach a requester only through a coordinator's "Copy status link"
+control, gated by `events.manage`. But the result dict this method returns
+is what `_process_integrations` persists to
+`submission.integration_result`, the same JSON column FORM-9 (pass 2)
+already established `FormSubmissionResponse` serializes back to the
+client — on **four** endpoints here, three (`get_submission`,
+`list_submissions`, `reprocess_submission_integrations`) gated only by
+`forms.manage` and one (`submit_form`) needing no elevated permission at
+all. None of the four requires `events.manage`. A department that grants
+`forms.manage` to someone without `events.manage` — a records clerk, not
+an events coordinator — could read any event request's `status_token` out
+of its form submission and use it to view or cancel that request, a
+capability the permission model reserves for `events.manage`. Fixed by
+dropping the key from the returned dict (nothing else reads it from
+there — the coordinator and the requester both still get it through their
+existing, documented paths). Guard test added and verified
+fail-before/pass-after.
+
+One additional finding, flagged rather than fixed: **FORM-12 (LOW/INFO)**
+— `get_submission`, `delete_submission` and
+`reprocess_submission_integrations` accept `form_id` in the URL but the
+service methods behind them never filter on it, only `organization_id`.
+Not a security boundary — `forms.manage` is an org-wide permission, so a
+mismatched `form_id` reaches a row the same permission already exposes via
+`list_submissions` — so this is a URL-correctness nit, not mirrored to
+`KNOWN_LIMITATIONS.md`.
+
+Full completion gate green: flake8/black/isort clean (isort 9.0.1,
+matching CI's pin); `validate_migrations.py --strict` passed (443
+revisions, single head, no new migration this pass); 482/482 scoped and
+12,448/12,448 full backend suite pass (21 skipped, all environment-only —
+`pywebpush`/`py_vapid`, Docker daemon/registry, the opt-in API-contract
+flag); frontend `tsc --noEmit` 0 errors and `eslint --max-warnings 10` exit
+0 with no warnings (no frontend file touched — the finding and fix are
+backend-only; the forms frontend surface was re-checked via `git log`
+since pass 3 and confirmed to have only an unrelated contrast/accessibility
+commit, plus a fresh grep confirming `dangerouslySetInnerHTML` still
+appears nowhere under the forms components, re-confirming FORM-4). Findings
+doc: `docs/security-review/FORM-26-forms.md` (Pass 4). Rotation row 26 ->
+✅. Next: Feature 27 (Integrations).
+
+### 2026-09-13 — Feature 27 (Integrations, pass 4)
+
+Fourth-lap pass. No security-review PR was open at the start (row 26 had
+already closed via merged PR #2506/#2507); branched directly off a fresh
+`git fetch origin main`.
+
+Loaded prior art in order (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/integrations.md`, `docs/app-review/integrations.md`, this
+feature's own passes 1-3 in `INT-27-integrations.md`,
+`KNOWN_LIMITATIONS.md`'s integrations-related entries) before reading any
+code. Read every backend file this feature owns in full — all close to pass
+3's documented sizes (`integrations.py` 841→849 L, confirmed by direct read
+to be content-identical modulo this environment's squashed git history, not a
+real diff) — plus, for the first time in this file's history, the frontend
+module (`IntegrationsPage.tsx`, `useConnectedIntegrations.ts`,
+`McpServiceKeyPanel.tsx`), which prior passes explicitly scoped out as
+"backend only." Also enumerated `mcp_keys.py`'s 4 routes (mounted at
+`/integrations/claude-mcp` behind the same `module_gate` as the rest of this
+feature) at the route/permission/org-scoping level for the first time,
+without pulling the wider `app/mcp/*` package into scope (unchanged
+precedent from pass 3). 25 routes total re-enumerated across 6 files, all
+correctly gated; no route relies on `require_permission` alone to scope its
+object.
+
+Re-verified INT-1 through INT-9 against current code — all hold, nothing
+regressed: send-time SSRF re-validation on every chat/Cal.com sender, the
+`integrations.manage`/`/connected` read-gating split, the `exclude_unset`
+partial-PATCH merge, the uninvoked webhook-domain allowlist (still an owner
+decision), connector-exception sanitization, the response-size cap and its
+`http1`/`http2`/`cert` kwarg forwarding, and Google Calendar's still-open,
+still correctly-scoped bypass of the shared HTTP hardening (INT-9).
+
+One new fix: **INT-10 (MED)** — `documenso_service.py`, this feature's own
+file, was the one `create_integration_client`-family connector with **no**
+`assert_outbound_url_safe` call anywhere in it (a gap `KNOWN_LIMITATIONS.md`
+already tracked, found by an out-of-scope training-extended pass) — added
+the missing send-time re-validation to `test_connection()` and
+`create_document()`, mirroring `calcom_service.py`'s identical shape. 2 guard
+tests added (`test_connection_blocks_unsafe_base_url`,
+`test_create_document_blocks_unsafe_base_url`), both verified via `git
+stash` to fail against the pre-fix file (`AttributeError` — the name did not
+exist to patch) and pass after. `KNOWN_LIMITATIONS.md`'s "Outbound
+Integration Requests" entry updated: `documenso_service.py` is no longer the
+worse case among its six-file family, only the same narrowed-not-closed
+TOCTOU every sibling still carries (that larger fix remains open, tracked,
+out of this pass's scope).
+
+One new finding, flagged: **INT-11 (LOW-MED)** — the first-ever frontend
+read in this file's history found that Salesforce's backend-documented
+"blank the refresh token to switch to client credentials" feature
+(`integrations.py`'s `clear_salesforce_refresh_token` handling) has no
+reachable UI control: `IntegrationsPage.tsx` sends `undefined` (dropped from
+the JSON payload) rather than an explicit `""` when the field is blank, so
+an admin who clears the field and saves changes nothing, with no error and
+no visible confirmation either way. Not attacker-reachable — requires
+`integrations.manage` and the admin's own mistaken belief — so flagged
+rather than fixed, since closing it means choosing between two UI shapes
+(a distinct "switch mode" control, or changing blank-submission semantics
+for this field only, which risks the opposite defect on every other secret
+field this form shares that convention with). Mirrored into
+`KNOWN_LIMITATIONS.md`.
+
+Checked and confirmed no new finding: abuse resistance on the four
+Salesforce sync-trigger endpoints (no rate limit, but admin-triggered,
+org-bounded, not cross-tenant — consistent with three prior passes not
+flagging this); `mcp_keys.py`'s `DELETE /keys/{key_id}` resolves via
+`get_key(org_id, key_id)`, properly org-scoped; unmodelled catalog entries
+with no `INTEGRATION_CONFIG_SCHEMAS` row (data-quality nit, no security
+surface); JSON-column mutation safety (every write in this feature is a
+flat top-level merge, Pitfall #12 n/a); zero LIKE-pattern usage anywhere in
+this feature (Pitfall #25 n/a).
+
+Full completion gate green: flake8/black/isort clean (isort 9.0.1, matching
+CI's pin); `validate_migrations.py --strict` passed (443 revisions, single
+head, no new migration this pass); 2690/2690 scoped and 12450/12450 full
+backend suite pass (21 skipped, all environment-only); frontend `tsc
+--noEmit` 0 errors and `eslint --max-warnings 10` exit 0 with no warnings
+(frontend was read but not edited this pass — the one frontend-observable
+finding, INT-11, is flagged rather than fixed). Findings doc:
+`docs/security-review/INT-27-integrations.md` (Pass 4). Rotation row 27 ->
+✅. Next: Feature 28 (Security, audit & IP).

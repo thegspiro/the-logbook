@@ -1463,6 +1463,62 @@ class TestCreateFromMeeting:
         assert created.attendees[0]["present"] is True
 
     @pytest.mark.unit
+    async def test_create_from_meeting_scopes_attendee_name_lookup_to_org(
+        self, service, mock_db, org_id, user_id
+    ):
+        """MM-16: att.user_id comes off an already org-scoped MeetingAttendee
+        row today (every write path onto it validates membership first), but
+        the name lookup must not rely on that being the only guard — a
+        future write path that skipped it would otherwise leak a cross-org
+        member's name into the copied minutes (pitfall 14a), same shape as
+        MM-14's waiver/grantor lookups."""
+        meeting_id = uuid4()
+
+        mock_attendee = MagicMock()
+        mock_attendee.user_id = str(uuid4())
+        mock_attendee.present = True
+        mock_attendee.excused = False
+
+        mock_meeting = MagicMock()
+        mock_meeting.id = str(meeting_id)
+        mock_meeting.organization_id = str(org_id)
+        mock_meeting.title = "Meeting with Attendees"
+        mock_meeting.meeting_type = "business"
+        mock_meeting.meeting_date = datetime(2026, 3, 10).date()
+        mock_meeting.start_time = datetime(2026, 3, 10, 19, 0).time()
+        mock_meeting.location = "Station 1"
+        mock_meeting.called_by = None
+        mock_meeting.agenda = None
+        mock_meeting.event_id = None
+        mock_meeting.attendees = [mock_attendee]
+
+        meeting_result = MagicMock()
+        meeting_result.scalar_one_or_none.return_value = mock_meeting
+
+        captured_where = []
+        user_result = MagicMock()
+        user_result.scalar_one_or_none.return_value = None
+
+        async def _execute(stmt):
+            captured_where.append(
+                str(stmt.whereclause.compile(compile_kwargs={"literal_binds": True}))
+            )
+            return meeting_result if len(captured_where) == 1 else user_result
+
+        mock_db.execute = AsyncMock(side_effect=_execute)
+
+        with patch(
+            "app.services.minute_service.generate_uuid", return_value="gen-uuid"
+        ):
+            await service.create_from_meeting(meeting_id, org_id, user_id)
+
+        # captured_where[0] is the Meeting fetch (already asserted org-scoped
+        # elsewhere); captured_where[1] is the attendee name lookup this
+        # finding is about.
+        assert len(captured_where) == 2
+        assert "organization_id" in captured_where[1]
+
+    @pytest.mark.unit
     async def test_create_from_meeting_special_type(
         self, service, mock_db, org_id, user_id
     ):

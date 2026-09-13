@@ -263,7 +263,7 @@ Tier **ids** are not editable, for the reason rank codes are not: `id` is what
 not recognise — so a renamed id drops those members out of the operational body
 and the electorate at once.
 
-## ONBOARD-7 — Concurrent First-Run Requests Brick Setup With a 500 (2026-09-12)
+## ONBOARD-7 — Concurrent First-Run Requests Brick Setup With a 500 (resolved 2026-09-12)
 
 **Found while capturing the setup-wizard screenshots, reproduced twice on a
 freshly-migrated database.** Not a theoretical race: it fired on an ordinary
@@ -302,16 +302,36 @@ the worst time to need it: the System Owner does not exist yet, so there is no
 account to sign in as, and `/onboarding/reset` authenticates against the same
 broken state.
 
-**Not fixed here.** This was found during a screenshot-capture change set and a
-fix belongs in its own: it wants a uniqueness guarantee on the table plus a
-lock around the get-or-create (CLAUDE.md pitfall #27 is this exact shape), and
-`needs_onboarding()` should tolerate duplicates rather than 500 on them. Both
-touch first-run and authentication paths.
+## Resolved (2026-09-12)
 
-**Working around it meanwhile:** issue one `POST /onboarding/start` serially
-before opening a browser. A pre-existing row makes every later call take the
-"return existing" branch, so the race cannot fire.
-`scripts/screenshots/wizard-walk.mjs` documents this as a prerequisite.
+Both halves were needed, because they fail independently: the constraint stops
+new duplicates and does nothing for a database that already has them, while the
+tolerant read rescues that database and does nothing to stop the race.
+
+- **`onboarding_status.singleton`, uniquely indexed.** There is nothing to lock
+  instead — the conflicting row does not exist yet, so `FOR UPDATE` has no
+  target. The index decides the race; the loser gets an IntegrityError.
+- **`start_onboarding` adopts the winner's row.** The insert runs inside a
+  SAVEPOINT so a failed flush cannot poison the caller's session, and on
+  conflict the transaction is **rolled back** before re-reading. That rollback
+  is the subtle part: under REPEATABLE READ the loser's snapshot predates the
+  winner's commit, so re-reading inside it finds nothing and would raise on a
+  row that demonstrably exists. Bounded at three attempts.
+- **`needs_onboarding` reads with `.first()`**, so an installation duplicated
+  before the constraint existed answers instead of raising — which is what lets
+  the migration reach it at all.
+- **Migration `6ab7d903fae5`** collapses existing duplicates before adding the
+  index, since it cannot be created over them. The survivor is the completed
+  row if any, else the furthest-progressed, tie-broken oldest — losing recorded
+  progress being the harm worth avoiding.
+
+**Verified against a real database, not just mocks.** Twenty concurrent
+`POST /onboarding/start` against an empty install: **20/20 → 200, one row**,
+and `/onboarding/status` healthy. Before the fix the same run produced
+duplicates and a permanent 500. Two intermediate versions each got 10 and 6 of
+20 wrong and passed the mocked tests throughout — an `expunge()` on an instance
+the SAVEPOINT rollback had already detached, then the REPEATABLE READ snapshot
+above. Neither was visible without a live MySQL.
 
 ## ONBOARD-3 — A Deleted Seed Rank Is Still Accepted on a Write (2026-09-09)
 
@@ -2945,38 +2965,42 @@ already records this pairing as deliberately unadjudicated, for the same
 reason. (Security review EC-14 residual,
 `docs/security-review/EC-14-equipment-check-shifts.md`.)
 
-## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26, count corrected 2026-08-26, `external_training_service.py` and `push_service.py` closed 2026-09-02, `documenso_service.py` added 2026-09-10)
+## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26, count corrected 2026-08-26, `external_training_service.py` and `push_service.py` closed 2026-09-02, `documenso_service.py` added 2026-09-10, `documenso_service.py`'s missing call added 2026-09-13)
 
 `assert_outbound_url_safe()` (`app/utils/url_validator.py`) re-resolves an
 org-configured integration URL's hostname via `socket.getaddrinfo()`
 immediately before an outbound request, to catch a hostname that was
 repointed at an internal address since it was saved. **Seven** call sites
-still share the gap. All seven use `httpx`, via two different
-client-construction paths — the distinction that matters for scoping a fix,
-since a factory-only fix would miss the one that doesn't use the factory:
+still share the gap (the gap being the narrowing-not-closing TOCTOU below —
+not a missing call; see the 2026-09-13 correction two paragraphs down). All
+seven use `httpx`, via two different client-construction paths — the
+distinction that matters for scoping a fix, since a factory-only fix would
+miss the one that doesn't use the factory:
 
 - **Six** go through the shared `create_integration_client()` (plain
   `httpx.AsyncClient`) and share one remediation:
   `integration_services/{teams,webhook,slack,discord,calcom,documenso}_service.py`.
-  `documenso_service.py` is the odd one of the six: `test_connection` and
-  `create_document` call `create_integration_client().get/post` against the
-  admin-configured `api_base_url` with **no** `assert_outbound_url_safe`
-  call anywhere in the file — unlike its closest sibling
-  `calcom_service.py` (same "self-hosted org points this at its own
-  `https://<host>/api/v1`" shape), which does call it before every request.
-  The generic `_validate_urls_in_config`/`validate_integration_url` save-time
-  check in `integrations.py` still applies to `DocumensoConfig.api_base_url`
-  like every other integration's URL fields, so this is not an unvalidated
-  field — but Documenso's window between that save-time check and the
-  request that actually uses the value is the entire gap this note
-  describes, with none of the send-time narrowing its five siblings already
-  have. Caught by a Codex review of `docs/security-review/
-TRX-18-training-extended.md`'s pass 4 (PR #2460), which had claimed this
-  entry needed no correction without checking every site named in it.
+  **`documenso_service.py` was the odd one of the six until 2026-09-13**:
+  `test_connection` and `create_document` called
+  `create_integration_client().get/post` against the admin-configured
+  `api_base_url` with **no** `assert_outbound_url_safe` call anywhere in the
+  file — unlike its closest sibling `calcom_service.py` (same "self-hosted
+  org points this at its own `https://<host>/api/v1`" shape), which calls it
+  before every request. Fixed by security review INT-27 pass 4
+  (`docs/security-review/INT-27-integrations.md`, INT-10): both methods now
+  call a `_assert_base_url_safe()` helper mirroring `calcom_service.py`'s
+  own, closing the "no check at all" gap and bringing this file down to the
+  same narrowed-not-closed posture as its five siblings (see below) — it does
+  **not** close the underlying TOCTOU itself, which is what the rest of this
+  entry still tracks as open across all six.
 - **One** constructs its own `httpx.AsyncClient` directly rather than going
   through `create_integration_client` — a `create_integration_client` fix
   alone would not reach it; it needs either migrating onto the shared
-  client or its own equivalent fix: `audit_ship_service.py`.
+  client or its own equivalent fix: `audit_ship_service.py`. Unlike
+  `documenso_service.py`'s prior gap, this one already calls
+  `assert_outbound_url_safe` before its request — narrowed, not closed, the
+  same as the `create_integration_client` family, just via its own client
+  construction.
 
 **`external_training_service.py` and `push_service.py` are no longer in
 this list.** Both previously shared this same TOCTOU shape and were
@@ -3024,25 +3048,27 @@ independently closed on 2026-09-02, outside any security-review PR:
   correction (added by the same commit) and was not re-run as part of this
   correction since no code changed.
 
-In six of the remaining seven (every site except `documenso_service.py`),
-the actual request performs its **own** independent DNS resolution when it
-connects, separate from the `assert_outbound_url_safe` check the site does
-call. A hostname that resolves to a public IP for the check and an
-internal one moments later (classic DNS rebinding) passes the check and
-still reaches the internal address. The function's own docstring says it
-"shrink[s] the rebinding window... versus save-time-to-send" — narrows,
-not closes — which is accurate for those six. `documenso_service.py` is
-worse, not narrowed: it never calls `assert_outbound_url_safe` at all, so
-its only protection is the generic save-time config check, with the full
-save-to-send window open behind it. A security review draft that read this
-as "closed," and then first wrote it up as six files sharing one fix, was
-corrected twice (SCH-10, then a Codex review of that correction itself),
-the count was corrected again when the training-extended pass found the
-eighth site, corrected twice more when that eighth site and
-`push_service.py` were independently closed, and corrected once more (six
-to seven) when a later training-extended pass found `documenso_service.py`
-had been missed from the `create_integration_client` family's list the
-whole time.
+**As of 2026-09-13, all seven remaining sites share the identical shape** —
+every one calls `assert_outbound_url_safe` before its request, and every one
+still has the actual request perform its **own** independent DNS resolution
+when it connects, separate from that check. A hostname that resolves to a
+public IP for the check and an internal one moments later (classic DNS
+rebinding) passes the check and still reaches the internal address. The
+function's own docstring says it "shrink[s] the rebinding window... versus
+save-time-to-send" — narrows, not closes — which is now accurate for all
+seven uniformly. (Before 2026-09-13, `documenso_service.py` was a worse case
+than the other six — it never called `assert_outbound_url_safe` at all, so
+its only protection was the generic save-time config check, with the full
+save-to-send window open behind it; INT-27 pass 4 closed that specific gap,
+see above.) A security review draft that read this as "closed," and then
+first wrote it up as six files sharing one fix, was corrected twice (SCH-10,
+then a Codex review of that correction itself), the count was corrected
+again when the training-extended pass found the eighth site, corrected twice
+more when that eighth site and `push_service.py` were independently closed,
+corrected once more (six to seven) when a later training-extended pass found
+`documenso_service.py` had been missed from the `create_integration_client`
+family's list the whole time, and `documenso_service.py`'s own gap (not the
+count) was closed by INT-27 pass 4.
 
 Not fixed: closing the remaining seven means pinning the address
 `assert_outbound_url_safe` resolved for the actual connection (while
@@ -3052,14 +3078,12 @@ to any single file, but narrower than before now that the two sites
 outside this `httpx` family (`external_training_service.py`'s own client,
 and `push_service.py`'s non-`httpx` `pywebpush` transport) are closed.
 `external_training_service.py`'s fix (above) is the reference shape for
-the six remaining `create_integration_client`-family `httpx` sites (and,
-for `documenso_service.py` specifically, adding the missing
-`assert_outbound_url_safe` call is the first step before that shape
-applies at all); `push_service.py`'s is the reference shape should a
-future non-`httpx` transport need the same treatment. Needs a dedicated
-cross-cutting pass (the shape SEC-00 exists for) that accounts for both
-`httpx` client-construction paths, not a unilateral fix inside a
-feature-scoped review.
+the six remaining `create_integration_client`-family `httpx` sites (all six
+now uniformly narrowed-not-closed, `documenso_service.py` included);
+`push_service.py`'s is the reference shape should a future non-`httpx`
+transport need the same treatment. Needs a dedicated cross-cutting pass (the
+shape SEC-00 exists for) that accounts for both `httpx` client-construction
+paths, not a unilateral fix inside a feature-scoped review.
 (Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`;
 count corrected by the training-extended pass,
 `docs/security-review/TRX-18-training-extended.md`;
@@ -3067,7 +3091,8 @@ count corrected by the training-extended pass,
 both re-verified in the training-extended pass 3 re-review, the latter
 following a Codex finding on that pass's own PR; `documenso_service.py`
 added to the list following a Codex finding on the training-extended pass
-4 PR, #2460.)
+4 PR, #2460; `documenso_service.py`'s missing call closed by security review
+INT-27 pass 4, `docs/security-review/INT-27-integrations.md`.)
 
 ## Outbound Integration Requests — No Wall-Clock Deadline (INT-7 follow-up, 2026-09-06)
 
@@ -3177,6 +3202,41 @@ API calls here run synchronously inside an `async def` method with no
 entry does not attempt to resolve).
 
 (Security review INT-27, follow-up round 5, 2026-09-06:
+`docs/security-review/INT-27-integrations.md`.)
+
+## Salesforce Integration — Clearing the Refresh Token Has No Reachable UI Control (INT-11, 2026-09-13)
+
+`connect_integration`/`update_integration`
+(`backend/app/api/v1/endpoints/integrations.py`) special-case an explicit
+`config["refresh_token"] == ""` on a Salesforce integration: it clears the
+stored `refresh_token` and `access_token`, switching the integration from its
+interactive OAuth grant to Salesforce's client-credentials flow on the next
+sync — the documented way for a department to move off a colleague's
+personal OAuth connection onto the Connected App's own service credentials.
+
+The frontend has no way to trigger it. `IntegrationsPage.tsx` builds the
+Salesforce config as `refresh_token: sfRefreshToken || undefined` — a blank
+field becomes `undefined`, which is dropped from the JSON payload entirely
+rather than sent as `""`. The backend's merge
+(`{**stored, **public_config}`) then leaves the old `refresh_token`
+untouched: an administrator who clears the field and saves, believing they
+have switched auth modes, sees no error and no confirmation either way — the
+org keeps authenticating as whoever the old refresh token belonged to.
+
+**Not fixed — needs a product decision on the shape.** Two options, and this
+review would not choose between them unilaterally: (1) a distinct "Switch to
+Client Credentials" control that sends the explicit `""` the backend already
+knows how to handle, or (2) changing the field's blank-submission semantics
+to always mean "clear" — which would need its own pass across every other
+field this same form treats as "blank = leave unchanged" (client secret,
+webhook secrets, API tokens across Documenso/Cal.com/PayPal), since widening
+one field's semantics without checking the others risks the opposite defect
+(a blank field silently wiping a working secret). No cross-tenant or
+credential-exposure angle — this is a credential-lifecycle correctness gap
+reachable only by an org's own `integrations.manage` holder acting on their
+own organization's integration.
+
+(Security review INT-27 pass 4, 2026-09-13:
 `docs/security-review/INT-27-integrations.md`.)
 
 ## Training — Bulk/Historical-Import Enum Fields Have No Request-Level Validators (2026-08-26)
@@ -3745,6 +3805,37 @@ route above should also close this path — most likely by having
 `update_meeting` reject a client-supplied `status` transition into
 `APPROVED` and requiring the dedicated route (or its replacement) for that
 transition specifically.
+
+## MM-17 — `set_meeting_quorum_config` Has No Finalization Guard on Approved Minutes (2026-09-13)
+
+Every other mutating route against a `MeetingMinutes` record —
+`update_minutes`, `add_motion`/`update_motion`/`delete_motion`,
+`add_action_item`/`delete_action_item` — rejects the call once the record's
+status is `APPROVED` (draft or rejected only). `PATCH
+/minutes/{id}/quorum-config` (`set_meeting_quorum_config` in
+`app/api/v1/endpoints/minutes.py`) has no such guard: a `minutes.manage`
+holder can overwrite `quorum_type`/`quorum_threshold` and immediately trigger
+a recalculation of `quorum_met`/`quorum_count` on a minutes record that has
+already been ratified, changing whether the historical record says quorum
+was met for a vote the organization has already treated as final.
+
+Closing this needs a product decision, not a mechanical patch: adding the
+same `if minutes.status == MinutesStatus.APPROVED.value: raise ValueError(...)`
+guard the four sibling endpoints already use would newly forbid an action the
+API has always allowed, and it is plausible a secretary legitimately needs to
+correct a quorum misconfiguration discovered after approval — the four
+guarded endpoints are all content edits a correction workflow wouldn't need,
+while this one is closer to record metadata. The options are (a) add the
+finalization guard to match every sibling mutation and require a distinct
+"reopen" or "amend" path for a genuine post-approval correction, or (b)
+leave this endpoint deliberately exempt from the finalization convention and
+document why. Neither was chosen here.
+
+First surfaced as an unfiled observation in
+`docs/security-review/MM-24-meetings-minutes.md` (feature 24, pass 3,
+"Looked suspicious, not fixed"); promoted to a tracked finding with an id and
+disposition in pass 4, when a related fix (MM-15) touched the same
+validation block.
 
 ## MSG-12 — A Failed or Throttled Department-Message Delivery Is Never Retried (2026-08-31, stranded-pending sub-case fixed 2026-09-06)
 

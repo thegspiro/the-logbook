@@ -12,7 +12,7 @@ from uuid import UUID
 
 from loguru import logger
 from sqlalchemy import delete, func, or_, select
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event
@@ -229,6 +229,12 @@ class OnboardingService:
         },
     ]
 
+    # How many times `start_onboarding` re-reads after losing the insert race.
+    # Each loss costs one rollback and one re-read; three is far past what a
+    # genuine race needs and still bounded, so a pathological loop cannot hang
+    # the request.
+    _START_RACE_ATTEMPTS = 3
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -240,20 +246,39 @@ class OnboardingService:
             True if onboarding is needed, False if already completed
         """
         try:
+            # `.first()`, not `scalar_one_or_none()`, on both of these.
+            #
+            # The table is a singleton and is now constrained to be one (see
+            # ONBOARD-7), but this read has to survive a database that is
+            # ALREADY duplicated -- one written before that constraint existed.
+            # `scalar_one_or_none()` raised MultipleResultsFound there, which
+            # turned two harmless rows into a permanent 500 on
+            # GET /onboarding/status and left setup with no way forward.
+            #
+            # Either row answers the only question being asked ("is there a
+            # completed one? an in-progress one?"), so taking the first is
+            # correct rather than merely tolerant, and it is what lets the
+            # de-duplicating migration reach an installation that is already
+            # stuck.
+
             # First, check if onboarding is explicitly marked as completed
             result = await self.db.execute(
-                select(OnboardingStatus).where(OnboardingStatus.is_completed.is_(True))
+                select(OnboardingStatus)
+                .where(OnboardingStatus.is_completed.is_(True))
+                .limit(1)
             )
-            completed = result.scalar_one_or_none()
+            completed = result.scalars().first()
 
             if completed:
                 return False
 
             # Check if there's an onboarding in progress (not completed)
             result = await self.db.execute(
-                select(OnboardingStatus).where(OnboardingStatus.is_completed.is_(False))
+                select(OnboardingStatus)
+                .where(OnboardingStatus.is_completed.is_(False))
+                .limit(1)
             )
-            in_progress = result.scalar_one_or_none()
+            in_progress = result.scalars().first()
 
             if in_progress:
                 # Onboarding is in progress, needs to continue
@@ -303,6 +328,13 @@ class OnboardingService:
         """
         Start the onboarding process
 
+        Get-or-create, and the "or create" is contended. Two concurrent callers
+        both read "none exists" and both insert; the wizard's own page load
+        issues them in parallel, so an ordinary first run reaches it. There is
+        nothing to lock instead -- the conflicting row does not exist yet, so
+        `FOR UPDATE` has no target (CLAUDE.md pitfall #27). The unique index on
+        `singleton` decides the race, and the loser adopts the winner's row.
+
         Args:
             ip_address: IP address of user starting onboarding
             user_agent: User agent string
@@ -310,26 +342,58 @@ class OnboardingService:
         Returns:
             OnboardingStatus object
         """
-        # Check if already exists
-        existing = await self.get_onboarding_status()
-        if existing and not existing.is_completed:
-            return existing
+        last_error: Optional[IntegrityError] = None
 
-        # Create new onboarding status
-        status = OnboardingStatus(
-            current_step=1,
-            steps_completed={},
-            setup_ip_address=ip_address,
-            setup_user_agent=user_agent,
-        )
+        for _ in range(self._START_RACE_ATTEMPTS):
+            existing = await self.get_onboarding_status()
+            if existing and not existing.is_completed:
+                return existing
 
-        self.db.add(status)
-        await self.db.flush()
-        await self.db.refresh(
-            status, attribute_names=["created_at", "updated_at", "setup_started_at"]
-        )
+            status = OnboardingStatus(
+                current_step=1,
+                steps_completed={},
+                setup_ip_address=ip_address,
+                setup_user_agent=user_agent,
+            )
 
-        return status
+            try:
+                # Inside a SAVEPOINT: a failed flush otherwise poisons the whole
+                # session and takes the caller's transaction down with it. The
+                # nested block rolls back just this statement.
+                async with self.db.begin_nested():
+                    self.db.add(status)
+                    await self.db.flush()
+            except IntegrityError as exc:
+                last_error = exc
+                # Roll back the TRANSACTION, not just the SAVEPOINT, and this is
+                # the part that is easy to get wrong: under InnoDB's default
+                # REPEATABLE READ this session's snapshot was taken at its first
+                # read -- before the winner committed -- so re-reading inside it
+                # finds nothing and we would raise on a row that demonstrably
+                # exists. Only a new transaction sees the winner.
+                #
+                # Nothing is lost by doing so. Every caller reaches here having
+                # only read (the completion check and the owner check), so there
+                # is no work in this transaction to discard.
+                await self.db.rollback()
+                continue
+
+            await self.db.refresh(
+                status,
+                attribute_names=["created_at", "updated_at", "setup_started_at"],
+            )
+            return status
+
+        # Losing every attempt is no longer a race worth retrying. Prefer the
+        # row that beat us over an error, and only raise if there genuinely is
+        # none -- a concurrent /reset truncates the table, and then there is no
+        # winner to defer to and no duplicate being avoided.
+        winner = await self.get_onboarding_status()
+        if winner is not None:
+            return winner
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Unable to start onboarding")
 
     async def verify_security_configuration(self) -> Dict[str, Any]:
         """
@@ -1536,7 +1600,14 @@ class OnboardingService:
         await self.db.flush()
 
     async def _mark_legacy_completed(self):
-        """Mark onboarding as completed for existing installations"""
+        """Mark onboarding as completed for existing installations.
+
+        Races the same way `start_onboarding` does, and from a hotter path:
+        this is reached from `needs_onboarding`, which every first page load
+        calls. Two concurrent callers on a legacy installation both see no row
+        and both insert. Losing that race is harmless -- the winner wrote the
+        same "legacy, completed" fact -- so the loser simply stands down.
+        """
         status = OnboardingStatus(
             is_completed=True,
             completed_at=datetime.now(UTC),
@@ -1544,8 +1615,14 @@ class OnboardingService:
             steps_completed={"legacy": True},
             setup_notes="Auto-completed for existing installation",
         )
-        self.db.add(status)
-        await self.db.flush()
+        try:
+            async with self.db.begin_nested():
+                self.db.add(status)
+                await self.db.flush()
+        except IntegrityError:
+            # Same reason as start_onboarding: the SAVEPOINT rollback has
+            # already detached `status`, and the winner wrote the same fact.
+            pass
 
     async def _seed_default_data(self):
         """Seed default admin hours categories and event mappings.

@@ -1,6 +1,6 @@
 # Security Review — Meetings & Minutes
 
-**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), pass 3 PR TBD
+**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), #2303 (pass 3), [#2502](https://github.com/thegspiro/the-logbook/pull/2502) (pass 4)
 
 ## Pass 1 (2026-08-26)
 
@@ -641,3 +641,310 @@ test_list_waivers_scopes_member_and_grantor_lookup_to_org` (MM-14, above).
 | `npx tsc --noEmit` (frontend)                                                      | 0 errors                                                  |
 | `npx eslint .` (frontend)                                                          | 0 errors, 3 pre-existing warnings (none in touched files) |
 | `npx vitest run src/modules/minutes` (frontend)                                    | 23 passed, 3 files                                        |
+
+---
+
+## Pass 4 (2026-09-13)
+
+**Backend:** `app/api/v1/endpoints/meetings.py` (623 L, unchanged since pass 3),
+`app/api/v1/endpoints/minutes.py` (1,123 L before this pass's edits),
+`app/services/meetings_service.py` (642 L, unchanged), `app/services/minute_service.py`
+(991 L before this pass's edits), `app/services/quorum_service.py` (159 L,
+unchanged), `app/services/attendance_dashboard_service.py` (348 L, unchanged) —
+all read fresh, in full. `app/models/meeting.py`/`app/models/minute.py` and
+`app/schemas/meetings.py`/`app/schemas/minute.py` re-read for checklist
+dimension 7 (schema/migration integrity).
+**Frontend:** `frontend/src/modules/minutes/` (grep-verified, not re-read in
+full — see Scope below), `frontend/src/services/meetingsServices.ts`,
+`frontend/src/pages/MinutesPage.tsx`.
+**Migrations:** none — confirmed no new revision under `alembic/versions/`
+touches `meeting_minutes`/`meetings`/`meeting_action_items`/`minutes_templates`
+since pass 3's `20260903_1130_7bfe85f2e4e5` (meeting-action-item provenance).
+
+### Scope
+
+`git log --since=2026-09-06` on every file this feature names turned up only
+merge commits from unrelated branches merging `main` into themselves — no
+substantive change to any of the six backend files since pass 3 merged (line
+counts match pass 3's end-of-pass figures exactly: 623 / 642 / 1,123 / 991 /
+159 / 348). Read all six in full rather than trusting that byte-count match
+alone, since a same-length edit is possible in principle. Re-verified every
+pass 1–3 fix by reading the current code at its cited location (not re-citing
+the doc): MM-1 through MM-8, MM-10, MM-11, MM-14 all confirmed present and
+unchanged (see "Confirmed still-intact" below for specifics).
+
+Frontend: `git log` confirmed `frontend/src/modules/minutes/` and
+`frontend/src/services/meetingsServices.ts` also unchanged since pass 3 (the
+latter's git-blame boundary commit is a shallow-clone artifact, not evidence
+of a 2026-09-08 edit — re-confirmed by grepping for actual usage, see MM-9
+re-verification below). Given no diff exists to review, this pass did not
+re-read the frontend module in full a second time; it re-ran the specific
+greps pass 2/3 used to confirm the MM-11 fix, the dialog ban, and the
+`approveMeeting()`/`meetingsService` call-site question are all still true,
+rather than re-deriving them from a fresh full read. This is a narrower
+frontend scope than pass 3's — noted rather than silently matched.
+
+New this pass: two findings from a fresh, full read of `quorum_service.py`'s
+consumer in `minutes.py` (`set_meeting_quorum_config`, MM-15) and
+`minute_service.py`'s `create_from_meeting` (MM-16), both confirmed
+exploitable/verified against actual code paths rather than left as
+"unconfirmed" the way pass 3's note on the same endpoint did.
+
+### Route inventory
+
+All 42 routes re-enumerated by reading both files top to bottom (not diffed
+against pass 3's count). Every one still carries `require_permission(...)`; no
+bare `get_current_user`, no `.view` permission gating a mutation.
+
+| File        | Route                             | Permission                        | Org-scoped                                                             | Notes                                                         |
+| ----------- | --------------------------------- | --------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- |
+| meetings.py | `GET /`                           | `meetings.view` OR `minutes.view` | service query filters org                                              |                                                               |
+| meetings.py | `POST /`                          | `meetings.manage`                 | org-stamped on create                                                  | attendee/action-item FKs validated (MM-4)                     |
+| meetings.py | `GET /{id}`                       | `meetings.view` OR `minutes.view` | `get_meeting_by_id(id, org)`                                           |                                                               |
+| meetings.py | `PATCH /{id}`                     | `meetings.manage`                 | `get_meeting_by_id(id, org)`                                           | `status` can reach `approved` — MM-9                          |
+| meetings.py | `DELETE /{id}`                    | `meetings.manage`                 | `get_meeting_by_id(id, org)`                                           |                                                               |
+| meetings.py | `POST /{id}/approve`              | `meetings.manage`                 | `get_meeting_by_id(id, org)`                                           | no state machine / self-check — MM-9                          |
+| meetings.py | `POST /{id}/attendees`            | `meetings.manage`                 | meeting + user both org-checked                                        |                                                               |
+| meetings.py | `DELETE /{id}/attendees/{aid}`    | `meetings.manage`                 | filters `meeting_id` + `organization_id`                               |                                                               |
+| meetings.py | `POST /{id}/action-items`         | `meetings.manage`                 | meeting org-checked; assignee validated (MM-4)                         |                                                               |
+| meetings.py | `PATCH /action-items/{id}`        | `meetings.manage`                 | filters `organization_id`; assignee validated                          |                                                               |
+| meetings.py | `DELETE /action-items/{id}`       | `meetings.manage`                 | filters `organization_id`                                              |                                                               |
+| meetings.py | `GET /action-items/open`          | `meetings.view` OR `minutes.view` | filters `organization_id`                                              | `assigned_to` typed `UUID                                     | None` (MM-7) |
+| meetings.py | `GET /stats/summary`              | `meetings.view` OR `minutes.view` | filters `organization_id`                                              |                                                               |
+| meetings.py | `GET /attendance/dashboard`       | `meetings.manage`                 | filters `organization_id` throughout                                   |                                                               |
+| meetings.py | `POST /{id}/attendance-waiver`    | `meetings.manage`                 | meeting + user both org-checked                                        |                                                               |
+| meetings.py | `GET /{id}/attendance-waivers`    | `meetings.manage`                 | meeting org-checked; member/grantor lookups (MM-14)                    |                                                               |
+| meetings.py | `POST /from-event/{event_id}`     | `meetings.manage`                 | locking reads, both org-filtered (MM-3)                                |                                                               |
+| minutes.py  | `GET /`                           | `minutes.view`                    | filters org + `restricted` gate                                        |                                                               |
+| minutes.py  | `GET /stats`                      | `minutes.view`                    | filters org + `restricted` gate                                        |                                                               |
+| minutes.py  | `GET /search`                     | `minutes.view`                    | filters org + `restricted` gate; LIKE-escaped                          |                                                               |
+| minutes.py  | `GET /templates`                  | `minutes.view`                    | filters `organization_id`                                              |                                                               |
+| minutes.py  | `GET /{id}`                       | `minutes.view`                    | filters org + `restricted` gate (404 not 403)                          |                                                               |
+| minutes.py  | `POST /`                          | `minutes.manage`                  | org-stamped; `event_id`/`assignee_id`/`template_id` validated (MM-1/4) |                                                               |
+| minutes.py  | `PUT /{id}`                       | `minutes.manage`                  | `get_minutes(id, org)`; re-pointed `event_id` validated                | draft/rejected only                                           |
+| minutes.py  | `DELETE /{id}`                    | `minutes.manage`                  | `get_minutes(id, org)`                                                 | draft only                                                    |
+| minutes.py  | `POST /{id}/submit`               | `minutes.manage`                  | `get_minutes(id, org)`                                                 | draft/rejected only                                           |
+| minutes.py  | `POST /{id}/approve`              | `minutes.manage`                  | `get_minutes(id, org)`                                                 | submitted only; separation of duties (MM-5)                   |
+| minutes.py  | `POST /{id}/reject`               | `minutes.manage`                  | `get_minutes(id, org)`                                                 | submitted only                                                |
+| minutes.py  | `POST /{id}/motions`              | `minutes.manage`                  | `get_minutes(id, org)`                                                 | draft/rejected only                                           |
+| minutes.py  | `PUT /{id}/motions/{mid}`         | `minutes.manage`                  | `get_minutes(id, org)` + `minutes_id` filter                           | draft/rejected only                                           |
+| minutes.py  | `DELETE /{id}/motions/{mid}`      | `minutes.manage`                  | `get_minutes(id, org)` + `minutes_id` filter                           | draft/rejected only                                           |
+| minutes.py  | `POST /{id}/action-items`         | `minutes.manage`                  | `get_minutes(id, org)`; assignee validated (MM-4)                      |                                                               |
+| minutes.py  | `PUT /{id}/action-items/{iid}`    | `minutes.manage`                  | `get_minutes(id, org)`; assignee validated                             | approved minutes: status/notes only                           |
+| minutes.py  | `DELETE /{id}/action-items/{iid}` | `minutes.manage`                  | `get_minutes(id, org)`                                                 | draft/rejected only                                           |
+| minutes.py  | `POST /{id}/publish`              | `minutes.manage`                  | `get_minutes(id, org)`                                                 |                                                               |
+| minutes.py  | `GET /templates/{id}`             | `minutes.view`                    | filters `organization_id`                                              |                                                               |
+| minutes.py  | `POST /templates`                 | `minutes.manage`                  | org-stamped                                                            |                                                               |
+| minutes.py  | `PUT /templates/{id}`             | `minutes.manage`                  | filters `organization_id`                                              |                                                               |
+| minutes.py  | `DELETE /templates/{id}`          | `minutes.manage`                  | filters `organization_id`                                              |                                                               |
+| minutes.py  | `GET /{id}/quorum`                | `minutes.manage`                  | `.with_for_update()` locked (MM-4)                                     |                                                               |
+| minutes.py  | `PATCH /{id}/quorum-config`       | `minutes.manage`                  | filters `organization_id`                                              | input validation fixed (MM-15); no finalization guard (MM-17) |
+| minutes.py  | `POST /from-meeting/{meeting_id}` | `minutes.manage`                  | `Meeting` org-checked; attendee-name lookup fixed (MM-16)              |                                                               |
+
+### Confirmed still-intact (re-verified fresh, not trusted from prior docs)
+
+- MM-1/MM-4 (XC-1 FK validation on create/update): `assert_in_org` calls
+  present at every cited call site in both services — `create_meeting`'s
+  attendee/action-item loops, `create_action_item`, `update_action_item` (both
+  services), `create_minutes`'s `event_id`/`assignee_id`, `update_minutes`'s
+  re-pointed `event_id`, `add_action_item`, `update_action_item`
+  (`minute_service.py`).
+- MM-2 (`apply_updates` not blind `setattr`): confirmed in `update_meeting`,
+  `update_action_item` (`meetings_service.py`), `update_minutes`,
+  `update_motion`, `update_action_item` (`minute_service.py`); the two
+  `meetings.py` update endpoints still use `exclude_unset=True`.
+- MM-3 (`create_from_event` TOCTOU): both the `Event` fetch and the `Meeting`
+  existence check still render `.with_for_update()`.
+- MM-4/quorum (`calculate_quorum` race): the `MeetingMinutes` fetch still
+  locks with `.with_for_update().execution_options(populate_existing=True)`.
+- MM-5 (separation of duties on `approve_minutes`): `assert_different_person`
+  call still present and unchanged.
+- MM-6/MM-8 (audit trail): every mutating route in both files still calls
+  `log_audit_event` — re-confirmed by reading each of the 42 routes directly,
+  not by re-citing the prior count.
+- MM-7 (`assigned_to` typed as `UUID | None`): confirmed on
+  `get_open_action_items`.
+- MM-10 (`create_meeting_from_event` error sanitization): still routes through
+  `sanitize_error_message()`, not `safe_error_detail()`.
+- MM-11 (frontend unlink-event no-op): `MinutesDetailPage.tsx`'s
+  `handleUnlinkEvent` still sends `{ event_id: null }` (grep-confirmed, see
+  Scope).
+- MM-14 (cross-org name leak in `list_waivers`): both the member and grantor
+  `User` lookups in `attendance_dashboard_service.py` still filter
+  `organization_id`.
+- LIKE-escaping (Pitfall #25): every `.ilike()` call across both services
+  still passes `escape=LIKE_ESCAPE_CHAR` on a `like_pattern()`-built term —
+  re-swept, no new call site skips it.
+- JSON columns (Pitfall #12): `minute_service.py`'s `attendees`/`sections`/
+  `header_config`/`footer_config` are still always rebuilt from a fresh
+  `model_dump()` and reassigned wholesale, never shallow-copy-then-mutate.
+- Schema/migration integrity (checklist dimension 7): every `ondelete="SET
+NULL"` column on `Meeting`/`MeetingActionItem`/`MeetingMinutes` (`event_id`,
+  `location_id`, `created_by` on `MeetingActionItem`, `template_id`,
+  `event_id`, `meeting_id` on `MeetingMinutes`) still pairs with
+  `nullable=True` — re-checked directly against `app/models/meeting.py` and
+  `app/models/minute.py`, not sampled.
+- Baseline grants: `_LINE_MEMBER_PERMISSIONS` in `app/core/permissions.py`
+  grants the line-member baseline `meetings.view`/`minutes.view` only — no
+  `.manage` grant in the baseline set (Pitfall #23 n/a here).
+
+### MM-9 (re-verified, still OPEN, unchanged) — `approve_meeting`/`update_meeting` have no approval state machine or separation of duties
+
+Re-read `meetings_service.approve_meeting` and `MeetingUpdate`'s `status`
+validator directly: `approve_meeting` still sets `APPROVED` unconditionally
+from any prior status with no `submitted_by` comparison, and
+`MeetingUpdate.status` still validates against the full `MeetingStatus` enum
+(including `"approved"`) with `MeetingsService.update_meeting` applying it via
+`apply_updates` with no transition check — both exactly as pass 3 described.
+Re-confirmed the frontend still has no call site: `meetingsService.
+approveMeeting()` is defined in `frontend/src/services/meetingsServices.ts`
+(and was, per git blame, before this rotation's involvement with this file —
+the shallow clone's blame boundary is not evidence of a recent add) but is not
+invoked from any `.tsx`/`.ts` file (`grep -rn "approveMeeting" src/ | grep -v
+services/meetingsServices.ts` returns nothing). No regression; still needs the
+same product decision pass 2/3 described (give `Meeting` its own
+`submitted_by` + submit step, or accept a lighter single-actor policy for this
+record type). **OPEN — no change.**
+
+### New findings
+
+#### MM-15 — LOW-MED — `set_meeting_quorum_config` accepted non-finite and unbounded `quorum_threshold` values — ✅ FIXED
+
+**What:** `quorum_threshold: float` (a raw query parameter) was validated only
+with `quorum_threshold <= 0`. `inf`, `-inf`, and `nan` all pass that check —
+`float('nan') <= 0` is `False`, the same as every other ordinary comparison
+against NaN — so nothing rejected them before they reached
+`minutes.quorum_threshold = quorum_threshold; await db.commit()`.
+**Where:** `app/api/v1/endpoints/minutes.py:1009-1018` (pre-fix).
+**Failure scenario (verified against the real driver and column, not
+inferred):** a `minutes.manage` holder sends
+`PATCH /minutes/{id}/quorum-config?quorum_type=count&quorum_threshold=inf`.
+Confirmed directly against the actual `Float` column and MySQL driver in a
+throwaway integration test: `db.commit()` raises
+`sqlalchemy.exc.ProgrammingError: (pymysql.err.ProgrammingError) inf can not
+be used with MySQL` — pymysql's own float encoder rejects `inf`/`-inf`/`nan`
+before the value ever reaches the server. That is an unhandled exception (no
+`try`/`except` around the commit in this endpoint), caught only by the app's
+global `Exception` handler (`main.py`'s `unhandled_exception_handler`), which
+sanitizes the response to a generic 500 — no information disclosure, but a
+clean input is turned into a crash instead of a 400. Independently, even if a
+write had succeeded, `QuorumService.calculate_quorum`'s `int(q_threshold)` for
+the `"count"` branch raises `OverflowError: cannot convert float infinity to
+integer` on the next recalculation. A `percentage` threshold above 100 is a
+distinct, non-crashing bug: it can never be satisfied by any attendee count,
+permanently blocking quorum for that meeting with no error explaining why.
+**Impact:** any `minutes.manage` holder (secretary/officer — not a public
+surface) can 500 this endpoint with a single malformed value, and can silently
+misconfigure a meeting into an unreachable quorum with a value that looks
+plausible (e.g. `120`).
+**Fix:** added an explicit `math.isfinite(quorum_threshold)` check (bare
+comparisons cannot catch NaN) ahead of the existing positivity check, and a
+type-specific upper bound — 100 for `percentage` (a percentage above 100 can
+never be met), 100,000 for `count` (comfortably inside MySQL `FLOAT`'s
+representable range, far beyond any real department's membership). This is
+the same class of fix as pass 1's MM-7 (malformed input reaching an unhandled
+exception, turned into a clean 400) — not a new policy, a validation gap on an
+existing, already-declared positivity rule.
+
+#### MM-16 — LOW — `create_from_meeting`'s attendee-name lookup had no org filter — ✅ FIXED
+
+**What:** `MinuteService.create_from_meeting`'s attendee-name-resolution loop
+ran `select(User).where(User.id == att.user_id)` with no `organization_id`
+filter — the one `select(User)` call site across all four files (grepped)
+missing it; `meetings_service.py`, `attendance_dashboard_service.py`, and
+`meetings.py`'s own waiver-granting route all filter it.
+**Where:** `app/services/minute_service.py:938` (pre-fix).
+**Failure scenario:** not exploitable today — `att.user_id` on a
+`Meeting`'s attendee list is always populated by an already org-validated
+write (`add_attendee`'s explicit check, `create_meeting`'s `assert_in_org`
+loop, or `create_from_event`'s RSVP import from an org-scoped `EventRSVP`).
+This is the exact fragile shape pitfall 14a warns about and MM-14 (pass 3)
+fixed on the same file's sibling service: a future write path onto
+`MeetingAttendee.user_id` that skipped that validation would have this lookup
+silently resolve and copy another organization's member's name into the new
+minutes record's `attendees` JSON.
+**Fix:** added `User.organization_id == str(organization_id)` to the lookup,
+matching the convention used at every other `select(User)` call site in this
+feature.
+
+#### MM-17 — LOW-MED — `set_meeting_quorum_config` has no finalization guard on approved minutes — OPEN (flagged, not fixed)
+
+**What:** every other mutating route on a `MeetingMinutes` record
+(`update_minutes`, `add_motion`/`update_motion`/`delete_motion`,
+`add_action_item`/`delete_action_item`) rejects the operation once the record
+is `APPROVED` (draft/rejected only). `set_meeting_quorum_config` has no such
+guard: it can overwrite `quorum_type`/`quorum_threshold` and immediately
+recompute `quorum_met`/`quorum_count` on an already-approved record, changing
+whether the historical record now says quorum was met for a vote that has
+already been ratified.
+**Where:** `app/api/v1/endpoints/minutes.py` (`set_meeting_quorum_config`,
+the block before the org-scoped `MeetingMinutes` fetch).
+**Why flagged, not fixed:** this is the same category as MM-9 — bringing it
+in line with every sibling mutation is an obvious-looking change that is
+still a behavior change with no test today asserting the current (permissive)
+behavior is unwanted. Unlike MM-15 (turning an already-declared "must be
+positive" rule into one that actually catches every non-conforming value —
+not a new rule), blocking this endpoint on `APPROVED` would newly forbid an
+action the API has always allowed, and it's plausible a secretary
+legitimately needs to correct a quorum misconfiguration discovered after
+approval (the four other guarded endpoints are all content edits a correction
+workflow wouldn't need; this one is closer to metadata). First raised as an
+unfiled observation in pass 3 ("Looked suspicious, not fixed"); promoted to a
+tracked finding this pass since MM-15's fix touches the same validation block
+and the gap deserves its own id and disposition rather than staying prose in
+a "looked suspicious" aside.
+**Recommendation:** add the same `if minutes.status == MinutesStatus.APPROVED.value: raise ValueError(...)`
+guard used by the four sibling endpoints, once a product owner confirms
+post-approval quorum correction isn't a supported workflow — or, if it is,
+document that this endpoint is deliberately exempt from the finalization
+convention.
+
+## Schema & migration notes (pass 4)
+
+None — every fix this pass is service/endpoint-layer only, matching pass 1–3.
+
+## Guard tests added (pass 4)
+
+- `backend/tests/test_minutes_quorum_config_validation.py` (new) — calls
+  `set_meeting_quorum_config` directly with a `db` mock that raises if
+  `execute()` is ever called, asserting `inf`/`-inf`/`nan`/zero/negative/
+  over-100-percentage/1e30-count are all rejected with 400 before any query
+  runs, and that `100.0` (percentage) and `10.0` (count) pass validation and
+  proceed to the (mocked) lookup. Verified to fail against the pre-fix
+  endpoint (4 of 9 cases) and pass after.
+- `backend/tests/test_minute_service.py::TestCreateFromMeeting::
+test_create_from_meeting_scopes_attendee_name_lookup_to_org` (new) —
+  captures the compiled `WHERE` clause of the attendee-name lookup and
+  asserts `organization_id` appears in it, matching MM-14's guard-test shape.
+  Verified to fail against the reverted (unfixed) code with the actual
+  captured SQL shown, and pass after.
+
+## Completion gate (pass 4)
+
+| Check                                                                             | Result                                                                                  |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                     | clean (0 violations)                                                                    |
+| `black --check app/ tests/ alembic/`                                              | clean (1,586 files unchanged)                                                           |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                       | clean                                                                                   |
+| `python3 scripts/validate_migrations.py --strict`                                 | PASSED — 443 revisions, single head                                                     |
+| backend tests, scope (`-k "meeting or minute or quorum or attendance_dashboard"`) | 289 passed, 1 skipped (pre-existing, py_vapid)                                          |
+| backend tests, full suite                                                         | 12,447 passed, 21 skipped (env-only: py_vapid, Docker, contract), 0 failed              |
+| `npx tsc --noEmit` (frontend, via `tsc-native.mjs`)                               | 0 errors                                                                                |
+| `npm run lint` (frontend)                                                         | 0 errors, 1,449 pre-existing `@typescript-eslint/no-unsafe-*` warnings — see note below |
+
+**The 1,449 lint warnings are not from this pass's changes** — this diff
+touches no frontend file at all (`git status`: only two backend files, one
+new and one edited backend test file, and this doc). Every warning is
+`@typescript-eslint/no-unsafe-*` with the message "…a type that cannot be
+resolved," spread across dozens of files this feature never touches
+(`themeTokenIntegrity.test.ts` and others). This is the exact symptom
+`docs/KNOWN_LIMITATIONS.md`'s "Frontend — `typescript`'s declared version has
+drifted…" entry already documents from an unrelated pass (EV-16, pass 4):
+type-aware lint failing to resolve types under this sandbox's `node_modules`
+state and emitting a large, spurious warning count instead of real findings —
+already escalated there as needing an owner decision on the `typescript`
+version pin, not a mechanical fix inside a single feature's PR. Re-confirmed
+this is a local/sandbox artifact, not a real regression: 0 errors, and
+`npx tsc --noEmit` (the actual build compiler) is clean. Not re-escalated as
+a new KNOWN_LIMITATIONS entry since the existing one already covers it; noted
+here only so this pass's gate table doesn't read as unexplained.
