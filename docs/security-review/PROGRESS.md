@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2503](https://github.com/thegspiro/the-logbook/pull/2503)
+(docs-only, recording PR #2502's merge and marking row 25 in progress) and
+PR [#2504](https://github.com/thegspiro/the-logbook/pull/2504) (Feature 25,
+Messaging & notifications, pass 4) both merged clean, in that order — merge
+commits `891bdb094e` and `0ad5d5bb0a`. Since #2504's branch was built
+directly on top of #2503's tip commit (both landed in the same working
+tree), #2503 merging first left #2504 a linear fast-forward with no actual
+conflict; its `mergeable_state` resolved to `clean` on its own once GitHub
+recomputed it against the new `main`, and both merged with all CI green
+(17/17 on #2504) and no open review threads (Codex had hit its usage-limit
+cap on both, posting no findings). Rotation row 25 is now `✅`. Next:
+Feature 26 (Forms).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 4, PR #2504, before it merged), preserved for history</summary>
+
 **PR [#2504](https://github.com/thegspiro/the-logbook/pull/2504)** (Feature
 25, Messaging & notifications, pass 4) — branch
 `claude/security-review-messaging-notifications`. A separate, docs-only PR
@@ -54,6 +70,8 @@ frontend `tsc --noEmit` 0 errors; `npm run lint` exit 0, no output (no
 frontend file touched by this pass's fix). Full write-up:
 `docs/security-review/MSG-25-messaging-notifications.md` → Pass 4. Rotation
 row 25 -> ✅. Next feature (26, Forms) does not start until this PR merges.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 4, PR #2502, after it merged), preserved for history</summary>
