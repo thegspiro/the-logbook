@@ -2839,10 +2839,22 @@ class FormsService:
                     )
                 )
 
+            # `status_token` is deliberately excluded: this dict is persisted to
+            # submission.integration_result, which FormSubmissionResponse
+            # serializes back to every forms.manage admin (get_submission,
+            # list_submissions, reprocess_submission_integrations) and to the
+            # authenticated submit_form caller — a broader audience than
+            # events.manage, which is the permission that actually gates the
+            # event-request admin surface. The token is a bearer credential:
+            # KNOWN_LIMITATIONS.md documents that it is meant to reach a
+            # requester only via a coordinator's "Copy status link" control in
+            # Events -> Requests (events.manage), never auto-emailed or
+            # surfaced elsewhere. Leaking it here would let any forms.manage
+            # holder view and self-service-cancel an event request without
+            # holding events.manage.
             return {
                 "success": True,
                 "event_request_id": event_request.id,
-                "status_token": event_request.status_token,
                 "message": "Event request created for coordinator review",
             }
         except Exception as e:

@@ -1,6 +1,228 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+
+---
+
+## Pass 4 (2026-09-13) — the event-request integration leaked a bearer capability token past the permission that guards it
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes
+1-3, `KNOWN_LIMITATIONS.md`'s two FORM-10-related entries) before touching
+code. Unlike pass 3, this module has grown substantially since the last
+pass: `forms_service.py` 2,628 → 2,985 L before this pass's fix (+357;
+pass 3 through pass 4 span nine commits, 2026-09-09 through 2026-09-10,
+titled "Close three gaps in the public outreach request pipeline" through
+"Store an aware datetime as UTC..." — a multi-round Codex-reviewed hardening
+of the shared JSON-endpoint/form intake parity for event requests). `forms.py`
+(784 L), `public/forms.py` (236 L), `models/forms.py` (347 L) and
+`schemas/forms.py` (424 L) all match pass 3's recorded line counts exactly,
+and `git log --since=2026-09-06` on each turns up no commit that actually
+diffs the file (the one merge commit it names touches unrelated modules) —
+confirming no change since pass 3, not merely a coincidental line-count
+match. All five files were read in full this pass regardless. The
+growth is concentrated entirely in `_process_event_request` and the new
+`app/services/event_request_service.py` module it now imports eight helpers
+from (`clamp_text_fields`, `get_pipeline_settings`, `lead_time_error`,
+`normalize_request_preferences`, `parse_audience_size`, `public_daily_limit`,
+`apply_default_assignee`, `send_request_notification`) — that shared service
+has its own extensive dedicated review history (visible in its commit
+messages) as part of the events/outreach surface, which is a different
+rotation concern; this pass reviewed it only at the boundary forms_service.py
+actually calls across, not as a from-scratch audit of the whole outreach
+pipeline.
+
+Re-verified every prior finding (FORM-1 through FORM-10, BXC-1) against
+current code — all hold, nothing regressed. Full route inventory
+re-enumerated: all 22 `endpoints/forms.py` routes still carry either
+`require_permission("forms.view")` or `require_permission("forms.manage")`,
+except `submit_form` and `GET /member-lookup` (bare `get_current_user`, by
+design — any authenticated org member), and both `public/forms.py` routes
+remain intentionally unauthenticated behind slug regex + rate limiting +
+honeypot + CAPTCHA, unchanged from every prior pass.
+
+### FORM-11 — MEDIUM — `_process_event_request`'s result carried `EventRequest.status_token`, a bearer credential, to an audience the permission model does not authorize for it — ✅ FIXED
+
+**What:** `status_token` is a 64-character bearer credential
+(`app/models/event_request.py:163`) that lets its holder view **and
+self-service-cancel** an event request at the fully unauthenticated
+`GET /event-requests/status/{token}` / `POST /event-requests/status/{token}/cancel`
+endpoints (`app/api/v1/endpoints/event_requests.py:402-519`) — no
+`organization_id` check, no permission, nothing but possession of the string.
+`docs/KNOWN_LIMITATIONS.md` (the "Public portal" and "requester's status link"
+entries) documents this as a **deliberate** design choice: the token is meant
+to reach a requester only by a coordinator's "Copy status link" control on
+the request detail panel in Events → Requests, which is gated by
+`events.manage` — "nothing puts that URL in front of the requester
+automatically... a coordinator hands it out." The admin-facing
+`GET /event-requests/{request_id}` endpoint that also returns it
+(`event_requests.py:191`) is likewise gated by `require_permission("events.manage")`.
+
+`forms_service.py`'s `_process_event_request` (added as part of the
+event-request/forms intake-parity work between pass 3 and this pass) built
+its result dict as `{"success": True, "event_request_id": ..., "status_token":
+event_request.status_token, "message": ...}`. That dict is what
+`_process_integrations` stores verbatim into `submission.integration_result`
+— the same JSON column FORM-9 (pass 2) already established is serialized to
+the client by `FormSubmissionResponse`, the response model on **four**
+endpoints: `submit_form` (any authenticated org member, no `forms.manage`
+needed — `get_current_user` only), `get_submission`, `list_submissions`, and
+`reprocess_submission_integrations` (all three gated only by
+`forms.manage`). None of those four require `events.manage`.
+
+**Where:** `app/services/forms_service.py:2842-2847` (as it stood before this
+pass's fix — the `return` at the end of `_process_event_request`).
+
+**Failure scenario:** a department grants `forms.manage` to a records clerk
+who is not an events coordinator (no `events.manage`). The department has
+published its request-intake form (the standard "Generate public request
+form" flow) with the `event_request` integration. Any submission to it —
+public or, since the direct/legacy path runs identically for the internal
+`submit_form` route, an authenticated member's own submission — stores its
+`status_token` on `submission.integration_result`. The clerk opens
+`GET /forms/{id}/submissions` (their own permission, `forms.manage`, is
+enough) and reads `status_token` for any event request in the org straight
+out of the JSON body — no `events.manage` involved. With it they can open
+the request's public status page and, if it is not yet in a terminal state,
+call the self-service cancel endpoint and cancel a community event on the
+department's calendar — a capability the permission model reserves for
+`events.manage` holders, reached instead through `forms.manage`.
+
+**Impact:** cross-permission privilege escalation within one organization
+(not cross-tenant — everything here stays inside the submitting org). Same
+disclosure _shape_ as FORM-9 (a value captured into `integration_result` that
+was assessed as "internal" without tracing where the response schema
+actually sends it) but a different, more consequential payload: FORM-9 leaked
+diagnostic error text; this leaked a working bearer credential with a
+destructive action (cancel) behind it, and did so past a specific,
+documented access-control boundary (`events.manage`) rather than merely past
+`safe_error_detail`'s sanitization.
+
+**Fix:** dropped `status_token` from the dict `_process_event_request`
+returns. Nothing else reads it from there — the coordinator still gets the
+token the documented way (the request detail panel, gated by
+`events.manage`), and the requester still gets it via
+`send_request_notification`'s email where the department has chosen to send
+one; neither of those paths goes through `submission.integration_result`.
+The returned dict now carries only `success`, `event_request_id` and
+`message`.
+
+**Guard test:** `tests/test_event_request_form_intake.py::test_a_form_request_result_never_carries_the_status_token`
+— asserts the full key set of `_process_event_request`'s success result is
+exactly `{success, event_request_id, message}`. Verified to fail on
+reintroduction (restoring the `"status_token": event_request.status_token`
+line fails the test with the token value visible in the assertion diff) and
+to pass with the fix in place; the file's other five tests (pre-existing,
+covering auto-assignment, the deferred notification queue, and the lead-time
+warning) still pass unchanged.
+
+### FORM-12 — LOW/INFO — `get_submission`, `delete_submission` and `reprocess_submission_integrations` ignore the `form_id` path segment — 🚩 FLAGGED (not a security boundary, correctness-only)
+
+**What:** `GET/DELETE /forms/{form_id}/submissions/{submission_id}` and
+`POST /forms/{form_id}/submissions/{submission_id}/reprocess` all accept
+`form_id` in the URL, but the service methods behind them
+(`get_submission_by_id`, `delete_submission`,
+`reprocess_submission_integrations`) filter only `submission_id` +
+`organization_id` — `form_id` is never passed through or checked. A request
+against the "wrong" `form_id` for a submission that belongs to a different
+form in the same org still succeeds.
+
+**Where:** `app/api/v1/endpoints/forms.py:688-784` (the three routes) calling
+`app/services/forms_service.py:1226` (`get_submission_by_id`), `:1275`
+(`delete_submission`), `:1241` (`reprocess_submission_integrations`) — none
+of the three accepts or uses a `form_id` parameter.
+
+**Why this is not a security boundary today:** `forms.manage` is an
+org-wide, not per-form, permission — the same holder can already reach any
+submission on any form in the org via `list_submissions` with the correct
+`form_id`, so reaching the same row through a mismatched `form_id` in the
+path grants no privilege beyond what the permission already carries. This is
+a URL-correctness gap (a form_id that does not describe what is actually
+returned/deleted/reprocessed), not an access-control one.
+
+**Disposition:** flagged rather than fixed. Adding the filter is
+low-complexity, but it is a behavior change (a previously-200 request with a
+mismatched `form_id` would start 404ing) that this task's scope excludes from
+an unreviewed drive-by fix — left for a future pass or an explicit product
+call on whether that response should change. Not mirrored to
+`KNOWN_LIMITATIONS.md`: it carries no owner-facing risk or decision, only an
+API-shape nit.
+
+### Re-verified this pass (unchanged, all hold)
+
+- **FORM-1/FORM-2** (`_entity_in_org` gates `member_id`/`item_id`/`event_id`)
+  — re-read `_process_equipment_assignment`, `_process_event_registration` in
+  full; both still validate in-org before the write.
+- **FORM-3** (`MULTISELECT` option-membership validation) — intact.
+- **FORM-4** (form-definition text stored unescaped) — still correctly left
+  unescaped at storage; re-confirmed no `dangerouslySetInnerHTML` anywhere
+  under `frontend/src/components/forms/`, `pages/PublicFormPage.tsx`, or
+  `modules/forms/` (grep, zero matches).
+- **FORM-5** (`require_authentication`/`allow_multiple_submissions` enforced
+  on public submit, cross-org 404 for a foreign-org authenticated submitter)
+  — intact in `public/forms.py` and `submit_public_form`.
+- **FORM-6** (`_is_empty_value`).
+- **FORM-7/FORM-9** (`safe_error_detail`/`sanitize_error_message` on every
+  client-facing error path) — re-read all four integration processors and
+  `_process_integrations`'s two exception handlers; every one still routes
+  through one or the other, never raw `str(e)`.
+- **FORM-8** (`apply_updates` on `update_form`/`update_field`/
+  `update_integration`).
+- **FORM-10** (the public duplicate-submission check is a locking read,
+  `.with_for_update()`, not a plain `SELECT`) — re-read
+  `_create_public_submission` in full; the fix and its documenting
+  docstring are unchanged. The sibling gap it noted — the authenticated
+  `submit_form` path enforces no `allow_multiple_submissions` check at all —
+  is unchanged and remains a product-scope question, not a defect; still
+  correctly recorded only in `KNOWN_LIMITATIONS.md`, not re-litigated here.
+  The companion `KNOWN_LIMITATIONS.md` entry (no form-builder control writes
+  `allow_multiple_submissions` at all, so it defaults `True` and is
+  unreachable from the UI) is also unchanged — re-confirmed by grepping
+  `frontend/src` for the field: still only the type declaration, test
+  fixtures, and `PublicFormPage.tsx`'s read of it to decide whether to offer
+  "Submit Another Response".
+- **BXC-1** (`FormField.condition_field_id` — soft reference, never
+  dereferenced server-side) — unchanged in `models/forms.py`.
+- **Tenant isolation** — every by-id read/update/delete across forms,
+  fields, integrations, and submissions filters `organization_id` or
+  resolves through an org-scoped parent; the new `_process_event_request`
+  code path was checked against this too — it stamps `organization_id` from
+  `submission.organization_id` (server-derived, never client input) on the
+  `EventRequest` it creates, and takes no client-supplied FK id at all (every
+  field is free text or server-derived), so it introduces no FORM-1/FORM-2
+  shaped cross-org write risk. `is_public` (the flag gating the
+  `accept_public_requests`/daily-cap checks added since pass 3) is likewise
+  derived server-side from `submitted_by is None`, never from client input
+  or the URL.
+- **LIKE escaping** — `get_forms`/`search_members`, unchanged, both still use
+  `like_pattern()` + `escape=LIKE_ESCAPE_CHAR`.
+- **`search_members` email disclosure** — unchanged, still gated on
+  `ContactPolicy`.
+- **JSON column mutation (Pitfall #12)** — every write to
+  `submission.integration_result`, `integration.field_mappings`, and
+  `progress.action_result` in this module is a full-value reassignment
+  (`submission.integration_result = results`, etc.), never a mutated shared
+  reference behind a shallow copy; unchanged from pass 2's finding.
+- **CSV export (Pitfall #15)** — n/a, this module has no CSV/spreadsheet
+  export surface (grepped for `csv`/`SafeCsvWriter`, zero matches).
+- **Capacity/locking (Pitfall #27)** — the one capacity-style check in this
+  module's own code is FORM-10's duplicate-submission lock, re-verified
+  above. The event-request daily cap (`daily_cap_exceeded`, an atomic Redis
+  `INCR`) is not a row-lock pattern and lives in `event_request_service.py`,
+  outside this feature's file set.
+
+### Completion gate (pass 4)
+
+| Check                                             | Result                                                                                                |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                                                       |
+| `black --check app/ tests/ alembic/`              | ✅ clean, 1586 files unchanged                                                                        |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (isort 9.0.1, matches CI's pin)                                                              |
+| `python3 scripts/validate_migrations.py --strict` | ✅ PASSED — 443 revisions, single head, no migration this pass                                        |
+| `pytest tests/ -q -k form`                        | ✅ 482 passed, 1 skipped (pywebpush, environment-only)                                                |
+| `pytest tests/` (full suite)                      | ✅ 12,448 passed, 21 skipped (all environment-only: pywebpush, Docker, opt-in API-contract), 0 failed |
+| `tsc --noEmit` (`npm run typecheck`)              | ✅ 0 errors                                                                                           |
+| `npm run lint`                                    | ✅ exit 0, no warnings                                                                                |
 
 ---
 

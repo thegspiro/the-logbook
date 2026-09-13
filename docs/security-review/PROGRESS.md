@@ -16,6 +16,62 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2506](https://github.com/thegspiro/the-logbook/pull/2506)** (Feature
+26, Forms, pass 4) — branch
+`claude/security-review-forms`, opened against `origin/main`. A separate,
+docs-only PR (#2505, branch `claude/security-review-record-msg25-merge`) was
+already open recording PRs #2503/#2504's merges and marking row 25 closed
+when this review started. Per this file's own established precedent for two
+concurrent sessions landing on adjacent features (see the pass-4 MSG-25 Open
+PR note below, and the pass-2 MSG-25 log entry it in turn cites), this PR
+proceeds independently rather than waiting: #2505 is docs-only bookkeeping
+for the _previous_ feature's closure, not an open review PR _for_ Feature 26
+itself, and row 26 was already `⬜` (not `🔄`) on `origin/main` with no
+Forms-review PR open against it. This PR was branched directly from a fresh
+`git fetch origin main` (not off this session's own prior local branch,
+which carries #2505's unmerged commit) specifically to avoid dragging
+#2505's content into this diff. Whichever of #2505/this PR merges first, the
+other's overlapping "Open PR" section and rotation-table row text becomes a
+trivial, same-direction conflict for a future tend-PR iteration to resolve,
+not a disagreement about what happened.
+
+1 fix, 1 flagged (pass 4 — this feature's fourth lap; passes 1-3 already
+closed FORM-1 through FORM-10 and BXC-1, all re-verified still holding this
+pass): **FORM-11** (MEDIUM, fixed) — `_process_event_request` (added to
+`forms_service.py` between pass 3 and this pass, as part of the unrelated
+event-request/forms intake-parity hardening) carried
+`EventRequest.status_token` — a bearer credential that alone grants view
+**and self-service cancel** at the fully unauthenticated
+`/event-requests/status/{token}` endpoints — into the result dict persisted
+to `submission.integration_result`. That JSON column is serialized back by
+`FormSubmissionResponse` to any `forms.manage` holder (`get_submission`,
+`list_submissions`, `reprocess_submission_integrations`) and to any
+authenticated org member via `submit_form` — none of which requires
+`events.manage`, the permission `KNOWN_LIMITATIONS.md` documents as the
+intended gate on this token (a coordinator's "Copy status link" control).
+Fixed by dropping the key from the returned dict; guard test added
+(verified fail-before/pass-after). **FORM-12** (LOW/INFO, flagged, not
+fixed): `get_submission`/`delete_submission`/`reprocess_submission_integrations`
+accept `form_id` in the URL but never filter on it — org-scoped only. Not a
+security boundary (`forms.manage` is org-wide, so this grants no privilege
+beyond what the permission already carries), so left as a URL-correctness
+nit rather than an unreviewed behavior change; not mirrored to
+`KNOWN_LIMITATIONS.md` (no owner decision needed). All 22 `endpoints/forms.py`
+routes + both `public/forms.py` routes re-enumerated; auth/permission
+posture unchanged from every prior pass.
+
+Completion gate: flake8/black/isort clean (isort 9.0.1, CI's pin);
+migrations unchanged (443 revisions, single head, no new migration this
+pass); 482 scoped + 12,448 full-suite backend tests pass (21 skipped, all
+environment-only — `pywebpush`/`py_vapid`, Docker, opt-in contract suite);
+frontend `tsc --noEmit` 0 errors; `npm run lint` exit 0, no warnings (no
+frontend file touched — the finding and fix are backend-only). Full
+write-up: `docs/security-review/FORM-26-forms.md` → Pass 4. Rotation row 26
+-> ✅. Next: Feature 27 (Integrations).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 4, PR #2504, after it merged), preserved for history</summary>
+
 **None.** PR [#2503](https://github.com/thegspiro/the-logbook/pull/2503)
 (docs-only, recording PR #2502's merge and marking row 25 in progress) and
 PR [#2504](https://github.com/thegspiro/the-logbook/pull/2504) (Feature 25,
@@ -13763,7 +13819,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
@@ -18021,3 +18077,85 @@ flag); frontend `tsc --noEmit` 0 errors and `eslint --max-warnings 10` exit
 0 with no output (no frontend file touched by this pass's fix). Findings
 doc: `docs/security-review/MSG-25-messaging-notifications.md` (Pass 4).
 Rotation row 25 -> ✅. Next: 26 Forms.
+
+### 2026-09-13 — Feature 26 (Forms, pass 4)
+
+Fourth-lap pass. A separate, docs-only PR (#2505) was already open
+recording Features 25's PRs (#2503/#2504) as merged when this review
+started; row 26 was already `⬜` on `origin/main` with no Forms-review PR
+open against it, so — per this file's own established precedent for a
+docs-only bookkeeping PR not blocking the next feature (see the Feature 25
+pass-4 entry above) — this review proceeded independently rather than
+waiting, and branched directly off a fresh `git fetch origin main` (this
+session's working tree started on #2505's own branch, so its uncommitted
+Forms-review edits were stashed, moved to the new branch, and reapplied
+there specifically to avoid dragging #2505's unmerged commit into this
+diff).
+
+Loaded prior art in order (`CHECKLIST.md`,
+`SEC-00-cross-cutting-baseline.md`, `docs/module-audit/forms.md`,
+`docs/app-review/forms.md`, this feature's own passes 1-3,
+`KNOWN_LIMITATIONS.md`'s two FORM-10-related entries) before reading any
+code. `endpoints/forms.py` (784 L), `public/forms.py` (236 L),
+`models/forms.py` (347 L) and `schemas/forms.py` (424 L) are all unchanged
+since pass 3 (line counts match exactly, and `git log` on each turns up no
+commit that actually diffs the file). `forms_service.py` grew
+2,628 → 2,985 L across nine commits between pass 3 and this pass — an
+unrelated hardening pass ("Close three gaps in the public outreach request
+pipeline" through "Store an aware datetime as UTC...") that gave
+`_process_event_request` its own `event_request_service.py` module of
+shared helpers. Re-verified FORM-1 through FORM-10 and BXC-1 against
+current code — all hold, nothing regressed, including FORM-10's locking
+duplicate-check read and the (separately, deliberately unfixed)
+authenticated `submit_form` path's lack of an `allow_multiple_submissions`
+check. All 22 `endpoints/forms.py` routes + both `public/forms.py` routes
+re-enumerated; auth/permission posture unchanged from every prior pass.
+
+One new finding, fixed: **FORM-11 (MEDIUM)** — the growth above introduced
+a leak the first three passes' review couldn't have caught, since the code
+didn't exist yet. `_process_event_request`'s result dict carried
+`EventRequest.status_token` verbatim. That token is a bearer credential:
+alone, it grants view **and self-service cancel** at the fully
+unauthenticated `/event-requests/status/{token}` endpoints — no
+organization check, no permission, just possession of the string.
+`KNOWN_LIMITATIONS.md` already documents this as deliberate: the token is
+meant to reach a requester only through a coordinator's "Copy status link"
+control, gated by `events.manage`. But the result dict this method returns
+is what `_process_integrations` persists to
+`submission.integration_result`, the same JSON column FORM-9 (pass 2)
+already established `FormSubmissionResponse` serializes back to the
+client — on **four** endpoints here, three (`get_submission`,
+`list_submissions`, `reprocess_submission_integrations`) gated only by
+`forms.manage` and one (`submit_form`) needing no elevated permission at
+all. None of the four requires `events.manage`. A department that grants
+`forms.manage` to someone without `events.manage` — a records clerk, not
+an events coordinator — could read any event request's `status_token` out
+of its form submission and use it to view or cancel that request, a
+capability the permission model reserves for `events.manage`. Fixed by
+dropping the key from the returned dict (nothing else reads it from
+there — the coordinator and the requester both still get it through their
+existing, documented paths). Guard test added and verified
+fail-before/pass-after.
+
+One additional finding, flagged rather than fixed: **FORM-12 (LOW/INFO)**
+— `get_submission`, `delete_submission` and
+`reprocess_submission_integrations` accept `form_id` in the URL but the
+service methods behind them never filter on it, only `organization_id`.
+Not a security boundary — `forms.manage` is an org-wide permission, so a
+mismatched `form_id` reaches a row the same permission already exposes via
+`list_submissions` — so this is a URL-correctness nit, not mirrored to
+`KNOWN_LIMITATIONS.md`.
+
+Full completion gate green: flake8/black/isort clean (isort 9.0.1,
+matching CI's pin); `validate_migrations.py --strict` passed (443
+revisions, single head, no new migration this pass); 482/482 scoped and
+12,448/12,448 full backend suite pass (21 skipped, all environment-only —
+`pywebpush`/`py_vapid`, Docker daemon/registry, the opt-in API-contract
+flag); frontend `tsc --noEmit` 0 errors and `eslint --max-warnings 10` exit
+0 with no warnings (no frontend file touched — the finding and fix are
+backend-only; the forms frontend surface was re-checked via `git log`
+since pass 3 and confirmed to have only an unrelated contrast/accessibility
+commit, plus a fresh grep confirming `dangerouslySetInnerHTML` still
+appears nowhere under the forms components, re-confirming FORM-4). Findings
+doc: `docs/security-review/FORM-26-forms.md` (Pass 4). Rotation row 26 ->
+✅. Next: Feature 27 (Integrations).
