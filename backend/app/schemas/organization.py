@@ -10,7 +10,14 @@ from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.schemas.base import UTCResponseBase
@@ -255,7 +262,37 @@ class EmailServiceSettings(BaseModel):
     # Common
     from_email: Optional[str] = Field(None, description="From email address")
     from_name: Optional[str] = Field(None, description="From name")
-    use_tls: bool = Field(default=True, description="Use TLS encryption")
+    # Derived from smtp_encryption / the platform preset, never stored as an
+    # independent choice — see _derive_use_tls.
+    use_tls: bool = Field(
+        default=True,
+        description=(
+            "Whether the connection is encrypted. Derived from the effective "
+            "encryption; set smtp_encryption to change it."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _derive_use_tls(self) -> "EmailServiceSettings":
+        """Make ``use_tls`` report the encryption the sender will actually use.
+
+        It was a switch with no reader (CLAUDE.md pitfall 19): stored by
+        onboarding, present in the API response and the frontend type, and
+        consulted by nothing — ``smtp_encryption`` (or the platform preset)
+        is what ``_smtp_connect`` acts on. Left settable it could disagree
+        with the transport and describe a plaintext connection as encrypted.
+
+        Wiring a second reader would create two authorities for one decision,
+        so it is a projection of the one that already exists instead
+        (pitfall 29). Kept in the schema rather than deleted because it is in
+        the response shape of ``GET /organizations/settings`` and removing it
+        would be a breaking API change for no gain.
+        """
+        from app.utils.email_providers import resolve_smtp_settings
+
+        resolved = resolve_smtp_settings(self.model_dump())
+        self.use_tls = resolved["encryption"] != "none"
+        return self
 
     @field_validator("platform")
     @classmethod

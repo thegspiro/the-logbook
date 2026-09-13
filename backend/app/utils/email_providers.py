@@ -11,6 +11,7 @@ the sender did not, so a Gmail department passed its connection test and then
 failed every real send.
 """
 
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
@@ -72,6 +73,37 @@ def uses_microsoft_oauth(email_config: Mapping[str, Any]) -> bool:
 
 
 REDACTED_SECRET = "••••••••"
+
+# A Cloudflare account ID as the dashboard shows it. It is interpolated into
+# the sending URL, so the shape is checked wherever one is accepted: the
+# settings write, the connection test and the sender. One definition, because
+# three copies of a regex are three chances for the write path to accept
+# something the sender then rejects.
+CLOUDFLARE_ACCOUNT_ID_RE = re.compile(r"[a-f0-9]{32}")
+
+
+def is_valid_cloudflare_account_id(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    return CLOUDFLARE_ACCOUNT_ID_RE.fullmatch(value) is not None
+
+
+def stored_email_section(org_settings: Any) -> dict[str, Any]:
+    """An organization's ``email_service`` settings section, always a dict.
+
+    ``settings.get("email_service", {})`` looks equivalent and is not: the
+    key can be present and null. ``PATCH /organizations/settings`` accepts an
+    explicit ``"email_service": null`` (the field is ``Optional`` and
+    ``exclude_unset=True`` keeps it), the deep merge stores that null, and
+    every later ``.get("enabled")`` on it raises ``AttributeError`` — which
+    for the sender means the organization stops sending entirely, with a
+    settings screen that still reads normally because the read path already
+    guards. Non-dict values are settled the same way for the same reason.
+    """
+    if not isinstance(org_settings, Mapping):
+        return {}
+    section = org_settings.get("email_service")
+    return dict(section) if isinstance(section, Mapping) else {}
 
 
 def normalize_app_password(value: Any) -> Optional[str]:
@@ -158,6 +190,9 @@ REQUIRED_FIELD_LABELS = {
     "microsoft_client_secret": "the Microsoft 365 client secret",
     "smtp_host": "an SMTP host",
     "smtp_password": "the SMTP password",
+    "cloudflare_account_id": "the Cloudflare account ID",
+    "cloudflare_api_token": "a Cloudflare API token with email sending permission",
+    "platform": "a platform that can send mail",
 }
 
 
@@ -202,7 +237,27 @@ def missing_for_enabled(email_config: Mapping[str, Any]) -> Optional[str]:
         # with no username is still a complete configuration.
         if email_config.get("smtp_user") and not email_config.get("smtp_password"):
             return "smtp_password"
-    return None
+        return None
+    if platform == "cloudflare":
+        # The REST sender needs all three: the account owns the sending
+        # endpoint, the token authorizes it, and the From address is the
+        # envelope. Without them EmailService falls through to the SMTP path,
+        # which a Cloudflare row has no host for — so the send fails with
+        # "SMTP host and from_email are required" on a configuration the
+        # screen saved green.
+        if not is_valid_email(email_config.get("from_email")):
+            return "from_email"
+        if not email_config.get("cloudflare_account_id"):
+            return "cloudflare_account_id"
+        if not email_config.get("cloudflare_api_token"):
+            return "cloudflare_api_token"
+        return None
+    # "other" means not configured. Enabling it is not an incomplete
+    # configuration but an impossible one, and it is worse than leaving email
+    # disabled: _get_smtp_config returns early on `enabled`, so the hollow
+    # section shadows whatever global SMTP_* settings the deployment has, and
+    # a department that was sending through those stops.
+    return "platform"
 
 
 def invalid_for_enabled(email_config: Mapping[str, Any]) -> Optional[str]:
@@ -218,7 +273,21 @@ def invalid_for_enabled(email_config: Mapping[str, Any]) -> Optional[str]:
     through the schema, so rejecting a malformed stored value here would lock
     an organization out of the screen where they would fix it.
     """
-    if not email_config.get("enabled") or not uses_microsoft_oauth(email_config):
+    if not email_config.get("enabled"):
+        return None
+    if email_config.get("platform") == "cloudflare":
+        account_id = email_config.get("cloudflare_account_id")
+        if account_id and not is_valid_cloudflare_account_id(account_id):
+            # Absence is missing_for_enabled's to report. A present but
+            # misshapen one is rejected here rather than at send time, where
+            # _cloudflare_send raises on the same check after the settings
+            # screen has already said the configuration was saved.
+            return (
+                "The Cloudflare account ID must be the 32-character "
+                "hexadecimal value shown in your Cloudflare dashboard."
+            )
+        return None
+    if not uses_microsoft_oauth(email_config):
         return None
     # Imported here: the OAuth module imports nothing from this one, and a
     # module-level import would make that a cycle the moment it does.
@@ -243,6 +312,13 @@ def invalid_for_enabled(email_config: Mapping[str, Any]) -> Optional[str]:
 
 
 def required_field_message(platform: Any, field: str) -> str:
+    if field == "platform":
+        # Not a field the admin can fill in — the platform itself is the
+        # answer, so name the choices rather than asking them to "enter" one.
+        return (
+            "Email cannot be enabled without an email platform. Choose Gmail, "
+            "Microsoft 365, SMTP or Cloudflare, or leave email disabled."
+        )
     return (
         f"Enabling {platform} email requires {REQUIRED_FIELD_LABELS[field]}. "
         "Enter it, or leave email disabled."

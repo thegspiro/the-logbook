@@ -420,15 +420,57 @@ See detailed guide: [`ERROR_MESSAGES_LOGO_UPLOAD.md`](./ERROR_MESSAGES_LOGO_UPLO
    Password: [app password]
    ```
 
-#### **Custom/Self-hosted**
+#### **Any other provider (SMTP)**
+
+Gmail, Microsoft 365 and Cloudflare have their own tiles because they need
+credentials of their own shape. **Every other provider goes under the SMTP
+platform**, including the ones that issue app passwords of their own — that
+tile is not only for a mail server you run yourself.
+
+The settings screen (and the onboarding email step) has a **"Fill in settings
+for a known provider"** picker that enters the host, port and encryption for
+the providers below. You supply the username and the credential.
+
+| Provider           | Host                                 | Port | Encryption | Username                  | Credential                                 |
+| ------------------ | ------------------------------------ | ---- | ---------- | ------------------------- | ------------------------------------------ |
+| Yahoo Mail         | `smtp.mail.yahoo.com`                | 465  | SSL        | Full Yahoo address        | App password (Yahoo Account Security)      |
+| iCloud Mail        | `smtp.mail.me.com`                   | 587  | STARTTLS   | iCloud address            | App-specific password (appleid.apple.com)  |
+| Zoho Mail          | `smtp.zoho.com` (EU: `smtp.zoho.eu`) | 587  | STARTTLS   | Full Zoho address         | Application-specific password if 2FA is on |
+| Fastmail           | `smtp.fastmail.com`                  | 465  | SSL        | Full Fastmail address     | App password with SMTP access              |
+| AOL Mail           | `smtp.aol.com`                       | 465  | SSL        | Full AOL address          | App password (AOL Account Security)        |
+| GMX                | `mail.gmx.com`                       | 587  | STARTTLS   | Full GMX address          | Account password, POP3/IMAP enabled first  |
+| Proton Mail Bridge | `127.0.0.1`                          | 1025 | STARTTLS   | Proton address            | The password Bridge shows for the account  |
+| SendGrid           | `smtp.sendgrid.net`                  | 587  | STARTTLS   | The literal word `apikey` | Your API key                               |
+| Amazon SES         | `email-smtp.<region>.amazonaws.com`  | 587  | STARTTLS   | SES SMTP username         | SES SMTP password (not an AWS secret key)  |
+| Mailgun            | `smtp.mailgun.org`                   | 587  | STARTTLS   | `postmaster@your-domain`  | Domain SMTP password                       |
+| Postmark           | `smtp.postmarkapp.com`               | 587  | STARTTLS   | Server API token          | The same server API token                  |
+| Brevo              | `smtp-relay.brevo.com`               | 587  | STARTTLS   | Brevo login address       | SMTP key (Brevo → SMTP & API)              |
+| Mailjet            | `in-v3.mailjet.com`                  | 587  | STARTTLS   | API key                   | Secret key                                 |
+
+**The most common failure is using the account password.** Yahoo, iCloud, Zoho,
+Fastmail and AOL all refuse an ordinary password over SMTP once two-factor
+sign-in is enabled, and answer with `535 Authentication failed` — which reads
+like a typo rather than a policy. Generate an app password in the provider's
+own security settings.
+
+For a provider not listed, or your own mail server, ask the provider for:
 
 ```
-Check with your email provider for:
-- Correct SMTP server address
-- Supported ports (usually 587 or 465)
+- SMTP server address
+- Port (usually 587 for STARTTLS, 465 for SSL)
 - Whether TLS/SSL is required
-- Authentication method (usually username/password)
+- Whether the account needs an app password rather than its own password
 ```
+
+**"Not configured" is not a platform.** It records that email has not been set
+up. Leaving email switched on with that selected is refused on save, because an
+enabled configuration with no platform has no server to send through — and it
+suppresses any deployment-wide `SMTP_*` settings that were working.
+
+A server that accepts unauthenticated submission (an internal relay, say) is a
+complete configuration: leave the username blank. A username with no password
+is not, and both the connection test and the save refuse it rather than
+reporting a reachable server as a success.
 
 ---
 

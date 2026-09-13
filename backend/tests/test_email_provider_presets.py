@@ -10,6 +10,7 @@ sender and the connection test now share.
 
 import io
 import json
+import re
 import smtplib
 import threading
 import time
@@ -33,7 +34,9 @@ from app.api.v1.onboarding import (
     _email_settings_from_onboarding,
     _incomplete_session_email,
     _parse_smtp_port,
+    verify_email_configuration,
 )
+from app.core.config import settings as app_settings
 from app.core.security import encrypt_data
 from app.schemas.organization import (
     _EMAIL_SECRET_FIELDS,
@@ -54,7 +57,9 @@ from app.utils.email_providers import (
     missing_for_enabled,
     normalize_app_password,
     normalize_stored_platform,
+    required_field_message,
     resolve_smtp_settings,
+    stored_email_section,
     uses_microsoft_oauth,
 )
 from app.utils.microsoft_oauth import (
@@ -811,9 +816,62 @@ class TestEnabledConfigurationMustBeAbleToSend:
         # stay saveable with nothing filled in.
         assert missing_for_enabled({"enabled": False, "platform": "gmail"}) is None
 
-    def test_cloudflare_and_other_are_not_gated_here(self):
-        assert missing_for_enabled({"enabled": True, "platform": "cloudflare"}) is None
-        assert missing_for_enabled({"enabled": True, "platform": "other"}) is None
+    def test_cloudflare_needs_an_address_account_and_token(self):
+        # Without all three, _get_cloudflare_config returns None, the sender
+        # falls through to SMTP, and a Cloudflare row has no host — so the
+        # screen saves green and every send raises. Gate it on the write.
+        base = {"enabled": True, "platform": "cloudflare"}
+
+        assert missing_for_enabled(base) == "from_email"
+        assert (
+            missing_for_enabled({**base, "from_email": "fd@x.org"})
+            == "cloudflare_account_id"
+        )
+        assert (
+            missing_for_enabled(
+                {**base, "from_email": "fd@x.org", "cloudflare_account_id": "a" * 32}
+            )
+            == "cloudflare_api_token"
+        )
+        assert (
+            missing_for_enabled(
+                {
+                    **base,
+                    "from_email": "fd@x.org",
+                    "cloudflare_account_id": "a" * 32,
+                    "cloudflare_api_token": "tok",
+                }
+            )
+            is None
+        )
+
+    def test_cloudflare_account_id_must_be_the_dashboard_shape(self):
+        config = {
+            "enabled": True,
+            "platform": "cloudflare",
+            "from_email": "fd@x.org",
+            "cloudflare_account_id": "not-a-cloudflare-account",
+            "cloudflare_api_token": "tok",
+        }
+
+        # Present, so not "missing" — but _cloudflare_send raises on exactly
+        # this check at send time, so it must not save.
+        assert missing_for_enabled(config) is None
+        assert "32-character" in (invalid_for_enabled(config) or "")
+
+    def test_enabling_other_is_refused_outright(self):
+        # "other" means not configured. Enabled, it shadows the deployment's
+        # global SMTP settings with a section that has no host at all.
+        assert missing_for_enabled({"enabled": True, "platform": "other"}) == "platform"
+
+        message = required_field_message("other", "platform")
+        assert "cannot be enabled" in message
+        assert "leave email disabled" in message
+
+    def test_other_stays_saveable_while_disabled(self):
+        # The onboarding "Other / Skip" outcome, and the state an admin
+        # returns to when they turn email off.
+        assert missing_for_enabled({"enabled": False, "platform": "other"}) is None
 
     def test_read_path_still_accepts_an_enabled_row_without_password(self):
         # Write-only: an OAuth-era row is enabled with no App Password and
@@ -2988,3 +3046,317 @@ class TestOnlyARefusedCredentialIsARejection:
 
         assert result["details"].get("auth_rejected") is not True
         assert "method not supported" in result["message"]
+
+
+class TestStoredEmailSection:
+    """A null or malformed section must not take an organization off the air.
+
+    ``PATCH /organizations/settings`` accepts an explicit
+    ``"email_service": null`` and the deep merge stores it. Every sender-side
+    ``.get("email_service", {}).get(...)` then raised ``AttributeError``,
+    while the settings screen kept reading normally because the read path
+    already guarded — so the department saw a healthy configuration page and
+    no email.
+    """
+
+    def test_missing_section_is_empty(self):
+        assert stored_email_section({}) == {}
+
+    def test_null_section_is_empty(self):
+        assert stored_email_section({"email_service": None}) == {}
+
+    def test_non_mapping_section_is_empty(self):
+        assert stored_email_section({"email_service": "gmail"}) == {}
+
+    def test_null_settings_is_empty(self):
+        assert stored_email_section(None) == {}
+
+    def test_a_real_section_survives(self):
+        section = {"enabled": True, "platform": "gmail"}
+
+        assert stored_email_section({"email_service": section}) == section
+
+    def test_the_sender_falls_back_to_global_settings_on_a_null_section(self):
+        service = EmailService(
+            SimpleNamespace(name="FD", settings={"email_service": None})
+        )
+
+        # Global SMTP settings, not a crash and not a hollow org config.
+        assert service._smtp_config["host"] == app_settings.SMTP_HOST
+        assert service._use_cloudflare is False
+
+
+class TestUseTlsIsDerived:
+    """``use_tls`` reports the encryption in force; it does not choose it.
+
+    It was stored, returned by the API and read by nothing — the sender acts
+    on ``smtp_encryption`` (or the platform preset). Left settable it could
+    describe a plaintext relay as encrypted.
+    """
+
+    @pytest.mark.parametrize(
+        ("encryption", "expected"),
+        [("tls", True), ("ssl", True), ("none", False)],
+    )
+    def test_follows_smtp_encryption(self, encryption, expected):
+        settings_obj = EmailServiceSettings(
+            platform="selfhosted", smtp_encryption=encryption
+        )
+
+        assert settings_obj.use_tls is expected
+
+    def test_a_preset_platform_follows_its_preset(self):
+        # Gmail is STARTTLS whatever smtp_encryption happens to hold.
+        settings_obj = EmailServiceSettings(platform="gmail", smtp_encryption="none")
+
+        assert settings_obj.use_tls is True
+
+    def test_a_submitted_value_cannot_contradict_the_transport(self):
+        settings_obj = EmailServiceSettings(
+            platform="selfhosted", smtp_encryption="none", use_tls=True
+        )
+
+        assert settings_obj.use_tls is False
+
+    def test_onboarding_does_not_store_a_second_copy(self):
+        mapped = _email_settings_from_onboarding(
+            "selfhosted",
+            {
+                "smtpHost": "mail.dept.example",
+                "fromEmail": "fd@dept.example",
+                "smtpEncryption": "none",
+            },
+        )
+
+        assert "use_tls" not in mapped
+        assert EmailServiceSettings(**mapped).use_tls is False
+
+
+def _cloudflare_org() -> SimpleNamespace:
+    return _org(
+        {
+            "enabled": True,
+            "platform": "cloudflare",
+            "from_email": "fd@dept.example",
+            "cloudflare_account_id": "a" * 32,
+            "cloudflare_api_token": "tok",
+        }
+    )
+
+
+class TestSendBatchOnCloudflare:
+    """A Cloudflare department can send a pre-rendered batch.
+
+    ``send_batch`` used to warn "raw MIME is not supported — falling back to
+    SMTP" and then attempt SMTP, which a Cloudflare row has no host for. Its
+    only caller is the election ballot fan-out, so every ballot email failed
+    for those departments.
+    """
+
+    def _built(self, service, count: int):
+        return [
+            service.build_batch_message(
+                to_email=f"member{i}@dept.example",
+                subject=f"Ballot {i}",
+                html_body=f"<p>Vote {i}</p>",
+                text_body=f"Vote {i}",
+            )
+            for i in range(count)
+        ]
+
+    async def test_each_message_posts_its_own_body(self):
+        service = EmailService(_cloudflare_org())
+        posted = []
+
+        async def fake_post(_self, _client, _url, _headers, to_email, payload, _sem):
+            posted.append((to_email, payload["subject"], payload["html"]))
+            return True
+
+        with patch.object(EmailService, "_cloudflare_post", fake_post):
+            results = await service.send_batch(self._built(service, 3))
+
+        assert results == [True, True, True]
+        assert posted == [
+            ("member0@dept.example", "Ballot 0", "<p>Vote 0</p>"),
+            ("member1@dept.example", "Ballot 1", "<p>Vote 1</p>"),
+            ("member2@dept.example", "Ballot 2", "<p>Vote 2</p>"),
+        ]
+
+    async def test_a_refused_message_is_reported_per_entry(self):
+        service = EmailService(_cloudflare_org())
+
+        async def fake_post(_self, _client, _url, _headers, to_email, _payload, _sem):
+            return not to_email.startswith("member1@")
+
+        with patch.object(EmailService, "_cloudflare_post", fake_post):
+            results = await service.send_batch(self._built(service, 3))
+
+        assert results == [True, False, True]
+
+    async def test_raw_mime_is_failed_rather_than_sent_nowhere(self):
+        # The old shape, on an org whose platform *is* Cloudflare: there is
+        # no SMTP host to fall back to, so report the failure instead of
+        # opening a connection to nothing.
+        service = EmailService(_cloudflare_org())
+        pair = service.build_message(
+            to_email="member@dept.example", subject="s", html_body="<p>h</p>"
+        )
+
+        with patch.object(EmailService, "_smtp_send_batch") as smtp_batch:
+            results = await service.send_batch([pair])
+
+        assert results == [False]
+        smtp_batch.assert_not_called()
+
+    async def test_an_api_failure_fails_the_batch_rather_than_raising(self):
+        service = EmailService(_cloudflare_org())
+        messages = self._built(service, 2)
+
+        with patch.object(
+            EmailService,
+            "_cloudflare_send_batch",
+            AsyncMock(side_effect=RuntimeError("cloudflare down")),
+        ):
+            results = await service.send_batch(messages)
+
+        assert results == [False, False]
+
+
+class TestSendBatchOnSmtp:
+    """The SMTP path is unchanged by the Cloudflare one, in either shape."""
+
+    def _smtp_service(self) -> EmailService:
+        return EmailService(
+            _org(
+                {
+                    "enabled": True,
+                    "platform": "selfhosted",
+                    "smtp_host": "mail.dept.example",
+                    "from_email": "fd@dept.example",
+                    "smtp_user": "fd@dept.example",
+                    "smtp_password": "secret",
+                }
+            )
+        )
+
+    async def test_built_messages_arrive_as_recipient_mime_pairs(self):
+        # _smtp_send_batch unpacks each entry as a 2-tuple; a BuiltMessage
+        # has nine fields, so it has to be narrowed on the way in.
+        service = self._smtp_service()
+        built = service.build_batch_message(
+            to_email="member@dept.example", subject="s", html_body="<p>h</p>"
+        )
+        seen = []
+
+        def fake_batch(_self, messages):
+            seen.extend(messages)
+            return [True] * len(messages)
+
+        with patch.object(EmailService, "_smtp_send_batch", fake_batch):
+            results = await service.send_batch([built])
+
+        assert results == [True]
+        assert seen == [(["member@dept.example"], built.mime)]
+
+    async def test_the_legacy_pair_still_works(self):
+        service = self._smtp_service()
+        pair = service.build_message(
+            to_email="member@dept.example", subject="s", html_body="<p>h</p>"
+        )
+        seen = []
+
+        def fake_batch(_self, messages):
+            seen.extend(messages)
+            return [True] * len(messages)
+
+        with patch.object(EmailService, "_smtp_send_batch", fake_batch):
+            results = await service.send_batch([pair])
+
+        assert results == [True]
+        assert seen == [pair]
+
+    def test_build_message_returns_the_same_mime_as_build_batch_message(self):
+        service = self._smtp_service()
+        kwargs = {
+            "to_email": "member@dept.example",
+            "subject": "Drill",
+            "html_body": "<p>0700</p>",
+            "text_body": "0700",
+            "cc_emails": ["chief@dept.example"],
+            "reply_to": "chief@dept.example",
+        }
+        with patch.object(EmailService, "_make_message_id", return_value="<id@x>"):
+            recipients, mime = service.build_message(**kwargs)
+            built = service.build_batch_message(**kwargs)
+
+        # The MIME multipart boundary is generated per message, so normalize
+        # it away rather than asserting the two renderings are byte-identical.
+        def _without_boundary(text: str) -> str:
+            return re.sub(r"={5,}\d+={2,}", "BOUNDARY", text)
+
+        assert recipients == built.recipients
+        assert _without_boundary(mime) == _without_boundary(built.mime)
+        assert built.to_email == "member@dept.example"
+        assert built.subject == "Drill"
+        assert built.cc_emails == ["chief@dept.example"]
+        assert built.reply_to == "chief@dept.example"
+
+
+class TestOnboardingSelfHostedLogin:
+    """Onboarding matches the backend's rule on self-hosted credentials.
+
+    ``missing_for_enabled`` permits a relay that accepts unauthenticated
+    submission (host and From address, no username), so onboarding must too.
+    The honesty guard comes with that: ``test_smtp_connection`` reads a
+    missing password as "no authentication" and calls any reachable server a
+    success, so a half-entered login would test green and then fail to sign
+    in. This is ``_smtp_login_incomplete``'s rule, on the other screen.
+    """
+
+    async def test_a_username_without_a_password_is_refused(self):
+        request = SimpleNamespace(
+            platform="selfhosted",
+            config={
+                "smtpHost": "mail.dept.example",
+                "smtpPort": 587,
+                "fromEmail": "fd@dept.example",
+                "smtpUsername": "fd@dept.example",
+            },
+        )
+
+        with (
+            patch("app.api.v1.onboarding.validate_session", AsyncMock()),
+            patch.object(email_test_helper, "test_smtp_connection") as smtp_test,
+        ):
+            response = await verify_email_configuration(
+                request, MagicMock(), db=MagicMock()
+            )
+
+        assert response.success is False
+        assert "password is required" in response.message
+        assert response.details["required"] == ["smtpPassword"]
+        smtp_test.assert_not_called()
+
+    async def test_an_anonymous_relay_is_still_tested(self):
+        request = SimpleNamespace(
+            platform="selfhosted",
+            config={
+                "smtpHost": "mail.dept.example",
+                "smtpPort": 25,
+                "fromEmail": "fd@dept.example",
+            },
+        )
+
+        with (
+            patch("app.api.v1.onboarding.validate_session", AsyncMock()),
+            patch(
+                "app.api.v1.onboarding.test_smtp_connection",
+                return_value=(True, "SMTP connection successful", {}),
+            ) as smtp_test,
+        ):
+            response = await verify_email_configuration(
+                request, MagicMock(), db=MagicMock()
+            )
+
+        assert response.success is True
+        smtp_test.assert_called_once()

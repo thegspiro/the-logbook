@@ -230,7 +230,9 @@ def _email_settings_from_onboarding(platform: str, raw_config: dict) -> dict:
         "smtp_encryption": raw_config.get("smtpEncryption", "tls"),
         "from_email": raw_config.get("fromEmail"),
         "from_name": raw_config.get("fromName"),
-        "use_tls": raw_config.get("smtpEncryption", "tls") != "none",
+        # use_tls is not stored: EmailServiceSettings derives it from the
+        # effective encryption, so computing it here too would be a second
+        # definition of one value.
         "google_app_password": raw_config.get("googleAppPassword"),
         "microsoft_app_password": raw_config.get("microsoftAppPassword"),
         "microsoft_auth_method": _validated_microsoft_auth_method(
@@ -1701,6 +1703,24 @@ async def verify_email_configuration(
             # Test Cloudflare Email Service API token
             test_func = partial(test_cloudflare_email, config)
         elif platform == "selfhosted" or platform == "other":
+            if config.get("smtpUsername") and not config.get("smtpPassword"):
+                # test_smtp_connection reads a missing password as "no
+                # authentication" and reports any reachable server as a
+                # success. That is right for a relay that accepts
+                # unauthenticated submission — which is why a username is
+                # optional here — but a username with no password is a
+                # credential that was not finished, and a green result would
+                # vouch for a configuration that cannot sign in. Mirrors
+                # _smtp_login_incomplete on the settings screen's test.
+                return EmailTestResponse(
+                    success=False,
+                    message=(
+                        "SMTP password is required for the username entered. "
+                        "Enter the password, or clear the username if the "
+                        "server accepts unauthenticated submission."
+                    ),
+                    details={"required": ["smtpPassword"]},
+                )
             # Test self-hosted SMTP configuration
             test_func = partial(test_smtp_connection, config)
         else:

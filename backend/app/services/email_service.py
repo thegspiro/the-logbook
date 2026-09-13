@@ -18,7 +18,7 @@ from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -35,7 +35,11 @@ from app.services.email_theme import (
     build_shell,
     colourway_context,
 )
-from app.utils.email_providers import resolve_smtp_settings
+from app.utils.email_providers import (
+    is_valid_cloudflare_account_id,
+    resolve_smtp_settings,
+    stored_email_section,
+)
 from app.utils.microsoft_oauth import acquire_access_token, xoauth2_string
 
 # Header injection control characters that must never appear in
@@ -366,6 +370,37 @@ def _summarize_recipients(to_emails: List[str]) -> str:
     return (", ".join(kept) + suffix)[:320]
 
 
+class BuiltMessage(NamedTuple):
+    """One rendered message, in both the forms the two backends need.
+
+    ``recipients`` and ``mime`` are what ``_smtp_send_batch`` takes. The rest
+    is the same message before MIME assembly, because the Cloudflare Email
+    Sending API accepts structured fields and not a raw MIME blob — and
+    without them a Cloudflare department's batch send has nothing to post.
+    That was not theoretical: ``send_batch`` logged "falling back to SMTP"
+    and fell back to an SMTP configuration a Cloudflare row does not have,
+    so every election ballot email failed for those departments.
+
+    It is a ``NamedTuple`` so that ``message[0], message[1]`` still unpacks
+    as the ``(recipients, mime)`` pair the SMTP path has always been handed.
+    """
+
+    recipients: List[str]
+    mime: str
+    to_email: str
+    subject: str
+    html_body: str
+    text_body: Optional[str]
+    cc_emails: Optional[List[str]]
+    bcc_emails: Optional[List[str]]
+    reply_to: Optional[str]
+
+
+# What send_batch accepts: the historical (recipients, mime) pair, or a
+# BuiltMessage, which the Cloudflare backend can also send.
+BatchMessage = Union[Tuple[List[str], str], BuiltMessage]
+
+
 class EmailService:
     """Service for sending emails"""
 
@@ -522,7 +557,7 @@ class EmailService:
         if self.organization and self.organization.settings:
             # Decrypt secret fields (smtp_password, etc.) before reading
             decrypted = decrypt_settings_secrets(self.organization.settings)
-            org_email_config = decrypted.get("email_service", {})
+            org_email_config = stored_email_section(decrypted)
             if org_email_config.get("enabled"):
                 # Gmail and Microsoft 365 store only an App Password; the
                 # host, port and login are the provider's, resolved here so
@@ -558,7 +593,7 @@ class EmailService:
         """
         if self.organization and self.organization.settings:
             decrypted = decrypt_settings_secrets(self.organization.settings)
-            org_email = decrypted.get("email_service", {})
+            org_email = stored_email_section(decrypted)
             if org_email.get("enabled") and org_email.get("platform") == "cloudflare":
                 account_id = org_email.get("cloudflare_account_id")
                 api_token = org_email.get("cloudflare_api_token")
@@ -594,12 +629,15 @@ class EmailService:
 
         Priority:
         1. ``SMTP_EHLO_HOSTNAME`` from config
-        2. Organization-specific SMTP host (if org email settings are active)
-        3. Domain portion of the ``from_email`` address
+        2. Domain portion of the ``from_email`` address
+        3. ``localhost``
 
         Microsoft's Enhanced Filtering rejects connections whose EHLO
         hostname doesn't resolve in DNS, so using the actual sending
-        domain is critical.
+        domain is critical. The configured SMTP *host* is deliberately not a
+        candidate: EHLO names the client announcing itself, not the server
+        being connected to, and announcing the relay's own name to it is
+        what Enhanced Filtering is looking for.
         """
         # Explicit config takes top priority
         explicit = getattr(settings, "SMTP_EHLO_HOSTNAME", None)
@@ -818,32 +856,25 @@ class EmailService:
             )
         return attachments
 
-    async def _cloudflare_send(
-        self,
-        to_emails: List[str],
-        subject: str,
-        html_body: str,
-        text_body: Optional[str] = None,
-        cc_emails: Optional[List[str]] = None,
-        bcc_emails: Optional[List[str]] = None,
-        reply_to: Optional[str] = None,
-        attachments: Optional[List[Dict[str, str]]] = None,
-    ) -> List[bool]:
-        """Send emails via Cloudflare Email Service REST API.
+    # Concurrent in-flight requests to the Cloudflare API, and how many times
+    # a transient failure (429, 5xx, transport) is retried behind a doubling
+    # backoff. Shared by the per-recipient and pre-rendered batch senders so
+    # the two cannot pace the same account differently.
+    _CLOUDFLARE_CONCURRENCY = 5
+    _CLOUDFLARE_MAX_RETRIES = 3
 
-        Sends up to 5 requests concurrently (per-recipient). Retries
-        transient errors (429 rate-limit, 5xx server errors) up to 3
-        times with exponential backoff. Attachments are base64 dicts from
-        ``_build_cloudflare_attachments``.
+    def _cloudflare_endpoint(self) -> Tuple[str, Dict[str, str], Dict[str, str]]:
+        """The send URL, auth headers and From field for the configured account.
+
+        Raises ``ValueError`` when Cloudflare is not the active backend or the
+        stored account ID is not the 32-hex value the API path requires.
         """
-        import httpx
-
         cfg = self._cloudflare_config
         if not cfg:
             raise ValueError("Cloudflare Email Service is not configured")
 
         account_id = cfg["account_id"]
-        if not re.fullmatch(r"[a-f0-9]{32}", account_id):
+        if not is_valid_cloudflare_account_id(account_id):
             raise ValueError("Invalid Cloudflare account ID format")
 
         url = (
@@ -857,79 +888,190 @@ class EmailService:
         from_field: Dict[str, str] = {"address": cfg["from_email"]}
         if cfg.get("from_name"):
             from_field["name"] = _sanitize_header(cfg["from_name"])
+        return url, headers, from_field
 
-        max_retries = 3
-        concurrency = asyncio.Semaphore(5)
+    @staticmethod
+    def _cloudflare_payload(
+        from_field: Dict[str, str],
+        to_email: str,
+        subject: str,
+        html_body: str,
+        text_body: Optional[str] = None,
+        cc_emails: Optional[List[str]] = None,
+        bcc_emails: Optional[List[str]] = None,
+        reply_to: Optional[str] = None,
+        attachments: Optional[List[Dict[str, str]]] = None,
+    ) -> Dict[str, Any]:
+        """One recipient's request body for the Email Sending API."""
+        payload: Dict[str, Any] = {
+            "to": [to_email],
+            "from": from_field,
+            "subject": _sanitize_header(subject),
+        }
+        if html_body:
+            payload["html"] = html_body
+        if text_body:
+            payload["text"] = text_body
+        if cc_emails:
+            payload["cc"] = cc_emails
+        if bcc_emails:
+            payload["bcc"] = bcc_emails
+        if reply_to:
+            payload["reply_to"] = reply_to
+        if attachments:
+            payload["attachments"] = attachments
+        return payload
 
-        async def _send_one(client: "httpx.AsyncClient", to_email: str) -> bool:
-            payload: Dict[str, Any] = {
-                "to": [to_email],
-                "from": from_field,
-                "subject": _sanitize_header(subject),
-            }
-            if html_body:
-                payload["html"] = html_body
-            if text_body:
-                payload["text"] = text_body
-            if cc_emails:
-                payload["cc"] = cc_emails
-            if bcc_emails:
-                payload["bcc"] = bcc_emails
-            if reply_to:
-                payload["reply_to"] = reply_to
-            if attachments:
-                payload["attachments"] = attachments
+    async def _cloudflare_post(
+        self,
+        client: Any,
+        url: str,
+        headers: Dict[str, str],
+        to_email: str,
+        payload: Dict[str, Any],
+        concurrency: asyncio.Semaphore,
+    ) -> bool:
+        """POST one message, retrying transient failures. Never raises."""
+        async with concurrency:
+            for attempt in range(self._CLOUDFLARE_MAX_RETRIES + 1):
+                try:
+                    resp = await client.post(url, headers=headers, json=payload)
+                    if resp.status_code in (200, 201, 202):
+                        return True
 
-            async with concurrency:
-                for attempt in range(max_retries + 1):
-                    try:
-                        resp = await client.post(url, headers=headers, json=payload)
-                        if resp.status_code in (200, 201, 202):
-                            return True
-
-                        retryable = resp.status_code == 429 or resp.status_code >= 500
-                        if retryable and attempt < max_retries:
-                            delay = 2**attempt
-                            logger.warning(
-                                "Cloudflare API {} for {}, retrying in {}s "
-                                "(attempt {}/{})",
-                                resp.status_code,
-                                _redact_email(to_email),
-                                delay,
-                                attempt + 1,
-                                max_retries,
-                            )
-                            await asyncio.sleep(delay)
-                            continue
-
-                        body = resp.text[:500]
-                        logger.error(
-                            "Cloudflare email API error (status={}) to={}: {}",
+                    retryable = resp.status_code == 429 or resp.status_code >= 500
+                    if retryable and attempt < self._CLOUDFLARE_MAX_RETRIES:
+                        delay = 2**attempt
+                        logger.warning(
+                            "Cloudflare API {} for {}, retrying in {}s "
+                            "(attempt {}/{})",
                             resp.status_code,
                             _redact_email(to_email),
-                            body,
+                            delay,
+                            attempt + 1,
+                            self._CLOUDFLARE_MAX_RETRIES,
                         )
-                        return False
-                    except Exception as e:
-                        if attempt < max_retries:
-                            await asyncio.sleep(2**attempt)
-                            continue
-                        logger.error(
-                            "Cloudflare email send failed to={}: {}",
-                            _redact_email(to_email),
-                            e,
-                        )
-                        return False
-            return False  # unreachable, satisfies type checker
+                        await asyncio.sleep(delay)
+                        continue
+
+                    body = resp.text[:500]
+                    logger.error(
+                        "Cloudflare email API error (status={}) to={}: {}",
+                        resp.status_code,
+                        _redact_email(to_email),
+                        body,
+                    )
+                    return False
+                except Exception as e:
+                    if attempt < self._CLOUDFLARE_MAX_RETRIES:
+                        await asyncio.sleep(2**attempt)
+                        continue
+                    logger.error(
+                        "Cloudflare email send failed to={}: {}",
+                        _redact_email(to_email),
+                        e,
+                    )
+                    return False
+        return False  # unreachable, satisfies type checker
+
+    async def _cloudflare_send(
+        self,
+        to_emails: List[str],
+        subject: str,
+        html_body: str,
+        text_body: Optional[str] = None,
+        cc_emails: Optional[List[str]] = None,
+        bcc_emails: Optional[List[str]] = None,
+        reply_to: Optional[str] = None,
+        attachments: Optional[List[Dict[str, str]]] = None,
+    ) -> List[bool]:
+        """Send one rendered body to many recipients via the Cloudflare API.
+
+        Sends up to 5 requests concurrently (per-recipient). Retries
+        transient errors (429 rate-limit, 5xx server errors) up to 3
+        times with exponential backoff. Attachments are base64 dicts from
+        ``_build_cloudflare_attachments``.
+        """
+        import httpx
+
+        url, headers, from_field = self._cloudflare_endpoint()
+        concurrency = asyncio.Semaphore(self._CLOUDFLARE_CONCURRENCY)
 
         async with httpx.AsyncClient(timeout=30) as client:
             results = await asyncio.gather(
-                *[_send_one(client, addr) for addr in to_emails]
+                *[
+                    self._cloudflare_post(
+                        client,
+                        url,
+                        headers,
+                        addr,
+                        self._cloudflare_payload(
+                            from_field,
+                            addr,
+                            subject,
+                            html_body,
+                            text_body,
+                            cc_emails,
+                            bcc_emails,
+                            reply_to,
+                            attachments,
+                        ),
+                        concurrency,
+                    )
+                    for addr in to_emails
+                ]
             )
 
         succeeded = sum(1 for r in results if r)
         logger.info(
             "Cloudflare batch send complete: {}/{} succeeded", succeeded, len(results)
+        )
+        return list(results)
+
+    async def _cloudflare_send_batch(
+        self, messages: Sequence["BuiltMessage"]
+    ) -> List[bool]:
+        """Send pre-rendered messages, each with its own body, via the API.
+
+        The sibling of ``_smtp_send_batch`` for the Cloudflare backend. Every
+        message carries its own subject and body — a ballot notice names its
+        recipient and carries that member's own voting link — so this is one
+        request per message rather than one body fanned out.
+        """
+        import httpx
+
+        url, headers, from_field = self._cloudflare_endpoint()
+        concurrency = asyncio.Semaphore(self._CLOUDFLARE_CONCURRENCY)
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            results = await asyncio.gather(
+                *[
+                    self._cloudflare_post(
+                        client,
+                        url,
+                        headers,
+                        message.to_email,
+                        self._cloudflare_payload(
+                            from_field,
+                            message.to_email,
+                            message.subject,
+                            message.html_body,
+                            message.text_body,
+                            message.cc_emails,
+                            message.bcc_emails,
+                            message.reply_to,
+                        ),
+                        concurrency,
+                    )
+                    for message in messages
+                ]
+            )
+
+        succeeded = sum(1 for r in results if r)
+        logger.info(
+            "Cloudflare pre-rendered batch complete: {}/{} succeeded",
+            succeeded,
+            len(results),
         )
         return list(results)
 
@@ -952,6 +1094,40 @@ class EmailService:
                 Required by Gmail/Microsoft for bulk email.
 
         Returns ``(all_recipients, mime_message_string)``.
+
+        Prefer :meth:`build_batch_message` when the result is going to
+        :meth:`send_batch`: this pair is MIME-only, and the Cloudflare
+        backend cannot send MIME.
+        """
+        built = self.build_batch_message(
+            to_email=to_email,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            cc_emails=cc_emails,
+            bcc_emails=bcc_emails,
+            reply_to=reply_to,
+            list_unsubscribe=list_unsubscribe,
+        )
+        return built.recipients, built.mime
+
+    def build_batch_message(
+        self,
+        to_email: str,
+        subject: str,
+        html_body: str,
+        text_body: Optional[str] = None,
+        cc_emails: Optional[List[str]] = None,
+        bcc_emails: Optional[List[str]] = None,
+        reply_to: Optional[str] = None,
+        list_unsubscribe: Optional[str] = None,
+    ) -> BuiltMessage:
+        """Render one message for :meth:`send_batch`, for either backend.
+
+        Same arguments and same MIME output as :meth:`build_message`; it also
+        keeps the structured parts, so a Cloudflare department can send the
+        batch through the REST API instead of failing on a fallback to an
+        SMTP server it has not configured.
         """
         html_body = inline_email_css(html_body)
 
@@ -984,17 +1160,33 @@ class EmailService:
         if bcc_emails:
             all_recipients.extend(bcc_emails)
 
-        return all_recipients, msg.as_string()
+        return BuiltMessage(
+            recipients=all_recipients,
+            mime=msg.as_string(),
+            to_email=to_email,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            cc_emails=cc_emails,
+            bcc_emails=bcc_emails,
+            reply_to=reply_to,
+        )
 
-    async def send_batch(self, messages: List[Tuple[List[str], str]]) -> List[bool]:
-        """Send pre-built MIME messages through a single SMTP connection.
+    async def send_batch(self, messages: Sequence[BatchMessage]) -> List[bool]:
+        """Send pre-rendered messages, one per entry, in order.
 
-        Each item is ``(all_recipients, mime_message_string)`` as returned
-        by :meth:`build_message`.
+        Each item is either a :class:`BuiltMessage` (from
+        :meth:`build_batch_message`) or the ``(all_recipients,
+        mime_message_string)`` pair :meth:`build_message` returns. SMTP
+        departments are served identically by both.
 
-        Note: Cloudflare Email Service does not support raw MIME.  When
-        Cloudflare is the active backend, callers should use
-        :meth:`send_email` instead.
+        The Cloudflare Email Sending API takes structured fields rather than
+        raw MIME, so it can only send the first shape. Given the second it
+        falls back to SMTP — which is right for a deployment that has global
+        SMTP settings alongside a Cloudflare account, and impossible for an
+        organization whose platform *is* Cloudflare, since that row carries
+        no SMTP host. Those entries are reported as failures rather than
+        attempted, so the caller records a failure instead of a timeout.
         """
         if not messages:
             return []
@@ -1003,20 +1195,38 @@ class EmailService:
             or self._use_cloudflare
             or (
                 self.organization
-                and (self.organization.settings or {})
-                .get("email_service", {})
-                .get("enabled")
+                and stored_email_section(self.organization.settings).get("enabled")
             )
         )
         if not email_enabled:
             logger.info("Email disabled. Would batch-send {} messages.", len(messages))
             return [False] * len(messages)
         if self._use_cloudflare:
+            built = [m for m in messages if isinstance(m, BuiltMessage)]
+            if len(built) == len(messages):
+                try:
+                    return await self._cloudflare_send_batch(built)
+                except Exception as e:
+                    logger.error("Cloudflare batch send failed: {}", e)
+                    return [False] * len(messages)
+            if not self._smtp_config.get("host"):
+                logger.error(
+                    "send_batch called with {} raw-MIME messages on the "
+                    "Cloudflare backend and no SMTP host to fall back to; "
+                    "use build_batch_message() so they can be sent through "
+                    "the Cloudflare API",
+                    len(messages),
+                )
+                return [False] * len(messages)
             logger.warning(
                 "send_batch called with Cloudflare backend; raw MIME is not "
                 "supported — falling back to SMTP"
             )
-        return await asyncio.to_thread(self._smtp_send_batch, messages)
+        # _smtp_send_batch unpacks each entry as a (recipients, mime) pair,
+        # which a BuiltMessage is not; narrow it to the pair here.
+        return await asyncio.to_thread(
+            self._smtp_send_batch, [(m[0], m[1]) for m in messages]
+        )
 
     async def send_email(
         self,
@@ -1057,9 +1267,7 @@ class EmailService:
             or self._use_cloudflare
             or (
                 self.organization
-                and (self.organization.settings or {})
-                .get("email_service", {})
-                .get("enabled")
+                and stored_email_section(self.organization.settings).get("enabled")
             )
         )
         if not email_enabled:

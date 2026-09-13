@@ -76,12 +76,17 @@ const EmailPlatformChoice: React.FC = () => {
     },
     {
       id: 'selfhosted',
-      name: 'Self-Hosted',
-      description: 'Your own mail server (SMTP)',
+      name: 'SMTP',
+      description: 'Any other provider, or your own mail server',
       icon: <Server aria-hidden="true" className="h-10 w-10" />,
       color: 'from-green-500 to-emerald-500',
-      features: ['Full control', 'SMTP/IMAP support', 'Custom configuration'],
-      setupInfo: "You'll need SMTP server details (host, port, credentials).",
+      features: [
+        'Yahoo, iCloud, Zoho, Fastmail and other app-password providers',
+        'SendGrid, Amazon SES, Mailgun, Postmark and other relays',
+        'Your own mail server, with full control',
+      ],
+      setupInfo:
+        "Pick your provider on the next screen and we'll fill in the server details — you supply the username and app password.",
     },
     {
       id: 'cloudflare',
@@ -94,11 +99,11 @@ const EmailPlatformChoice: React.FC = () => {
     },
     {
       id: 'other',
-      name: 'Other / Skip',
-      description: 'Different provider or configure later',
+      name: 'Skip for now',
+      description: 'Set email up later',
       icon: <Mail aria-hidden="true" className="h-10 w-10" />,
       color: 'from-slate-500 to-slate-600',
-      features: ['Configure manually', 'Skip for now', 'Set up later in settings'],
+      features: ['No email is sent until this is configured', 'Set up later in settings'],
       setupInfo: 'You can configure email settings after setup is complete.',
     },
   ];
