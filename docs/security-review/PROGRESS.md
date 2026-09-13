@@ -16,6 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2525](https://github.com/thegspiro/the-logbook/pull/2525)** (Feature
+31, Scheduled tasks, pass 4) — branch `claude/security-review-scheduled-tasks`,
+opened against a fresh `origin/main` (no security-review PR was open at the
+start of this iteration; row 31 was `⬜`, row 30's closure — PR #2521 — was
+already merged and recorded). Delta-focused per the established convention:
+diffed pass 3's merge commit (`ff8cf35c0`, PR #2362) against `HEAD` for both
+target files — `scheduled.py` unchanged, `scheduled_tasks.py`'s only diff was
+an unrelated app-review fix closing the same CRON2-31-11/CRON-31-5/CRON3-31-1
+org-active-filter shape one function over (`_run_scheduled_emails_inner`),
+read in full and re-verified correct. Re-verified every prior finding
+(CRON2-31-1 through 13, CRON-31-1 through 8, CRON3-31-1/2) against current
+code — all holding, no regressions; registry sync still 44/44.
+
+One real, previously-unflagged LOW finding, fixed: **CRON4-31-1** — `POST
+/scheduled/run-task`, a platform-wide System-Owner-only endpoint that can
+fire any of the 44 org-spanning task runners, had no audit trail. Added
+`log_audit_event()` before invoking the runner, committed immediately (not
+left to the request-scoped session's end-of-request commit) so the record
+survives even a runner that raises; 3 new tests, each verified to fail
+against the pre-fix endpoint and pass after. One related LOW gap flagged, not
+fixed — **CRON4-31-2**: the manual endpoint has no per-task lock and can race
+the in-process scheduler's own run of the same task, a previously-unnamed
+instance of the dedup-flag double-send risk app-review's original pass
+already accepted, not a new risk class; closing it needs a lock shared
+between `main.py` and `scheduled.py`'s dispatch, an architecture call beyond
+a review-pass fix. Full account in `CRON4-31-scheduled-tasks.md`.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 4, PR #2521, after it merged), preserved for history</summary>
+
 **None.** PR [#2521](https://github.com/thegspiro/the-logbook/pull/2521)
 (Feature 30, Onboarding, pass 4) merged clean, merged directly by the repo
 owner. One HIGH finding, fixed: **ONB3-30-3** — a real, reproduced-against-
@@ -30,6 +60,8 @@ fix is still present and intact after three unrelated PRs (#2511, #2519,
 #2520) merged on top, one of which (#2519) also touches
 `backend/app/api/v1/onboarding.py` — no conflict, no regression to the
 lock. Rotation row 30 is now `✅`. Next: Feature 31 (Scheduled tasks).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 4, PR #2521, before it merged), preserved for history</summary>
@@ -849,6 +881,87 @@ that were an artifact of the worktree layout, not the code). Rotation row
 20 → `✅` (pending merge). Next: Feature 21 (Admin hours).
 
 </details>
+
+### 2026-09-13 — Feature 31 (Scheduled tasks, pass 4)
+
+PR #2521 (Feature 30, pass 4) had already merged and been recorded before
+this iteration began (row 30 was `✅`, row 31 `⬜`, no security-review PR
+open). Delta-focused pass per the established pass-3+/pass-4 convention:
+loaded all three prior findings docs in full
+(`CRON2-31-scheduled-tasks.md` pass 1/PR #1915, `CRON-31-scheduled-tasks.md`
+pass 2/PR #2095, `CRON3-31-scheduled-tasks.md` pass 3/PR #2362), then diffed
+pass 3's merge commit (`ff8cf35c0`) against current `HEAD` for both target
+files. `scheduled.py` — zero changes. `scheduled_tasks.py` — +18/−3 lines,
+entirely from an unrelated app-review pass ("Close seven
+email-configuration gaps found in review", `ac9990d0c`) that independently
+closed the exact CRON2-31-11/CRON-31-5/CRON3-31-1 org-active-filter shape in
+`_run_scheduled_emails_inner` (a fourth sibling of the same gap, on the
+scheduled-email table rather than scheduled-messages) and swapped a raw
+settings-dict read for a new `stored_email_section()` helper that tolerates
+an explicit `null` section. Both read in full and re-verified correct
+(including running the app-review pass's own new test,
+`test_scheduled_email_active_org.py`); neither needed further action here.
+
+Re-verified every prior finding (CRON2-31-1 through 13, CRON-31-1 through 8,
+CRON3-31-1/2) against current code, not re-derived: registry sync still
+44/44 with no drift; `grep -rn "\.active = False"` across `app/` still finds
+nothing, so every "latent, no live exposure today" framing still holds;
+`system.run_tasks` still resolves only through the wildcard `"*"`; the
+in-process scheduler's single-worker lease and Redis-down fail-open fallback
+unchanged.
+
+**Gave `scheduled.py` (the endpoint file itself) full, dedicated attention
+for the first time** — all three prior passes covered its auth/permission
+shape in the route inventory but never asked whether the endpoint's own
+handler body followed the rest of the codebase's audit-logging convention.
+It didn't: found and fixed **CRON4-31-1** (LOW) — `POST /run-task`, gated to
+the wildcard System Owner because it can fire any of 44 org-spanning task
+runners (retention deletes, department-message sends, dues/hours state
+changes), had zero audit trail of who triggered a run or when. Fixed with a
+`log_audit_event()` call before invoking the runner, plus an explicit
+`await db.commit()` immediately after — `log_audit_event()` only opens a
+nested SAVEPOINT, and `get_db`'s request-scoped session rolls the whole
+session back, audit entry included, if the runner subsequently raises past
+its own per-org guards. 3 new regression tests
+(`test_scheduled_task_manual_trigger_audit.py`), each independently verified
+to **fail** against the pre-fix endpoint (a plain `TypeError` on the new
+`request` parameter, confirming the tests exercise the actual code path) and
+**pass** after — including a test specifically for the commit-placement
+subtlety (a monkeypatched runner that raises still leaves the audit row
+behind).
+
+Flagged, not fixed: **CRON4-31-2** (LOW) — the manual endpoint takes no
+per-task lock, so it can race the in-process scheduler's own automatic run
+of the same task. Distinguished this from a fresh finding: it is a
+previously-unnamed _instance_ of the dedup-flag double-send risk
+`docs/app-review/scheduled-tasks.md`'s original pass already identified and
+the project already accepted ("the dedup flags... are read-then-write with
+no lock... a real (if narrow) double-send window... acceptable for a
+volunteer fire department"), reachable through a door — the manual trigger
+racing the auto-loop — that hadn't been named before. Runners already backed
+by a DB-level `with_for_update(skip_locked=True)` claim (e.g.
+`run_publish_scheduled_messages`, CRON3-31-1's fix to
+`run_recover_stranded_message_deliveries`) are unaffected by construction.
+Closing it properly needs a lock shared between `main.py`'s dispatch and
+`scheduled.py`'s dispatch — an architecture decision beyond a review-pass
+fix, recorded for whoever next revisits the accepted-risk list (same
+treatment this rotation gives `audit.py`'s SEC2-28-10 finding).
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on both
+changed files — clean. `pytest tests/test_scheduled_task_manual_trigger_audit.py`
+— 3 passed (all `integration`-marked, real MariaDB `db_session`). Re-ran the
+feature's existing test files (`test_scheduled_task_coverage.py`,
+`test_scheduled_tasks_structure.py`, `test_cron_org_loop_isolation.py`,
+`test_message_delivery_claim_recovery.py`, `test_message_delivery_service.py`,
+`test_scheduled_email_active_org.py`, `test_scheduled_email_group_isolation.py`,
+`test_audit_shipping.py`) — 68 passed, 0 failed. Audit-chain sanity
+(`test_audit_hash_chain.py`, `test_audit_log_org_scoping.py`,
+`test_audit_org_scoping.py`) — 22 passed, 0 failed. `validate_migrations.py
+--strict` — single head, unaffected (no migration touched). No frontend
+files touched this pass. Findings doc:
+`docs/security-review/CRON4-31-scheduled-tasks.md`. PR
+[#2525](https://github.com/thegspiro/the-logbook/pull/2525) opened. Rotation
+row 31 → `⏳` (pending merge).
 
 ### 2026-09-11 — Feature 22 (Grants & fundraising), pass 4 — watchdog iteration, 3 fixed (LOW/NIT), 0 flagged (new)
 
@@ -14057,7 +14170,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⏳     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
