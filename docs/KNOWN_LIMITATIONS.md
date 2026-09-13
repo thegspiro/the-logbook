@@ -333,6 +333,22 @@ duplicates and a permanent 500. Two intermediate versions each got 10 and 6 of
 the SAVEPOINT rollback had already detached, then the REPEATABLE READ snapshot
 above. Neither was visible without a live MySQL.
 
+**Related, same family, found and fixed the same rotation window
+(security-review pass 4, ONB3-30-3):** the resumability fix that let a lapsed
+onboarding session be re-minted (`get_or_create_session` keying its refusal on
+completion rather than mere organization existence) had, as an unavoidable
+consequence, widened who can obtain a session at all — an unrelated caller can
+now mint one any time between organization creation and System Owner creation,
+not merely in the sub-millisecond window before any organization exists. That
+made `create_system_owner`'s own single-owner guard (a plain read-then-write,
+never itself locked) newly and directly reachable as a two-caller race rather
+than only as a single-session replay: reproduced against a real database, two
+concurrent `POST /system-owner` calls both created a full-access "*" account.
+Fixed the same way as this entry's own singleton race — lock the parent
+(`onboarding_status`, guaranteed to exist and be unique by this point) and make
+the existence check itself a locking read. See
+`docs/security-review/ONB3-30-onboarding.md` → Pass 4.
+
 ## ONBOARD-3 — A Deleted Seed Rank Is Still Accepted on a Write (2026-09-09)
 
 Setup now lets a department curate its rank ladder, and removing a rank does

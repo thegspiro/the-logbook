@@ -16,6 +16,34 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2521](https://github.com/thegspiro/the-logbook/pull/2521)** (Feature
+30, Onboarding, pass 4) — branch `claude/security-review-onboarding`, opened
+against a fresh `origin/main` (no security-review PR was open at the start of
+this iteration; row 30 was `⬜`, row 29's closure — PR #2517 — was already
+merged and recorded). One HIGH finding, fixed: **ONB3-30-3** — a real,
+reproduced-against-a-live-database race condition where two concurrent
+`POST /system-owner` calls could both create a full-access "*" System Owner
+account, the exact "two people racing to claim initial-admin" shape this
+feature's rotation slot exists to check for. Fixed by locking the
+`onboarding_status` singleton row and making the existing-user check itself a
+locking read (CLAUDE.md pitfall #27's pattern, same shape as the already-merged
+ONBOARD-7 singleton fix one table over); guarded by a new integration test,
+`tests/test_onboarding_owner_race.py`, verified to fail (2/2 successes) with
+the fix reverted and pass restored. This feature's findings history is
+fragmented across three files with no reliable suffix ordering
+(`ONB2-30-onboarding.md` is pass 1, the plain `ONB-30-onboarding.md` is pass 2,
+`ONB3-30-onboarding.md` is pass 3) — resolved by cross-checking each file's own
+self-description against `PROGRESS.md`'s log and real PR merge dates, all
+three agreeing; continued as Pass 4 in `ONB3-30-onboarding.md`. See the log
+entry below for the full account, including re-verification of the
+already-merged ONBOARD-7 onboarding-singleton fix and the newly-landed
+onboarding resumability change that made the System Owner race newly
+reachable by an unrelated caller. Rotation row 30 is now `✅` (pending merge).
+Next: Feature 31 (Scheduled tasks).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 6, PR #2517, after it merged), preserved for history</summary>
+
 **None.** PR [#2517](https://github.com/thegspiro/the-logbook/pull/2517)
 (Feature 29, Reports & analytics, pass 6) merged clean via merge commit
 `4559bcde25`, 17/17 CI green, `mergeable_state: clean`, no unresolved
@@ -27,6 +55,8 @@ resolved by merging `origin/main` into the PR branch, keeping both sides'
 (flake8/black/isort/migrations clean on the merged tree — no code files
 conflicted, so the full test suite wasn't re-run), and pushing. Rotation
 row 29 is now `✅`. Next: Feature 30 (Onboarding).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 6, PR #2517, before it merged), preserved for history</summary>
@@ -14006,7 +14036,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
@@ -18665,3 +18695,129 @@ src/modules/reports`) 42 passed (5 files). Findings doc:
 rotation table — this cycle's earlier log entries for Feature 30 (e.g. PR
 #2358) belong to a prior full pass before the rotation wrapped. Next: 30
 Onboarding, once this PR merges.
+
+---
+
+## 2026-09-13 — Feature 30 (Onboarding, pass 4) — race condition on `/system-owner`
+
+**Branched fresh off `origin/main`** (`git fetch origin main && git checkout
+-b claude/security-review-onboarding origin/main`) after re-verifying no
+security-review PR was open and row 30 was still `⬜` (the working tree
+initially held a leftover branch, `claude/security-review-record-rpt29-merge`,
+from an already-merged PR #2518 bookkeeping commit — confirmed merged into
+`origin/main` and not a source of uncommitted work, then branched past it).
+
+**This feature's findings history is fragmented across three files, and the
+suffixes do not sort chronologically** — the same shape Feature 29 hit with
+`RPT`/`RPT2`. Resolved by reading all three in full and cross-checking each
+file's own self-description against this doc's log and real PR merge dates,
+all three agreeing: `ONB2-30-onboarding.md` is pass 1 (PR #1913 + a same-day
+follow-up, merged 2026-08-27); the **plain, unsuffixed** `ONB-30-onboarding.md`
+is pass 2 (PR #2093, merged 2026-08-31); `ONB3-30-onboarding.md` is pass 3 (PR
+#2358, merged 2026-09-07). Continued as **Pass 4** in `ONB3-30-onboarding.md`,
+one more than that file's own highest pass number.
+
+**Scope: the delta since pass 3's merge (`f0bda691`).** Only three of this
+feature's files had any diff at all (`onboarding.py` +292/-, `models/
+onboarding.py` +28/-, `services/onboarding.py` +367/- — 565 insertions / 122
+deletions combined; `email_test_helper.py`/`microsoft_oauth.py`/
+`email_providers.py`/`template_service.py`/`org_template_service.py`/
+`org_template_registry.py`/`utils/onboarding_security.py` confirmed
+byte-identical via `git diff --quiet`). Both changed files' full diffs were
+read end to end, not sampled. Two backend changes account for the whole
+delta:
+
+1. **ONBOARD-7's onboarding-singleton fix** (migration `6ab7d903fae5`,
+   resolved 2026-09-12, already merged before this pass started — the task
+   brief's "recent onboarding-singleton migration"). Re-verified against
+   current code and against a real database: 8 consecutive runs of a genuine
+   two-connection concurrent-insert reproduction all landed exactly one row.
+   **Holds, no regression.**
+2. **Onboarding resumability** (commit `534bea6`, narrowed by `4b708e8`'s step
+   reorder) — `get_or_create_session` now refuses a new session only on
+   `needs_onboarding() == False` (completion) rather than on an organization
+   merely existing, so a lapsed 30-minute session mid-setup is recoverable.
+   New `_require_owner_authority` bounds this: once a System Owner exists,
+   only that owner may mint a new session or reset; **before one exists,
+   minting a session is unauthenticated by design** (stated in the fix's own
+   commit and asserted by its own test). This is a deliberate, tested
+   widening of who can obtain a session — from "before step 1" to "before
+   step 2" — and is not itself a new finding. But it is what turned a
+   pre-existing gap into a directly reachable one:
+
+**One new finding, HIGH, fixed: ONB3-30-3.** `create_system_owner`'s
+single-owner guard (`existing_user = await self.db.execute(select(User.id)
+.limit(1))`) was an unlocked read-then-write — the exact CLAUDE.md pitfall
+#27 shape, and the same shape ONBOARD-7 had just fixed one table over.
+ONB-2 (module-audit iteration 25) added this guard against a _replayed single
+session_; it was never load-tested against two _independent_ concurrent
+callers, and until this pass there was no documented way for an independent
+caller to reach `/system-owner` except in the sub-millisecond
+pre-organization window. The resumability change above made that window the
+entire gap between `/organization` succeeding and `/system-owner` succeeding —
+real, if usually short, on a network-reachable instance where an operator
+takes even a few seconds between two adjacent wizard screens. **Reproduced
+against a real database, not mocked, 8/8 runs:** two independent,
+independently-committing connections calling `create_system_owner`
+concurrently both succeeded before the fix — two full-access `*` accounts,
+one attacker-controlled, on the real organization. This is precisely the
+"two people racing to claim initial-admin" shape this feature's rotation slot
+calls out. **Fixed** by locking the `onboarding_status` singleton row
+(`.with_for_update()`, the parent to lock since there is no `User` row to
+lock yet) and making the existence check itself a locking read too — per
+pitfall #27's documented gotcha, a plain `SELECT` under InnoDB REPEATABLE
+READ answers from the transaction's own pre-lock snapshot, so the parent lock
+alone is not sufficient; verified an intermediate version with only the
+parent lock still let both callers through. Re-verified 8/8 → exactly one
+success after the fix. New guard test,
+`tests/test_onboarding_owner_race.py` (real two-connection integration test,
+mirroring the established `test_auth_lockout_race.py` pattern, plus two
+source-level assertions), verified to fail with the fix reverted (`git
+stash`) and pass restored.
+
+**All prior findings (ONB-1 through ONB-9, ONB2-30-1 through ONB2-30-8,
+ONB-30-3, ONB3-30-1, ONB3-30-2) re-verified intact, no regressions.** All 24
+routes re-enumerated; no route lost a compensating control. Frontend module
+re-swept (grep, matching pass 3's stated depth) for `window.confirm`/`alert`/
+`prompt`, `dangerouslySetInnerHTML`, and secrets in browser storage — 0 hits,
+despite substantial unrelated frontend feature work (rank ladder, membership
+ladder, navigation-layout setting) having landed in this window.
+
+**A sandbox-hygiene note for future passes:** the real-database reproduction
+above (and, before its own cleanup was tightened, the new integration test)
+writes real committed rows bypassing the auto-rollback `db_session` fixture —
+including an audit-log row, since `create_system_owner` logs one on success.
+One such row leaked into a full-suite run and caused 11 unrelated
+`test_audit_*`/`test_election_voting_flow.py` failures (a hash-chain/org-
+scoping assertion tripping over a row referencing a since-deleted
+organization) — confirmed to be sandbox pollution, not a regression, by
+clearing the table and re-running those 11 clean. Documented in
+`ONB3-30-onboarding.md`'s completion-gate section so the next session
+recognizes the failure shape rather than re-diagnosing it; `organizations`/
+`users`/`onboarding_status`/`audit_logs` all reconfirmed empty before and
+after the final full-suite run below.
+
+**Found along the way: this sandbox has two `flake8` installs, same shape as
+CLAUDE.md's documented `typescript`/`typescript-native` split.** Bare
+`flake8` on `PATH` is a `uv`-tool install with no `flake8-pytest-style`
+plugin; `python3 -m flake8` resolves the `dist-packages` install CI actually
+matches (`flake8-pytest-style==2.2.0` pinned in `ci.yml`). The bare binary
+reported this pass's new test file clean; `python3 -m flake8` correctly
+caught a real `PT018` (a combined `assert X and Y`), fixed by splitting it.
+Re-ran `python3 -m flake8` over the **whole tree** after the fix — clean, so
+this was confined to the one new file. Recorded in
+`ONB3-30-onboarding.md`'s completion-gate section — use `python3 -m flake8`,
+never bare `flake8`, in this sandbox going forward.
+
+Completion gate: `python3 -m flake8`/`black --check`/`isort --check-only`
+clean over `app/ tests/ alembic/` (isort 9.0.1, CI's pinned version);
+`validate_migrations.py --strict` passed (444 revisions, single head
+`6ab7d903fae5`, unchanged — no migration this pass); scoped backend tests
+(`-k "onboard or org_template or template_service"`) 247 passed, 1 skipped
+(environment-only — `pywebpush`); full backend suite **12,496 passed, 21
+skipped** (all environment-only: `pywebpush`, Docker registry/daemon
+unavailable in this sandbox, opt-in API-contract suite), 0 failures;
+frontend `npm run typecheck` 0 errors; `npm run lint` 0 errors/0 warnings
+(frontend read for the sweep above, not edited, this pass). Findings doc:
+`docs/security-review/ONB3-30-onboarding.md` (Pass 4). Rotation row 30 ->
+✅ (pending PR merge). Next: Feature 31 (Scheduled tasks).
