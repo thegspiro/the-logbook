@@ -1296,6 +1296,12 @@ class EligiblePositionsResponse(BaseModel):
 
     positions: List[str]
     is_excluded: bool = False
+    #: Of ``positions``, the ones that still have an unclaimed seat on the
+    #: shift — empty when no ``shift_id`` was asked about. Reported separately
+    #: rather than by narrowing ``positions`` so a screen can tell "you are not
+    #: cleared for this shift" apart from "your positions are all taken", which
+    #: need different answers and send the member to different people.
+    open_positions: List[str] = []
 
 
 class SchedulingEligibilitySettings(BaseModel):
