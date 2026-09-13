@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2517](https://github.com/thegspiro/the-logbook/pull/2517)
+(Feature 29, Reports & analytics, pass 6) merged clean via merge commit
+`4559bcde25`, 17/17 CI green, `mergeable_state: clean`, no unresolved
+review threads. Its branch picked up a real, same-direction conflict with
+PR #2515 (a second, independently-branched Feature 28 pass-4 review that
+merged while this PR was in flight — see the superseded note below);
+resolved by merging `origin/main` into the PR branch, keeping both sides'
+`PROGRESS.md` content in documented supersession order, re-validating
+(flake8/black/isort/migrations clean on the merged tree — no code files
+conflicted, so the full test suite wasn't re-run), and pushing. Rotation
+row 29 is now `✅`. Next: Feature 30 (Onboarding).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 6, PR #2517, before it merged), preserved for history</summary>
+
 **PR [#2517](https://github.com/thegspiro/the-logbook/pull/2517)**
 (Feature 29, Reports & analytics, pass 6) — branch
 `claude/security-review-reports-analytics`, opened against a fresh
@@ -49,6 +64,8 @@ analytics or dashboard or attendance_dashboard"`) 545/545 passed, 1 skipped
 (all environment-only); frontend `npm run typecheck` 0 errors, `npm run
 lint` 0 errors/0 warnings, scoped `vitest run src/modules/reports` 42/42
 passed.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass-4 addendum, PR #2515, after it merged), preserved for history</summary>
