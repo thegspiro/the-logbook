@@ -934,8 +934,16 @@ class MinuteService:
         attendees_json = []
         if meeting.attendees:
             for att in meeting.attendees:
+                # MM-16: org-filter this name lookup even though att.user_id
+                # is always in-org today (every write path onto
+                # MeetingAttendee.user_id validates membership first) — same
+                # "cheap insurance against a future unvalidated write path"
+                # rationale as MM-14's grantor/waiver-member lookups.
                 user_result = await self.db.execute(
-                    select(User).where(User.id == att.user_id)
+                    select(User).where(
+                        User.id == att.user_id,
+                        User.organization_id == str(organization_id),
+                    )
                 )
                 user = user_result.scalar_one_or_none()
                 attendees_json.append(

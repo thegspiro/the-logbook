@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR opened this pass** (Feature 24, Meetings & minutes, pass 4) — branch
+`claude/friendly-babbage-4ccnij`, continuing the same watchdog branch this
+file's own prior Log entry started Feature 24 on (not a new branch: the
+watchdog's docs-only commit had not yet opened a PR, so this is that same
+in-progress feature, not a reuse of a merged branch's name per Pitfall #24).
+2 fixes (MM-15 non-finite/unbounded `quorum_threshold` validation, MM-16
+missing org filter on `create_from_meeting`'s attendee-name lookup), 1 new
+flagged item (MM-17, no finalization guard on `set_meeting_quorum_config` —
+owner decision, mirrored into `KNOWN_LIMITATIONS.md`), MM-9 re-verified still
+open and unchanged. Completion gate: flake8/black/isort clean; migrations
+unchanged (443 revisions, single head); 289 scoped + 12,447 full-suite
+backend tests pass (21 skipped, all environment-only); frontend `tsc` clean;
+`npm run lint` shows 0 errors and a large pre-existing, sandbox-local
+`@typescript-eslint/no-unsafe-*` warning count already covered by
+`KNOWN_LIMITATIONS.md`'s "Frontend — `typescript`'s declared version has
+drifted…" entry — not from this pass's diff, which touches no frontend file.
+Full write-up: `docs/security-review/MM-24-meetings-minutes.md` → Pass 4. PR
+number to follow in a short update to this row once opened. Next feature
+(25, Messaging & notifications) does not start until this PR merges.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 11, PR #2489, before it merged; and the watchdog note that closed it out and started Feature 24), preserved for history</summary>
+
 **None.** PR [#2489](https://github.com/thegspiro/the-logbook/pull/2489)
 (Feature 23, Medical supplies, pass 11 re-verification) merged clean via
 merge commit `0407246f5`, all 17 CI checks green (CI Success, both
@@ -30,9 +53,6 @@ stalled here for over 36 hours with no follow-up docs commit and no
 Feature 24 branch or PR, and is closing it out and starting Feature 24
 directly, per this file's established watchdog precedent). Next: Feature
 24 (Meetings & minutes), pass 4.
-
-<details>
-<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 11, PR #2489, before it merged), preserved for history</summary>
 
 **PR [#2489](https://github.com/thegspiro/the-logbook/pull/2489)** —
 Feature 23 (Medical supplies), a fresh rotation-lap review (this feature's
@@ -13660,7 +13680,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | 🔄     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
@@ -13678,6 +13698,68 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-13 — Feature 24 (Meetings & minutes, pass 4) — 2 fixed (MM-15, MM-16), 1 flagged (MM-17), MM-9 re-confirmed unchanged
+
+Continued the watchdog's branch (`claude/friendly-babbage-4ccnij`) rather
+than opening a new one, per the orchestrating task's explicit instruction —
+the branch's only prior commit was a docs-only recording of PR #2489's merge
+with no PR of its own yet open, so this is not a reuse of an already-merged
+branch (Pitfall #24 does not apply).
+
+Loaded pass 1–3's findings (`MM-24-meetings-minutes.md`), `CHECKLIST.md`,
+and re-verified every fix those passes applied by reading the current code
+at its cited location, not by re-citing the doc. All six backend files
+(`meetings.py`, `minutes.py`, `meetings_service.py`, `minute_service.py`,
+`quorum_service.py`, `attendance_dashboard_service.py`) were unchanged since
+pass 3 (line counts match exactly; `git log --since=2026-09-06` on each
+turns up only unrelated merge commits) — read all six fresh in full rather
+than trusting the byte-count match alone. Re-enumerated all 42 routes
+(17 `meetings.py` + 25 `minutes.py`): every one still carries
+`require_permission(...)`, every by-id query still org-scopes or resolves
+through an org-scoped parent, LIKE-escaping and JSON-column handling both
+still correct, and MM-9 (`approve_meeting`/`update_meeting`'s missing
+approval state machine) is confirmed still open and unchanged, with no live
+frontend call site for `approveMeeting()`.
+
+Two new findings, both mechanical fixes verified against the real failure
+mode rather than inferred: **MM-15** — `PATCH /minutes/{id}/quorum-config`'s
+`quorum_threshold` accepted `inf`/`-inf`/`nan` (all pass a bare `<= 0`
+check) and any finite value including a percentage over 100; confirmed via a
+throwaway integration test that `inf` reaches pymysql's float encoder on
+commit as an unhandled `ProgrammingError`, and that `int(inf)` in
+`QuorumService.calculate_quorum` raises `OverflowError` independently. Fixed
+with an explicit `math.isfinite()` check plus type-specific bounds (≤100 for
+percentage, ≤100,000 for count). **MM-16** — `MinuteService.create_from_meeting`'s
+attendee-name lookup was the one `select(User)` call site across this
+feature's four files with no `organization_id` filter (grep-verified);
+fixed to match the convention MM-14 (pass 3) already established on the
+sibling service. **MM-17** — `set_meeting_quorum_config` has no finalization
+guard blocking it on `APPROVED` minutes, unlike every sibling mutation in the
+file; flagged (not fixed) since blocking it is a behavior change with no
+test asserting today's permissive behavior is unwanted, and mirrored into
+`KNOWN_LIMITATIONS.md`. Two guard tests added: a DB-free endpoint-level test
+asserting every non-finite/out-of-bounds `quorum_threshold` is rejected
+before any query runs (verified to fail on 4/9 cases against the pre-fix
+code), and a service-level test capturing the compiled `WHERE` clause of
+MM-16's fixed lookup (verified to fail against the reverted code with the
+actual captured SQL shown).
+
+Completion gate: `flake8`/`black`/`isort` (9.0.1, CI's pin) all clean;
+`validate_migrations.py --strict` passed (443 revisions, single head); scoped
+tests (`meeting or minute or quorum or attendance_dashboard`) 289 passed, 1
+pre-existing skip; full backend suite 12,447 passed, 21 skipped (all
+environment-only — py_vapid, Docker daemon/registry, the opt-in API contract
+suite), 0 failed; frontend `tsc --noEmit` 0 errors; `npm run lint` 0 errors
+but exits non-zero on 1,449 pre-existing `@typescript-eslint/no-unsafe-*`
+warnings from a sandbox `node_modules` type-resolution issue this pass's diff
+does not touch (0 frontend files changed) — the exact symptom
+`KNOWN_LIMITATIONS.md`'s existing "Frontend — `typescript`'s declared version
+has drifted…" entry already tracks from an unrelated pass, not re-escalated
+as a new entry. Full write-up: `docs/security-review/MM-24-meetings-minutes.md`
+→ Pass 4. Rotation row 24 → `✅` (pending PR merge). PR opened this pass —
+number recorded in the Open PR row above once created. Next: Feature 25
+(Messaging & notifications), once this PR merges.
 
 ### 2026-09-13 — Watchdog: closed out Feature 23 (PR #2489), starting Feature 24 (Meetings & minutes, pass 4)
 
