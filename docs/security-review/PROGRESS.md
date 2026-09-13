@@ -16,25 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR opened this pass** (Feature 24, Meetings & minutes, pass 4) — branch
-`claude/friendly-babbage-4ccnij`, continuing the same watchdog branch this
-file's own prior Log entry started Feature 24 on (not a new branch: the
-watchdog's docs-only commit had not yet opened a PR, so this is that same
-in-progress feature, not a reuse of a merged branch's name per Pitfall #24).
-2 fixes (MM-15 non-finite/unbounded `quorum_threshold` validation, MM-16
-missing org filter on `create_from_meeting`'s attendee-name lookup), 1 new
-flagged item (MM-17, no finalization guard on `set_meeting_quorum_config` —
-owner decision, mirrored into `KNOWN_LIMITATIONS.md`), MM-9 re-verified still
-open and unchanged. Completion gate: flake8/black/isort clean; migrations
-unchanged (443 revisions, single head); 289 scoped + 12,447 full-suite
-backend tests pass (21 skipped, all environment-only); frontend `tsc` clean;
-`npm run lint` shows 0 errors and a large pre-existing, sandbox-local
+**PR [#2502](https://github.com/thegspiro/the-logbook/pull/2502)** (Feature
+24, Meetings & minutes, pass 4) — branch `claude/friendly-babbage-4ccnij`,
+continuing the same watchdog branch this file's own prior Log entry started
+Feature 24 on (not a new branch: the watchdog's docs-only commit had not yet
+opened a PR, so this is that same in-progress feature, not a reuse of a
+merged branch's name per Pitfall #24). 2 fixes (MM-15 non-finite/unbounded
+`quorum_threshold` validation, MM-16 missing org filter on
+`create_from_meeting`'s attendee-name lookup), 1 new flagged item (MM-17, no
+finalization guard on `set_meeting_quorum_config` — owner decision, mirrored
+into `KNOWN_LIMITATIONS.md`), MM-9 re-verified still open and unchanged.
+Completion gate: flake8/black/isort clean; migrations unchanged (443
+revisions, single head); 289 scoped + 12,447 full-suite backend tests pass
+(21 skipped, all environment-only); frontend `tsc` clean; `npm run lint`
+shows 0 errors and a large pre-existing, sandbox-local
 `@typescript-eslint/no-unsafe-*` warning count already covered by
 `KNOWN_LIMITATIONS.md`'s "Frontend — `typescript`'s declared version has
 drifted…" entry — not from this pass's diff, which touches no frontend file.
-Full write-up: `docs/security-review/MM-24-meetings-minutes.md` → Pass 4. PR
-number to follow in a short update to this row once opened. Next feature
-(25, Messaging & notifications) does not start until this PR merges.
+Subscribed to PR activity. Full write-up:
+`docs/security-review/MM-24-meetings-minutes.md` → Pass 4. Next feature (25,
+Messaging & notifications) does not start until this PR merges.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 11, PR #2489, before it merged; and the watchdog note that closed it out and started Feature 24), preserved for history</summary>
@@ -13757,9 +13758,10 @@ does not touch (0 frontend files changed) — the exact symptom
 `KNOWN_LIMITATIONS.md`'s existing "Frontend — `typescript`'s declared version
 has drifted…" entry already tracks from an unrelated pass, not re-escalated
 as a new entry. Full write-up: `docs/security-review/MM-24-meetings-minutes.md`
-→ Pass 4. Rotation row 24 → `✅` (pending PR merge). PR opened this pass —
-number recorded in the Open PR row above once created. Next: Feature 25
-(Messaging & notifications), once this PR merges.
+→ Pass 4. Rotation row 24 → `✅` (pending PR merge). PR
+[#2502](https://github.com/thegspiro/the-logbook/pull/2502) opened and
+subscribed. Next: Feature 25 (Messaging & notifications), once this PR
+merges.
 
 ### 2026-09-13 — Watchdog: closed out Feature 23 (PR #2489), starting Feature 24 (Meetings & minutes, pass 4)
 

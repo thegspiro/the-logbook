@@ -1,6 +1,6 @@
 # Security Review — Meetings & Minutes
 
-**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), #2303 (pass 3), pass 4 PR TBD
+**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), #2303 (pass 3), [#2502](https://github.com/thegspiro/the-logbook/pull/2502) (pass 4)
 
 ## Pass 1 (2026-08-26)
 
