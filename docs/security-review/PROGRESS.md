@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**
+**PR [#2517](https://github.com/thegspiro/the-logbook/pull/2517)**
 (Feature 29, Reports & analytics, pass 6) — branch
 `claude/security-review-reports-analytics`, opened against a fresh
 `origin/main` (no other security-review PR was open at the start of this

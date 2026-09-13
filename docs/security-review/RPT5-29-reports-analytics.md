@@ -176,8 +176,7 @@ decision this doc declines to make.
 
 ## Pass 6 (2026-09-13) — findings-history fragmentation resolved; two lint/hygiene fixes
 
-**Prefix:** `RPT5` (continued) · **Rotation pass:** 6 · **PR:** see
-`docs/security-review/PROGRESS.md`'s Open PR section for the number.
+**Prefix:** `RPT5` (continued) · **Rotation pass:** 6 · **PR:** #2517
 
 ### Fragmentation note
 
