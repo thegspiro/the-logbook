@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2521](https://github.com/thegspiro/the-logbook/pull/2521)
+(Feature 30, Onboarding, pass 4) merged clean, merged directly by the repo
+owner. One HIGH finding, fixed: **ONB3-30-3** — a real, reproduced-against-
+a-live-database race condition where two concurrent `POST /system-owner`
+calls could both create a full-access `*` System Owner account, the exact
+"two people racing to claim initial-admin" shape this feature's rotation
+slot exists to check for. Fixed by locking the `onboarding_status`
+singleton row and making the existing-user check itself a locking read
+(CLAUDE.md pitfall #27's pattern); guarded by a new integration test,
+verified to fail with the fix reverted and pass restored. Re-verified the
+fix is still present and intact after three unrelated PRs (#2511, #2519,
+#2520) merged on top, one of which (#2519) also touches
+`backend/app/api/v1/onboarding.py` — no conflict, no regression to the
+lock. Rotation row 30 is now `✅`. Next: Feature 31 (Scheduled tasks).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 4, PR #2521, before it merged), preserved for history</summary>
+
 **PR [#2521](https://github.com/thegspiro/the-logbook/pull/2521)** (Feature
 30, Onboarding, pass 4) — branch `claude/security-review-onboarding`, opened
 against a fresh `origin/main` (no security-review PR was open at the start of
@@ -40,6 +58,8 @@ already-merged ONBOARD-7 onboarding-singleton fix and the newly-landed
 onboarding resumability change that made the System Owner race newly
 reachable by an unrelated caller. Rotation row 30 is now `✅` (pending merge).
 Next: Feature 31 (Scheduled tasks).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 6, PR #2517, after it merged), preserved for history</summary>
