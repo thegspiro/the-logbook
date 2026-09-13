@@ -16,6 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2506](https://github.com/thegspiro/the-logbook/pull/2506)
+(Feature 26, Forms, pass 4) merged clean via merge commit `8f9c3e6658`.
+Its branch had picked up a real, same-direction conflict with #2505 (both
+independently edited this file's "Open PR" section relative to a common
+ancestor); resolved by merging `origin/main` into the PR branch, keeping
+both notes in their documented supersession order, and re-validating —
+CI came back all 17/17 green on the merge commit, `mergeable_state: clean`,
+no unresolved review threads. Rotation row 26 is now `✅`. Next: Feature 27
+(Integrations).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 4, PR #2506, before it merged), preserved for history</summary>
+
 **PR [#2506](https://github.com/thegspiro/the-logbook/pull/2506)** (Feature
 26, Forms, pass 4) — branch
 `claude/security-review-forms`, opened against `origin/main`. A separate,
@@ -68,6 +81,8 @@ frontend `tsc --noEmit` 0 errors; `npm run lint` exit 0, no warnings (no
 frontend file touched — the finding and fix are backend-only). Full
 write-up: `docs/security-review/FORM-26-forms.md` → Pass 4. Rotation row 26
 -> ✅. Next: Feature 27 (Integrations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 4, PR #2504, after it merged), preserved for history</summary>
