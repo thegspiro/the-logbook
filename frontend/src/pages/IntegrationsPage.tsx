@@ -1976,14 +1976,7 @@ const IntegrationsPage: React.FC = () => {
             return (
               <div className="fixed inset-0 z-50 overflow-y-auto">
                 <div className="flex min-h-screen items-center justify-center px-4">
-                  <div
-                    className="modal-overlay"
-                    onClick={() => {
-                      setShowConnectModal(null);
-                      resetFormState();
-                    }}
-                    aria-hidden="true"
-                  />
+                  <div className="modal-overlay" aria-hidden="true" />
                   <DialogPanel
                     onClose={() => {
                       setShowConnectModal(null);

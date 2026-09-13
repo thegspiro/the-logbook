@@ -17,6 +17,14 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  /**
+   * Off by default: a dialog in this app is nearly always a form, and the
+   * click target is the gutter around the panel, so a click there is far more
+   * often a slip than an intent to discard. Losing a half-filled form to one
+   * is unrecoverable — nothing is drafted, and callers routinely reset their
+   * form state in `onClose`. Escape and the header X remain the ways out.
+   * Enable it only for a transient surface with nothing to lose.
+   */
   closeOnClickOutside?: boolean;
   closeOnEscape?: boolean;
   /** Stable IDs are supported for dialogs whose accessible relationships are tested or externally referenced. */
@@ -34,7 +42,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   footer,
   size = 'md',
-  closeOnClickOutside = true,
+  closeOnClickOutside = false,
   closeOnEscape = true,
   titleId = 'modal-title',
   'aria-describedby': ariaDescribedBy,

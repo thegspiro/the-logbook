@@ -1542,6 +1542,48 @@ successful one — the schema-docs step above was blamed for a failure two steps
 earlier for exactly this reason. `actions_list` with `list_workflow_jobs`
 gives a per-step conclusion; that names the failing step directly.
 
+### 31. A Dialog Does Not Close on a Click Outside It _(2026-09-13)_
+
+`components/Modal.tsx` defaults `closeOnClickOutside` to **false**, and hand-rolled
+overlays carry no backdrop close handler. The reported case was the inventory Add
+Item dialog: a click in the `p-4` gutter around the panel discarded a name, a
+category, every selected size and every garment style axis, and reopened blank.
+
+Three things make this unrecoverable rather than merely annoying, and all three
+are normal here:
+
+- **Nothing is drafted.** No draft store, no localStorage, no confirmation.
+- **The parent keeps the modal mounted.** Only `Modal` returns `null`, so closing
+  does not unmount the form — a reset effect keyed on `isOpen` re-seeds it.
+- **Callers reset their own state in `onClose`.** `GrantDetailPage`'s shared
+  shell called `resetBudgetForm()`, `IntegrationsPage` called `resetFormState()`,
+  `EventsPage` blanked the import file input. The close _is_ the discard.
+
+A click in the gutter is also far more often a slip than an intent: a
+text-selection drag that starts in the panel and ends outside resolves to the
+container, so `target === currentTarget` cannot tell it from a deliberate click.
+`ShiftDetailPanel` carried a mousedown/mouseup guard for exactly that, which the
+rule makes unnecessary.
+
+```tsx
+// WRONG — a slip in the gutter discards the form, with no undo
+<div className="modal-overlay" onClick={() => setShowModal(false)} aria-hidden="true" />
+
+// CORRECT — an inert scrim; Escape and the close button are the ways out
+<div className="modal-overlay" aria-hidden="true" />
+```
+
+Escape stays on: it is deliberate, and it is the WAI-ARIA escape hatch. Every
+`Modal` renders the header X, so nothing is trapped.
+
+**Rule:** no new dialog closes on an outside click. A transient surface that
+holds no user input — a command palette, a picker, a jump sheet — may, by adding
+itself to `ALLOWED` in `src/dialogDismissIntegrity.test.ts` with a comment saying
+why. That test scans the tree for all three shapes (a re-enabled
+`closeOnClickOutside`, a scrim with a click handler, and the
+`target === currentTarget` container check), so a new one fails loudly rather
+than shipping.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.

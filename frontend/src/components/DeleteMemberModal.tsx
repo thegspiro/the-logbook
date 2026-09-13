@@ -90,7 +90,6 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
       onClose={onClose}
       title={`Remove Member: ${memberDisplayName}`}
       size="md"
-      closeOnClickOutside={!deleting}
       closeOnEscape={!deleting}
     >
       {/* Tab Toggle */}

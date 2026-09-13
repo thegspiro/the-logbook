@@ -654,38 +654,6 @@ describe('ShiftDetailPanel dialog shell', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('does not close when a selection drag starts inside the panel and ends on the backdrop', async () => {
-    // The browser resolves such a click to the common ancestor — the backdrop
-    // container — so `target === currentTarget` is true and the click alone
-    // cannot tell it from a deliberate backdrop click. Losing the dialog here
-    // would discard a half-typed cancellation reason or close-out hours.
-    const onClose = vi.fn();
-    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
-
-    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
-    fireEvent.mouseDown(screen.getByRole('heading', { name: 'Shift Details' }));
-    fireEvent.click(dialog);
-
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it('does not close when a press starts on the backdrop and is released inside the panel', async () => {
-    // The mirror of the case above, and it reaches the handler identically:
-    // the click still resolves to the container. mouseup is what distinguishes
-    // them, so it has to be able to invalidate a press that already qualified.
-    const onClose = vi.fn();
-    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
-
-    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
-    const heading = screen.getByRole('heading', { name: 'Shift Details' });
-
-    fireEvent.mouseDown(dialog);
-    fireEvent.mouseUp(heading);
-    fireEvent.click(dialog);
-
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
   it('goes inert while the driver-qualification dialog is on top of it', async () => {
     // Both dialogs portal to the body, so they are siblings rather than nested:
     // two aria-modal surfaces at once leave assistive technology to guess which
@@ -770,17 +738,32 @@ describe('ShiftDetailPanel dialog shell', () => {
     expect(document.body).not.toHaveFocus();
   });
 
-  it('closes on a backdrop click but not on a click inside the panel', async () => {
+  it('never closes on a click outside the panel, however the gesture is made', async () => {
+    // This panel carries close-out hours and a cancellation reason, and used to
+    // close on a click that merely resolved to the backdrop container — which a
+    // text-selection drag out of the panel does too. It was guarded by
+    // reconciling mousedown with mouseup; the guard is gone because the dialog
+    // no longer closes on any of them. Escape and the Close button remain.
     const user = userEvent.setup();
     const onClose = vi.fn();
     renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
 
-    // Inside the panel first: the container's handler sees a click whose target
-    // is a descendant, not the backdrop itself.
-    await user.click(await screen.findByRole('heading', { name: 'Shift Details' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
+    const heading = screen.getByRole('heading', { name: 'Shift Details' });
+
+    await user.click(heading);
+    await user.click(dialog);
+
+    // A selection drag out of the panel, then the mirror case back into it.
+    fireEvent.mouseDown(heading);
+    fireEvent.click(dialog);
+    fireEvent.mouseDown(dialog);
+    fireEvent.mouseUp(heading);
+    fireEvent.click(dialog);
+
     expect(onClose).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole('dialog', { name: 'Shift Details' }));
+    await user.click(screen.getByRole('button', { name: 'Close panel' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

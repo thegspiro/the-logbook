@@ -593,7 +593,7 @@ const MinutesPage: React.FC = () => {
         {canManage && showCreateModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="modal-overlay" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
+              <div className="modal-overlay" aria-hidden="true" />
               <div ref={dialogRef} className="modal-panel relative w-full max-w-2xl">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
