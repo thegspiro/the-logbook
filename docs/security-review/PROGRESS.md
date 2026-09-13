@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2502](https://github.com/thegspiro/the-logbook/pull/2502)
+(Feature 24, Meetings & minutes, pass 4) merged clean via merge commit
+`e2bdae89f5`, all 17 CI checks green (CI Success, both MySQL/MariaDB
+integration and contract suites, Migration Chain, Docker Image Build &
+Container Tests, Frontend Tests, Frontend Lint/Typecheck/Build, Frontend
+E2E/Playwright, Backend Unit Tests, Backend Lint, Backend Security Scan,
+Docs Link Check, Trivy, Gitleaks, SBOM), `mergeable_state: clean`, no open
+review threads. Codex Code Review had hit its usage-limit cap on this PR
+(posted "reached your Codex usage limits" rather than a review) — treated
+as idle/clean per this rotation's own precedent, same as prior PRs Codex
+could not reach. Merged directly by this 30-minute watchdog session. Rotation
+row 24 is now `✅`. Next: Feature 25 (Messaging & notifications).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 4, PR #2502, before it merged), preserved for history</summary>
+
 **PR [#2502](https://github.com/thegspiro/the-logbook/pull/2502)** (Feature
 24, Meetings & minutes, pass 4) — branch `claude/friendly-babbage-4ccnij`,
 continuing the same watchdog branch this file's own prior Log entry started
@@ -36,6 +52,8 @@ drifted…" entry — not from this pass's diff, which touches no frontend file.
 Subscribed to PR activity. Full write-up:
 `docs/security-review/MM-24-meetings-minutes.md` → Pass 4. Next feature (25,
 Messaging & notifications) does not start until this PR merges.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 11, PR #2489, before it merged; and the watchdog note that closed it out and started Feature 24), preserved for history</summary>
