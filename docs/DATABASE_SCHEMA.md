@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**265 tables · 4483 columns · 855 foreign keys**
+**265 tables · 4484 columns · 855 foreign keys**
 
 ---
 
@@ -445,7 +445,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`onboarding_sessions`](#onboarding_sessions) | `OnboardingSessionModel` | 8 | Server-side onboarding session storage |
-| [`onboarding_status`](#onboarding_status) | `OnboardingStatus` | 20 | System-wide onboarding status |
+| [`onboarding_status`](#onboarding_status) | `OnboardingStatus` | 21 | System-wide onboarding status |
 
 ### Operational Ranks
 
@@ -6434,6 +6434,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `singleton` | INTEGER | no |  | `1` |  |
 | `is_completed` | BOOL | no |  | `0` |  |
 | `completed_at` | DATETIME | yes |  |  |  |
 | `steps_completed` | JSON | yes |  | `dict()` |  |
@@ -6453,6 +6454,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `setup_notes` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_onboarding_status_singleton` (`singleton`)
 
 ## Operational Ranks
 

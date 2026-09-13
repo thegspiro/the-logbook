@@ -13,7 +13,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime, getTodayLocalDate, toLocalDateString, formatDateCustom } from '../../utils/dateFormatting';
+import { formatTime, formatDateCustom } from '../../utils/dateFormatting';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
@@ -38,6 +38,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
 
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [dateFilter, setDateFilter] = useState('');
   const [signupShiftId, setSignupShiftId] = useState<string | null>(null);
   const [signupPosition, setSignupPosition] = useState('');
@@ -51,11 +52,17 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
   const isOutreachSignup = Boolean(signupShift?.is_outreach) && openRoles.length > 0;
 
   // Fetch eligible positions for the currently selected shift
+  // `openPositions` and not `positions`: a seat someone already holds is one
+  // the server refuses, and offering it produced a signup error describing a
+  // race that had not happened. `positions` is still read, to tell a member who
+  // is not cleared for this shift apart from one whose seats are simply taken.
   const {
     positions: eligiblePositions,
+    openPositions: claimablePositions,
     isExcluded,
     loading: eligibilityLoading,
   } = useEligiblePositions(signupShiftId ?? undefined);
+  const seatsAllTaken = !isExcluded && eligiblePositions.length > 0 && claimablePositions.length === 0;
 
   useEffect(() => {
     if (!signupShiftId) {
@@ -65,9 +72,9 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
     }
 
     if (!eligibilityLoading) {
-      setSignupPosition((current) => (eligiblePositions.includes(current) ? current : (eligiblePositions[0] ?? '')));
+      setSignupPosition((current) => (claimablePositions.includes(current) ? current : (claimablePositions[0] ?? '')));
     }
-  }, [signupShiftId, eligiblePositions, eligibilityLoading]);
+  }, [signupShiftId, claimablePositions, eligibilityLoading]);
 
   useEffect(() => {
     setSignupRole((current) => (openRoles.some((r) => r.role === current) ? current : (openRoles[0]?.role ?? '')));
@@ -86,30 +93,25 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
   const loadShifts = useCallback(async () => {
     setLoading(true);
     try {
-      // Try the open shifts endpoint first, fall back to regular shifts
-      try {
-        const data = await schedulingService.getOpenShifts({
-          start_date: dateFilter || undefined,
-        });
-        setShifts(data);
-      } catch {
-        // Fallback: get upcoming shifts
-        const today = getTodayLocalDate(tz);
-        const endDate = new Date();
-        endDate.setDate(endDate.getDate() + 30);
-        const data = await schedulingService.getShifts({
-          start_date: dateFilter || today,
-          end_date: toLocalDateString(endDate, tz),
-          limit: 50,
-        });
-        setShifts(data.shifts);
-      }
+      // No fallback to the plain shifts list. This tab used to swap one in
+      // whenever /shifts/open failed, and that list is filtered by neither
+      // open seats nor the member's positions — so a failure quietly repainted
+      // the board with fully-staffed shifts, which is the very thing a member
+      // then gets refused for signing up to. An empty board with an error is
+      // honest; a full one that lies is not.
+      const data = await schedulingService.getOpenShifts({
+        start_date: dateFilter || undefined,
+      });
+      setShifts(data);
+      setLoadFailed(false);
     } catch (err) {
+      setShifts([]);
+      setLoadFailed(true);
       toast.error(getErrorMessage(err, 'Failed to load shifts'));
     } finally {
       setLoading(false);
     }
-  }, [dateFilter, tz]);
+  }, [dateFilter]);
 
   useEffect(() => {
     void loadShifts();
@@ -215,6 +217,20 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
           <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" aria-hidden="true" />
           <span className="sr-only">Loading open shifts…</span>
+        </div>
+      ) : loadFailed ? (
+        /* Distinct from the empty state on purpose: "we could not ask" and
+           "there is nothing" look identical to a member, and only one of them
+           is worth retrying. */
+        <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
+          <CalendarDays className="text-theme-text-muted mx-auto mb-3 h-12 w-12" aria-hidden="true" />
+          <h3 className="text-theme-text-primary mb-1 text-lg font-medium">Could not load open shifts</h3>
+          <p className="text-theme-text-muted mb-4 text-sm">
+            The list of open shifts is unavailable right now. Nothing has changed on your schedule.
+          </p>
+          <button onClick={() => void loadShifts()} className="btn-primary">
+            Try again
+          </button>
         </div>
       ) : sortedDates.length === 0 ? (
         <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
@@ -356,6 +372,16 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                         You are not eligible to sign up for this shift. Contact a scheduling admin for assistance.
                       </p>
                     </div>
+                  ) : seatsAllTaken && !isOutreachSignup ? (
+                    /* Cleared for this shift, but every seat at those positions
+                       is taken. Saying "not eligible" here sends the member to
+                       an admin about qualifications that are perfectly fine. */
+                    <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                      <p className="text-sm text-amber-600 dark:text-amber-400">
+                        Every seat you are cleared for on this shift has been filled. Other positions may still be open,
+                        but not ones you are qualified to ride.
+                      </p>
+                    </div>
                   ) : isOutreachSignup ? (
                     <div>
                       <label htmlFor="signup-role" className="text-theme-text-secondary mb-1 block text-sm font-medium">
@@ -392,7 +418,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                         onChange={(e) => setSignupPosition(e.target.value)}
                         className="form-input"
                       >
-                        {eligiblePositions.map((pos) => (
+                        {claimablePositions.map((pos) => (
                           <option key={pos} value={pos}>
                             {positionLabel(pos)}
                           </option>
@@ -408,7 +434,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                   >
                     Cancel
                   </button>
-                  {!isExcluded && eligiblePositions.length > 0 && (
+                  {!isExcluded && eligiblePositions.length > 0 && (isOutreachSignup || !seatsAllTaken) && (
                     <button
                       onClick={() => {
                         void handleSignup(signupShiftId);
