@@ -213,7 +213,7 @@ allowlist recovery paths under fail-closed. **Status:** fixed.
   `dangerouslySetInnerHTML` (the only two such sites are the unrelated
   link/markdown helpers). No stored-XSS path. `context` remains capped at 4 KB.
   (EL #6, PP-5)
-- **Correction (security-review SEC2-28, pass 4, 2026-09-13):** the claim
+- **Correction (security-review SEC2-28-11, pass-4 addendum, 2026-09-13):** the claim
   directly below — that the org-scoped `get_all_active_allowed_ips` was
   deleted — is no longer accurate and should not be re-derived as newly found:
   the method is present in `ip_security_service.py` today, correctly
