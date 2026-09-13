@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR #(this PR)** (Feature 27, Integrations, pass 4) — branch
+`claude/security-review-integrations`, opened against a fresh `origin/main`
+(no other security-review PR was open at the start of this iteration; row 27
+was `⬜` and rotation row 26's closure — PR #2506/#2507 — was already merged
+and recorded). One fix, one flagged: **INT-10** (MED, fixed) —
+`documenso_service.py` was the one `create_integration_client`-family
+connector with no `assert_outbound_url_safe` re-validation at send time at
+all (found by an out-of-scope pass, TRX-18, and tracked in
+`KNOWN_LIMITATIONS.md`; closing it belonged to this feature's own rotation
+turn) — added the missing send-time check to `test_connection()` and
+`create_document()`, mirroring `calcom_service.py`'s identical shape; 2 guard
+tests added, both verified to fail against the pre-fix code (`AttributeError`
+on the not-yet-imported name) and pass after. **INT-11** (LOW-MED, flagged) —
+this pass's first frontend read of `IntegrationsPage.tsx` found that
+Salesforce's backend-documented "blank the refresh token to switch to client
+credentials" feature has no reachable UI control: the form sends `undefined`
+(dropped from the payload) rather than an explicit `""` when the field is
+blank, so an admin who clears it and saves changes nothing, silently.
+Flagged rather than fixed — needs a product decision on which of two UI
+shapes to build. Mirrored into `KNOWN_LIMITATIONS.md`. All 25 routes across
+6 files re-enumerated (up from pass 3's 21 across 4 — `mcp_keys.py`'s 4
+routes newly enumerated this pass, all correctly gated and org-scoped, no
+finding). INT-1 through INT-9 re-verified still holding.
+
+Completion gate: flake8/black/isort clean (isort 9.0.1, CI's pin); migrations
+unchanged (443 revisions, single head, no schema change this pass); 2690
+scoped + 12450 full-suite backend tests pass (21 skipped, all
+environment-only); frontend `tsc --noEmit` 0 errors; `eslint --max-warnings
+10` 0 errors/0 warnings (frontend was read, not edited, this pass).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 4, PR #2506, before it merged), preserved for history</summary>
+
 **None.** PR [#2506](https://github.com/thegspiro/the-logbook/pull/2506)
 (Feature 26, Forms, pass 4) merged clean via merge commit `8f9c3e6658`.
 Its branch had picked up a real, same-direction conflict with #2505 (both
@@ -25,9 +58,6 @@ both notes in their documented supersession order, and re-validating —
 CI came back all 17/17 green on the merge commit, `mergeable_state: clean`,
 no unresolved review threads. Rotation row 26 is now `✅`. Next: Feature 27
 (Integrations).
-
-<details>
-<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 4, PR #2506, before it merged), preserved for history</summary>
 
 **PR [#2506](https://github.com/thegspiro/the-logbook/pull/2506)** (Feature
 26, Forms, pass 4) — branch
@@ -13835,7 +13865,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
@@ -18174,3 +18204,85 @@ commit, plus a fresh grep confirming `dangerouslySetInnerHTML` still
 appears nowhere under the forms components, re-confirming FORM-4). Findings
 doc: `docs/security-review/FORM-26-forms.md` (Pass 4). Rotation row 26 ->
 ✅. Next: Feature 27 (Integrations).
+
+### 2026-09-13 — Feature 27 (Integrations, pass 4)
+
+Fourth-lap pass. No security-review PR was open at the start (row 26 had
+already closed via merged PR #2506/#2507); branched directly off a fresh
+`git fetch origin main`.
+
+Loaded prior art in order (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/integrations.md`, `docs/app-review/integrations.md`, this
+feature's own passes 1-3 in `INT-27-integrations.md`,
+`KNOWN_LIMITATIONS.md`'s integrations-related entries) before reading any
+code. Read every backend file this feature owns in full — all close to pass
+3's documented sizes (`integrations.py` 841→849 L, confirmed by direct read
+to be content-identical modulo this environment's squashed git history, not a
+real diff) — plus, for the first time in this file's history, the frontend
+module (`IntegrationsPage.tsx`, `useConnectedIntegrations.ts`,
+`McpServiceKeyPanel.tsx`), which prior passes explicitly scoped out as
+"backend only." Also enumerated `mcp_keys.py`'s 4 routes (mounted at
+`/integrations/claude-mcp` behind the same `module_gate` as the rest of this
+feature) at the route/permission/org-scoping level for the first time,
+without pulling the wider `app/mcp/*` package into scope (unchanged
+precedent from pass 3). 25 routes total re-enumerated across 6 files, all
+correctly gated; no route relies on `require_permission` alone to scope its
+object.
+
+Re-verified INT-1 through INT-9 against current code — all hold, nothing
+regressed: send-time SSRF re-validation on every chat/Cal.com sender, the
+`integrations.manage`/`/connected` read-gating split, the `exclude_unset`
+partial-PATCH merge, the uninvoked webhook-domain allowlist (still an owner
+decision), connector-exception sanitization, the response-size cap and its
+`http1`/`http2`/`cert` kwarg forwarding, and Google Calendar's still-open,
+still correctly-scoped bypass of the shared HTTP hardening (INT-9).
+
+One new fix: **INT-10 (MED)** — `documenso_service.py`, this feature's own
+file, was the one `create_integration_client`-family connector with **no**
+`assert_outbound_url_safe` call anywhere in it (a gap `KNOWN_LIMITATIONS.md`
+already tracked, found by an out-of-scope training-extended pass) — added
+the missing send-time re-validation to `test_connection()` and
+`create_document()`, mirroring `calcom_service.py`'s identical shape. 2 guard
+tests added (`test_connection_blocks_unsafe_base_url`,
+`test_create_document_blocks_unsafe_base_url`), both verified via `git
+stash` to fail against the pre-fix file (`AttributeError` — the name did not
+exist to patch) and pass after. `KNOWN_LIMITATIONS.md`'s "Outbound
+Integration Requests" entry updated: `documenso_service.py` is no longer the
+worse case among its six-file family, only the same narrowed-not-closed
+TOCTOU every sibling still carries (that larger fix remains open, tracked,
+out of this pass's scope).
+
+One new finding, flagged: **INT-11 (LOW-MED)** — the first-ever frontend
+read in this file's history found that Salesforce's backend-documented
+"blank the refresh token to switch to client credentials" feature
+(`integrations.py`'s `clear_salesforce_refresh_token` handling) has no
+reachable UI control: `IntegrationsPage.tsx` sends `undefined` (dropped from
+the JSON payload) rather than an explicit `""` when the field is blank, so
+an admin who clears the field and saves changes nothing, with no error and
+no visible confirmation either way. Not attacker-reachable — requires
+`integrations.manage` and the admin's own mistaken belief — so flagged
+rather than fixed, since closing it means choosing between two UI shapes
+(a distinct "switch mode" control, or changing blank-submission semantics
+for this field only, which risks the opposite defect on every other secret
+field this form shares that convention with). Mirrored into
+`KNOWN_LIMITATIONS.md`.
+
+Checked and confirmed no new finding: abuse resistance on the four
+Salesforce sync-trigger endpoints (no rate limit, but admin-triggered,
+org-bounded, not cross-tenant — consistent with three prior passes not
+flagging this); `mcp_keys.py`'s `DELETE /keys/{key_id}` resolves via
+`get_key(org_id, key_id)`, properly org-scoped; unmodelled catalog entries
+with no `INTEGRATION_CONFIG_SCHEMAS` row (data-quality nit, no security
+surface); JSON-column mutation safety (every write in this feature is a
+flat top-level merge, Pitfall #12 n/a); zero LIKE-pattern usage anywhere in
+this feature (Pitfall #25 n/a).
+
+Full completion gate green: flake8/black/isort clean (isort 9.0.1, matching
+CI's pin); `validate_migrations.py --strict` passed (443 revisions, single
+head, no new migration this pass); 2690/2690 scoped and 12450/12450 full
+backend suite pass (21 skipped, all environment-only); frontend `tsc
+--noEmit` 0 errors and `eslint --max-warnings 10` exit 0 with no warnings
+(frontend was read but not edited this pass — the one frontend-observable
+finding, INT-11, is flagged rather than fixed). Findings doc:
+`docs/security-review/INT-27-integrations.md` (Pass 4). Rotation row 27 ->
+✅. Next: Feature 28 (Security, audit & IP).

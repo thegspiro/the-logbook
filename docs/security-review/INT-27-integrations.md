@@ -1,6 +1,297 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** #(this PR) (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 4 (2026-09-13) — one fix (a known, tracked gap closed), one new flagged finding, everything else re-verified
+
+**Backend:** `app/api/v1/endpoints/integrations.py` (849 L, 7 routes),
+`app/api/v1/endpoints/salesforce_sync.py` (586 L, 9 routes),
+`app/api/v1/endpoints/calcom_sync.py` (73 L, 1 route),
+`app/api/v1/endpoints/mcp_keys.py` (244 L, 4 routes — mounted at
+`/integrations/claude-mcp` under the same `module_gate("integrations", ...)`
+as the other three files; reviewed at the route/permission level per this
+pass's scope, deeper MCP internals left to the existing out-of-scope carve-out
+below), `app/api/public/integrations_webhook.py` (258 L, 2 public routes),
+`app/api/public/salesforce_webhook.py` (246 L, 1 public route),
+`app/api/public/paypal_webhook.py` (153 L, 1 public route),
+`app/services/integration_services/*` (base.py, calcom_service.py,
+slack/discord/teams/webhook_service.py, documenso_service.py,
+paypal_service.py, salesforce_service.py, salesforce_oauth_service.py,
+salesforce_sync_service.py, google_calendar_service.py,
+outlook_calendar_service.py, weather_service.py, notification_dispatch.py,
+`__init__.py` dispatcher — all read in full this pass), `models/integration.py`,
+`schemas/integration.py`.
+**Frontend:** `pages/IntegrationsPage.tsx` (2081 L), `hooks/useConnectedIntegrations.ts`,
+`components/integrations/McpServiceKeyPanel.tsx`, `modules/integrations/*` —
+read in full. Prior passes explicitly scoped the frontend out ("not reviewed
+this pass — backend only"); this is the first pass in this file's history to
+read it, and it is what surfaced INT-11 below.
+**Migrations:** none this pass (443 revisions, single head, unchanged).
+
+### Scope
+
+Re-verified every standing finding (INT-1 through INT-9) against current code
+rather than assuming pass 3's verdicts still hold, then did a fresh full read
+of every backend file this feature owns (all byte-for-byte close to pass 3's
+sizes — `integrations.py` 841→849 L from an unrelated `git log` artifact of
+this environment's squashed history, not a real content diff; content
+confirmed identical to pass 3's documented state by direct read) plus, for the
+first time in this file, the frontend module. Also read `mcp_keys.py` at the
+route/permission/org-scoping level, since it is mounted under
+`/integrations/claude-mcp` behind the same `module_gate` as the rest of this
+feature's routes — narrower than a full MCP-internals review, which stays
+out of scope per pass 3's own precedent (the wider `app/mcp/*` package has its
+own `KNOWN_LIMITATIONS.md` entry, outside this rotation).
+
+### Route inventory (re-verified, +4 routes since pass 3 — `mcp_keys.py` now enumerated)
+
+| Method | Path                                       | Auth dependency           | Permission                                       | Org-scoped                                  | Notes                                               |
+| ------ | ------------------------------------------ | ------------------------- | ------------------------------------------------ | ------------------------------------------- | --------------------------------------------------- |
+| GET    | `/integrations`                            | `require_permission`      | `integrations.manage`                            | yes (query filter)                          | INT-3                                               |
+| GET    | `/integrations/connected`                  | `get_current_user` (bare) | none                                             | yes (query filter)                          | INT-3 carve-out, deliberate                         |
+| GET    | `/integrations/{id}`                       | `require_permission`      | `integrations.manage`                            | yes (id+org)                                |                                                     |
+| POST   | `/integrations/{id}/connect`               | `require_permission`      | `integrations.manage`                            | yes (id+org)                                |                                                     |
+| POST   | `/integrations/{id}/disconnect`            | `require_permission`      | `integrations.manage`                            | yes (id+org)                                | revokes MCP keys, `require_audit_entry`-gated       |
+| PATCH  | `/integrations/{id}`                       | `require_permission`      | `integrations.manage`                            | yes (id+org)                                |                                                     |
+| POST   | `/integrations/{id}/test-connection`       | `require_permission`      | `integrations.manage`                            | yes (id+org)                                |                                                     |
+| GET    | `/integrations/salesforce/status`          | `require_permission`      | `integrations.manage`                            | yes                                         |                                                     |
+| POST   | `/integrations/salesforce/push/members`    | `require_permission`      | `integrations.manage`                            | yes                                         |                                                     |
+| POST   | `/integrations/salesforce/push/training`   | `require_permission`      | `integrations.manage`                            | yes                                         |                                                     |
+| POST   | `/integrations/salesforce/push/events`     | `require_permission`      | `integrations.manage`                            | yes                                         |                                                     |
+| POST   | `/integrations/salesforce/pull/contacts`   | `require_permission`      | `integrations.manage`                            | yes                                         |                                                     |
+| GET    | `/integrations/salesforce/readiness`       | `require_permission`      | `integrations.manage`                            | yes                                         |                                                     |
+| POST   | `/integrations/salesforce/preview/members` | `require_permission`      | `integrations.manage`                            | yes                                         | read-only                                           |
+| GET    | `/integrations/salesforce/oauth/authorize` | `require_permission`      | `integrations.manage`                            | yes                                         | 302 to Salesforce                                   |
+| GET    | `/integrations/salesforce/oauth/callback`  | **none**                  | n/a                                              | yes (id+org from signed state)              | public by design, JWT state + nonce cookie          |
+| GET    | `/integrations/calcom/bookings`            | `require_permission`      | `integrations.manage`                            | yes                                         |                                                     |
+| GET    | `/integrations/claude-mcp/status`          | `require_permission`      | `integrations.manage` OR `integrations.mcp_keys` | yes                                         |                                                     |
+| GET    | `/integrations/claude-mcp/keys`            | `require_permission`      | `integrations.manage` OR `integrations.mcp_keys` | yes                                         |                                                     |
+| POST   | `/integrations/claude-mcp/keys`            | `require_permission`      | `integrations.mcp_keys`                          | yes                                         | tighter than read; `require_audit_entry`-gated      |
+| DELETE | `/integrations/claude-mcp/keys/{key_id}`   | `require_permission`      | `integrations.mcp_keys`                          | yes (`get_key(org_id, key_id)`)             | `require_audit_entry`-gated                         |
+| POST   | `/public/v1/webhooks/documenso/{id}`       | none                      | n/a                                              | yes (resolved via id-matched `Integration`) | public, HMAC/shared-secret, replay-protected        |
+| POST   | `/public/v1/webhooks/calcom/{id}`          | none                      | n/a                                              | yes                                         | public, HMAC, replay-protected                      |
+| POST   | `/public/v1/webhooks/salesforce/{id}`      | none                      | n/a                                              | yes                                         | public, HMAC, replay-protected, 500-record cap      |
+| POST   | `/public/v1/webhooks/paypal/{id}`          | none                      | n/a                                              | yes                                         | public, PayPal-verified signature, replay-protected |
+
+25 routes, all enumerated (21 authenticated/permission-gated + 4 intentionally
+public with a named compensating control). No route relies on
+`require_permission` alone to scope its object (checklist 14b) — every by-id
+route resolves its target through an `id` + `organization_id` filter in the
+same query, confirmed by direct read of every handler, not sampled.
+
+### Re-verified from passes 1–3 (all hold)
+
+- **INT-1** (send-time SSRF re-validation, `assert_outbound_url_safe`): intact
+  in `calcom_service.py`, `slack_service.py`, `discord_service.py`,
+  `teams_service.py`, `webhook_service.py` — each calls it immediately before
+  the outbound request, confirmed by direct read of every connector this
+  pass, not grep alone.
+- **INT-2** (OAuth `error` URL-encoded): intact, `salesforce_sync.py:419`.
+- **INT-3** (list/get gated on `integrations.manage`; `/connected`
+  status-only on bare auth, registered first): intact,
+  `integrations.py:464-517`.
+- **INT-4** (`exclude_unset` partial-PATCH merge): intact, `integrations.py:345`.
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist): unchanged, still an
+  explicit owner decision, `app/utils/url_validator.py`.
+- **INT-6** (connector exception sanitization via `sanitize_connector_error`):
+  intact at `integrations.py:848`, `salesforce_sync_service.py:664`/`704`, and
+  the three non-interpolating re-raises in `google_calendar_service.py`,
+  `outlook_calendar_service.py`, `weather_service.py`.
+- **INT-7** (`_SizeLimitedTransport` response-size cap): intact,
+  `base.py:98-139`, wired into `create_integration_client()`.
+- **INT-8** (`http1`/`http2`/`cert` kwargs reaching the wrapped transport):
+  intact, `base.py:212-386`.
+- **INT-9** (Google Calendar bypasses the shared HTTP hardening — no size cap,
+  no future wall-clock deadline): still open, still correctly scoped to
+  `google_calendar_service.py`'s `googleapiclient`/`httplib2` transport, which
+  never reaches `create_integration_client()`. `KNOWN_LIMITATIONS.md`'s entry
+  is current and accurate; re-verified rather than re-derived.
+- **SOQL injection defense** (`_soql_quote`/`_soql_identifier`,
+  `salesforce_sync_service.py:131-149`): every dynamic SOQL construction site
+  (`_find_contact_by_email:314`, `_find_record_by_external_id:735-737`) still
+  uses them; `pull_contacts`' `LastModifiedDate > {ts}` interpolation
+  (line 419) is a server-formatted `datetime` (`integration.last_sync_at`),
+  never user input, so it carries no injection surface.
+- **Instance-URL domain pinning** (`salesforce_service.py`): `_INSTANCE_URL_RE`
+  now also gates `_api_url()` itself (`:157-175`), not only the token-refresh
+  path — confirmed still the case, closing the gap the file's own docstring
+  there describes (a cached access token skips `_refresh_access_token()`
+  entirely, so without this second gate an admin-editable `instance_url`
+  would reach every request URL, with the live bearer token attached,
+  unvalidated).
+- **Secret handling** (`models/integration.py`): secrets live only in
+  `encrypted_config` (AES-256 via `app/core/security.encrypt_data`), decrypted
+  only through `get_secret()`; `_sanitize_config` redacts any
+  `_SECRET_KEY_PATTERN`-matching key before a response is built. No endpoint
+  response includes a raw secret — confirmed by reading every response
+  builder in `integrations.py`/`salesforce_sync.py`/`calcom_sync.py`, not
+  assumed.
+- **Frontend cache exclusion**: `/integrations` is in `apiCache.ts`'s
+  `UNCACHEABLE_PREFIXES` (SEC-00's SEC4-3 pin covers it), and
+  `integrationsService` is built on the shared, CSRF/auth-wired
+  `services/apiClient.ts` — not a bespoke module axios instance (Pitfall #7
+  n/a; there is only one client here).
+- **Webhook replay dedup** (`app/utils/webhook_replay.py`): Redis-backed,
+  10-minute TTL, fails open (not drops) when Redis is unavailable — bounded,
+  no Pitfall #9 tracker concern.
+
+### Findings
+
+#### INT-10 — MED — `documenso_service.py` never re-validated its outbound URL at send time — ✅ FIXED
+
+**What:** `KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" entry
+(found by the training-extended rotation's pass 4, added 2026-09-10) named
+`documenso_service.py` as the one `create_integration_client`-family connector
+with **no** `assert_outbound_url_safe` call anywhere in the file — worse than
+its five siblings (which at least narrow the DNS-rebinding TOCTOU window),
+this one had no send-time re-check at all. Since Documenso is this feature's
+own file, closing the documented "first step" (adding the missing call, matching
+`calcom_service.py`'s identical `_assert_base_url_safe()` shape) belongs to
+this rotation pass rather than waiting for another feature to stumble onto it
+again.
+**Where:** `backend/app/services/integration_services/documenso_service.py` —
+`test_connection()` (the only currently-invoked path, via the
+`test_integration_connection` dispatcher) and `create_document()` (not yet
+wired to any route, but part of this class's public API).
+**Failure scenario:** a department points a self-hosted Documenso instance's
+`api_base_url` at a hostname that resolves to a public IP at config-save time
+(passing `validate_integration_url`) and is later re-pointed (DNS rebinding)
+at `169.254.169.254`/`127.0.0.1`/an internal host. Every sibling connector
+(Cal.com, Slack, Discord, Teams, generic webhook) would refuse the request at
+send time; Documenso's `test_connection()`/`create_document()` would not —
+the only thing standing between the request and an internal service was the
+save-time check, whose window was the entire lifetime of the stored config.
+**Impact:** MED — SSRF against internal infrastructure, gated behind
+`integrations.manage` (an org admin must have configured the integration), so
+not attacker-reachable without that permission, but a real gap relative to
+every sibling connector doing the equivalent request.
+**Fix:** added `_assert_base_url_safe()` (identical shape and docstring intent
+to `calcom_service.py`'s own method) and call it before the request in both
+`test_connection()` and `create_document()`. This is the "narrowed, not
+closed" TOCTOU shape the other five connectors already have — it does not
+pin the resolved address the way `external_training_service.py`'s
+`SSRFSafeAsyncTransport` does; that larger cross-cutting fix (resolve once,
+connect to the pinned IP, preserve Host/SNI) remains tracked, unfixed, for all
+six `create_integration_client`-family connectors in
+`KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" entry, updated below
+to reflect that `documenso_service.py` is no longer the _worse_ case (no
+check at all), only the same "narrowed, not closed" case as its siblings.
+**Guard tests:** `backend/tests/test_integration_services.py::TestDocumensoPayload::test_connection_blocks_unsafe_base_url`
+and `::test_create_document_blocks_unsafe_base_url` — each patches
+`assert_outbound_url_safe` to raise, asserts the exception propagates
+(fail-closed), and asserts `create_integration_client` is never called (proves
+the check runs _before_ any request, not merely somewhere in the method).
+Both verified to fail against the pre-fix code (`AttributeError: ... does not
+have the attribute 'assert_outbound_url_safe'`, since the import did not
+exist) via `git stash` on just this file, and to pass after.
+
+#### INT-11 — LOW-MED — Salesforce's "blank the refresh token to switch to client credentials" feature has no reachable frontend control — 🚩 FLAGGED
+
+**What:** `connect_integration`/`update_integration`
+(`integrations.py:568-572`, `:720-724`) special-case an explicit
+`config["refresh_token"] == ""` on a Salesforce integration: it clears the
+stored `refresh_token` _and_ `access_token`, switching the integration from
+the interactive OAuth grant to Salesforce's client-credentials flow on the
+next sync. This requires the wire payload to contain the literal key/value
+pair `"refresh_token": ""`. `IntegrationsPage.tsx:585` builds the Salesforce
+config as `refresh_token: sfRefreshToken || undefined` — when the field is
+blank, this is `undefined`, which `JSON.stringify` (and therefore the request
+body axios sends) **omits entirely**, not `""`. Grepped the whole file for
+any other place that could send an explicit empty string for this field —
+none exists; the field only reaches the backend as either a real token or
+absent.
+**Where:** `frontend/src/pages/IntegrationsPage.tsx:580-590` (the Salesforce
+branch of `getConfigFromForm`); the backend behavior it can never trigger is
+`backend/app/api/v1/endpoints/integrations.py:568-572` (connect) and
+`:720-724` (update).
+**Failure scenario:** an IT administrator who previously pasted a
+colleague's personal Salesforce refresh token (interactive OAuth) wants to
+switch the org to the Connected App's own client-credentials flow — the
+documented, intended way to do this is to clear the Refresh Token field and
+save. Clearing the field and saving does nothing: the key is omitted from the
+payload, the backend's merge (`{**stored, **public_config}`) leaves the
+stored `refresh_token`/`access_token` untouched, and every subsequent sync
+keeps authenticating as whoever the old refresh token belonged to — silently,
+with no error, and no way for the admin to tell from the UI that their intent
+was not carried out (the form has no separate confirmation of which auth mode
+is currently active). If that person leaves the department or Salesforce
+revokes their session, sync failures start with no visible link back to "the
+field I cleared didn't do what its own tooltip position implies."
+**Impact:** LOW-MED. Not attacker-reachable (requires `integrations.manage`
+and the admin's own mistaken belief that clearing the field did something) —
+this is a credential-lifecycle correctness gap, not a leak or an escalation.
+Flagged rather than fixed because closing it is a product decision between at
+least two shapes (a distinct "Switch to Client Credentials" button/checkbox
+that sends the explicit `""`, versus changing the field's semantics so a
+blank submission always means "clear," which would itself need its own
+review against every _other_ field this form treats as "blank = leave
+unchanged" — CSV3-style scope creep this pass should not decide unilaterally).
+**Mirrored:** `docs/KNOWN_LIMITATIONS.md`, new entry below.
+
+### Checked, no new finding
+
+- **Abuse resistance on the sync-trigger endpoints**
+  (`push/members`/`push/training`/`push/events`/`pull/contacts`): none of the
+  four carry a rate-limit dependency, and each runs synchronously within the
+  request (no background task), so a large org's push could hold the request
+  open for a while. Not flagged: the actor must already hold
+  `integrations.manage`, the work is bounded by the org's own data (not
+  attacker-controlled), and the effect (a slow request, a duplicate
+  Salesforce Contact if two pushes race) is self-inflicted within the org's
+  own tenant, not a cross-tenant or resource-exhaustion vector against the
+  platform. Consistent with three prior passes not flagging this; recorded so
+  the next pass does not re-derive the question from scratch.
+- **`mcp_keys.py`'s four routes**: enumerated in the route inventory above.
+  `DELETE /keys/{key_id}` resolves via `McpKeyService.get_key(org_id, key_id)`
+  (`app/mcp/keys.py:155-163`), which filters both — confirmed by direct read,
+  closing the one route in this file with a client-supplied id (checklist
+  14a). No new finding; this is the first pass to enumerate these routes
+  rather than treating the whole file as out of scope.
+- **`nfc-id-cards`/coming-soon catalog entries with no `INTEGRATION_CONFIG_SCHEMAS`
+  entry** (`active911`, `google-maps`, `zapier`, `whatsapp`, `imagetrend`,
+  `eso-solutions`, `nremt`, `firstwatch`, `pulse-point`, `nfc-id-cards`): PATCH
+  (unlike POST `/connect`) does not check `status == "coming_soon"`, so an
+  admin can write arbitrary JSON into a not-yet-implemented integration's
+  public config. No schema means no `extra="forbid"` and no secret-key
+  restriction beyond the generic `SECRET_CONFIG_KEYS` split, but this is the
+  org's own admin writing to the org's own row — no cross-tenant or
+  injection surface. `nfc-id-cards` itself stores no config at all in
+  practice (`app/utils/nfc_integration.py` reads only `enabled`/`status`).
+  Not flagged — a data-quality nit, not a security finding.
+- **JSON-column mutation** (`integration.config`): every write in this
+  feature is a flat top-level merge (`{**stored, **new}`) or a `dict()` copy
+  with only top-level key assignment (`salesforce_sync.py:564-568`) — no
+  nested-mutation-on-shared-reference shape anywhere in this feature
+  (Pitfall #12 n/a here, consistent with SEC-00 pass 4's sweep 9).
+- **LIKE-pattern usage**: none in this feature (`grep -rn "\.like(\|\.ilike("`
+  across every file in scope: zero hits). Checklist §4's LIKE item is n/a.
+
+## Schema & migration notes
+
+None — no model or migration change this pass. `validate_migrations.py
+--strict`: 443 revisions, single head, unchanged from before this pass.
+
+## Guard tests added
+
+| Test                                                                                              | Invariant asserted                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test_integration_services.py::TestDocumensoPayload::test_connection_blocks_unsafe_base_url`      | `DocumensoService.test_connection()` re-validates `api_base_url` at send time and fails closed before any request; fails on reintroduction of the missing call. |
+| `test_integration_services.py::TestDocumensoPayload::test_create_document_blocks_unsafe_base_url` | Same guard on `create_document()`.                                                                                                                              |
+
+## Completion gate (pass 4)
+
+| Check                                                                                                                       | Result                                           |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                               | ✅ 0 violations                                  |
+| `black --check app/ tests/ alembic/`                                                                                        | ✅ 1586 files unchanged                          |
+| `isort --check-only app/ tests/ alembic/`                                                                                   | ✅ clean (isort 9.0.1, CI's pinned version)      |
+| `python3 scripts/validate_migrations.py --strict`                                                                           | ✅ 443 revisions, single head, PASSED            |
+| backend tests, scope (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key"`) | ✅ 2690 passed, 21 skipped (env-only), 0 failed  |
+| backend tests, full suite (`pytest tests/ -q`)                                                                              | ✅ 12450 passed, 21 skipped (env-only), 0 failed |
+| `tsc --noEmit` (frontend)                                                                                                   | ✅ 0 errors                                      |
+| `eslint --max-warnings 10` (frontend)                                                                                       | ✅ 0 errors, 0 warnings                          |
 
 ---
 
