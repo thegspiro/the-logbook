@@ -846,7 +846,11 @@ export interface InventoryCategory {
 export interface InventoryItem {
   id: string;
   organization_id: string;
-  category_id?: string;
+  // Nullable, not merely absent: the API serializes `Optional[UUID] = None`
+  // as an explicit null for an uncategorised item, so code that only allowed
+  // `string | undefined` was describing a response shape the backend does not
+  // send -- and a test had to cast a real null away to say so.
+  category_id?: string | null;
   category_name?: string;
   name: string;
   description?: string;
