@@ -16,6 +16,43 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**
+(Feature 29, Reports & analytics, pass 6) — branch
+`claude/security-review-reports-analytics`, opened against a fresh
+`origin/main` (no other security-review PR was open at the start of this
+iteration; row 29 was `⬜` and row 28's closure — PR #2513 — was already
+merged and recorded). This feature's findings history was fragmented across
+four files (`RPT-29-reports-analytics-pass3.md`, `RPT2-29-reports-
+analytics.md`, `RPT4-29-reports-analytics.md`, `RPT5-29-reports-
+analytics.md`, no `RPT3` file ever existed); reconciled by chronology
+(cross-checked against this doc's own log) to `RPT5-29-reports-
+analytics.md` being the latest, continued here as its "Pass 6". Full
+end-to-end re-read of all ten files (no commit had touched any of them
+since PR #2344 merged); 2 fixes, both LOW/informational hygiene items, no
+new correctness or tenant-isolation findings: **RPT5-29-3** — 6 real
+`# noqa: E712` suppressions in `dashboard.py`/`attendance_dashboard_service.py`
+(plus 1 stray leftover marker) that pass 2's identical sweep of `reports.py`/
+`platform_analytics.py` never reached — converted to `.is_(True)`/
+`.is_(False)`, no behavior change; **RPT5-29-4** — deleted the dead
+`reportExportService` in the frontend reports module (zero callers,
+targets a `/reports/export` route that has never existed), flagged for
+deletion by pass 3 and left untouched since. Every prior-pass finding
+(module-audit iteration 16 through security-review pass 5) re-verified
+intact, none regressed. See `docs/security-review/RPT5-29-reports-
+analytics.md` → Pass 6.
+
+Completion gate: flake8/black/isort clean over `app/ tests/ alembic/`
+(isort 9.0.1, CI's pin); `validate_migrations.py --strict` passed (444
+revisions, single head); scoped backend tests (`-k "reports or label or
+analytics or dashboard or attendance_dashboard"`) 545/545 passed, 1 skipped
+(environment-only); full backend suite 12,490/12,490 passed, 21 skipped
+(all environment-only); frontend `npm run typecheck` 0 errors, `npm run
+lint` 0 errors/0 warnings, scoped `vitest run src/modules/reports` 42/42
+passed.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 4, PR #2513, merged), preserved for history</summary>
+
 **None.** PR [#2513](https://github.com/thegspiro/the-logbook/pull/2513)
 (Feature 28, Security, audit & IP, pass 4) merged clean via merge commit
 `2be53982b0`, 17/17 CI green, `mergeable_state: clean`, no unresolved
@@ -25,6 +62,8 @@ deliberately flagged rather than fixed — this rotation's own instructions
 called for extra conservatism reviewing the app's own defense mechanisms,
 and a drive-by lock here risked app-wide request serialization. Rotation
 row 28 is now `✅`. Next: Feature 29 (Reports & analytics).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 4, PR #2513, before it merged), preserved for history</summary>
@@ -13924,7 +13963,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
@@ -18442,3 +18481,119 @@ suite); frontend `tsc --noEmit` 0 errors; `eslint --max-warnings 10` 0
 errors/0 warnings (frontend read, not edited, this pass). Findings doc:
 `docs/security-review/SEC2-28-security-audit-ip.md` (Pass 4). Rotation row
 28 -> ✅. Next: Feature 29 (Reports & analytics).
+
+---
+
+### 2026-09-13 — Feature 29 (Reports & analytics, pass 6) — findings-history fragmentation resolved
+
+**Branched fresh off `origin/main`** (`git fetch origin main && git checkout
+-b claude/security-review-reports-analytics origin/main`) — `main` was
+clean, no security-review PR open, row 29 was `⬜`.
+
+**This feature's findings history is fragmented across four files with no
+single linear numbering**, and untangling it was this iteration's first
+task: `RPT-29-reports-analytics-pass3.md` (labeled "pass 3", PR #2091,
+merged 2026-08-31), `RPT2-29-reports-analytics.md` (its own header says no
+pass number, but its content and `PROGRESS.md`'s log confirm it is
+chronologically _pass 2_, PR #1912, merged 2026-08-27 — earlier than the
+"pass3"-named file despite the plain `RPT2` prefix sorting after `RPT`
+alphabetically), `RPT4-29-reports-analytics.md` (pass 4, 2026-09-06,
+delta-only by design), and `RPT5-29-reports-analytics.md` (pass 5,
+2026-09-06, PR #2344 — extending pass 4's own branch/PR rather than opening
+a competing one, per the rotation's one-PR-per-feature rule, and supplying
+the full end-to-end re-read of `reports_service.py`/`dashboard.py`/
+`attendance_dashboard_service.py`/`label_service.py` that pass 4 explicitly
+deferred). Cross-checked this ordering against `PROGRESS.md`'s own prior log
+entries (grepped for "Reports"/"RPT"), which agree and additionally confirm
+PR #2344 (covering both pass 4 and pass 5) merged 2026-09-06 21:58:57Z as
+`cf18d329`. **`RPT5-29-reports-analytics.md` is therefore the
+chronologically latest file**; this pass continues it as its own "Pass 6"
+section, with finding ids continuing that file's `RPT5-29-*` sequence
+(next: `RPT5-29-3`, `RPT5-29-4`) rather than starting a fifth file or a new
+numbering scheme.
+
+No commit touched any of this feature's ten files between PR #2344 merging
+and this pass starting (verified via `git log` on each file — the one
+intervening hit, `f8fdd1a`, is an unrelated squash-merge boundary in this
+repo's history touching effectively the entire tree, not a targeted edit).
+Re-read all ten files end to end from scratch rather than trusting that
+byte-identity implied nothing needed a second look: re-enumerated all 30
+routes' auth/permission gates from source; read all 15 `reports_service.py`
+report generators bounded to their own function bodies and confirmed each
+either filters `organization_id` directly or resolves through an
+already-org-scoped parent id list (no exceptions found); read all 16
+`platform_analytics.py` aggregate queries individually and confirmed each
+filters to the caller's own org (the endpoint is per-org despite its
+platform-sounding name, gated on the ordinary org-scoped `settings.manage`
+permission — not a cross-tenant surface); re-read the label-printer SSRF
+guards (port allowlist, blocked address classes, operator network
+allowlist, resolve-then-connect-to-IP-literal) and the prospect
+self-access filter across all three label paths; re-swept for `.like`/
+`.ilike`/raw SQL/bare `csv.writer` (all still zero across the ten files);
+re-checked `apiCache.ts`'s `UNCACHEABLE_PREFIXES` still carries
+`/dashboard/action-items` and `/analytics/export`; re-checked the one
+`ondelete="SET NULL"` FK on `SavedReport` and on `LabelPrinter` are both
+`nullable=True`; re-ran `validate_migrations.py --strict` (444 revisions
+now, up from 431 at pass 5 — unrelated features' migrations landed between,
+single head, no conflict).
+
+**Found and fixed 2 real gaps, both hygiene-class, both LOW/informational:**
+
+1. **RPT5-29-3 — `dashboard.py`/`attendance_dashboard_service.py` carried 6
+   live `# noqa: E712` suppressions (plus 1 stray leftover marker) that pass
+   2's identical sweep never reached.** Pass 2 (`RPT2-1`) converted `==
+True`/`== False` boolean comparisons to `.is_(True)`/`.is_(False)` in
+   `reports.py` and `platform_analytics.py` and declared "both files are now
+   E712-free" — but never touched the two sibling files in this same
+   feature carrying the identical pattern. CLAUDE.md Pitfall #10 treats a
+   `# noqa` suppression as a non-fix regardless of which flake8 code it
+   silences, and the app-wide precedent for this exact pattern had already
+   been set twice in this same feature. No behavioral difference (`==`
+   against a boolean column compiles to the same SQL as `.is_()`) — a
+   hygiene finding, not a correctness bug — but a real, present suppression
+   or a stray no-longer-needed marker sitting in code this rotation is
+   specifically charged with keeping lint-clean. Fixed: all 6 converted,
+   all 7 markers (6 real + 1 stray) removed. `flake8` on both files clean
+   with zero suppressions.
+2. **RPT5-29-4 — deleted the dead `reportExportService` in `modules/
+reports/services/api.ts`.** Pass 3 found this posts to a `/reports/
+export` route that has never existed, with zero frontend callers, and
+   flagged it for "whoever next touches this file to delete." Re-confirmed
+   zero callers repo-wide before deleting (the only other hit for the same
+   export name is an unrelated, actually-used export in `services/
+trainingServices.ts`, a different module). Not exploitable as it stood
+   (would 404), so this is cleanup, not a vulnerability fix.
+
+**Everything else re-verified unchanged, no new information:** RPT5-29-1
+(compliance-status/training-summary re-deriving training compliance
+independently of `training_compliance.py`'s shared evaluator — Pitfall #29
+shape, already mirrored in `KNOWN_LIMITATIONS.md`, still flagged pending an
+architecture decision), RPT2-29-2 (saved-report scheduling fields stored
+and API-writable with no reader — already mirrored, still flagged),
+LBL-29-2 (`GET /label-printers` authentication-only, deliberate), LBL-29-4
+(PDF label path has no per-request count cap unlike the print path),
+DASH-2 (`GET /dashboard/stats` has no frontend caller), and RPT-5c/RPT-6
+(inventory `float()`, `apparatus_status.last_inspection_date` hardcoded
+`None`, `requirement_breakdown` completion % can exceed 100% in the
+shared-requirement double-enrollment case) — none re-litigated, none
+regressed.
+
+No guard test added for either fix (both mechanical: a lint-clean rewrite
+with no behavior change, and a dead-code deletion), matching pass 2's own
+precedent for the identical E712 pattern.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/` (isort 9.0.1, matches CI's pin);
+`validate_migrations.py --strict` passed (444 revisions, single head);
+scoped backend tests (`-k "reports or label or analytics or dashboard or
+attendance_dashboard"`) 545 passed, 1 skipped (environment-only —
+`pywebpush`); full backend suite 12,490 passed, 21 skipped (all
+environment-only: `pywebpush`, Docker registry/daemon unavailable in this
+sandbox); frontend `npm run typecheck` 0 errors; `npm run lint` 0
+errors/0 warnings; scoped frontend suite (`npx vitest run
+src/modules/reports`) 42 passed (5 files). Findings doc:
+`docs/security-review/RPT5-29-reports-analytics.md` (Pass 6). Rotation row
+29 -> ✅ (pending PR merge). Row 30 (Onboarding) is `⬜` in the current
+rotation table — this cycle's earlier log entries for Feature 30 (e.g. PR
+#2358) belong to a prior full pass before the rotation wrapped. Next: 30
+Onboarding, once this PR merges.
