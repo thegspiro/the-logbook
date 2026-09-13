@@ -16,11 +16,42 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2508](https://github.com/thegspiro/the-logbook/pull/2508)
-(Feature 27, Integrations, pass 4) merged clean via merge commit
-`3ab30172e7`, 17/17 CI green, `mergeable_state: clean`, no unresolved review
-threads (Codex hit its usage-limit cap, posting no findings). Rotation row
-27 is now `✅`. Next: Feature 28 (Security, audit & IP).
+**PR [#2513](https://github.com/thegspiro/the-logbook/pull/2513)** (Feature
+28, Security, audit & IP, pass 4) — branch
+`claude/security-review-audit-ip`, opened against a fresh `origin/main` (no
+other security-review PR was open at the start of this iteration; row 28 was
+`⬜` and row 27's closure — PR #2508/#2509 — was already merged and
+recorded). Zero fixes (all nine prior-pass fixes re-verified intact against
+a full re-read of every file this doc covers, all 35 routes re-enumerated);
+one new HIGH finding flagged, not fixed: **SEC2-28-10** —
+`AuditLogger.create_log_entry`'s "last row" read (for the new row's
+`previous_hash`) has no concurrency control, so two audit-log writes racing
+on two different sessions can both compute the same `previous_hash` and fork
+the chain — reproduced directly with two real, independently-committing
+sessions and `asyncio.gather` (100% reproduction on a fresh chain).
+`verify_integrity` then reports the fork as `"Chain broken"`, indistinguishable
+from real tampering, firing a false CRITICAL `LOG_TAMPERING` alert — and it's
+reachable by an unauthenticated caller via a burst of blocked-IP requests
+(`IPBlockingMiddleware._log_blocked_attempt` opens its own session per
+blocked request). Not fixed: the obvious `.with_for_update()` mirror of the
+sibling `audit_ship_service.py` fix (SEC2-28-9) doesn't transfer safely here
+— that lock would be held for the life of whichever caller's outer
+transaction happens to include the audit write, on a function called from
+48 endpoint files, a global-availability risk this pass can't load-test with
+confidence. Flagged and mirrored into `KNOWN_LIMITATIONS.md`; the
+correct-shaped fix (a dedicated, separately-committed "chain head" row) needs
+a migration and an owner decision. See
+`docs/security-review/SEC2-28-security-audit-ip.md` → SEC2-28-10.
+
+Completion gate: flake8/black/isort clean (isort 9.0.1, CI's pin);
+`validate_migrations.py --strict` passed (444 revisions, single head, no
+migration of this feature's own); 369/369 scoped + 12,490/12,490 full-suite
+backend tests pass (21 skipped, all environment-only); frontend
+`tsc --noEmit` 0 errors, `eslint --max-warnings 10` 0 errors/0 warnings
+(frontend read, not edited, this pass). `origin/main` moved after branching
+(a scheduling fix, an onboarding-singleton migration/fix — neither touching
+this feature); merged in with no conflicts, applied the new migration to
+this sandbox's test DB, and the gate above is the post-merge, re-run result.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 4, PR #2508, before it merged), preserved for history</summary>
@@ -13877,7 +13908,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
@@ -18297,3 +18328,102 @@ backend suite pass (21 skipped, all environment-only); frontend `tsc
 finding, INT-11, is flagged rather than fixed). Findings doc:
 `docs/security-review/INT-27-integrations.md` (Pass 4). Rotation row 27 ->
 ✅. Next: Feature 28 (Security, audit & IP).
+
+## 2026-09-13 — Feature 28 (Security, audit & IP), pass 4
+
+Branched fresh off `origin/main` per this file's own established habit
+(`git fetch origin main && git checkout -b claude/security-review-audit-ip
+origin/main`) — no security-review PR was open, row 28 was `⬜`, row 27's
+closure was already recorded. Full re-read of all nine files this feature
+covers (`security_monitoring.py` endpoint + service, `ip_security.py` +
+`ip_security_service.py`, `audit_logs.py`, `error_logs.py`, `core/audit.py`,
+`core/geoip.py`, `audit_ship_service.py`, plus `core/suspicious_ip.py` —
+named explicitly in `CLAUDE.md`'s Attack Protection table and read for the
+first time under this feature's file list — and the IP-enforcement/
+security-monitoring sections of `core/security_middleware.py`); `git log`
+confirmed none of the nine core files changed since pass 3 (2026-09-06).
+
+All 35 routes across the four endpoint files re-enumerated (13 in
+`security_monitoring.py`, 12 in `ip_security.py`, 3 in `audit_logs.py`, 7 in
+`error_logs.py`) — every one carries an auth dependency, the two
+intentionally-open ones (`POST /ip-security/exceptions`, `GET
+/ip-security/exceptions/me`) are self-scoped by design, and `GET
+/errors/codes` is static reference data. No permission gap, no XC-2/XC-3
+issue found. `CLAUDE.md`'s two suspicious-IP invariants re-verified directly
+in `auth.py`: `clear_auth_failures` fires only after full authentication
+(the `login`/`mfa_login` handlers only call it on the branch where no
+further factor is required — a correct password alone on an MFA-enabled
+account does **not** clear it, per the comment at `auth.py:736`), and
+`clear_auth_failures` never touches an active block (confirmed in
+`suspicious_ip.py:199-217`, which only ever deletes the failure-count key,
+never the block key). All nine prior-pass findings (SEC-1 through SEC-9,
+SEC2-28-1 through SEC2-28-9) re-verified intact against the actual current
+code, not assumed from the doc. SEC2-28-5 (IP-allowlist exceptions
+enforcement gap), SEC2-28-6 (TOCTOU on duplicate exception requests), and
+SEC2-28-7 (security-monitoring alert surface has no admin UI, plus the
+`organization_id=NULL` brute-force-alert and `Content-Length`-gated
+exfiltration gaps) all re-confirmed still open, unchanged, already mirrored
+in `KNOWN_LIMITATIONS.md`. The dead-detector-code note (`analyze_request`,
+`_check_rate_limit`, `_check_injection_patterns` — zero production callers)
+also re-confirmed unchanged. One loose end from pass 1 is now settled
+rather than merely re-verified: `app/core/permissions.py`'s in-line comment
+confirms `system.run_tasks` is seeded to no default role by design, closing
+the tangential "could an org's own admin hold it" question pass 1 raised.
+
+**One new finding, HIGH, flagged not fixed: SEC2-28-10.**
+`AuditLogger.create_log_entry` (`core/audit.py:205-210`) determines a new
+audit row's `previous_hash` with a plain, non-locking read of the chain's
+last row, inside a SAVEPOINT that provides no cross-session serialization.
+Reproduced directly — not inferred — with two real, independently-committing
+`AsyncSession`s and `asyncio.gather` (the same technique
+`test_audit_shipping.py`'s `TestConcurrentShipRuns` already uses for the
+sibling watermark race): both writes came back with the identical
+`previous_hash`, and a subsequent `verify_audit_log_integrity()` reported
+`verified: False`, `"Chain broken - previous hash does not match"` — a false
+positive on the exact mechanism that exists to detect real tampering. This
+is reachable by an unauthenticated caller: `IPBlockingMiddleware.
+_log_blocked_attempt` opens its own DB session and writes an audit row for
+every blocked request, so a burst of concurrent requests from a blocked IP
+or country triggers the race with no credentials at all — a denial-of-service
+against the integrity-monitoring subsystem's own credibility, since a chain
+that cries "tampering" under ordinary concurrent use trains operators to
+distrust real alerts. Not fixed: the obvious mechanical fix
+(`.with_for_update()` on the last-row read, mirroring `audit_ship_service.py`'s
+own SEC2-28-9 fix) does not transfer safely — that fix's lock is held inside
+one short, dedicated, self-committing function; here the SAVEPOINT lives
+inside whatever the _caller's_ outer transaction is (this function is called
+from 48 endpoint files across the app), so the row lock would be held until
+the caller's own commit — potentially the rest of the request — creating an
+unbounded, app-wide serialization risk this sandbox cannot load-test with
+confidence. The correct-shaped fix is likely a dedicated "chain head" row
+updated in its own short, self-contained transaction (schema change +
+migration), which needs an owner decision and a load-tested rollout, not a
+drive-by fix in a review pass. Mirrored into `KNOWN_LIMITATIONS.md`. No
+guard test added — per this file's own convention, a guard test protects a
+fix, and a permanently-red test would itself be a new CI failure left
+behind; the reproduction steps are recorded in the findings doc instead.
+(The reproduction was run against this sandbox's live MySQL instance outside
+the `pytest` fixtures and fully cleaned up — `DELETE FROM audit_logs`,
+`audit_ship_state` confirmed untouched — before the completion gate below,
+verified by re-running the scoped suite clean afterward.)
+
+`origin/main` moved after branching (`2eee5c6` scheduling fix, `3a875be`
+onboarding-singleton fix + its migration `6ab7d903fae5`, `ae78831` schema-doc
+regen — none touching this feature's files); merged in with no conflicts in
+this file or `KNOWN_LIMITATIONS.md`, applied the new migration to this
+sandbox's test database, and re-ran the full gate below against the merged
+tree.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/` (isort 9.0.1, CI's pinned version);
+`validate_migrations.py --strict` passed (444 revisions, single head, no
+migration of this feature's own); scoped backend tests
+(`audit`/`security_monitoring`/`ip_security`/`error_log`/
+`privilege_ceiling`/`security_middleware`/`suspicious_ip`) 369 passed, 1
+skipped (environment-only — optional `pywebpush`); full backend suite
+12,490 passed, 21 skipped (all environment-only: optional `pywebpush`,
+Docker registry/daemon unavailable in this sandbox, opt-in API-contract
+suite); frontend `tsc --noEmit` 0 errors; `eslint --max-warnings 10` 0
+errors/0 warnings (frontend read, not edited, this pass). Findings doc:
+`docs/security-review/SEC2-28-security-audit-ip.md` (Pass 4). Rotation row
+28 -> ✅. Next: Feature 29 (Reports & analytics).
