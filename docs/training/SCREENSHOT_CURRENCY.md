@@ -1,5 +1,48 @@
 # Screenshot currency
 
+## Audited 2026-09-13 — no drift, nothing recaptured
+
+Routine maintenance pass per the currency job's standing brief. Rebased onto
+`origin/main` (107 commits, `25e8e8bd1` → `d90abd511`; the branch's own 31
+commits replayed on top). Two conflicts, both in files this pipeline
+regenerates wholesale rather than hand-edits, and both trivial — resolved per
+this repo's changelog-style convention (keep both sides, newest disposition on
+top): `SCREENSHOT_STATUS.md`'s filled/remaining counts (regenerated below
+anyway) and three separate insertion points in this file where both sides had
+added a new dated disposition section. No conflict touched application code,
+a guide's prose, or a placeholder's caption.
+
+Backend + frontend brought up via `dev_env.sh` against the container's existing
+MariaDB/Redis; `bootstrap_demo.py` (fresh demo org and administrator) and
+`seed_demo_data.py` both ran clean (exit 0). Seeding took roughly 25 minutes,
+almost all of it the login-rate-limiter's own backoff (5 requests/60s, `auth:
+login:<ip>`) working as designed while the seeder logs in as ~20 distinct
+members in turn to post RSVPs with no admin on-behalf-of route — not a
+toolchain defect, just an inherent cost of seeding against a real limiter from
+one IP. The seeder's own flagged-not-fixed list is unchanged from prior
+sessions: the `administrative` membership-tier 400 (tracked below, in the
+2026-09-07 second-pass entry and since), plus two new-to-this-run but equally
+benign rejections (a count-only-mode closeout `PATCH .../calls` and a
+minutes-approval self-approval guard) — both are the seeder attempting a state
+a business rule correctly refuses, not a break.
+
+**`audit_images.py --baseline scripts/screenshots/audit_baseline.txt`: no new
+findings**, across all 580 images on disk. The only check that reports
+anything is the dark-page scrollbar-gutter edge check, and that finding is the
+pre-known one the (empty) baseline already accounts for — nothing new to
+triage, so nothing was recaptured.
+
+**`status_report.py` was stale by 12 images and is refreshed here separately
+from the audit verdict above.** It read 568/568 going into this pass;
+`08-admin-reports.md` and `20-september-2026-release-changes.md` actually carry
+52 and 27 filled placeholders respectively in the rebased tree (580/580 total,
+matching what `audit_images.py` just counted on disk) — the prior "no drift"
+commit in this branch's history simply predates some of the 107 rebased `main`
+commits that landed already-captured images against those two guides directly
+(release-notes docs that other PRs touch outside this branch). Regenerating is
+a mechanical fix, not a finding: no guide's prose or caption changed, and
+nothing here was recaptured. `check_docs_links.py`: 354 files, 0 broken links.
+
 ## Disposition for September 6-12, 2026 - setup was rebuilt, and one shot broke silently
 
 Audit: [`CHANGE_AUDIT_2026-09-06_TO_09-12.md`](../CHANGE_AUDIT_2026-09-06_TO_09-12.md).
