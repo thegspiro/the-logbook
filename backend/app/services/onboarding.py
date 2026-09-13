@@ -1320,9 +1320,31 @@ class OnboardingService:
         """
         # The System Owner is the FIRST user created during onboarding. Refuse to
         # mint a second wildcard-permission owner: without this, a leaked/replayed
-        # in-progress session could call /system-owner repeatedly (distinct
-        # emails) and create several full-access "*" accounts.
-        existing_user = await self.db.execute(select(User.id).limit(1))
+        # in-progress session -- or, since the resumability fix, a second
+        # session minted by an unrelated caller during the org-exists-but-
+        # no-owner-yet window (see `_require_owner_authority`'s own
+        # docstring: "before the owner exists the wizard is unauthenticated by
+        # design") -- could call /system-owner concurrently with the real
+        # operator and create two full-access "*" accounts, one attacker-
+        # controlled. Reproduced against a real database: two concurrent
+        # calls both read "no user exists" and both created a user (see
+        # docs/security-review/ONB3-30-onboarding.md, pass 4).
+        #
+        # There is no user row to lock yet -- the conflicting row does not
+        # exist until the loser has already lost (CLAUDE.md pitfall #27's
+        # "nothing to lock instead" case, same shape ONBOARD-7 hit for
+        # onboarding_status). onboarding_status is the parent to lock
+        # instead: exactly one row from /start onward (enforced by
+        # ONBOARD-7's unique constraint), and always present by the time this
+        # method can be reached at all. The existence check must then be a
+        # locking read too, not a plain one -- InnoDB's REPEATABLE READ
+        # answers a plain SELECT from this transaction's own snapshot even
+        # after the row lock is granted, so a loser that already holds an
+        # older snapshot would still see zero users after winning the lock.
+        await self.db.execute(select(OnboardingStatus).with_for_update())
+        existing_user = await self.db.execute(
+            select(User.id).limit(1).with_for_update()
+        )
         if existing_user.scalar_one_or_none() is not None:
             raise ValueError("A system owner has already been created")
 

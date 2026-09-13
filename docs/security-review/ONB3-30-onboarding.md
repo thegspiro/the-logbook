@@ -1,10 +1,352 @@
-# Security Review — Onboarding (pass 3)
+# Security Review — Onboarding (passes 3-4)
 
 **Prefix:** `ONB3` · **Iteration:** 30 (rotation pass 3; prior: module-audit
 iteration 25, app-review B25 (4 passes), security-review pass 1 — PR #1913 +
 follow-up (`docs/security-review/ONB2-30-onboarding.md`), security-review
 pass 2 — PR #2093 (`docs/security-review/ONB-30-onboarding.md`))
 · **Reviewed:** 2026-09-06/07 · **PR:** [#2358](https://github.com/thegspiro/the-logbook/pull/2358)
+
+---
+
+## Pass 4 (2026-09-13)
+
+**Which file is latest, and why this one:** three findings files exist for
+this feature and none of their name suffixes are chronological —
+`ONB2-30-onboarding.md` is its own "pass 1" (PR #1913 + a same-day follow-up,
+merged 2026-08-27, `PROGRESS.md` line ~13482), `ONB-30-onboarding.md` (no
+digit suffix) is its own "**pass 2**" (PR #2093, merged 2026-08-31,
+`PROGRESS.md` line ~10236) and names `ONB2` as its predecessor, and this file,
+`ONB3-30-onboarding.md`, is its own "pass 3" (PR #2358, merged 2026-09-07,
+`PROGRESS.md` line ~16996/4078) and names both prior files as its own
+predecessors in order. So the suffix and the chronology agree here (`ONB2` →
+`ONB` → `ONB3`, i.e. 1 → 2 → 3) even though the plain, unsuffixed file sits
+_between_ two numbered ones — cross-checked three independent ways: each
+file's own self-description ("pass N", "prior: ..."), `PROGRESS.md`'s running
+log (grep for `Onboarding`/`ONB`, giving merge dates 2026-08-27 <
+2026-08-31 < 2026-09-07), and each file's cited PR number against real PR
+merge order. This is therefore continued here as **Pass 4**, one more than
+this file's own highest pass number, per the task's instruction — not
+appended to `ONB2` or `ONB` despite `ONB3` numerically sorting _after_ the
+plain `ONB` file, which is the opposite ordering trap the identically-shaped
+`RPT`/`RPT2` fragmentation in Feature 29 had (there, alphabetical order
+matched chronological order in neither direction reliably; here it happens to
+match once you read each file's own stated position rather than trusting the
+suffix alone).
+
+**Scope of this pass: everything that changed in this feature's own files
+since pass 3's baseline** (`services/onboarding.py`, `models/onboarding.py`,
+`api/v1/onboarding.py` — the only three of this feature's files with any
+diff; `email_test_helper.py`/`microsoft_oauth.py`/`email_providers.py`/
+`template_service.py`/`org_template_service.py`/`org_template_registry.py`/
+`utils/onboarding_security.py` confirmed byte-identical via
+`git diff --quiet f0bda691..origin/main`, so every pass-3 finding scoped to
+them is re-confirmed with the same confidence as a fresh read). Pass 3's
+merge commit is `f0bda691`. `git diff --stat` against it: `onboarding.py`
++292/-, `models/onboarding.py` +28/-, `services/onboarding.py` +367/-; 565
+insertions / 122 deletions combined. Read in full: both diffs, end to end —
+not sampled, given the size and the fact that one of the two changes
+(`get_or_create_session`'s guard) alters who can reach the bootstrap flow at
+all. A large amount of unrelated onboarding feature work also landed in this
+window (33 commits touching the frontend module and, incidentally, nothing
+in this feature's own three backend files beyond the two changes below) —
+`RoleSetup.tsx`/`positionTemplates.ts`/the rank-ladder and membership-ladder
+screens grew substantially; re-swept at the same sampling depth pass 3 used
+(grep for the frontend risk classes: `window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, secrets in `localStorage`/`sessionStorage`) —
+**clean, 0 hits**, same conclusion as pass 3.
+
+**Two backend changes account for the whole delta, both already-merged
+production code, not proposals:**
+
+1. **ONBOARD-7 (`docs/KNOWN_LIMITATIONS.md`, resolved 2026-09-12,
+   migration `6ab7d903fae5`)** — `start_onboarding` was a read-then-write
+   race on `onboarding_status` (two concurrent first-run page loads both read
+   "none exists" and both inserted; `needs_onboarding()` then raised
+   `MultipleResultsFound` and `/status` 500'd permanently). Fixed with a
+   unique `singleton` column, a `begin_nested()`/rollback/retry loop in
+   `start_onboarding`, and `.first()` instead of `scalar_one_or_none()` so an
+   already-duplicated install recovers too. This landed and was verified
+   _before_ this rotation pass started (the task brief's "recent
+   onboarding-singleton migration" — confirmed already in place, not
+   something this pass needed to add). Re-verified against current code
+   (model's `UniqueConstraint`, the retry loop, the `.first()` reads) and
+   against a real database: 8 consecutive runs of a genuine two-connection
+   concurrent-insert reproduction (mirroring `KNOWN_LIMITATIONS.md`'s own
+   "20 concurrent, verified against a real database" claim) all landed
+   exactly one row. **Holds.**
+2. **Onboarding resumability (commit `534bea6`, then narrowed by `4b708e8`'s
+   step reorder) — no prior write-up; new to this pass.** `get_or_create_session`
+   used to refuse a new session once _any_ organization existed, which made a
+   lapsed 30-minute session unrecoverable (no System Owner exists yet at step
+   1, so `/reset` had nothing to authenticate against either — dead install).
+   Fixed by keying the refusal on `needs_onboarding() == False` (completion)
+   instead, and introducing `_require_owner_authority`: once a System Owner
+   exists, only that owner may mint a new session or reset; **before one
+   exists, minting a session is unauthenticated by design** (stated in the
+   fix's own commit message and asserted directly by
+   `test_onboarding_session_resume.py::TestOwnerAuthority::
+test_open_before_any_owner_exists`). This is a genuine, deliberate widening
+   of who can obtain a valid onboarding session — previously bounded to
+   "before step 1's org creation" (a near-instantaneous window on any
+   ordinary install), now bounded to "before step 2's owner creation." The
+   step reorder (`4b708e8`, landed the same window, its own commit message:
+   "Identity is second so the remainder of setup belongs to a real account
+   rather than to an anonymous 30-minute session") appears to have been
+   written specifically to narrow this back down to two adjacent steps
+   rather than the eight-step gap the resumability fix would otherwise have
+   opened (System Owner creation was step 9 before the reorder, per
+   `534bea6`'s own commit message). Net effect on current `main`: **any
+   unauthenticated caller can obtain a valid onboarding session at any point
+   between `POST /organization` and `POST /system-owner` succeeding** —
+   verified this is intentional and tested as such, not an oversight, so not
+   itself re-flagged as a new finding. But see **ONB3-30-3** below: this
+   widened window is what makes a pre-existing gap newly and directly
+   reachable by an unrelated caller rather than only by whichever single
+   session already existed.
+
+### ONB3-30-3 — HIGH — `create_system_owner`'s single-owner guard was an unlocked read-then-write; two concurrent callers both became the System Owner — ✅ FIXED
+
+**What:** `OnboardingService.create_system_owner` (the handler behind
+`POST /system-owner`) refused a second System Owner by reading "does any user
+row exist" and then creating one, with nothing serializing the two —
+the exact CLAUDE.md pitfall #27 shape ("a capacity check is a read-then-write
+and needs the row locked"), and the exact shape ONBOARD-7 had just fixed one
+table over for `onboarding_status`. ONB-2 (module-audit iteration 25,
+2026-08) added this guard specifically to stop a _replayed single session_
+from minting several owners; it was never load-tested against two
+_independent_ concurrent callers, and until this pass there was no
+documented way for an independent caller to reach `/system-owner` at all
+except in the sub-millisecond pre-organization window.
+
+**Where:** `backend/app/services/onboarding.py`, `create_system_owner`
+(the guard sat at what was line 1325: `existing_user = await
+self.db.execute(select(User.id).limit(1))`).
+
+**Why this pass, not pass 3 or earlier:** the guard's code did not change
+this pass — what changed is reachability. Per the resumability fix above,
+any unauthenticated caller can now mint their own onboarding session during
+the `/organization`-succeeded-but-`/system-owner`-not-yet-called window,
+which — for an operator who fills the Organization form, submits it, and
+takes even a few seconds before submitting the System Owner form on the very
+next screen — is a real, if usually short, window on a network-reachable
+instance. `validate_session` on `/system-owner` only requires _a_ valid
+onboarding session, not any particular one, and `_require_owner_authority`
+(the new resumability guard) does not apply to `/system-owner` at all — it
+gates `/start` and `/reset`, not this route.
+
+**Failure scenario, reproduced against a real database (not mocked), 8/8
+runs:** two independent `AsyncSession`s, each on its own connection, both
+call `create_system_owner` for the same organization within milliseconds of
+each other (`asyncio.gather`) with distinct usernames/emails. Before the fix:
+**both succeeded** — 2 rows in `users`, two accounts each holding the
+`it_manager` position's wildcard `*` permission grant on the real,
+freshly-provisioned organization. Script and output recorded in this PR's
+description. This is precisely the "two people racing to claim initial-admin"
+shape the task brief named.
+
+**Impact:** HIGH. An attacker who wins this race gets full, unrestricted
+administrative access to the department's real production instance — read
+every member's PII, reconfigure permissions, disable audit logging, exfiltrate
+data — indistinguishable at the account level from the legitimate operator's
+own owner account, and the legitimate operator's own `/system-owner` call
+then fails with "a system owner has already been created," which they would
+most likely read as a transient error and retry rather than recognize as
+"someone else just took this."
+
+**Fix:** locks the `onboarding_status` singleton row
+(`select(OnboardingStatus).with_for_update()`) before the existence check —
+the same "lock the parent, not the not-yet-existing conflicting row" pattern
+CLAUDE.md pitfall #27 and ONBOARD-7 both use, since there is no `User` row to
+lock until one caller has already won. Critically, **the existence check
+itself is now also a locking read** (`select(User.id).limit(1)
+.with_for_update()`), not merely guarded by the parent lock — per pitfall
+#27's own documented gotcha, a plain `SELECT` under InnoDB's REPEATABLE READ
+answers from the snapshot taken at this transaction's first read, so the
+loser (having already read once, earlier in the same request) would still
+see zero users after being released from the lock, and would create a second
+owner anyway. Both halves were necessary; verified by testing an
+intermediate version with only the parent lock, which still let both callers
+through for exactly this reason.
+
+**Verification:** the reproduction script (2 real, independently-committing
+connections, `asyncio.gather`) was re-run 8 times against the fixed code:
+**8/8 → exactly 1 success, 1 row in `users`**. A permanent regression test,
+`backend/tests/test_onboarding_owner_race.py`, reproduces the same shape
+using the established two-connection pattern from
+`test_auth_lockout_race.py` (`@pytest.mark.integration`, real
+`database_manager.engine.connect()` per coroutine, not the shared
+savepoint-wrapped `db_session` fixture, which cannot show a lost update since
+there is no second connection to lose it to) plus two source-level guards so
+the fix cannot be quietly reverted even where MySQL is unavailable. Verified
+to **fail** (2 successes, not 1) with the fix reverted (`git stash`), and to
+**pass** restored, in both the DB-backed test and the standalone repro
+script.
+
+**Guard test added:** `tests/test_onboarding_owner_race.py` —
+`TestConcurrentSystemOwnerCreation::
+test_two_concurrent_callers_produce_exactly_one_owner` (integration,
+real MySQL, 2 connections) plus `TestTheLockIsDeclared`'s two source-level
+assertions (the parent-row lock and the locking-read existence check are
+each present in `create_system_owner`'s source).
+
+## Re-verification of pass 1-3 findings (all hold, no regressions)
+
+All prior findings were re-checked against current code, not re-derived.
+`services/onboarding.py`'s and `models/onboarding.py`'s pass-3-reviewed
+sections are unchanged apart from the two items above (confirmed by reading
+the full diff, not by assuming the byte-identical-file shortcut pass 3 used
+for its unchanged files — these two _did_ change).
+
+- **ONB-1** (reset deletes `Location`/`Facility` before `users`) —
+  unchanged, present in `/reset`'s delete ordering.
+- **ONB-2** (single-org guard in `create_organization`; single-owner guard
+  in `create_system_owner`) — the single-org guard is unchanged; the
+  single-owner guard is the one just hardened by ONB3-30-3 above (the
+  _check_ is unchanged, its atomicity is what was fixed).
+- **ONB-3/ONB-9** (`needs_onboarding()` replay guard) — re-enumerated across
+  all 24 routes this pass (see Route inventory below); present everywhere it
+  was present in pass 3, unchanged.
+- **ONB-4, ONB-5, ONB-6** — unchanged.
+- **ONB-7** (role editor accepts client-supplied permissions/priority/
+  system-flag on new roles) — re-confirmed still open, same shape;
+  `save_session_roles` also gained an unrelated new feature this pass (an
+  unticked seeded position is now deleted unless a member holds it, reported
+  back as `removed`/`retained` rather than silently ignored) — traced by
+  hand, this only affects **removal** of a role/position already in the
+  database, is scoped to `existing_system_roles` (itself
+  `organization_id`-filtered), explicitly protects `it_manager`/`member`, and
+  checks `user_positions` before deleting — does not touch, widen, or narrow
+  ONB-7's boundary (client-controlled grants on **new** roles), which remains
+  a distinct, still-open, still-flagged item.
+- **ONB-8** (reset re-authentication; `/status` minimal post-completion
+  response; template mass-assignment) — reset re-authentication is now
+  factored into the shared `_require_owner_authority` helper (used by both
+  `/start`'s resume path and `/reset`), same boundary, same 403/409 split,
+  confirmed by direct read; `/status` and template mass-assignment unchanged.
+  Audit-durability residual (the `reset_initiated` log call shares a
+  transaction with `/reset`'s deletes) — still open, unchanged.
+- **ONB2-30-1 through ONB2-30-8, ONB3-30-1, ONB3-30-2** — all unchanged
+  (confirmed via the byte-identical-file check for the files they live in,
+  or by direct re-read for `onboarding.py`'s portions not touched by the two
+  changes above). ONB2-30-8 (sliding session TTL, no absolute cap, three GET
+  routes slide it without CSRF) — still open, unchanged.
+- **ONB-30-3** (self-hosted SMTP path has no SSRF/private-network
+  protection) — `email_test_helper.py` confirmed byte-identical to pass 3;
+  still open, unchanged, for the same reason (blocking private IPs would
+  break the legitimate on-premises-relay case).
+
+## Route inventory (re-enumerated, 24/24)
+
+Re-walked every `@router.get`/`@router.post` decorator in current
+`onboarding.py` (24 found, matching pass 1-3's count and the SEC-00
+baseline) and grepped each handler's body for `validate_session(` and
+`needs_onboarding()`. Unchanged from pass 3's table for every route except
+`/start` and `/reset`, whose guard chains now go through the new
+`_require_owner_authority` (documented above) in addition to their existing
+checks. No route lost a compensating control; no route outside the
+documented 24 carries none. `/session/positions` still has neither
+`validate_session` nor `needs_onboarding` in its own body by design — it
+delegates to `save_session_roles`, which has both, confirmed by direct read
+of the delegation call.
+
+## Additional checks this pass
+
+- **Tenant isolation (XC-1/XC-3):** unchanged conclusion from pass 3 — this
+  feature is single-org by design (ONB-2), so there is no second tenant to
+  leak across. The new `_rehydrate_department_org_id` helper (points a
+  freshly-minted session at the one existing organization, needed by the
+  resumability fix so `/session/stations`/`/session/apparatus` don't reject
+  a setup whose org demonstrably exists) reads the organization by
+  `order_by(Organization.created_at.asc()).limit(1)` with no client input
+  involved — not client-suppliable, and correct precisely because
+  single-instance onboarding provisions exactly one organization (ONB-2).
+- **JSON-column mutation (Pitfall #12):** `_persist_session_data_to_org`'s
+  new membership-counter read-back (`org_settings["membership_id"] =
+copy.deepcopy(live_membership_id)`) and the new membership-tier default
+  (`org_settings.setdefault("membership_tiers", ...)`) both operate on the
+  same `copy.deepcopy(organization.settings or {})` snapshot this function
+  already used pre-pass-4 (ONB-30 pass 2 verified this deep-copy) — no new
+  shallow-copy-then-mutate introduced. `_rehydrate_department_org_id`
+  reassigns the whole `session.data` mapping (`session.data = {**data,
+"department": department}`) rather than mutating a nested key in place —
+  correct, and its own comment says why (`MutableDict` only auto-tracks
+  top-level key changes).
+- **Membership numbering (`generate_next_membership_id`, called from the new
+  IT-team/System-Owner numbering code):** not this feature's own code —
+  lives in `OrganizationService`, already locks the organization row
+  (`.with_for_update()`) and deep-copies `settings` before mutating the
+  counter. Checked only for correct usage from onboarding's call sites (both
+  pass `UUID(organization_id)` from the session/org context, no client
+  override) — correct, no new finding.
+- **Rank resolution for IT-team contacts (`_deferred_rank`,
+  `resolve_configured_rank_code`):** org-scoped (`organization_id` is a
+  required parameter, not client-suppliable — it comes from the session's
+  own department context), fails soft (drops an unresolvable rank with a
+  `logger.warning`, never raises) — cannot fail the whole of setup over an
+  optional field, and cannot resurrect a rank the department has since
+  deleted from its own ladder. No finding.
+- **Frontend module (`modules/onboarding/`):** re-swept (not read
+  line-by-line, matching pass 3's stated judgment that this class of
+  frontend risk is server-enforced) for `window.confirm`/`alert`/`prompt`,
+  `dangerouslySetInnerHTML`, and secrets written to
+  `localStorage`/`sessionStorage` — **0 hits**, same as pass 3.
+  `sessionStorage`/`localStorage` writes found are all non-sensitive (CSRF
+  token, navigation-layout preference, a `has_session` flag) — none carry a
+  password, API key, or config secret; `AdminUserCreation.tsx` still has its
+  own `// SECURITY CRITICAL: Send password to server (NEVER sessionStorage!)`
+  comment guarding the one field that would matter.
+
+## Completion gate (pass 4)
+
+| Check                                                            | Result                                                                                                                                                               |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                    | ✅ 0 violations, **once run as `python3 -m flake8`** — see note below                                                                                                |
+| `black --check app/ tests/ alembic/`                             | ✅ clean (after formatting the new test file); `python3 -m black` (26.5.1, CI's pin) agrees                                                                          |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI-pinned)     | ✅ clean                                                                                                                                                             |
+| `python3 scripts/validate_migrations.py --strict`                | ✅ 444 revisions, single head `6ab7d903fae5`                                                                                                                         |
+| `pytest tests/ -k "onboard or org_template or template_service"` | ✅ 247 passed, 1 skipped (pywebpush, env-only) — up from 183 (new: `test_onboarding_owner_race.py`, `test_onboarding_singleton.py` and others landed since pass 3)   |
+| Guard-test reintroduction check (fix reverted via `git stash`)   | ✅ fails as expected (2/2 successes, not 1) with the fix removed; passes restored                                                                                    |
+| `pytest tests/` (full suite)                                     | ✅ 12,496 passed, 21 skipped (all environment-only: optional `pywebpush`, Docker registry/daemon unavailable in this sandbox, opt-in API-contract suite), 0 failures |
+| `npm run typecheck` (aliased 7.0.2 compiler, `tsc-native.mjs`)   | ✅ 0 errors                                                                                                                                                          |
+| `npm run lint` (`--max-warnings 10`)                             | ✅ 0 errors, 0 warnings                                                                                                                                              |
+
+**A note on this sandbox having two `flake8` installs, for the next pass:**
+the bare `flake8` on `PATH` resolves to a `uv`-tool install
+(`~/.local/share/uv/tools/flake8`) with **no `flake8-pytest-style` plugin**,
+while `python3 -m flake8` resolves the `dist-packages` install that **does**
+have it (CI installs `flake8-pytest-style==2.2.0` explicitly — see
+`.github/workflows/ci.yml` → Backend Lint). The two disagree: bare `flake8`
+reported this pass's new test file clean; `python3 -m flake8` correctly
+caught `PT018` (a combined `assert X and Y` in
+`test_onboarding_owner_race.py`, fixed by splitting it into two asserts).
+Re-ran `python3 -m flake8 app/ tests/ alembic/` over the **whole tree**
+after the fix — clean, so this was confined to the one new file, not a
+sandbox-wide gap the bare binary had been silently hiding elsewhere. Same
+shape as CLAUDE.md's documented `typescript`/`typescript-native` two-install
+trap, just for a different tool and not yet written down anywhere else in
+this repo's docs — **use `python3 -m flake8`, never bare `flake8`, in this
+sandbox.**
+
+**A note on test-database hygiene, for the next pass:** this feature's own
+convention (per `KNOWN_LIMITATIONS.md`'s ONBOARD-7 entry and this session's
+own reproduction) is to verify a bootstrap-path race against a real,
+independently-committing connection pair, which bypasses the `db_session`
+fixture's auto-rollback. The reproduction script and the new integration test
+both write real, committed rows (`organizations`, `users`, `onboarding_status`,
+and — since `create_system_owner` logs an audit event on success —
+`audit_logs`). All four were confirmed empty before this pass's changes,
+cleaned up after every manual reproduction run and left clean by the new
+test's own teardown, and reconfirmed empty (`SELECT COUNT(*)` on all four) both
+immediately before and immediately after the full 12,496-test suite run. One
+stray `audit_logs` row from an early manual repro run _did_ leak into a
+full-suite run before this cleanup was tightened, and caused 11 unrelated
+`test_audit_*`/`test_election_voting_flow.py` failures purely from an
+orphaned row referencing a since-deleted organization — not a regression in
+this feature's code, confirmed by re-running just those 11 after clearing the
+table (24/24 passed). Recorded here so a future session seeing the same
+failure shape recognizes it as sandbox hygiene rather than re-diagnosing it.
+
+---
 
 **Backend:** `backend/app/api/v1/onboarding.py` (2,639 L, 24 unauthenticated
 bootstrap routes), `backend/app/services/onboarding.py` (1,465 L, unchanged
@@ -27,6 +369,8 @@ feature's scope, sanity-checked here only for interaction with onboarding's
 own seeded-role logic; see Scope).
 
 ---
+
+## Pass 3 (2026-09-06/07)
 
 ## Scope
 
