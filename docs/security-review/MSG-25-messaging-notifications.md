@@ -1,8 +1,9 @@
 # Security Review — Messaging & Notifications
 
 **Prefix:** `MSG` · **Iteration:** 25 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-31 (pass 2), 2026-09-06 (pass 3) · **PR:** #1907 (pass 1), pass 2 PR
-recorded in `PROGRESS.md`, pass 3 PR TBD
+2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4) · **PR:** #1907
+(pass 1), pass 2 PR recorded in `PROGRESS.md`, #2305 (pass 3), pass 4 PR
+recorded in `PROGRESS.md`
 
 ## Pass 1 (2026-08-26)
 
@@ -1087,3 +1088,289 @@ test_subtitle_is_escaped` (MSG-14). Verified to fail against the
 
 No frontend file was modified by this pass, so `tsc`/`eslint` establish
 that the backend fixes didn't regress the frontend build.
+
+---
+
+## Pass 4 (2026-09-13)
+
+**Backend:** re-read, fresh and in full: `messages.py` (492 L, up from 461 at
+pass 1), `message_history.py` (256 L, unchanged), `notifications.py` (514 L,
+up from 422 at pass 1), `email_templates.py` (937 L, up from 904),
+`messaging_service.py` (1120 L), `message_delivery_service.py` (547 L,
+unchanged since pass 3), `notifications_service.py` (590 L),
+`push_service.py` (539 L), `notification_rules.py` (134 L, unchanged),
+`notification_channels.py` (136 L), `integration_services/
+notification_dispatch.py` (254 L, unchanged), plus targeted re-checks of
+`email_theme.py`, `email_service.py` (the two fixed-invariant regions:
+`_sanitize_header`/attachment budgets, and the `build_shell`/
+`_SHELL_COLOURWAYS` cache split) and `app/schemas/notifications.py`.
+`email_template_service.py`, `email_templates_storefront.py` and
+`email_footers.py` were not re-read line-by-line — `git log` since pass 3
+shows zero commits touching any of the three, so nothing to re-derive; pass
+3's full read of them stands.
+**Frontend:** not re-read line-by-line this pass. `git log` since pass 2
+(the pass that read the frontend module in full) shows only two mobile-
+accessibility commits touching this feature's frontend
+(`communicationsServices.ts`'s `getRules` and two settings-page components),
+neither security-relevant — read both diffs directly rather than assumed
+clean: one adds `expectArray` validation on a notification-rules response
+(a reliability fix, throws instead of silently substituting `[]` on a
+malformed body — matches the file's own documented invariant that an empty
+rules list must never be inferred), the other resizes a filter control and a
+breadcrumb. Neither touches auth, permissions, org-scoping, or payload
+construction.
+**Migrations:** none added this pass. `validate_migrations.py --strict`
+reports 443 revisions, one head — up from pass 3's 431, entirely from other
+features' work landing on `main` between passes.
+
+### Doc correction — MSG-12's stranded-`pending` sub-case was already fixed on `main`; this file didn't say so
+
+Not a new code finding. `KNOWN_LIMITATIONS.md`'s own MSG-12 entry already
+carries a "(stranded-pending sub-case fixed 2026-09-06)" qualifier and
+describes the fix in full, but this findings file's own MSG-12 write-up
+(pass 2, reproduced verbatim in pass 3's "confirmed still open" note) never
+picked up the correction and still reads as if all three sub-cases —
+stranded `pending`, ordinary `failed`, and throttled-with-no-row — remain
+open. They do not, in full: a scheduled task,
+`run_recover_stranded_message_deliveries`
+(`app/services/scheduled_tasks.py:3895`, registered in `SCHEDULE`,
+`TASK_RUNNERS` (the dispatch map), and `TASK_INTERVALS_SECONDS` at 1800s /
+30 minutes), now sweeps `DepartmentMessageDelivery` rows stuck at
+`status="pending"` past `_STRANDED_CLAIM_AFTER_MINUTES = 35`. Verified by
+reading the task in full (not merely the `KNOWN_LIMITATIONS.md` prose): it
+retires claims whose message or organization is no longer active/live
+(`status="failed"`, with a reason, rather than left `pending` forever —
+otherwise one dead message's claims would fill the bounded 500-row scan
+window on every run and starve genuinely recoverable ones), and re-delivers
+the rest through `MessageDeliveryService.deliver(message,
+only_user_ids=...)`, which reclaims the stale claim via
+`_reclaim_stale_delivery` rather than creating a duplicate — the same
+idempotency mechanism `deliver()`'s normal path already relies on. Covered by
+`backend/tests/test_message_delivery_claim_recovery.py` (module-level
+`pytestmark = [pytest.mark.integration]`, correctly per Pitfall #30b since
+every test uses `db_session`).
+
+**Still genuinely open, unchanged:** the ordinary `failed` path (a
+transient SMTP/Twilio error or a rejected recipient commits the same
+un-revisitable row the stranded-`pending` fix does not touch — `_finish_delivery`
+only ever writes `"failed"` when an error occurred, and nothing re-queues a
+`"failed"` row) and the throttled path (`_send_email`/`_send_sms` return
+before claiming a single recipient when the org's per-hour cap is hit, so
+there is no row for any sweep — this one or a future one — to find). Both
+still need the product decision pass 2/3 described (what counts as
+eligible for retry, whether a throttled batch should be recorded somewhere
+retriable, automatic vs. admin-surfaced, duplicate-risk vs. silent-miss).
+**Fix applied here:** corrected this file's own MSG-12 entry (above, in the
+Pass 2 section) to no longer describe the stranded-`pending` path as open,
+and pointed it at `KNOWN_LIMITATIONS.md` for the current, accurate state —
+this is a documentation-only change; no code in `scheduled_tasks.py` was
+touched by this pass.
+
+### MSG-16 — LOW-MED — `POST /notifications/push/unsubscribe` let any member of the same org delete a colleague's push subscription — ✅ FIXED
+
+**What:** `PushService.unsubscribe` filtered only on `endpoint_hash` and
+`organization_id`, never `user_id` — the one self-scoped route in this file
+that didn't. Every sibling self-scoped route already filters on the
+caller's own id, not merely the org: `subscribe()` writes rows keyed to
+`current_user.id`; `notifications_service.mark_as_read`'s `/my/{log_id}/read`
+path and `toggle_pin` both additionally filter `recipient_id ==
+current_user.id`, the latter's docstring stating the reason explicitly
+("prevent an IDOR where any authenticated member could mark another
+member's notification as read by guessing its log_id"). `unsubscribe` did
+not, and CLAUDE.md's own authorization checklist names this exact shape
+("self-scoped routes ... filter on the caller's own id, not merely the
+org").
+
+**Where:** `app/services/push_service.py`, `unsubscribe`;
+`app/api/v1/endpoints/notifications.py`, `unsubscribe_from_push`.
+
+**Failure scenario:** a push endpoint is a long, effectively-unguessable
+per-device URL issued by the browser's push service, so this is not
+opportunistically exploitable at scale — but it is a real, unauthenticated-
+by-user action once a caller obtains one: a shared station computer, an
+endpoint value logged or cached somewhere, or a future bug elsewhere that
+echoes one back. Any member of the same organization who has (or guesses)
+another member's endpoint could call this route directly (it needs no
+special permission — `get_current_user` only) and silently unsubscribe that
+colleague's device, with no error surfaced to either party. Not
+cross-tenant (the org filter already blocked another department), and not a
+data-exposure issue (it deletes a row, it doesn't read one) — but it is an
+authorization gap matching the checklist's dimension 2 "self-scoped routes"
+criterion exactly, the same category MSG-9 (pass 2) and the `/my/{log_id}`
+routes were fixed/designed against.
+
+**Impact:** low — the only consequence is that the victim stops receiving
+web push notifications (they still receive the same notice by email, the
+channel of record, per the "Notifications Are Email-First" pitfall) until
+they re-subscribe, which most PWA install flows do automatically on next
+open. No data is read, and nothing but that one row is affected.
+
+**Fix:** `PushService.unsubscribe` now takes `user_id` and filters on it
+alongside `organization_id`; `unsubscribe_from_push` passes
+`current_user.id`. The one other caller (`tests/test_push_service.py`'s
+`TestOrgScoping`) was updated for the new signature.
+
+**Guard test:** `tests/test_push_service.py::TestOrgScoping::
+test_another_member_of_the_same_org_cannot_unsubscribe_this_endpoint` —
+inserts a second user in the same org as the subscription's real owner and
+asserts that user's `unsubscribe` call returns `False` and leaves the row
+in place, then confirms the real owner's call still succeeds. Like the rest
+of this file, this could not be executed in this sandbox (the whole module
+is `importorskip`-skipped without the optional `py_vapid`/`pywebpush`
+dependency — confirmed by running `pytest tests/test_push_service.py
+--collect-only`, which reports the single skip and collects zero tests);
+the logic is a direct mechanical mirror of the adjacent, already-passing
+`test_another_org_cannot_unsubscribe_this_endpoint` in the same class, which
+exercises the identical delete-with-a-filter shape against a real database
+in CI.
+
+### Route inventory (enumerated, not sampled)
+
+48 routes across the four endpoint files, all carrying an auth dependency.
+
+| Method | Path                                                | Auth dependency      | Permission                                        | Org/self-scoped                    | Notes                                  |
+| ------ | --------------------------------------------------- | -------------------- | ------------------------------------------------- | ---------------------------------- | -------------------------------------- |
+| GET    | `/messages`                                         | `require_permission` | `notifications.manage`                            | org (service)                      | admin list                             |
+| POST   | `/messages`                                         | `require_permission` | `notifications.manage`                            | org (stamped)                      | create                                 |
+| GET    | `/messages/roles`                                   | `require_permission` | `notifications.manage`                            | org                                | targeting picker                       |
+| GET    | `/messages/inbox`                                   | `get_current_user`   | —                                                 | self (recipient join)              |                                        |
+| GET    | `/messages/inbox/unread-count`                      | `get_current_user`   | —                                                 | self                               |                                        |
+| GET    | `/messages/inbox/{message_id}`                      | `get_current_user`   | —                                                 | self (`_visible_message_or_none`)  |                                        |
+| GET    | `/messages/{message_id}`                            | `require_permission` | `notifications.manage`                            | org (`get_message_by_id`)          | admin view                             |
+| PATCH  | `/messages/{message_id}`                            | `require_permission` | `notifications.manage`                            | org                                |                                        |
+| DELETE | `/messages/{message_id}`                            | `require_permission` | `notifications.manage`                            | org                                | soft delete                            |
+| POST   | `/messages/{message_id}/read`                       | `get_current_user`   | —                                                 | self                               |                                        |
+| POST   | `/messages/{message_id}/acknowledge`                | `get_current_user`   | —                                                 | self                               | audit-logged                           |
+| GET    | `/messages/{message_id}/stats`                      | `require_permission` | `notifications.manage`                            | org                                | MSG-9 fix                              |
+| GET    | `/messages/{message_id}/acknowledgments`            | `require_permission` | `notifications.manage`                            | org                                |                                        |
+| GET    | `/message-history`                                  | `require_permission` | `settings.manage`\|`organization.update_settings` | org                                | LIKE-escaped search                    |
+| POST   | `/message-history/test-email`                       | `require_permission` | `settings.manage`\|`organization.update_settings` | org                                | MSG-3: `to_email` arbitrary, by design |
+| GET    | `/notifications/rules`                              | `require_permission` | `notifications.view`                              | org                                | LIKE-escaped search                    |
+| POST   | `/notifications/rules`                              | `require_permission` | `notifications.manage`                            | org                                |                                        |
+| GET    | `/notifications/rules/{id}`                         | `require_permission` | `notifications.view`                              | org                                |                                        |
+| PATCH  | `/notifications/rules/{id}`                         | `require_permission` | `notifications.manage`                            | org                                | `apply_updates` (MSG-5)                |
+| DELETE | `/notifications/rules/{id}`                         | `require_permission` | `notifications.manage`                            | org                                |                                        |
+| POST   | `/notifications/rules/{id}/toggle`                  | `require_permission` | `notifications.manage`                            | org                                |                                        |
+| GET    | `/notifications/logs`                               | `get_current_user`   | `notifications.manage` iff `scope=organization`   | self by default                    | `_resolve_log_scope`                   |
+| POST   | `/notifications/logs/read-all`                      | `get_current_user`   | same                                              | self by default                    |                                        |
+| POST   | `/notifications/logs/{id}/read`                     | `require_permission` | `notifications.manage`                            | org (any recipient)                | admin log view                         |
+| GET    | `/notifications/my`                                 | `get_current_user`   | —                                                 | self                               | cursor-paginated                       |
+| GET    | `/notifications/my/unread-count`                    | `get_current_user`   | —                                                 | self                               |                                        |
+| POST   | `/notifications/my/read-all`                        | `get_current_user`   | —                                                 | self                               |                                        |
+| POST   | `/notifications/my/{id}/read`                       | `get_current_user`   | —                                                 | self (`user_id` filter)            |                                        |
+| POST   | `/notifications/my/{id}/pin`                        | `get_current_user`   | —                                                 | self (`user_id` filter)            |                                        |
+| GET    | `/notifications/summary`                            | `require_permission` | `notifications.view`                              | org                                |                                        |
+| GET    | `/notifications/push/config`                        | `get_current_user`   | —                                                 | n/a (public VAPID key)             |                                        |
+| POST   | `/notifications/push/subscribe`                     | `get_current_user`   | —                                                 | self                               | SSRF-guarded endpoint                  |
+| POST   | `/notifications/push/unsubscribe`                   | `get_current_user`   | —                                                 | self + org                         | **MSG-16 fix: now self-scoped**        |
+| GET    | `/email-templates/footers`                          | `require_permission` | `settings.manage`\|`organization.update_settings` | org                                |                                        |
+| PUT    | `/email-templates/footers`                          | same                 | same                                              | org                                | `copy.deepcopy` (Pitfall #12)          |
+| GET    | `/email-templates`                                  | same                 | same                                              | org                                |                                        |
+| GET    | `/email-templates/scheduled`                        | same                 | same                                              | org                                | unpaginated (accepted)                 |
+| GET    | `/email-templates/{id}`                             | same                 | same                                              | org                                |                                        |
+| PUT    | `/email-templates/{id}`                             | same                 | same                                              | org                                | `exclude_unset` + `apply_updates`      |
+| POST   | `/email-templates/{id}/reset`                       | same                 | same                                              | org                                |                                        |
+| POST   | `/email-templates/{id}/preview`                     | same                 | same                                              | org                                |                                        |
+| POST   | `/email-templates/{id}/attachments`                 | same                 | same                                              | org                                | magic-byte MIME check                  |
+| DELETE | `/email-templates/{id}/attachments/{attachment_id}` | same                 | same                                              | org (joined)                       | file-then-row delete order             |
+| POST   | `/email-templates/schedule`                         | same                 | same                                              | org; `template_id` `assert_in_org` | `to/cc/bcc_emails` arbitrary (MAIL-4)  |
+| PATCH  | `/email-templates/scheduled/{id}`                   | same                 | same                                              | org                                |                                        |
+| DELETE | `/email-templates/scheduled/{id}`                   | same                 | same                                              | org                                |                                        |
+
+No route without an auth dependency was found. No permission string reads as
+under-gated for its data's sensitivity (dimension 2): the one org-wide
+read-everyone's-notification-body view (`GET /notifications/logs
+?scope=organization`) is gated on `notifications.manage`, not the weaker
+`notifications.view`, specifically because `NotificationLog` carries
+`subject`/`message`/`recipient_email` for every recipient (see
+`_resolve_log_scope`'s own docstring).
+
+### Re-verified still intact (not re-derived)
+
+- **MSG-4** through **MSG-9** (reschedule-guard normalization,
+  `update_rule`/`apply_updates`, email header sanitization + `cc_emails`
+  tightening, SMTP attachment budget + exception safety, `build_shell`
+  cache split, `get_message_stats` org-scoping) — all re-read directly
+  against current source, unchanged.
+- **MSG-13** (push-subscription cap, the four-round lock-ordering fix) —
+  `_MAX_PUSH_SUBSCRIPTIONS_PER_USER = 20`, the sorted-lock-then-peek
+  sequence, the deadlock retry, and the `send_to_user` newest-first cap are
+  all present exactly as pass 3 left them.
+- **MSG-14** (`build_shell` subtitle escaping) — intact.
+- **Tenant isolation / audience targeting** — `_targeted_users` is still
+  the single choke point for delivery, stats, and the acknowledgment
+  report, still filtered to `User.organization_id == message.organization_id`.
+  `_validate_targeting` still rejects a foreign member/role id on
+  create/update.
+- **Recipient materialization / revocation** (`DepartmentMessageRecipient`,
+  `revoked_at`) — `reconcile_recipients` still prunes only un-evidenced rows
+  and soft-revokes the rest, matching the MSG-10 fix pass 3 confirmed.
+- **SMS allowlist (Pitfall #18)** — `resolve_sms_targets`/
+  `resolve_sms_recipients` in `notification_channels.py` remain the only
+  path to `SMSService`; grepped the whole feature (`grep -rn "SMSService()"`)
+  and found exactly one call site outside that module
+  (`message_delivery_service.py`), which goes through the resolver.
+- **Chat-integration webhook senders** (Slack/Discord/Teams) — unchanged,
+  each still self-guards before `notification_dispatch.py` calls it.
+- **`ondelete="SET NULL"` nullability (Pitfall #2)** — re-checked every
+  `SET NULL` FK in `app/models/notification.py`
+  (`NotificationLog.rule_id`, `NotificationLog.recipient_id`,
+  `DepartmentMessage.posted_by`); all three are `nullable=True`.
+- **LIKE escaping (Pitfall #25)** — every `.ilike(` call in the feature's
+  services (`messaging_service.py`, `notifications_service.py`,
+  `message_history.py`) passes `escape=LIKE_ESCAPE_CHAR` via `like_pattern()`.
+  No bare `.like(`/`.ilike(` call exists anywhere in this feature's files.
+- **No CSV export in this feature** — the only `"csv"` hits in the four
+  endpoint files are an allowed attachment extension/MIME type in
+  `email_templates.py`, not an export. Checklist dimension 4's
+  `SafeCsvWriter` rule is n/a here.
+
+### Confirmed still open — unchanged, no new product-decision items
+
+MSG-3 (test-email arbitrary destination, by design), MSG-12's `failed` and
+throttled sub-cases (see the doc correction above — the stranded-`pending`
+sub-case is now fixed), MSG-15 (Web Push send-time DNS-rebinding pin skipped
+outside `production`/`staging`), MAIL-4 (arbitrary scheduled-email
+recipients), `email_service.py`'s F4 (no SSRF guard on an org-configured
+SMTP host — deliberate policy), and the informational
+`NotificationRuleCreate`/`Update.config` unbounded-JSON note are all
+re-verified unchanged and not re-flagged. The three informational
+pagination/N+1 notes from pass 3 (`get_inbox`/`get_logs` in-Python
+pagination — actually cursor/keyset-paginated now, see below —
+`ensure_default_templates`'s ~35-query N+1, `GET /email-templates/scheduled`
+and `GET /notifications/rules` having no pagination) are unchanged
+performance observations, not security findings.
+
+**Correction to a stale pass-1 note, not a new finding:** pass 1's "Future
+development" list still described `get_inbox`'s pagination as an in-Python
+`skip:skip+limit` slice with no total. That was true in pass 1; PR #1938
+(before pass 2) replaced it with the `DepartmentMessageRecipient` join, and
+`GET /notifications/logs`/`GET /notifications/my` both gained cursor
+pagination independently, also before pass 2. Pass 2 and 3 already
+description-corrected this in their own bodies; noted here only because a
+reader skimming from pass 1's still-present language alone would be
+mistaken. No code change.
+
+## Guard tests added (pass 4)
+
+- `backend/tests/test_push_service.py::TestOrgScoping::
+test_another_member_of_the_same_org_cannot_unsubscribe_this_endpoint`
+  (MSG-16) — same-org, cross-user `unsubscribe` attempt is rejected; the
+  legitimate owner's call still succeeds. Cannot run in this sandbox (see
+  MSG-16 above); mirrors the adjacent passing cross-org test's shape.
+
+## Completion gate (pass 4)
+
+| Check                                                                                                                                                                                               | Result                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                       | clean (0 violations)                                                                                                             |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                | clean (1586 files unchanged)                                                                                                     |
+| `isort --check-only app/ tests/ alembic/` (installed 9.0.1, matching CI's pin)                                                                                                                      | clean                                                                                                                            |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                   | PASSED — 443 revisions, single head                                                                                              |
+| backend tests, scope (`-k "push_service or messaging or notification or message_history or message_delivery or email_theme or email_template or email_service or message_delivery_claim_recovery"`) | 1127 passed, 1 skipped (pre-existing, `py_vapid`/`pywebpush` unavailable in this sandbox)                                        |
+| backend tests, full suite                                                                                                                                                                           | 12,447 passed, 21 skipped (environment-only: `py_vapid`/`pywebpush`, Docker daemon/registry, API-contract opt-in flag), 0 failed |
+| `npx tsc --noEmit` (frontend, via `npm run typecheck`)                                                                                                                                              | 0 errors                                                                                                                         |
+| `npx eslint --max-warnings 10` (frontend, via `npm run lint`)                                                                                                                                       | exit 0, no output (0 errors, 0 warnings)                                                                                         |
+
+No frontend file was modified by this pass (MSG-16 is backend-only), so
+`tsc`/`eslint` establish the backend fix didn't regress the frontend build.
