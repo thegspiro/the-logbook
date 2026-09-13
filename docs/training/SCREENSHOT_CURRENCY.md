@@ -1,5 +1,41 @@
 # Screenshot currency
 
+## Audited 2026-09-13 (second pass) — one queued: the election-vote hint is new
+
+Routine maintenance pass per the currency job's standing brief. Rebased onto
+`origin/main` (4 commits, `fb94aa362` → `f9c67bdf6`): PR #2527 (Feature 32,
+Locations & kiosk, security-review pass 4 — docs only), and the merge of
+`98d218c6c` ("A meeting stage that names no event advances on nothing"), which
+gates auto-advance on both the Meeting and Election Vote stage types. Clean
+replay, no conflicts.
+
+`status_report.py`: 580/580, unchanged. `audit_images.py --baseline
+scripts/screenshots/audit_baseline.txt`: no new findings across all 580
+images — only the pre-known dark-page scrollbar-gutter edge finding, already
+in the baseline. `check_docs_links.py`: 356 files, 0 broken links.
+
+**Queued: `15-08-election-package.png` is stale.** `98d218c6c` added a new
+branch to `ApplicantActionPanels.tsx`'s `getStageRequirementHint()` for
+`StageType.ELECTION_VOTE`: "Once the applicant is on a ballot, they cannot
+advance until the election closes and the result is recorded." That hint
+renders in the same applicant-detail-drawer panel `15-08-election-package`
+captures `fullPage` for an applicant on the "Membership Vote" stage
+(`openApplicantAtStage("Membership Vote")`), so the currently-committed image
+predates this line and no longer matches the screen. Neither `audit_images.py`
+nor `status_report.py` catches this class of drift — the placeholder is still
+filled and no global pixel signature moved, only one panel's text grew — which
+is why it is recorded here by hand rather than by a script. Not recaptured in
+this pass: doing so needs the full stack up (`dev_env.sh`,
+`seed_demo_data.py`) rather than the three read-only checks above, which is
+correctly a separate, heavier pass. Recapture with
+`node scripts/screenshots/capture.mjs --only 15-08` once seeded.
+
+The same commit's `StageConfigModal.tsx` change (refusing to save an
+auto-advancing Meeting stage with no linked event type) has no manifest entry
+to go stale: `15-02-pipeline-builder` pictures the stage list, not the
+per-stage config modal, and no shot opens that modal for a Meeting or
+Election Vote stage.
+
 ## Audited 2026-09-13 — no drift, nothing recaptured
 
 Routine maintenance pass per the currency job's standing brief. Rebased onto
