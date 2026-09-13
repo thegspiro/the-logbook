@@ -14215,7 +14215,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⏳     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
@@ -14225,6 +14225,63 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-13 — Feature 32 (Locations & kiosk, pass 4) — 0 fixed, 0 flagged, all prior findings re-confirmed
+
+Checked for a concurrent session first: `git fetch origin main` showed row 32
+still `⬜` and no open PR touching `locations.py`/`admin_hub.py`/the kiosk
+frontend surface. Branched fresh from `origin/main` (`claude/security-review-
+locations-kiosk`) rather than reusing the existing local tree.
+
+Loaded `CHECKLIST.md` and all three prior findings docs (`LOC2-32` pass 1, PR
+#1916; `LOC-32` pass 2, PR #2098; `LOC3-32` pass 3, PR #2365) before touching
+code. Delta-focused per the established convention: `git diff --stat` against
+pass 3's merge commit (`3ac9cd4a3`) scoped to every file in this feature's
+backend surface found exactly two changed — `admin_hub_service.py` (pass 3's
+own already-recorded addendum: `_age_days` made timezone-aware, `_short_
+staffed_shifts` given a `max_candidates` cap) and `guest_check_in_service.py`
+(an unrelated membership-pipeline dedup refactor extracting the meeting-
+config-match predicate to a shared function, logic byte-for-byte preserved).
+Both re-verified directly against current code rather than assumed from the
+addendum's prose alone. Every other backend file — `locations.py`,
+`location_service.py`, `public/display.py`, `admin_hub.py`, both schema
+files, both model files — byte-identical to pass 3.
+
+Frontier of this pass: three frontend files (`LocationKioskPage.tsx`,
+`GuestCheckInPage.tsx`, `LocationsPage.tsx`) picked up accessibility-only
+changes (semantic `<main>` landmarks, dialog `aria-label`/`aria-labelledby`,
+`htmlFor`/`id` pairing) from an unrelated sweep between pass 3's merge and
+this iteration — read all three diffs in full; none touch data fetching,
+the display-code URL construction, form submission, or dialog dismiss
+behavior. Also gave the kiosk credential model (the room's `display_code`)
+a fresh end-to-end read rather than citing prior passes: confirmed the code
+is the sole credential, resolves its own organization (no client-supplied
+org id to mismatch), answers malformed and not-found identically (no
+enumeration oracle), and that `_resolve_guest_event` requires the event to
+actually belong to the resolved location before accepting guest sign-in.
+Re-verified `admin_hub_service.py`'s core service methods (`_context`,
+`get_summary`, `_load_preferences`, `_sanitize`, `save_settings`) are
+unchanged and still org-scope every preference read/write; `MODULE_REGISTRY`
+still has no `locations` module (this feature's admin-hub inclusion is about
+reviewing the shared Administration frame, not a Locations-specific admin
+page). Re-checked all four of this feature's routes are still present in
+`APPLICATION_PAGES.md`, `mobile-route-inventory.ts`, and `testingRegistry.ts`.
+
+**0 fixes, 0 new findings.** All five pass-2 findings, pass 3's addendum
+fixes, and the two pre-pass-1 findings (LOC-1/2/4) re-confirmed present and
+correct. LOC-3 (`GET /locations/{id}/display`, dead code) remains open,
+unchanged, still tracked in `docs/KNOWN_LIMITATIONS.md` — not fixed, same
+reasoning as every prior pass (deleting or wiring up a dead endpoint is an
+API-surface decision outside a review pass's scope).
+
+flake8/black/isort clean on this feature's backend files; `validate_
+migrations.py --strict`: 444 revisions, single head; scoped tests
+(`-k "location or kiosk or admin_hub"`) 357 passed, 1 skipped (pywebpush,
+pre-existing); full backend suite 12,524 passed, 21 skipped (pre-existing),
+0 failed; frontend typecheck 0 errors; eslint 0 errors, 0 warnings. Findings
+doc: `docs/security-review/LOC4-32-locations-kiosk.md`.
+
+---
 
 ### 2026-09-13 — Feature 24 (Meetings & minutes, pass 4) — 2 fixed (MM-15, MM-16), 1 flagged (MM-17), MM-9 re-confirmed unchanged
 
