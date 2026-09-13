@@ -96,7 +96,11 @@ describe('EmailSettingsSection — hosted platforms are App Password only', () =
     renderSection(settings({ platform: 'selfhosted' }));
 
     expect(screen.getByText('SMTP Host')).toBeInTheDocument();
-    expect(screen.queryByText(/app password/i)).not.toBeInTheDocument();
+    // No App Password *field* — that is the preset platforms' credential.
+    // Asserted on the control rather than on the text, because this section
+    // legitimately mentions app passwords in its guidance: most of the
+    // providers it serves (Yahoo, iCloud, Fastmail, Zoho) issue one.
+    expect(screen.queryByLabelText(/app password/i)).not.toBeInTheDocument();
   });
 });
 
@@ -211,5 +215,61 @@ describe('EmailSettingsSection — Microsoft 365 authentication method', () => {
 
     const update = onEmailSettingsChange.mock.calls[0]?.[0] as (s: EmailServiceSettings) => EmailServiceSettings;
     expect(update(saved).microsoft_auth_method).toBeUndefined();
+  });
+});
+
+describe('EmailSettingsSection — SMTP serves every other provider', () => {
+  it('fills in the server details for a chosen provider without touching credentials', async () => {
+    const state = applyUpdatesTo(
+      settings({ platform: 'selfhosted', smtp_user: 'fd@dept.example', smtp_password: 'kept' })
+    );
+    renderSection(settings({ platform: 'selfhosted', smtp_user: 'fd@dept.example', smtp_password: 'kept' }), {
+      onEmailSettingsChange: state.onEmailSettingsChange,
+    });
+
+    await userEvent.selectOptions(screen.getByLabelText('Fill in settings for a known provider'), 'fastmail');
+
+    expect(state.latest()).toMatchObject({
+      smtp_host: 'smtp.fastmail.com',
+      smtp_port: 465,
+      smtp_encryption: 'ssl',
+      // The department's own credentials, never overwritten by a preset.
+      smtp_user: 'fd@dept.example',
+      smtp_password: 'kept',
+    });
+  });
+
+  it('names the credential the chosen provider expects', async () => {
+    renderSection(settings({ platform: 'selfhosted' }));
+
+    await userEvent.selectOptions(screen.getByLabelText('Fill in settings for a known provider'), 'yahoo');
+
+    expect(screen.getByText(/app password generated in Yahoo Account Security/i)).toBeInTheDocument();
+  });
+
+  it('offers no quick fill on a preset platform, which has no host to fill', () => {
+    renderSection(settings({ platform: 'gmail' }));
+
+    expect(screen.queryByLabelText('Fill in settings for a known provider')).not.toBeInTheDocument();
+  });
+});
+
+describe('EmailSettingsSection — enabled with no platform', () => {
+  it('warns that nothing can be sent', () => {
+    renderSection(settings({ enabled: true, platform: 'other' }));
+
+    expect(screen.getByText(/no platform is selected, so nothing can be sent/i)).toBeInTheDocument();
+  });
+
+  it('stays quiet when email is switched off', () => {
+    renderSection(settings({ enabled: false, platform: 'other' }));
+
+    expect(screen.queryByText(/nothing can be sent/i)).not.toBeInTheDocument();
+  });
+
+  it('stays quiet once a platform is chosen', () => {
+    renderSection(settings({ enabled: true, platform: 'selfhosted' }));
+
+    expect(screen.queryByText(/nothing can be sent/i)).not.toBeInTheDocument();
   });
 });
