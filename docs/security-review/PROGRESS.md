@@ -16,6 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2513](https://github.com/thegspiro/the-logbook/pull/2513)
+(Feature 28, Security, audit & IP, pass 4) merged clean via merge commit
+`2be53982b0`, 17/17 CI green, `mergeable_state: clean`, no unresolved
+review threads. Docs-only PR (0 code fixes); its one HIGH finding
+(SEC2-28-10, the audit hash chain's missing write-concurrency control) was
+deliberately flagged rather than fixed — this rotation's own instructions
+called for extra conservatism reviewing the app's own defense mechanisms,
+and a drive-by lock here risked app-wide request serialization. Rotation
+row 28 is now `✅`. Next: Feature 29 (Reports & analytics).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 4, PR #2513, before it merged), preserved for history</summary>
+
 **PR [#2513](https://github.com/thegspiro/the-logbook/pull/2513)** (Feature
 28, Security, audit & IP, pass 4) — branch
 `claude/security-review-audit-ip`, opened against a fresh `origin/main` (no
@@ -52,6 +65,8 @@ backend tests pass (21 skipped, all environment-only); frontend
 (a scheduling fix, an onboarding-singleton migration/fix — neither touching
 this feature); merged in with no conflicts, applied the new migration to
 this sandbox's test DB, and the gate above is the post-merge, re-run result.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 4, PR #2508, before it merged), preserved for history</summary>
