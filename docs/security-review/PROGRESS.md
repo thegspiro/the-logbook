@@ -16,6 +16,48 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2504](https://github.com/thegspiro/the-logbook/pull/2504)** (Feature
+25, Messaging & notifications, pass 4) — branch
+`claude/security-review-messaging-notifications`. A separate, docs-only PR
+(#2503, branch `claude/security-review-record-mm24-merge`) was already open
+recording PR #2502's merge and marking row 25 in progress when this review
+started; per this file's own established precedent for two concurrent
+sessions landing on the same feature (see the pass-2 MSG-25 log entry
+below), this PR proceeds independently rather than waiting, since #2503 is
+docs-only bookkeeping for the _previous_ feature's closure, not an open
+review PR _for_ Feature 25 itself — the rotation's "one PR at a time" rule
+is about not starting a new feature while its own review PR is open, and
+no such PR existed for Feature 25 before this one. Whichever of #2503/#2504
+merges first, the other's overlapping bookkeeping text becomes a trivial,
+same-direction conflict for a future tend-PR iteration to resolve, not a
+disagreement about what happened.
+
+1 fix: **MSG-16** (LOW-MED) — `PushService.unsubscribe` filtered a
+client-supplied push endpoint on `organization_id` only, not the caller's
+own id, unlike every sibling self-scoped route in the file — any member of
+the same org who obtained another member's endpoint could silently
+unsubscribe their push notifications. Fixed by adding a `user_id` filter;
+guard test added. 1 doc correction: this file's own MSG-12 write-up hadn't
+caught up to `KNOWN_LIMITATIONS.md` already recording its stranded-`pending`
+sub-case as fixed (2026-09-06, `run_recover_stranded_message_deliveries`) —
+corrected in the Pass 4 section, no code change. MSG-3/MSG-15/F4/MAIL-4 and
+the `NotificationRuleCreate.config` note re-verified unchanged, not
+re-flagged. All 48 routes across the four endpoint files enumerated fresh
+(table in the findings doc); every route carries an auth dependency, every
+by-id query is org- or self-scoped correctly.
+
+Completion gate: flake8/black/isort clean (isort 9.0.1, CI's pin);
+migrations unchanged (443 revisions, single head, no new migration this
+pass); 1,127 scoped + 12,447 full-suite backend tests pass (21 skipped, all
+environment-only — `pywebpush`/`py_vapid`, Docker, opt-in contract suite);
+frontend `tsc --noEmit` 0 errors; `npm run lint` exit 0, no output (no
+frontend file touched by this pass's fix). Full write-up:
+`docs/security-review/MSG-25-messaging-notifications.md` → Pass 4. Rotation
+row 25 -> ✅. Next feature (26, Forms) does not start until this PR merges.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 4, PR #2502, after it merged), preserved for history</summary>
+
 **None.** PR [#2502](https://github.com/thegspiro/the-logbook/pull/2502)
 (Feature 24, Meetings & minutes, pass 4) merged clean via merge commit
 `e2bdae89f5`, all 17 CI checks green (CI Success, both MySQL/MariaDB
@@ -28,6 +70,8 @@ review threads. Codex Code Review had hit its usage-limit cap on this PR
 as idle/clean per this rotation's own precedent, same as prior PRs Codex
 could not reach. Merged directly by this 30-minute watchdog session. Rotation
 row 24 is now `✅`. Next: Feature 25 (Messaging & notifications).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 4, PR #2502, before it merged), preserved for history</summary>
@@ -13700,7 +13744,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | 🔄     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
@@ -17900,3 +17944,62 @@ components/CallTypeChips.tsx`, not touched this pass). Full writeup:
   touched). Findings doc: `docs/security-review/FORM-26-forms.md` (Pass 3).
   Rotation row 26 -> ⏳ pending PR. Next: open the PR, tend it to green,
   then 27 Integrations.
+
+### 2026-09-13 — Feature 25 (Messaging & notifications, pass 4)
+
+Fourth-lap pass (row 25 was ⬜ at the start of this lap; row 26 Forms is
+still ⬜ too, so this is not the tail of an already-reset lap). Loaded prior
+art in order (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/messaging.md`, `docs/app-review/messaging.md`, this
+feature's own passes 1-3) before reading any code. Re-verified MSG-4
+through MSG-9, MSG-13, MSG-14, the recipient-materialization/revocation
+architecture, and the SMS allowlist against current source — all still
+hold, nothing regressed. Enumerated all 48 routes across the four endpoint
+files (table in the findings doc): every route carries an auth dependency,
+every by-id query is org-scoped (or self-scoped where the route is
+self-service), and no permission string reads as under-gated for its
+data's sensitivity.
+
+One new finding, fixed: **MSG-16 (LOW-MED)** — `PushService.unsubscribe`
+filtered a client-supplied endpoint on `organization_id` only, unlike every
+sibling self-scoped route in the file (`subscribe`, `mark_as_read`'s `/my/`
+path, `toggle_pin`), which also filter on the caller's own id — CLAUDE.md's
+own authorization checklist names this exact "self-scoped routes ... filter
+on the caller's own id, not merely the org" shape. Impact is bounded (an
+endpoint URL is a long, effectively unguessable per-device secret, and the
+only consequence is the victim's push notifications going quiet — they
+still get the same notice by email, the channel of record), but it is a
+real same-org authorization gap with a one-line fix. Fixed by adding a
+`user_id` filter to the query and its one caller; the pre-existing
+cross-org guard test's signature was updated, and a new same-org
+cross-user guard test was added. Could not run in this sandbox — the whole
+`test_push_service.py` module is `importorskip`-skipped without the
+optional `pywebpush`/`py_vapid` dependency, a pre-existing, previously
+documented sandbox limitation, not something this pass introduced; the new
+test mirrors the shape of the adjacent cross-org test that already passes
+in CI.
+
+One doc correction, no code change: this findings file's own MSG-12
+write-up (written pass 2, carried forward unmodified through pass 3's
+"confirmed still open" note) never picked up that its stranded-`pending`
+sub-case was already fixed on `main` on 2026-09-06
+(`run_recover_stranded_message_deliveries` in `scheduled_tasks.py`, tested
+in `test_message_delivery_claim_recovery.py`) — `KNOWN_LIMITATIONS.md`'s
+own MSG-12 entry already said so correctly, this file just hadn't caught
+up. Added a Pass 4 "Doc correction" section pointing at the current state;
+the `failed` and throttled sub-cases remain genuinely open, unchanged, and
+still need the product decision prior passes described. MSG-3, MSG-15,
+`email_service.py`'s F4, MAIL-4, and the `NotificationRuleCreate.config`
+unbounded-JSON note are all re-verified unchanged and not re-flagged;
+nothing new needed mirroring into `KNOWN_LIMITATIONS.md` (MSG-16 was fixed,
+not flagged, and MSG-12's current state there was already accurate).
+
+Full completion gate green: flake8/black/isort clean (isort 9.0.1,
+matching CI's pin); `validate_migrations.py --strict` passed (443
+revisions, single head, no new migration this pass); 1127/1127 scoped and
+12,447/12,447 full backend suite pass (21 skipped, all environment-only —
+`pywebpush`/`py_vapid`, Docker daemon/registry, the opt-in API-contract
+flag); frontend `tsc --noEmit` 0 errors and `eslint --max-warnings 10` exit
+0 with no output (no frontend file touched by this pass's fix). Findings
+doc: `docs/security-review/MSG-25-messaging-notifications.md` (Pass 4).
+Rotation row 25 -> ✅. Next: 26 Forms.
