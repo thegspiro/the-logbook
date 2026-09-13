@@ -247,6 +247,42 @@ class TestEndpointPermissions:
             assert deps is not None, f"Route {path} GET not found"
             assert any("require_permission" in d or "scheduling" in d for d in deps)
 
+    def test_swap_reads_admit_manage(self):
+        """The swap reads take either grant, for the time-off pair's reason.
+
+        Each already **branches on `scheduling.manage`** to decide its own
+        scope — the department's swaps for an officer, the caller's own for
+        everyone else — so gating them on `scheduling.swap` alone put that
+        branch behind a door the grant it tests for could not open.
+
+        The base grant differs from the time-off pair: swaps sit on
+        `scheduling.swap`, which every line member holds, rather than
+        `scheduling.view`. That changes nothing here, because a position
+        granted `manage` alone holds neither, and it is the position
+        `/swap-requests/{id}/review` below exists for.
+
+        The swap **writes** are deliberately absent. Not one of them branches
+        on `manage` — proposing and cancelling a swap are the member's own
+        actions — so pairing them would widen a grant with nothing behind it
+        asking for the widening.
+        """
+        for path in ("/swap-requests", "/swap-requests/{request_id}"):
+            deps = self._get_route_deps(path, "GET")
+            assert deps is not None, f"Route {path} GET not found"
+            assert (
+                "PermissionChecker(scheduling.swap,scheduling.manage)" in deps
+            ), f"GET {path} does not admit scheduling.manage"
+
+        for path, method in (
+            ("/swap-requests", "POST"),
+            ("/swap-requests/{request_id}/cancel", "POST"),
+        ):
+            deps = self._get_route_deps(path, method)
+            assert deps is not None, f"Route {path} {method} not found"
+            assert (
+                "PermissionChecker(scheduling.swap)" in deps
+            ), f"{method} {path} unexpectedly widened"
+
     def test_swap_review_requires_scheduling_manage(self):
         deps = self._get_route_deps("/swap-requests/{request_id}/review", "POST")
         assert (

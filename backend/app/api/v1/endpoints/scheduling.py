@@ -2374,13 +2374,26 @@ async def decline_assignment(
 # ============================================
 
 
+# Both swap reads take either grant, for the reason the time-off pair below
+# does: each already *branches* on `scheduling.manage` to decide what it
+# returns, so gating them on `scheduling.swap` alone put that branch behind a
+# door the grant it tests for could not open. The base grant differs — swaps
+# are gated on `scheduling.swap`, which every line member holds, rather than
+# `scheduling.view` — but a position granted `manage` alone holds neither, and
+# it is the position `/swap-requests/{id}/review` exists for.
+#
+# The writes below stay on `scheduling.swap` alone and are not part of this:
+# none of them branches on `manage`, because proposing and cancelling a swap
+# are the member's own actions, not an officer's.
 @router.get("/swap-requests", response_model=ShiftSwapRequestsPage)
 async def list_swap_requests(
     status_filter: str | None = Query(None, alias="status"),
     mine: bool = False,
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.swap")),
+    current_user: User = Depends(
+        require_permission("scheduling.swap", "scheduling.manage")
+    ),
 ):
     """List shift swap requests.
 
@@ -2450,7 +2463,9 @@ async def create_swap_request(
 async def get_swap_request(
     request_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.swap")),
+    current_user: User = Depends(
+        require_permission("scheduling.swap", "scheduling.manage")
+    ),
 ):
     """Get a specific swap request"""
     service = SchedulingService(db)
