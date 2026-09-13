@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#2519](https://github.com/thegspiro/the-logbook/pull/2519)** (Feature
+**PR [#2521](https://github.com/thegspiro/the-logbook/pull/2521)** (Feature
 30, Onboarding, pass 4) — branch `claude/security-review-onboarding`, opened
 against a fresh `origin/main` (no security-review PR was open at the start of
 this iteration; row 30 was `⬜`, row 29's closure — PR #2517 — was already
