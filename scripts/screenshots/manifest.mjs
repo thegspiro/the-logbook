@@ -4405,6 +4405,47 @@ export const SHOTS = [
     // /onboarding/start.
     capturedElsewhere: "scripts/screenshots/wizard-walk.mjs",
   },
+  {
+    id: "20-08-onboarding-member-numbering",
+    doc: "20-september-2026-release-changes.md",
+    line: 1059,
+    anchor:
+      "Step 1's member-numbering block with the switch on, a prefix filled in and a",
+    alt: "Step 1's member-numbering block — the switch on, a prefix of FD- and numbering starting at 100",
+    route: "/onboarding/start",
+    // Two closed things, not one: "Department Identifiers" starts collapsed,
+    // and the prefix and starting-number fields render only while the switch
+    // is on. Also the only shot here taken BEFORE step 1 is submitted -- the
+    // form stops existing at that point.
+    capturedElsewhere: "scripts/screenshots/wizard-walk.mjs",
+  },
+  {
+    id: "20-09-onboarding-tier-rights",
+    doc: "20-september-2026-release-changes.md",
+    line: 1075,
+    anchor:
+      "Step 4's membership tier ladder with one tier's rights open — the voting,",
+    alt: "Step 4's tier ladder with Active Member open — can vote, can hold office, the attendance threshold, and the automatic-advancement switch",
+    route: "/onboarding/positions",
+    // Active Member deliberately, not the first tier: Probationary's rights
+    // are all off at the shipped defaults, which photographs as a blank form.
+    // 08-80 already pictures this editor closed at its Settings address, so an
+    // OPEN tier is the whole reason this entry is not a duplicate of it.
+    capturedElsewhere: "scripts/screenshots/wizard-walk.mjs",
+  },
+  {
+    id: "20-10-onboarding-permission-rows",
+    doc: "20-september-2026-release-changes.md",
+    line: 1088,
+    anchor:
+      "Step 4's permission rows for any position other than IT Manager, against a",
+    alt: "Step 4's permission rows for Chief, with 13 unenabled modules hidden and a Show all modules control",
+    route: "/onboarding/positions",
+    // Depends on the Modules step having run. `visibleCategoryIds` fails OPEN
+    // on an empty answer -- every module shown, nothing hidden, no notice --
+    // so a shot taken without it pictures the opposite of its caption.
+    capturedElsewhere: "scripts/screenshots/wizard-walk.mjs",
+  },
   // ── 20 September release: reachable from the seeded department ──────
   {
     id: "20-04-org-profile-navigation-layout",

@@ -73,37 +73,70 @@ capture and why `08-admin-reports.md` says so in prose.
 ### The wizard cannot be shot by capture.mjs
 
 `wizard-walk.mjs` runs against an **empty** database, before
-`bootstrap_demo.py`, and drives the real wizard. Three constraints made this
-harder than "point a capture at a route", and all three are encoded in the
-script:
+`bootstrap_demo.py`, and drives the real wizard. It now takes **six** shots, and
+three constraints made this harder than "point a capture at a route":
 
-1. **An empty database is not enough for two of the three.** The progress strip
-   and the rank ladder need a live onboarding *session*. A fresh browser at
+1. **An empty database is not enough for five of the six.** Every shot but
+   `20-01` needs a live onboarding *session*. A fresh browser at
    `/onboarding/modules` has none, so the strip resets to "Step 1 of 11" and the
    completed ticks vanish; at `/onboarding/positions` it is redirected to
-   `/onboarding/start` outright. Both clips are therefore taken **inside** the
+   `/onboarding/start` outright. The clips are therefore taken **inside** the
    walk's own session, not by revisiting the route afterwards.
-2. **Both subjects are panels on very tall pages.** Step 4 is ~5,200px and the
+2. **The subjects are panels on very tall pages.** Step 4 is ~5,200px and the
    modules step ~3,400px; a `fullPage` shot of either renders its subject as a
    thin band and pictures the position templates or the module grid instead.
-   Both are clipped, and the script asserts on the clip's own text before
+   Every one is clipped, and the script asserts on the clip's own text before
    writing.
-3. **A duplicate-row race can brick the wizard mid-run** -- see the note at the
-   end of this section. `POST /onboarding/start` once, serially, before opening
-   a browser.
+3. **The order cannot be rearranged.** `20-08` is on the step-1 form, which
+   stops existing the moment step 1 is submitted; `20-02` needs steps 1-2
+   already ticked; and `20-10` needs the Modules step to have run at all. They
+   are taken in the order the wizard reaches them, which is the only order that
+   works.
+
+**The serial `POST /onboarding/start` this used to require is gone.** It worked
+around ONBOARD-7 -- the wizard's own parallel page load created duplicate
+`onboarding_status` rows, and `/onboarding/status` then 500ed permanently, which
+killed the run partway through. That is fixed (PR #2500: a unique index plus a
+retrying get-or-create), and twenty concurrent starts now yield one row. Issuing
+one first is harmless if an older checkout still does it.
 
 | Shot | Status | Notes |
 | ---- | ------ | ----- |
 | `20-01` `/onboarding/prepare` | **shot** | Both lists in frame; the footer reads "9 of the 11 steps are optional" |
 | `20-02` progress strip, mid-flow | **shot** | Clipped. "Step 3 of 11: Modules", steps 1-2 ticked, Modules marked optional |
 | `20-03` step 4 rank ladder | **shot** | Clipped to the card: each rank's fillable seats, per-rank Edit, Add Rank |
-| `/onboarding/start`, member-numbering block | **queued** | The switch, prefix and starting number. It sits in a collapsed section of the step-1 form, so it needs a `prepare` that expands that section first |
-| `/onboarding/positions`, tier ladder | **queued** | One tier expanded, showing the voting / office / attendance controls **and** the automatic-advancement switch. `08-80` pictures the same editor at its Settings address, which may be enough |
-| `/onboarding/positions`, permission rows | **queued** | Rows for a **deliberately small** module selection |
+| `20-08` step 1 member numbering | **shot** | Clipped. Switch on, prefix `FD-`, numbering from 100, both help lines in frame |
+| `20-09` step 4 tier ladder | **shot** | Clipped. **Active Member** open -- its three rights plus the automatic-advancement switch |
+| `20-10` step 4 permission rows | **shot** | Clipped. "13 modules you did not enable are hidden", six rows, **Show all modules** |
 
-**Capture the permission rows last** and with few modules enabled. Shot against
-a full module set the change is invisible, and the frame argues the opposite of
-the caption.
+**The permission rows were captured last, and the small module selection is not
+staged.** The Modules step enables only the `essential` modules by default, and
+`moduleStatuses` is in the onboarding store's persisted allowlist, so it
+survives the `page.goto` that reaches step 4. That detail is load-bearing rather
+than incidental: `visibleCategoryIds` **fails open** -- an empty answer returns
+every category and `hiddenModuleCount` becomes 0 -- so a run that never reached
+the Modules step produces no notice to photograph at all, and the frame would
+argue the opposite of its caption. The walk asserts the notice is in the clip
+for exactly that reason.
+
+**`20-09` opens Active Member, not the first tier.** First is Probationary,
+whose rights are all **off** at the shipped defaults. That is accurate, and it
+photographs as an empty form -- a reader could reasonably conclude no tier
+votes. Active Member is the tier most members hold, its rights are on, and
+opening it additionally reveals the **Minimum % / Over the last (months)**
+fields, which render only while the attendance threshold is ticked. This is
+what keeps the shot from duplicating `08-80`, which pictures the same editor
+closed at its Settings address.
+
+**A tier name cannot be asserted from page text.** Tier names live in an
+`input`'s `value`, and `innerText` never contains input values -- so a check for
+"Active Member" in the clip's text is unsatisfiable by construction, in the
+manner of Pitfall #28a. The walk proves the right row opened by reading its own
+toggle instead, which reads `Hide` only while that tier is open.
+
+**`20-08` blurs the focus ring before it shoots.** The starting-number box is
+filled last and keeps its ring, and a ring in a documentation image reads as
+"type here" rather than as a value already set.
 
 **`20-03` does not show a renamed rank**, which the placeholder originally asked
 for. The ladder is pictured at its shipped defaults instead: staging a rename
@@ -173,6 +206,16 @@ backlog, not a regression, but it is the largest single block of unfilled
 placeholders in the library. Two further placeholders were added to
 `08-admin-reports.md` for the ranks and tiers sections, taking the library from
 42 remaining to **51**.
+
+**Update, 2026-09-13.** The three queued wizard shots above are now taken, which
+moves the library to **530 captured, 42 remaining**. The three needed
+placeholders written for them first -- they had been tracked here as queued
+since the 09-12 pass but never had one, so there was nothing for
+`apply_placeholders.py` to fill. Worth knowing for the next one:
+`wizard-walk.mjs` writes no capture report, so its shots never appear in
+`capture-report.json` and the applier does not see them at all. The report for
+them was generated from the manifest, so the alt text and spacing came out of
+the same machinery as every other shot rather than being typed by hand.
 
 ## Disposition for September 7-8, 2026 - the items list gained pinning and grouping
 
