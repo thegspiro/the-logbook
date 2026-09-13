@@ -1056,6 +1056,8 @@ accounts holding no number, and the roster import starting at the number those
 accounts should have had — an off-by-a-few nobody notices until a badge is
 printed.
 
+![Step 1's member-numbering block — the switch on, a prefix of FD- and numbering starting at 100](./images/20-08-onboarding-member-numbering.png)
+
 **Your rank ladder**, in step 4. You can rename ranks to your own vocabulary,
 reorder the ladder, remove ranks you do not have, add your own, and set which
 shift seats each rank can fill — **including a seat your department invented**.
@@ -1065,11 +1067,15 @@ at Members → Administration → Settings → Membership Tiers.
 
 ![Step 4's rank ladder — each rank with the shift seats it may fill, an Edit control per rank, and Add Rank](./images/20-03-onboarding-rank-ladder.png)
 
+![Step 4's tier ladder with Active Member open — can vote, can hold office, the attendance threshold, and the automatic-advancement switch](./images/20-09-onboarding-tier-rights.png)
+
 Also in step 4: the permission checkboxes now **show rows only for the modules
 you turned on** in step 3, which is why modules moved ahead of positions. Every
 checkbox grants a permission that actually exists, unticking a seeded position
 removes it, and pressing Continue without editing anything **no longer deletes
 most of the roster**.
+
+![Step 4's permission rows for Chief, with 13 unenabled modules hidden and a Show all modules control](./images/20-10-onboarding-permission-rows.png)
 
 ## New: Members Administration → Settings
 
