@@ -98,24 +98,48 @@ class TestEndpointPermissions:
                 "PermissionChecker(scheduling.view,scheduling.manage)" in deps
             ), f"{method} {path} does not admit scheduling.manage"
 
-    def test_member_facing_reads_stay_on_scheduling_view(self):
-        """The widening above is scoped, not a blanket.
+    def test_board_and_dashboard_reads_admit_manage(self):
+        """The board's own reads take either grant too.
 
-        These are the member's own surfaces — the board, the summary, their
-        requests. No `scheduling.manage` page reads them, so they keep the
-        narrower gate rather than drifting wider by habit.
+        These three were pinned to `scheduling.view` alone until 2026-09-13,
+        on the reasoning that no `scheduling.manage` page reads them. That is
+        true and was the wrong test: `/scheduling` and the dashboard are not
+        permission-gated as *routes*, so a position granted `manage` alone
+        lands on them anyway and is refused the shifts they exist to draw —
+        the calendar reports "Could not load the schedule" and the summary
+        tiles their load-failure state.
+
+        Widening conceals nothing that was hidden. Every shift `/calendar/*`
+        returns, and every shift `/summary` counts, is already readable
+        through `/shifts`, which admits both grants; the narrow gate bought no
+        confidentiality and cost a half-broken screen. `/time-off` below is
+        the one that stays, and for a reason this argument does not reach.
         """
         for path in (
             "/calendar/week",
             "/calendar/month",
             "/summary",
-            "/time-off",
         ):
             deps = self._get_route_deps(path, "GET")
             assert deps is not None, f"Route {path} GET not found"
             assert (
-                "PermissionChecker(scheduling.view)" in deps
-            ), f"GET {path} unexpectedly widened"
+                "PermissionChecker(scheduling.view,scheduling.manage)" in deps
+            ), f"GET {path} does not admit scheduling.manage"
+
+    def test_time_off_list_stays_on_scheduling_view(self):
+        """The widening is scoped, not a blanket.
+
+        Unlike the calendar and the summary, this list is not a projection of
+        anything `scheduling.manage` can already read: it returns members'
+        time-off requests, and the reasons they give for them. Reviewing one
+        is `scheduling.manage` on `/time-off/{id}/review`, which is a separate
+        gate on a separate route — holding the grant that reviews a request is
+        not the same as holding the grant that reads the department's whole
+        list. Pinned so the pairing above is not applied here by habit.
+        """
+        deps = self._get_route_deps("/time-off", "GET")
+        assert deps is not None, "Route /time-off GET not found"
+        assert "PermissionChecker(scheduling.view)" in deps
 
     def test_closeout_backlog_stays_on_scheduling_manage(self):
         """The one scheduling read that is *not* widened to `view`.

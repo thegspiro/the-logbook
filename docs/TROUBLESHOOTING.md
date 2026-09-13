@@ -5347,7 +5347,7 @@ docker exec the-logbook-db-1 mysql -u root -p the_logbook \
 **Possible Causes**:
 
 1. **No shifts logged this month**: Hours are calculated from shift attendance records for the current month.
-2. **Scheduling permissions**: The `/scheduling/summary` endpoint requires `scheduling.view` permission.
+2. **Scheduling permissions**: The `/scheduling/summary` endpoint requires `scheduling.view` or `scheduling.manage`. Neither implies the other, so a position holding some third scheduling grant alone — `scheduling.assign`, `scheduling.swap` or `scheduling.report` — reads zeroes rather than an error.
 3. **Detailed hour breakdown**: Training and administrative hours require shift completion reports to be filed. The standby hours come from the scheduling summary.
 
 ### Training Admin Compliance Matrix Not Showing Requirement Completion (Fixed 2026-02-18)

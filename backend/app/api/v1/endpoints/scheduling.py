@@ -1507,11 +1507,20 @@ async def get_my_attendance(
 # ============================================
 
 
+# The calendar and the summary below take either grant, like `/shifts`.
+# `permission_matches` is literal, so `scheduling.manage` does not imply
+# `scheduling.view`: a position granted `manage` alone reached the board and
+# the dashboard — neither is permission-gated as a route — and was refused the
+# shifts they exist to draw. Widening leaks nothing, because every shift these
+# two return is already readable through `/shifts`, which admits both grants;
+# what it buys is that one grant no longer produces a half-broken screen.
 @router.get("/calendar/week", response_model=list[ShiftResponse])
 async def get_week_calendar(
     week_start: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get shifts for a specific week"""
     service = SchedulingService(db)
@@ -1535,7 +1544,9 @@ async def get_month_calendar(
     year: int | None = None,
     month: int | None = Query(None, ge=1, le=12),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get shifts for a specific month"""
     service = SchedulingService(db)
@@ -1555,7 +1566,9 @@ async def get_month_calendar(
 @router.get("/summary", response_model=SchedulingSummary)
 async def get_scheduling_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get scheduling module summary statistics"""
     service = SchedulingService(db)
