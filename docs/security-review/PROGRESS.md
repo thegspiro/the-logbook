@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #(this PR)** (Feature 27, Integrations, pass 4) — branch
+**PR [#2508](https://github.com/thegspiro/the-logbook/pull/2508)** (Feature 27, Integrations, pass 4) — branch
 `claude/security-review-integrations`, opened against a fresh `origin/main`
 (no other security-review PR was open at the start of this iteration; row 27
 was `⬜` and rotation row 26's closure — PR #2506/#2507 — was already merged

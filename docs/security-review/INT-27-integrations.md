@@ -1,6 +1,6 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** #(this PR) (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
 
 ---
 
