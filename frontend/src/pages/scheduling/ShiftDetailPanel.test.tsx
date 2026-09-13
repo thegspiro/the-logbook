@@ -298,6 +298,30 @@ describe('ShiftDetailPanel crew board signup gating', () => {
     expect(await screen.findAllByRole('button', { name: /Sign myself up/ })).toHaveLength(2);
     expect(screen.queryByText(/None of the open seats on this shift match/)).not.toBeInTheDocument();
   });
+
+  it('withholds a seat the member is cleared for but somebody already holds', async () => {
+    // Cleared for both; the driver's seat is taken. Offering it produced a
+    // signup refusal worded as a race that had not happened.
+    mockEligibility.mockResolvedValue({
+      positions: ['driver', 'ems'],
+      is_excluded: false,
+      open_positions: ['ems'],
+    });
+
+    renderWithRouter(<ShiftDetailPanel shift={crewShift as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: 'Sign myself up as EMT' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sign myself up as Driver/Operator' })).not.toBeInTheDocument();
+  });
+
+  it('offers every cleared seat when the server does not report open ones', async () => {
+    // A backend predating `open_positions` must behave exactly as before.
+    mockEligibility.mockResolvedValue({ positions: ['driver', 'ems'], is_excluded: false });
+
+    renderWithRouter(<ShiftDetailPanel shift={crewShift as never} onClose={vi.fn()} />);
+
+    expect(await screen.findAllByRole('button', { name: /Sign myself up/ })).toHaveLength(2);
+  });
 });
 
 /**

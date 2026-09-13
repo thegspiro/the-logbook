@@ -7,9 +7,10 @@ attendance tracking, and calendar views.
 
 import calendar
 import html as _html
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -322,6 +323,35 @@ class SignupActor(str, Enum):
     ASSIGNER = "assigner"
     #: Holds ``scheduling.manage``. Never bounded — this is the records path.
     MANAGER = "manager"
+
+
+@dataclass(frozen=True)
+class OpenSeats:
+    """Which seats on one shift nobody has taken yet.
+
+    ``filter_shifts_with_open_positions`` answers "is anything open here" and
+    stops at the first gap, which is the right question for a staffing-gap
+    report and the wrong one for a member: a firefighter is not helped by a
+    shift whose only empty chair is the driver's. This carries the answer per
+    position so the two can be intersected.
+    """
+
+    #: Position names, casefolded, with at least one unclaimed seat.
+    positions: Set[str] = field(default_factory=set)
+    #: For a shift that names no seats: whether the crew is still short of its
+    #: stated size. ``None`` means no size was ever stated, which is not the
+    #: same as full — see ``open_positions_by_shift``.
+    unnamed_headroom: Optional[bool] = None
+    #: Whether the shift names seats at all, so a caller can tell an empty
+    #: ``positions`` set ("every named seat is taken") apart from a shift that
+    #: has no named seats and is judged on headcount instead.
+    has_named_seats: bool = False
+    #: Set when ``exclude_user_id`` is already on this shift. Carried as its own
+    #: flag rather than as an empty answer: "you are on it" and "it is full"
+    #: are different facts, and an unsized shift's ``unnamed_headroom`` of
+    #: ``None`` legitimately means "still claimable", so an empty ``OpenSeats``
+    #: cannot stand in for either.
+    member_already_assigned: bool = False
 
 
 class SchedulingService:
@@ -1378,22 +1408,149 @@ class SchedulingService:
                 open_shifts.append(shift)
         return open_shifts
 
-    async def get_open_shifts(
+    async def open_positions_by_shift(
+        self,
+        organization_id: UUID,
+        shifts: List[Shift],
+        exclude_user_id: Optional[str] = None,
+    ) -> Dict[str, OpenSeats]:
+        """Which seat names are still unclaimed, per shift.
+
+        Deliberately mirrors the seat cap in ``_validate_assignment_candidate``
+        rather than the required-seat rule in
+        ``filter_shifts_with_open_positions``, because this is what decides
+        whether a member is *offered* a seat and the validator is what decides
+        whether they get it. Where the two disagreed, a member was shown a
+        shift and then refused it with "Position was filled after this request
+        was submitted" — a message describing a race, for a seat that had been
+        full for days. So, matching the validator and not the listing:
+
+        - **every** seat counts, not just ``required`` ones. The validator caps
+          a position at ``len(matching_slots)`` over all of them, so an
+          unclaimed optional seat is one a member can genuinely take.
+        - a seat is held by any assignment that is not ``DECLINED`` or
+          ``CANCELLED``. The listing counts only ``ASSIGNED``/``CONFIRMED``,
+          which leaves ``PENDING`` and ``NO_SHOW`` holding a seat against the
+          validator and not against the board — the same mismatch, one status
+          further along.
+
+        Names are casefolded on both sides, as the listing's own matching and
+        the client's ``canTakeSeat`` already do, and as ``CANONICAL_POSITIONS``
+        stores them.
+
+        One assignment scan for every shift passed; ``exclude_user_id``'s own
+        shifts are reported from it too, so a caller filtering "shifts I am not
+        already on" needs no second query.
+        """
+        if not shifts:
+            return {}
+
+        shift_ids = [str(shift.id) for shift in shifts]
+        assignments = await self.db.execute(
+            select(
+                ShiftAssignment.shift_id,
+                ShiftAssignment.user_id,
+                ShiftAssignment.position,
+            )
+            .where(ShiftAssignment.shift_id.in_(shift_ids))
+            .where(ShiftAssignment.organization_id == str(organization_id))
+            .where(
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                )
+            )
+        )
+        held: Dict[str, Dict[str, int]] = {}
+        held_total: Dict[str, int] = {}
+        own_shift_ids: Set[str] = set()
+        for shift_id, user_id, position in assignments.all():
+            key = str(shift_id)
+            name = str(getattr(position, "value", position) or "").lower()
+            counts = held.setdefault(key, {})
+            counts[name] = counts.get(name, 0) + 1
+            held_total[key] = held_total.get(key, 0) + 1
+            if exclude_user_id and str(user_id) == str(exclude_user_id):
+                own_shift_ids.add(key)
+
+        # Normalized once up front: both the apparatus-fallback decision and
+        # the per-shift answer below ask the same question of the same column.
+        slots_by_shift: Dict[str, List[Dict[str, Any]]] = {
+            str(shift.id): self.normalize_positions(shift.positions) for shift in shifts
+        }
+
+        # Only shifts that name no seats need the apparatus fallback, so only
+        # those are looked up — one statement across both apparatus tables.
+        apparatus_ids = list(
+            {
+                shift.apparatus_id
+                for shift in shifts
+                if shift.apparatus_id
+                and shift.min_staffing is None
+                and not slots_by_shift[str(shift.id)]
+            }
+        )
+        apparatus_min_staffing: Dict[str, int] = {
+            key: value.min_staffing
+            for key, value in (
+                await resolve_apparatus_display_map(
+                    self.db, apparatus_ids, organization_id
+                )
+            ).items()
+            if value.min_staffing is not None
+        }
+
+        result: Dict[str, OpenSeats] = {}
+        for shift in shifts:
+            key = str(shift.id)
+            if key in own_shift_ids:
+                result[key] = OpenSeats(member_already_assigned=True)
+                continue
+            counts = held.get(key, {})
+            slots = slots_by_shift[key]
+            if slots:
+                capacity: Dict[str, int] = {}
+                for slot in slots:
+                    name = str(slot.get("position", "") or "").lower()
+                    if name:
+                        capacity[name] = capacity.get(name, 0) + 1
+                result[key] = OpenSeats(
+                    positions={
+                        name
+                        for name, seats in capacity.items()
+                        if seats > counts.get(name, 0)
+                    },
+                    has_named_seats=True,
+                )
+                continue
+
+            min_staff = shift.min_staffing
+            if min_staff is None and shift.apparatus_id:
+                min_staff = apparatus_min_staffing.get(shift.apparatus_id)
+            # No stated size anywhere is left as None rather than defaulting to
+            # a crew of one. The validator caps such a shift at nothing at all,
+            # and inventing a limit here would hide a shift a member could
+            # genuinely join because nobody has finished configuring it.
+            result[key] = OpenSeats(
+                unnamed_headroom=(
+                    None if min_staff is None else held_total.get(key, 0) < min_staff
+                )
+            )
+        return result
+
+    async def _open_shift_candidates(
         self,
         organization_id: UUID,
         start_date: date,
         end_date: date,
         apparatus_id: Optional[str] = None,
-        exclude_user_id: Optional[str] = None,
         max_candidates: int = 500,
     ) -> List[Shift]:
-        """Return every shift in the window that still has an open position.
+        """Shifts in the window that could still be signed up for.
 
-        Date range, finalized status, and apparatus are filtered in SQL so we
-        never fetch rows we will discard, then the open-position check is
-        applied. Unlike fetching a fixed page and filtering it, this is exact
-        for the window — fully-staffed shifts can no longer push open ones out
-        of an arbitrary page. ``max_candidates`` only bounds pathological data.
+        The SQL half of ``get_open_shifts`` and ``get_claimable_shifts``, which
+        differ only in how they judge a candidate. Date range, finalized status,
+        and apparatus are filtered here so neither fetches rows it will
+        discard; ``max_candidates`` only bounds pathological data.
         """
         query = (
             select(Shift)
@@ -1409,10 +1566,122 @@ class SchedulingService:
             max_candidates
         )
         result = await self.db.execute(query)
-        candidates = list(result.scalars().all())
+        return list(result.scalars().all())
+
+    async def get_open_shifts(
+        self,
+        organization_id: UUID,
+        start_date: date,
+        end_date: date,
+        apparatus_id: Optional[str] = None,
+        exclude_user_id: Optional[str] = None,
+        max_candidates: int = 500,
+    ) -> List[Shift]:
+        """Return every shift in the window that still has an open position.
+
+        Department-wide, and judged on *required* seats: this is the staffing-gap
+        answer the administration hub and the MCP tool read. For the member-facing
+        board — "a seat I could actually claim" — use ``get_claimable_shifts``.
+
+        Unlike fetching a fixed page and filtering it, this is exact for the
+        window: fully-staffed shifts can no longer push open ones out of an
+        arbitrary page.
+        """
+        candidates = await self._open_shift_candidates(
+            organization_id,
+            start_date,
+            end_date,
+            apparatus_id=apparatus_id,
+            max_candidates=max_candidates,
+        )
         return await self.filter_shifts_with_open_positions(
             organization_id, candidates, exclude_user_id=exclude_user_id
         )
+
+    async def get_claimable_shifts(
+        self,
+        user: User,
+        organization_id: UUID,
+        start_date: date,
+        end_date: date,
+        apparatus_id: Optional[str] = None,
+        max_candidates: int = 500,
+    ) -> List[Shift]:
+        """The open-shift board, as one member sees it.
+
+        ``get_open_shifts`` asks whether the department still needs somebody on
+        this shift; this asks whether *this member* can take a seat on it. The
+        two used to be conflated, with the shift-level answer handed to a
+        member-level screen, so a firefighter was shown a shift whose only empty
+        chair was the driver's and refused at signup.
+
+        A shift is kept when the member's eligible positions overlap its
+        unclaimed seats — or, for a shift that names no seats, when the member
+        is eligible for anything at all and the crew is still short of its
+        stated size (a shift that states no size is claimable, matching the
+        validator, which caps it at nothing).
+
+        Outreach sheets are deliberately left on the shift-level rule. Their
+        seats are *roles*, not positions — signup rewrites the position to
+        ``OUTREACH_SEAT_POSITION`` and the endpoint reports per-role
+        ``remaining`` counts the client already filters on — so intersecting
+        their ``positions`` here would be a second, wrong rule.
+        """
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        candidates = await self._open_shift_candidates(
+            organization_id,
+            start_date,
+            end_date,
+            apparatus_id=apparatus_id,
+            max_candidates=max_candidates,
+        )
+        if not candidates:
+            return []
+
+        member_id = str(user.id)
+        outreach = [s for s in candidates if getattr(s, "is_outreach", False)]
+        duty = [s for s in candidates if not getattr(s, "is_outreach", False)]
+
+        open_seats = await self.open_positions_by_shift(
+            organization_id, duty, exclude_user_id=member_id
+        )
+        # Outreach sheets keep the shift-level rule; they still need the
+        # already-signed-up and still-has-room checks the duty shifts get from
+        # their seat counts.
+        outreach_open = {
+            str(shift.id)
+            for shift in await self.filter_shifts_with_open_positions(
+                organization_id, outreach, exclude_user_id=member_id
+            )
+        }
+        eligibility = await ShiftEligibilityService(
+            self.db
+        ).get_eligible_positions_bulk(
+            user,
+            str(organization_id),
+            [str(shift.id) for shift in candidates],
+        )
+
+        keep: List[Shift] = []
+        for shift in candidates:
+            key = str(shift.id)
+            if not eligibility.get(key):
+                continue
+            if getattr(shift, "is_outreach", False):
+                if key in outreach_open:
+                    keep.append(shift)
+                continue
+            seats = open_seats.get(key)
+            if seats is None or seats.member_already_assigned:
+                continue
+            if seats.has_named_seats:
+                eligible = {str(value).lower() for value in eligibility[key] if value}
+                if eligible & seats.positions:
+                    keep.append(shift)
+            elif seats.unnamed_headroom is not False:
+                keep.append(shift)
+        return keep
 
     async def get_shift_by_id(
         self, shift_id: UUID, organization_id: UUID, for_update: bool = False

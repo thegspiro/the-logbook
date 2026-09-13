@@ -254,6 +254,15 @@ export interface ShiftTemplateUpdate {
 export interface EligiblePositionsResponse {
   positions: string[];
   is_excluded: boolean;
+  /**
+   * Of `positions`, the ones that still have an unclaimed seat on the shift —
+   * absent when no shift was asked about, and from a backend predating the
+   * field. Reported separately rather than by narrowing `positions` so a screen
+   * can tell "you are not cleared for this shift" apart from "your positions
+   * are all taken": the first sends the member to a scheduling admin about
+   * their qualifications, the second to a different shift.
+   */
+  open_positions?: string[];
 }
 
 export interface SchedulingEligibilitySettings {

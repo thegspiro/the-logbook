@@ -183,6 +183,122 @@ describe('OpenShiftsTab', () => {
   });
 
   // ==========================================================================
+  // A seat someone already holds is one the server refuses
+  // ==========================================================================
+  describe('positions whose seats are already taken', () => {
+    beforeEach(() => {
+      // This block drives `open_positions`, so it states its own default
+      // rather than inheriting whatever configured the mock last.
+      mockGetEligiblePositions.mockReset();
+      mockGetOpenShifts.mockReset();
+      mockGetOpenShifts.mockResolvedValue(mockShifts);
+    });
+
+    it('offers only the positions that still have a seat', async () => {
+      const user = userEvent.setup();
+      // Cleared for both; the firefighter seat is taken.
+      mockGetEligiblePositions.mockResolvedValue({
+        positions: ['driver', 'firefighter'],
+        is_excluded: false,
+        open_positions: ['driver'],
+      });
+      renderWithRouter(<OpenShiftsTab />);
+
+      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      await user.click(signupButtons[0]);
+
+      expect(await screen.findByRole('option', { name: 'Driver/Operator' })).toBeVisible();
+      expect(screen.queryByRole('option', { name: 'Firefighter' })).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Position')).toHaveValue('driver');
+    });
+
+    it('says the seats are taken rather than that the member is not eligible', async () => {
+      const user = userEvent.setup();
+      // The distinction matters: "not eligible" sends a member to a scheduling
+      // admin about qualifications that are perfectly fine.
+      mockGetEligiblePositions.mockResolvedValue({
+        positions: ['firefighter'],
+        is_excluded: false,
+        open_positions: [],
+      });
+      renderWithRouter(<OpenShiftsTab />);
+
+      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      await user.click(signupButtons[0]);
+
+      expect(await screen.findByText(/Every seat you are cleared for/)).toBeVisible();
+      expect(screen.queryByText(/not eligible to sign up/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Confirm Sign Up' })).not.toBeInTheDocument();
+    });
+
+    it('still says not eligible when the member is cleared for nothing', async () => {
+      const user = userEvent.setup();
+      mockGetEligiblePositions.mockResolvedValue({
+        positions: [],
+        is_excluded: false,
+        open_positions: [],
+      });
+      renderWithRouter(<OpenShiftsTab />);
+
+      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      await user.click(signupButtons[0]);
+
+      expect(await screen.findByText(/not eligible to sign up/)).toBeVisible();
+      expect(screen.queryByText(/Every seat you are cleared for/)).not.toBeInTheDocument();
+    });
+
+    it('falls back to the eligible list when the server does not report open seats', async () => {
+      // An older backend omits `open_positions` entirely. It must behave
+      // exactly as it did before the field existed, not offer nothing.
+      const user = userEvent.setup();
+      mockGetEligiblePositions.mockResolvedValue({ positions: ['driver'], is_excluded: false });
+      renderWithRouter(<OpenShiftsTab />);
+
+      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      await user.click(signupButtons[0]);
+
+      expect(await screen.findByRole('option', { name: 'Driver/Operator' })).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Confirm Sign Up' })).toBeVisible();
+    });
+  });
+
+  // ==========================================================================
+  // A failed load must not repaint the board with unfiltered shifts
+  // ==========================================================================
+  describe('when the open-shift list cannot be loaded', () => {
+    beforeEach(() => {
+      mockGetOpenShifts.mockReset();
+      mockGetShifts.mockReset();
+      mockGetEligiblePositions.mockReset();
+      mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: false });
+    });
+
+    it('shows an error instead of falling back to the plain shift list', async () => {
+      // The fallback this replaces fetched a list filtered by neither open
+      // seats nor the member's positions, so a failure quietly repainted the
+      // board with fully-staffed shifts a member is then refused for.
+      mockGetOpenShifts.mockRejectedValue(new Error('network'));
+      mockGetShifts.mockResolvedValue({ shifts: mockShifts, total: 2 });
+      renderWithRouter(<OpenShiftsTab />);
+
+      expect(await screen.findByText('Could not load open shifts')).toBeVisible();
+      expect(mockGetShifts).not.toHaveBeenCalled();
+      expect(screen.queryByLabelText('Sign up for this shift')).not.toBeInTheDocument();
+    });
+
+    it('recovers when the retry succeeds', async () => {
+      const user = userEvent.setup();
+      mockGetOpenShifts.mockRejectedValueOnce(new Error('network')).mockResolvedValue(mockShifts);
+      renderWithRouter(<OpenShiftsTab />);
+
+      await user.click(await screen.findByRole('button', { name: 'Try again' }));
+
+      expect(await screen.findAllByLabelText('Sign up for this shift')).toHaveLength(mockShifts.length);
+      expect(screen.queryByText('Could not load open shifts')).not.toBeInTheDocument();
+    });
+  });
+
+  // ==========================================================================
   // Community outreach sheets ask for a role, not a riding position
   // ==========================================================================
   describe('outreach signup sheets', () => {

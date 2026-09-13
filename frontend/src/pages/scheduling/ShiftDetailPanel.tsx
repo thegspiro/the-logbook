@@ -337,8 +337,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   // Which seats on this shift this member may claim. The signup endpoint is
   // the gate; these buttons are only the affordance — so offering a seat the
   // server will refuse is what we are removing here, not adding a second rule.
+  // The open subset, not the cleared one: a seat someone already holds is one
+  // the server refuses, so offering it is exactly the affordance this is here
+  // to remove.
   const {
-    positions: eligiblePositions,
+    openPositions: eligiblePositions,
     loading: eligibilityLoading,
     error: eligibilityError,
   } = useEligiblePositions(shift.id);
