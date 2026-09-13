@@ -3746,6 +3746,37 @@ route above should also close this path — most likely by having
 `APPROVED` and requiring the dedicated route (or its replacement) for that
 transition specifically.
 
+## MM-17 — `set_meeting_quorum_config` Has No Finalization Guard on Approved Minutes (2026-09-13)
+
+Every other mutating route against a `MeetingMinutes` record —
+`update_minutes`, `add_motion`/`update_motion`/`delete_motion`,
+`add_action_item`/`delete_action_item` — rejects the call once the record's
+status is `APPROVED` (draft or rejected only). `PATCH
+/minutes/{id}/quorum-config` (`set_meeting_quorum_config` in
+`app/api/v1/endpoints/minutes.py`) has no such guard: a `minutes.manage`
+holder can overwrite `quorum_type`/`quorum_threshold` and immediately trigger
+a recalculation of `quorum_met`/`quorum_count` on a minutes record that has
+already been ratified, changing whether the historical record says quorum
+was met for a vote the organization has already treated as final.
+
+Closing this needs a product decision, not a mechanical patch: adding the
+same `if minutes.status == MinutesStatus.APPROVED.value: raise ValueError(...)`
+guard the four sibling endpoints already use would newly forbid an action the
+API has always allowed, and it is plausible a secretary legitimately needs to
+correct a quorum misconfiguration discovered after approval — the four
+guarded endpoints are all content edits a correction workflow wouldn't need,
+while this one is closer to record metadata. The options are (a) add the
+finalization guard to match every sibling mutation and require a distinct
+"reopen" or "amend" path for a genuine post-approval correction, or (b)
+leave this endpoint deliberately exempt from the finalization convention and
+document why. Neither was chosen here.
+
+First surfaced as an unfiled observation in
+`docs/security-review/MM-24-meetings-minutes.md` (feature 24, pass 3,
+"Looked suspicious, not fixed"); promoted to a tracked finding with an id and
+disposition in pass 4, when a related fix (MM-15) touched the same
+validation block.
+
 ## MSG-12 — A Failed or Throttled Department-Message Delivery Is Never Retried (2026-08-31, stranded-pending sub-case fixed 2026-09-06)
 
 `MessageDeliveryService._claim_delivery` commits a
