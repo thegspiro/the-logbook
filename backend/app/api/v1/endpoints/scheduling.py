@@ -2559,13 +2559,22 @@ async def cancel_swap_request(
 # ============================================
 
 
+# Both time-off reads take either grant, because both already *branch* on
+# `scheduling.manage` to decide what they return — the whole department's
+# requests for a reviewer, the caller's own for everyone else. Gating the pair
+# on `scheduling.view` alone put that branch behind a door the grant it tests
+# for could not open: a position granted `manage` alone is exactly who
+# `/time-off/{id}/review` is for, and could not reach the list that finds a
+# request to review.
 @router.get("/time-off", response_model=ShiftTimeOffRequestsPage)
 async def list_time_off_requests(
     status_filter: str | None = Query(None, alias="status"),
     user_id: UUID | None = None,
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """List time-off requests"""
     service = SchedulingService(db)
@@ -2632,7 +2641,9 @@ async def create_time_off_request(
 async def get_time_off_request(
     time_off_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get a specific time-off request"""
     service = SchedulingService(db)

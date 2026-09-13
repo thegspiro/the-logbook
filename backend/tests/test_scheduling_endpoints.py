@@ -112,8 +112,8 @@ class TestEndpointPermissions:
         Widening conceals nothing that was hidden. Every shift `/calendar/*`
         returns, and every shift `/summary` counts, is already readable
         through `/shifts`, which admits both grants; the narrow gate bought no
-        confidentiality and cost a half-broken screen. `/time-off` below is
-        the one that stays, and for a reason this argument does not reach.
+        confidentiality and cost a half-broken screen. The time-off reads
+        below joined them on 2026-09-13, for a reason of their own.
         """
         for path in (
             "/calendar/week",
@@ -126,20 +126,31 @@ class TestEndpointPermissions:
                 "PermissionChecker(scheduling.view,scheduling.manage)" in deps
             ), f"GET {path} does not admit scheduling.manage"
 
-    def test_time_off_list_stays_on_scheduling_view(self):
-        """The widening is scoped, not a blanket.
+    def test_time_off_reads_admit_manage(self):
+        """Both time-off reads take either grant, and the handlers say why.
 
-        Unlike the calendar and the summary, this list is not a projection of
-        anything `scheduling.manage` can already read: it returns members'
-        time-off requests, and the reasons they give for them. Reviewing one
-        is `scheduling.manage` on `/time-off/{id}/review`, which is a separate
-        gate on a separate route — holding the grant that reviews a request is
-        not the same as holding the grant that reads the department's whole
-        list. Pinned so the pairing above is not applied here by habit.
+        Held back from the widening above until 2026-09-13, on the reasoning
+        that this list is not a projection of anything `scheduling.manage`
+        already reads — it carries members' requests and the reasons they give
+        for them. That reasoning did not survive reading the handlers: each
+        one **branches on `scheduling.manage`** to decide its own scope,
+        returning the whole department's requests to a reviewer and only the
+        caller's to everyone else.
+
+        So the gate put that branch behind a door the grant it tests for could
+        not open. A position granted `manage` alone is exactly who
+        `/time-off/{id}/review` exists for, and could not reach the list that
+        finds a request to review, nor open one it was sent a link to.
+
+        Pinned as a pair: the detail route matters as much as the list, since
+        a reviewer who can see the queue and not the request is no better off.
         """
-        deps = self._get_route_deps("/time-off", "GET")
-        assert deps is not None, "Route /time-off GET not found"
-        assert "PermissionChecker(scheduling.view)" in deps
+        for path in ("/time-off", "/time-off/{time_off_id}"):
+            deps = self._get_route_deps(path, "GET")
+            assert deps is not None, f"Route {path} GET not found"
+            assert (
+                "PermissionChecker(scheduling.view,scheduling.manage)" in deps
+            ), f"GET {path} does not admit scheduling.manage"
 
     def test_closeout_backlog_stays_on_scheduling_manage(self):
         """The one scheduling read that is *not* widened to `view`.
