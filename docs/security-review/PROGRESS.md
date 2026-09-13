@@ -16,6 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2508](https://github.com/thegspiro/the-logbook/pull/2508)
+(Feature 27, Integrations, pass 4) merged clean via merge commit
+`3ab30172e7`, 17/17 CI green, `mergeable_state: clean`, no unresolved review
+threads (Codex hit its usage-limit cap, posting no findings). Rotation row
+27 is now `✅`. Next: Feature 28 (Security, audit & IP).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 4, PR #2508, before it merged), preserved for history</summary>
+
 **PR [#2508](https://github.com/thegspiro/the-logbook/pull/2508)** (Feature 27, Integrations, pass 4) — branch
 `claude/security-review-integrations`, opened against a fresh `origin/main`
 (no other security-review PR was open at the start of this iteration; row 27
@@ -45,6 +54,8 @@ unchanged (443 revisions, single head, no schema change this pass); 2690
 scoped + 12450 full-suite backend tests pass (21 skipped, all
 environment-only); frontend `tsc --noEmit` 0 errors; `eslint --max-warnings
 10` 0 errors/0 warnings (frontend was read, not edited, this pass).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 26, Forms, pass 4, PR #2506, before it merged), preserved for history</summary>
