@@ -16,6 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2515](https://github.com/thegspiro/the-logbook/pull/2515)
+(Feature 28, Security, audit & IP, pass-4 addendum) merged clean, folding in
+the one item it found that PR #2513 below had not: a second,
+independently-branched pass-4 review of this feature (branch
+`claude/security-review-security-audit-ip`, started before #2513 merged)
+reached the same "no new exploitable bug" conclusion, re-deriving all prior
+findings intact, and additionally caught a stale claim in
+`docs/module-audit/security-audit-ip.md`'s SEC-9 section — it asserted the
+org-scoped `get_all_active_allowed_ips` service method had been deleted,
+when it is still present, correctly org-scoped, and simply unused.
+Corrected in place and recorded as **SEC2-28-11** in
+`docs/security-review/SEC2-28-security-audit-ip.md` (renumbered from the
+PR's own "SEC2-28-10" label, which collided with the unrelated audit-hash-
+chain-race finding #2513 had already recorded under that ID). #2515's own
+pass-4 re-verification narrative duplicated #2513's and was not merged in
+twice — only this one net-new item was folded in. Rotation row 28 remains
+`✅`. Next: Feature 29 (Reports & analytics).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 4, PR #2513, merged), preserved for history</summary>
+
 **None.** PR [#2513](https://github.com/thegspiro/the-logbook/pull/2513)
 (Feature 28, Security, audit & IP, pass 4) merged clean via merge commit
 `2be53982b0`, 17/17 CI green, `mergeable_state: clean`, no unresolved
@@ -65,6 +86,8 @@ backend tests pass (21 skipped, all environment-only); frontend
 (a scheduling fix, an onboarding-singleton migration/fix — neither touching
 this feature); merged in with no conflicts, applied the new migration to
 this sandbox's test DB, and the gate above is the post-merge, re-run result.
+
+</details>
 
 </details>
 
@@ -18442,3 +18465,27 @@ suite); frontend `tsc --noEmit` 0 errors; `eslint --max-warnings 10` 0
 errors/0 warnings (frontend read, not edited, this pass). Findings doc:
 `docs/security-review/SEC2-28-security-audit-ip.md` (Pass 4). Rotation row
 28 -> ✅. Next: Feature 29 (Reports & analytics).
+
+### 2026-09-13 — Feature 28 (Security, audit & IP), pass-4 addendum (PR #2515)
+
+A second, independently-branched pass-4 review of this feature (branch
+`claude/security-review-security-audit-ip`) had started from `origin/main`
+before the pass-4 review above merged as PR #2513, and reached the same
+conclusion by the same method — full re-read of all nine files, all 35
+routes re-enumerated, every prior finding (SEC-1 through SEC-9, SEC2-28-1
+through SEC2-28-9) re-verified intact, no new exploitable bug. Rather than
+land as a second, fully-duplicate Feature 28 pass-4 entry, only the one item
+that pass caught and this one did not was folded in here: a stale claim in
+`docs/module-audit/security-audit-ip.md`'s SEC-9 section, asserting the
+org-scoped `get_all_active_allowed_ips` service method had been deleted — it
+is in fact still present in `ip_security_service.py`, still correctly
+org-scoped, still covered by its own passing unit tests, just with zero
+production callers and no `_global` variant anywhere in the current
+codebase. Corrected in place; recorded in
+`docs/security-review/SEC2-28-security-audit-ip.md` as **SEC2-28-11**
+(renumbered from that PR's own "SEC2-28-10" label, which collided with the
+unrelated audit-hash-chain-race finding this file's Pass 4 above already
+recorded under that ID). No code fix, no guard test — documentation only.
+PR #2515 merged with this one addendum; its own duplicate pass-4 narrative
+was not carried over. Rotation row 28 remains `✅`. Next: Feature 29
+(Reports & analytics).

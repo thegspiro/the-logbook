@@ -981,3 +981,64 @@ between branching and pushing; merged in with no conflicts in this file or
 database, and re-ran the full gate above against the merged tree — all
 green, counts updated to reflect it (444 revisions, 12,490 full-suite
 passes, up from the pre-merge 443/12,450).
+
+---
+
+## Pass 4 addendum (2026-09-13) — second, independently-branched review (PR #2515)
+
+A second pass-4 review of this feature branched from `origin/main` before
+the pass 4 above (PR #2513) had merged — branch
+`claude/security-review-security-audit-ip`, PR #2515 — and, working
+independently, reached the same conclusion: every prior finding
+re-verified intact, no new exploitable bug. Its own re-verification
+narrative duplicated the above and is not repeated here. It did surface one
+item this review missed:
+
+### SEC2-28-11 — LOW — stale "dead code removed" claim in the module-audit doc — ✅ FIXED (documentation only)
+
+**What:** `docs/module-audit/security-audit-ip.md`'s SEC-9 section claimed
+"the unused org-scoped `get_all_active_allowed_ips` service method was
+deleted (only the pre-auth `_global` variant is called)." Re-checked against
+the current `ip_security_service.py`: the org-scoped method is present
+(`ip_security_service.py:477-500`), correctly scoped
+(`organization_id`/`valid_from`/`valid_until` all filtered), and has its own
+passing unit tests (`test_ip_security_service.py::TestGetAllActiveAllowedIps`
+— confirmed by name/behavior, not just presence) — but grepping all of
+`backend/app` finds **zero production callers**, and there is no `_global`
+variant anywhere in the current codebase. The doc's claim was stale, not a
+new defect: it most likely described an intermediate state before PR #1544
+(SEC2-28-5) removed the middleware's allowlist union entirely rather than
+routing it through a safe per-tenant lookup.
+
+**Where:** `docs/module-audit/security-audit-ip.md` (doc only; no
+application code defect — the method is unreachable, not unsafe).
+
+**Impact:** none functionally (dead code opens nothing); a reviewer trusting
+the stale claim could wrongly assume this method no longer exists, which
+matters if/when SEC2-28-5's proposed fix (a) — a per-IP-only allowlist
+lookup — is ever built, since this method is exactly the building block
+that fix would adapt.
+
+**Fix:** corrected the module-audit doc in place to describe the current,
+re-verified state and cross-reference SEC2-28-5 and this entry, rather than
+silently leaving a wrong "resolved" claim standing next to accurate
+neighboring bullets. Not mirrored into `KNOWN_LIMITATIONS.md` — it is a
+documentation correction about an existing, already-tracked finding
+(SEC2-28-5, and the same "written but not wired" shape as the pass-3
+dead-detector note), not a new open item.
+
+**Renumbering note:** PR #2515 itself labeled this finding SEC2-28-10,
+which collides with the unrelated audit-hash-chain-race finding recorded
+under that same ID in the Pass 4 section above (from PR #2513, which
+merged first). Renumbered SEC2-28-11 here to keep this file's ID space
+collision-free; PR #2515's own commit history and PR description still
+read "SEC2-28-10" and are left as-is as the historical record of that
+branch.
+
+No code fix, no guard test — documentation only, nothing to pin. PR #2515's
+own completion gate (`flake8`/`black --check`/`isort --check-only` clean;
+`validate_migrations.py --strict` passed, 444 revisions single head; scoped
+backend tests 165/165 passed; full suite 12,490 passed, 1 skipped
+(env-only); frontend `tsc --noEmit` 0 errors, `eslint --max-warnings 10` 0
+errors/warnings) verified the same tree state this file's Pass 4 gate above
+already covers, and is not duplicated here.
