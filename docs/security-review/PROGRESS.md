@@ -43,11 +43,14 @@ a migration and an owner decision. See
 `docs/security-review/SEC2-28-security-audit-ip.md` → SEC2-28-10.
 
 Completion gate: flake8/black/isort clean (isort 9.0.1, CI's pin);
-`validate_migrations.py --strict` passed (443 revisions, single head, no
-migration this pass); 369/369 scoped + 12,450/12,450 full-suite backend
-tests pass (21 skipped, all environment-only); frontend `tsc --noEmit` 0
-errors, `eslint --max-warnings 10` 0 errors/0 warnings (frontend read, not
-edited, this pass).
+`validate_migrations.py --strict` passed (444 revisions, single head, no
+migration of this feature's own); 369/369 scoped + 12,490/12,490 full-suite
+backend tests pass (21 skipped, all environment-only); frontend
+`tsc --noEmit` 0 errors, `eslint --max-warnings 10` 0 errors/0 warnings
+(frontend read, not edited, this pass). `origin/main` moved after branching
+(a scheduling fix, an onboarding-singleton migration/fix — neither touching
+this feature); merged in with no conflicts, applied the new migration to
+this sandbox's test DB, and the gate above is the post-merge, re-run result.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 4, PR #2508, before it merged), preserved for history</summary>
@@ -18403,14 +18406,21 @@ the `pytest` fixtures and fully cleaned up — `DELETE FROM audit_logs`,
 `audit_ship_state` confirmed untouched — before the completion gate below,
 verified by re-running the scoped suite clean afterward.)
 
+`origin/main` moved after branching (`2eee5c6` scheduling fix, `3a875be`
+onboarding-singleton fix + its migration `6ab7d903fae5`, `ae78831` schema-doc
+regen — none touching this feature's files); merged in with no conflicts in
+this file or `KNOWN_LIMITATIONS.md`, applied the new migration to this
+sandbox's test database, and re-ran the full gate below against the merged
+tree.
+
 Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
 `app/ tests/ alembic/` (isort 9.0.1, CI's pinned version);
-`validate_migrations.py --strict` passed (443 revisions, single head, no
-migration this pass); scoped backend tests
+`validate_migrations.py --strict` passed (444 revisions, single head, no
+migration of this feature's own); scoped backend tests
 (`audit`/`security_monitoring`/`ip_security`/`error_log`/
 `privilege_ceiling`/`security_middleware`/`suspicious_ip`) 369 passed, 1
 skipped (environment-only — optional `pywebpush`); full backend suite
-12,450 passed, 21 skipped (all environment-only: optional `pywebpush`,
+12,490 passed, 21 skipped (all environment-only: optional `pywebpush`,
 Docker registry/daemon unavailable in this sandbox, opt-in API-contract
 suite); frontend `tsc --noEmit` 0 errors; `eslint --max-warnings 10` 0
 errors/0 warnings (frontend read, not edited, this pass). Findings doc:

@@ -958,9 +958,9 @@ this file's own established practice.
 | `flake8 app/ tests/ alembic/`                                                                                              | clean                                                                                                                                                 |
 | `black --check app/ tests/ alembic/`                                                                                       | clean                                                                                                                                                 |
 | `isort --check-only app/ tests/ alembic/`                                                                                  | clean                                                                                                                                                 |
-| `python3 scripts/validate_migrations.py --strict`                                                                          | PASSED — 443 revisions, single head, no migration this pass                                                                                           |
+| `python3 scripts/validate_migrations.py --strict`                                                                          | PASSED — 444 revisions, single head (no migration of this feature's own; +1 unrelated migration picked up by the `origin/main` merge below)           |
 | backend tests, scope (audit/security_monitoring/ip_security/error_log/privilege_ceiling/security_middleware/suspicious_ip) | 369 passed, 1 skipped (env-only: optional `pywebpush`)                                                                                                |
-| backend tests, full suite                                                                                                  | 12,450 passed, 21 skipped (all environment-only: optional `pywebpush`, Docker registry/daemon unavailable in this sandbox, opt-in API-contract suite) |
+| backend tests, full suite                                                                                                  | 12,490 passed, 21 skipped (all environment-only: optional `pywebpush`, Docker registry/daemon unavailable in this sandbox, opt-in API-contract suite) |
 | frontend `tsc --noEmit`                                                                                                    | 0 errors (no frontend file touched this pass; run anyway per convention)                                                                              |
 | frontend `eslint --max-warnings 10`                                                                                        | 0 errors / 0 warnings                                                                                                                                 |
 
@@ -972,3 +972,12 @@ already uses) rather than a script against a mocked session, run outside the
 verified `audit_ship_state` untouched) before the completion-gate runs above
 — confirmed by re-running the scoped suite clean afterward. No test was
 added to the suite for this finding (see SEC2-28-10's own writeup for why).
+
+**Post-merge re-run:** `origin/main` moved (a scheduling fix and an
+onboarding-singleton migration/fix, neither touching this feature's files)
+between branching and pushing; merged in with no conflicts in this file or
+`KNOWN_LIMITATIONS.md`, applied the new migration
+(`6ab7d903fae5_enforce_onboarding_status_singleton`) to this sandbox's test
+database, and re-ran the full gate above against the merged tree — all
+green, counts updated to reflect it (444 revisions, 12,490 full-suite
+passes, up from the pre-merge 443/12,450).
