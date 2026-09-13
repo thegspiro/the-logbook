@@ -84,7 +84,7 @@ from app.models.user import (
     UserStatus,
     user_positions,
 )
-from app.schemas.inventory import INSPECTION_MAINTENANCE_TYPES
+from app.schemas.inventory import is_inspection_type
 from app.schemas.user import resolve_profile_visibility
 from app.utils.color_names import canonical_color, normalize_color
 from app.utils.garment_styles import (
@@ -4035,8 +4035,9 @@ class InventoryService:
                     # as compliant four months longer than it was. Nothing
                     # raised, nothing logged: the only sign was two dates on
                     # the item page disagreeing.
-                    record_type = str(maintenance_data.get("maintenance_type") or "")
-                    if completed and record_type in INSPECTION_MAINTENANCE_TYPES:
+                    if completed and is_inspection_type(
+                        maintenance_data.get("maintenance_type")
+                    ):
                         item.last_inspection_date = completed
                         # Auto-calculate next_inspection_due from interval
                         if item.inspection_interval_days:
@@ -4121,7 +4122,18 @@ class InventoryService:
                     if safe_data.get("condition_after"):
                         item.condition = safe_data["condition_after"]
                     completed = safe_data.get("completed_date") or record.completed_date
-                    if completed:
+                    # Only an INSPECTION may move the inspection clock -- the
+                    # same rule the create path applies, which #2479 fixed there
+                    # and only there. This is the likelier route to it: a
+                    # quartermaster schedules a repair and marks it complete
+                    # later, which is a PATCH, so the coat's annual NFPA 1851
+                    # deadline still slid a year on the commonest flow.
+                    #
+                    # `record`, not `safe_data`: the type is read AFTER the
+                    # update is applied, so a call that completes a record and
+                    # corrects its type in one go is judged on what it ends up
+                    # being, not on what it was.
+                    if completed and is_inspection_type(record.maintenance_type):
                         item.last_inspection_date = completed
                         if item.inspection_interval_days:
                             if isinstance(completed, str):
