@@ -1269,10 +1269,15 @@ const InventoryItemsPage: React.FC = () => {
 
   const handleMore = async () => {
     // A manual press is the member asking again, so it clears whatever stopped
-    // the automatic top-up.
+    // the automatic top-up -- for this one attempt. If that attempt ALSO
+    // fails, the halt goes straight back on: without this the guards stayed
+    // cleared while the visible count stayed zero, so the automatic effect
+    // fired again immediately and one press bought a second request and a
+    // second toast.
     autoTopUpsRef.current = 0;
     topUpHaltedRef.current = false;
-    await loadMorePage();
+    const ok = await loadMorePage();
+    if (!ok) topUpHaltedRef.current = true;
   };
 
   /* ---- sorting ---- */
@@ -1575,11 +1580,18 @@ const InventoryItemsPage: React.FC = () => {
     return shown('Available', availableItems) + shown('Unavailable', unavailableItems);
   }, [loadedGroupBy, availableItems, unavailableItems, collapsed]);
 
-  // Anything the member does to change what is on screen is them asking again.
+  // Anything the member does to change what is on screen is them asking again
+  // -- which includes the filters, not just the grouping. Keyed on
+  // `loadedParams` rather than `[collapsed, loadedGroupBy]`: a new search,
+  // sort, status or location reloads page zero without touching either of
+  // those, so a cap or a failure from the PREVIOUS result set stayed in force
+  // over a list the member had just replaced, and the top-up was off for good.
+  // `loadedParams` is stamped on a successful load and already identifies
+  // exactly "the filter set that produced the rows currently on screen".
   useEffect(() => {
     autoTopUpsRef.current = 0;
     topUpHaltedRef.current = false;
-  }, [collapsed, loadedGroupBy]);
+  }, [collapsed, loadedParams]);
 
   useEffect(() => {
     if (loading || loadingMore || !hasMore) return;
@@ -1593,8 +1605,16 @@ const InventoryItemsPage: React.FC = () => {
     // listing it re-runs this effect continuously. The refs above are what
     // terminate the loop, and they do it without depending on the response —
     // `hasMore` alone does not, because a rejected request leaves it true.
+    //
+    // `loadedParams` is listed for the opposite reason: clearing the refs when
+    // the filters change is not enough on its own. Across a filter reload all
+    // four of the other dependencies hold the values they already had — zero
+    // visible, more to fetch, neither load in flight — so React had no reason
+    // to re-run this, and the freshly cleared guards were never consulted. The
+    // effect that clears them is declared above this one, so it has run by the
+    // time this body does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleGroupedRows, hasMore, loading, loadingMore]);
+  }, [visibleGroupedRows, hasMore, loading, loadingMore, loadedParams]);
 
   /* ================================================================ */
   return (

@@ -108,6 +108,22 @@ INSPECTION_MAINTENANCE_TYPES = frozenset(
     }
 )
 
+
+def is_inspection_type(value: Any) -> bool:
+    """Whether a maintenance type is an inspection, given a string OR the enum.
+
+    Both spellings reach this rule. A create payload carries the plain string
+    Pydantic validated out of ``MaintenanceTypeLiteral``; a record read back
+    from the database carries ``MaintenanceType``, whose ``str()`` is
+    ``"MaintenanceType.ROUTINE_INSPECTION"`` and matches nothing. Comparing the
+    raw ``str()`` therefore silently answers False for every stored record --
+    which would gate out genuine inspections as well as repairs, the failure
+    this helper exists to make impossible at the third call site rather than
+    the first.
+    """
+    return getattr(value, "value", value) in INSPECTION_MAINTENANCE_TYPES
+
+
 AssignmentTypeLiteral = Literal["permanent", "temporary"]
 
 TrackingTypeLiteral = Literal["individual", "pool"]
@@ -1045,10 +1061,13 @@ class MaintenanceRecordCreate(MaintenanceRecordBase):
     @model_validator(mode="after")
     def validate_maintenance_workflow(self):
         """Keep scheduling, inspection, and completion records internally consistent."""
-        inspection_types = INSPECTION_MAINTENANCE_TYPES
-        maintenance_type = str(self.maintenance_type)
-        if hasattr(self.maintenance_type, "value"):
-            maintenance_type = self.maintenance_type.value
+        # Normalized once: the field may arrive as the validated string or as
+        # the MaintenanceType enum, and `str()` on the latter yields
+        # "MaintenanceType.REPAIR", which matches no rule below.
+        maintenance_type = getattr(
+            self.maintenance_type, "value", self.maintenance_type
+        )
+        is_inspection = is_inspection_type(self.maintenance_type)
 
         if not self.description or not self.description.strip():
             raise ValueError("Task description or performed work is required")
@@ -1062,13 +1081,9 @@ class MaintenanceRecordCreate(MaintenanceRecordBase):
             raise ValueError("Completion date is only allowed for completed work")
         if self.is_completed and not self.completed_date:
             raise ValueError("Completion date is required for completed work")
-        if (
-            maintenance_type in inspection_types
-            and self.is_completed
-            and self.passed is None
-        ):
+        if is_inspection and self.is_completed and self.passed is None:
             raise ValueError("A pass/fail result is required for inspections")
-        if maintenance_type not in inspection_types and self.passed is not None:
+        if not is_inspection and self.passed is not None:
             raise ValueError("Pass/fail result is only allowed for inspections")
         return self
 
