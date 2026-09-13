@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2489](https://github.com/thegspiro/the-logbook/pull/2489)
+(Feature 23, Medical supplies, pass 11 re-verification) merged clean via
+merge commit `0407246f5`, all 17 CI checks green (CI Success, both
+MySQL/MariaDB integration and contract suites, Migration Chain, Docker
+Image Build & Container Tests, Frontend Tests, Frontend Lint/Typecheck/
+Build, Frontend E2E/Playwright, Backend Unit Tests, Backend Lint, Backend
+Security Scan, Docs Link Check, Trivy, Gitleaks, SBOM). No open review
+threads. Rotation row 23 is now `✅` (the merged PR's own body had already
+updated the Rotation table; this entry closes the gap left when the Open
+PR row itself was not cleared afterward — this session found the rotation
+stalled here for over 36 hours with no follow-up docs commit and no
+Feature 24 branch or PR, and is closing it out and starting Feature 24
+directly, per this file's established watchdog precedent). Next: Feature
+24 (Meetings & minutes), pass 4.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 11, PR #2489, before it merged), preserved for history</summary>
+
 **PR [#2489](https://github.com/thegspiro/the-logbook/pull/2489)** —
 Feature 23 (Medical supplies), a fresh rotation-lap review (this feature's
 own findings file is at "pass 11," continuing the cumulative numbering
@@ -43,6 +61,8 @@ scoped + 849 `inventory or medical_supplies` backend tests pass (1
 pre-existing skip); frontend `tsc`/`eslint` clean (no frontend source
 changed — the module was read, not edited). Full write-up:
 `docs/security-review/MSUP-23-medical-supplies.md` → Pass 11.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, pass 4's Codex-review follow-up, PR #2485, merged; before Feature 23 pass 11 started), preserved for history</summary>
@@ -13640,7 +13660,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | 🔄     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
@@ -13658,6 +13678,23 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-13 — Watchdog: closed out Feature 23 (PR #2489), starting Feature 24 (Meetings & minutes, pass 4)
+
+**Step 0 (watchdog):** PR #2489 (Feature 23, Medical supplies, pass 11)
+merged clean at 2026-09-11T17:11:45Z — all 17 CI checks green, no open
+review threads — but no follow-up commit ever cleared the Open PR row or
+recorded the merge, even though the PR's own body had already flipped the
+Rotation table's row 23 to `✅`. This scheduled watchdog check found the
+rotation stalled at that point for **over 36 hours** with no new
+`security-review-*` branch or PR opened for Feature 24, well past the
+~90-minute stall threshold this file's own prior watchdog entries (Feature
+18, Feature 19) used as their trigger. Re-checked live GitHub open PRs
+(`list_pull_requests`, state=open) before proceeding: only #2495, #2500,
+#2501 open, none security-review-shaped — confirmed clear. Recorded PR
+#2489's merge in the Open PR row and started Feature 24 directly, on this
+watchdog session's own designated branch (`claude/friendly-babbage-4ccnij`),
+per the same precedent Feature 18 and Feature 19's watchdog passes used.
 
 ### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 3 fixed (SKT4-4/5/6, SKT4-5 in three steps, SKT4-6 in three), 4 flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), SKT3-2 scope widened three times, across seven Codex review rounds
 
