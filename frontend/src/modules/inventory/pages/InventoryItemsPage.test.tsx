@@ -1473,6 +1473,66 @@ describe('InventoryItemsPage — CSV export', () => {
       expect(mockToastError).toHaveBeenCalledTimes(1);
     });
 
+    it('re-halts when the manual retry also fails', async () => {
+      // Load More clears the guards so the member can try again -- for ONE
+      // attempt. Without re-halting on its result, the guards stayed cleared
+      // while the visible count stayed zero, so the automatic effect fired
+      // straight after and one press bought a second request and toast.
+      mockGetItems.mockImplementation((params: unknown) =>
+        ((params as { skip?: number } | undefined)?.skip ?? 0) === 0
+          ? Promise.resolve(hiddenPage('p1'))
+          : Promise.reject(new Error('network down'))
+      );
+
+      renderWithRouter(<InventoryItemsPage />);
+      await collapsePPE();
+      await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 150));
+
+      const before = mockGetItems.mock.calls.length;
+      const toastsBefore = mockToastError.mock.calls.length;
+      await userEvent.click(await screen.findByRole('button', { name: /Load More/ }));
+      await waitFor(() => expect(mockGetItems.mock.calls.length).toBeGreaterThan(before));
+      await new Promise((r) => setTimeout(r, 200));
+
+      // Exactly one more request, and one more toast, for one press.
+      expect(mockGetItems.mock.calls.length).toBe(before + 1);
+      expect(mockToastError.mock.calls.length).toBe(toastsBefore + 1);
+    });
+
+    it('re-enables the top-up when a filter replaces the result set', async () => {
+      // Keyed on the grouping alone, a HALT from the previous result set
+      // survived a search the member typed afterwards, so the automatic
+      // top-up stayed off over rows they had just asked for. Driven through
+      // the failure path rather than the cap, because a failure halts
+      // unconditionally — the cap needs more hidden pages than jsdom settles.
+      let failNext = true;
+      const topUps: number[] = [];
+      mockGetItems.mockImplementation((params: unknown) => {
+        const skip = (params as { skip?: number } | undefined)?.skip ?? 0;
+        if (skip > 0) {
+          topUps.push(skip);
+          if (failNext) return Promise.reject(new Error('network down'));
+        }
+        return Promise.resolve(hiddenPage(`p${topUps.length}`));
+      });
+
+      renderWithRouter(<InventoryItemsPage />);
+      await collapsePPE();
+      await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 200));
+      const halted = topUps.length;
+
+      // It really is halted: nothing more happens on its own.
+      await new Promise((r) => setTimeout(r, 150));
+      expect(topUps.length).toBe(halted);
+
+      // A new search is a different result set, so the halt must not carry.
+      failNext = false;
+      await userEvent.type(screen.getByPlaceholderText(/Search items/i), 'helmet');
+      await waitFor(() => expect(topUps.length).toBeGreaterThan(halted), { timeout: 3000 });
+    });
+
     it('does not consume the page offset when a load fails', async () => {
       // `skip` advanced before the request, so a failed page was skipped for
       // good and the rows in it were never fetched.
@@ -1540,7 +1600,7 @@ describe('InventoryItemsPage — CSV export', () => {
           standard_size: size.toLowerCase(),
           tracking_type: 'pool',
           quantity: 2,
-          category_id: null as unknown as undefined,
+          category_id: null,
         });
       mockGetItems.mockResolvedValue({ items: [bare('h-s', 'S'), bare('h-m', 'M')], total: 2 });
 

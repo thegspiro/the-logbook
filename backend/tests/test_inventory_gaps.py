@@ -963,6 +963,109 @@ class TestInspectionClock:
         assert item.condition.value == "fair"
         assert item.last_inspection_date is None
 
+    # -- the same rule, reached through the UPDATE path ----------------
+    #
+    # #2479 gated `create_maintenance_record` and stopped there, which left
+    # the commoner route open: work is usually SCHEDULED and marked complete
+    # later, and that is a PATCH.
+
+    async def _scheduled(self, svc, item, org_id, user_id, kind, due):
+        record, err = await svc.create_maintenance_record(
+            item_id=uuid.UUID(item.id),
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+            maintenance_data={
+                "maintenance_type": kind,
+                "is_completed": False,
+                "scheduled_date": due,
+            },
+        )
+        assert err is None, err
+        return record
+
+    async def _complete(self, svc, record, item, org_id, completed, **extra):
+        updated, err = await svc.update_maintenance_record(
+            record_id=uuid.UUID(record.id),
+            item_id=uuid.UUID(item.id),
+            organization_id=uuid.UUID(org_id),
+            update_data={
+                "is_completed": True,
+                "completed_date": completed,
+                **extra,
+            },
+        )
+        assert err is None, err
+        return updated
+
+    @pytest.mark.asyncio
+    async def test_completing_a_scheduled_repair_leaves_the_clock_alone(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await self._coat(svc, org_id, user_id)
+        await self._record(
+            svc, item, org_id, user_id, "routine_inspection", date(2026, 4, 13)
+        )
+
+        repair = await self._scheduled(
+            svc, item, org_id, user_id, "repair", date(2026, 7, 29)
+        )
+        await self._complete(svc, repair, item, org_id, date(2026, 8, 1))
+        await db_session.refresh(item)
+
+        assert item.last_inspection_date == date(2026, 4, 13)
+        assert item.next_inspection_due == date(2027, 4, 13)
+
+    @pytest.mark.asyncio
+    async def test_completing_a_scheduled_inspection_still_sets_it(
+        self, db_session, setup_org_and_user
+    ):
+        # The half that must keep working: gating the repair must not stop a
+        # real inspection from recording itself.
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await self._coat(svc, org_id, user_id)
+
+        scheduled = await self._scheduled(
+            svc, item, org_id, user_id, "routine_inspection", date(2026, 4, 10)
+        )
+        await self._complete(
+            svc, scheduled, item, org_id, date(2026, 4, 13), passed=True
+        )
+        await db_session.refresh(item)
+
+        assert item.last_inspection_date == date(2026, 4, 13)
+        assert item.next_inspection_due == date(2027, 4, 13)
+
+    @pytest.mark.asyncio
+    async def test_the_type_is_read_after_the_update_applies(
+        self, db_session, setup_org_and_user
+    ):
+        # A record filed as a repair, corrected to an inspection in the same
+        # call that completes it, is an inspection. Reading the type off the
+        # incoming payload alone would miss the correction; reading it off the
+        # record after the update is what makes "final type" true.
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await self._coat(svc, org_id, user_id)
+
+        misfiled = await self._scheduled(
+            svc, item, org_id, user_id, "repair", date(2026, 4, 10)
+        )
+        await self._complete(
+            svc,
+            misfiled,
+            item,
+            org_id,
+            date(2026, 4, 13),
+            maintenance_type="routine_inspection",
+            passed=True,
+        )
+        await db_session.refresh(item)
+
+        assert item.last_inspection_date == date(2026, 4, 13)
+
 
 # ── Category Soft-Delete ───────────────────────────────────────────
 
