@@ -16,14 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 28 (Security, audit & IP), pass 4** — branch
-`claude/security-review-security-audit-ip`, findings/docs committed; PR being
-opened this iteration (this row is updated with the PR number/link in a
-follow-up commit on the same branch, per this tracker's own convention). No
-code fixes this pass beyond a documentation correction
+**PR [#2515](https://github.com/thegspiro/the-logbook/pull/2515)** (Feature
+28, Security, audit & IP, pass 4) — branch
+`claude/security-review-security-audit-ip`, opened against a fresh
+`origin/main` (no other security-review PR was open at the start of this
+iteration; row 27's closure — PR #2508 — had already merged). No code fixes
+this pass beyond a documentation correction
 (`docs/module-audit/security-audit-ip.md`'s stale SEC-9 "dead code removed"
 claim) — see `docs/security-review/SEC2-28-security-audit-ip.md`'s Pass 4
-section for the full re-verification. Rotation row 28 is now `✅`.
+section for the full re-verification. Subscribed via
+`subscribe_pr_activity`. Rotation row 28 is now `✅`.
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2508's merge, Feature 27 pass 4), preserved for history</summary>
