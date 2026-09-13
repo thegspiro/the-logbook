@@ -1006,39 +1006,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     else onClose();
   }, [editingNotesId, onClose]);
 
-  /**
-   * Close only on a press that both began and ended on the backdrop.
-   *
-   * A click resolves to the common ancestor of its mousedown and mouseup, so
-   * either half of a drag between the panel and the backdrop arrives here with
-   * `target === currentTarget` — indistinguishable, on the click alone, from a
-   * deliberate backdrop click. Both directions happen: selecting a member's
-   * notes to copy and releasing past the panel edge, and pressing just outside
-   * the panel then dragging in. Closing on either discards a half-typed
-   * cancellation reason or a screen of close-out hours with no undo.
-   *
-   * So the gesture has to start and finish on the backdrop. mouseup runs before
-   * click, which is what lets the release invalidate a press that qualified.
-   */
-  const backdropPressRef = useRef(false);
-
-  const handleBackdropMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    backdropPressRef.current = event.target === event.currentTarget;
-  }, []);
-
-  const handleBackdropMouseUp = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) backdropPressRef.current = false;
-  }, []);
-
-  const handleBackdropClick = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      const fromBackdrop = backdropPressRef.current;
-      backdropPressRef.current = false;
-      if (fromBackdrop && event.target === event.currentTarget) onClose();
-    },
-    [onClose]
-  );
-
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');
   const isPast = shift.shift_date < getTodayLocalDate(tz);
 
@@ -1357,13 +1324,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           aria-modal="true"
           aria-labelledby="shift-detail-title"
           inert={driverBlock !== null || printDialogOpen}
-          onMouseDown={handleBackdropMouseDown}
-          onMouseUp={handleBackdropMouseUp}
-          onClick={handleBackdropClick}
         >
           {/* Scrim as an empty sibling of the panel, so it carries no z-index
-              of its own (see the modal-overlay utility) and no pointer events —
-              closing on a backdrop click is the container's job. */}
+              of its own (see the modal-overlay utility) and no pointer events. */}
           <div className="modal-overlay pointer-events-none" aria-hidden="true" />
 
           {/* DialogPanel supplies `modal-panel` plus the shared focus trap,

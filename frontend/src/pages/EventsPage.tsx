@@ -1260,7 +1260,7 @@ export const EventsPage: React.FC = () => {
           aria-modal="true"
           aria-label="Import Events from CSV"
         >
-          <div className="modal-overlay" onClick={handleCloseImportModal} aria-hidden="true" />
+          <div className="modal-overlay" aria-hidden="true" />
           <DialogPanel
             onClose={handleCloseImportModal}
             className="modal-panel-scroll relative mx-4 w-full max-w-lg p-6"
@@ -1420,7 +1420,7 @@ export const EventsPage: React.FC = () => {
       {/* Cancel Confirmation Modal */}
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
-          <div className="modal-overlay" onClick={() => setShowCancelConfirm(false)} aria-hidden="true" />
+          <div className="modal-overlay" aria-hidden="true" />
           <DialogPanel
             onClose={() => setShowCancelConfirm(false)}
             className="modal-panel-scroll relative mx-4 w-full max-w-md p-6"

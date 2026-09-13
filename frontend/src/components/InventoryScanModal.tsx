@@ -694,7 +694,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const showResults = results !== null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg" closeOnClickOutside={false}>
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
       <div className="space-y-4">
         <p className="text-theme-text-secondary text-sm">
           {mode === 'distribute'

@@ -52,13 +52,17 @@ describe('Modal', () => {
 
   // ---- Backdrop click ----
 
-  it('calls onClose when clicking backdrop (outside modal)', async () => {
+  // A dialog here is nearly always a form, nothing is drafted, and callers
+  // routinely reset their form state in onClose — so a slip in the gutter
+  // around the panel must not discard the work. Escape and the close button
+  // are the ways out.
+  it('does not close on backdrop click by default', () => {
     render(<Modal {...defaultProps} />);
 
     const backdrop = screen.getByTestId('modal-backdrop');
     fireEvent.click(backdrop);
 
-    expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
   });
 
   it('does not close on backdrop click when closeOnClickOutside is false', () => {
@@ -66,6 +70,23 @@ describe('Modal', () => {
 
     const backdrop = screen.getByTestId('modal-backdrop');
     fireEvent.click(backdrop);
+
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes on backdrop click when a transient surface opts in', () => {
+    render(<Modal {...defaultProps} closeOnClickOutside />);
+
+    const backdrop = screen.getByTestId('modal-backdrop');
+    fireEvent.click(backdrop);
+
+    expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a click that lands on the panel rather than the backdrop', () => {
+    render(<Modal {...defaultProps} closeOnClickOutside />);
+
+    fireEvent.click(screen.getByTestId('modal-panel'));
 
     expect(defaultProps.onClose).not.toHaveBeenCalled();
   });

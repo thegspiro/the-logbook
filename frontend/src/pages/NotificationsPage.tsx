@@ -1070,7 +1070,7 @@ const NotificationsPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="modal-overlay" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
+              <div className="modal-overlay" aria-hidden="true" />
               <DialogPanel onClose={() => setShowCreateModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">

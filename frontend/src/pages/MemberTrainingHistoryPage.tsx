@@ -24,7 +24,7 @@ import { getTrainingPeriodWindow, TRAINING_PERIOD_LABELS, TrainingExportPeriod }
 import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
-import { useOverlaySurface } from '../hooks/useOverlaySurface';
+import { useDialog } from '../hooks/useDialog';
 
 type FilterStatus = 'all' | 'completed' | 'scheduled' | 'in_progress' | 'expired' | 'expiring_soon';
 type SortField = 'date' | 'course' | 'hours' | 'status';
@@ -35,8 +35,10 @@ const RecordAttachmentsModal: React.FC<{
   courseName: string;
   onClose: () => void;
 }> = ({ recordId, courseName, onClose }) => {
-  // Mounted only while open.
-  useOverlaySurface();
+  // Mounted only while open. useDialog rather than useOverlaySurface alone:
+  // this dialog dismissed on a backdrop click and had no Escape handler, so
+  // removing the former would have left the X button as the only way out.
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
 
   const [attachments, setAttachments] = useState<TrainingAttachment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,13 +78,18 @@ const RecordAttachmentsModal: React.FC<{
   };
 
   return (
-    <div className="modal-overlay z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div
-        className="bg-theme-surface modal-panel-scroll w-full max-w-lg rounded-lg p-6 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div
+      className="modal-overlay z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="record-attachments-title"
+    >
+      <div ref={dialogRef} className="bg-theme-surface modal-panel-scroll w-full max-w-lg rounded-lg p-6 shadow-xl">
         <div className="mb-1 flex items-center justify-between">
-          <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
+          <h3
+            id="record-attachments-title"
+            className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold"
+          >
             <Paperclip className="h-5 w-5" /> Attachments
           </h3>
           <button onClick={onClose} aria-label="Close" className="text-theme-text-muted hover:text-theme-text-primary">

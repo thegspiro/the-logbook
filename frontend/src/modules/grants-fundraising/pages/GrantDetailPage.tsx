@@ -144,7 +144,7 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) => {
       aria-modal="true"
       aria-label={title}
     >
-      <div className="modal-overlay" onClick={onClose} role="presentation" />
+      <div className="modal-overlay" aria-hidden="true" />
       {/* DialogPanel rather than a bare div: this shell predated the shared one
           and so shipped without a focus trap, Escape handling, the body scroll
           lock, or the registration that lifts the mobile bottom bar off it. */}

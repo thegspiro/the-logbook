@@ -266,7 +266,7 @@ const FieldEditor = ({
       }}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" aria-hidden="true" />
 
       {/* Modal */}
       <div ref={dialogRef} className="modal-panel relative max-h-[90dvh] w-full max-w-lg overflow-y-auto">
