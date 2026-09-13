@@ -104,6 +104,17 @@ Each pipeline stage has a type that determines its behavior:
 > when they reach it. The applicant must be checked in at an event matching the
 > stage's **Auto-Link Event Type** (and category, if one is set).
 >
+> **A stage with no Auto-Link Event Type auto-advances on nothing.** The type
+> is what tells the stage which event counts, and **Meeting Type** does not
+> stand in for it — that field names the stage's purpose for whoever reads it
+> and decides nothing. A stage naming no event used to take attendance at _any_
+> event in the department, so a stage reading "Meeting with the Fire Chief"
+> advanced an applicant who signed in at a fundraiser. It now advances on none
+> of them, and the stage builder refuses to save an auto-advancing meeting
+> stage until you pick a type. Stages that self-schedule through **Cal.com**
+> are the exception: they advance when Cal.com reports the meeting ended, so
+> they need no linked event.
+>
 > If someone attended and it was not recorded, use **Advance** — a coordinator's
 > manual advance is not gated on the attendance record.
 
@@ -230,7 +241,7 @@ For stages with explicit completion criteria:
 
 An applicant can end up on no stage at all. Deleting a stage moves everyone on
 it to the next one, or to the previous one if you deleted the last stage — but
-if you delete a pipeline's *only remaining* stage there is nowhere to move them
+if you delete a pipeline's _only remaining_ stage there is nowhere to move them
 to, and they are left without one.
 
 The board shows these applicants in an **Unassigned** column rather than hiding
@@ -428,6 +439,19 @@ When an applicant advances to an **Election Vote** stage, the system automatical
 | **Not Elected**     | Membership vote failed                 |
 
 ![Election package section showing the package status for an applicant at the vote](./images/15-08-election-package.png)
+
+> **The ballot holds the stage.** Once a package reaches **Added to Ballot**,
+> **Advance** is refused until the election closes and the result is recorded,
+> and a package that comes back **Not Elected** is refused outright — reject or
+> withdraw the application, or hold a new vote. This is what stops an applicant
+> the department voted down from being advanced, and — on a pipeline with
+> **Auto-transfer on approval** and the vote as its final stage — converted
+> into a member.
+>
+> A department that holds its vote at a meeting and records the outcome by hand
+> is unaffected: a stage with no package, or one still **Draft** or **Ready**,
+> advances exactly as before. Nothing is gated until a package is actually put
+> on a ballot.
 
 See [Elections & Voting > Prospective Member Election Packages](./14-elections.md#prospective-member-election-packages) for the voting workflow.
 

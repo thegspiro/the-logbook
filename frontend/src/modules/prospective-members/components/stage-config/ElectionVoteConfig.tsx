@@ -170,9 +170,6 @@ const ElectionVoteConfig: React.FC<ElectionVoteConfigProps> = ({ config, setConf
           );
         })()}
       </div>
-      {errors.eligible_voter_roles && (
-        <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.eligible_voter_roles}</p>
-      )}
       {errors.victory_percentage && (
         <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.victory_percentage}</p>
       )}

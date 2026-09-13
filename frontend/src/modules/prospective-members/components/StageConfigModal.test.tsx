@@ -980,4 +980,116 @@ describe('StageConfigModal', () => {
     const saved = defaultProps.onSave.mock.calls[0]?.[0] as PipelineStageCreate;
     expect('package_fields' in saved.config).toBe(false);
   });
+  // =========================================================================
+  // Stage types creatable from the type picker
+  //
+  // Both of these were unsavable. `validate()` required `approver_roles`
+  // (manual approval) and `eligible_voter_roles` (election vote) to be
+  // non-empty, neither key has an input anywhere in this modal, and both
+  // default to `[]` — so Save did nothing. Manual Approval is this modal's
+  // default type and its error was never rendered, so it failed in silence;
+  // only the quick-add presets, which seed the keys, could create either
+  // stage. Nothing reads either key on the backend.
+  // =========================================================================
+
+  it('saves a manual approval stage, the type the modal opens on', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText(/stage name/i), 'Coordinator Sign-off');
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Coordinator Sign-off',
+        stage_type: 'manual_approval',
+      })
+    );
+  });
+
+  it('saves an election vote stage picked from the type list', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Election / Vote'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Membership Vote');
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Membership Vote',
+        stage_type: 'election_vote',
+      })
+    );
+  });
+
+  it('still refuses an out-of-range supermajority percentage', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Election / Vote'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Membership Vote');
+    await user.selectOptions(screen.getByLabelText(/victory condition/i), 'supermajority');
+    await user.clear(screen.getByLabelText(/required percentage/i));
+    await user.type(screen.getByLabelText(/required percentage/i), '150');
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(screen.getByText('Victory percentage must be between 1 and 100')).toBeInTheDocument();
+    expect(defaultProps.onSave).not.toHaveBeenCalled();
+  });
+
+  // =========================================================================
+  // Meeting auto-advance needs an event to point at
+  //
+  // "Auto-advance when attendance is recorded" advances off attendance at the
+  // *linked* event, and the matcher accepts nothing when no event is named.
+  // Auto-Link Event Type starts at None, so the box was tickable on a stage it
+  // could never move — and before the matcher was tightened it matched every
+  // event instead, advancing a chief-interview stage on a fundraiser.
+  // =========================================================================
+
+  it('refuses to save a meeting stage set to auto-advance with no linked event', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Meeting'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Meeting with the Fire Chief');
+    await user.click(screen.getByLabelText(/auto-advance when attendance is recorded/i));
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(screen.getByText(/Choose an Auto-Link Event Type, or turn off auto-advance/)).toBeInTheDocument();
+    expect(defaultProps.onSave).not.toHaveBeenCalled();
+  });
+
+  it('saves that stage once an event type is chosen', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Meeting'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Meeting with the Fire Chief');
+    await user.click(screen.getByLabelText(/auto-advance when attendance is recorded/i));
+    await user.selectOptions(screen.getByLabelText(/auto-link event type/i), 'business_meeting');
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage_type: 'meeting',
+        config: expect.objectContaining({
+          auto_advance: true,
+          linked_event_type: 'business_meeting',
+        }) as unknown,
+      })
+    );
+  });
+
+  it('saves a meeting stage with no linked event when auto-advance is off', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Meeting'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Meeting with the Fire Chief');
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(expect.objectContaining({ stage_type: 'meeting' }));
+  });
 });

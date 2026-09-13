@@ -143,6 +143,52 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Two prospective-member stages now hold applicants where they should (2026-09-13)
+
+Both changes are to the membership pipeline. Neither touches an existing
+record, and a coordinator's **Advance** button remains ungated in every case
+described below — these withhold _automatic_ movement, not the coordinator's.
+
+**An Election Vote stage now waits for the ballot.** A stage of that type
+refuses **Advance** while the applicant's election package reads _Added to
+Ballot_, and refuses it outright when the package comes back _Not Elected_.
+
+**Why.** The package status was already the authoritative record of the vote —
+the Elections module writes it when a package is put on a ballot and again
+when the closed ballot is tallied — and nothing consulted it when moving an
+applicant. An applicant the department had voted _down_ advanced on a click,
+beside a panel reading "This applicant was not elected by the membership
+vote"; on a pipeline with **Auto-transfer on approval** and the vote as its
+final stage, that click made them a member.
+
+**What you will see.** If your department holds its vote at a meeting and
+records the result by hand, nothing changes: a stage with no package, or one
+still _Draft_ or _Ready_, advances exactly as before. Only a package that
+actually reached a ballot is held. If a ballot closed but the result was never
+synced, the applicant stays put — un-tick **Required** on the stage and use
+**Skip**, which stays audited, or record the result.
+
+**A Meeting stage that names no event no longer auto-advances at all.** The
+stage builder's **Auto-Link Event Type** is what tells a meeting stage which
+event counts. A stage that named none used to accept attendance at _any_ event
+in the department; it now accepts none, and the stage builder refuses to save
+an auto-advancing meeting stage until a type is chosen.
+
+**Why.** Guest check-in is department-wide and is usually enabled on public
+events — open houses, fundraisers, public education — which is exactly where a
+prospective member turns up casually. So a stage reading "Meeting with the Fire
+Chief" advanced an applicant who signed in at a pancake breakfast. **Meeting
+Type** does not stand in for the event type: that field names the stage's
+purpose for whoever reads it and is read by nothing.
+
+**What you will see.** Check your meeting stages: any with _Auto-advance when
+attendance is recorded_ ticked and **Auto-Link Event Type** set to _None_ will
+stop advancing on their own after this upgrade. Set the event type and they
+resume; the coordinator can advance by hand meanwhile. Stages that
+self-schedule through **Cal.com** are unaffected — they advance when Cal.com
+reports the meeting ended, not off an attendance record, so they need no
+linked event.
+
 ### A skills test can no longer be filed with unmarked steps (2026-09-12)
 
 Completing a skills evaluation now requires a result against every step on the
