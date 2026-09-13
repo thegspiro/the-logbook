@@ -510,6 +510,54 @@ class TestDocumensoPayload:
             with pytest.raises(Exception, match="rejected the API token"):
                 await service.test_connection()
 
+    async def test_connection_blocks_unsafe_base_url(self):
+        """INT-27 pass 4: api_base_url is re-validated at send time, matching
+        every other create_integration_client-family connector (this file was
+        the one sibling with no assert_outbound_url_safe call at all — see
+        KNOWN_LIMITATIONS.md's "Outbound Integration Requests" entry). A
+        rebound/unsafe host must fail closed before any request is attempted.
+        """
+        service = DocumensoService(
+            {"api_base_url": "https://sign.example.com/api/v1", "api_token": "tok"}
+        )
+        with (
+            patch(
+                "app.services.integration_services.documenso_service."
+                "assert_outbound_url_safe",
+                side_effect=ValueError("unsafe URL"),
+            ),
+            patch(
+                "app.services.integration_services.documenso_service."
+                "create_integration_client"
+            ) as mock_client,
+        ):
+            with pytest.raises(ValueError, match="unsafe URL"):
+                await service.test_connection()
+        mock_client.assert_not_called()
+
+    async def test_create_document_blocks_unsafe_base_url(self):
+        """Same guard on the send-a-document path (not currently wired to any
+        route, but part of this class's public API and must not regress)."""
+        service = DocumensoService(
+            {"api_base_url": "https://sign.example.com/api/v1", "api_token": "tok"}
+        )
+        with (
+            patch(
+                "app.services.integration_services.documenso_service."
+                "assert_outbound_url_safe",
+                side_effect=ValueError("unsafe URL"),
+            ),
+            patch(
+                "app.services.integration_services.documenso_service."
+                "create_integration_client"
+            ) as mock_client,
+        ):
+            with pytest.raises(ValueError, match="unsafe URL"):
+                await service.create_document(
+                    "Doc", [{"name": "A", "email": "a@x.com"}]
+                )
+        mock_client.assert_not_called()
+
 
 # ============================================
 # Cal.com Tests
