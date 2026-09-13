@@ -760,7 +760,7 @@ async def get_operations_dashboard(
                 Event.start_datetime < boundary,
                 Event.is_cancelled.is_(False),
             )
-        )  # noqa: E712
+        )
         count, first = result.one()
         sections.append(
             OperationsSection(
@@ -938,7 +938,7 @@ async def get_dashboard_stats(
         select(func.count(Event.id)).where(
             Event.organization_id == org_id,
             Event.created_at >= cutoff,
-            Event.is_cancelled == False,  # noqa: E712
+            Event.is_cancelled.is_(False),
         )
     )
     recent_events_count = result.scalar() or 0
@@ -1019,7 +1019,7 @@ async def get_admin_summary(
                 Event.organization_id == org_id,
                 Event.start_datetime >= now_utc,
                 Event.start_datetime < now_utc + timedelta(days=30),
-                Event.is_cancelled == False,  # noqa: E712
+                Event.is_cancelled.is_(False),
             )
         )
         upcoming_events = result.scalar() or 0
@@ -1304,7 +1304,7 @@ async def get_community_engagement(
         select(func.count(Event.id)).where(
             Event.organization_id == org_id,
             Event.event_type.in_(public_types),
-            Event.is_cancelled == False,  # noqa: E712
+            Event.is_cancelled.is_(False),
         )
     )
     total_public = result.scalar() or 0
@@ -1313,7 +1313,7 @@ async def get_community_engagement(
     result = await db.execute(
         select(func.count(EventRSVP.id)).where(
             EventRSVP.organization_id == org_id,
-            EventRSVP.checked_in == True,  # noqa: E712
+            EventRSVP.checked_in.is_(True),
             EventRSVP.event_id.in_(
                 select(Event.id).where(
                     Event.organization_id == org_id,
@@ -1330,7 +1330,7 @@ async def get_community_engagement(
     result = await db.execute(
         select(func.count(EventExternalAttendee.id)).where(
             EventExternalAttendee.organization_id == org_id,
-            EventExternalAttendee.checked_in == True,  # noqa: E712
+            EventExternalAttendee.checked_in.is_(True),
             EventExternalAttendee.event_id.in_(
                 select(Event.id).where(
                     Event.organization_id == org_id,
@@ -1347,7 +1347,7 @@ async def get_community_engagement(
             Event.organization_id == org_id,
             Event.event_type.in_(public_types),
             Event.start_datetime >= datetime.now(timezone.utc),
-            Event.is_cancelled == False,  # noqa: E712
+            Event.is_cancelled.is_(False),
         )
     )
     upcoming_public = result.scalar() or 0

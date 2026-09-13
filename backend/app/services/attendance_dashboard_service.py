@@ -90,7 +90,7 @@ class AttendanceDashboardService:
         leave_result = await self.db.execute(
             select(MemberLeaveOfAbsence).where(
                 MemberLeaveOfAbsence.organization_id == org_id,
-                MemberLeaveOfAbsence.active == True,  # noqa: E712
+                MemberLeaveOfAbsence.active.is_(True),
             )
         )
         all_leaves = list(leave_result.scalars().all())
