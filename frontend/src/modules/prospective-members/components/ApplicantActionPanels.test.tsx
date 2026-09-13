@@ -173,3 +173,51 @@ describe('placing an applicant who is on no stage', () => {
     expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('already on a stage'));
   });
 });
+
+/**
+ * The hint is what tells a coordinator a stage will refuse before they click
+ * Advance and find out. It covered five of the gated stage types and missed
+ * document_upload, whose gate has been enforced on the backend all along, and
+ * election_vote, whose gate is new.
+ */
+describe('stage requirement hints', () => {
+  beforeEach(() => {
+    mocks.storeState.currentPipeline = currentPipeline;
+  });
+
+  const onStage = (stageType: string, config: Record<string, unknown>) =>
+    renderPanels({
+      current_stage_id: 's1',
+      current_stage_type: stageType,
+      current_stage_config: config,
+    } as unknown as Partial<Applicant>);
+
+  it('names the documents a document_upload stage is waiting on', () => {
+    onStage('document_upload', {
+      required_document_types: ['Driver’s License', 'Background Check'],
+      allow_multiple: true,
+    });
+
+    expect(
+      screen.getByText('Upload 2 required documents before advancing: Driver’s License, Background Check.')
+    ).toBeInTheDocument();
+  });
+
+  it('ignores blank document types when counting', () => {
+    onStage('document_upload', { required_document_types: ['ID', '  '], allow_multiple: true });
+
+    expect(screen.getByText('Upload 1 required document before advancing: ID.')).toBeInTheDocument();
+  });
+
+  it('says nothing for a document_upload stage that requires no named type', () => {
+    onStage('document_upload', { required_document_types: [], allow_multiple: true });
+
+    expect(screen.queryByText(/before advancing/)).toBeNull();
+  });
+
+  it('warns that a ballot holds an election_vote stage until the result is in', () => {
+    onStage('election_vote', { voting_method: 'simple_majority', victory_condition: 'majority' });
+
+    expect(screen.getByText(/cannot advance until the election closes/)).toBeInTheDocument();
+  });
+});

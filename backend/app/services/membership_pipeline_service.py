@@ -1764,8 +1764,59 @@ class MembershipPipelineService:
                         f"Medical screenings not yet passed: " f"{', '.join(missing)}."
                     )
 
+        elif step_type == PipelineStepType.ELECTION_VOTE:
+            await self._assert_election_decided(prospect)
+
         elif step_type == PipelineStepType.MEETING and automated:
             await self._assert_meeting_attended(prospect, step, action_result)
+
+    # The two election-package states that are provably not a pass. "draft"
+    # and "ready" are deliberately absent, and their absence is the whole
+    # shape of this gate: a department that holds its vote at a meeting and
+    # records the outcome by hand never assigns a package to a ballot, so
+    # those two states have to keep advancing exactly as they did before this
+    # gate existed. Only a package that actually reached a ballot is graded.
+    _ELECTION_BLOCK_REASON = {
+        "added_to_ballot": (
+            "is on a ballot and the vote has not been decided yet. Advance "
+            "once the election is closed and the result has been recorded."
+        ),
+        "not_elected": (
+            "was not elected by the membership vote and cannot be advanced. "
+            "Reject or withdraw the application, or hold a new vote."
+        ),
+    }
+
+    async def _assert_election_decided(self, prospect: ProspectiveMember) -> None:
+        """Refuse an advance off an election stage the vote has not cleared.
+
+        ``ProspectElectionPackage.status`` is system-derived and already
+        authoritative: ``assign_package_to_election`` sets "added_to_ballot",
+        and ``election_service._sync_package_statuses`` tallies the closed
+        ballot into "elected"/"not_elected". Nothing read it when deciding
+        whether an applicant could move, so the one stage whose entire purpose
+        is to make the membership vote binding was the one stage with no gate —
+        an applicant the department had voted *down* advanced on a click, and
+        on a pipeline with ``auto_transfer_on_approval`` a final election stage
+        converted them into a member.
+
+        The package graded here is selected exactly as
+        :meth:`get_election_package` selects the one the coordinator is shown
+        in the applicant drawer — latest by ``created_at``, not filtered by
+        ``step_id``. Re-deriving "which package counts" differently here would
+        let the drawer read "was not elected" beside an Advance that works
+        (CLAUDE.md Pitfall #29).
+        """
+        result = await self.db.execute(
+            select(ProspectElectionPackage.status)
+            .where(ProspectElectionPackage.prospect_id == prospect.id)
+            .order_by(ProspectElectionPackage.created_at.desc())
+            .limit(1)
+        )
+        status = result.scalars().first()
+        reason = self._ELECTION_BLOCK_REASON.get(str(status or ""))
+        if reason:
+            raise ValueError(f"This applicant {reason}")
 
     async def _assert_meeting_attended(
         self,

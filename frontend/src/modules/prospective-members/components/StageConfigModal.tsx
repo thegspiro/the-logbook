@@ -534,21 +534,27 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
       if (validTypes.length === 0) newErrors.document_types = 'At least one document type is required';
     }
 
+    // `eligible_voter_roles` and `approver_roles` are deliberately NOT
+    // validated. Both were required here, neither has an input anywhere in
+    // this modal, and both default to `[]` — so picking either stage type
+    // from the list and pressing Save did nothing at all. Manual Approval is
+    // this modal's default type and its error was never even rendered, so it
+    // failed silently; Election Vote showed a message with no field to
+    // satisfy. Only the quick-add presets, which seed the keys, could create
+    // either stage.
+    //
+    // Nothing reads either key: the ballot item takes `eligible_voter_types`
+    // off `recommended_ballot_item`, and approval authority comes from the
+    // `prospective_members.manage` permission (and, for multi_approval, from
+    // the signer's own positions — see `_authorized_multi_approval_result`).
+    // They are stored-but-inert config, so requiring them gated stage
+    // creation on a value that could not be supplied and would not be read
+    // (CLAUDE.md Pitfall #19).
     if (stageType === StageTypeConst.ELECTION_VOTE) {
       const c = config as ElectionStageConfig;
-      if (!c.eligible_voter_roles || c.eligible_voter_roles.length === 0) {
-        newErrors.eligible_voter_roles = 'At least one eligible voter role is required';
-      }
       const pct = c.victory_percentage ?? 67;
       if (pct < 1 || pct > 100 || !Number.isFinite(pct)) {
         newErrors.victory_percentage = 'Victory percentage must be between 1 and 100';
-      }
-    }
-
-    if (stageType === StageTypeConst.MANUAL_APPROVAL) {
-      const c = config as ManualApprovalConfig;
-      if (!c.approver_roles || c.approver_roles.length === 0) {
-        newErrors.approver_roles = 'At least one approver role is required';
       }
     }
 
