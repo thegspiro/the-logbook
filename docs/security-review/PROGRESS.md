@@ -16,6 +16,34 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2527](https://github.com/thegspiro/the-logbook/pull/2527)** (Feature
+32, Locations & kiosk, pass 4) — branch `claude/security-review-locations-
+kiosk`, opened against a fresh `origin/main` (no security-review PR was open
+at the start of this iteration; row 32 was `⬜`, row 31's closure — PR #2525
+— was already merged and recorded). Delta-focused per the established
+convention: diffed pass 3's merge commit (`3ac9cd4a3`, PR #2365) against
+`HEAD` for every file in this feature's backend surface. Two files differed
+— `admin_hub_service.py` (pass 3's own already-recorded addendum fixes,
+confirmed present and correct) and `guest_check_in_service.py` (an unrelated
+membership-pipeline dedup refactor, logic preserved byte-for-byte) — every
+other backend file byte-identical. Three frontend files picked up
+accessibility-only changes from an unrelated sweep. Gave the kiosk
+`display_code` credential model a fresh end-to-end read (sole credential,
+self-resolving org, no enumeration oracle, event-to-location binding
+enforced) rather than citing prior passes' conclusions. Re-verified every
+prior finding (LOC2-32-1 through 3, LOC-32-1 through 5, LOC-1/2/4) against
+current code — all holding, no regressions. **0 fixes, 0 new findings.**
+LOC-3 (`GET /locations/{id}/display`, a dead authenticated endpoint) remains
+open and flagged, same reasoning as every prior pass. flake8/black/isort
+clean; migrations 444 revisions, single head; scoped tests 357/358 (1
+skipped, pywebpush); full backend suite 12,524 passed, 21 skipped
+(pre-existing), 0 failed; frontend typecheck 0 errors; eslint 0
+errors/warnings. Findings doc: `docs/security-review/
+LOC4-32-locations-kiosk.md`.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2525's merge, Feature 31 pass 4 closure), preserved for history</summary>
+
 **None.** PR [#2525](https://github.com/thegspiro/the-logbook/pull/2525)
 (Feature 31, Scheduled tasks, pass 4) merged clean, 17/17 CI green (after one
 stale-superseded-run false failure on the prior commit — every job on that
@@ -44,6 +72,8 @@ already accepted, not a new risk class; closing it needs a lock shared
 between `main.py` and `scheduled.py`'s dispatch, an architecture call beyond
 a review-pass fix. Full account in `CRON4-31-scheduled-tasks.md`. Rotation
 row 31 is now `✅`. Next: Feature 32 (Locations & kiosk).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 4, PR #2525, before it merged), preserved for history</summary>

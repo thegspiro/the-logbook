@@ -1,6 +1,6 @@
 # Security Review — Feature 32: Locations & Kiosk (pass 4)
 
-**Prefix:** `LOC4` · **Iteration:** 32 · **Reviewed:** 2026-09-13 · **PR:** (opening)
+**Prefix:** `LOC4` · **Iteration:** 32 · **Reviewed:** 2026-09-13 · **PR:** [#2527](https://github.com/thegspiro/the-logbook/pull/2527)
 
 **Backend:** `app/api/v1/endpoints/locations.py` (364 L, 8 routes, byte-identical
 to pass 3), `app/services/location_service.py` (383 L, byte-identical),
