@@ -104,6 +104,17 @@ Each pipeline stage has a type that determines its behavior:
 > when they reach it. The applicant must be checked in at an event matching the
 > stage's **Auto-Link Event Type** (and category, if one is set).
 >
+> **A stage with no Auto-Link Event Type auto-advances on nothing.** The type
+> is what tells the stage which event counts, and **Meeting Type** does not
+> stand in for it — that field names the stage's purpose for whoever reads it
+> and decides nothing. A stage naming no event used to take attendance at _any_
+> event in the department, so a stage reading "Meeting with the Fire Chief"
+> advanced an applicant who signed in at a fundraiser. It now advances on none
+> of them, and the stage builder refuses to save an auto-advancing meeting
+> stage until you pick a type. Stages that self-schedule through **Cal.com**
+> are the exception: they advance when Cal.com reports the meeting ended, so
+> they need no linked event.
+>
 > If someone attended and it was not recorded, use **Advance** — a coordinator's
 > manual advance is not gated on the attendance record.
 

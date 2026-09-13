@@ -1037,4 +1037,59 @@ describe('StageConfigModal', () => {
     expect(screen.getByText('Victory percentage must be between 1 and 100')).toBeInTheDocument();
     expect(defaultProps.onSave).not.toHaveBeenCalled();
   });
+
+  // =========================================================================
+  // Meeting auto-advance needs an event to point at
+  //
+  // "Auto-advance when attendance is recorded" advances off attendance at the
+  // *linked* event, and the matcher accepts nothing when no event is named.
+  // Auto-Link Event Type starts at None, so the box was tickable on a stage it
+  // could never move — and before the matcher was tightened it matched every
+  // event instead, advancing a chief-interview stage on a fundraiser.
+  // =========================================================================
+
+  it('refuses to save a meeting stage set to auto-advance with no linked event', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Meeting'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Meeting with the Fire Chief');
+    await user.click(screen.getByLabelText(/auto-advance when attendance is recorded/i));
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(screen.getByText(/Choose an Auto-Link Event Type, or turn off auto-advance/)).toBeInTheDocument();
+    expect(defaultProps.onSave).not.toHaveBeenCalled();
+  });
+
+  it('saves that stage once an event type is chosen', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Meeting'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Meeting with the Fire Chief');
+    await user.click(screen.getByLabelText(/auto-advance when attendance is recorded/i));
+    await user.selectOptions(screen.getByLabelText(/auto-link event type/i), 'business_meeting');
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage_type: 'meeting',
+        config: expect.objectContaining({
+          auto_advance: true,
+          linked_event_type: 'business_meeting',
+        }) as unknown,
+      })
+    );
+  });
+
+  it('saves a meeting stage with no linked event when auto-advance is off', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Meeting'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Meeting with the Fire Chief');
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(expect.objectContaining({ stage_type: 'meeting' }));
+  });
 });

@@ -162,14 +162,38 @@ def effective_step_type(step: MembershipPipelineStep) -> PipelineStepType:
 def meeting_config_matches_event(config: Dict[str, Any], event: Event) -> bool:
     """Whether a meeting stage's config accepts ``event`` as its meeting.
 
-    So the type the coordinator actually chose wins, the pinned id is the
-    fallback for a stage built without one, and a stage naming no event at
-    all takes any recorded attendance.
+    The type the coordinator actually chose wins, and the pinned id is the
+    fallback for a stage built without one. Grading the pinned id first would
+    strand every recurring stage the moment that occurrence passed — an
+    applicant at March's business meeting would not satisfy a stage pinned to
+    January's.
 
-    Lives here rather than on ``GuestCheckInService`` because two callers now
-    need it: the check-in hook that offers an advance, and the stage gate that
-    decides whether an advance has its evidence. ``GuestCheckInService``
-    keeps its own method, delegating, so its behaviour is unchanged.
+    A stage naming **neither** matches nothing, and this is the part that is
+    easy to get backwards. It used to take any recorded attendance, on the
+    reasoning that a stage which names no event cannot discriminate — but that
+    assumes the only attendance a prospect can accrue is at the meeting the
+    stage is about, and guest check-in is org-wide. The events departments
+    actually enable it on are the public ones: open houses, fundraisers,
+    public education. So a stage reading "Meeting with the Fire Chief"
+    advanced on a pancake breakfast.
+
+    That shape is not exotic, it is the stage builder's default:
+    ``DEFAULT_STAGE_CONFIGS.meeting`` sets only ``meeting_type`` and
+    ``meeting_description``, and "Auto-Link Event Type" starts at None. The
+    ``meeting_type`` the coordinator picks (``chief_meeting``,
+    ``president_meeting``) names the stage's purpose and is read by nothing
+    here — it is a label, not a matcher, so it cannot stand in for the event
+    type (CLAUDE.md Pitfall #19).
+
+    Matching nothing only withholds the *automated* advance. A coordinator who
+    watched the applicant walk in still advances by hand, ungated — the same
+    escape hatch :meth:`_assert_meeting_attended` documents for attendance
+    that was never recorded.
+
+    Lives here rather than on ``GuestCheckInService`` because two callers need
+    it: the check-in hook that offers an advance, and the stage gate that
+    decides whether an advance has its evidence. Both must answer identically
+    or one will offer what the other refuses.
     """
     linked_event_type = config.get("linked_event_type")
     if linked_event_type:
@@ -187,7 +211,7 @@ def meeting_config_matches_event(config: Dict[str, Any], event: Event) -> bool:
     if linked_event_id:
         return str(linked_event_id) == str(event.id)
 
-    return True
+    return False
 
 
 def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
@@ -1857,6 +1881,11 @@ class MembershipPipelineService:
         stage auto-links the next matching *future* event
         (``_auto_link_event_for_step``), so treating the link as attendance
         would re-create the bug in a new place.
+
+        A stage that names no event at all matches nothing — see
+        :func:`meeting_config_matches_event` — so it is refused here with its
+        own message. That is a stage-configuration problem, not a missing
+        attendance record, and the two have different remedies.
         """
         # Local import: event_service imports no pipeline code today, but this
         # module is imported by guest_check_in_service, which imports both.
@@ -1891,6 +1920,16 @@ class MembershipPipelineService:
                 event
             ):
                 return
+
+        # A stage naming no event can never satisfy the match above, so say
+        # that rather than asking for attendance it would ignore anyway. The
+        # remedy is a change to the stage, not to the applicant's record.
+        if not config.get("linked_event_type") and not config.get("linked_event_id"):
+            raise ValueError(
+                f"'{step.name}' has no linked event, so no attendance can "
+                "advance it automatically. Set an Auto-Link Event Type on the "
+                "stage, or advance the applicant by hand."
+            )
 
         raise ValueError(
             f"No attendance has been recorded for '{step.name}' yet. "

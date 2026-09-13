@@ -574,9 +574,26 @@ def _make_event(org_id: str, **overrides) -> Event:
 class TestMeetingStageMatching:
     """The pure question of which event a meeting stage is waiting on."""
 
-    def test_stage_naming_no_event_takes_any_attendance(self):
+    def test_stage_naming_no_event_matches_nothing(self):
+        """Reversed on 2026-09-13. This asserted the opposite — a stage naming
+        no event took *any* recorded attendance — on the reasoning that a
+        stage which cannot discriminate should accept whatever arrives. That
+        assumes the only attendance a prospect accrues is at the meeting the
+        stage is about, and guest check-in is org-wide: departments enable it
+        on open houses, fundraisers and public education, which is exactly
+        where a prospective member turns up casually. So a stage reading
+        "Meeting with the Fire Chief" advanced on a pancake breakfast.
+        """
         event = _make_event(_uid())
-        assert GuestCheckInService._meeting_config_matches_event({}, event) is True
+        assert GuestCheckInService._meeting_config_matches_event({}, event) is False
+
+    def test_a_meeting_type_label_is_not_an_event_type(self):
+        """``meeting_type`` is the stage builder's default and names the
+        stage's purpose; nothing in the matcher reads it. It must not be
+        mistaken for the linked event type (CLAUDE.md Pitfall #19)."""
+        event = _make_event(_uid())
+        config = {"meeting_type": "chief_meeting", "meeting_description": ""}
+        assert GuestCheckInService._meeting_config_matches_event(config, event) is False
 
     def test_event_type_must_match(self):
         event = _make_event(_uid(), event_type=EventType.TRAINING)
@@ -795,6 +812,133 @@ class TestMeetingAutoAdvanceOnStaffCheckIn:
 
         assert attendee.checked_in is True
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
+class TestMeetingStageWithNoLinkedEvent:
+    """A meeting stage that names no event advances on nothing.
+
+    This is the stage builder's *default* shape, not an exotic one:
+    ``DEFAULT_STAGE_CONFIGS.meeting`` sets only ``meeting_type`` and
+    ``meeting_description``, "Auto-Link Event Type" starts at None, and
+    nothing validated it. Every other test in this file sets
+    ``linked_event_type``, so the shape a coordinator actually produces was
+    never exercised — and it matched every event in the organisation.
+
+    Guest check-in is org-wide and departments enable it on their public
+    events, so the attendance a prospect is most likely to accrue is at an
+    open house or a fundraiser, not at the chief's interview.
+    """
+
+    async def _check_in(self, db_session, event, org_id, email):
+        return await GuestCheckInService(db_session).check_in_guest(
+            event=event,
+            organization_id=org_id,
+            first_name="Dana",
+            last_name="Reed",
+            email=email,
+        )
+
+    async def _parked(self, db_session, org):
+        return await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            # Verbatim the frontend default, plus the auto-advance tick.
+            config={
+                "meeting_type": "chief_meeting",
+                "meeting_description": "",
+                "auto_advance": True,
+            },
+        )
+
+    async def test_an_unrelated_event_does_not_advance_it(
+        self, db_session: AsyncSession, org
+    ):
+        """The pancake breakfast: a chief-interview stage advancing on a
+        public-education event nobody thought was part of the pipeline."""
+        svc, prospect, gate = await self._parked(db_session, org)
+        fundraiser = _make_event(
+            org,
+            event_type=EventType.PUBLIC_EDUCATION,
+            title="Pancake Breakfast Fundraiser",
+        )
+        db_session.add(fundraiser)
+        await db_session.flush()
+
+        attendee, error, _ = await self._check_in(
+            db_session, fundraiser, org, prospect.email
+        )
+
+        assert error is None
+        assert attendee is not None
+        assert attendee.checked_in is True
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_even_a_plausible_looking_event_does_not_advance_it(
+        self, db_session: AsyncSession, org
+    ):
+        """Not "the wrong event type" — the stage names no type at all, so
+        there is nothing for a business meeting to match either."""
+        svc, prospect, gate = await self._parked(db_session, org)
+        meeting = _make_event(org)
+        db_session.add(meeting)
+        await db_session.flush()
+
+        _, error, _ = await self._check_in(db_session, meeting, org, prospect.email)
+
+        assert error is None
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_the_gate_names_the_stage_config_as_the_reason(
+        self, db_session: AsyncSession, org
+    ):
+        """A missing link and a missing attendance record have different
+        remedies, so the refusal must not ask for attendance it would
+        ignore."""
+        svc, prospect, gate = await self._parked(db_session, org)
+        full = await svc.get_prospect(prospect.id, org)
+        step = next(s for s in full.pipeline.steps if str(s.id) == str(gate.id))
+
+        with pytest.raises(ValueError, match="no linked event") as excinfo:
+            await svc._validate_step_completion(full, step, None, automated=True)
+
+        # And it names the remedy, which is a change to the stage rather than
+        # to the applicant's attendance record.
+        assert "Auto-Link Event Type" in str(excinfo.value)
+
+    async def test_a_coordinator_can_still_advance_by_hand(
+        self, db_session: AsyncSession, org
+    ):
+        """Withholding the automated advance must not strand the applicant —
+        the manual path stays ungated, as it is for unrecorded attendance."""
+        svc, prospect, gate = await self._parked(db_session, org)
+
+        await svc.advance_prospect(prospect.id, org, advanced_by=None)
+
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_setting_an_event_type_restores_the_advance(
+        self, db_session: AsyncSession, org
+    ):
+        """The remedy the refusal names actually works."""
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={
+                "meeting_type": "chief_meeting",
+                "linked_event_type": "business_meeting",
+                "auto_advance": True,
+            },
+        )
+        meeting = _make_event(org)
+        db_session.add(meeting)
+        await db_session.flush()
+
+        _, error, _ = await self._check_in(db_session, meeting, org, prospect.email)
+
+        assert error is None
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
 
 
 class TestMeetingStageNeedsRealAttendance:

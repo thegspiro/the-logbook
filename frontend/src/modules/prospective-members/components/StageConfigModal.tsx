@@ -37,6 +37,7 @@ import type {
   DocumentStageConfig,
   ElectionStageConfig,
   ManualApprovalConfig,
+  MeetingStageConfig,
   MeetingType,
   StatusPageToggleConfig,
   AutomatedEmailStageConfig,
@@ -558,6 +559,29 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
       }
     }
 
+    // Auto-advance on a meeting stage means "advance when attendance is
+    // recorded at the linked event", and `meeting_config_matches_event`
+    // matches nothing when no event is named — so the box cannot do what it
+    // says without one. It used to match *every* event instead, which is how
+    // a stage reading "Meeting with the Fire Chief" advanced an applicant who
+    // signed in at a pancake breakfast.
+    //
+    // `meeting_type` does not stand in for it. That field names the stage's
+    // purpose for the reader and is read by nothing on the backend, so a
+    // stage set to "Chief Meeting" is, to the matcher, a stage naming nothing.
+    //
+    // Cal.com stages are exempt: they advance off a signature-verified
+    // MEETING_ENDED webhook keyed on `calcom_booking_url`, never off an
+    // attendance record, so they have no linked event to name.
+    if (stageType === StageTypeConst.MEETING) {
+      const c = config as MeetingStageConfig;
+      const schedulesThroughCalcom = (c.scheduling_provider ?? 'manual') === 'calcom';
+      if (c.auto_advance && !schedulesThroughCalcom && !c.linked_event_type && !c.linked_event_id) {
+        newErrors.linked_event_type =
+          'Choose an Auto-Link Event Type, or turn off auto-advance. Attendance can only advance this stage if the stage names which event counts.';
+      }
+    }
+
     if (stageType === StageTypeConst.AUTOMATED_EMAIL) {
       const c = config as AutomatedEmailStageConfig;
       if (!c.email_subject.trim()) newErrors.email_subject = 'Email subject is required';
@@ -971,6 +995,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
                   renderEventPreview={renderEventPreview}
                   calcomConnected={isIntegrationConnected('calcom')}
                   integrationsReady={!integrationsLoading}
+                  errors={errors}
                 />
               )}
 

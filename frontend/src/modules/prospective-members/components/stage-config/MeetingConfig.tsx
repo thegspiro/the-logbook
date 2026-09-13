@@ -12,6 +12,7 @@ interface MeetingConfigProps {
   calcomConnected?: boolean;
   /** True once the integrations list has loaded (avoids a hint flash). */
   integrationsReady?: boolean;
+  errors: Record<string, string>;
 }
 
 const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string; description: string }[] = [
@@ -49,6 +50,7 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
   renderEventPreview,
   calcomConnected = false,
   integrationsReady = false,
+  errors,
 }) => {
   const meetingConfig = config as MeetingStageConfig;
   const schedulingProvider = meetingConfig.scheduling_provider ?? 'manual';
@@ -106,6 +108,9 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
         <p className="text-theme-text-muted mt-1 text-xs">
           When this stage activates, the next upcoming event of this type will be auto-linked.
         </p>
+        {errors.linked_event_type && (
+          <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.linked_event_type}</p>
+        )}
       </div>
       {meetingConfig.linked_event_type && customCategories.length > 0 && (
         <div>
@@ -220,6 +225,14 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
       <p className="text-theme-text-muted ml-6 text-xs">
         Automatically complete this step and advance the prospect when their attendance is recorded at the linked event.
       </p>
+      {meetingConfig.auto_advance &&
+        schedulingProvider !== 'calcom' &&
+        !meetingConfig.linked_event_type &&
+        !meetingConfig.linked_event_id && (
+          <p className="mt-1 ml-6 text-xs text-amber-700 dark:text-amber-400">
+            Set an Auto-Link Event Type above — without one, this stage names no event, so no attendance can advance it.
+          </p>
+        )}
     </div>
   );
 };
