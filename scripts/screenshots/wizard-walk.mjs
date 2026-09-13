@@ -10,21 +10,15 @@
  * So this walks the real wizard, captures, and the caller then drops the
  * database and re-runs bootstrap_demo.py for everything else.
  *
- * PREREQUISITE -- issue one `POST /api/v1/onboarding/start` serially, before
- * opening a browser:
+ * Run the backend with RATE_LIMIT_ENABLED=false: the wizard's own asset and API
+ * traffic trips the 60/minute default partway through step 1.
  *
- *     curl -s -X POST http://127.0.0.1:3001/api/v1/onboarding/start
- *
- * `start_onboarding` is an unguarded read-then-write, and the wizard's own page
- * load fires it in parallel. Two callers both read "none exists", both insert,
- * and `needs_onboarding()` then raises MultipleResultsFound out of
- * `scalar_one_or_none()` -- so /onboarding/status 500s permanently and the run
- * dies partway through. A row that already exists makes every later call take
- * the "return existing" branch, so the race cannot fire. See ONBOARD-7 in
- * docs/KNOWN_LIMITATIONS.md.
- *
- * Also run the backend with RATE_LIMIT_ENABLED=false: the wizard's own asset
- * and API traffic trips the 60/minute default partway through step 1.
+ * The serial `POST /onboarding/start` this used to require is no longer needed.
+ * It worked around ONBOARD-7, where the wizard's own parallel page load created
+ * duplicate `onboarding_status` rows and left /onboarding/status 500ing
+ * permanently; that is fixed (unique index plus a retrying get-or-create), and
+ * twenty concurrent starts now yield one row. Issuing one first is harmless if
+ * an older checkout still does it.
  *
  * Framing matches capture.mjs exactly (1440x900, deviceScaleFactor 1, pngquant
  * --quality=70-92) so the outputs are interchangeable with the rest.

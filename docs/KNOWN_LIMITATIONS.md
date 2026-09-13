@@ -263,7 +263,7 @@ Tier **ids** are not editable, for the reason rank codes are not: `id` is what
 not recognise — so a renamed id drops those members out of the operational body
 and the electorate at once.
 
-## ONBOARD-7 — Concurrent First-Run Requests Brick Setup With a 500 (2026-09-12)
+## ONBOARD-7 — Concurrent First-Run Requests Brick Setup With a 500 (resolved 2026-09-12)
 
 **Found while capturing the setup-wizard screenshots, reproduced twice on a
 freshly-migrated database.** Not a theoretical race: it fired on an ordinary
@@ -302,16 +302,36 @@ the worst time to need it: the System Owner does not exist yet, so there is no
 account to sign in as, and `/onboarding/reset` authenticates against the same
 broken state.
 
-**Not fixed here.** This was found during a screenshot-capture change set and a
-fix belongs in its own: it wants a uniqueness guarantee on the table plus a
-lock around the get-or-create (CLAUDE.md pitfall #27 is this exact shape), and
-`needs_onboarding()` should tolerate duplicates rather than 500 on them. Both
-touch first-run and authentication paths.
+## Resolved (2026-09-12)
 
-**Working around it meanwhile:** issue one `POST /onboarding/start` serially
-before opening a browser. A pre-existing row makes every later call take the
-"return existing" branch, so the race cannot fire.
-`scripts/screenshots/wizard-walk.mjs` documents this as a prerequisite.
+Both halves were needed, because they fail independently: the constraint stops
+new duplicates and does nothing for a database that already has them, while the
+tolerant read rescues that database and does nothing to stop the race.
+
+- **`onboarding_status.singleton`, uniquely indexed.** There is nothing to lock
+  instead — the conflicting row does not exist yet, so `FOR UPDATE` has no
+  target. The index decides the race; the loser gets an IntegrityError.
+- **`start_onboarding` adopts the winner's row.** The insert runs inside a
+  SAVEPOINT so a failed flush cannot poison the caller's session, and on
+  conflict the transaction is **rolled back** before re-reading. That rollback
+  is the subtle part: under REPEATABLE READ the loser's snapshot predates the
+  winner's commit, so re-reading inside it finds nothing and would raise on a
+  row that demonstrably exists. Bounded at three attempts.
+- **`needs_onboarding` reads with `.first()`**, so an installation duplicated
+  before the constraint existed answers instead of raising — which is what lets
+  the migration reach it at all.
+- **Migration `6ab7d903fae5`** collapses existing duplicates before adding the
+  index, since it cannot be created over them. The survivor is the completed
+  row if any, else the furthest-progressed, tie-broken oldest — losing recorded
+  progress being the harm worth avoiding.
+
+**Verified against a real database, not just mocks.** Twenty concurrent
+`POST /onboarding/start` against an empty install: **20/20 → 200, one row**,
+and `/onboarding/status` healthy. Before the fix the same run produced
+duplicates and a permanent 500. Two intermediate versions each got 10 and 6 of
+20 wrong and passed the mocked tests throughout — an `expunge()` on an instance
+the SAVEPOINT rollback had already detached, then the REPEATABLE READ snapshot
+above. Neither was visible without a live MySQL.
 
 ## ONBOARD-3 — A Deleted Seed Rank Is Still Accepted on a Write (2026-09-09)
 
