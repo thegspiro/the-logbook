@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2532](https://github.com/thegspiro/the-logbook/pull/2532)** (Feature
+34, Frontend shared, pass 6) — branch
+`claude/security-review-frontend-shared`, opened against a fresh
+`origin/main` (no security-review PR was open at the start of this
+iteration; row 34 was `⬜`). 0 new findings — this feature's stable core
+(`apiClient.ts`, `createApiClient.ts`, `ProtectedRoute.tsx`, `authStore.ts`,
+the offline-queue/purge chain, 10 of 13 module axios instances) confirmed
+byte-identical to pass 5's baseline (`f53258ee7`) across 502 intervening
+commits; every axios-instance-creating file in the frontend re-enumerated
+from scratch (still 2 factories, 16 client-creating files, all correctly
+configured per Pitfall #7). Both open HIGH findings (FE3-34-2, FE3-34-5)
+re-verified unchanged and correctly still flagged, not this pass's to fix.
+Backend PII-cache ratchet (`test_api_cache_pii_exclusions.py`) re-run
+clean (4/4). Findings doc: `docs/security-review/FE6-34-frontend-shared.md`.
+typecheck/lint clean; scoped suite 372/372 (10 files); full frontend suite
+532 files / 7,576 tests passed; backend `test_api_cache_pii_exclusions.py`
+4/4, `test_inventory_member_visibility.py` 15/15. Subscribed to PR activity.
+Next: tend #2532 to green and merged, then the rotation wraps to 00
+(cross-cutting baseline) for its next full pass.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 4, PR #2529, after it merged), preserved for history</summary>
+
 **None.** PR [#2529](https://github.com/thegspiro/the-logbook/pull/2529)
 (Feature 33, Core infrastructure, pass 4) merged clean, merged directly by
 the repo owner. Re-verified the fix (`EXPORT_ENDPOINTS` entries for the two
@@ -14431,7 +14454,7 @@ flake8/black/isort not run (no backend file modified); `npm run typecheck`
 apiClient, authStore, createApiClient, learningProgressStore,
 pendingSyncStore, skillsTestingStore, ProtectedRoute.module,
 breadcrumbRoutes, Breadcrumbs) 372 passed across 10 files; full frontend
-suite run (see PR for final count); backend
+suite 7,576 passed across 532 files, 0 failed; backend
 `test_api_cache_pii_exclusions.py` 4 passed,
 `test_inventory_member_visibility.py` 15 passed. Findings doc:
 `docs/security-review/FE6-34-frontend-shared.md`. Rotation row 34 → `⏳`

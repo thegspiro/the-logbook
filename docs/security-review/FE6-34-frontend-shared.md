@@ -316,14 +316,14 @@ pass 4 forward).
 
 ## Completion gate
 
-| Check                                                                                                                                                                                                 | Result                          |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `npm run typecheck` (`tsc-native.mjs`, aliased 7.0.2 compiler)                                                                                                                                        | ✅ 0 errors                     |
-| `npm run lint` (`eslint --max-warnings 10`, whole frontend)                                                                                                                                           | ✅ 0 errors, 0 warnings, exit 0 |
-| Scoped suite (`apiCache`, `apiClient`, `authStore`, `createApiClient`, `learningProgressStore`, `pendingSyncStore`, `skillsTestingStore`, `ProtectedRoute.module`, `breadcrumbRoutes`, `Breadcrumbs`) | ✅ 372 passed (10 files)        |
-| Full frontend suite (`npm test -- --run`)                                                                                                                                                             | ✅ see below                    |
-| Backend `pytest tests/test_api_cache_pii_exclusions.py`                                                                                                                                               | ✅ 4 passed                     |
-| Backend `pytest tests/test_inventory_member_visibility.py`                                                                                                                                            | ✅ 15 passed                    |
+| Check                                                                                                                                                                                                 | Result                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `npm run typecheck` (`tsc-native.mjs`, aliased 7.0.2 compiler)                                                                                                                                        | ✅ 0 errors                           |
+| `npm run lint` (`eslint --max-warnings 10`, whole frontend)                                                                                                                                           | ✅ 0 errors, 0 warnings, exit 0       |
+| Scoped suite (`apiCache`, `apiClient`, `authStore`, `createApiClient`, `learningProgressStore`, `pendingSyncStore`, `skillsTestingStore`, `ProtectedRoute.module`, `breadcrumbRoutes`, `Breadcrumbs`) | ✅ 372 passed (10 files)              |
+| Full frontend suite (`npm test -- --run`)                                                                                                                                                             | ✅ 7,576 passed (532 files, 0 failed) |
+| Backend `pytest tests/test_api_cache_pii_exclusions.py`                                                                                                                                               | ✅ 4 passed                           |
+| Backend `pytest tests/test_inventory_member_visibility.py`                                                                                                                                            | ✅ 15 passed                          |
 
 No code changes were made this pass (0 findings requiring a fix), so no
 backend `flake8`/`black`/`isort` run was needed — no backend file was
