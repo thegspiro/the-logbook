@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (branch pushed; number to follow)** — branch
+**PR [#2561](https://github.com/thegspiro/the-logbook/pull/2561)** — branch
 `claude/security-review-feature11-pass5`, Feature 11 (Inventory), pass 5.
 Step 0 concurrent-session check: `git fetch origin main` clean;
 `PROGRESS.md`'s Open PR row read "None." with the Feature 10 pass 5 closure
