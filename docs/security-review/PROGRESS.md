@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#2537](https://github.com/thegspiro/the-logbook/pull/2537)**
+**PR [#2536](https://github.com/thegspiro/the-logbook/pull/2536)**
 (Feature 01, Auth & session lifecycle, pass 5) — branch
 `claude/security-review-auth-session`, opened against a fresh `origin/main`
 (no security-review PR was open at the start of this iteration; Feature 00's
@@ -14539,7 +14539,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-14 — Feature 01 (Auth & session lifecycle, pass 5) — PR #2537 opened; 0 new findings
+### 2026-09-14 — Feature 01 (Auth & session lifecycle, pass 5) — PR #2536 opened; 0 new findings
 
 Checked for a concurrent session first: `git fetch origin main`, the **Open
 PR** section showed Feature 00 pass 5 (PR #2534) already merged with "None"
