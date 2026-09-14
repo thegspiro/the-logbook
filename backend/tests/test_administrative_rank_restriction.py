@@ -373,7 +373,22 @@ class TestMembershipTypeChange:
     def _request(membership_type):
         return SimpleNamespace(membership_type=membership_type, reason=None)
 
-    async def _run(self, member, membership_type, tiers=None):
+    # The shipped ladder. Every organization onboarded since tiers were seeded
+    # at creation has one, so running these against `settings={}` -- which is
+    # what `tiers=None` used to mean -- tested the endpoint in the one
+    # configuration no real organization is in. `valid_tier_ids` was empty
+    # there, the validation short-circuited, and the administrative case below
+    # passed while 400ing against every live department.
+    # A tuple, so a default argument cannot be mutated by one test into the
+    # next one's starting state.
+    DEFAULT_TIERS = (
+        {"id": "probationary"},
+        {"id": "active"},
+        {"id": "senior"},
+        {"id": "life"},
+    )
+
+    async def _run(self, member, membership_type, tiers=DEFAULT_TIERS):
         caller = _caller()
         member.organization_id = caller.organization_id
         org = SimpleNamespace(
@@ -396,6 +411,25 @@ class TestMembershipTypeChange:
 
         assert member.rank is None
         assert audit.await_args.kwargs["event_data"]["cleared_rank"] == "fire_chief"
+
+    async def test_an_unconfigured_ladder_still_accepts_administrative(self):
+        """The freeform path: no ladder, so nothing to validate against."""
+        member = _target(rank="captain", membership_type="active")
+
+        _result, audit = await self._run(member, "administrative", tiers=None)
+
+        assert member.rank is None
+        assert audit.await_args.kwargs["event_data"]["cleared_rank"] == "captain"
+
+    async def test_a_value_in_neither_vocabulary_is_still_refused(self):
+        """Widening to the class words must not accept anything at all."""
+        member = _target(rank="captain", membership_type="active")
+
+        with pytest.raises(HTTPException) as exc:
+            await self._run(member, "not-a-real-standing")
+
+        assert exc.value.status_code == 400
+        assert "not-a-real-standing" in exc.value.detail
 
     async def test_an_ordinary_tier_change_leaves_the_rank_alone(self):
         member = _target(rank="captain", membership_type="probationary")

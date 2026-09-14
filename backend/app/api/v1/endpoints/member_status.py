@@ -29,7 +29,7 @@ from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
 )
-from app.utils.membership import is_administrative
+from app.utils.membership import LEGACY_MEMBERSHIP_TYPES, is_administrative
 
 router = APIRouter()
 
@@ -850,11 +850,28 @@ async def change_membership_type(
     organization = org_result.scalar_one_or_none()
     tier_config = (organization.settings or {}).get("membership_tiers", {})
     valid_tier_ids = [t["id"] for t in tier_config.get("tiers", [])]
-    # Allow the change even if no tiers are configured (freeform)
-    if valid_tier_ids and request.membership_type not in valid_tier_ids:
+    # This column holds TWO vocabularies, so gating on one of them rejects half
+    # of what it legitimately stores. `split_membership_type` spells it out:
+    # `membership_type` carries the legacy class/status words AND
+    # org-configurable tier ids.
+    #
+    # Gating on tiers alone made the rank-clearing below dead code. Nothing
+    # in `valid_tier_ids` can ever satisfy `is_administrative` -- the one value
+    # that does is "administrative", which this check was rejecting -- so the
+    # enforcement that an administrative member drops the rank whose default
+    # permissions union into their effective set never ran here. It survived
+    # only for an organization with no ladder configured, because the
+    # `valid_tier_ids and` guard skips the check entirely for those.
+    accepted = set(valid_tier_ids) | LEGACY_MEMBERSHIP_TYPES
+    # Still allow anything when no tiers are configured (freeform).
+    if valid_tier_ids and request.membership_type not in accepted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid membership tier '{request.membership_type}'. Valid tiers: {valid_tier_ids}",
+            detail=(
+                f"Invalid membership tier '{request.membership_type}'. "
+                f"Valid tiers: {valid_tier_ids}, "
+                f"or a membership class: {sorted(LEGACY_MEMBERSHIP_TYPES)}"
+            ),
         )
 
     previous_type = member.membership_type or "active"
