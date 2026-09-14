@@ -16,6 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2534](https://github.com/thegspiro/the-logbook/pull/2534)
+(Feature 00, Cross-cutting baseline, pass 5) merged clean, merged directly
+by the repo owner (after one stale-superseded-run false CI failure on the
+prior commit — every job on that run showed `cancelled`, not `failed`,
+because the branch advanced mid-run; documented in a PR comment). This is
+the fifth pass of Feature 00's whole-codebase sweep and opens the
+rotation's **second full lap** (00 through 34) — the first lap closed out
+with PR #2532 above. All 13 sweep classes established across passes 1–4
+were re-run against the 485 commits landed since pass 4's `c91060f7a` and
+hold clean; 0 new findings. One open cross-cutting item (the
+outbound-integration-URL DNS-rebinding TOCTOU, `KNOWN_LIMITATIONS.md`) was
+evaluated for a fix this pass — since that doc explicitly names this
+feature as where it should be closed — and deliberately left flagged rather
+than attempted: pinning the resolved address across
+`create_integration_client()`'s shared transport interacts non-trivially
+with that factory's existing proxy/HTTP-2/mTLS handling (each already the
+subject of a prior real regression per its own docstring), so it needs a
+dedicated, narrowly-scoped follow-up PR with its own test matrix rather
+than a line item inside a whole-codebase sweep. Findings doc:
+`docs/security-review/SEC-00-cross-cutting-baseline.md` (pass 5 section).
+`flake8`/`black --check`/`isort --check-only` clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` 444 revisions, single head;
+`check_route_permissions.py --strict` 228 routes, 0 errors; backend full
+unit suite (`pytest tests/ -m "not integration and not slow and not
+docker"`) **10158 passed, 1 skipped**; `npm run typecheck` 0 errors; `npm
+run lint` 0 errors, 0 warnings; frontend structural guards
+(`dialogScrollIntegrity`, `dialogDismissIntegrity`, `testingRegistry`,
+`mobile-route-integrity.spec.ts`) all green. Rotation row 00 stays `✅`
+per this file's own convention (pass number tracked in the log/findings
+doc, not the table). Next: Feature 01 (Auth & session lifecycle) begins
+this lap's cycle, whenever the next iteration starts it.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 5, PR #2534, before it merged), preserved for history</summary>
+
 **PR [#2534](https://github.com/thegspiro/the-logbook/pull/2534)**
 (Feature 00, Cross-cutting baseline, pass 5) — branch
 `claude/security-review-cross-cutting-pass5`, opened against a fresh
@@ -45,6 +80,8 @@ run lint` 0 errors, 0 warnings; frontend structural guards
 `mobile-route-integrity.spec.ts`) all green. Rotation row 00 stays `✅`
 per this file's own convention (pass number tracked in the log/findings
 doc, not the table).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 6, PR #2532, after it merged, closing out the rotation's first full lap), preserved for history</summary>
@@ -14466,6 +14503,19 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 00 (Cross-cutting baseline) — PR #2534 merged, watchdog recorded it
+
+PR #2534 (pass 5: all 13 established sweep classes re-run against 485
+commits landed since pass 4, 0 new findings; the outbound-integration-URL
+DNS-rebinding TOCTOU in `KNOWN_LIMITATIONS.md` re-evaluated and deliberately
+left flagged — needs its own narrowly-scoped follow-up PR, not a line item
+in a whole-codebase sweep) merged clean, merged directly by the repo owner,
+after one stale-superseded-run false CI failure (every job `cancelled`, not
+`failed`, on the pre-bookkeeping commit — documented in a PR comment).
+Rotation row 00 stays `✅`. This opens the rotation's second full lap;
+next is Feature 01 (Auth & session lifecycle) whenever the next iteration
+starts it.
 
 ### 2026-09-14 — Feature 00 (Cross-cutting baseline, pass 5) — PR #2534 opened; 0 new findings, second full rotation lap begins
 
