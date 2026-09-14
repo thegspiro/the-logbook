@@ -16,6 +16,49 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2540](https://github.com/thegspiro/the-logbook/pull/2540)** (Feature
+03, Public surface & webhooks, pass 5) — branch
+`claude/security-review-public-webhooks`, opened against a fresh
+`origin/main` (the **Open PR** row read "None", Feature 02's own pass 5 (PR
+#2538) had already merged, and a log search for "Feature 03" + "pass 5"
+found no prior attempt — confirmed via `git fetch origin main` before
+branching). **0 new findings.** `git log d03530fc..origin/main --
+backend/app/api/public/ backend/app/core/public_portal_security.py`
+(`d03530fc` is pass 4's own closing merge commit) returns exactly one
+commit, `93364039` — feature 27's membership-pipeline meeting-stage-advance
+fix, touching only `integrations_webhook.py` (+18/-6): `completed_by` no
+longer passes a string sentinel into a column that is a FK to `users.id`
+(the advance used to die silently on the constraint), and Cal.com's advance
+now gates on `MEETING_ENDED`/`attended` instead of `BOOKING_CREATED`/
+`created`. All 13 declared files (2 482 L across 12 `api/public/` files plus
+556 L in `public_portal_security.py`) read in full anyway, the same
+methodology pass 4 established — signature verification, replay ordering,
+and org resolution are untouched by the one in-scope commit, and the ripple
+into `guest_check_in_service.py` (a collaborator, not a declared file, but
+one the public guest-check-in route calls) was traced to a shared
+meeting-matching predicate that tightens an existing gate (`return False` at
+its fall-through, not `True`) rather than opening a new one. Every prior fix
+(PUB-1, PUB-2, PUB-4, PUB-5/5b, PUB-6, PUB-9, PUB-10) re-verified in place at
+current line numbers; both flagged items (PUB-7's `/events/public`
+response-model mismatch, PUB-8's unreachable failed-auth logging) remain
+open and unchanged, still mirrored in `docs/KNOWN_LIMITATIONS.md`. Full
+write-up: the **Pass 5** section of
+`docs/security-review/PUB-03-public-surface-webhooks.md`.
+`flake8`/`black --check`/`isort --check-only` clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` 444 revisions, single head
+`6ab7d903fae5`; `check_route_permissions.py --strict` 228 routes, 0 errors;
+`check_docs_links.py` 358 files, 0 broken links; scoped public/portal/
+webhook/salesforce/paypal/finance-approval/legal/display/calendar/forms
+tests 547 passed, 1 skipped (`py_vapid`, pre-existing); org-scoping/
+endpoint-auth/LIKE/CSV/capacity ratchets 59 passed; backend full unit suite
+(`pytest tests/ -m "not integration and not slow and not docker"`) **10 158
+passed, 1 skipped, 0 failed**; no frontend file changed this pass. Rotation
+row 03 stays `✅` per this file's own convention. Next: Feature 04
+(Storefront & payments), once this PR merges.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 5, PR #2538, merged), preserved for history</summary>
+
 **None.** PR [#2538](https://github.com/thegspiro/the-logbook/pull/2538)
 (Feature 02, Permissions & roles, pass 5) merged clean, merged directly by
 the repo owner (after one stale-superseded-run false CI failure on the
@@ -14681,6 +14724,70 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 03 (Public surface & webhooks, pass 5) — PR #2540 opened; 0 new findings
+
+Checked for a concurrent session first: `git fetch origin main`, the **Open
+PR** section showed Feature 02 pass 5 (PR #2538) already merged with "None"
+open, and a log search for "Feature 03" + "pass 5" found no prior attempt.
+Branched fresh from `origin/main` (`claude/security-review-public-webhooks`);
+the working tree had no pre-existing uncommitted state to stash.
+
+Read `CHECKLIST.md` and all four prior passes in
+`PUB-03-public-surface-webhooks.md` in full (PUB-1 through PUB-10 across four
+passes, including pass 4's methodology shift to reading all 13 files rather
+than diffing) before touching anything.
+
+Diffed pass 4's merge commit (`d03530fc`, PR #2393) against `origin/main`
+across the 13 files this feature owns. One commit changed:
+`93364039` (feature 27's membership-pipeline meeting-stage-advance fix),
+touching only `integrations_webhook.py` (+18/-6) — `completed_by` no longer
+passes a string sentinel into a column that is a FK to `users.id` (the
+advance used to die silently on the MySQL constraint), and Cal.com's advance
+now gates on `MEETING_ENDED`/`attended` rather than `BOOKING_CREATED`/
+`created`. The other 12 files are byte-identical to pass 4.
+
+All 13 files read in full regardless, continuing pass 4's methodology.
+Traced the one in-scope change's full commit (not just its description) and
+confirmed signature verification, replay ordering, and org resolution — all
+of which sit above this code — are untouched. Followed its ripple into
+`guest_check_in_service.py` (a collaborator the public guest-check-in route
+calls, outside this feature's 13-file scope) and confirmed the shared
+meeting-matching predicate it now delegates to
+(`membership_pipeline_service.meeting_config_matches_event`) tightens an
+existing gate — its fall-through returns `False`, not `True` — rather than
+opening a new one. Also diffed the wider collaborator set pass 4 named
+(`forms_service.py`, `membership_pipeline_service.py`,
+`scheduling_service.py` all changed substantially since pass 4, mostly from
+the same membership-pipeline commit plus unrelated scheduling work) and
+confirmed none of the five specific functions this feature's public routes
+call (`submit_public_form`, `_sanitize_submission_data`,
+`get_prospect_by_token`, `get_user_by_calendar_token`,
+`get_shifts_for_user_feed`) were touched. `webhook_service.py`,
+`paypal_service.py` and `webhook_replay.py` — the actual signature-
+verification and replay code all four webhooks depend on — are
+byte-identical to pass 4.
+
+**0 new findings.** Every prior fix (PUB-1, PUB-2, PUB-4, PUB-5/5b, PUB-6,
+PUB-9, PUB-10) re-verified in place at current line numbers; both flagged
+items (PUB-7's `/events/public` response-model mismatch, PUB-8's unreachable
+failed-auth logging) remain open and unchanged, still mirrored in
+`docs/KNOWN_LIMITATIONS.md`. Route count re-derived and unchanged at 20;
+file count unchanged at 13. Full write-up: the **Pass 5** section of
+`docs/security-review/PUB-03-public-surface-webhooks.md`.
+
+`flake8`/`black --check`/`isort --check-only` clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` 444 revisions, single head
+`6ab7d903fae5`; `check_route_permissions.py --strict` 228 routes, 0 errors;
+`check_docs_links.py` 358 files, 0 broken links; scoped public/portal/
+webhook/salesforce/paypal/finance-approval/legal/display/calendar/forms
+tests 547 passed, 1 skipped (`py_vapid`, pre-existing); org-scoping/
+endpoint-auth/LIKE/CSV/capacity ratchets 59 passed; backend full unit suite
+(`pytest tests/ -m "not integration and not slow and not docker"`) **10158
+passed, 1 skipped, 0 failed**; no frontend file changed this pass. Rotation
+row 03 stays `✅` per this file's own convention.
+
+---
 
 ### 2026-09-14 — Feature 02 (Permissions & roles) — PR #2538 merged, watchdog recorded it
 
