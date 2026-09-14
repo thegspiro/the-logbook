@@ -3000,6 +3000,18 @@ document-listing/aggregate path in this service (`get_folders`,
 finding's own scope — left open rather than fixed here. (Security review
 DOC-9, `docs/security-review/DOC-10-documents-legal.md`.)
 
+**The same shape exists a second time, in the Claude MCP surface** (security
+review DOC-10 pass 5, first review of `app/mcp/tools/documents.py`):
+`_open_folder_ids` — a separate function, since an MCP service key has no
+per-user context for `accessible_folder_ids`'s own rule to apply to —
+likewise selects every `DocumentFolder` row in the organization with no
+`LIMIT` and walks each one's ancestry in Python, on every `list_documents`,
+`get_document`, and `get_document_description` call. Not a leak (the
+predicate it computes is strictly conservative — see DOC-30 in the findings
+doc), and not fixed for the same reason as the REST-side gap above: bounding
+either scan is a wider change than either finding's own scope. (Security
+review DOC-30, `docs/security-review/DOC-10-documents-legal.md`.)
+
 ## Equipment Checks — `get_item_deployments` Gates on `.view`, Its Sibling on `.manage` (2026-08-26)
 
 `GET .../deployments` (`get_item_deployments` — which checklist positions
