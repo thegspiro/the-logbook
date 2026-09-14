@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [(this PR)](https://github.com/thegspiro/the-logbook/pull/) — branch
+`claude/security-review-feature10-pass5`, Feature 10 (Documents & legal),
+pass 5.** Step 0 concurrent-session check: `git fetch origin main` clean;
+`PROGRESS.md`'s Open PR row read "None." with the Feature 09 pass 5 closure
+note beneath it and named "Next: Feature 10 (Documents & legal), pass 5"
+explicitly; `list_pull_requests` (open) returned only the pre-flagged
+unrelated PRs (#2547, #2548, dependabot #2550-2552) plus #2495 (scheduling)
+— no Feature 10/documents/legal branch or title; `git ls-remote --heads
+origin` for `feature10`/`documents`/`legal`/`doc` found nothing either.
+Full re-verification of DOC-1 through DOC-29 (all confirmed still fixed;
+`git log` against every scope file and dependency since pass 4's merge
+returned no commits) plus a first review of the feature-owned MCP surface
+(`app/mcp/tools/documents.py`, per this rotation's established precedent).
+**1 new finding, flagged (LOW):** DOC-30 — the MCP surface's own folder-ACL
+scan (`_open_folder_ids`) shares DOC-9's already-accepted-as-flagged
+unbounded-scan shape; not a leak, not fixed for the same reason DOC-9
+wasn't. Full write-up: the **Pass 5** section of
+`docs/security-review/DOC-10-documents-legal.md`. Rotation row 10 stays
+`✅`. **Next: Feature 11 (Inventory), pass 5, once this PR merges.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening (PHI), pass 5, PR #2557, merged), preserved for history</summary>
+
 **None.** PR [#2557](https://github.com/thegspiro/the-logbook/pull/2557)
 (Feature 09, Medical screening (PHI), pass 5) merged clean — 17/17 CI
 green, after one stale-superseded-run false failure on the pre-bookkeeping
@@ -37,6 +60,8 @@ and a volume/retention decision), mirrored to `KNOWN_LIMITATIONS.md`. Full
 write-up: the **Pass 5** section of
 `docs/security-review/MS-09-medical-screening.md`. Rotation row 09 stays
 `✅`. **Next: Feature 10 (Documents & legal), pass 5.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening (PHI), pass 5, PR #2557, before it merged), preserved for history</summary>
@@ -15255,6 +15280,69 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 10 (Documents & legal, pass 5) — 0 fixed, 1 flagged (new); opening PR
+
+Step 0 concurrent-session check: `git fetch origin main` clean; local
+working tree started on an unrelated leftover branch
+(`claude/security-review-record-ms09-pass5-merge`, clean, matching
+`origin/main`) — switched off it rather than building on it.
+`PROGRESS.md`'s Open PR section read "None." with the Feature 09 pass 5
+closure note beneath it and named "Next: Feature 10 (Documents & legal),
+pass 5" explicitly. `list_pull_requests` (open) returned only the
+pre-flagged unrelated PRs (#2547, #2548, dependabot #2550-2552) plus #2495
+(scheduling) — no Feature 10/documents/legal branch or title.
+`git ls-remote --heads origin` for `feature10`/`documents`/`legal`/`doc`
+found nothing either. Created `claude/security-review-feature10-pass5` off
+`origin/main`.
+
+Read `DOC-10-documents-legal.md`'s pass 1-4 write-up in full (the largest
+findings doc in the rotation — DOC-1 through DOC-29 across four passes),
+`docs/KNOWN_LIMITATIONS.md`'s Documents entries, and
+`docs/app-review/documents.md`. Pass 4 (PR #2411) merged as `070a28c2c`;
+`git log 070a28c2c..origin/main` against every scope file, every backing
+service, and every shared utility they depend on returned **no commits** —
+nothing in this feature's surface has changed since pass 4 closed, other
+than two purely-additive `core/permissions.py` commits (a new
+`module_checkbox_*` helper family for the onboarding wizard, confirmed not
+touching any function this feature calls) and one frontend commit applying
+CLAUDE.md Pitfall #31 to `DocumentsPage.tsx`'s three modals (confirmed
+correct, not a regression). Re-verified all of DOC-1 through DOC-29 by
+reading every file in scope end to end against current `main` — not
+trusting "unchanged since pass 4" from git log alone — rather than by
+reviewing an empty diff: `documents.py`, `station_documents.py`,
+`legal_documents.py`, `documents_service.py` (2301 L, in full),
+`legal_service.py`, `print_document_service.py`, `document_service.py`,
+both models files, both schemas files, and `app/api/public/legal.py`. Every
+prior fix intact, no regression found.
+
+**Scope addition:** `app/mcp/tools/documents.py` (213 L, 3 tools) — per this
+rotation's established precedent (Feature 11 pass 4, reapplied by Feature 09
+pass 5) that a feature-owned MCP surface belongs to the owning feature's
+first pass, and no prior Feature 10 pass had reviewed it. Read in full with
+its shared infrastructure. Design is sound: org-scoped, fails closed on
+missing/cyclic folder ancestry, categorically excludes system-generated
+documents (structured PII a text scrub can't recognize), audited via the
+shared `mcp.tool_call` trail regardless of outcome, and covered by extensive
+existing tests in `test_mcp_tools.py`.
+
+**1 new finding, flagged (LOW):** DOC-30 — the MCP surface's own
+`_open_folder_ids` scans every folder in the organization with no bound on
+every `list_documents`/`get_document`/`get_document_description` call — the
+same unbounded shape as DOC-9's already-open, already-accepted-as-flagged
+`accessible_folder_ids` gap on the REST side, found a second time rather
+than a new class of problem. Not a leak (the predicate it computes is
+strictly conservative), not fixed for the same reason DOC-9 wasn't: bounding
+either scan is a wider change than one finding's scope. Mirrored into
+`KNOWN_LIMITATIONS.md`'s existing DOC-9 entry as an addendum.
+
+Full write-up: the **Pass 5** section of
+`docs/security-review/DOC-10-documents-legal.md`. Rotation row 10 stays
+`✅`. Completion gate: scoped suites clean (282 + 274 passed); full backend
+`pytest tests/` — 12563 passed, 21 skipped (pre-existing: Docker/registry
+unavailable, `pywebpush` not installed, API-contract server-mode opt-in), 0
+failed. No frontend file changed this pass, so `tsc`/`eslint` not run.
+**Next: Feature 11 (Inventory), pass 5** once this PR merges.
 
 ### 2026-09-14 — Feature 09 (Medical screening, PHI, pass 5) — PR #2557 merged; next Feature 10
 
