@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2557](https://github.com/thegspiro/the-logbook/pull/2557)
+(Feature 09, Medical screening (PHI), pass 5) merged clean — 17/17 CI
+green, after one stale-superseded-run false failure on the pre-bookkeeping
+commit (`f4983dba4`; every job on that run showed `cancelled`, not
+`failed`, because a follow-up commit filling in the PR number advanced the
+branch mid-run; documented in a PR comment, resolved by waiting for the
+new head's own fresh run) — merged by this session via `merge_pull_request`.
+`git fetch origin main` confirms the merge commit (`b7fa066d3`) is on
+`main`. **1 new finding, fixed (LOW):** MS-11 — a false claim in
+`mcp/tools/medical.py`'s docstring that the PHI field `notes` was on the
+MCP redaction denylist (it isn't, and can't safely be added there
+globally); no live leak, both tools already use explicit closed field
+lists — fixed the docstring to name the real protection (explicit
+projection). **1 new finding, flagged (LOW):** MS-12 — none of the five
+PHI-returning `GET` routes call `log_audit_event()` (only writes do), a
+HIPAA §164.312(b)-relevant gap unchanged since pass 1 but named explicitly
+for the first time this pass; deferred (needs a new audit-event taxonomy
+and a volume/retention decision), mirrored to `KNOWN_LIMITATIONS.md`. Full
+write-up: the **Pass 5** section of
+`docs/security-review/MS-09-medical-screening.md`. Rotation row 09 stays
+`✅`. **Next: Feature 10 (Documents & legal), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening (PHI), pass 5, PR #2557, before it merged), preserved for history</summary>
+
 **PR [#2557](https://github.com/thegspiro/the-logbook/pull/2557)** — branch
 `claude/security-review-feature09-pass5`, Feature 09 (Medical screening,
 PHI), pass 5 per the rotation tracker. Step 0 concurrent-session
@@ -67,6 +92,8 @@ pass 4 is a repo-wide accessibility sweep, reviewed and confirmed not
 security-relevant). Full write-up: the **Pass 5** section of
 `docs/security-review/MS-09-medical-screening.md`. Rotation row 09 stays
 `✅`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 5/6, PR #2555, after it merged), preserved for history</summary>
@@ -15228,6 +15255,24 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 09 (Medical screening, PHI, pass 5) — PR #2557 merged; next Feature 10
+
+30-minute watchdog check found PR #2557 (Feature 09, Medical screening
+(PHI), pass 5) green (17/17, after one stale-superseded-run false failure
+on the pre-bookkeeping commit `f4983dba4` — every job on that run showed
+`cancelled`, not `failed`, because a follow-up commit advanced the branch
+mid-run; diagnosed via `list_workflow_jobs`, resolved with one explanatory
+PR comment rather than a code push) and `mergeable_state: clean`, so this
+session merged it directly via `merge_pull_request`. `git fetch origin
+main` confirmed the merge commit (`b7fa066d3`) landed on `main`; open PRs
+remain only the pre-flagged unrelated ones (#2547, #2548, dependabot
+#2550-2552, #2495) — no Feature 10 collision. Recorded the closure in
+`PROGRESS.md`: superseded the prior **Open PR** note (preserved in a
+`<details>` block) with a "None." closure paragraph summarizing MS-11
+(fixed, docstring correction, no live leak) and MS-12 (flagged, PHI-read
+audit-logging gap), rotation row 09 confirmed still `✅`. Next: Feature 10
+(Documents & legal), pass 5.
 
 ### 2026-09-14 — Feature 09 (Medical screening, PHI, pass 5) — 1 fixed (LOW), 1 flagged (LOW) — PR opened
 
