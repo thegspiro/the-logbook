@@ -1,6 +1,6 @@
 # Security Review — Feature 33: Core Infrastructure (pass 4)
 
-**Prefix:** `CI4` · **Iteration:** 33 · **Reviewed:** 2026-09-13 · **PR:** (opened this pass)
+**Prefix:** `CI4` · **Iteration:** 33 · **Reviewed:** 2026-09-13 · **PR:** [#2529](https://github.com/thegspiro/the-logbook/pull/2529)
 
 **Backend:** `app/core/security_middleware.py` (1,730 L → 1,732 L after this
 pass's fix), `app/core/config.py` (1,041 L, unchanged), `app/core/database.py`

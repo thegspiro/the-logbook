@@ -16,9 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (Feature 33, Core infrastructure, pass 4) — branch
+**PR [#2529](https://github.com/thegspiro/the-logbook/pull/2529)** (Feature
+33, Core infrastructure, pass 4) — branch
 `claude/security-review-core-infrastructure`, opened against a fresh
-`origin/main`** (no security-review PR was open at the start of this
+`origin/main` (no security-review PR was open at the start of this
 iteration; row 33 was `⬜`). Loaded `CHECKLIST.md` and all three prior
 findings docs (`CI2-33` pass 1, PR #1917; `CI-33` pass 2, PR #2106/#2107;
 `CI3-33` pass 3, PR #2368/#2370 — the latter a ten-round Codex saga on
@@ -50,8 +51,7 @@ flake8/black/isort clean; migrations 444 revisions, single head
 suite 12,550 passed, 21 skipped (pre-existing: `pywebpush`, Docker
 unavailable, opt-in API-contract suite), 0 failed; frontend typecheck 0
 errors; eslint 0 errors/0 warnings. Findings doc:
-`docs/security-review/CI4-33-core-infra.md`. PR link to be added once
-opened.
+`docs/security-review/CI4-33-core-infra.md`.
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2527's merge, Feature 32 pass 4 closure), preserved for history</summary>
