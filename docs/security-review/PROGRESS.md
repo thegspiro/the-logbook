@@ -16,6 +16,52 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR pending — branch `claude/security-review-feature08-pass5` pushed**
+(Feature 08, Membership pipeline, pass 5 per the rotation tracker; the
+feature's own findings doc numbers it **Pass 6**, since a section titled
+"Pass 5" already exists there from 2026-09-08 — see the naming note at the
+top of that section). Step 0 concurrent-session check: `git fetch origin
+main` clean; `PROGRESS.md`'s Open PR row read "None." with the Feature 07
+pass 5 closure note beneath it (now superseded below); `list_pull_requests`
+(open) returned only #2547/#2548 (unrelated member/rank-permission fixes,
+explicitly flagged as not a collision), dependabot #2550-2552, and #2495
+(scheduling) — no Feature 08/membership-pipeline branch or title. `git
+ls-remote --heads origin` for `feature08`/`membership`/`mp` found nothing
+either. **1 new finding, fixed (HIGH):** MP-30 — the `election_vote` stage's
+completion gate (added by ordinary feature work since the last pass) only
+guarded `complete_step`, not `transfer_to_membership`/`_do_transfer` (`POST
+/prospects/{id}/transfer`) — which is the documented, primary way a
+coordinator finishes a pipeline's final stage (`skip_current_step`'s own
+refusal message says "convert or reject instead", and the frontend's
+"Convert" button, shown whenever the applicant is on the pipeline's last
+stage, calls this endpoint directly, never `complete_step`). An applicant
+the department's own election vote rejected — or one still awaiting the
+vote's outcome — could be manually converted to a full member with the
+election gate never consulted. Fixed by sharing the same
+latest-package-by-`created_at` read both doors need (`_election_block_
+reason`, split out of the existing `_assert_election_decided`) and checking
+it at the top of `_do_transfer`, covering the manual transfer path and the
+auto-transfer-from-`complete_step` path uniformly (the latter already passed
+the check once upstream, so this is a verified no-op there, not a behavior
+change). 3 new tests in `test_election_vote_stage_gate.py`, the 2
+refusal-asserting ones confirmed red pre-fix (`git stash`) / green post-fix.
+**0 new flags** — 4 prior FLAGGED/narrowed items (MP-10, MP-19's
+`/widget-summary` half, MP-22, MP-26) re-verified unchanged, no regressions
+in MP-27/28/29's locking or the new `add_step`/`delete_step`/`reorder_steps`
+concurrency rework this pass independently traced end to end. Full write-up:
+the **Pass 6** section of `docs/security-review/MP-08-membership-pipeline.md`.
+Gate: flake8/black/isort clean; `validate_migrations.py --strict` passed
+(444 revisions, single head, no schema change this pass); scoped pytest
+1177 passed / 1 pre-existing skip / 0 failed; full backend suite 12563
+passed / 21 pre-existing/environmental skips / 0 failed; frontend
+`typecheck`/`lint` not run — no frontend file touched. Rotation row 08 stays
+`✅`. PR not yet opened as this paragraph is written — see the commit history
+for whether a follow-up filled in the number, per this doc's own standing
+practice.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 5, PR #2553, merged), preserved for history</summary>
+
 **None.** PR [#2553](https://github.com/thegspiro/the-logbook/pull/2553)
 (Feature 07, Users & organizations, pass 5) merged clean — 17/17 CI green,
 after one stale-superseded-run false failure on the pre-bookkeeping commit
@@ -35,6 +81,8 @@ own locking scheme, mirrored into `docs/KNOWN_LIMITATIONS.md`. Full
 write-up: the **Pass 5** section of
 `docs/security-review/USR-07-users-organizations.md`. Rotation row 07 stays
 `✅`. **Next: Feature 08 (Membership pipeline), pass 5.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 5, PR #2553, before it merged), preserved for history</summary>
@@ -15100,6 +15148,51 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 08 (Membership pipeline, pass 5) — 1 fixed (HIGH), 0 flagged — PR opened
+
+Step 0: `git fetch origin main` clean; Open PR row read "None." with the
+Feature 07 pass 5 closure note; `list_pull_requests` (open) returned only
+#2547/#2548 (unrelated, flagged as such by this run's briefing), dependabot
+#2550-2552, and #2495 (scheduling) — no Feature 08 collision; `git
+ls-remote --heads origin` for `feature08`/`membership`/`mp` found nothing.
+Branched fresh off `origin/main` as `claude/security-review-feature08-pass5`.
+
+Read `MP-08-membership-pipeline.md` in full (all 5 prior passes) and
+`docs/module-audit/membership-pipeline.md` / `docs/app-review/
+membership-pipeline.md` (no open items in either). Last reviewed SHA:
+`4e281e3b3` (pass 5/MP-29 round 4, PR #2413). `git log 4e281e3b3..origin/main`
+on the scope files found substantial, unreviewed feature growth: a hard
+completion gate on the `election_vote` stage (grading
+`ProspectElectionPackage.status` for the first time), a meeting-attendance
+gate on automated advances, a new `assign-stage` recovery route, a
+`UNIQUE(pipeline_id, sort_order)` constraint with a full locking rework of
+`add_step`/`delete_step`/`reorder_steps`, and legacy-stage-type resolution —
+nine commits, each already Codex-reviewed and hardened pre-merge with its
+own guard tests (independently spot-verified, not trusted on say-so).
+
+Re-traced every by-id query, the new locking order, the new `assign-stage`
+route's scoping, and (per this pass's brief on stage-gating integrity)
+walked every door that can turn a prospect into a `User` record. Found one:
+**MP-30 (HIGH)** — the new election-vote gate only runs inside
+`complete_step`, but `transfer_to_membership`/`_do_transfer` (`POST
+/prospects/{id}/transfer`) is the documented, primary way to finish a
+pipeline's final stage (`skip_current_step`'s own message says "convert or
+reject instead", and the frontend's "Convert" button — shown whenever the
+applicant is on the last stage — calls transfer directly, never
+`complete_step`). A department's own election rejection could be silently
+bypassed by the ordinary completion button. Fixed by sharing the gate's
+underlying read (`_election_block_reason`) into `_do_transfer`, checked
+first. 3 new tests, 2 confirmed red pre-fix / green post-fix. Re-verified 4
+prior flagged items (MP-10, MP-19, MP-22, MP-26) unchanged, and MP-27/28/29's
+locking byte-for-byte intact. Gate: flake8/black/isort clean; migrations
+valid (no schema change); scoped pytest 1177 passed; full backend suite
+12563 passed / 21 pre-existing skips / 0 failed; no frontend file touched.
+Full write-up: `MP-08-membership-pipeline.md`'s **Pass 6** section (numbered
+6 in that doc to avoid colliding with its existing "Pass 5" section — see
+that section's own naming note). PR opened; PROGRESS.md's Open PR section
+updated with the finding summary; PR number to follow in a small commit to
+this same branch once the PR exists.
 
 ### 2026-09-14 — Feature 07 (Users & organizations, pass 5) — PR #2553 merged; next Feature 08
 

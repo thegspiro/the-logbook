@@ -1,8 +1,268 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5)
+**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), pass 6 PR pending (see `PROGRESS.md`'s Open PR section for the number once filled in)
 
 ---
+
+## Pass 6 (2026-09-14) — 1 fixed (MP-30, HIGH), 0 new flagged (4 prior FLAGGED/narrowed items re-verified unchanged)
+
+**Naming note:** this is the rotation tracker's "pass 5" of the current
+second-lap cycle (`docs/security-review/PROGRESS.md`'s rotation table and Log
+use that label) — but this feature's own history already has a section
+titled "Pass 5" (2026-09-08, MP-27/28/29). Numbered **Pass 6** here to keep
+this doc's own sequence unambiguous, matching how `USR-07`/`ELEC-06` numbered
+their own second-lap sections 5 rather than reusing an earlier number.
+
+**Scope confirmation.** Rotation table row: `08 | Membership pipeline | MP |
+membership_pipeline.py, membership_pipeline_service.py | ✅`. Prior passes'
+own declared scope additionally covers `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `api/prospect_privacy.py`, and
+`utils/prospect_fields.py` — kept here for continuity, since the two
+rotation-table files do not stand alone (the endpoint imports the schemas,
+the service imports the models, and the router installs
+`prospect_privacy.py`'s guard).
+
+**Last reviewed at:** `4e281e3b3` (MP-29 round 4, PR #2413, merged
+2026-09-08). `git log --oneline 4e281e3b3..origin/main -- <scope files>`
+found real, substantial feature growth since then — not a quiet period:
+
+| File                                                  | Diff                                                    |
+| ----------------------------------------------------- | ------------------------------------------------------- |
+| `services/membership_pipeline_service.py`             | +691/-45                                                |
+| `api/v1/endpoints/membership_pipeline.py`             | +61/-9                                                  |
+| `models/membership_pipeline.py`                       | +19/-1                                                  |
+| `schemas/membership_pipeline.py`                      | +15/-0                                                  |
+| `api/prospect_privacy.py`, `utils/prospect_fields.py` | byte-identical (confirmed via `git diff --stat`, empty) |
+
+Nine commits (`98d218c6c` through `933640397`), all ordinary feature work —
+never run through this rotation — adding: a hard completion gate on the
+`election_vote` stage type (nothing previously read
+`ProspectElectionPackage.status` when deciding whether an applicant could
+advance); a completion gate requiring genuine recorded attendance before an
+**automated** advance off a `meeting` stage (manual advance is still an
+escape hatch there, by design — unlike the election gate); a new
+`POST /prospects/{id}/assign-stage` recovery route for an applicant a
+pipeline-edit left on no stage at all; a `UNIQUE(pipeline_id, sort_order)`
+constraint plus a full concurrency-locking rework of `add_step`/
+`delete_step`/`reorder_steps` (a locked pipeline-row read, then a _separate_
+locked, current read of the step list — `_load_steps_for_update` — since a
+parent-row lock alone does not refresh a plain SELECT's REPEATABLE READ
+snapshot); and resolution of legacy `step_type='action'` stages
+(`effective_step_type`) so the new gates and existing auto-advance triggers
+apply to them too. Every one of these was already independently reviewed and
+hardened through multiple rounds of Codex review before landing — the commit
+messages (`933640397`, `41508f9f2`, `5c5a7e966`, `925c13021`, `99e850abf`)
+document real defects Codex found and fixed pre-merge (an early-arrival
+check-in window bug, a same-slot `add_step` race, a `sort_order`-default
+bug, a MySQL-8.0-specific index-drop failure, a `StaleDataError` on
+concurrent stage deletion) with guard tests for each, independently spot-
+verified rather than trusted on the commit's own say-so — see Verified good.
+
+This pass targeted the three areas named in this iteration's brief plus a
+fresh look at the new completion gates, given "can a stage be skipped via a
+side door" is exactly what a brand-new hard gate needs checked against.
+
+### MP-30 — HIGH — the election-vote gate protects `complete_step`, not the "Convert" action that is the ordinary way to finish a pipeline — ✅ FIXED
+
+**What:** `933640397`/`c5e30c0a3` added `_assert_election_decided`, called
+from `_validate_step_completion` only when the current stage's (resolved)
+type is `ELECTION_VOTE` — i.e., only on the path through `complete_step`
+(`advance_prospect`, `bulk_advance_prospects`, `approve_step`, the
+integration-webhook auto-advance). It does **not** run on
+`transfer_to_membership` / `_do_transfer` (`POST /prospects/{id}/transfer`),
+which has no stage-awareness at all — it only refuses when
+`prospect.status == TRANSFERRED`.
+
+That would be a narrow residual gap if `transfer_to_membership` were a rare,
+break-glass path. It is not — it is the **documented, primary** way to
+finish a pipeline whose last stage is not on `auto_transfer_on_approval`.
+`skip_current_step`'s own refusal message says so directly: `"The final
+stage cannot be skipped; convert or reject instead"`. The frontend matches:
+`ProspectiveMembersPage.tsx`'s `isLastStage` (current stage equals the
+pipeline's last stage by `sort_order`) swaps the primary action button from
+Advance to Convert (`ApplicantActionPanels.tsx:150-154`,
+`handleAdvance: if (isLastStage) { onConvert(applicant); return; }`), and
+Convert opens `ConversionModal`, whose only backend call is
+`applicantService.convertToMember` → `POST /prospects/{id}/transfer`. For a
+pipeline whose final stage is the `election_vote` stage — the exact
+configuration the gate's own commit message names as the motivating,
+worst-case scenario ("the one stage whose entire purpose is to make the
+membership vote binding") — the frontend's normal completion flow **never
+calls `complete_step` at all**, and so never reaches the new gate.
+
+**Failure scenario:** a department configures a pipeline ending in an
+`election_vote` stage, holds the vote, and the board rejects the applicant
+(`ProspectElectionPackage.status = "not_elected"`). A coordinator (or bulk
+sweep, or a compromised `members.manage`/`prospective_members.manage`
+session) opens the applicant, clicks the button now reading "Convert" —
+exactly the button the UI presents as the normal way to finish this stage —
+and the applicant becomes a full `User` record: department email generated,
+temporary password issued, welcome email optionally sent, default `member`
+role attached. The vote the department just held is worth nothing. The same
+gap blocks nothing for `"added_to_ballot"` either — an applicant still
+awaiting the vote's outcome can be converted before the ballot even closes.
+
+**Where:** `_do_transfer`, `membership_pipeline_service.py` (pre-fix: no
+election check anywhere in the method).
+
+**Fix:** the existing `_ELECTION_BLOCK_REASON` lookup was split out of
+`_assert_election_decided` into a shared, non-raising
+`_election_block_reason(prospect) -> Optional[str]` — the same
+latest-package-by-`created_at` read `get_election_package` uses for the
+applicant drawer (CLAUDE.md Pitfall #29: one definition, not a second one
+that can drift). `_assert_election_decided` now just raises off it, unchanged
+behavior for the `complete_step` path. `_do_transfer` calls the shared
+helper first and, on a block, returns `{"success": False, "message": ...}` —
+matching this method's own established refusal shape for every other
+business-rule block (a rank not configured, an administrative/rank pairing,
+a duplicate member match), which is what the endpoint's existing `if not
+result.get("success"): raise HTTPException(400, detail=result.get(
+"message"))` already surfaces to the caller with no endpoint change needed.
+Placed as the very first check in `_do_transfer` — ahead of the rank/
+duplicate-member checks — since it is the one board-decision fact that
+should end the request before any of that work runs.
+
+This protects both doors uniformly: the `complete_step` → `_do_transfer`
+auto-transfer path already passed through `_validate_step_completion`'s gate
+before reaching `_do_transfer`, so the added check there is a no-op replay
+of a decision already made (verified — see tests below) — and the
+previously-unchecked `POST /prospects/{id}/transfer` path is now covered by
+the same read, not a re-derived copy of it.
+
+**Considered and declined:** gating only when the prospect's _current_
+stage is the `election_vote` stage, to mirror `_validate_step_completion`'s
+own dispatch exactly. Declined: `_election_block_reason` is already
+prospect-scoped, not stage-scoped (it does not filter by `step_id`), which
+is deliberate upstream design — the same "latest package, not the current
+stage's package" rule `get_election_package` uses for the drawer, so a
+non-elected applicant who has since been manually moved past the vote stage
+(by whatever means) is still blocked, rather than only blocked while
+literally parked on the vote stage. A pipeline that never uses the election
+feature has no `ProspectElectionPackage` rows and this check is a no-op —
+confirmed by a dedicated regression test.
+
+Covered by three new integration tests (real MySQL, `db_session`, marked
+`integration` per the file's existing `pytestmark`) added to the existing
+`backend/tests/test_election_vote_stage_gate.py`, alongside the file's own
+`complete_step`-path tests: `test_manual_transfer_refuses_an_undecided_or_
+failed_vote` (parametrized `added_to_ballot`/`not_elected`, asserting
+`{"success": False, "message": <fragment>}` and that the prospect stays
+`ACTIVE` with `transferred_user_id is None`), `test_manual_transfer_still_
+works_once_the_vote_clears` (an `"elected"` package still transfers
+successfully — the gate narrows, it does not newly block the ordinary
+case), and `test_manual_transfer_unaffected_with_no_election_package` (a
+pipeline with no election package at all — the overwhelmingly common
+case — is unaffected). The two refusal-parametrized cases were independently
+confirmed to fail against the pre-fix code (`git stash` on
+`membership_pipeline_service.py` only, tests left in place — the transfer
+silently succeeded, `result["success"] is True`, exactly the failure
+scenario above) before the fix was applied; the unaffected-case tests were
+confirmed to already pass unchanged against that same pre-fix code, so the
+fix is additive rather than accidentally masking other behavior.
+
+### Verified good ✅ (re-confirmed, and newly reviewed)
+
+- **MP-27/MP-28/MP-29 locks are unchanged.** `update_prospect`,
+  `set_prospect_status`, and `bulk_set_prospect_status`'s `_set_status`
+  closure all still call `get_prospect(..., lock_for_update=True)` ahead of
+  the `TRANSFERRED` guard; `_bulk_apply`'s rejected-item branch still
+  `commit()`s (never `rollback()`s) before continuing the loop. Byte-for-byte
+  unchanged since pass 5 (confirmed — none of the nine new commits touch
+  these methods).
+- **The new `add_step`/`delete_step`/`reorder_steps` locking is sound.**
+  Independently traced the lock order on all three: `get_pipeline(...,
+lock_for_update=True)` (the parent row) always precedes
+  `_load_steps_for_update` (the steps, also locked, also
+  `populate_existing=True` so a stale identity-mapped instance from this
+  transaction's own earlier read is refreshed rather than reused) — the same
+  order on every path, so none of the three can deadlock against each other.
+  `_renumber_steps_densely`'s two-phase park-on-negatives-then-assign write
+  is what makes a reversal or a gap-closing renumber survive the new
+  `UNIQUE(pipeline_id, sort_order)` constraint (MySQL checks uniqueness per
+  statement, no deferral) — reasoned through by hand against a 3-stage
+  reversal and confirmed against `test_prospect_stage_movement.py`/
+  `test_pipeline_step_renumber_race.py`, not merely trusted from the commit
+  message.
+- **The stranded-prospect read in `delete_step` is correctly a locking read
+  scoped by `organization_id`, not only `current_step_id`.** Confirmed the
+  comment's own claim: `current_step_id` carries no index, and the added
+  `ProspectiveMember.organization_id == organization_id` predicate is what
+  keeps a stage deletion's `FOR UPDATE` from next-key-locking every
+  prospect row in every organization rather than one org's narrow range —
+  checked against `idx_prospect_org_status` actually covering
+  `(organization_id, status)` in `models/membership_pipeline.py`, which it
+  does.
+- **`assign_stage` (the new recovery route) cannot be used to skip a gate.**
+  It refuses outright when `prospect.current_step_id` is already set
+  (`ValueError`, "already on a stage"), so it only ever fires from the one
+  state — no stage at all — that `delete_step`'s own fallback can produce
+  when a pipeline's last remaining stage is deleted out from under a
+  prospect. It performs no completion, no transfer, and no auto-advance
+  side effect — only `current_step_id` and a fresh `IN_PROGRESS` progress
+  row — so placing an applicant on a later stage this way carries no more
+  capability than `transfer_to_membership` already has unconditionally (see
+  MP-30): a `members.manage`/`prospective_members.manage` holder was never
+  gated stage-by-stage on the transfer path to begin with. Org-scoped via
+  the already-org-scoped `get_prospect` call and the step lookup being
+  restricted to `prospect.pipeline.steps`, so a cross-org or cross-pipeline
+  `step_id` cannot resolve. Carries `log_audit_event` at the endpoint
+  (`membership_pipeline.prospect_stage_assigned`) and is a `{prospect_id}`
+  route, so it inherits the router-level `block_self_prospect_access`
+  guard automatically.
+- **`_assert_meeting_attended`'s org-scoping.** The `Event`/
+  `EventExternalAttendee` join filters `Event.organization_id ==
+prospect.organization_id` before any check-in match is attempted, so an
+  attendance record from another organization's event can never satisfy
+  this gate for a cross-org prospect id (not reachable anyway, given
+  `prospect` is already resolved org-scoped by the caller, but confirmed
+  rather than assumed).
+- **`add_step`'s new `data.model_dump(exclude_unset=True)`** was re-verified
+  against every field `add_step` reads — same fallback behavior as before
+  for each (matching the fix commit's own claim), not merely trusted.
+- **Route inventory:** re-enumerated programmatically — 52 routes (51 + the
+  new `assign-stage`), every route still either `require_permission(...)`-
+  gated or the one documented auth-only exception (`approve-step`, MP-11's
+  fix intact — still returns the minimal `StepApprovalResponse`), every
+  `{prospect_id}` route inherits the router-level self-access guard, and
+  `PUT`/`DELETE /interviews/{interview_id}` still carry the dedicated
+  `block_self_interview_access` dependency (MP-12).
+- **`docs/module-audit/` and `docs/app-review/`** re-checked: no open
+  finding tied to this feature in either.
+
+### Flagged items re-verified, unchanged (no new fix, no regression)
+
+- **MP-10** (unbounded `list_election_packages`/`create_election_package`,
+  no pagination or per-prospect cap) — still open exactly as documented;
+  `docs/KNOWN_LIMITATIONS.md`'s entry matches the current code.
+- **MP-19's `/widget-summary` half** (full-table scan for aggregate counts
+  and the manager-only `details` list) — still open; the sibling
+  `/pipelines` fix (aggregate-count query, no eager `prospects` load) is
+  still intact.
+- **MP-22** (a document delete can lose the file if the commit fails after
+  a successful `os.remove`) — still open, deliberate tradeoff; the ordering
+  (`os.remove` before the DB delete/commit) is unchanged.
+- **MP-26 / the narrowed multi-`election_vote`-stage ambiguity** — still
+  open exactly as narrowed in pass 4 round 4; unaffected by this pass's
+  changes (the new `_assert_election_decided` gate and `_election_block_
+reason` helper both operate on the latest package regardless of which
+  stage governs `package_fields`, a separate question from which package
+  is "the" one).
+
+No new flags. Every flagged item above was re-derived from the current code,
+not copied from the prior write-up.
+
+### Completion gate (pass 6)
+
+| Check                                                                 | Result                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                         | pass, 0 violations                                                                                                                                                                                                      |
+| `black --check app/ tests/ alembic/`                                  | pass, 1592 files unchanged                                                                                                                                                                                              |
+| `isort --check-only app/ tests/ alembic/`                             | pass, 0 violations                                                                                                                                                                                                      |
+| `python3 scripts/validate_migrations.py --strict`                     | pass — 444 revisions, single head (no schema change this pass)                                                                                                                                                          |
+| new guard tests (`test_election_vote_stage_gate.py`, +4)              | 12 passed (8 existing + 4 new); the 2 refusal-parametrized new cases independently confirmed to fail against the pre-fix code (`git stash` on `membership_pipeline_service.py`)                                         |
+| scoped pytest (`-k "membership or prospect or pipeline or election"`) | 1177 passed / 1 skipped (`py_vapid`) / 0 failed                                                                                                                                                                         |
+| full backend suite (`pytest tests/ -q`)                               | 12563 passed / 21 skipped (pre-existing/environmental — docker, API-contract-needs-server, `py_vapid`) / 0 failed                                                                                                       |
+| `npm run typecheck` / `npm run lint` (frontend)                       | not run — no frontend file touched this pass (the fix is entirely server-side; the frontend already surfaces `err.message` from a failed `convertToMember` call via `getErrorMessage`/toast with no code change needed) |
 
 ## Pass 5 (2026-09-08) — 3 fixed (MP-27, plus MP-28/MP-29 from Codex review of the PR), 0 flagged (3 prior FLAGGED items re-verified unchanged)
 
