@@ -14367,7 +14367,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⏳     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -14375,6 +14375,70 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 34 (Frontend shared, pass 6) — 0 new findings; both open HIGH items re-verified unchanged
+
+Checked for a concurrent session first: `git fetch origin main` showed row 34
+still `⬜` and the Open PR row said "None" (Feature 33's PR #2529 had already
+merged and been recorded). Read all four prior findings docs (FE2-34 pass 1,
+FE3-34 pass 2, FE4-34 pass 3, FE5-34 pass 4/corrective) and
+`docs/KNOWN_LIMITATIONS.md`'s three FE entries before touching anything.
+Branched fresh from `origin/main` (`claude/security-review-frontend-shared`).
+
+Established the correct baseline as `f53258ee7` (PR #2382's merge, the commit
+that landed FE5-34) and confirmed every one of this feature's stable core
+files — `apiClient.ts`, `createApiClient.ts`, `errorHandling.ts`,
+`errorTracking.ts`, `ProtectedRoute.tsx`, `authStore.ts`, the three offline
+queues, `purgeLocalMemberData.ts`, and 10 of 13 module `api.ts` files — is
+byte-identical to it (502 intervening commits, none touching this feature's
+core). Re-enumerated every axios-instance-creating file in the frontend from
+scratch (`grep -rn "axios.create("`, not a file-list assumption): still
+exactly two — the global `apiClient.ts` and the shared `createApiClient.ts`
+factory — and every one of the 13 module `services/api.ts` files plus the
+three "second per-module clients" (`equipmentCheckApi.ts`,
+`shiftSettingsApi.ts`, `publicPortalApi.ts` — the latter two not individually
+named by any prior pass's file list) uses one of the two, or imports the
+global instance directly. Pitfall #7 holds across all 16.
+
+**0 new findings.** The only diff in feature-owned files since `f53258ee7`
+is other features' own rotation passes touching the shared `apiCache.ts`
+(apparatus/inventory/training PII exclusions from an out-of-band sweep,
+`ae423afa3`, plus the training-extended rotation's own pass) and unrelated,
+already-safe feature work (accessibility contrast fixes in `components/ux/*`,
+a defensive array-validation fix in scheduling, a new `assignStage` method).
+Ran the backend ratchet those `apiCache.ts` additions depend on
+(`test_api_cache_pii_exclusions.py`) fresh: 4/4 passed, confirming no new
+cached PII route, no stale baseline, all 9 pinned exclusions still excluded.
+Both previously-flagged HIGH findings re-verified unchanged and still
+correctly open: **FE3-34-2** (a failed client-side logout leaves session
+cookies live — `authStore.ts:440`, `auth.py:1349-1384`, needs a product
+decision on retry-vs-explicit-failure-UI) and **FE3-34-5** (an offline queue
+item can sync under the next member's identity if the sign-in purge silently
+fails — `purgeLocalMemberData.ts`, needs a decision on gating auth on
+confirmed deletion vs. tagging queue entries with a validated owner).
+FE5-34-1's fix (the `/inventory/items/colors` cache exclusion +
+`inventory.view` permission gate) re-confirmed present. Repo-wide sweeps for
+new `api.get` call sites, `localStorage`/`sessionStorage.setItem` token
+storage, and hardcoded secrets all came back clean — the two new `api.get`
+sites found (`getRankLadder` at the already-safe `/operational-ranks`;
+`/organization` branding gaining a `navigation_layout` field) are both
+already covered by existing exclusions or carry no per-member data.
+`docs/KNOWN_LIMITATIONS.md`'s three FE entries re-read in full and needed no
+edits — still accurate.
+
+flake8/black/isort not run (no backend file modified); `npm run typecheck`
+0 errors; `npm run lint` 0 errors/0 warnings; scoped suite (apiCache,
+apiClient, authStore, createApiClient, learningProgressStore,
+pendingSyncStore, skillsTestingStore, ProtectedRoute.module,
+breadcrumbRoutes, Breadcrumbs) 372 passed across 10 files; full frontend
+suite run (see PR for final count); backend
+`test_api_cache_pii_exclusions.py` 4 passed,
+`test_inventory_member_visibility.py` 15 passed. Findings doc:
+`docs/security-review/FE6-34-frontend-shared.md`. Rotation row 34 → `⏳`
+(awaiting PR merge). **This closes the 00–34 table for this full pass** —
+per this file's own preamble, the rotation now wraps back to 00 once this PR
+merges, re-verifying nothing has regressed across the whole application.
+Next: tend this PR to merge, then 00 (cross-cutting baseline).
 
 ### 2026-09-14 — Feature 33 (Core infrastructure) — PR #2529 merged, watchdog recorded it
 
