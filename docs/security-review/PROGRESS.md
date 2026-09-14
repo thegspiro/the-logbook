@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2537](https://github.com/thegspiro/the-logbook/pull/2537)**
+(Feature 01, Auth & session lifecycle, pass 5) — branch
+`claude/security-review-auth-session`, opened against a fresh `origin/main`
+(no security-review PR was open at the start of this iteration; Feature 00's
+own pass 5, PR #2534, had already merged). **0 new findings.** `git diff`
+against pass 4's merge commit (`a68d674dd9`) shows changes in exactly two of
+this feature's files since pass 4 — `auth.py` (`GET /branding` gained a
+`navigation_layout` field, from an unrelated onboarding feature branch) and
+`auth_service.py` (the app-review track's own AUTH-20 lockout-race fix) —
+every other in-scope file is byte-identical to pass 4. Both changes were read
+in full under this rotation's own seven-dimension checklist rather than taken
+on trust from whichever track landed them first, and both hold: the branding
+field exposes nothing sensitive and validates against a literal allowlist; the
+lockout-race fix is structurally identical to the already-established
+`_verify_and_consume_totp`/`_verify_and_consume_recovery_code` locking
+pattern, its own guard test (`test_auth_lockout_race.py`) passes, and its lock
+placement (inside the failure branch, never around the Argon2 verify) was
+independently re-derived rather than assumed. All 19 prior findings'
+fixes (AUTH-1 through AUTH-19) re-verified still in place at current line
+numbers; AUTH-15 (HIPAA max password age enforced only in the browser) and
+AUTH-17 (session rows never reaped) remain open and unchanged, both still
+needing an owner decision before a fix. Findings doc:
+`docs/security-review/AUTH-01-auth-session.md` (pass 5 section).
+`flake8`/`black --check`/`isort --check-only` clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` 444 revisions, single head;
+backend full unit suite (`pytest tests/ -m "not integration and not slow and
+not docker"`) **10158 passed, 1 skipped**; scoped auth/mfa/oauth/consent
+tests 674 passed, 2 skipped (both pre-existing); no frontend files changed
+this pass. Rotation row 01 stays `✅` per this file's own convention.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 5, PR #2534, merged), preserved for history</summary>
+
 **None.** PR [#2534](https://github.com/thegspiro/the-logbook/pull/2534)
 (Feature 00, Cross-cutting baseline, pass 5) merged clean, merged directly
 by the repo owner (after one stale-superseded-run false CI failure on the
@@ -47,6 +80,8 @@ run lint` 0 errors, 0 warnings; frontend structural guards
 per this file's own convention (pass number tracked in the log/findings
 doc, not the table). Next: Feature 01 (Auth & session lifecycle) begins
 this lap's cycle, whenever the next iteration starts it.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 5, PR #2534, before it merged), preserved for history</summary>
@@ -14503,6 +14538,71 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 01 (Auth & session lifecycle, pass 5) — PR #2537 opened; 0 new findings
+
+Checked for a concurrent session first: `git fetch origin main`, the **Open
+PR** section showed Feature 00 pass 5 (PR #2534) already merged with "None"
+open, and a log search for "Feature 01" + "pass 5" found no prior attempt —
+not a duplicate. `mcp__github__list_pull_requests` confirmed the only open PR
+in the repo was an unrelated scheduling feature branch. Branched fresh from
+`origin/main` (`claude/security-review-auth-session`); the working tree had
+no pre-existing uncommitted state to stash.
+
+Read `CHECKLIST.md`, all four prior passes in `AUTH-01-auth-session.md` in
+full (19 numbered findings across passes 1–4, including the two-round Codex
+correction in pass 3 and the AUTH-14/AUTH-19 fixes in pass 4), and
+`docs/app-review/auth-session.md`'s own pass 5 (AUTH-20 fixed, AUTH-21
+flagged — a different numbering track sharing the same `AUTH-` prefix by
+collision, documented at the top of that file) before touching anything.
+
+Diffed pass 4's real merge commit (`a68d674dd9`, reachable this time — pass 4
+itself could not diff because of a history squash) against `origin/main`
+across every file in this feature's scope. Exactly two files changed:
+`auth.py` (`GET /branding` gained a `navigation_layout` field, landed by an
+unrelated onboarding feature branch) and `auth_service.py` (the app-review
+track's own AUTH-20 lockout-race fix, landed the same day as this feature's
+own pass 4). Every other file — `mfa_service.py`, `oauth_service.py`,
+`consent_service.py`, `app/api/dependencies.py`, `app/core/suspicious_ip.py`,
+`app/core/security.py`, `app/schemas/auth.py`, and all three in-scope
+frontend files — is byte-identical to pass 4's reviewed state. Both changed
+files were still read and re-verified under this rotation's full seven-
+dimension checklist rather than accepted on the strength of another track's
+review: the branding field exposes nothing sensitive and degrades safely to
+a validated default; the lockout-race fix's row-lock placement (never around
+the Argon2 verify, which would trade the counter's protection for a cheaper
+DoS) was independently re-derived, and its guard test
+(`test_auth_lockout_race.py`) passes.
+
+Re-verified all 19 prior findings' fixes at current line numbers (not merely
+grepped for presence) — all hold, no regression. AUTH-15 (HIPAA maximum
+password age enforced only in the browser) and AUTH-17 (session rows never
+reaped) remain open, unchanged, still needing an owner decision on rollout
+before either can be fixed; both are still current in
+`KNOWN_LIMITATIONS.md`. Considered two candidate new findings given the
+established concurrency lens (a same-shape unlocked read-then-write race in
+`reset_password_with_token`'s token consumption, and in `mfa_setup`'s secret
+write) — both reasoned through and deliberately not raised: both require the
+attacker to already hold the single credential that already grants full
+account takeover on its own (the reset token, or the caller's own
+authenticated session), so the race changes nothing about what an attacker
+who has it can do; at most a same-user double-submit, the same accepted
+exactly-once-delivery shape already flagged and left unfixed for
+`/mfa/recovery-codes` in pass 3.
+
+**0 new findings.** Findings doc: `docs/security-review/
+AUTH-01-auth-session.md` (pass 5 section, appended after pass 4's,
+newest-first). Gate: `flake8`/`black --check`/`isort --check-only` clean on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` 444 revisions,
+single head; scoped auth/mfa/oauth/consent/dependencies/permission tests 674
+passed, 2 skipped (both pre-existing); backend full unit suite (`pytest
+tests/ -m "not integration and not slow and not docker"`) **10158 passed, 1
+skipped**; standing guards (`endpoint_auth_coverage`, `org_scoping_ratchet`,
+`capacity_locking`, `like_escaping`) 47 passed; the three concurrency/gate
+guard tests named above pass when run directly. No frontend files changed
+this pass, so `tsc`/`eslint` are n/a. Rotation row 01 stays `✅` per this
+file's own convention (pass number tracked in the log/findings doc, not the
+table).
 
 ### 2026-09-14 — Feature 00 (Cross-cutting baseline) — PR #2534 merged, watchdog recorded it
 
