@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Branch `claude/security-review-feature09-pass5`** — Feature 09 (Medical
-screening, PHI), pass 5 per the rotation tracker. Step 0 concurrent-session
+**PR [#2557](https://github.com/thegspiro/the-logbook/pull/2557)** — branch
+`claude/security-review-feature09-pass5`, Feature 09 (Medical screening,
+PHI), pass 5 per the rotation tracker. Step 0 concurrent-session
 check: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
 "None." with the Feature 08 pass 5/6 closure note beneath it (now
 superseded below) and named "Next: Feature 09 (Medical screening), pass 5"
