@@ -16,6 +16,51 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2542](https://github.com/thegspiro/the-logbook/pull/2542)
+(Feature 04, Storefront & payments, pass 5) merged clean, 17/17 CI green, no
+unresolved review threads (one bot comment noting a Codex usage-limit
+notice, and one PR comment from this rotation's own watchdog explaining a
+stale-superseded-run false failure on the pre-bookkeeping commit — every job
+on that run showed `cancelled`, not `failed`, because the branch advanced
+mid-run while the first commit's CI was still in flight). **0 new findings.**
+`git log c71b5fb26..origin/main` (pass 4's own closing merge) showed exactly
+three real commits in this feature's domain, all from the **app-review**
+track's own concurrent Tier-A pass 5, not this one: SF-8 (HIGH, already fixed
+there) — `_ordered_quantities` was a plain `SELECT` compared against a
+`FOR UPDATE`-locked product row, the second half of CLAUDE.md Pitfall #27
+that was missing, closed by locking `store_settings` → the window → the
+products → the (now-locking) tallies in a fixed order so a department's whole
+order-placement critical section serializes per organisation rather than
+deadlocking on InnoDB gap locks across disjoint carts; plus a same-day
+follow-up that turned a source-level lock-order guard into one that also
+asserts the reads are genuinely locking reads, and collapsed a per-cart-line
+`get_product` call inside that (now organisation-wide) critical section into
+one query. All 48 endpoints re-enumerated and gated; every by-id query
+re-traced org-scoped; price still fully catalog-derived; the PayPal webhook's
+signature verification, replay guard and audit logging re-read and unchanged
+despite an empty diff. SF-9 (app-review, MED, concurrent `record_payment` can
+lose a payment off the ledger) and SF-11 (app-review, LOW, no cart
+line-count maximum) both re-confirmed still open and correctly left flagged
+— both already carry a documented, reasoned deferral in
+`docs/app-review/storefront.md` and `KNOWN_LIMITATIONS.md`. Full write-up:
+the **Pass 5** section of `docs/security-review/SF-04-storefront-payments.md`.
+`flake8`/`black --check`/`isort --check-only` clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` 444 revisions, single head
+(`6ab7d903fae5`); `check_route_permissions.py --strict` 228 routes, 0 errors;
+scoped storefront/payment tests (DB available) 725 passed, 1 skipped
+(`py_vapid`, pre-existing); cross-cutting guard tests (org-scoping ratchet,
+capacity locking, LIKE escaping, CSV sweep) 58 passed; backend full unit suite
+(`pytest tests/ -m "not integration and not slow and not docker"`) **10,158
+passed, 1 skipped, 0 failed**; `npm run typecheck` 0 errors; `npm run lint` 0
+errors, 0 warnings; `vitest run src/modules/storefront/ src/components/admin/`
+205 passed (18 files). No file in this feature's declared scope was changed —
+the app-review track had already closed the one real gap (SF-8) three days
+before this pass started. Rotation row 04 stays `✅`. Next: Feature 05
+(Finance & approvals), pass 5.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 5, PR #2542, before it merged), preserved for history</summary>
+
 **PR [#2542](https://github.com/thegspiro/the-logbook/pull/2542)** (Feature
 04, Storefront & payments, pass 5) — branch
 `claude/security-review-feature04-pass5`, opened against a fresh
@@ -59,6 +104,8 @@ errors, 0 warnings; `vitest run src/modules/storefront/ src/components/admin/`
 205 passed (18 files). No file in this feature's declared scope was changed —
 the app-review track had already closed the one real gap (SF-8) three days
 before this pass started. Rotation row 04 stays `✅`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 5, PR #2540, merged), preserved for history</summary>
@@ -14815,6 +14862,16 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 04 (Storefront & payments) — PR #2542 merged
+
+30-minute watchdog check confirmed PR #2542 (pass 5: 0 new findings; the
+app-review track's own concurrent Tier-A pass 5 had already closed SF-8, the
+one real gap in this feature's domain, three days before this pass started;
+SF-9 and SF-11 re-confirmed still open and correctly left flagged; no
+application code changed) merged clean, 17/17 CI green, no unresolved review
+threads. Rotation row 04 stays `✅`. Next: Feature 05 (Finance & approvals),
+pass 5.
 
 ### 2026-09-14 — Feature 04 (Storefront & payments, pass 5) — PR #2542 opened; 0 new findings
 
