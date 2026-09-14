@@ -2424,6 +2424,41 @@ break those callers; the fix needs a decision on whether `GET /users` should
 serve two shapes by permission or a narrower directory endpoint should be
 split out. (Security review USR-8, `docs/security-review/USR-07-users-organizations.md`.)
 
+## Users: A Membership-Tier Removal's Occupancy Check Can Still Miss an Unattended Batch Advancement (2026-09-14)
+
+`PUT /users/membership-tiers/config` (`update_membership_tier_config`,
+`member_status.py`) refuses to remove or rename a tier members currently
+hold, and `PATCH /users/{user_id}/membership-type` (`change_membership_type`)
+refuses to assign a tier that no longer exists. Security review pass 5 found
+and fixed the race between these two endpoints directly (both now lock the
+`Organization` row before deciding — see USR-10 in
+`docs/security-review/USR-07-users-organizations.md`), but not the same race
+against a third writer: `MembershipTierService.advance_all`, the unattended
+monthly/on-demand tier-advancement scan, writes `User.membership_type`
+without ever locking the `Organization` row. Under InnoDB's default
+REPEATABLE READ, `update_membership_tier_config`'s occupancy count is a
+plain read answering from a snapshot fixed before its own lock is acquired —
+if `advance_all` commits a member onto the tier being removed in the narrow
+window between that snapshot and the lock, the occupancy check can still
+miss it, landing a member on a tier id absent from the stored config.
+
+Not fixed: the only complete close is making `advance_all`'s member-row
+locks and this occupancy check share one consistent lock order — either
+holding the `Organization` lock for the scan's entire duration (a real,
+bounded availability cost to every settings edit in the org while the scan
+runs) or making the occupancy count itself a locking read scoped to the
+tiers being removed, which does not fully eliminate the same AB/BA deadlock
+risk USR-10's fix was designed to avoid (`advance_all` locks member rows one
+at a time across its own loop without ever touching the `Organization` row).
+Either is a deliberate change to `membership_tier_service.py`'s own,
+separately-tuned locking scheme (last touched in security review pass 2 for
+an unrelated race), not a one-file fix. Requires three conditions at once
+(the scan running, a concurrent config edit, and a narrow non-contending
+commit window) and is self-healing on the next `advance_all` run in the
+common case — an unrecognized `membership_type` is `off_ladder`-counted and
+skipped, not silently re-corrupted further. (Security review USR-10a,
+`docs/security-review/USR-07-users-organizations.md`.)
+
 ## Membership Pipeline — Election Packages Have No List Bound or Creation Cap (2026-08-25)
 
 `GET /prospective-members/election-packages` (`list_election_packages`) runs

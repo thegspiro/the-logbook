@@ -16,6 +16,61 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2550](https://github.com/thegspiro/the-logbook/pull/2550)** — branch
+`claude/security-review-feature07-pass5` (Feature 07, Users & organizations,
+pass 5), opened against a fresh `origin/main`. Step 0 concurrent-session
+check: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
+"None." with the Feature 06 pass 5 closure note beneath it (see the
+superseded block below); `list_pull_requests` (open) returned only #2547 and
+#2548 (unrelated member/rank-permission fixes, explicitly flagged as not a
+collision by this run's own briefing) and #2495 (scheduling) — no Feature
+07/users/organizations branch or title. `git ls-remote --heads origin` for
+`feature07`/`users`/`organizations`/`usr` found nothing either.
+
+`users.py`, `member_leaves.py`, `services/user_service.py`,
+`services/organization_service.py`, `services/member_leave_service.py` and
+`models/user.py` were byte-identical to pass 4's own review (zero diff since
+`83a55e014`, PR #2402); `organizations.py`, `member_status.py` and
+`schemas/organization.py` had changed from unrelated feature work
+(department-wide navigation layout, membership-tier config validation,
+email-config fixes) and were read in full rather than diffed. **1 new
+finding, fixed (MED):** USR-10 — `change_membership_type` and
+`update_membership_tier_config` (both `member_status.py`) raced each other
+with no lock on the `Organization` row, so a member could be assigned to a
+membership tier the other request was concurrently deleting (or vice versa),
+landing a row on a tier id absent from the stored config with nothing
+reporting it — the same "eligibility, read-then-write" shape CLAUDE.md
+Pitfall #27 names, one layer down from a numeric capacity check. Fixed by
+locking the `Organization` row in both handlers, in an order chosen
+specifically to avoid an AB/BA deadlock against
+`MembershipTierService.advance_all`'s separate per-member locking (analyzed,
+not assumed — see the findings doc). Guarded by three new tests in
+`tests/test_capacity_locking.py`
+(this codebase's established repo-wide sweep for the same invariant),
+confirmed to fail against the pre-fix code via `git stash`. **1 residual
+gap flagged, not fixed (LOW):** USR-10a — the same occupancy check can still
+miss a write from `advance_all` itself, which never locks the `Organization`
+row at all; closing it needs a change to `membership_tier_service.py`'s own,
+separately-tuned locking scheme (last touched in pass 2 for an unrelated
+race), architectural discussion beyond a scoped fix — mirrored into
+`docs/KNOWN_LIMITATIONS.md`. USR-5 and USR-8 (unbounded lists; over-broad
+`GET /users` field set) re-verified still open/accurate, no drift. Every
+by-id query across all four files re-confirmed org-scoped; every
+privilege-ceiling call site re-confirmed wired; USR-9's HTML-escaping fix
+re-confirmed byte-for-byte intact. Full write-up: the **Pass 5** section of
+`docs/security-review/USR-07-users-organizations.md`.
+
+Gate: flake8/black/isort clean on both changed files
+(`member_status.py`, `tests/test_capacity_locking.py`);
+`validate_migrations.py --strict` passed (444 revisions, single head, no
+migration this pass); scoped pytest 564 passed, 1 pre-existing skip, 0
+failed; full backend suite 12559 passed, 21 pre-existing/environmental
+skips, 0 failed; frontend `typecheck`/`lint` not run — no frontend file
+touched this pass. Next: 08 Membership pipeline.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 5, PR #2546, merged), preserved for history</summary>
+
 **None.** PR [#2546](https://github.com/thegspiro/the-logbook/pull/2546)
 (Feature 06, Elections & ballots, pass 5) merged clean — 16/16 real CI jobs
 green, after one stale-superseded-run false failure on the pre-bookkeeping
@@ -15020,6 +15075,85 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 07 (Users & organizations, pass 5) — 1 fixed (MED), 1 flagged (LOW) — PR opened
+
+Step 0 concurrent-session check: `git fetch origin main` clean; Open PR row
+read "None." with the Feature 06 pass 5 closure note; `list_pull_requests`
+(open) returned only #2547/#2548 (unrelated, explicitly flagged in this
+run's briefing as not a collision) and #2495 (scheduling); `git ls-remote
+--heads origin` for feature07/users/organizations/usr branch names found
+nothing. Created `claude/security-review-feature07-pass5` fresh off
+`origin/main`. Rotation row 07 confirmed already ✅ from prior passes.
+
+Worked the full checklist against the diff since pass 4's merge (`83a55e014`,
+PR #2402). `users.py`, `member_leaves.py`, and all three call-into service
+files plus `models/user.py` were byte-identical to pass 4's review — zero
+diff across five days of unrelated commits. `organizations.py` (+136/-3) and
+`member_status.py` (+169/-24) changed from unrelated feature work (a
+department-wide navigation-layout setting, fuller membership-tier config
+validation replacing pass-3-and-earlier's two-field ad-hoc checks, and
+email-config fixes touching the setup checklist) and were read in full end
+to end rather than diff-only, given this feature's core-identity/tenancy
+status. All 21 `organizations.py` routes (up one) and all 12
+`member_status.py` routes re-enumerated; `organizations.py` re-confirmed to
+carry no by-id path parameter across all 21.
+
+**USR-10 (MED, fixed)** — the new, fuller `update_membership_tier_config`
+validation added a "cannot remove/rename a tier members hold" occupancy
+check, and the pre-existing `change_membership_type` validates a requested
+tier against the same stored ladder — neither locked the `Organization` row
+first, so the two could pass each other: a member assigned to a tier the
+other request was concurrently deleting (or the reverse), landing a row on a
+tier id absent from the stored config with nothing reporting it — the same
+CLAUDE.md Pitfall #27 read-then-write shape, one layer down from a numeric
+seat count. Fixed by locking the `Organization` row in both handlers, with
+the lock order chosen specifically to avoid an AB/BA deadlock against
+`MembershipTierService.advance_all`'s own separate per-member locking
+(`update_membership_tier_config` locks the org row only, never a member row,
+so it structurally cannot be the other half of that cycle — verified by
+reasoning through the actual lock-acquisition order of all three writers,
+not assumed). Guarded by three new tests added to the codebase's existing
+repo-wide sweep for this exact invariant, `tests/test_capacity_locking.py`
+(`TestMembershipTierEligibility`), two of which were confirmed to fail
+against the pre-fix code via `git stash` (1 lock found where 2 were
+required; 0 found where 1 was required); the third asserts the lock ordering
+itself as a guard against a future regression.
+
+**USR-10a (LOW, flagged)** — the fix above does not close every direction:
+`MembershipTierService.advance_all` (not in this feature's declared scope)
+writes `membership_type` during its unattended batch scan without ever
+locking the `Organization` row, so `update_membership_tier_config`'s
+occupancy count — a plain read, deliberately not made a locking one, for the
+same deadlock-avoidance reason — can still miss a narrow-window `advance_all`
+commit. Closing it needs a change to `membership_tier_service.py`'s own,
+separately-tuned locking scheme (last touched in pass 2 for an unrelated
+race) — architectural discussion beyond a scoped fix. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
+
+USR-5 (unbounded lists) and USR-8 (over-broad `GET /users` field set for
+`members.view`-tier callers) re-verified still open/flagged, current line
+numbers checked against this pass's file state, no drift. USR-9 (pass 4's
+HTML-escaping fix) re-confirmed byte-for-byte intact. All by-id queries
+across all four files re-confirmed org-scoped by direct read; all
+privilege-ceiling call sites re-confirmed wired at their documented lines;
+the new `AppearanceSettings`/`MembershipTierSettings` schema additions
+confirmed fully bounded (length/range limits, `max_length=50` on the tier
+list) with no secret/PII exposure.
+
+Gate: flake8/black/isort clean on both changed files; `validate_migrations.py
+--strict` passed (444 revisions, single head, no migration this pass);
+scoped pytest (`-k "member_status or member_leave or property_return or
+user_list or platoon or users or organization or rank_grant or role_edit or
+audit_history or ceiling or administrative or membership_tier or
+capacity_locking or navigation_layout or setup_checklist"`) 564 passed, 1
+pre-existing skip, 0 failed; full backend suite 12559 passed, 21
+pre-existing/environmental skips, 0 failed; frontend typecheck/lint not run
+— no frontend file touched this pass.
+
+Full write-up: `docs/security-review/USR-07-users-organizations.md` pass 5.
+PR opened: `claude/security-review-feature07-pass5`. Next: 08 Membership
+pipeline.
 
 ### 2026-09-14 — Feature 06 (Elections & ballots, pass 5) — PR #2546 merged; next Feature 07
 
