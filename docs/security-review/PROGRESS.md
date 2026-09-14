@@ -16,6 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2546](https://github.com/thegspiro/the-logbook/pull/2546)
+(Feature 06, Elections & ballots, pass 5) merged clean — 16/16 real CI jobs
+green, after one stale-superseded-run false failure on the pre-bookkeeping
+commit (`23c249b2d`; every job on that run showed `cancelled`, not
+`failed`, because a follow-up commit filling in the PR number advanced the
+branch mid-run; documented in a PR comment, resolved by waiting for the new
+head's own fresh run) — merged directly by the repo owner
+(`merged_by: thegspiro`) before this session called `merge_pull_request`
+itself. `git fetch origin main` confirms the merge commit (`f45f691f3`) is
+on `main`. **0 new findings, no application code changed** — a clean
+re-verification pass: `backend/app/api/v1/endpoints/elections.py` was
+byte-identical to what pass 4 last reviewed, so this was a full independent
+re-read of all 3,895 lines rather than a diff review. ELEC-41/ELEC-42 (the
+pass-4 rate-limit fixes) re-verified byte-for-byte intact and re-run under
+their guard test; every by-id query re-confirmed org-scoped; all
+JSON-column mutations re-confirmed using `copy.deepcopy()`; every 500-path
+re-confirmed routed through `safe_error_detail()`; audit logging
+re-confirmed present on every state-changing route. 5 prior flagged
+findings (ELEC-12, ELEC-14, ELEC-16, ELEC-28, ELEC-40) re-verified still
+open/accurate, no drift. Full write-up: the **Pass 5** section of
+`docs/security-review/ELEC-06-elections-ballots.md`. Rotation row 06 stays
+`✅`. **Next: Feature 07 (Users & organizations), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 5, PR #2546, before it merged), preserved for history</summary>
+
 **PR [#2546](https://github.com/thegspiro/the-logbook/pull/2546)** —
 branch `claude/security-review-feature06-pass5`
 (Feature 06, Elections & ballots, pass 5), opened against a fresh
@@ -46,6 +72,8 @@ revisions, single head); scoped pytest 584 passed; rate-limit guard test 7
 passed; full backend suite 12556 passed, 21 pre-existing/environmental
 skips, 0 failed; frontend `npm run typecheck` 0 errors, `npm run lint` 0
 errors/warnings.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 5, PR #2544, merged), preserved for history</summary>
@@ -14992,6 +15020,24 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 06 (Elections & ballots, pass 5) — PR #2546 merged; next Feature 07
+
+30-minute watchdog check found PR #2546 (Feature 06, Elections & ballots,
+pass 5) merged directly by the repo owner (`merged_by: thegspiro`) before
+this session's own `merge_pull_request` call. CI on the current head
+(`53c24193a`) had gone green after one stale-superseded-run false failure
+on the pre-bookkeeping commit (`23c249b2d`) — every job on that run showed
+`cancelled`, not `failed`, because a follow-up commit advanced the branch
+mid-run; diagnosed via `list_workflow_jobs`, resolved with one explanatory
+PR comment rather than a code push. `git fetch origin main` confirmed the
+merge commit (`f45f691f3`) landed on `main`; also found two unrelated open
+PRs (#2547, #2548) from another workflow, not a Feature 07 collision.
+Recorded the closure in `PROGRESS.md`: superseded the prior **Open PR**
+note (preserved in a `<details>` block) with a "None." closure paragraph —
+this was a clean re-verification pass with 0 new findings and no
+application code changed — rotation row 06 confirmed still `✅`. Next:
+Feature 07 (Users & organizations), pass 5.
 
 ### 2026-09-14 — Feature 06 (Elections & ballots, pass 5) — 0 new findings, clean re-verification — PR opened
 
