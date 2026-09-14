@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending** — branch `claude/security-review-feature06-pass5`
+**PR [#2546](https://github.com/thegspiro/the-logbook/pull/2546)** —
+branch `claude/security-review-feature06-pass5`
 (Feature 06, Elections & ballots, pass 5), opened against a fresh
 `origin/main`. Checked for a concurrent session first per this run's own
 Step 0: `git fetch origin main` showed a clean working tree; the Open PR
@@ -44,8 +45,7 @@ write-up: the **Pass 5** section of
 revisions, single head); scoped pytest 584 passed; rate-limit guard test 7
 passed; full backend suite 12556 passed, 21 pre-existing/environmental
 skips, 0 failed; frontend `npm run typecheck` 0 errors, `npm run lint` 0
-errors/warnings. PR number to be filled in via a small follow-up commit
-once opened.
+errors/warnings.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 5, PR #2544, merged), preserved for history</summary>
@@ -15035,8 +15035,9 @@ passed; full backend suite 12556 passed, 21 pre-existing/environmental
 skips, 0 failed; frontend `npm run typecheck` 0 errors and `npm run lint` 0
 errors/warnings — no frontend file changed this pass, both run anyway per
 the gate. See `docs/security-review/ELEC-06-elections-ballots.md` pass 5
-for the full write-up. Rotation row 06 stays `✅`. PR opened; branch
-`claude/security-review-feature06-pass5`.
+for the full write-up. Rotation row 06 stays `✅`. PR
+[#2546](https://github.com/thegspiro/the-logbook/pull/2546) opened from
+branch `claude/security-review-feature06-pass5`.
 
 ### 2026-09-14 — Feature 05 (Finance & approvals, pass 5) — PR #2544 merged; next Feature 06
 
