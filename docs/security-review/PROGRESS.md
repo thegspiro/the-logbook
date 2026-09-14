@@ -16,6 +16,52 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR opened** — branch `claude/security-review-feature04-pass5` (Feature 04,
+Storefront & payments, pass 5), opened against a fresh `origin/main`. Checked
+for a concurrent session first: `git fetch origin main` showed a clean working
+tree; the **Open PR** row read "None" (Feature 03's own pass 5, PR #2540, had
+already merged); and a log search for "Feature 04" + "pass 5" found no prior
+attempt this lap. **0 new findings.** `git log c71b5fb26..origin/main` (pass
+4's own closing merge) shows exactly three real commits in this feature's
+domain, all from the **app-review** track's own concurrent Tier-A pass 5, not
+this one: SF-8 (HIGH, already fixed there) — `_ordered_quantities` was a plain
+`SELECT` compared against a `FOR UPDATE`-locked product row, the second half
+of CLAUDE.md Pitfall #27 that was missing, closed by locking `store_settings`
+→ the window → the products → the (now-locking) tallies in a fixed order so a
+department's whole order-placement critical section serializes per
+organisation rather than deadlocking on InnoDB gap locks across disjoint
+carts; plus a same-day follow-up that turned a source-level lock-order guard
+into one that also asserts the reads are genuinely locking reads, and
+collapsed a per-cart-line `get_product` call inside that (now organisation-
+wide) critical section into one query. All 48 endpoints re-enumerated and
+gated; every by-id query re-traced org-scoped; price still fully catalog-
+derived; the PayPal webhook's signature verification, replay guard and audit
+logging re-read and unchanged despite an empty diff. SF-9 (app-review, MED,
+concurrent `record_payment` can lose a payment off the ledger) and SF-11
+(app-review, LOW, no cart line-count maximum) both re-confirmed still open
+and correctly left flagged — both already carry a documented, reasoned
+deferral in `docs/app-review/storefront.md` and `KNOWN_LIMITATIONS.md`, and
+this pass's contract is to re-verify that reasoning still holds, not to
+re-litigate a payments-path trade-off from a different review track. Full
+write-up: the **Pass 5** section of
+`docs/security-review/SF-04-storefront-payments.md`.
+`flake8`/`black --check`/`isort --check-only` clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` 444 revisions, single head
+(`6ab7d903fae5`); `check_route_permissions.py --strict` 228 routes, 0 errors;
+scoped storefront/payment tests (DB available) 725 passed, 1 skipped
+(`py_vapid`, pre-existing); cross-cutting guard tests (org-scoping ratchet,
+capacity locking, LIKE escaping, CSV sweep) 58 passed; backend full unit suite
+(`pytest tests/ -m "not integration and not slow and not docker"`) **10,158
+passed, 1 skipped, 0 failed**; `npm run typecheck` 0 errors; `npm run lint` 0
+errors, 0 warnings; `vitest run src/modules/storefront/ src/components/admin/`
+205 passed (18 files). No file in this feature's declared scope was changed —
+the app-review track had already closed the one real gap (SF-8) three days
+before this pass started. Rotation row 04 stays `✅`. PR number to follow
+once opened.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 5, PR #2540, merged), preserved for history</summary>
+
 **None.** PR [#2540](https://github.com/thegspiro/the-logbook/pull/2540)
 (Feature 03, Public surface & webhooks, pass 5) merged clean, 17/17 CI green
 (after one stale-superseded-run false failure on the prior commit — every
@@ -54,6 +100,8 @@ endpoint-auth/LIKE/CSV/capacity ratchets 59 passed; backend full unit suite
 passed, 1 skipped, 0 failed**; no frontend file changed this pass. Rotation
 row 03 stays `✅` per this file's own convention. Next: Feature 04
 (Storefront & payments), pass 5.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 5, PR #2540, before it merged), preserved for history</summary>
@@ -14766,6 +14814,83 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 04 (Storefront & payments, pass 5) — branch pushed, opening PR; 0 new findings
+
+Checked for a concurrent session first: `git fetch origin main`, the **Open
+PR** section showed Feature 03 pass 5 (PR #2540) already merged with "None"
+open, and a log search for "Feature 04" + "pass 5" found no prior attempt.
+Branched fresh from `origin/main` (`claude/security-review-feature04-pass5`);
+the working tree had no pre-existing uncommitted state to stash.
+
+Confirmed the exact scope against `docs/security-review/PROGRESS.md`'s own
+rotation table row (`endpoints/storefront.py`, `storefront_service.py`,
+`utils/storefront_payments.py`, plus the wider domain passes 1–4 already
+established: `storefront_notification_service.py`,
+`email_templates_storefront.py`, `storefront_preview_service.py`,
+`paypal_webhook.py`, `models/storefront.py`, `schemas/storefront.py`,
+`utils/size_order.py`, `utils/embroidery.py`, the frontend storefront module)
+and read `docs/security-review/SF-04-storefront-payments.md` (all four prior
+passes) plus the `KNOWN_LIMITATIONS.md` rows tied to this feature (SF-9, SF-11,
+`auto_apply_payments` default, no reconciliation backfill) before touching
+code.
+
+`git log c71b5fb26..origin/main` (pass 4's own closing merge, PR #2395) shows
+three real commits in this feature's domain since pass 4, all landed by the
+**app-review** track's own Tier-A pass 5 on 2026-09-09/10 — not this
+security-review pass. That track's SF-8 (HIGH) closed the one genuine gap:
+`_ordered_quantities` was a plain `SELECT` compared against a
+`FOR UPDATE`-locked product row (CLAUDE.md Pitfall #27's second half missing),
+fixed across two review rounds — measured against a real database each time —
+by locking `store_settings` → the order window → the products → the now-
+locking tallies in a fixed order, so order placement serializes per
+organisation and InnoDB's gap-lock deadlock on disjoint same-window carts
+(reproduced 2/5 rounds pre-fix, 0/5 post) is closed alongside the original
+oversell. A same-day follow-up hardened the source-level lock-order guard
+into one that also asserts the reads are genuinely locking reads (a mutation
+that dropped `.with_for_update()` had left the whole suite green), and
+collapsed a per-cart-line `get_product` call inside the now organisation-wide
+critical section into one query.
+
+This pass re-verified the result independently rather than trusting the
+app-review write-up: re-enumerated all 48 endpoints (unchanged gating), re-
+traced every by-id query for org-scoping (Pitfall #14a/14b/14c all clean, no
+new by-id surface added), re-confirmed price is still 100% catalog-derived,
+re-read `paypal_webhook.py` end to end despite a byte-for-byte empty diff
+(signature verification, replay guard, and audit logging all intact), checked
+for unbounded in-memory trackers (Pitfall #9 — none) and JSON-column shallow-
+copy mutation (Pitfall #12 — none, all three JSON columns are replaced
+wholesale or written once), and re-ran the guard tests the app-review fix
+added (`test_storefront_order_deadlock.py`,
+`test_the_service_locks_the_org_before_the_window_and_tallies`,
+`test_both_availability_tallies_are_locking_reads`) rather than re-deriving
+them. SF-9 (app-review, MED — concurrent `record_payment` can lose a payment
+off the ledger) and SF-11 (app-review, LOW — no cart line-count maximum) were
+both re-confirmed still open at their cited lines and deliberately left
+flagged: both already carry a reasoned, options-laid-out deferral in
+`docs/app-review/storefront.md` and `KNOWN_LIMITATIONS.md`, and this pass's
+job is to re-verify that reasoning still holds against current code, not to
+re-litigate a payments-path transaction-boundary trade-off from a different
+review track's considered decision. All five self-settlement guards (SF-6,
+SF-7, and the three siblings `mark_order_paid`/`waive_order_payment`/
+`refund_order`) re-read directly at their current line numbers and confirmed
+unmodified. **0 new findings.** Full write-up: the **Pass 5** section of
+`docs/security-review/SF-04-storefront-payments.md`.
+
+`flake8`/`black --check`/`isort --check-only` clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` 444 revisions, single head
+(`6ab7d903fae5`); `check_route_permissions.py --strict` 228 routes, 0 errors;
+scoped `pytest -k "storefront or payment"` (DB available in this sandbox) 725
+passed, 1 skipped (`py_vapid`, pre-existing); cross-cutting guard tests
+(org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep) 58 passed;
+backend full unit suite (`pytest tests/ -m "not integration and not slow and
+not docker"`) **10,158 passed, 1 skipped, 0 failed**; `npm run typecheck` 0
+errors; `npm run lint` 0 errors, 0 warnings; `vitest run
+src/modules/storefront/ src/components/admin/` 205 passed (18 files). No file
+in this feature's scope was changed by this pass. Rotation row 04 stays `✅`.
+Opening a PR now to close out this pass per the rotation's "one PR at a time"
+rule, even with zero code changes, so the **Open PR** row and this log stay
+the record of what was checked and when.
 
 ### 2026-09-14 — Feature 03 (Public surface & webhooks) — PR #2540 merged
 
