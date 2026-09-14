@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending — branch `claude/security-review-feature08-pass5` pushed**
+**PR [#2555](https://github.com/thegspiro/the-logbook/pull/2555)** — branch
+`claude/security-review-feature08-pass5`
 (Feature 08, Membership pipeline, pass 5 per the rotation tracker; the
 feature's own findings doc numbers it **Pass 6**, since a section titled
 "Pass 5" already exists there from 2026-09-08 — see the naming note at the
@@ -55,9 +56,7 @@ Gate: flake8/black/isort clean; `validate_migrations.py --strict` passed
 1177 passed / 1 pre-existing skip / 0 failed; full backend suite 12563
 passed / 21 pre-existing/environmental skips / 0 failed; frontend
 `typecheck`/`lint` not run — no frontend file touched. Rotation row 08 stays
-`✅`. PR not yet opened as this paragraph is written — see the commit history
-for whether a follow-up filled in the number, per this doc's own standing
-practice.
+`✅`.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 5, PR #2553, merged), preserved for history</summary>
