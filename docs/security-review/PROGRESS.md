@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2555](https://github.com/thegspiro/the-logbook/pull/2555)
+(Feature 08, Membership pipeline, pass 5 per the rotation tracker / pass 6
+per the feature's own findings doc) merged clean — 17/17 CI green, after one
+stale-superseded-run false failure on the pre-bookkeeping commit
+(`bcbeb9c72`; every job on that run showed `cancelled`, not `failed`,
+because a follow-up commit filling in the PR number advanced the branch
+mid-run; documented in a PR comment, resolved by waiting for the new head's
+own fresh run) — merged by the watchdog session via `merge_pull_request`.
+`git fetch origin main` confirms the merge commit (`ae3177ecf`) is on
+`main`. **1 new finding, fixed (HIGH):** MP-30 — the `election_vote` stage's
+completion gate guarded `complete_step` only, not the `transfer_to_
+membership`/`_do_transfer` path that is the documented, primary way a
+coordinator finishes a pipeline's final stage — fixed by sharing one
+non-raising status check (`_election_block_reason`) between both doors. **0
+new flags** — 4 prior FLAGGED/narrowed items re-verified unchanged. Full
+write-up: the **Pass 6** section of
+`docs/security-review/MP-08-membership-pipeline.md`. Rotation row 08 stays
+`✅`. **Next: Feature 09 (Medical screening), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 5, PR #2555, before it merged), preserved for history</summary>
+
 **PR [#2555](https://github.com/thegspiro/the-logbook/pull/2555)** — branch
 `claude/security-review-feature08-pass5`
 (Feature 08, Membership pipeline, pass 5 per the rotation tracker; the
@@ -57,6 +79,8 @@ Gate: flake8/black/isort clean; `validate_migrations.py --strict` passed
 passed / 21 pre-existing/environmental skips / 0 failed; frontend
 `typecheck`/`lint` not run — no frontend file touched. Rotation row 08 stays
 `✅`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 5, PR #2553, merged), preserved for history</summary>
