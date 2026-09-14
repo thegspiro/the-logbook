@@ -16,6 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2544](https://github.com/thegspiro/the-logbook/pull/2544)
+(Feature 05, Finance & approvals, pass 5) merged clean — 16/16 real CI jobs
+green, after one stale-superseded-run false failure on an intermediate
+commit (`496c2f0d`; every job on that run showed `cancelled`, not `failed`,
+because a follow-up commit filling in the PR number advanced the branch
+mid-run; documented in a PR comment, resolved by waiting for the new head's
+own fresh run) — merged directly by the repo owner (`merged_by: thegspiro`)
+before this session called `merge_pull_request` itself. `git fetch origin
+main` confirms the merge commit (`6613919e2`) is on `main`. **Two new
+findings, both fixed:** FIN-31 (MED) — five disbursement methods
+(`mark_pr_paid`, `mark_expense_paid`, `issue_check`, `void_check`,
+`cancel_purchase_request`) read their entity via an unlocked `SELECT`
+before mutating the org's shared `Budget` ledger (CLAUDE.md Pitfall #27),
+allowing a double-credit race or a stale-write status revert; fixed with
+`.with_for_update()` on each read, guarded by 6 new source-inspection tests
+confirmed red pre-fix/green post-fix. FIN-32 (LOW) — no audit logging on
+any disbursement or public token-approval action; fixed. 8 lower-severity,
+non-ledger status transitions with the same unlocked-read shape were
+deliberately deferred to a dedicated pass and documented in
+`KNOWN_LIMITATIONS.md`. Full write-up: the **Pass 5** section of
+`docs/security-review/FIN-05-finance-approvals.md`. Rotation row 05 stays
+`✅`. **Next: Feature 06 (Elections & ballots), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 5, PR #2544, before it merged), preserved for history</summary>
+
 **PR [#2544](https://github.com/thegspiro/the-logbook/pull/2544)**
 (Feature 05, Finance & approvals, pass 5) — branch
 `claude/security-review-feature05-pass5`, opened against a fresh
@@ -76,6 +102,8 @@ scoped finance/dues/approval/budget/export tests 332 passed (326 pre-existing
   pre-existing, environment-only), 0 failed.** No frontend file changed by this
   pass. Rotation row 05 stays `✅` (pending PR merge). Next: 06 Elections &
   ballots.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 5, PR #2542, merged), preserved for history</summary>
@@ -14928,6 +14956,23 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 05 (Finance & approvals, pass 5) — PR #2544 merged; next Feature 06
+
+30-minute watchdog check found PR #2544 (Feature 05, Finance & approvals,
+pass 5) merged directly by the repo owner (`merged_by: thegspiro`) before
+this session's own `merge_pull_request` call. CI on the current head
+(`875819e`) had gone green after one stale-superseded-run false failure on
+an intermediate commit (`496c2f0d`) — every job on that run showed
+`cancelled`, not `failed`, because a follow-up commit advanced the branch
+mid-run; diagnosed via `list_workflow_jobs`, resolved with one explanatory
+PR comment rather than a code push. `git fetch origin main` confirmed the
+merge commit (`6613919e2`) landed on `main`. Recorded the closure in
+`PROGRESS.md`: superseded the prior **Open PR** note (preserved in a
+`<details>` block) with a "None." closure paragraph summarizing the two
+fixed findings (FIN-31 disbursement-lock race, FIN-32 audit logging),
+rotation row 05 confirmed still `✅`. Next: Feature 06 (Elections &
+ballots), pass 5.
 
 ### 2026-09-14 — Feature 05 (Finance & approvals, pass 5) — PR opened; 2 new findings, both fixed
 
