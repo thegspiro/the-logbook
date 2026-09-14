@@ -1,5 +1,29 @@
 # Screenshot currency
 
+## Audited 2026-09-14 (fourth watchdog pass) — no drift found
+
+Routine maintenance pass per the currency job's standing brief. This pass
+found the branch about 8 hours stale (last watchdog commit `fcec3cd93` at
+15:40 UTC, well past the ~2-hour cadence of prior passes) with no indication
+of why the previous runner stopped; ran this pass manually to bring the
+branch back to current rather than leave the gap open.
+
+Rebased onto `origin/main` (2 commits, `50b99aa59` → `ffafe640f`):
+PR #2562 recording the merge of PR #2561 (Feature 11, Inventory,
+security-review pass 5) — docs-only, touching
+`docs/security-review/INV-11-inventory.md` and
+`docs/security-review/PROGRESS.md` — no frontend/UI change. Clean replay, no
+conflicts.
+
+`status_report.py`: 580/580, unchanged. `audit_images.py --baseline
+scripts/screenshots/audit_baseline.txt`: no new findings across all 580
+images — only the pre-known dark-page scrollbar-gutter edge finding, already
+in the baseline. `check_docs_links.py`: 358 files, 0 broken links.
+
+`15-08-election-package.png` remains queued from the 2026-09-13 second pass
+(below) for a full-stack capture run — nothing in this range touches it
+further, and this pass had no live app/browser available to clear it.
+
 ## Audited 2026-09-14 (third watchdog pass) — no drift found
 
 Routine maintenance pass per the currency job's standing brief, run from the
