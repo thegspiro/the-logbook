@@ -16,6 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2561](https://github.com/thegspiro/the-logbook/pull/2561)
+(Feature 11, Inventory, pass 5) merged clean — 17/17 CI green, no flakes —
+merged by this session via `merge_pull_request`. `git fetch origin main`
+confirms the merge commit (`89754f467`) is on `main`. Re-verified the five
+standing flags (INV-8, INV-9, INV-16, INV-17, INV-22) against current code:
+all five confirmed still open/unchanged since pass 4. Reviewed everything
+that landed in the module's scope files since pass 4's merge (a
+`GET /items/export` streaming rewrite that also closes a prior silent
+10,000-row export cap, an NFPA-1851 inspection-date guard fix on
+`update_maintenance_record`, and a member-facing variant-clustering/top-up
+UI in `InventoryItemsPage.tsx`) — all independently merged outside this
+rotation via separate PRs (#2471/#2479/#2512). **0 new findings**: every
+change checked against all seven checklist dimensions and found to preserve
+auth, org-scoping, LIKE-escaping, and CSV-injection protection, with no new
+by-id query or client-supplied FK. Full write-up: the **Pass 5** section of
+`docs/security-review/INV-11-inventory.md`. Rotation row 11 stays `✅`.
+**Next: Feature 12 (Facilities), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 5, PR #2561, before it merged), preserved for history</summary>
+
 **PR [#2561](https://github.com/thegspiro/the-logbook/pull/2561)** — branch
 `claude/security-review-feature11-pass5`, Feature 11 (Inventory), pass 5.
 Step 0 concurrent-session check: `git fetch origin main` clean;
@@ -41,6 +62,8 @@ Full write-up: the **Pass 5** section of
 `docs/security-review/INV-11-inventory.md`. Rotation row 11 → 🔄 (becomes
 `✅` once this PR merges). **Next: Feature 12 (Facilities), pass 5, once
 this PR merges.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 5, PR #2559, merged), preserved for history</summary>
