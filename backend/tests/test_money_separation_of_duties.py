@@ -22,27 +22,29 @@ def _one(obj):
 
 
 class TestFinanceDisbursementSoD:
+    # mark_pr_paid/mark_expense_paid/issue_check now read their entity via a
+    # locked inline SELECT rather than the get_*/get_check_request getters
+    # (CLAUDE.md Pitfall #27 -- see TestFinanceDisbursementLocking in
+    # test_capacity_locking.py), so these mock db.execute directly instead of
+    # stubbing a getter the production code no longer calls.
     async def test_requester_cannot_mark_own_pr_paid(self):
-        svc = FinanceService(MagicMock())
-        svc.get_purchase_request = AsyncMock(
-            return_value=SimpleNamespace(requested_by="u1")
-        )
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_one(SimpleNamespace(requested_by="u1")))
+        svc = FinanceService(db)
         with pytest.raises(ValueError, match="cannot mark paid your own"):
             await svc.mark_pr_paid("pr1", "org1", None, acted_by="u1")
 
     async def test_requester_cannot_mark_own_expense_paid(self):
-        svc = FinanceService(MagicMock())
-        svc.get_expense_report = AsyncMock(
-            return_value=SimpleNamespace(submitted_by="u1")
-        )
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_one(SimpleNamespace(submitted_by="u1")))
+        svc = FinanceService(db)
         with pytest.raises(ValueError, match="cannot mark paid your own"):
             await svc.mark_expense_paid("er1", "org1", None, acted_by="u1")
 
     async def test_requester_cannot_issue_own_check(self):
-        svc = FinanceService(MagicMock())
-        svc.get_check_request = AsyncMock(
-            return_value=SimpleNamespace(requested_by="u1")
-        )
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_one(SimpleNamespace(requested_by="u1")))
+        svc = FinanceService(db)
         with pytest.raises(ValueError, match="cannot issue check your own"):
             await svc.issue_check("cr1", "org1", "1001", acted_by="u1")
 
@@ -56,12 +58,13 @@ class TestFinanceDisbursementSoD:
     async def test_a_different_approver_is_allowed_through_the_guard(self):
         # acted_by != requester -> the guard passes (the ValueError here, if any,
         # is a later precondition, not the SoD block).
-        svc = FinanceService(MagicMock())
-        svc.get_purchase_request = AsyncMock(
-            return_value=SimpleNamespace(
-                requested_by="u1", status="draft", budget_id=None
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=_one(
+                SimpleNamespace(requested_by="u1", status="draft", budget_id=None)
             )
         )
+        svc = FinanceService(db)
         # Passes the SoD guard (u2 != u1) and stops at the later status
         # precondition, proving the guard did not block a legitimate approver.
         with pytest.raises(ValueError, match="cannot be marked as paid in this status"):

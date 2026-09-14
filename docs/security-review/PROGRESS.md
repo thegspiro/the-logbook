@@ -16,6 +16,70 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2544](https://github.com/thegspiro/the-logbook/pull/2544)**
+(Feature 05, Finance & approvals, pass 5) — branch
+`claude/security-review-feature05-pass5`, opened against a fresh
+`origin/main`. Checked for a concurrent session first per this run's own
+Step 0: `git fetch origin main` showed a clean working tree (3 commits
+behind, fast-forwarded); the **Open PR** row read "None" (Feature 04 pass
+5's PR #2542 had already merged); and `list_pull_requests` / a log search for
+"Feature 05" + "pass 5" found no prior attempt this lap. No commit touched
+this feature's declared scope or its direct dependencies since pass 4's
+closing merge (`320a143d`, PR #2398) — confirmed with both a pathspec-scoped
+and a full non-simplified `git log` walk of the 475 intervening commits — so
+this was a full fresh re-read rather than a diff review. FIN-19 through
+FIN-30 (every prior pass's fix) re-verified present and unchanged. **Two new
+findings, both fixed:** FIN-31 (MED) — `mark_pr_paid`, `mark_expense_paid`,
+`issue_check`, `void_check`, and `cancel_purchase_request` each read their
+entity via a plain unlocked SELECT before checking/flipping its status and
+mutating the org's shared `Budget` ledger (CLAUDE.md Pitfall #27, the same
+shape FIN-10 already fixed for `approve_step`/`deny_step`) — two concurrent
+calls on the same request/report/check could both pass the precondition
+check and both apply the budget delta, double-crediting spend or (an
+unlocked `cancel_purchase_request` racing a locked `mark_pr_paid`) silently
+reverting an already-committed `PAID` status back to `CANCELLED`. Fixed by
+locking each entity's initial read with `.with_for_update()`, matching
+`update_budget`'s existing precedent exactly, and — for `void_check`
+specifically — routing its budget reversal through the shared
+`_mutate_budget` helper instead of a second, independent unlocked
+read-then-write on `Budget.amount_spent`. Guarded by 6 new source-inspection
+tests in `tests/test_capacity_locking.py::TestFinanceDisbursementLocking`,
+confirmed red against the pre-fix `finance_service.py` and green after; 4
+existing tests in `test_money_separation_of_duties.py` needed updating to
+mock `db.execute` instead of the getter methods these 5 rewritten methods no
+longer call. FIN-32 (LOW) — `finance_service.py` had zero `log_audit_event`
+call sites of its own and none of the six actual disbursement actions
+(`mark_pr_paid`, `mark_expense_paid`, `issue_check`, `void_check`,
+`record_dues_payment`, `waive_dues`) or either public token-approval action
+(`approve_via_token`/`deny_via_token`) wrote an audit event — fixed by adding
+`log_audit_event` calls matching the file's own existing pattern (the public
+endpoints follow the no-`user_id`/explicit-`organization_id` convention
+`paypal_webhook.py` already uses for an external-actor event). The eight
+remaining non-ledger status-transition methods with the same unlocked-read
+shape (`submit_purchase_request`/`submit_expense_report`/
+`submit_check_request`/`mark_pr_ordered`/`mark_pr_received`/
+`update_purchase_request`/`update_expense_report`/`update_check_request`)
+were deliberately left unfixed and flagged — lower severity (none touches the
+budget ledger) and a broader uniform sweep than this pass's evidence
+supports fixing under one commit without its own dedicated concurrency-test
+pass; recorded in `docs/KNOWN_LIMITATIONS.md` with the concrete fix pattern.
+Full write-up: the **Pass 5** section of
+`docs/security-review/FIN-05-finance-approvals.md`. `flake8`/
+`black --check`/`isort --check-only` clean on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` 444 revisions, single head
+(`6ab7d903fae5`); `check_route_permissions.py --strict` 228 routes, 0 errors;
+scoped finance/dues/approval/budget/export tests 332 passed (326 pre-existing
+
+- 6 new), 1 skipped (pre-existing); cross-cutting guard tests (org-scoping
+  ratchet, capacity locking, LIKE escaping, CSV sweep) 64 passed; **full
+  backend suite (`pytest tests/ -q`) 12,556 passed, 21 skipped (all
+  pre-existing, environment-only), 0 failed.** No frontend file changed by this
+  pass. Rotation row 05 stays `✅` (pending PR merge). Next: 06 Elections &
+  ballots.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 5, PR #2542, merged), preserved for history</summary>
+
 **None.** PR [#2542](https://github.com/thegspiro/the-logbook/pull/2542)
 (Feature 04, Storefront & payments, pass 5) merged clean, 17/17 CI green, no
 unresolved review threads (one bot comment noting a Codex usage-limit
@@ -57,6 +121,8 @@ errors, 0 warnings; `vitest run src/modules/storefront/ src/components/admin/`
 the app-review track had already closed the one real gap (SF-8) three days
 before this pass started. Rotation row 04 stays `✅`. Next: Feature 05
 (Finance & approvals), pass 5.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 5, PR #2542, before it merged), preserved for history</summary>
@@ -14862,6 +14928,99 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 05 (Finance & approvals, pass 5) — PR opened; 2 new findings, both fixed
+
+Checked for a concurrent session first per Step 0: `git fetch origin main`
+(clean working tree, 3 commits behind, fast-forwarded); the **Open PR**
+section read "None" (Feature 04 pass 5's PR #2542 already merged); and
+`list_pull_requests` plus a log search for "Feature 05" + "pass 5" found no
+prior attempt this lap. Branch `claude/security-review-feature05-pass5`
+opened fresh off `origin/main`.
+
+No commit touched `endpoints/finance.py`, `finance_service.py`, or
+`public/finance_approvals.py` (or their direct model/schema/util
+dependencies) since pass 4's closing merge (`320a143d`, PR #2398) —
+confirmed with both a pathspec-scoped and a full, non-simplified `git log`
+walk of the 475 intervening commits. This was therefore a full fresh re-read
+against the model, not a diff review. FIN-19 through FIN-30 (every prior
+pass's fix, including pass 4's FIN-27/28/29 and the FIN-30 flag) re-verified
+present and unchanged.
+
+**FIN-31 (MED, fixed) — five money-ledger status transitions raced.**
+`mark_pr_paid`, `cancel_purchase_request`, `mark_expense_paid`,
+`issue_check`, and `void_check` each read their entity (`PurchaseRequest`/
+`ExpenseReport`/`CheckRequest`) via a plain unlocked SELECT before checking
+and flipping its status and mutating the org's shared `Budget` row —
+CLAUDE.md Pitfall #27, the identical shape FIN-10 (pass 2) already fixed for
+`approve_step`/`deny_step`, just on the disbursement side instead of the
+approval side. Two concurrent calls on the same entity could both pass the
+precondition check off their own stale snapshot and both apply the budget
+delta a second time — a genuine double-credit of `amount_spent`, unbounded
+unlike a capacity cap. Including `cancel_purchase_request` in the fix (not
+just `mark_pr_paid`) mattered: an unlocked cancel racing a locked
+`mark_pr_paid` would otherwise flush a stale `status=CANCELLED` write over
+an already-committed `PAID` row once its own write finally landed — fixing
+only the money-movement method would have moved the corruption rather than
+closed it. Fixed by locking each initial entity read with
+`.with_for_update()` (matching `update_budget`'s FIN-11 precedent exactly),
+and — for `void_check` specifically — replacing a second, independent
+unlocked read-then-write on `Budget.amount_spent` with the shared
+`_mutate_budget` helper every other budget mutation already uses. 6 new
+source-inspection guard tests in `tests/test_capacity_locking.py`
+(`TestFinanceDisbursementLocking`), confirmed red against the pre-fix
+`finance_service.py` (`git stash`, re-run: all 6 fail) and green after.
+Updating this also required 4 tests in `test_money_separation_of_duties.py`
+to mock `db.execute` instead of the getter methods these 5 rewritten methods
+no longer call — no change to what each test proves.
+
+**Scope decision, documented rather than fixed:** the same unlocked-read
+shape also exists on 8 non-ledger status transitions (the three `submit_*`
+methods — a race there could create two parallel approval-chain record
+sets for one entity — and `mark_pr_ordered`/`mark_pr_received`/the three
+`update_*` methods). Lower severity (none touches `Budget`), and fixing all
+eight uniformly in the same commit — without a dedicated concurrency test
+per interaction — risks a rushed sweep across a financial surface. Flagged
+in `docs/KNOWN_LIMITATIONS.md` with the concrete fix pattern for a future
+pass.
+
+**FIN-32 (LOW, fixed) — no audit trail on any disbursement or token-approval
+action.** `finance_service.py` has zero `log_audit_event` call sites of its
+own; of ~46 mutating routes in `finance.py`, 8 already logged (fiscal-year
+create/activate, approval-chain create, `approve_step`/`deny_step`,
+purchase-request create/submit, dues-waiver reversal) but the six actual
+disbursement actions (`mark_pr_paid`, `mark_expense_paid`, `issue_check`,
+`void_check`, `record_dues_payment`, `waive_dues`) had none, and neither did
+either public token-approval action (`approve_via_token`/`deny_via_token` in
+`public/finance_approvals.py`) — arguably the higher-value gap, since those
+are approval-chain decisions made by someone with no Logbook account at all.
+Not a live access-control defect (every action already carries its own
+permission gate and, on the money side, the FIN-4 SoD guard) but a real
+compliance/observability gap on a financial ledger. Fixed by adding
+`log_audit_event` calls matching the file's own established pattern exactly;
+the two public endpoints follow the no-`user_id`/explicit-`organization_id`
+convention `paypal_webhook.py` already uses for an external-actor event.
+`waive_dues`'s event deliberately omits the waive reason, matching
+`unwaive_dues`'s existing privacy rationale for the same field.
+
+Full write-up: the **Pass 5** section of
+`docs/security-review/FIN-05-finance-approvals.md`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` 444 revisions,
+single head (`6ab7d903fae5`); `check_route_permissions.py --strict` 228
+routes, 0 errors (no route added/removed); scoped finance/dues/approval/
+budget/export tests 332 passed (326 pre-existing + 6 new), 1 skipped
+(pre-existing); cross-cutting guard tests (org-scoping ratchet, capacity
+locking, LIKE escaping, CSV sweep) 64 passed; **full backend suite
+(`pytest tests/ -q`) 12,556 passed, 21 skipped (all pre-existing,
+environment-only: `py_vapid`, Docker-unavailable/unreachable integration
+tests, the opt-in API-contract suite), 0 failed.** No frontend file changed
+by this pass, so `tsc`/`eslint`/`vitest` were not re-run (the assignment's
+own gate for those is conditioned on touching a frontend file). Rotation row
+05 stays `✅` (pending PR merge). PR [#2544](https://github.com/thegspiro/the-logbook/pull/2544)
+opened; next tend/watchdog pass merges it and advances to Feature 06
+(Elections & ballots).
 
 ### 2026-09-14 — Feature 04 (Storefront & payments) — PR #2542 merged
 

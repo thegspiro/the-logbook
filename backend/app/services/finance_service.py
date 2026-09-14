@@ -1722,7 +1722,24 @@ class FinanceService:
         actual_amount: Optional[Decimal] = None,
         acted_by: Optional[str] = None,
     ) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        # Locked read (CLAUDE.md Pitfall #27): two concurrent "mark paid" calls
+        # on the same request must not both pass the not-yet-paid check off a
+        # plain SELECT and both move budget from encumbered to spent -- the
+        # same shape FIN-10 already fixed for approve_step/deny_step, here on
+        # the disbursement transition instead of the approval one. Racing with
+        # cancel_purchase_request (also locked, below) matters too: an
+        # unlocked cancel reading a stale pre-payment snapshot would otherwise
+        # flush a status=CANCELLED write that silently overwrites this
+        # request's already-committed PAID status.
+        result = await self.db.execute(
+            select(PurchaseRequest)
+            .where(
+                PurchaseRequest.id == pr_id,
+                PurchaseRequest.organization_id == org_id,
+            )
+            .with_for_update()
+        )
+        pr = result.scalar_one_or_none()
         if not pr:
             raise ValueError("Purchase request not found")
         # SoD (FIN-4): the person who disburses must not be the requester.
@@ -1759,7 +1776,20 @@ class FinanceService:
         return pr
 
     async def cancel_purchase_request(self, pr_id: str, org_id: str) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        # Locked read -- see mark_pr_paid: this is the request's other terminal
+        # transition off the same status field, and the two must not race each
+        # other (an unlocked cancel here reading a stale pre-payment snapshot
+        # would flush a status=CANCELLED write over an already-committed PAID
+        # request once its own lock clears).
+        result = await self.db.execute(
+            select(PurchaseRequest)
+            .where(
+                PurchaseRequest.id == pr_id,
+                PurchaseRequest.organization_id == org_id,
+            )
+            .with_for_update()
+        )
+        pr = result.scalar_one_or_none()
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status in (PurchaseRequestStatus.PAID,):
@@ -1955,7 +1985,19 @@ class FinanceService:
         payment_method: Optional[str] = None,
         acted_by: Optional[str] = None,
     ) -> ExpenseReport:
-        er = await self.get_expense_report(er_id, org_id)
+        # Locked read -- see mark_pr_paid. Two concurrent "mark paid" calls on
+        # the same report must not both pass the APPROVED check off a plain
+        # SELECT and both add every line item's amount to spent.
+        result = await self.db.execute(
+            select(ExpenseReport)
+            .options(selectinload(ExpenseReport.line_items))
+            .where(
+                ExpenseReport.id == er_id,
+                ExpenseReport.organization_id == org_id,
+            )
+            .with_for_update()
+        )
+        er = result.scalar_one_or_none()
         if not er:
             raise ValueError("Expense report not found")
         # SoD (FIN-4): the person who disburses must not be the submitter.
@@ -2096,7 +2138,18 @@ class FinanceService:
         check_date: Optional[datetime] = None,
         acted_by: Optional[str] = None,
     ) -> CheckRequest:
-        cr = await self.get_check_request(cr_id, org_id)
+        # Locked read -- see mark_pr_paid. Two concurrent "issue" calls on the
+        # same request must not both pass the APPROVED check off a plain
+        # SELECT and both add the check's amount to spent.
+        result = await self.db.execute(
+            select(CheckRequest)
+            .where(
+                CheckRequest.id == cr_id,
+                CheckRequest.organization_id == org_id,
+            )
+            .with_for_update()
+        )
+        cr = result.scalar_one_or_none()
         if not cr:
             raise ValueError("Check request not found")
         # SoD (FIN-4): the person who issues the check must not be the requester.
@@ -2118,7 +2171,18 @@ class FinanceService:
         return cr
 
     async def void_check(self, cr_id: str, org_id: str) -> CheckRequest:
-        cr = await self.get_check_request(cr_id, org_id)
+        # Locked read -- see mark_pr_paid/issue_check. Two concurrent "void"
+        # calls on the same check must not both pass the ISSUED check off a
+        # plain SELECT and both subtract the check's amount from spent.
+        result = await self.db.execute(
+            select(CheckRequest)
+            .where(
+                CheckRequest.id == cr_id,
+                CheckRequest.organization_id == org_id,
+            )
+            .with_for_update()
+        )
+        cr = result.scalar_one_or_none()
         if not cr:
             raise ValueError("Check request not found")
         if cr.status != CheckRequestStatus.ISSUED:
@@ -2126,14 +2190,14 @@ class FinanceService:
 
         cr.status = CheckRequestStatus.VOIDED
 
-        # Reverse the spent amount
+        # Reverse the spent amount through the same locked helper every other
+        # budget mutation uses (Pitfall #27), rather than a duplicated inline
+        # read-then-write on Budget.amount_spent: that plain read could answer
+        # from a stale REPEATABLE READ snapshot taken before a concurrent
+        # _mutate_budget writer (issue_check, mark_expense_paid) committed,
+        # silently discarding that writer's spend when this write lands.
         if cr.budget_id:
-            budget = await self.get_budget(cr.budget_id, org_id)
-            if budget:
-                budget.amount_spent = max(
-                    Decimal("0"),
-                    budget.amount_spent - cr.amount,
-                )
+            await self._mutate_budget(cr.budget_id, org_id, spent_delta=-cr.amount)
 
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])
