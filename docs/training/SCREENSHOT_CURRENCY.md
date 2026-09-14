@@ -123,6 +123,26 @@ restores it afterwards. Without that, the count-only Call Volume shots have no
 data behind them and the seeder reports the failure only in its blocked list,
 where a capture run does not look.
 
+## Audited 2026-09-14 (watchdog pass) — no drift found
+
+Routine maintenance pass per the currency job's standing brief, run from the
+branch-currency watchdog after several hours with no commit on this branch.
+Rebased onto `origin/main` (2 commits, `59a519874` → `9e79ab485`): PR #2543
+recording the merge of PR #2542 (Feature 04, Storefront & payments,
+security-review pass 5) — both docs-only, touching only
+`docs/security-review/PROGRESS.md` and
+`docs/security-review/SF-04-storefront-payments.md`. Clean replay, no
+conflicts.
+
+`status_report.py`: 580/580, unchanged. `audit_images.py --baseline
+scripts/screenshots/audit_baseline.txt`: no new findings across all 580
+images — only the pre-known dark-page scrollbar-gutter edge finding, already
+in the baseline. `check_docs_links.py`: 358 files, 0 broken links.
+
+`15-08-election-package.png` remains queued from the 2026-09-13 second pass
+(below) for a full-stack capture run — nothing in this range touches it
+further.
+
 ## Audited 2026-09-13 (second pass) — one queued: the election-vote hint is new
 
 Routine maintenance pass per the currency job's standing brief. Rebased onto
