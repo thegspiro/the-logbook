@@ -2337,12 +2337,14 @@ async def delete_interview(
 async def list_prospect_event_links(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("prospective_members.view")),
+    current_user: User = Depends(
+        require_permission("prospective_members.view", "prospective_members.manage")
+    ),
 ):
     """
     List all events linked to a prospect.
 
-    **Requires permission: prospective_members.view**
+    **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     try:

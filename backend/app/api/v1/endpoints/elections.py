@@ -1940,13 +1940,15 @@ async def rollback_election(
 async def list_candidates(
     election_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("elections.view")),
+    current_user: User = Depends(
+        require_permission("elections.view", "elections.manage")
+    ),
 ):
     """
     List all candidates for an election
 
     **Authentication required**
-    **Requires permission: elections.view**
+    **Requires permission: elections.view or elections.manage**
     """
     service = ElectionService(db)
     election = await service.get_election(election_id, current_user.organization_id)

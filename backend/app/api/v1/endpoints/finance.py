@@ -957,7 +957,7 @@ async def list_expense_reports(
     status: Optional[str] = Query(None),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.view", "finance.manage")),
 ):
     service = FinanceService(db)
     # A plain finance.view holder sees only their own reimbursement submissions;
@@ -1010,7 +1010,7 @@ async def create_expense_report(
 async def get_expense_report(
     er_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.view", "finance.manage")),
 ):
     service = FinanceService(db)
     restrict = (
@@ -1415,7 +1415,7 @@ async def list_member_dues(
     status: Optional[str] = Query(None),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.view", "finance.manage")),
 ):
     # Member dues balances are individual financial records. `finance.view`
     # (roster-level read) must not expose one member's dues to another; only a
@@ -1470,7 +1470,7 @@ async def record_dues_payment(
 async def list_dues_payments(
     dues_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.view", "finance.manage")),
 ):
     """
     List every payment recorded against one member's dues, oldest first.
