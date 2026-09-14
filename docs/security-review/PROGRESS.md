@@ -16,6 +16,42 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2536](https://github.com/thegspiro/the-logbook/pull/2536)
+(Feature 01, Auth & session lifecycle, pass 5) merged clean, 16/16 CI green
+(after one stale-superseded-run false failure on the prior commit — every
+job on that run showed `cancelled`, not `failed`, because the branch
+advanced mid-run; documented in a PR comment, resolved by waiting for the
+new head's own CI), no unresolved review threads. **0 new findings.** `git
+diff` against pass 4's merge commit (`a68d674dd9`) shows changes in exactly
+two of this feature's files since pass 4 — `auth.py` (`GET /branding`
+gained a `navigation_layout` field, from an unrelated onboarding feature
+branch) and `auth_service.py` (the app-review track's own AUTH-20
+lockout-race fix) — every other in-scope file is byte-identical to pass 4.
+Both changes were read in full under this rotation's own seven-dimension
+checklist rather than taken on trust from whichever track landed them
+first, and both hold: the branding field exposes nothing sensitive and
+validates against a literal allowlist; the lockout-race fix is
+structurally identical to the already-established
+`_verify_and_consume_totp`/`_verify_and_consume_recovery_code` locking
+pattern, its own guard test (`test_auth_lockout_race.py`) passes, and its
+lock placement (inside the failure branch, never around the Argon2 verify)
+was independently re-derived rather than assumed. All 19 prior findings'
+fixes (AUTH-1 through AUTH-19) re-verified still in place at current line
+numbers; AUTH-15 (HIPAA max password age enforced only in the browser) and
+AUTH-17 (session rows never reaped) remain open and unchanged, both still
+needing an owner decision before a fix. Findings doc:
+`docs/security-review/AUTH-01-auth-session.md` (pass 5 section).
+`flake8`/`black --check`/`isort --check-only` clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` 444 revisions, single head;
+backend full unit suite (`pytest tests/ -m "not integration and not slow and
+not docker"`) **10158 passed, 1 skipped**; scoped auth/mfa/oauth/consent
+tests 674 passed, 2 skipped (both pre-existing); no frontend files changed
+this pass. Rotation row 01 stays `✅` per this file's own convention. Next:
+Feature 02 (Permissions & roles), pass 5.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 5, PR #2536, before it merged), preserved for history</summary>
+
 **PR [#2536](https://github.com/thegspiro/the-logbook/pull/2536)**
 (Feature 01, Auth & session lifecycle, pass 5) — branch
 `claude/security-review-auth-session`, opened against a fresh `origin/main`
@@ -45,6 +81,8 @@ backend full unit suite (`pytest tests/ -m "not integration and not slow and
 not docker"`) **10158 passed, 1 skipped**; scoped auth/mfa/oauth/consent
 tests 674 passed, 2 skipped (both pre-existing); no frontend files changed
 this pass. Rotation row 01 stays `✅` per this file's own convention.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 5, PR #2534, merged), preserved for history</summary>
@@ -14538,6 +14576,18 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 01 (Auth & session lifecycle) — PR #2536 merged
+
+PR #2536 (pass 5: two in-scope files had changed since pass 4 — a benign
+branding field and an already-verified lockout-race fix from the app-review
+track — every other file byte-identical; all 19 prior findings
+re-confirmed, both open items AUTH-15/AUTH-17 unchanged; 0 new findings)
+merged clean, 16/16 CI green, after one stale-superseded-run false CI
+failure (every job `cancelled`, not `failed`, on the pre-bookkeeping commit
+— documented in a PR comment, resolved by waiting for the new head's own
+CI). Rotation row 01 stays `✅`. Next: Feature 02 (Permissions & roles),
+pass 5.
 
 ### 2026-09-14 — Feature 01 (Auth & session lifecycle, pass 5) — PR #2536 opened; 0 new findings
 
