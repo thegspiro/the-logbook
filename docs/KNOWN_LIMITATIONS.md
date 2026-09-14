@@ -4278,6 +4278,35 @@ typed in), and a full second-approver workflow is a feature, not a same-day
 fix. Found in `docs/security-review/MS-09-medical-screening.md` (feature 09,
 pass 3, MS-7).
 
+## Medical Screening — PHI Reads Are Not Audit-Logged, Only Writes Are (2026-09-14)
+
+`medical_screening.py`'s six write routes (`create`/`update`/`delete` for
+both requirements and records) each call `log_audit_event()`, and MS-8
+(pass 3) already closed the one gap in those six — the two `_created`
+events now carry the new row's own id. The five `GET` routes that can
+return PHI-bearing fields — `/records`, `/records/{id}`,
+`/compliance/{user_id}`, `/compliance/prospect/{prospect_id}`, `/expiring`
+— call `log_audit_event()` nowhere. HIPAA's audit-control expectation
+(§164.312(b)) is commonly read to cover _access_ to PHI, not only changes
+to it — so who viewed a member's drug-screening or psychological-evaluation
+result, and when, is currently undiscoverable after the fact, unlike who
+created or edited it.
+
+This has been the shape of the endpoint file since Feature 09 pass 1
+(2026-08-25); it was not a regression introduced by any later pass, and no
+prior pass named it as a gap — each one reviewed the six writes and
+described "audit logging: present" without separately weighing the seven
+reads. Surfaced explicitly in pass 5's re-review.
+
+Not fixed as a same-day change: instrumenting five read routes needs a
+volume/retention decision (`/records` and `/expiring` back the main list
+views used on every page load, not just a detail drill-down — logging once
+per request vs. once per row returned is a real design choice, not a
+formatting detail) and a new audit event taxonomy for reads, which is a
+feature addition rather than a scoped fix. Found in
+`docs/security-review/MS-09-medical-screening.md` (feature 09, pass 5,
+MS-12).
+
 ## FAC-13 — Every Facility Folder Requires the Sensitive-Family Permission Set, Silencing Three Established-Baseline Categories for Their Intended Audience (2026-09-03)
 
 `GET /{facility_id}/folders` is gated at baseline `facilities.view`/

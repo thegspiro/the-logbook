@@ -16,6 +16,61 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2557](https://github.com/thegspiro/the-logbook/pull/2557)** — branch
+`claude/security-review-feature09-pass5`, Feature 09 (Medical screening,
+PHI), pass 5 per the rotation tracker. Step 0 concurrent-session
+check: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
+"None." with the Feature 08 pass 5/6 closure note beneath it (now
+superseded below) and named "Next: Feature 09 (Medical screening), pass 5"
+explicitly; `list_pull_requests` (open) returned only #2547/#2548
+(unrelated member/rank-permission fixes), dependabot #2550-2552, and #2495
+(scheduling) — no Feature 09/medical-screening branch or title;
+`search_pull_requests` for every prior Feature 09 PR (#1816, #1952, #2180,
+#2409) confirmed all four closed/merged. `git ls-remote --heads origin` for
+`feature09`/`medical`/`screening`/`ms` found nothing either. **1 new
+finding, fixed (LOW):** MS-11 — `app/mcp/tools/medical.py`'s module
+docstring claimed `notes` (a PHI, `EncryptedText` column) was, like
+`provider_name`/`result_summary`/`result_data`, "on the redaction
+denylist" — it is not, and cannot safely be added there globally (the bare
+key name `notes` is legitimate, non-PHI content in four other MCP tool
+modules). No live leak: both tools in the file build their return values
+from explicit, closed field lists that never touch `.notes`, confirmed by
+direct read and by the file's existing static and behavioral test coverage
+— but the _claimed_ second-net guarantee for that field did not actually
+hold, which is exactly the failure mode the second net exists to catch.
+Fixed by correcting the docstring to name what really protects `notes`
+(explicit projection, not redaction) and warn against a future addition to
+the file relying on the denylist for it. **1 new finding, flagged (LOW):**
+MS-12 — none of the five PHI-returning `GET` routes call
+`log_audit_event()` (only the six writes do); unchanged since pass 1,
+first named explicitly this pass per the assignment's HIPAA §164.312(b)
+access-logging callout, mirrored to `KNOWN_LIMITATIONS.md` rather than
+fixed same-day (a real feature addition: new audit event types, and a
+volume/retention decision for high-frequency list routes). Full re-
+verification of every prior pass's fixed item (MS-3/MS-5/MS-8's
+`assert_in_org`/`apply_updates`/audit-id changes, PHI encryption, no
+baseline grant, cache exclusion, module gate) confirmed all four backend
+declared files byte-for-byte unchanged since pass 4's merge and every fix
+still intact; MS-6/MS-7/MS-9 re-confirmed still open/flagged, unchanged.
+This pass also enumerated `app/mcp/tools/medical.py` into scope for the
+first time (this rotation's established precedent, per Feature 11 pass 4:
+a feature-owned MCP surface belongs to the owning feature's pass) — where
+MS-11/MS-12 were found. Gate: flake8/black/isort clean on the one changed
+file; `validate_migrations.py --strict` passed (444 revisions, single
+head, no schema change this pass — no migration touched); scoped pytest
+50 passed / 1 pre-existing skip / 0 failed; MCP test files (`test_mcp_
+tools.py`/`test_mcp_redaction.py`/`test_mcp_keys.py`/`test_mcp_key_
+endpoints.py`/`test_mcp_transport.py`) 274 passed / 0 failed; full backend
+suite 12563 passed / 21 pre-existing/environmental skips / 0 failed;
+frontend typecheck/lint not run — no frontend file touched (the diff since
+pass 4 is a repo-wide accessibility sweep, reviewed and confirmed not
+security-relevant). Full write-up: the **Pass 5** section of
+`docs/security-review/MS-09-medical-screening.md`. Rotation row 09 stays
+`✅`.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 5/6, PR #2555, after it merged), preserved for history</summary>
+
 **None.** PR [#2555](https://github.com/thegspiro/the-logbook/pull/2555)
 (Feature 08, Membership pipeline, pass 5 per the rotation tracker / pass 6
 per the feature's own findings doc) merged clean — 17/17 CI green, after one
@@ -34,6 +89,8 @@ new flags** — 4 prior FLAGGED/narrowed items re-verified unchanged. Full
 write-up: the **Pass 6** section of
 `docs/security-review/MP-08-membership-pipeline.md`. Rotation row 08 stays
 `✅`. **Next: Feature 09 (Medical screening), pass 5.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 5, PR #2555, before it merged), preserved for history</summary>
@@ -15171,6 +15228,91 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 09 (Medical screening, PHI, pass 5) — 1 fixed (LOW), 1 flagged (LOW) — PR opened
+
+Step 0: `git fetch origin main` clean; local checkout was left on the prior
+session's `claude/security-review-feature08-pass5` branch. Read `PROGRESS.md`'s
+Open PR section on `origin/main` (not the stale local checkout) — it read
+"None." with the Feature 08 pass 5/6 closure note (PR #2555, merged) and named
+"Next: Feature 09 (Medical screening), pass 5" explicitly. `list_pull_requests`
+(open) returned only #2547/#2548 (unrelated member/rank-permission fixes),
+dependabot #2550-2552, and #2495 (scheduling) — no Feature 09 collision;
+confirmed #2555 itself was already merged (`pull_request_read`) rather than
+trusting the stale local branch state. `search_pull_requests` for every prior
+Feature 09 PR (#1816, #1952, #2180, #2409) confirmed all four closed/merged —
+no open Feature 09 work anywhere. `git ls-remote --heads origin` for
+`feature09`/`medical`/`screening`/`ms` found nothing either. Branched fresh
+off `origin/main` as `claude/security-review-feature09-pass5`.
+
+Read `MS-09-medical-screening.md` in full (all 4 prior passes) and
+`docs/KNOWN_LIMITATIONS.md`/`docs/app-review/medical-screening.md` for open
+items tied to this feature (MS-6/MS-7/MS-9's disclosures already mirrored;
+app-review's own MS-1 is stale — closed by the 2026-08-10 encryption
+migration, already noted as such in pass 1). Last reviewed SHA: `f8fdd1a07`
+(pass 4, PR #2409). `git log f8fdd1a07..origin/main` on the two declared
+scope files, plus `models/medical_screening.py`/`schemas/medical_screening.py`
+as import dependencies, returned nothing — all four read in full anyway and
+confirmed byte-for-byte identical to pass 4's documented state, every prior
+fix (MS-3/MS-5/MS-8) intact. Direct dependencies (`org_scoping.py`,
+`model_updates.py`, `core/audit.py`, `core/permissions.py`) also unchanged;
+two onboarding commits touching `permissions.py` in this window are the
+unrelated Medical _Supplies_ (inventory) module, confirmed by grep that
+neither adds `medical_screening.*` to the checkbox-grant tables. Enumerated
+every other consumer of `MedicalScreeningService`/`ScreeningRecord` outside
+the four declared files; only `membership_pipeline_service.py` changed, and
+only as Feature 08 pass 5/6 work already independently re-reviewed there —
+the one integration point on this feature's side (`try_advance_pipeline_
+stage`) is unchanged.
+
+Enumerated `app/mcp/tools/medical.py` into scope for the first time this
+pass — no prior Feature 09 pass had, and this rotation's own precedent
+(Feature 11 pass 4's correction) is that a feature-owned MCP surface belongs
+to the owning feature's pass. Found **MS-11 (LOW, fixed)**: the file's
+docstring claimed `notes` — a PHI, `EncryptedText` column, same as
+`provider_name`/`result_summary`/`result_data` — was "on the redaction
+denylist" (`app/mcp/redaction.py`). It is not, and can't safely be added
+globally: `notes` is a legitimate non-PHI field name in `finance.py`/
+`meetings.py`/`scheduling.py`/`writes.py`, and the denylist strips by bare
+key name with no source-model context. No live leak — both tools in the
+file build their return values from explicit, closed field lists that never
+read `.notes`, confirmed directly and by existing test coverage
+(`test_mcp_redaction.py`'s static sweep, `test_mcp_tools.py`'s direct
+assertions on both tools) — but the docstring's claim about the second net
+was false, which undercuts the exact guarantee that net exists to provide.
+Fixed by correcting the docstring: names which three fields are actually
+denied, why `notes` deliberately isn't, and what really protects it
+(explicit projection) so a future addition to this file doesn't trust
+redaction for a field it doesn't cover.
+
+Also considered, per this pass's brief on HIPAA §164.312(b) access logging:
+**MS-12 (LOW, flagged)** — none of the five PHI-returning `GET` routes
+(`/records`, `/records/{id}`, `/compliance/{user_id}`, `/compliance/
+prospect/{prospect_id}`, `/expiring`) call `log_audit_event()`; only the six
+writes do. Unchanged since pass 1 — not a regression — but not previously
+named as a gap by any pass, each of which described "audit logging: present"
+against the six writes only. Not fixed same-day: a real feature addition
+(new audit event types for reads, a volume/retention decision for
+`/records`/`/expiring`, which back list views rather than only detail
+drill-downs). Mirrored to `KNOWN_LIMITATIONS.md`.
+
+Re-verified unchanged, not re-flagged: MS-6 (unbounded lists), MS-7 (no
+reviewer distinct from subject), MS-9 (`grace_period_days`/
+`applies_to_roles` unenforced, plus `frequency_months` noted but not folded
+in). Frontend diff since pass 4 (`f8fdd1a07..origin/main`) is a repo-wide
+accessibility sweep (`aria-labelledby`, `btn-primary` adoption, a mobile
+scroll-region marker) — reviewed and confirmed not security-relevant; no
+frontend file touched by this pass. Gate: flake8/black/isort clean on the
+one changed file; `validate_migrations.py --strict` passed (444 revisions,
+single head, no schema change); scoped pytest 50 passed / 1 pre-existing
+skip / 0 failed; MCP test suite (`test_mcp_tools.py`/`test_mcp_redaction.py`/
+`test_mcp_keys.py`/`test_mcp_key_endpoints.py`/`test_mcp_transport.py`) 274
+passed / 0 failed; full backend suite 12563 passed / 21 pre-existing/
+environmental skips / 0 failed; frontend typecheck/lint not run (no
+frontend file touched). Full write-up: the **Pass 5** section of
+`docs/security-review/MS-09-medical-screening.md`. Rotation row 09 stays
+`✅`. PR opened against `main` from branch
+`claude/security-review-feature09-pass5`.
 
 ### 2026-09-14 — Feature 08 (Membership pipeline, pass 5) — 1 fixed (HIGH), 0 flagged — PR opened
 
