@@ -16,6 +16,123 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2553](https://github.com/thegspiro/the-logbook/pull/2553)** — branch
+`claude/security-review-feature07-pass5` (Feature 07, Users & organizations,
+pass 5), opened against a fresh `origin/main`. Step 0 concurrent-session
+check: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
+"None." with the Feature 06 pass 5 closure note beneath it (see the
+superseded block below); `list_pull_requests` (open) returned only #2547 and
+#2548 (unrelated member/rank-permission fixes, explicitly flagged as not a
+collision by this run's own briefing) and #2495 (scheduling) — no Feature
+07/users/organizations branch or title. `git ls-remote --heads origin` for
+`feature07`/`users`/`organizations`/`usr` found nothing either.
+
+`users.py`, `member_leaves.py`, `services/user_service.py`,
+`services/organization_service.py`, `services/member_leave_service.py` and
+`models/user.py` were byte-identical to pass 4's own review (zero diff since
+`83a55e014`, PR #2402); `organizations.py`, `member_status.py` and
+`schemas/organization.py` had changed from unrelated feature work
+(department-wide navigation layout, membership-tier config validation,
+email-config fixes) and were read in full rather than diffed. **1 new
+finding, fixed (MED):** USR-10 — `change_membership_type` and
+`update_membership_tier_config` (both `member_status.py`) raced each other
+with no lock on the `Organization` row, so a member could be assigned to a
+membership tier the other request was concurrently deleting (or vice versa),
+landing a row on a tier id absent from the stored config with nothing
+reporting it — the same "eligibility, read-then-write" shape CLAUDE.md
+Pitfall #27 names, one layer down from a numeric capacity check. Fixed by
+locking the `Organization` row in both handlers, in an order chosen
+specifically to avoid an AB/BA deadlock against
+`MembershipTierService.advance_all`'s separate per-member locking (analyzed,
+not assumed — see the findings doc). Guarded by three new tests in
+`tests/test_capacity_locking.py`
+(this codebase's established repo-wide sweep for the same invariant),
+confirmed to fail against the pre-fix code via `git stash`. **1 residual
+gap flagged, not fixed (LOW):** USR-10a — the same occupancy check can still
+miss a write from `advance_all` itself, which never locks the `Organization`
+row at all; closing it needs a change to `membership_tier_service.py`'s own,
+separately-tuned locking scheme (last touched in pass 2 for an unrelated
+race), architectural discussion beyond a scoped fix — mirrored into
+`docs/KNOWN_LIMITATIONS.md`. USR-5 and USR-8 (unbounded lists; over-broad
+`GET /users` field set) re-verified still open/accurate, no drift. Every
+by-id query across all four files re-confirmed org-scoped; every
+privilege-ceiling call site re-confirmed wired; USR-9's HTML-escaping fix
+re-confirmed byte-for-byte intact. Full write-up: the **Pass 5** section of
+`docs/security-review/USR-07-users-organizations.md`.
+
+Gate: flake8/black/isort clean on both changed files
+(`member_status.py`, `tests/test_capacity_locking.py`);
+`validate_migrations.py --strict` passed (444 revisions, single head, no
+migration this pass); scoped pytest 564 passed, 1 pre-existing skip, 0
+failed; full backend suite 12559 passed, 21 pre-existing/environmental
+skips, 0 failed; frontend `typecheck`/`lint` not run — no frontend file
+touched this pass. Next: 08 Membership pipeline.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 5, PR #2546, merged), preserved for history</summary>
+
+**None.** PR [#2546](https://github.com/thegspiro/the-logbook/pull/2546)
+(Feature 06, Elections & ballots, pass 5) merged clean — 16/16 real CI jobs
+green, after one stale-superseded-run false failure on the pre-bookkeeping
+commit (`23c249b2d`; every job on that run showed `cancelled`, not
+`failed`, because a follow-up commit filling in the PR number advanced the
+branch mid-run; documented in a PR comment, resolved by waiting for the new
+head's own fresh run) — merged directly by the repo owner
+(`merged_by: thegspiro`) before this session called `merge_pull_request`
+itself. `git fetch origin main` confirms the merge commit (`f45f691f3`) is
+on `main`. **0 new findings, no application code changed** — a clean
+re-verification pass: `backend/app/api/v1/endpoints/elections.py` was
+byte-identical to what pass 4 last reviewed, so this was a full independent
+re-read of all 3,895 lines rather than a diff review. ELEC-41/ELEC-42 (the
+pass-4 rate-limit fixes) re-verified byte-for-byte intact and re-run under
+their guard test; every by-id query re-confirmed org-scoped; all
+JSON-column mutations re-confirmed using `copy.deepcopy()`; every 500-path
+re-confirmed routed through `safe_error_detail()`; audit logging
+re-confirmed present on every state-changing route. 5 prior flagged
+findings (ELEC-12, ELEC-14, ELEC-16, ELEC-28, ELEC-40) re-verified still
+open/accurate, no drift. Full write-up: the **Pass 5** section of
+`docs/security-review/ELEC-06-elections-ballots.md`. Rotation row 06 stays
+`✅`. **Next: Feature 07 (Users & organizations), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 5, PR #2546, before it merged), preserved for history</summary>
+
+**PR [#2546](https://github.com/thegspiro/the-logbook/pull/2546)** —
+branch `claude/security-review-feature06-pass5`
+(Feature 06, Elections & ballots, pass 5), opened against a fresh
+`origin/main`. Checked for a concurrent session first per this run's own
+Step 0: `git fetch origin main` showed a clean working tree; the Open PR
+row read "None" with the Feature 05 pass 5 closure note beneath it (see the
+superseded block below); and `list_pull_requests` (open, all repos) found
+no branch or title referencing Feature 06/elections. No file in this
+feature's declared scope (`backend/app/api/v1/endpoints/elections.py`)
+changed since pass 4's closing merge (`de8db76d3`, PR #2400) — confirmed by
+an empty `git diff` over that commit range — so this was a full,
+independent fresh re-read of the file (all 3,895 lines) rather than a diff
+review, the same standard pass 4 used when it found no diffable range.
+`election_service.py` (a call-into dependency) picked up one unrelated
+commit fixing Cloudflare ballot-email delivery, read in full and confirmed
+to carry no security-relevant change for this scope. **0 new findings —**
+ELEC-41/ELEC-42 (the pass-4 rate-limit fixes) re-verified byte-for-byte
+intact and re-run under their guard test; every by-id query re-confirmed
+org-scoped; all JSON-column mutations re-confirmed using
+`copy.deepcopy()`; every 500-path re-confirmed routed through
+`safe_error_detail()`; audit logging re-confirmed present on every
+state-changing route read. 5 prior flagged findings (ELEC-12, ELEC-14,
+ELEC-16, ELEC-28, ELEC-40) re-verified still open/accurate, no drift. Full
+write-up: the **Pass 5** section of
+`docs/security-review/ELEC-06-elections-ballots.md`. Rotation row 06 stays
+`✅`. Gate: flake8/black/isort clean; migration validator clean (444
+revisions, single head); scoped pytest 584 passed; rate-limit guard test 7
+passed; full backend suite 12556 passed, 21 pre-existing/environmental
+skips, 0 failed; frontend `npm run typecheck` 0 errors, `npm run lint` 0
+errors/warnings.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 5, PR #2544, merged), preserved for history</summary>
+
 **None.** PR [#2544](https://github.com/thegspiro/the-logbook/pull/2544)
 (Feature 05, Finance & approvals, pass 5) merged clean — 16/16 real CI jobs
 green, after one stale-superseded-run false failure on an intermediate
@@ -38,6 +155,8 @@ deliberately deferred to a dedicated pass and documented in
 `KNOWN_LIMITATIONS.md`. Full write-up: the **Pass 5** section of
 `docs/security-review/FIN-05-finance-approvals.md`. Rotation row 05 stays
 `✅`. **Next: Feature 06 (Elections & ballots), pass 5.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 5, PR #2544, before it merged), preserved for history</summary>
@@ -14956,6 +15075,149 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 07 (Users & organizations, pass 5) — 1 fixed (MED), 1 flagged (LOW) — PR opened
+
+Step 0 concurrent-session check: `git fetch origin main` clean; Open PR row
+read "None." with the Feature 06 pass 5 closure note; `list_pull_requests`
+(open) returned only #2547/#2548 (unrelated, explicitly flagged in this
+run's briefing as not a collision) and #2495 (scheduling); `git ls-remote
+--heads origin` for feature07/users/organizations/usr branch names found
+nothing. Created `claude/security-review-feature07-pass5` fresh off
+`origin/main`. Rotation row 07 confirmed already ✅ from prior passes.
+
+Worked the full checklist against the diff since pass 4's merge (`83a55e014`,
+PR #2402). `users.py`, `member_leaves.py`, and all three call-into service
+files plus `models/user.py` were byte-identical to pass 4's review — zero
+diff across five days of unrelated commits. `organizations.py` (+136/-3) and
+`member_status.py` (+169/-24) changed from unrelated feature work (a
+department-wide navigation-layout setting, fuller membership-tier config
+validation replacing pass-3-and-earlier's two-field ad-hoc checks, and
+email-config fixes touching the setup checklist) and were read in full end
+to end rather than diff-only, given this feature's core-identity/tenancy
+status. All 21 `organizations.py` routes (up one) and all 12
+`member_status.py` routes re-enumerated; `organizations.py` re-confirmed to
+carry no by-id path parameter across all 21.
+
+**USR-10 (MED, fixed)** — the new, fuller `update_membership_tier_config`
+validation added a "cannot remove/rename a tier members hold" occupancy
+check, and the pre-existing `change_membership_type` validates a requested
+tier against the same stored ladder — neither locked the `Organization` row
+first, so the two could pass each other: a member assigned to a tier the
+other request was concurrently deleting (or the reverse), landing a row on a
+tier id absent from the stored config with nothing reporting it — the same
+CLAUDE.md Pitfall #27 read-then-write shape, one layer down from a numeric
+seat count. Fixed by locking the `Organization` row in both handlers, with
+the lock order chosen specifically to avoid an AB/BA deadlock against
+`MembershipTierService.advance_all`'s own separate per-member locking
+(`update_membership_tier_config` locks the org row only, never a member row,
+so it structurally cannot be the other half of that cycle — verified by
+reasoning through the actual lock-acquisition order of all three writers,
+not assumed). Guarded by three new tests added to the codebase's existing
+repo-wide sweep for this exact invariant, `tests/test_capacity_locking.py`
+(`TestMembershipTierEligibility`), two of which were confirmed to fail
+against the pre-fix code via `git stash` (1 lock found where 2 were
+required; 0 found where 1 was required); the third asserts the lock ordering
+itself as a guard against a future regression.
+
+**USR-10a (LOW, flagged)** — the fix above does not close every direction:
+`MembershipTierService.advance_all` (not in this feature's declared scope)
+writes `membership_type` during its unattended batch scan without ever
+locking the `Organization` row, so `update_membership_tier_config`'s
+occupancy count — a plain read, deliberately not made a locking one, for the
+same deadlock-avoidance reason — can still miss a narrow-window `advance_all`
+commit. Closing it needs a change to `membership_tier_service.py`'s own,
+separately-tuned locking scheme (last touched in pass 2 for an unrelated
+race) — architectural discussion beyond a scoped fix. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
+
+USR-5 (unbounded lists) and USR-8 (over-broad `GET /users` field set for
+`members.view`-tier callers) re-verified still open/flagged, current line
+numbers checked against this pass's file state, no drift. USR-9 (pass 4's
+HTML-escaping fix) re-confirmed byte-for-byte intact. All by-id queries
+across all four files re-confirmed org-scoped by direct read; all
+privilege-ceiling call sites re-confirmed wired at their documented lines;
+the new `AppearanceSettings`/`MembershipTierSettings` schema additions
+confirmed fully bounded (length/range limits, `max_length=50` on the tier
+list) with no secret/PII exposure.
+
+Gate: flake8/black/isort clean on both changed files; `validate_migrations.py
+--strict` passed (444 revisions, single head, no migration this pass);
+scoped pytest (`-k "member_status or member_leave or property_return or
+user_list or platoon or users or organization or rank_grant or role_edit or
+audit_history or ceiling or administrative or membership_tier or
+capacity_locking or navigation_layout or setup_checklist"`) 564 passed, 1
+pre-existing skip, 0 failed; full backend suite 12559 passed, 21
+pre-existing/environmental skips, 0 failed; frontend typecheck/lint not run
+— no frontend file touched this pass.
+
+Full write-up: `docs/security-review/USR-07-users-organizations.md` pass 5.
+PR opened: `claude/security-review-feature07-pass5`. Next: 08 Membership
+pipeline.
+
+### 2026-09-14 — Feature 06 (Elections & ballots, pass 5) — PR #2546 merged; next Feature 07
+
+30-minute watchdog check found PR #2546 (Feature 06, Elections & ballots,
+pass 5) merged directly by the repo owner (`merged_by: thegspiro`) before
+this session's own `merge_pull_request` call. CI on the current head
+(`53c24193a`) had gone green after one stale-superseded-run false failure
+on the pre-bookkeeping commit (`23c249b2d`) — every job on that run showed
+`cancelled`, not `failed`, because a follow-up commit advanced the branch
+mid-run; diagnosed via `list_workflow_jobs`, resolved with one explanatory
+PR comment rather than a code push. `git fetch origin main` confirmed the
+merge commit (`f45f691f3`) landed on `main`; also found two unrelated open
+PRs (#2547, #2548) from another workflow, not a Feature 07 collision.
+Recorded the closure in `PROGRESS.md`: superseded the prior **Open PR**
+note (preserved in a `<details>` block) with a "None." closure paragraph —
+this was a clean re-verification pass with 0 new findings and no
+application code changed — rotation row 06 confirmed still `✅`. Next:
+Feature 07 (Users & organizations), pass 5.
+
+### 2026-09-14 — Feature 06 (Elections & ballots, pass 5) — 0 new findings, clean re-verification — PR opened
+
+Step 0 concurrent-session check: `git fetch origin main` clean, no
+uncommitted foreign changes; `PROGRESS.md`'s Open PR row read "None." with
+the Feature 05 pass 5 closure note; `list_pull_requests` (open) returned
+only an unrelated scheduling PR (#2495) — no Feature 06/elections branch or
+title. Created `claude/security-review-feature06-pass5` fresh off
+`origin/main`.
+
+`backend/app/api/v1/endpoints/elections.py` — the feature's full declared
+scope — has not changed since pass 4's closing merge (`de8db76d3`, PR
+#2400): `git diff de8db76d3 origin/main -- backend/app/api/v1/endpoints/elections.py`
+is empty. `quorum_service.py` likewise unchanged. `election_service.py` (a
+call-into dependency) picked up one commit (`ac9990d0c`) fixing Cloudflare
+ballot-email delivery — read in full and confirmed to carry no
+security-relevant change (no org-scoping, token, eligibility, vote-count,
+or audit-logging code touched). No new migration touches an election
+table.
+
+Because the scope file is byte-identical to pass 4's own review, this pass
+did a full independent re-read of all 3,895 lines rather than a diff
+review — same standard pass 4 used when it found no diffable range. **0 new
+findings.** Re-verified and confirmed intact: ELEC-41/ELEC-42 (the pass-4
+rate-limit fixes — `async def` + `await check_rate_limit(...)` with
+distinct `scope` values on both public-route wrappers, re-run under
+`test_election_ballot_rate_limit.py`), org-scoping on all 15 by-id
+`select()` call sites, `copy.deepcopy()` on every JSON-column mutation
+(election settings, attendees, voter overrides), `safe_error_detail()` on
+every 500 path, and audit logging on every state-changing route. 5 prior
+flagged findings (ELEC-12 unbounded saved-ballot-template list/create,
+ELEC-14 receipt-verify GET query param, ELEC-16 unbounded manual-ballot
+listing, ELEC-28 public ballot UI can't render a plain-position contest,
+ELEC-40 pre-ELEC-34 vote-dedup gap) re-verified still accurately open, no
+drift, no re-report needed.
+
+Gate: flake8/black/isort clean on `app/ tests/ alembic/`; migration
+validator passed (444 revisions, single head); scoped pytest (`election or
+ballot or quorum`) 584 passed, 1 pre-existing skip; rate-limit guard test 7
+passed; full backend suite 12556 passed, 21 pre-existing/environmental
+skips, 0 failed; frontend `npm run typecheck` 0 errors and `npm run lint` 0
+errors/warnings — no frontend file changed this pass, both run anyway per
+the gate. See `docs/security-review/ELEC-06-elections-ballots.md` pass 5
+for the full write-up. Rotation row 06 stays `✅`. PR
+[#2546](https://github.com/thegspiro/the-logbook/pull/2546) opened from
+branch `claude/security-review-feature06-pass5`.
 
 ### 2026-09-14 — Feature 05 (Finance & approvals, pass 5) — PR #2544 merged; next Feature 06
 

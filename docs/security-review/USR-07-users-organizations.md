@@ -1,6 +1,281 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4)
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4)
+
+---
+
+## Pass 5 (2026-09-14)
+
+**Scope:** full domain since pass 4's merge commit `83a55e014` (PR #2402):
+`endpoints/users.py`, `endpoints/organizations.py`, `endpoints/member_status.py`,
+`endpoints/member_leaves.py`, `services/user_service.py`,
+`services/organization_service.py`, `services/member_leave_service.py`,
+`models/user.py`, `schemas/user.py`, `schemas/organization.py`.
+
+**Diff-driven, confirmed by `git diff 83a55e014..origin/main -- <file>`:**
+`users.py`, `member_leaves.py`, `services/user_service.py`,
+`services/organization_service.py`, `services/member_leave_service.py`, and
+`models/user.py` are **byte-identical** to pass 4's own review — zero diff
+across five days of unrelated commits landing elsewhere in the tree.
+`organizations.py` (+136/-3) and `member_status.py` (+169/-24) changed, both
+from unrelated feature work (`f14370f4a` department-wide navigation-layout
+setting, `1e939465b`/`cd0fab900`/`55270e94c`/`1c0355ddf` membership-tier
+config validation, `ac9990d0c` email-config fixes touching the setup
+checklist's inventory-category split). `schemas/organization.py` changed
+(+103/-3) for the same two features (`AppearanceSettings`,
+`MembershipTierSettings`/`MembershipTierBenefits` validation).
+
+**Read in full:** `organizations.py` (all 1,627 lines, all 21 routes — up one
+from pass 4's 20) and `member_status.py` (all 1,247 lines, all 12 routes,
+unchanged count) end to end, not diff-only, given this is the core
+identity/tenancy surface. `schemas/organization.py`'s full diff. The new
+`PATCH /settings/appearance` route and `AppearanceSettings` schema; the
+`get_setup_checklist`/`update_membership_tier_config`/
+`get_membership_tier_config` diffs in full, including every new helper
+(`_tier_member_counts`, the duplicate-id/ordering/occupied-tier validation in
+`update_membership_tier_config`).
+
+**Re-enumerated, not re-derived:** `users.py`'s 16 by-id (`{user_id}`) routes
+re-checked by the same mechanical extraction pass 4 used (parse each route
+function, assert `organization_id` appears in its body) — all 16 still carry
+it, consistent with the file being byte-identical. `member_leaves.py`'s 7
+routes read in full: every leave lookup passes
+`organization_id=str(current_user.organization_id)` into the service layer,
+`get_member_leaves` still self-or-admin gates. `organizations.py`'s 21 routes
+confirmed to still carry **no by-id path parameter** — every route (including
+the new `/settings/appearance` and the pre-existing but previously
+uncounted-by-route `/retention-policy` pair) resolves exclusively off
+`current_user.organization_id`; XC-3 does not apply to this file by
+construction, re-confirmed by direct read rather than inferred.
+`/retention-policy`'s `record_class` path parameter is validated against a
+fixed `RECORD_CLASSES` allowlist in `retention_service.py` (raises
+`ValueError` → 400 for an unknown class) and its JSON-column write uses
+`copy.deepcopy()` (Pitfall #12) — read in full since it shares this file's
+by-id-free design and hadn't been individually named in a prior pass's route
+count.
+
+## Findings (pass 5)
+
+### USR-10 — MED — `change_membership_type` and `update_membership_tier_config` raced each other with no lock, letting a member be assigned to a tier the other request was mid-way through deleting (or vice versa) — ✅ FIXED
+
+**What:** `PATCH /users/{user_id}/membership-type` (`change_membership_type`)
+validates the caller's chosen tier against the org's stored `membership_tiers`
+ladder before writing `User.membership_type`. `PUT
+/users/membership-tiers/config` (`update_membership_tier_config`) — new this
+pass, replacing pass-3-and-earlier's two-field ad-hoc validation with full
+`MembershipTierSettings` model validation, duplicate-id detection, and a
+"cannot remove or rename a tier that members hold" occupancy check
+(`_tier_member_counts`) — decides whether a tier is safe to delete by
+counting who currently holds it. Neither locked the `Organization` row before
+reading `settings.membership_tiers`, so two requests arriving together could
+pass each other: `update_membership_tier_config` counts zero members on tier
+"probationary" and removes it, while a concurrent `change_membership_type`
+validates "probationary" against the ladder it read before the removal
+committed and writes a member onto it — landing a row whose
+`membership_type` matches no tier in the stored config. Per this pass's own
+new code comments (`_tier_member_counts`'s docstring, quoting the concern
+directly), that id is not something `split_membership_type` guesses at: the
+member silently falls out of the operational body and the ballot electorate,
+with nothing reporting it. The reverse interleaving (remove races ahead of an
+in-flight assignment to the same tier) has the identical result.
+
+**Where:** `backend/app/api/v1/endpoints/member_status.py:857-863`
+(`change_membership_type`'s tier-ladder read) and `:1068-1084`
+(`update_membership_tier_config`'s organization read).
+
+**Failure scenario:** two officers holding `members.manage` — plausible in
+any department where more than one person edits settings, e.g. a secretary
+and a training officer both in the admin screens during a bylaws update
+session — one renaming/removing a tier while the other processes a routine
+membership-type change for a different member, landing on exactly this
+interleaving. Neither request errors; both return success; the resulting row
+is silently inconsistent.
+
+**Impact:** MED. `members.manage`-gated on both sides (not reachable by an
+ordinary member), org-scoped (not cross-tenant), and requires two
+administrative actions to overlap — narrower than a capacity leak an
+unauthenticated or low-privilege caller could trigger at will. Raised to MED
+rather than LOW because the failure is silent (no error, no audit trail
+distinguishing it from a normal successful change) and the consequence
+(a member falling out of the electorate) is exactly the class of defect
+CLAUDE.md Pitfall #27 and this rotation's checklist exist to catch before a
+department discovers it at the next election.
+
+**Fix:** both handlers now lock the `Organization` row (`.with_for_update()`)
+before reading `settings.membership_tiers` — `change_membership_type`
+already locked its target `User` row for pass 2's rank/class invariant, and
+now also locks the org row after it, before validating the requested tier;
+`update_membership_tier_config` locks the org row as its very first
+statement, before `_tier_member_counts`. This is deliberately **not**
+extended to make `_tier_member_counts` itself a locking read (see USR-10a
+below, flagged rather than fixed) — analyzed and rejected: `_tier_member_counts`
+would need per-member `FOR UPDATE` locks across the whole roster to be
+current per Pitfall #27's "the count itself must be a locking read" half,
+and `MembershipTierService.advance_all` (a separate, unattended batch job
+already carrying its own carefully-tuned per-member locking from pass 2's
+different race) acquires member-row locks one at a time across its own scan
+without ever locking the Organization row. Locking both the Organization row
+_and_ arbitrary member rows in `update_membership_tier_config` while
+`advance_all` locks member rows without ever touching the Organization row
+opens a textbook AB/BA deadlock: one transaction holding a member row and
+waiting on the Organization row, the other holding the Organization row and
+waiting on that same member row. The fix implemented here avoids that
+entirely — `update_membership_tier_config` locks **only** the Organization
+row, never an individual member row, so it can never be the second half of
+that cycle — and closes the primary, directly-reachable race between the two
+declared-scope endpoints. `change_membership_type`'s existing member-row lock
+is taken _before_ its (new) Organization lock, which is safe specifically
+because `update_membership_tier_config` never contends for a member row at
+all; a source-inspection test asserts that invariant holds, not just that a
+lock is present, so a future change that adds a member-row lock to
+`update_membership_tier_config` fails loudly rather than quietly
+reintroducing the cycle.
+
+Guarded by three tests added to `tests/test_capacity_locking.py`
+(`TestMembershipTierEligibility`, this codebase's established repo-wide
+sweep for exactly this invariant — CLAUDE.md names it directly as enforcing
+"both halves at every site"): `test_change_membership_type_locks_the_organization_row`
+(asserts **two** `with_for_update()` calls, not merely one — a bare
+presence check would have passed vacuously against the pre-existing User
+lock from pass 2, which is a different lock protecting a different race, so
+the test counts rather than merely detects), `test_update_membership_tier_config_locks_the_organization_row`,
+and `test_the_organization_lock_is_taken_before_the_member_lock` (asserts the
+lock ordering itself, and that `update_membership_tier_config` never takes a
+member-row lock at all — the deadlock-avoidance argument above, checked by
+source rather than merely asserted in a comment). The first two confirmed to
+fail against the pre-fix code via `git stash` (1 lock found where 2 were
+required; no lock found at all), reproducing exactly the gap this finding
+describes; the ordering test does not distinguish pre-fix from post-fix code
+by itself (it holds either way, since the pre-existing member-row lock was
+never reordered) and is not counted as regression evidence for USR-10 on its
+own — it is a structural guard against a _future_ regression, the same
+non-discriminating-test caveat pass 3's own USR-7 write-up flagged for a
+different test.
+
+### USR-10a — LOW — `_tier_member_counts` is not a locking read, so `update_membership_tier_config`'s occupancy check can still miss a `MembershipTierService.advance_all` write that commits between this transaction's snapshot and its lock acquisition — 🚩 FLAGGED
+
+**What:** the fix above closes the race between the two `member_status.py`
+endpoints. It does not close every direction of Pitfall #27's "the count
+itself must be a locking read" requirement against a _third_ writer:
+`MembershipTierService.advance_all` (`services/membership_tier_service.py`,
+not in this feature's declared scope) writes `User.membership_type` during
+its unattended monthly/on-demand scan without ever locking the `Organization`
+row. `update_membership_tier_config`'s occupancy count
+(`_tier_member_counts`) is a plain `SELECT`, so under InnoDB's default
+REPEATABLE READ it answers from the snapshot fixed at this transaction's
+first read (the auth dependency's own `User` lookup, before the handler even
+runs) — a snapshot that predates the Organization lock this pass added.
+If an `advance_all` run commits a member onto the tier being removed in the
+narrow window between that snapshot and this request's lock acquisition
+(only possible when `advance_all` is not itself blocked waiting on the
+Organization lock, i.e. it was never contending for it in the first place),
+the occupancy check can still miss it.
+
+**Why not fixed here:** the only complete fix is making the `advance_all`
+member-row locks and `update_membership_tier_config`'s occupancy check
+share one consistent lock order, which means either (a) giving `advance_all`
+an Organization-row lock for its entire scan duration — a real, if bounded,
+availability cost (every settings edit in the org blocks for the scan's
+duration) to a file `membership_tier_service.py` that was last tuned in pass
+2 for an unrelated invariant, or (b) making `_tier_member_counts` a locking
+read scoped only to the tiers actually being removed, which narrows but does
+not structurally eliminate the same AB/BA risk documented in USR-10's fix
+(`advance_all` locks member rows one at a time across its own loop without
+ever locking Organization, so a broader Organization-then-member lock order
+in this file and a member-only order in that one are not consistently
+nested). Either is a change to that service's own, separately-tuned locking
+scheme and a deliberate availability/correctness tradeoff — architectural
+discussion beyond a scoped fix, per this rotation's own escalation rule, not
+a defect this pass silently walked past.
+
+**Impact:** LOW. Requires three conditions simultaneously: an org running
+the unattended tier-advancement scan, an admin editing tier config at the
+same moment, and a specific narrow commit-ordering window that (unlike
+USR-10) is _not_ closed merely by two requests contending for the same lock
+— `advance_all` must simply never have asked for the Organization lock at
+all during the relevant window. `members.manage`-gated indirectly (the scan
+itself runs unattended, but its trigger and the config edit both require
+that permission), org-scoped, self-healing on the next `advance_all` run in
+the common case (a member whose type drifts to an unrecognized id is
+`off_ladder`-counted and skipped by future scans, not silently re-corrupted
+further). Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+## Verified good ✅ (re-confirmed pass 5)
+
+- **`users.py` and `member_leaves.py` byte-identical to pass 4's review.**
+  All 16 `users.py` by-id routes re-confirmed to filter `organization_id`
+  (mechanical extraction, not sampling); privilege-ceiling call sites
+  (`_enforce_role_grant_ceiling`, `_enforce_rank_grant_ceiling`,
+  `_enforce_account_reset_ceiling`, `assert_positions_retain_administrator`)
+  re-confirmed present at their documented lines. `member_leaves.py`'s
+  create-path FK validation (XC-1, `MemberLeaveService.create_leave`) and
+  `get_member_leaves`'s self-or-admin gate re-confirmed by direct read.
+- **USR-9 (pass 4's HTML-escaping fix) re-confirmed byte-for-byte intact** —
+  `_send_property_return_email`'s fallback loop still escapes every context
+  value except `items_list_html`, still passes the `re.sub` replacement as a
+  closure rather than a raw string.
+- **`organizations.py`'s 21 routes (up one) still carry no by-id path
+  parameter** — read every handler individually rather than inferred; the
+  new `/settings/appearance` route follows the same
+  `current_user.organization_id`-only pattern as every sibling `/settings/*`
+  PATCH, gated on the same `settings.manage`/`organization.update_settings`
+  pair, with the same secret-free response shape (navigation layout carries
+  no PII, matching the route's own docstring reasoning).
+- **New `get_setup_checklist` additions (medical-supplies and storefront
+  catalog counts) are org-scoped** — both new `func.count()` queries filter
+  `organization_id == org_id`, matching every existing counter in the same
+  function; the `StoreProduct` query is wrapped in the same
+  try/except-and-log pattern as its neighbors, so a missing/unmigrated table
+  degrades the checklist item rather than 500ing the whole endpoint.
+- **`MembershipTierSettings`/`MembershipTierBenefits`/`MembershipTier` are
+  fully bounded** — `tiers` capped at `max_length=50`
+  (server-enforced, not merely documented), every benefit field has an
+  explicit range (`voting_min_attendance_pct` 0–100,
+  `voting_attendance_period_months` 1–60), `id`/`name` have length floors and
+  ceilings. `update_membership_tier_config`'s duplicate-id check, the
+  sort-order/years-required monotonicity check (prevents a reordered ladder
+  from silently _demoting_ a long-serving member on the next `advance_all`
+  run), and the occupied-tier removal refusal were each read against their
+  own reasoning comments and found to match the stated intent.
+- **`EmailServiceSettings.use_tls` is no longer a dead switch** — the new
+  `_derive_use_tls` model validator computes it from the same
+  `resolve_smtp_settings` the actual sender consults, closing a genuine
+  Pitfall #19 instance (stored, returned in the API response, read by
+  nothing) rather than introducing a second, potentially-disagreeing
+  authority.
+- **`/retention-policy` GET/PUT (pre-existing, individually verified this
+  pass)**: `record_class` validated against `RECORD_CLASSES`, no
+  cross-tenant surface (org resolved via `db.get(Organization,
+str(current_user.organization_id))`, no client-supplied org id anywhere),
+  JSON mutation uses `copy.deepcopy()`.
+- **No new `.ilike()`/`.like()`, raw `csv.writer`, or
+  `window.confirm`/`alert`/`prompt`** in any of the four backend files
+  (grepped fresh this pass — 0 hits).
+- **USR-5 (unbounded lists) and USR-8 (over-broad `GET /users` field set)
+  re-verified still open/flagged, current line numbers checked against this
+  pass's file state** — `get_archived_members` now at `member_status.py:751`
+  (was 738–747; the file grew from this pass's own additions, not a
+  regression), `get_users_for_organization`/`UserListResponse` unchanged
+  (file byte-identical to pass 4). `docs/KNOWN_LIMITATIONS.md` entries for
+  both re-read and confirmed still accurate.
+
+## Completion gate (pass 5)
+
+| Check                                                                                                                                                                                                                                                                          | Result                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8` on both changed files (`member_status.py`, `tests/test_capacity_locking.py`)                                                                                                                                                                                          | ✅ 0 violations                                                                                                                                            |
+| `black --check` on both changed files                                                                                                                                                                                                                                          | ✅ clean                                                                                                                                                   |
+| `isort --check-only` on both changed files                                                                                                                                                                                                                                     | ✅ clean                                                                                                                                                   |
+| `validate_migrations.py --strict`                                                                                                                                                                                                                                              | ✅ 444 revisions, single head — unchanged (no migration this pass)                                                                                         |
+| `pytest tests/ -k "member_status or member_leave or property_return or user_list or platoon or users or organization or rank_grant or role_edit or audit_history or ceiling or administrative or membership_tier or capacity_locking or navigation_layout or setup_checklist"` | ✅ 564 passed, 1 pre-existing skip (`py_vapid`), 0 failed                                                                                                  |
+| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                           | ✅ 12559 passed, 21 skipped (pre-existing/environmental: Docker daemon/registry unavailable, `py_vapid` optional dep, opt-in API-contract suite), 0 failed |
+| Frontend `typecheck`/`lint`                                                                                                                                                                                                                                                    | not run — no frontend file touched this pass, per CLAUDE.md's "match the verification to the change"                                                       |
+
+The USR-10 guard tests (`test_change_membership_type_locks_the_organization_row`,
+`test_update_membership_tier_config_locks_the_organization_row`) were
+confirmed to fail against the pre-fix code via `git stash` (1 lock found
+where 2 were required; 0 locks found where 1 was required) before being
+counted as covering the finding.
 
 ---
 
