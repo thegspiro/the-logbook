@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (branch pushed; number to follow)** — branch
+`claude/security-review-feature11-pass5`, Feature 11 (Inventory), pass 5.
+Step 0 concurrent-session check: `git fetch origin main` clean;
+`PROGRESS.md`'s Open PR row read "None." with the Feature 10 pass 5 closure
+note beneath it and named "Next: Feature 11 (Inventory), pass 5" explicitly;
+`list_pull_requests` (open) returned only #2547/#2548, dependabot
+#2550-2552, and #2495 — no Feature 11/inventory branch or title. Loaded
+prior art (`CHECKLIST.md`, `SEC-00` pass 5, `docs/security-review/
+INV-11-inventory.md`'s pass 2–4 history) rather than re-deriving it, then
+re-verified the five standing flags (INV-8, INV-9, INV-16, INV-17, INV-22)
+against current code: all five confirmed still open/unchanged — zero diff on
+any of their five methods since pass 4's merge (`92a4917e7`). Reviewed
+everything that landed in the module's scope files since that merge (a
+`GET /items/export` streaming rewrite that also closes a prior silent
+10,000-row export cap, an NFPA-1851 inspection-date guard fix on
+`update_maintenance_record`, and a member-facing variant-clustering/top-up
+UI in `InventoryItemsPage.tsx`) — all independently merged outside this
+rotation via separate PRs (#2471/#2479/#2512), not previously reviewed by
+this rotation. **0 new findings**: every change checked against all seven
+checklist dimensions and found to preserve auth, org-scoping, LIKE-escaping,
+and CSV-injection protection, with no new by-id query or client-supplied FK.
+Full write-up: the **Pass 5** section of
+`docs/security-review/INV-11-inventory.md`. Rotation row 11 → 🔄 (becomes
+`✅` once this PR merges). **Next: Feature 12 (Facilities), pass 5, once
+this PR merges.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 5, PR #2559, merged), preserved for history</summary>
+
 **None.** PR [#2559](https://github.com/thegspiro/the-logbook/pull/2559)
 (Feature 10, Documents & legal, pass 5) merged clean — 17/17 CI green,
 after one genuine network flake (`Docker Image Build & Container Tests`
@@ -15304,6 +15333,81 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 11 (Inventory, pass 5) — 0 fixed, 0 new findings; opening PR
+
+Rotation stalled (no commits ~85 minutes, past the usual 30-40 minute
+cadence, no open PR blocking it) — picked up as the next iteration. Step 0
+already confirmed by the invoking session: `PROGRESS.md`'s Open PR row read
+"None.", the log named "Next: Feature 11 (Inventory), pass 5" explicitly,
+`git fetch origin main` clean, `list_pull_requests` (open) showed no
+security-review branch/PR (only #2547/#2548 drafts, dependabot
+#2550-2552, #2495), working tree clean.
+
+Marked rotation row 11 🔄. Loaded prior art in order:
+`docs/security-review/CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`'s
+pass 5 (13 standing sweep classes, all clean against 485 commits, none
+inventory-specific), `docs/module-audit/inventory.md` and
+`docs/app-review/inventory.md` (both fully superseded by this rotation's
+own file — confirmed rather than assumed, by reading both), and
+`docs/security-review/INV-11-inventory.md`'s pass 2–4 history in full.
+
+Five items were still open/flagged going in: INV-8/INV-9 (two officer-facing
+routes gated on the baseline `inventory.view` rather than a narrower shape),
+INV-16 (`update_reorder_request` has no row lock or version bump, unlike its
+siblings), INV-17 (equipment-maintenance "Complete work" always creates a
+new record instead of closing an open one), and INV-22 (two catalog-read
+methods materialize their full pre-decision working set in Python, the
+DOC-9 shape). `git diff` against pass 4's squash-merge commit (`92a4917e7`)
+across every scope file confirmed **zero** diff on any of the five methods
+these findings name — each re-read directly at its current line number to
+confirm the body, not just the diff's silence, matches pass 4's description.
+All five: **still open/flagged, unchanged.**
+
+The module's scope files did have real, non-trivial diff since pass 4 —
+`inventory.py` net +163 lines, `inventory_service.py` net +128 — all of it
+landed through three already-merged, non-security-review PRs (#2471,
+#2479, #2512) rather than a prior rotation pass. Reviewed as this pass's
+own first read of current code, per the rotation's standing instruction:
+a `GET /items/export` rewrite from a `limit=10000` single fetch into a
+paged `StreamingResponse` (closes a prior silent 10,000-row export cap;
+org-scoping, permission gate, LIKE-escaping and `SafeCsvWriter` all
+confirmed preserved), an NFPA 1851 inspection-date guard added to
+`update_maintenance_record` (a correctness fix on the same compliance-
+relevant path INV-3 originally covered — no tenant-isolation or auth
+dimension touched), and a 491-line `InventoryItemsPage.tsx` diff (member-
+facing variant clustering, an export filter-parity fix, an auto-top-up
+retry-guard fix) read in full and checked for untrusted-output handling,
+blocked dialogs, and client-side auth/permission re-derivation — none
+found. A fresh AST route count confirmed 144 routes (unchanged from pass 4;
+the export endpoint's body changed, no route added or removed), the
+WebSocket still the only one without a `require_permission`/
+`get_current_user` dependency, consistent with its established manual-auth
+pattern. `app/mcp/tools/inventory.py`, `writes.py`'s inventory slice, and
+all of `labels.py`/`label_service.py`/`label_printer_service.py` confirmed
+zero diff since their last review (pass 4 and pass 3 respectively) via
+`git log`, so not re-read line-by-line.
+
+**0 new findings.** Full write-up: the **Pass 5** section of
+`docs/security-review/INV-11-inventory.md`. No edit to
+`docs/KNOWN_LIMITATIONS.md` was needed — all five standing items were
+already mirrored there by earlier passes and none changed.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/`, `tests/`, `alembic/` — all clean; `validate_migrations.py --strict`
+— single head (`6ab7d903fae5`), 444 revisions, no migration this pass;
+`pytest tests/ -k "inventory or label"` — 1030 passed, 1 pre-existing skip,
+0 failed; `npm run typecheck` — clean; `npm run lint` — 0 errors; `npx
+vitest run src/modules/inventory` — 1232 passed (74 files). No code changes
+were made this pass, so the full backend suite was not re-run beyond the
+scoped selection, per CLAUDE.md's "match the verification to the change"
+guidance.
+
+Rotation row 11 → `✅` (pending PR merge). Opening the PR next; the branch
+is `claude/security-review-feature11-pass5` (fresh name — no prior
+Inventory pass branch has this exact name, and none of them is reused per
+CLAUDE.md Pitfall #24). Next: Feature 12 (Facilities), pass 5, once this
+PR merges.
 
 ### 2026-09-14 — Feature 10 (Documents & legal, pass 5) — PR #2559 merged; next Feature 11
 
