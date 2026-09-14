@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2559](https://github.com/thegspiro/the-logbook/pull/2559)
+(Feature 10, Documents & legal, pass 5) merged clean — 17/17 CI green,
+after one genuine network flake (`Docker Image Build & Container Tests`
+failed with `npm error code ECONNRESET` fetching from the npm registry
+inside the frontend production Docker stage build — unrelated to this
+PR's docs-only diff, which touched neither the Dockerfile nor any frontend
+file; confirmed by re-running just the failed job, which then passed) —
+merged by this session via `merge_pull_request`. `git fetch origin main`
+confirms the merge commit (`093c8db91`) is on `main`. Full re-verification
+of DOC-1 through DOC-29 (all confirmed still fixed; no commits touched any
+scope file or dependency since pass 4) plus a first review of the
+feature-owned MCP surface (`app/mcp/tools/documents.py`). **1 new finding,
+flagged (LOW):** DOC-30 — the MCP surface's own folder-ACL scan
+(`_open_folder_ids`) shares DOC-9's already-accepted-as-flagged
+unbounded-scan shape; not a leak, not fixed for the same reason DOC-9
+wasn't. Full write-up: the **Pass 5** section of
+`docs/security-review/DOC-10-documents-legal.md`. Rotation row 10 stays
+`✅`. **Next: Feature 11 (Inventory), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 5, PR #2559, before it merged), preserved for history</summary>
+
 **PR [#2559](https://github.com/thegspiro/the-logbook/pull/2559)** — branch
 `claude/security-review-feature10-pass5`, Feature 10 (Documents & legal),
 pass 5. Step 0 concurrent-session check: `git fetch origin main` clean;
@@ -35,6 +57,8 @@ unbounded-scan shape; not a leak, not fixed for the same reason DOC-9
 wasn't. Full write-up: the **Pass 5** section of
 `docs/security-review/DOC-10-documents-legal.md`. Rotation row 10 stays
 `✅`. **Next: Feature 11 (Inventory), pass 5, once this PR merges.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening (PHI), pass 5, PR #2557, merged), preserved for history</summary>
@@ -15280,6 +15304,24 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 10 (Documents & legal, pass 5) — PR #2559 merged; next Feature 11
+
+30-minute watchdog check found PR #2559 (Feature 10, Documents & legal,
+pass 5) green (17/17, after one genuine network flake — `Docker Image
+Build & Container Tests` failed with `npm error code ECONNRESET` fetching
+npm inside the frontend production Docker stage build, unrelated to this
+PR's docs-only diff; posted a standing-down comment naming the failure and
+why it wasn't this PR's, then re-ran just the failed job via
+`rerun_failed_jobs` once the rest of the run had finished — the rerun
+passed) and `mergeable_state: clean`, so this session merged it directly
+via `merge_pull_request`. `git fetch origin main` confirmed the merge
+commit (`093c8db91`) landed on `main`; open PRs remain only the
+pre-flagged unrelated ones — no Feature 11 collision. Recorded the closure
+in `PROGRESS.md`: superseded the prior **Open PR** note (preserved in a
+`<details>` block) with a "None." closure paragraph summarizing DOC-30
+(flagged, same unbounded-scan shape as the already-accepted DOC-9 gap),
+rotation row 10 confirmed still `✅`. Next: Feature 11 (Inventory), pass 5.
 
 ### 2026-09-14 — Feature 10 (Documents & legal, pass 5) — 0 fixed, 1 flagged (new); opening PR
 
