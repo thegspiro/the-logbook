@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#2550](https://github.com/thegspiro/the-logbook/pull/2550)** — branch
+**PR [#2553](https://github.com/thegspiro/the-logbook/pull/2553)** — branch
 `claude/security-review-feature07-pass5` (Feature 07, Users & organizations,
 pass 5), opened against a fresh `origin/main`. Step 0 concurrent-session
 check: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
