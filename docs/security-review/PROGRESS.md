@@ -16,6 +16,46 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (Feature 33, Core infrastructure, pass 4) — branch
+`claude/security-review-core-infrastructure`, opened against a fresh
+`origin/main`** (no security-review PR was open at the start of this
+iteration; row 33 was `⬜`). Loaded `CHECKLIST.md` and all three prior
+findings docs (`CI2-33` pass 1, PR #1917; `CI-33` pass 2, PR #2106/#2107;
+`CI3-33` pass 3, PR #2368/#2370 — the latter a ten-round Codex saga on
+`RateLimiter` ending in a structural refactor) before touching code.
+`security_middleware.py` and `config.py` confirmed byte-identical to pass
+3's merge commit (`680905c95`) via `git diff`/`git log`; `database.py`
+picked up one unrelated, legitimate fix from Feature 13's own rotation pass
+(a second SQLAlchemy `"refresh"`-event UTC-stamping listener) since pass 3,
+reviewed fresh and found correct. **1 new finding, MED, fixed:**
+`SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` (the data-exfiltration
+monitoring allowlist) had drifted again — an unrelated PR
+(finance-approvals pass 4, 2026-09-08, one day after CI3-33's pass) added
+two new `/finance/export/*` GET routes with no reason to know this set
+existed, leaving them unmonitored. Added both paths, and — since this set
+has now drifted twice with only manual-grep verification each time — added
+`tests/test_security_middleware.py::TestExportEndpointsCoverage`, the
+first automated check on this set: it builds the live OpenAPI schema and
+asserts every non-parameterized `export` route is covered and no stale
+entry remains, verified fail-before/pass-after against the finding. All 29
+prior findings across CI-33/CI2-33/CI3-33 re-verified still correct at
+current line numbers; CI3-33's two flagged config-switch findings
+(`REGISTRATION_REQUIRES_APPROVAL` has no reader; four more `config.py`
+settings have no reader) re-confirmed still open, unchanged, not re-fixed
+or re-flagged as new. `app/core/audit.py`'s SEC2-28-10 (Feature 28's own
+flagged finding, the audit hash chain's missing write-concurrency control)
+re-confirmed still open and correctly described, not this feature's to fix.
+flake8/black/isort clean; migrations 444 revisions, single head
+`6ab7d903fae5`, no schema change; scoped tests 209 passed; full backend
+suite 12,550 passed, 21 skipped (pre-existing: `pywebpush`, Docker
+unavailable, opt-in API-contract suite), 0 failed; frontend typecheck 0
+errors; eslint 0 errors/0 warnings. Findings doc:
+`docs/security-review/CI4-33-core-infra.md`. PR link to be added once
+opened.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2527's merge, Feature 32 pass 4 closure), preserved for history</summary>
+
 **None.** PR [#2527](https://github.com/thegspiro/the-logbook/pull/2527)
 (Feature 32, Locations & kiosk, pass 4) merged clean, 17/17 CI green (after
 one stale-superseded-run false failure on the prior commit — every job on
@@ -42,6 +82,8 @@ skipped, pywebpush); full backend suite 12,524 passed, 21 skipped
 errors/warnings. Findings doc: `docs/security-review/
 LOC4-32-locations-kiosk.md`. Rotation row 32 is now `✅`. Next: Feature 33
 (Core infrastructure).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 4, PR #2527, before it merged), preserved for history</summary>
@@ -14278,7 +14320,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⏳     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -14287,6 +14329,83 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 33 (Core infrastructure, pass 4) — 1 fixed (MED), 0 flagged (new), all 29 prior findings re-confirmed
+
+Checked for a concurrent session first: `git fetch origin main` showed row
+33 still `⬜` and the Open PR row said "None" (Feature 32's PR #2527 had
+already merged and been recorded). Branched fresh from `origin/main`
+(`claude/security-review-core-infrastructure`).
+
+Loaded `CHECKLIST.md` and all three prior findings docs (`CI2-33` pass 1,
+PR #1917 — 14 findings; `CI-33` pass 2, PR #2106/#2107 — 3 more findings,
+re-verifying the first 14; `CI3-33` pass 3, PR #2368/#2370 — 10
+`RateLimiter` findings across ten Codex review rounds culminating in a
+structural refactor collapsing three independently-capped dicts into one
+per-key `_KeyState`, plus 2 flagged config-switch findings) before touching
+code. `git diff`/`git log` against pass 3's merge commit (`680905c95`)
+confirmed `security_middleware.py` and `config.py` byte-identical;
+`database.py` alone picked up 23 new lines — an unrelated, legitimate fix
+from Feature 13's own rotation pass ("Apparatus & NFC" pass 11, commit
+`1005d5bac`) adding a second SQLAlchemy `"refresh"`-event listener
+alongside the existing `"load"` one, so a `populate_existing=True` re-read
+doesn't lose its UTC-tagging. Reviewed it fresh (not merely diffed):
+idempotent, uses `set_committed_value` correctly, no security implication.
+
+Read `security_middleware.py` in full (all 1,730 lines) and re-verified
+every prior finding at its current location rather than assuming the
+prior write-up — all 29 (CI-33's 3, CI2-33's 14, CI3-33's 10) still hold.
+Re-confirmed `main.py`'s middleware stack unchanged (pure ASGI throughout,
+zero `BaseHTTPMiddleware` anywhere in the backend via a fresh repo-wide
+grep), wildcard-CORS-with-credentials still blocks production/staging boot
+(`main.py`'s `validate_security_configuration()`), and `SECRET_KEY`'s
+minimum-length check still gates boot the same way — the specific items
+this rotation's instructions asked to re-verify.
+
+**1 new finding, MED, fixed:** `SecurityMonitoringMiddleware
+.EXPORT_ENDPOINTS` — the data-exfiltration-monitoring allowlist CI2-33
+built and CI3-33 re-verified unchanged — had drifted a second time.
+Finance-approvals pass 4 (PR #2398, 2026-09-08, one day after CI3-33's
+pass) added two new GET routes (`/finance/export/mappings`,
+`/finance/export/logs`) with no reason for that PR's author to know this
+set existed. Confirmed via the live OpenAPI schema
+(`from main import app; app.openapi()`) that these were the only two real,
+non-parameterized `export` routes missing from the set. Added both; since
+this is the second time the set has drifted with only a one-time manual
+grep catching it, also added
+`tests/test_security_middleware.py::TestExportEndpointsCoverage` — the
+first automated check on this set, asserting against the live schema that
+every non-parameterized export route is covered and no stale entry
+remains. Verified fail-before (`git stash` on the fix alone reproduces the
+exact two-path failure) / pass-after.
+
+CI3-33's two flagged config-switch findings re-verified still open,
+unchanged, via fresh greps: `REGISTRATION_REQUIRES_APPROVAL` still has no
+reader anywhere in `app/`; `RATE_LIMIT_PER_MINUTE`/`MAX_FILE_SIZE`/
+`STORAGE_TYPE`/`DB_POOL_MIN` still have zero readers outside their own
+declarations. Neither re-fixed nor re-flagged as new — both remain
+product/architecture decisions outside a review pass's safe-fix scope, per
+CI3-33's own reasoning; `docs/KNOWN_LIMITATIONS.md` entries unchanged and
+accurate. `app/core/audit.py`'s SEC2-28-10 (Feature 28's own flagged
+finding — the audit hash chain's missing write-concurrency control, most
+recently re-verified in that feature's own 2026-09-13 pass) re-confirmed
+still open and correctly described; not this feature's finding to re-fix
+or re-flag, cross-referenced only because two of its reachable call sites
+(`IPBlockingMiddleware._log_blocked_attempt`,
+`SecurityMonitoringMiddleware`'s two detectors) sit in this feature's file
+scope.
+
+flake8/black/isort clean across `app/`, `tests/`, `alembic/`; migrations
+444 revisions, single head `6ab7d903fae5`, no schema change; scoped tests
+(`test_security_middleware.py` plus the six other core-infra-adjacent
+files, now including `test_openapi_contract.py`) 209 passed; full backend
+suite 12,550 passed, 21 skipped (pre-existing: optional `pywebpush`,
+Docker registry/daemon unavailable in this sandbox, opt-in API-contract
+suite), 0 failed; frontend `tsc --noEmit`/`npm run typecheck` 0 errors;
+`npm run lint` 0 errors, 0 warnings. Findings doc:
+`docs/security-review/CI4-33-core-infra.md`. Rotation row 33 → `⏳`
+(awaiting PR merge). Next: tend this PR to green and merged, then Feature
+34 (Frontend shared).
 
 ### 2026-09-13 — Feature 32 (Locations & kiosk) — PR #2527 merged, watchdog recorded it
 
