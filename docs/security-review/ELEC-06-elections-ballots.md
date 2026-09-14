@@ -1,6 +1,126 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), pass 5 PR TBD (see PROGRESS.md Open PR)
+
+---
+
+## Pass 5 (2026-09-14)
+
+**Scoping:** confirmed `PROGRESS.md`'s Open PR row read "None." (with the
+pass-4 closure note preserved beneath it), and `list_pull_requests` (open,
+all repos state) returned no branch or title referencing Feature 06 /
+elections before starting. Branch `claude/security-review-feature06-pass5`
+created fresh off `origin/main`.
+
+**No file in scope changed since pass 4's merge commit
+(`de8db76d3`).** `git log de8db76d3..origin/main -- backend/app/api/v1/endpoints/elections.py`
+returns nothing, and `git diff de8db76d3 origin/main --
+backend/app/api/v1/endpoints/elections.py` is empty — the file is
+byte-identical to what pass 4 last reviewed. `quorum_service.py` is
+likewise unchanged. `election_service.py` picked up one commit
+(`ac9990d0c`, "Close seven email-configuration gaps found in review") that
+touches the ballot-email send path: `send_batch` gained a Cloudflare
+REST-API branch alongside its existing SMTP path, and the ballot-email
+builder now calls `build_batch_message` (returning a `BuiltMessage`
+carrying both the MIME and the structured fields) instead of `build_message`
+(MIME only), so a Cloudflare-configured organization's ballot emails no
+longer silently fail. Read this commit in full: it is a mail-delivery
+correctness fix with no security-relevant surface for this scope — it does
+not touch org-scoping, token validation/expiry/single-use enforcement,
+ballot secrecy, vote counting, eligibility, or audit logging, and the vote
+token itself is embedded in the ballot URL by
+`send_ballot_emails`/`remind_non_voters` exactly as before, upstream of
+where this commit's change begins. No migration touched an election table
+(re-confirmed by grepping migration bodies, not filenames, for
+`elections`/`candidates`/`votes`/`voting_tokens`/`manual_ballot_batches`
+across every revision added since pass 4).
+
+**Because nothing in scope changed, this was a full independent re-read of
+`elections.py` end to end (all 3,895 lines, every route), not a diff
+review** — the same standard pass 4 applied when it found no diffable
+commit range. Read fresh rather than trusted from the write-up above:
+
+- **Every by-id query in the file org-scopes correctly.** Re-enumerated all
+  15 `select(Election|Candidate|Vote|SavedBallotTemplate)` call sites by
+  line and confirmed each either filters `organization_id` directly, or
+  resolves through `ElectionService.get_election(id, organization_id)`
+  first (candidate CRUD, manual-ballot listing, voter overrides, proxy
+  authorizations, preview-ballot, send-test-ballot). No 14a/14b/14c gap
+  found. `create_candidate` still runs `assert_in_org` on a client-supplied
+  `user_id` before persisting it; `_validate_election_links` still runs on
+  both `create_election` and `update_election` for a client-supplied
+  `meeting_id`/`event_id`.
+- **ELEC-41/ELEC-42 (rate-limit wrappers) — confirmed still fixed, byte for
+  byte.** `_ballot_read_rate_limit`/`_ballot_vote_rate_limit`
+  (`elections.py:124-147`) are `async def`, `await check_rate_limit(...)`,
+  and each passes its own `scope` (`"ballot_read"`/`"ballot_vote"`). Ran
+  `backend/tests/test_election_ballot_rate_limit.py` directly (see gate
+  below) rather than only reading the source.
+- **Every 500-path in the module routes through `safe_error_detail()`.**
+  Re-grepped all 19 `HTTPException(status_code=500, ...)` sites — no bare
+  `detail=str(e)` anywhere, matching pass 4.
+- **Zero `csv.writer`/`csv.DictWriter` calls** — this module's three
+  exports (`printable-ballot`, `certified-results`, `package-pdf`) are all
+  `StreamingResponse(media_type="application/pdf")`, not CSV. Pitfall #15
+  remains n/a, as every prior pass found.
+- **JSON-column mutations use `copy.deepcopy()` throughout.** Checked every
+  site that reads then reassigns a JSON column — election settings
+  (org-level `settings.election_defaults`/`proxy_voting`/
+  `election_features`), `election.attendees`,
+  `election.voter_overrides` (single add/remove and both bulk paths) — all
+  deep-copy before mutating and reassign the copy, never a shallow `dict()`.
+- **Audit logging is present on every state-changing route this pass
+  read**, including the two lifecycle actions most likely to be missed:
+  election deletion (`election_deleted_critical` with `severity="critical"`
+  for a non-draft election, including the leadership-notification count and
+  reason) and settings updates. No route in the file was found writing
+  state without a corresponding `log_audit_event()` call.
+- **No locking logic lives in this file.** The lock-then-read pattern this
+  module depends on for TOCTOU safety
+  (`_lock_token_ballot_for_submission`'s `.with_for_update()` +
+  `populate_existing=True`) is entirely inside `election_service.py`, which
+  — per the diff check above — is unchanged in that function since pass 3's
+  own rounds fixed it (ELEC-17/24/25). No new read-then-write shape was
+  introduced in `elections.py` itself; the endpoints that touch vote counts
+  (`delete_candidate`'s vote-count guard, `soft_delete_vote`) either read a
+  `func.count()` for a pre-condition check with no consequent write raced
+  against it, or delegate the mutation to the service layer's own locked
+  path.
+
+**5 prior findings re-verified, no drift, no re-report needed:** ELEC-12
+(`SavedBallotTemplate` list/create still unbounded, `elections.py:405-418`),
+ELEC-14 (`verify_vote_receipt`'s `receipt: str` GET query param,
+`elections.py:3861-3864`), ELEC-16 (`list_manual_ballot_batches` unbounded —
+confirmed in the service layer, unchanged), ELEC-28 (public ballot UI still
+cannot render a plain-position contest — `BallotVotingPage.tsx` still never
+references `election.positions`; no frontend file in this repo changed
+since pass 4 touches that page), ELEC-40 (pre-ELEC-34 vote
+collision-avoidance gap — documented known limitation, no code path
+changed). Each was checked against the current file/line, not carried
+forward from the write-up.
+
+**0 new findings.** This is a clean pass: a byte-identical scope file, one
+reviewed-and-cleared out-of-scope dependency commit, and a fresh full read
+that surfaced nothing beyond what five prior passes (through 42 numbered
+findings) already found and fixed or flagged.
+
+**Completion gate (pass 5):**
+
+| Check                                                    | Result                                                                    |
+| -------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                            | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                     | ✅ clean (1592 files)                                                     |
+| `isort --check-only app/ tests/ alembic/`                | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`        | ✅ 444 revisions, single head (`6ab7d903fae5`) — no migration this pass   |
+| `pytest tests/ -q -k "election or ballot or quorum"`     | ✅ 584 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `pytest tests/test_election_ballot_rate_limit.py -v`     | ✅ 7 passed, unchanged from pass 4                                        |
+| `pytest tests/ -q` (full backend suite)                  | ✅ 12556 passed, 21 skipped (pre-existing/environmental), 0 failed        |
+| `npm run typecheck` (frontend, aliased-compiler wrapper) | ✅ 0 errors — no frontend file changed this pass, run anyway per gate     |
+| `npm run lint` (frontend)                                | ✅ 0 errors, 0 warnings                                                   |
+
+No code change this pass, so no new guard test was added — the existing
+`test_election_ballot_rate_limit.py` (7 tests, pass 4) was re-run rather
+than modified.
 
 ---
 

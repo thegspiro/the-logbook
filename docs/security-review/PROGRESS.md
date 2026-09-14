@@ -16,6 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR pending** — branch `claude/security-review-feature06-pass5`
+(Feature 06, Elections & ballots, pass 5), opened against a fresh
+`origin/main`. Checked for a concurrent session first per this run's own
+Step 0: `git fetch origin main` showed a clean working tree; the Open PR
+row read "None" with the Feature 05 pass 5 closure note beneath it (see the
+superseded block below); and `list_pull_requests` (open, all repos) found
+no branch or title referencing Feature 06/elections. No file in this
+feature's declared scope (`backend/app/api/v1/endpoints/elections.py`)
+changed since pass 4's closing merge (`de8db76d3`, PR #2400) — confirmed by
+an empty `git diff` over that commit range — so this was a full,
+independent fresh re-read of the file (all 3,895 lines) rather than a diff
+review, the same standard pass 4 used when it found no diffable range.
+`election_service.py` (a call-into dependency) picked up one unrelated
+commit fixing Cloudflare ballot-email delivery, read in full and confirmed
+to carry no security-relevant change for this scope. **0 new findings —**
+ELEC-41/ELEC-42 (the pass-4 rate-limit fixes) re-verified byte-for-byte
+intact and re-run under their guard test; every by-id query re-confirmed
+org-scoped; all JSON-column mutations re-confirmed using
+`copy.deepcopy()`; every 500-path re-confirmed routed through
+`safe_error_detail()`; audit logging re-confirmed present on every
+state-changing route read. 5 prior flagged findings (ELEC-12, ELEC-14,
+ELEC-16, ELEC-28, ELEC-40) re-verified still open/accurate, no drift. Full
+write-up: the **Pass 5** section of
+`docs/security-review/ELEC-06-elections-ballots.md`. Rotation row 06 stays
+`✅`. Gate: flake8/black/isort clean; migration validator clean (444
+revisions, single head); scoped pytest 584 passed; rate-limit guard test 7
+passed; full backend suite 12556 passed, 21 pre-existing/environmental
+skips, 0 failed; frontend `npm run typecheck` 0 errors, `npm run lint` 0
+errors/warnings. PR number to be filled in via a small follow-up commit
+once opened.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 5, PR #2544, merged), preserved for history</summary>
+
 **None.** PR [#2544](https://github.com/thegspiro/the-logbook/pull/2544)
 (Feature 05, Finance & approvals, pass 5) merged clean — 16/16 real CI jobs
 green, after one stale-superseded-run false failure on an intermediate
@@ -38,6 +72,8 @@ deliberately deferred to a dedicated pass and documented in
 `KNOWN_LIMITATIONS.md`. Full write-up: the **Pass 5** section of
 `docs/security-review/FIN-05-finance-approvals.md`. Rotation row 05 stays
 `✅`. **Next: Feature 06 (Elections & ballots), pass 5.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 5, PR #2544, before it merged), preserved for history</summary>
@@ -14956,6 +14992,51 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 06 (Elections & ballots, pass 5) — 0 new findings, clean re-verification — PR opened
+
+Step 0 concurrent-session check: `git fetch origin main` clean, no
+uncommitted foreign changes; `PROGRESS.md`'s Open PR row read "None." with
+the Feature 05 pass 5 closure note; `list_pull_requests` (open) returned
+only an unrelated scheduling PR (#2495) — no Feature 06/elections branch or
+title. Created `claude/security-review-feature06-pass5` fresh off
+`origin/main`.
+
+`backend/app/api/v1/endpoints/elections.py` — the feature's full declared
+scope — has not changed since pass 4's closing merge (`de8db76d3`, PR
+#2400): `git diff de8db76d3 origin/main -- backend/app/api/v1/endpoints/elections.py`
+is empty. `quorum_service.py` likewise unchanged. `election_service.py` (a
+call-into dependency) picked up one commit (`ac9990d0c`) fixing Cloudflare
+ballot-email delivery — read in full and confirmed to carry no
+security-relevant change (no org-scoping, token, eligibility, vote-count,
+or audit-logging code touched). No new migration touches an election
+table.
+
+Because the scope file is byte-identical to pass 4's own review, this pass
+did a full independent re-read of all 3,895 lines rather than a diff
+review — same standard pass 4 used when it found no diffable range. **0 new
+findings.** Re-verified and confirmed intact: ELEC-41/ELEC-42 (the pass-4
+rate-limit fixes — `async def` + `await check_rate_limit(...)` with
+distinct `scope` values on both public-route wrappers, re-run under
+`test_election_ballot_rate_limit.py`), org-scoping on all 15 by-id
+`select()` call sites, `copy.deepcopy()` on every JSON-column mutation
+(election settings, attendees, voter overrides), `safe_error_detail()` on
+every 500 path, and audit logging on every state-changing route. 5 prior
+flagged findings (ELEC-12 unbounded saved-ballot-template list/create,
+ELEC-14 receipt-verify GET query param, ELEC-16 unbounded manual-ballot
+listing, ELEC-28 public ballot UI can't render a plain-position contest,
+ELEC-40 pre-ELEC-34 vote-dedup gap) re-verified still accurately open, no
+drift, no re-report needed.
+
+Gate: flake8/black/isort clean on `app/ tests/ alembic/`; migration
+validator passed (444 revisions, single head); scoped pytest (`election or
+ballot or quorum`) 584 passed, 1 pre-existing skip; rate-limit guard test 7
+passed; full backend suite 12556 passed, 21 pre-existing/environmental
+skips, 0 failed; frontend `npm run typecheck` 0 errors and `npm run lint` 0
+errors/warnings — no frontend file changed this pass, both run anyway per
+the gate. See `docs/security-review/ELEC-06-elections-ballots.md` pass 5
+for the full write-up. Rotation row 06 stays `✅`. PR opened; branch
+`claude/security-review-feature06-pass5`.
 
 ### 2026-09-14 — Feature 05 (Finance & approvals, pass 5) — PR #2544 merged; next Feature 06
 
