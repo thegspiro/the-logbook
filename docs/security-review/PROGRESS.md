@@ -16,6 +16,56 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2538](https://github.com/thegspiro/the-logbook/pull/2538)** (Feature 02,
+Permissions & roles, pass 5) — branch `claude/security-review-permissions-roles`,
+opened against a fresh `origin/main` (no security-review PR was open at the
+start of this iteration; Feature 01's own pass 5, PR #2536, had already
+merged, confirmed via `git fetch origin main` and a log search for "Feature
+02" + "pass 5" finding no prior attempt). **0 new findings.** `git diff`
+against pass 4's merge commit (`a96b7370`) shows changes in exactly three of
+this feature's ten files since pass 4 —
+`api/v1/endpoints/operational_ranks.py` and
+`services/operational_rank_service.py` (an unrelated feature branch,
+"Let members.manage edit the operational rank ladder", widened five of the
+router's seven routes from `settings.manage`-only to `settings.manage` OR
+`members.manage` when the ladder screen moved into Members Administration)
+and `core/permissions.py` (a same-branch fix for the onboarding wizard's
+module checkboxes, additive lookup data only) — every other in-scope file,
+including `users.py`'s position/rank-assignment handlers and
+`admin_continuity_service.py`, is byte-identical to pass 4. All ten files
+read in full anyway, and the widening commit given full weight rather than
+trusted on the strength of its own four prior Codex review rounds: verified
+the ceiling (`_enforce_rank_grant_ceiling`) runs on `create_rank` and on
+**both** directions of a `rank_code` rename on `update_rank`, verified the
+ordering carve-out (`sort_order` still requires `settings.manage`) actually
+closes the inventory-restriction bypass its own comment describes (traced
+`_passes_restrictions`'s `rank_order <= min_rank_order` rule directly), and
+independently chased a case-sensitivity edge (`get_rank_default_permissions`
+is an exact-string lookup) to its actual conclusion — closed by the
+database's case-insensitive collation (`utf8mb4_unicode_ci`) plus
+`resolve_rank_code`'s fold-and-match-seeded-first design, not merely assumed
+safe. All three prior fixes (PERM-6/7/8) re-verified in place at current
+line numbers; **PERM-5** (MED, the position-manager demotion gap) remains
+open and unchanged, still mirrored in `docs/KNOWN_LIMITATIONS.md`, still
+awaiting an owner decision among the three options pass 4 laid out. Full
+write-up: the **Pass 5** section of
+`docs/security-review/PERM-02-permissions-roles.md`.
+`flake8`/`black --check`/`isort --check-only` clean on `app/ tests/
+alembic/` (CI's pinned versions, resolved via `python3 -m <tool>` since the
+bare binaries on `PATH` shadow an older isolated install for `black` and a
+plugin-less one for `flake8`); `validate_migrations.py --strict` 444
+revisions, single head `6ab7d903fae5`; `check_route_permissions.py
+--strict` 228 routes, 0 errors; `check_docs_links.py` 358 files, 0 broken
+links; scoped permission/role/rank/officer/org_chart/scoping tests 1087
+passed, 1 skipped (environment); the eleven guard-test files this feature
+owns 195 passed; backend full unit suite (`pytest tests/ -m "not
+integration and not slow and not docker"`) **10158 passed, 1 skipped, 0
+failed**; no frontend file changed this pass. Rotation row 02 stays `✅`
+per this file's own convention.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 5, PR #2536, merged), preserved for history</summary>
+
 **None.** PR [#2536](https://github.com/thegspiro/the-logbook/pull/2536)
 (Feature 01, Auth & session lifecycle, pass 5) merged clean, 16/16 CI green
 (after one stale-superseded-run false failure on the prior commit — every
@@ -48,6 +98,8 @@ not docker"`) **10158 passed, 1 skipped**; scoped auth/mfa/oauth/consent
 tests 674 passed, 2 skipped (both pre-existing); no frontend files changed
 this pass. Rotation row 01 stays `✅` per this file's own convention. Next:
 Feature 02 (Permissions & roles), pass 5.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 5, PR #2536, before it merged), preserved for history</summary>
@@ -14576,6 +14628,66 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 02 (Permissions & roles, pass 5) — PR #2538 opened; 0 new findings
+
+Checked for a concurrent session first: `git fetch origin main`, the **Open
+PR** section showed Feature 01 pass 5 (PR #2536) already merged with "None"
+open, and a log search for "Feature 02" + "pass 5" found no prior attempt.
+Branched fresh from `origin/main`
+(`claude/security-review-permissions-roles`); the working tree had no
+pre-existing uncommitted state to stash.
+
+Read `CHECKLIST.md` and all four prior passes in
+`PERM-02-permissions-roles.md` in full (PERM-1 through PERM-8 across four
+passes, including pass 3's date-cutoff correction and pass 4's PERM-5
+flag) before touching anything.
+
+Diffed pass 4's merge commit (`a96b7370`, PR #2391) against `origin/main`
+across the ten files this feature owns. Three changed:
+`api/v1/endpoints/operational_ranks.py` and
+`services/operational_rank_service.py` (an unrelated feature branch,
+"Let members.manage edit the operational rank ladder", 2026-09-08/09 —
+already through four of its own Codex review rounds before this rotation
+reached it) and `core/permissions.py` (additive onboarding-checkbox lookup
+data, feature 30's own surface). The other seven — including `users.py`'s
+position/rank-assignment handlers and `admin_continuity_service.py`, where
+**PERM-5** lives — are byte-identical to pass 4.
+
+All ten files read in full regardless. The widening commit was given full
+weight rather than trusted on its own review history: verified
+`_enforce_rank_grant_ceiling` runs on `create_rank` and on **both**
+directions of a `rank_code` rename (the rename-out direction matters because
+the service cascades the code change onto every current holder); traced
+`inventory_service.py`'s `_passes_restrictions` directly to confirm the
+`sort_order` ordering carve-out actually closes the rank-order inventory
+bypass its own comment describes, rather than accepting the comment's word
+for it; and independently chased a case-sensitivity question
+(`get_rank_default_permissions` does an exact-string dict lookup) to its
+actual conclusion — closed by the database's `utf8mb4_unicode_ci` collation
+plus `resolve_rank_code`'s fold-and-match-seeded-first design, verified
+rather than assumed. All three prior fixes (PERM-6/7/8) re-verified in
+place at current line numbers.
+
+**PERM-5** (position manager can permanently demote the department's only
+wildcard `*` holder via `role_ids: []`, irreversible through the API)
+remains open, unchanged, still needing an owner decision — `users.py` and
+`admin_continuity_service.py` are byte-identical to pass 4, so neither guard
+moved. Still current in `KNOWN_LIMITATIONS.md`.
+
+**0 new findings.** Findings doc: `docs/security-review/
+PERM-02-permissions-roles.md` (pass 5 section, appended after pass 4's,
+newest-first). Gate: `flake8`/`black --check`/`isort --check-only` clean on
+`app/ tests/ alembic/` (CI's pinned versions, via `python3 -m <tool>` since
+the bare binaries on `PATH` resolve a different, older/plugin-less
+install); `validate_migrations.py --strict` 444 revisions, single head;
+`check_route_permissions.py --strict` 228 routes, 0 errors;
+`check_docs_links.py` 358 files, 0 broken links; scoped
+permission/role/rank/officer/org_chart/scoping tests 1087 passed, 1 skipped
+(environment); this feature's eleven guard-test files 195 passed; backend
+full unit suite (`pytest tests/ -m "not integration and not slow and not
+docker"`) **10158 passed, 1 skipped, 0 failed**; no frontend file changed
+this pass.
 
 ### 2026-09-14 — Feature 01 (Auth & session lifecycle) — PR #2536 merged
 
