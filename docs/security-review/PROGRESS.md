@@ -16,6 +16,57 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2538](https://github.com/thegspiro/the-logbook/pull/2538)
+(Feature 02, Permissions & roles, pass 5) merged clean, merged directly by
+the repo owner (after one stale-superseded-run false CI failure on the
+prior commit — every job on that run showed `cancelled`, not `failed`,
+because the branch advanced mid-run; documented in a PR comment). **0 new
+findings.** `git diff`
+against pass 4's merge commit (`a96b7370`) shows changes in exactly three of
+this feature's ten files since pass 4 —
+`api/v1/endpoints/operational_ranks.py` and
+`services/operational_rank_service.py` (an unrelated feature branch,
+"Let members.manage edit the operational rank ladder", widened five of the
+router's seven routes from `settings.manage`-only to `settings.manage` OR
+`members.manage` when the ladder screen moved into Members Administration)
+and `core/permissions.py` (a same-branch fix for the onboarding wizard's
+module checkboxes, additive lookup data only) — every other in-scope file,
+including `users.py`'s position/rank-assignment handlers and
+`admin_continuity_service.py`, is byte-identical to pass 4. All ten files
+read in full anyway, and the widening commit given full weight rather than
+trusted on the strength of its own four prior Codex review rounds: verified
+the ceiling (`_enforce_rank_grant_ceiling`) runs on `create_rank` and on
+**both** directions of a `rank_code` rename on `update_rank`, verified the
+ordering carve-out (`sort_order` still requires `settings.manage`) actually
+closes the inventory-restriction bypass its own comment describes (traced
+`_passes_restrictions`'s `rank_order <= min_rank_order` rule directly), and
+independently chased a case-sensitivity edge (`get_rank_default_permissions`
+is an exact-string lookup) to its actual conclusion — closed by the
+database's case-insensitive collation (`utf8mb4_unicode_ci`) plus
+`resolve_rank_code`'s fold-and-match-seeded-first design, not merely assumed
+safe. All three prior fixes (PERM-6/7/8) re-verified in place at current
+line numbers; **PERM-5** (MED, the position-manager demotion gap) remains
+open and unchanged, still mirrored in `docs/KNOWN_LIMITATIONS.md`, still
+awaiting an owner decision among the three options pass 4 laid out. Full
+write-up: the **Pass 5** section of
+`docs/security-review/PERM-02-permissions-roles.md`.
+`flake8`/`black --check`/`isort --check-only` clean on `app/ tests/
+alembic/` (CI's pinned versions, resolved via `python3 -m <tool>` since the
+bare binaries on `PATH` shadow an older isolated install for `black` and a
+plugin-less one for `flake8`); `validate_migrations.py --strict` 444
+revisions, single head `6ab7d903fae5`; `check_route_permissions.py
+--strict` 228 routes, 0 errors; `check_docs_links.py` 358 files, 0 broken
+links; scoped permission/role/rank/officer/org_chart/scoping tests 1087
+passed, 1 skipped (environment); the eleven guard-test files this feature
+owns 195 passed; backend full unit suite (`pytest tests/ -m "not
+integration and not slow and not docker"`) **10158 passed, 1 skipped, 0
+failed**; no frontend file changed this pass. Rotation row 02 stays `✅`
+per this file's own convention. Next: Feature 03 (Public surface &
+webhooks), pass 5.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 5, PR #2538, before it merged), preserved for history</summary>
+
 **PR [#2538](https://github.com/thegspiro/the-logbook/pull/2538)** (Feature 02,
 Permissions & roles, pass 5) — branch `claude/security-review-permissions-roles`,
 opened against a fresh `origin/main` (no security-review PR was open at the
@@ -62,6 +113,8 @@ owns 195 passed; backend full unit suite (`pytest tests/ -m "not
 integration and not slow and not docker"`) **10158 passed, 1 skipped, 0
 failed**; no frontend file changed this pass. Rotation row 02 stays `✅`
 per this file's own convention.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 5, PR #2536, merged), preserved for history</summary>
@@ -14628,6 +14681,17 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 02 (Permissions & roles) — PR #2538 merged, watchdog recorded it
+
+PR #2538 (pass 5: three of ten in-scope files changed since pass 4 — a
+rank-ladder permission widening and additive onboarding lookup data, both
+independently re-derived rather than trusted; all prior fixes PERM-6/7/8
+re-verified; PERM-5 unchanged and still awaiting an owner decision; 0 new
+findings) merged clean, merged directly by the repo owner, after one
+stale-superseded-run false CI failure (every job `cancelled`, not `failed`,
+on the pre-bookkeeping commit — documented in a PR comment). Rotation row
+02 stays `✅`. Next: Feature 03 (Public surface & webhooks), pass 5.
 
 ### 2026-09-14 — Feature 02 (Permissions & roles, pass 5) — PR #2538 opened; 0 new findings
 
