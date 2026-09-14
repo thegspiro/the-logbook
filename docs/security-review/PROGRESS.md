@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [(this PR)](https://github.com/thegspiro/the-logbook/pull/) — branch
+**PR [#2559](https://github.com/thegspiro/the-logbook/pull/2559)** — branch
 `claude/security-review-feature10-pass5`, Feature 10 (Documents & legal),
-pass 5.** Step 0 concurrent-session check: `git fetch origin main` clean;
+pass 5. Step 0 concurrent-session check: `git fetch origin main` clean;
 `PROGRESS.md`'s Open PR row read "None." with the Feature 09 pass 5 closure
 note beneath it and named "Next: Feature 10 (Documents & legal), pass 5"
 explicitly; `list_pull_requests` (open) returned only the pre-flagged
