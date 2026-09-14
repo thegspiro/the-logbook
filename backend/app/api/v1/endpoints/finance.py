@@ -898,12 +898,25 @@ async def mark_pr_paid(
 ):
     service = FinanceService(db)
     try:
-        return await service.mark_pr_paid(
+        pr = await service.mark_pr_paid(
             pr_id,
             str(current_user.organization_id),
             actual_amount,
             acted_by=str(current_user.id),
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.purchase_request_paid",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "request_number": pr.request_number,
+                "amount": str(pr.actual_amount or pr.estimated_amount),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return pr
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1101,12 +1114,25 @@ async def mark_expense_paid(
 ):
     service = FinanceService(db)
     try:
-        return await service.mark_expense_paid(
+        er = await service.mark_expense_paid(
             er_id,
             str(current_user.organization_id),
             payment_method,
             acted_by=str(current_user.id),
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.expense_report_paid",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "report_number": er.report_number,
+                "amount": str(er.total_amount),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return er
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1233,12 +1259,26 @@ async def issue_check(
 ):
     service = FinanceService(db)
     try:
-        return await service.issue_check(
+        cr = await service.issue_check(
             cr_id,
             str(current_user.organization_id),
             check_number,
             acted_by=str(current_user.id),
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.check_issued",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "request_number": cr.request_number,
+                "check_number": cr.check_number,
+                "amount": str(cr.amount),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return cr
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1258,7 +1298,21 @@ async def void_check(
 ):
     service = FinanceService(db)
     try:
-        return await service.void_check(cr_id, str(current_user.organization_id))
+        cr = await service.void_check(cr_id, str(current_user.organization_id))
+        await log_audit_event(
+            db=db,
+            event_type="finance.check_voided",
+            event_category="finance",
+            severity="warning",
+            event_data={
+                "request_number": cr.request_number,
+                "check_number": cr.check_number,
+                "amount": str(cr.amount),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return cr
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1385,12 +1439,25 @@ async def record_dues_payment(
 ):
     service = FinanceService(db)
     try:
-        return await service.record_dues_payment(
+        dues = await service.record_dues_payment(
             dues_id,
             str(current_user.organization_id),
             recorded_by=str(current_user.id),
             **data.model_dump(),
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.dues_payment_recorded",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "dues_id": dues_id,
+                "amount_paid": str(data.amount_paid),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return dues
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1439,12 +1506,22 @@ async def waive_dues(
 ):
     service = FinanceService(db)
     try:
-        return await service.waive_dues(
+        dues = await service.waive_dues(
             dues_id,
             str(current_user.organization_id),
             str(current_user.id),
             data.reason,
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.dues_waived",
+            event_category="finance",
+            severity="warning",
+            event_data={"dues_id": dues_id},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return dues
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:

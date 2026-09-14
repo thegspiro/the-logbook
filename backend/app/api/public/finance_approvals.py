@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
 from app.core.utils import safe_error_detail
@@ -144,6 +145,18 @@ async def approve_via_token(
     service = FinanceService(db)
     try:
         record = await service.approve_by_token(token, body.notes or None)
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_step_approved",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "step_record_id": str(record.id),
+                "entity_type": record.entity_type.value,
+                "via": "email_token",
+            },
+            organization_id=str(record.chain.organization_id),
+        )
         await db.commit()
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -177,6 +190,18 @@ async def deny_via_token(
     service = FinanceService(db)
     try:
         record = await service.deny_by_token(token, body.notes or None)
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_step_denied",
+            event_category="finance",
+            severity="warning",
+            event_data={
+                "step_record_id": str(record.id),
+                "entity_type": record.entity_type.value,
+                "via": "email_token",
+            },
+            organization_id=str(record.chain.organization_id),
+        )
         await db.commit()
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
