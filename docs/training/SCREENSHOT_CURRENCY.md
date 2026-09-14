@@ -1,5 +1,27 @@
 # Screenshot currency
 
+## Audited 2026-09-14 (second watchdog pass) — no drift found
+
+Routine maintenance pass per the currency job's standing brief, run from the
+branch-currency watchdog after roughly two hours with no commit on this
+branch. Rebased onto `origin/main` (2 commits, `9e79ab485` → `ff9f6fdd1`):
+PR #2545 recording the merge of PR #2544 (Feature 05, Finance & approvals,
+security-review pass 5) — backend-only, touching
+`backend/app/api/public/finance_approvals.py`,
+`backend/app/api/v1/endpoints/finance.py`,
+`backend/app/services/finance_service.py`, two backend test files,
+`docs/KNOWN_LIMITATIONS.md` and the Feature 05 security-review docs — no
+frontend/UI change. Clean replay, no conflicts.
+
+`status_report.py`: 580/580, unchanged. `audit_images.py --baseline
+scripts/screenshots/audit_baseline.txt`: no new findings across all 580
+images — only the pre-known dark-page scrollbar-gutter edge finding, already
+in the baseline. `check_docs_links.py`: 358 files, 0 broken links.
+
+`15-08-election-package.png` remains queued from the 2026-09-13 second pass
+(below) for a full-stack capture run — nothing in this range touches it
+further.
+
 ## Audited 2026-09-14 (watchdog pass) — no drift found
 
 Routine maintenance pass per the currency job's standing brief, run from the
