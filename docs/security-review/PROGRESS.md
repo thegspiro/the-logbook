@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2529](https://github.com/thegspiro/the-logbook/pull/2529)
+(Feature 33, Core infrastructure, pass 4) merged clean, 17/17 CI green (one
+transient `CI Success` failure on an intermediate commit was a
+stale-superseded-run false failure — every job on that run showed
+`cancelled`, not `failed`, because the branch advanced mid-run to the
+bookkeeping commit; documented in a PR comment, resolved by waiting for the
+new head's own CI run, which came back 17/17 green), no unresolved review
+threads (Codex hit its usage-limit quota and left no review). **1 new
+finding, MED, fixed:** `SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` (the
+data-exfiltration monitoring allowlist) had drifted again — an unrelated PR
+(finance-approvals pass 4, 2026-09-08, one day after CI3-33's pass) added
+two new `/finance/export/*` GET routes with no reason to know this set
+existed, leaving them unmonitored. Fixed by adding both paths, and — since
+this set has now drifted twice with only manual-grep verification each
+time — added `tests/test_security_middleware.py::TestExportEndpointsCoverage`,
+the first automated check on this set: it builds the live OpenAPI schema
+and asserts every non-parameterized `export` route is covered and no stale
+entry remains, verified fail-before/pass-after against the finding. All 29
+prior findings across CI-33/CI2-33/CI3-33 re-verified still correct;
+CI3-33's two flagged config-switch findings
+(`REGISTRATION_REQUIRES_APPROVAL` has no reader; four more `config.py`
+settings have no reader) re-confirmed still open, unchanged, not re-fixed
+or re-flagged as new. flake8/black/isort clean; migrations 444 revisions,
+single head, no schema change; scoped tests 209 passed; full backend suite
+12,550 passed, 21 skipped (pre-existing), 0 failed; frontend typecheck 0
+errors; eslint 0 errors/0 warnings. Findings doc:
+`docs/security-review/CI4-33-core-infra.md`. Rotation row 33 is now `✅`.
+Next: Feature 34 (Frontend shared).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 4, PR #2529, before it merged), preserved for history</summary>
+
 **PR [#2529](https://github.com/thegspiro/the-logbook/pull/2529)** (Feature
 33, Core infrastructure, pass 4) — branch
 `claude/security-review-core-infrastructure`, opened against a fresh
@@ -52,6 +84,8 @@ suite 12,550 passed, 21 skipped (pre-existing: `pywebpush`, Docker
 unavailable, opt-in API-contract suite), 0 failed; frontend typecheck 0
 errors; eslint 0 errors/0 warnings. Findings doc:
 `docs/security-review/CI4-33-core-infra.md`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2527's merge, Feature 32 pass 4 closure), preserved for history</summary>
@@ -14320,7 +14354,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⏳     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -14329,6 +14363,19 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 33 (Core infrastructure) — PR #2529 merged, watchdog recorded it
+
+PR #2529 (pass 4: `SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` drift —
+two finance export routes added by an unrelated PR one day after pass 3
+with no reason for that PR's author to know this hand-maintained set
+existed — fixed, plus a new automated coverage test closing the class; all
+29 prior findings re-verified) merged clean after one stale-superseded-run
+false CI failure (every job `cancelled`, not `failed`, on the
+pre-bookkeeping commit — documented in a PR comment, resolved by waiting
+for the new head's own CI, which came back 17/17 green). No unresolved
+review threads; Codex left only a usage-limit notice, no findings.
+Rotation row 33 → `✅`. Next: 34 Frontend shared.
 
 ### 2026-09-14 — Feature 33 (Core infrastructure, pass 4) — 1 fixed (MED), 0 flagged (new), all 29 prior findings re-confirmed
 
