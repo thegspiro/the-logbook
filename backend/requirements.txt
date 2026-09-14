@@ -19,13 +19,13 @@ slowapi==0.1.10
 # ============================================
 # Pulls in httpx2 (a separate distribution from the pinned httpx, they
 # coexist), sse-starlette, mcp-types, jsonschema and opentelemetry-api.
-mcp==2.1.1
+mcp==2.2.0
 
 # ============================================
 # Database - MySQL
 # ============================================
 sqlalchemy==2.0.52
-alembic==1.19.1
+alembic==1.19.2
 pymysql==1.2.0
 aiomysql==0.3.2
 greenlet==3.5.5  # Required by SQLAlchemy for async operations
@@ -40,7 +40,7 @@ hiredis==3.4.1
 # ============================================
 # Authentication & Security
 # ============================================
-PyJWT[crypto]==2.13.0
+PyJWT[crypto]==2.14.0
 bcrypt==5.0.0
 python-multipart==0.0.32
 pyotp==2.10.0
@@ -62,7 +62,7 @@ jinja2==3.1.6
 # ============================================
 # SMS
 # ============================================
-twilio==9.11.0
+twilio==9.11.1
 
 # ============================================
 # Web Push (PWA notifications)
@@ -74,9 +74,9 @@ pywebpush==2.5.0
 # ============================================
 # File Storage
 # ============================================
-boto3==1.43.88  # AWS S3
+boto3==1.43.92  # AWS S3
 azure-storage-blob==12.30.1
-google-cloud-storage==3.13.1
+google-cloud-storage==3.14.1
 python-magic==0.4.27
 
 # ============================================
@@ -85,7 +85,7 @@ python-magic==0.4.27
 python-docx==1.2.0
 openpyxl==3.1.5
 reportlab==5.0.1
-pypdf==6.17.0  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870
+pypdf==6.18.1  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870
 Pillow==12.3.0
 defusedxml==0.7.1  # Safe XML parsing (blocks XXE / entity-expansion attacks)
 
@@ -113,7 +113,7 @@ stripe==15.6.1
 # Monitoring & Logging
 # ============================================
 loguru==0.7.3
-sentry-sdk==2.68.1
+sentry-sdk==2.69.1
 psutil==7.2.2  # System monitoring for health checks
 
 # ============================================
@@ -132,7 +132,7 @@ celery==5.6.3
 # ============================================
 msal==1.38.0
 msgraph-core==1.5.1
-google-auth==2.57.1
+google-auth==2.58.0
 google-auth-oauthlib==1.4.1
 google-api-python-client==2.200.0
 
@@ -144,8 +144,8 @@ pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 pytest-randomly==5.0.0
 pytest-timeout==2.4.0
-hypothesis==6.167.1  # schemathesis 4.x requires >=6.130.12
-schemathesis==4.25.2
+hypothesis==6.168.0  # schemathesis 4.x requires >=6.130.12
+schemathesis==4.26.1
 # Pinned because these two move together. 4.24.3 called
 # CanonicalSchema.is_satisfiable(), which jsonschema-rs 0.50 removed, and an
 # unbounded transitive upgrade made every generated API contract case fail
@@ -159,7 +159,7 @@ schemathesis==4.25.2
 # free choice: 0.52.0 and the 0.50.0 that preceded it both make the file
 # unresolvable against the schemathesis above. Read that range off the
 # schemathesis release being pinned before changing this line.
-jsonschema-rs==0.51.0
+jsonschema-rs==0.56.0
 faker==40.38.0
 
 # Code Quality
