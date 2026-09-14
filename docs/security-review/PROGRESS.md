@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2534](https://github.com/thegspiro/the-logbook/pull/2534)**
+(Feature 00, Cross-cutting baseline, pass 5) — branch
+`claude/security-review-cross-cutting-pass5`, opened against a fresh
+`origin/main` (no security-review PR was open at the start of this
+iteration). This is the fifth pass of Feature 00's whole-codebase sweep and
+opens the rotation's **second full lap** (00 through 34) — the first lap
+closed out with PR #2532 above. All 13 sweep classes established across
+passes 1–4 were re-run against the 485 commits landed since pass 4's
+`c91060f7a` and hold clean; 0 new findings. One open cross-cutting item
+(the outbound-integration-URL DNS-rebinding TOCTOU, `KNOWN_LIMITATIONS.md`)
+was evaluated for a fix this pass — since that doc explicitly names this
+feature as where it should be closed — and deliberately left flagged rather
+than attempted: pinning the resolved address across
+`create_integration_client()`'s shared transport interacts non-trivially
+with that factory's existing proxy/HTTP-2/mTLS handling (each already the
+subject of a prior real regression per its own docstring), so it needs a
+dedicated, narrowly-scoped follow-up PR with its own test matrix rather
+than a line item inside a whole-codebase sweep. Findings doc:
+`docs/security-review/SEC-00-cross-cutting-baseline.md` (pass 5 section).
+`flake8`/`black --check`/`isort --check-only` clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` 444 revisions, single head;
+`check_route_permissions.py --strict` 228 routes, 0 errors; backend full
+unit suite (`pytest tests/ -m "not integration and not slow and not
+docker"`) **10158 passed, 1 skipped**; `npm run typecheck` 0 errors; `npm
+run lint` 0 errors, 0 warnings; frontend structural guards
+(`dialogScrollIntegrity`, `dialogDismissIntegrity`, `testingRegistry`,
+`mobile-route-integrity.spec.ts`) all green. Rotation row 00 stays `✅`
+per this file's own convention (pass number tracked in the log/findings
+doc, not the table).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 6, PR #2532, after it merged, closing out the rotation's first full lap), preserved for history</summary>
+
 **None.** PR [#2532](https://github.com/thegspiro/the-logbook/pull/2532)
 (Feature 34, Frontend shared, pass 6) merged clean, 16/16 CI green (after
 one stale-superseded-run false failure on the prior commit — every job on
@@ -43,6 +76,8 @@ rotation wraps to 00, which re-runs the whole-codebase sweeps against
 whatever has landed since"), the next iteration starts **Feature 00
 (Cross-cutting baseline)**, continuing from pass 4 (PR #2387,
 `SEC-00-cross-cutting-baseline.md`) as pass 5.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 6, PR #2532, before it merged), preserved for history</summary>
@@ -14431,6 +14466,72 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 00 (Cross-cutting baseline, pass 5) — PR #2534 opened; 0 new findings, second full rotation lap begins
+
+Checked for a concurrent session first: `git fetch origin main` and the
+**Open PR** row both showed "None" with the note that the next iteration is
+Feature 00 pass 5, and a log search for "Feature 00" + "pass 5" found no
+prior attempt — so this is not a duplicate. Branched fresh from
+`origin/main` (`claude/security-review-cross-cutting-pass5`), no local
+uncommitted state in the working tree to stash.
+
+Read `CHECKLIST.md`, all four prior passes in
+`SEC-00-cross-cutting-baseline.md` in full (pass 4's own 13 numbered sweep
+classes, the round-by-round `security_monitoring.py` saga from pass 3, and
+the out-of-band data-leakage sweep that fed pass 4), the Feature 00 log
+entries across all four prior passes, and `docs/module-audit/
+CROSS-CUTTING.md` before touching anything.
+
+Re-ran all 13 established sweep classes against the 485 commits landed
+since pass 4's `c91060f7a` — CSV writer sweep, `SET NULL` nullability,
+proxy-IP attribution, Alembic chain integrity (444 revisions now, up from
+437), LIKE-wildcard handling, `BaseHTTPMiddleware` usage, unbounded
+in-memory trackers (still the same 25, every cap re-verified individually
+rather than just re-counted), `window.confirm`/`alert`/`prompt`, JSON
+shallow-copy-then-nested-mutate, the org-scoping/IDOR ratchet, capacity-
+check locking, route auth coverage, and raw-exception-to-client disclosure
+— **all 13 hold clean**, each via its own standing guard test or a
+from-scratch AST/grep pass, not a diff against the prior count. Also
+re-ran the PII cache-exclusion pin test, the `create_all`-table migration
+tolerance test, the baseline-member-grants test, and (new to this file
+since pass 4, added by other rotation features in the meantime) the
+dialog-scroll/dialog-dismiss integrity tests, the testing registry test,
+and the mobile route inventory e2e spec — all green.
+
+Considered three candidate new sweep classes given the volume of
+intervening change (raw SQL built by string interpolation, `eval`/`exec`/
+`pickle.loads`, and a broader re-check of `log_audit_event` calls naming a
+PII-shaped key) — each turned up hits, each hit was read individually, and
+none was a real finding (details in the findings doc). Also evaluated,
+and deliberately declined to fix, the one item `KNOWN_LIMITATIONS.md`
+explicitly names this feature as the place to close: pinning the resolved
+address across `create_integration_client()`'s shared transport to fully
+close the outbound-integration-URL DNS-rebinding TOCTOU (currently
+narrowed-not-closed at 7 sites, up from 6 — `documenso_service.py`'s own
+missing call was independently closed by INT-27 pass 4 between pass 4 and
+this pass). That factory's own docstring documents four real regressions
+from past changes made without accounting for its proxy/HTTP-2/mTLS
+interactions; IP-pinning is in direct tension with proxy support (the
+proxy, not this process, needs to resolve and connect to the real host),
+so closing it needs a dedicated, narrowly-scoped PR with its own test
+matrix — not a line item inside a whole-codebase sweep with the widest
+blast radius in the rotation. Left flagged, unchanged disposition,
+re-verified rather than re-derived.
+
+**0 new findings.** Findings doc: `docs/security-review/
+SEC-00-cross-cutting-baseline.md` (pass 5 section, appended after pass 4's,
+newest-first). Gate: `flake8`/`black --check`/`isort --check-only` clean
+on `app/ tests/ alembic/`; `validate_migrations.py --strict` 444
+revisions, single head; `check_route_permissions.py --strict` 228 routes,
+0 errors, 0 warnings; backend full unit suite (`pytest tests/ -m "not
+integration and not slow and not docker"`) **10158 passed, 1 skipped**;
+`npm run typecheck` 0 errors; `npm run lint` 0 errors, 0 warnings. No
+source files changed this pass (every check is a re-verification), so
+there is no behavior-neutrality diff to run. Rotation row 00 stays `✅`
+per this file's own convention — the pass number lives in the log/findings
+doc, not the table. This opens the rotation's **second full lap**
+(00 through 34), the first having closed out with PR #2532 above.
 
 ### 2026-09-14 — Feature 34 (Frontend shared) — PR #2532 merged, watchdog recorded it; full 00–34 rotation table complete
 
