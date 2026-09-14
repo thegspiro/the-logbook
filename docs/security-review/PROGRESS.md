@@ -57,9 +57,9 @@ endpoints follow the no-`user_id`/explicit-`organization_id` convention
 `paypal_webhook.py` already uses for an external-actor event). The eight
 remaining non-ledger status-transition methods with the same unlocked-read
 shape (`submit_purchase_request`/`submit_expense_report`/
-`submit_check_request`/`mark_pr_ordered`/`mark_pr_received`/`update_
-purchase_request`/`update_expense_report`/`update_check_request`) were
-deliberately left unfixed and flagged — lower severity (none touches the
+`submit_check_request`/`mark_pr_ordered`/`mark_pr_received`/
+`update_purchase_request`/`update_expense_report`/`update_check_request`)
+were deliberately left unfixed and flagged — lower severity (none touches the
 budget ledger) and a broader uniform sweep than this pass's evidence
 supports fixing under one commit without its own dedicated concurrency-test
 pass; recorded in `docs/KNOWN_LIMITATIONS.md` with the concrete fix pattern.
