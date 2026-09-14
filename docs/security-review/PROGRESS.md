@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PASS5_PR](https://github.com/thegspiro/the-logbook/pull/PASS5_PR)**
+**PR [#2534](https://github.com/thegspiro/the-logbook/pull/2534)**
 (Feature 00, Cross-cutting baseline, pass 5) — branch
 `claude/security-review-cross-cutting-pass5`, opened against a fresh
 `origin/main` (no security-review PR was open at the start of this
@@ -14467,7 +14467,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-14 — Feature 00 (Cross-cutting baseline, pass 5) — PR #PASS5_PR opened; 0 new findings, second full rotation lap begins
+### 2026-09-14 — Feature 00 (Cross-cutting baseline, pass 5) — PR #2534 opened; 0 new findings, second full rotation lap begins
 
 Checked for a concurrent session first: `git fetch origin main` and the
 **Open PR** row both showed "None" with the note that the next iteration is
