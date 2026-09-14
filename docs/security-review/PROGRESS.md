@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2532](https://github.com/thegspiro/the-logbook/pull/2532)
+(Feature 34, Frontend shared, pass 6) merged clean, 16/16 CI green (after
+one stale-superseded-run false failure on the prior commit — every job on
+that run showed `cancelled`, not `failed`, because the branch advanced
+mid-run; documented in a PR comment, resolved by waiting for the new head's
+own CI), no unresolved review threads. 0 new findings — this feature's
+stable core (`apiClient.ts`, `createApiClient.ts`, `ProtectedRoute.tsx`,
+`authStore.ts`, the offline-queue/purge chain, 10 of 13 module axios
+instances) confirmed byte-identical to pass 5's baseline (`f53258ee7`)
+across 502 intervening commits; every axios-instance-creating file in the
+frontend re-enumerated from scratch (still 2 factories, 16 client-creating
+files, all correctly configured per Pitfall #7). Both open HIGH findings
+(FE3-34-2, FE3-34-5) re-verified unchanged and correctly still flagged,
+not this pass's to fix. Backend PII-cache ratchet
+(`test_api_cache_pii_exclusions.py`) re-run clean (4/4). Findings doc:
+`docs/security-review/FE6-34-frontend-shared.md`. typecheck/lint clean;
+scoped suite 372/372 (10 files); full frontend suite 532 files / 7,576
+tests passed; backend `test_api_cache_pii_exclusions.py` 4/4,
+`test_inventory_member_visibility.py` 15/15. Rotation row 34 is now `✅`.
+
+**This closes out the full 00–34 rotation table — every feature has now
+been reviewed at least once (several multiple times).** Per the rotation's
+own documented convention ("35 iterations per full pass. After 34 the
+rotation wraps to 00, which re-runs the whole-codebase sweeps against
+whatever has landed since"), the next iteration starts **Feature 00
+(Cross-cutting baseline)**, continuing from pass 4 (PR #2387,
+`SEC-00-cross-cutting-baseline.md`) as pass 5.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 6, PR #2532, before it merged), preserved for history</summary>
+
 **PR [#2532](https://github.com/thegspiro/the-logbook/pull/2532)** (Feature
 34, Frontend shared, pass 6) — branch
 `claude/security-review-frontend-shared`, opened against a fresh
@@ -35,6 +66,8 @@ typecheck/lint clean; scoped suite 372/372 (10 files); full frontend suite
 4/4, `test_inventory_member_visibility.py` 15/15. Subscribed to PR activity.
 Next: tend #2532 to green and merged, then the rotation wraps to 00
 (cross-cutting baseline) for its next full pass.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 4, PR #2529, after it merged), preserved for history</summary>
@@ -14390,7 +14423,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⏳     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -14398,6 +14431,23 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 34 (Frontend shared) — PR #2532 merged, watchdog recorded it; full 00–34 rotation table complete
+
+PR #2532 (pass 6: this feature's stable core re-verified byte-identical to
+pass 5's baseline across 502 intervening commits; every axios-instance-
+creating file re-enumerated from scratch, still 2 factories / 16
+client-creating files, all correctly configured per Pitfall #7; both open
+HIGH findings FE3-34-2 and FE3-34-5 re-confirmed unchanged, still needing a
+product decision; 0 new findings) merged clean after one
+stale-superseded-run false CI failure (every job `cancelled`, not `failed`,
+on the pre-bookkeeping commit — documented in a PR comment, resolved by
+waiting for the new head's own CI). Rotation row 34 → `✅`.
+
+**Every row in the 00–34 rotation table is now `✅`** — the full pass is
+complete. Per the table's own documented convention, the next iteration
+starts Feature 00 (Cross-cutting baseline) as pass 5, continuing from pass
+4 (PR #2387, `SEC-00-cross-cutting-baseline.md`).
 
 ### 2026-09-14 — Feature 34 (Frontend shared, pass 6) — 0 new findings; both open HIGH items re-verified unchanged
 
