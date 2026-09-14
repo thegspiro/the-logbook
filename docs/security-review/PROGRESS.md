@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](https://github.com/thegspiro/the-logbook/pull/TBD)** (Feature 02,
+**PR [#2538](https://github.com/thegspiro/the-logbook/pull/2538)** (Feature 02,
 Permissions & roles, pass 5) — branch `claude/security-review-permissions-roles`,
 opened against a fresh `origin/main` (no security-review PR was open at the
 start of this iteration; Feature 01's own pass 5, PR #2536, had already
@@ -14629,7 +14629,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-14 — Feature 02 (Permissions & roles, pass 5) — PR #TBD opened; 0 new findings
+### 2026-09-14 — Feature 02 (Permissions & roles, pass 5) — PR #2538 opened; 0 new findings
 
 Checked for a concurrent session first: `git fetch origin main`, the **Open
 PR** section showed Feature 01 pass 5 (PR #2536) already merged with "None"
