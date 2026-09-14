@@ -16,6 +16,50 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2529](https://github.com/thegspiro/the-logbook/pull/2529)
+(Feature 33, Core infrastructure, pass 4) merged clean, merged directly by
+the repo owner. Re-verified the fix (`EXPORT_ENDPOINTS` entries for the two
+finance-export routes) is present at `security_middleware.py:1593-1594`
+after two unrelated commits merged on top — no conflict, no regression.
+Branch `claude/security-review-core-infrastructure`, opened against a fresh
+`origin/main` (no security-review PR was open at the start of this
+iteration; row 33 was `⬜`). Loaded `CHECKLIST.md` and all three prior
+findings docs (`CI2-33` pass 1, PR #1917; `CI-33` pass 2, PR #2106/#2107;
+`CI3-33` pass 3, PR #2368/#2370 — the latter a ten-round Codex saga on
+`RateLimiter` ending in a structural refactor) before touching code.
+`security_middleware.py` and `config.py` confirmed byte-identical to pass
+3's merge commit (`680905c95`) via `git diff`/`git log`; `database.py`
+picked up one unrelated, legitimate fix from Feature 13's own rotation pass
+(a second SQLAlchemy `"refresh"`-event UTC-stamping listener) since pass 3,
+reviewed fresh and found correct. **1 new finding, MED, fixed:**
+`SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` (the data-exfiltration
+monitoring allowlist) had drifted again — an unrelated PR
+(finance-approvals pass 4, 2026-09-08, one day after CI3-33's pass) added
+two new `/finance/export/*` GET routes with no reason to know this set
+existed, leaving them unmonitored. Added both paths, and — since this set
+has now drifted twice with only manual-grep verification each time — added
+`tests/test_security_middleware.py::TestExportEndpointsCoverage`, the
+first automated check on this set: it builds the live OpenAPI schema and
+asserts every non-parameterized `export` route is covered and no stale
+entry remains, verified fail-before/pass-after against the finding. All 29
+prior findings across CI-33/CI2-33/CI3-33 re-verified still correct at
+current line numbers; CI3-33's two flagged config-switch findings
+(`REGISTRATION_REQUIRES_APPROVAL` has no reader; four more `config.py`
+settings have no reader) re-confirmed still open, unchanged, not re-fixed
+or re-flagged as new. `app/core/audit.py`'s SEC2-28-10 (Feature 28's own
+flagged finding, the audit hash chain's missing write-concurrency control)
+re-confirmed still open and correctly described, not this feature's to fix.
+flake8/black/isort clean; migrations 444 revisions, single head
+`6ab7d903fae5`, no schema change; scoped tests 209 passed; full backend
+suite 12,550 passed, 21 skipped (pre-existing: `pywebpush`, Docker
+unavailable, opt-in API-contract suite), 0 failed; frontend typecheck 0
+errors; eslint 0 errors/0 warnings. Findings doc:
+`docs/security-review/CI4-33-core-infra.md`. Rotation row 33 is now `✅`.
+Next: Feature 34 (Frontend shared).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 4, PR #2529, before it merged), preserved for history</summary>
+
 **PR [#2529](https://github.com/thegspiro/the-logbook/pull/2529)** (Feature
 33, Core infrastructure, pass 4) — branch
 `claude/security-review-core-infrastructure`, opened against a fresh
@@ -52,6 +96,8 @@ suite 12,550 passed, 21 skipped (pre-existing: `pywebpush`, Docker
 unavailable, opt-in API-contract suite), 0 failed; frontend typecheck 0
 errors; eslint 0 errors/0 warnings. Findings doc:
 `docs/security-review/CI4-33-core-infra.md`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2527's merge, Feature 32 pass 4 closure), preserved for history</summary>
@@ -14320,7 +14366,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⏳     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -14329,6 +14375,19 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 33 (Core infrastructure) — PR #2529 merged, watchdog recorded it
+
+PR #2529 (pass 4: `SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` had
+drifted a second time, missing two finance-export routes added by an
+unrelated PR the day after pass 3 — fixed, plus a new automated coverage
+test against the live OpenAPI schema so the next drift fails CI instead of
+going unmonitored; all 29 prior findings and both already-flagged
+config-switch items re-confirmed) merged clean, merged directly by the
+repo owner. Re-verified the fix is still present at
+`security_middleware.py:1593-1594` after two unrelated commits merged on
+top — no conflict, no regression. Rotation row 33 → `✅`. Next: 34 Frontend
+shared.
 
 ### 2026-09-14 — Feature 33 (Core infrastructure, pass 4) — 1 fixed (MED), 0 flagged (new), all 29 prior findings re-confirmed
 
