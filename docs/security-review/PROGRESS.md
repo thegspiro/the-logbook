@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2553](https://github.com/thegspiro/the-logbook/pull/2553)
+(Feature 07, Users & organizations, pass 5) merged clean — 17/17 CI green,
+after one stale-superseded-run false failure on the pre-bookkeeping commit
+(`61f828ec9`; every job on that run showed `cancelled`, not `failed`,
+because a follow-up commit filling in the PR number advanced the branch
+mid-run; documented in a PR comment, resolved by waiting for the new head's
+own fresh run) — merged by this session via `merge_pull_request`. `git
+fetch origin main` confirms the merge commit (`d245a9e21`) is on `main`.
+**1 new finding, fixed (MED):** USR-10 — a concurrent-mutation race on
+`Organization.settings.membership_tiers` between `change_membership_type`
+and `update_membership_tier_config`, fixed by locking the `Organization`
+row in both handlers with a deadlock-safe lock order, guarded by 3 new
+tests confirmed red pre-fix/green post-fix. **1 residual gap flagged, not
+fixed (LOW):** USR-10a — `MembershipTierService.advance_all` still writes
+without locking the org row; deferred to a dedicated pass on that service's
+own locking scheme, mirrored into `docs/KNOWN_LIMITATIONS.md`. Full
+write-up: the **Pass 5** section of
+`docs/security-review/USR-07-users-organizations.md`. Rotation row 07 stays
+`✅`. **Next: Feature 08 (Membership pipeline), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 5, PR #2553, before it merged), preserved for history</summary>
+
 **PR [#2553](https://github.com/thegspiro/the-logbook/pull/2553)** — branch
 `claude/security-review-feature07-pass5` (Feature 07, Users & organizations,
 pass 5), opened against a fresh `origin/main`. Step 0 concurrent-session
@@ -67,6 +90,8 @@ migration this pass); scoped pytest 564 passed, 1 pre-existing skip, 0
 failed; full backend suite 12559 passed, 21 pre-existing/environmental
 skips, 0 failed; frontend `typecheck`/`lint` not run — no frontend file
 touched this pass. Next: 08 Membership pipeline.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 5, PR #2546, merged), preserved for history</summary>
@@ -15075,6 +15100,23 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-14 — Feature 07 (Users & organizations, pass 5) — PR #2553 merged; next Feature 08
+
+30-minute watchdog check found PR #2553 (Feature 07, Users & organizations,
+pass 5) green (17/17, after one stale-superseded-run false failure on the
+pre-bookkeeping commit `61f828ec9` — every job on that run showed
+`cancelled`, not `failed`, because a follow-up commit advanced the branch
+mid-run; diagnosed via `list_workflow_jobs`, resolved with one explanatory
+PR comment rather than a code push) and `mergeable_state: clean`, so this
+session merged it directly via `merge_pull_request`. `git fetch origin
+main` confirmed the merge commit (`d245a9e21`) landed on `main`; also found
+three unrelated open PRs (#2547, #2548, plus three new dependabot PRs
+#2550-2552), none a Feature 08 collision. Recorded the closure in
+`PROGRESS.md`: superseded the prior **Open PR** note (preserved in a
+`<details>` block) with a "None." closure paragraph summarizing USR-10
+(fixed, membership-tier lock race) and USR-10a (flagged, deferred), rotation
+row 07 confirmed still `✅`. Next: Feature 08 (Membership pipeline), pass 5.
 
 ### 2026-09-14 — Feature 07 (Users & organizations, pass 5) — 1 fixed (MED), 1 flagged (LOW) — PR opened
 
