@@ -16,8 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR opened** — branch `claude/security-review-feature04-pass5` (Feature 04,
-Storefront & payments, pass 5), opened against a fresh `origin/main`. Checked
+**PR [#2542](https://github.com/thegspiro/the-logbook/pull/2542)** (Feature
+04, Storefront & payments, pass 5) — branch
+`claude/security-review-feature04-pass5`, opened against a fresh
+`origin/main`. Checked
 for a concurrent session first: `git fetch origin main` showed a clean working
 tree; the **Open PR** row read "None" (Feature 03's own pass 5, PR #2540, had
 already merged); and a log search for "Feature 04" + "pass 5" found no prior
@@ -56,8 +58,7 @@ passed, 1 skipped, 0 failed**; `npm run typecheck` 0 errors; `npm run lint` 0
 errors, 0 warnings; `vitest run src/modules/storefront/ src/components/admin/`
 205 passed (18 files). No file in this feature's declared scope was changed —
 the app-review track had already closed the one real gap (SF-8) three days
-before this pass started. Rotation row 04 stays `✅`. PR number to follow
-once opened.
+before this pass started. Rotation row 04 stays `✅`.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 5, PR #2540, merged), preserved for history</summary>
@@ -14815,7 +14816,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-14 — Feature 04 (Storefront & payments, pass 5) — branch pushed, opening PR; 0 new findings
+### 2026-09-14 — Feature 04 (Storefront & payments, pass 5) — PR #2542 opened; 0 new findings
 
 Checked for a concurrent session first: `git fetch origin main`, the **Open
 PR** section showed Feature 03 pass 5 (PR #2540) already merged with "None"
@@ -14888,9 +14889,10 @@ not docker"`) **10,158 passed, 1 skipped, 0 failed**; `npm run typecheck` 0
 errors; `npm run lint` 0 errors, 0 warnings; `vitest run
 src/modules/storefront/ src/components/admin/` 205 passed (18 files). No file
 in this feature's scope was changed by this pass. Rotation row 04 stays `✅`.
-Opening a PR now to close out this pass per the rotation's "one PR at a time"
-rule, even with zero code changes, so the **Open PR** row and this log stay
-the record of what was checked and when.
+PR [#2542](https://github.com/thegspiro/the-logbook/pull/2542) opened to
+close out this pass per the rotation's "one PR at a time" rule, even with
+zero code changes, so the **Open PR** row and this log stay the record of
+what was checked and when.
 
 ### 2026-09-14 — Feature 03 (Public surface & webhooks) — PR #2540 merged
 
