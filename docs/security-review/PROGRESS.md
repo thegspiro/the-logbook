@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**
+**PR [#2544](https://github.com/thegspiro/the-logbook/pull/2544)**
 (Feature 05, Finance & approvals, pass 5) — branch
 `claude/security-review-feature05-pass5`, opened against a fresh
 `origin/main`. Checked for a concurrent session first per this run's own
@@ -15018,8 +15018,9 @@ environment-only: `py_vapid`, Docker-unavailable/unreachable integration
 tests, the opt-in API-contract suite), 0 failed.** No frontend file changed
 by this pass, so `tsc`/`eslint`/`vitest` were not re-run (the assignment's
 own gate for those is conditioned on touching a frontend file). Rotation row
-05 stays `✅` (pending PR merge). PR being opened now; next tend/watchdog
-pass merges it and advances to Feature 06 (Elections & ballots).
+05 stays `✅` (pending PR merge). PR [#2544](https://github.com/thegspiro/the-logbook/pull/2544)
+opened; next tend/watchdog pass merges it and advances to Feature 06
+(Elections & ballots).
 
 ### 2026-09-14 — Feature 04 (Storefront & payments) — PR #2542 merged
 
