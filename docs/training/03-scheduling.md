@@ -572,6 +572,24 @@ follow or cancel it.
 3. An officer reviews and approves the swap.
 4. Assignments are updated automatically.
 
+> **Reviewers can now reach the queues they review** _(2026-09-13)_**.** Both
+> the time-off and swap lists hand a reviewer the department's whole queue and
+> everybody else their own requests — but the lists themselves were gated on
+> `scheduling.view` and `scheduling.swap` respectively, and **a permission named
+> `manage` does not automatically include either.** So a position granted only
+> `scheduling.manage` — which is exactly who reviews these — could reach neither
+> the queue that finds a request nor a request it had been sent a link to,
+> despite holding the permission the review action itself requires.
+>
+> Both list and detail reads on both queues now admit `scheduling.manage`. **The
+> writes are unchanged and stay on `scheduling.swap` alone**: proposing and
+> cancelling a request are the member's own actions, so there was nothing behind
+> them asking to be widened.
+>
+> No seeded rank or position is affected — every one that grants
+> `scheduling.manage` also grants `scheduling.view`. **If you have hand-built an
+> officer position, check it**: this is the shape that was broken.
+
 > **Corrected 2026-08-12.** The steps above previously said to open the
 > **Requests** tab and click **Request Swap**, then "select the shift you want
 > to swap and the shift you are offering". The Requests tab has no such button

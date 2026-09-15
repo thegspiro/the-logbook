@@ -218,14 +218,39 @@ as refusing **Advance**: it refuses Convert too.
 
 ## Documentation and media disposition
 
+### Training guides
+
+Three of the window's commits updated
+[`training/15-prospective-members.md`](./training/15-prospective-members.md) as
+they landed, which is why the pipeline material is in good shape. Nothing else
+did, and **five guides described pre-window behaviour**. All five are corrected
+in the same pass as this audit:
+
+| Guide                                                               | What was stale                                                                                                                                                                                |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`00-getting-started.md`](./training/00-getting-started.md)         | No statement of the dialog convention at all. It is app-wide and affects every member, so it belongs in **Understanding the Interface**, not only in a release lesson                         |
+| [`01-membership.md`](./training/01-membership.md)                   | "Moving a ranked member into the administrative class clears the rank" was true of the profile route and **not reachable** on the membership-type route for any department with a tier ladder |
+| [`03-scheduling.md`](./training/03-scheduling.md)                   | Open Shifts described as every shift needing coverage; the time-off and swap queues said nothing about who can reach them                                                                     |
+| [`05-inventory.md`](./training/05-inventory.md)                     | Maintenance Tracking never mentioned that completing a record moved the inspection clock, so the fix had nothing to correct and the warning nowhere to go                                     |
+| [`08-admin-reports.md`](./training/08-admin-reports.md)             | Email configuration carried no account of what an enabled section does to deployment-wide SMTP — the whole reason a half-filled one is dangerous                                              |
+| [`15-prospective-members.md`](./training/15-prospective-members.md) | The ballot gate was documented for **Advance** only. MP-30 landed a day after the commit that wrote that paragraph, and did not touch the guide                                               |
+
+**The 15-prospective-members gap is the instructive one.** Its ballot-gate note
+was written by the commit that added the gate, and was accurate the day it was
+written. A separate commit extended the gate to **Convert** the following day
+and updated `UPGRADING.md` but not the guide — so the guide told a coordinator
+that the button they are actually instructed to use was ungated. A per-commit
+documentation habit does not survive a follow-up commit; that is what the audit
+pass is for.
+
 ### Screenshots
 
 Full per-image queue in
 [`training/SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md);
 coverage counts are regenerated into
 [`training/SCREENSHOT_STATUS.md`](./training/SCREENSHOT_STATUS.md) by
-`scripts/screenshots/status_report.py` (**530 captured, 42 remaining** as of
-this audit).
+`scripts/screenshots/status_report.py` (**530 captured, 48 remaining** after
+this pass queued six).
 
 **This window adds a small queue, and none of it is urgent** — no screen moved
 and no control was added to a page that had none. What changed is what a
@@ -303,5 +328,5 @@ All six were run clean against `4c291192d` while writing this audit: migration
 head `6ab7d903fae5`, single head, no branch points, 444 revisions; 228 routes
 checked with 0 errors and 0 warnings (17 redirects skipped); 1,489 documented
 route handlers with 0 errors and 0 warnings; 358 Markdown files with 0 broken
-links; 530 screenshots captured with 42 remaining; `DATABASE_SCHEMA.md`
+links; 530 screenshots captured with 48 remaining; `DATABASE_SCHEMA.md`
 regenerated to 265 tables and 4,484 columns with no diff.

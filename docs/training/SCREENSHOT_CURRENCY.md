@@ -9,18 +9,19 @@ somewhere new. Every item is the same address showing something different, which
 is the disposition that goes stale quietly: an old frame of a screen that still
 exists does not announce itself the way a 404 does.
 
-**Five placeholders were written into the guides** by this pass and are queued
+**Six placeholders were written into the guides** by this pass and are queued
 below — four in
-[`20-september-2026-release-changes.md`](./20-september-2026-release-changes.md)
-and one in [`03-scheduling.md`](./03-scheduling.md). The library moves from
-530/572 to **530/577**; nothing was captured by this pass.
+[`20-september-2026-release-changes.md`](./20-september-2026-release-changes.md),
+one in [`03-scheduling.md`](./03-scheduling.md) and one in
+[`08-admin-reports.md`](./08-admin-reports.md). The library moves from 530/572
+to **530/578**; nothing was captured by this pass.
 
 | Image area                                    | Disposition | Guide                              | Why                                                                                                 |
 | --------------------------------------------- | ----------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Scheduling -> **Open Shifts**, member vs admin | **NEW**     | 20 (release), 03 (scheduling)      | The two views now differ. A single frame carrying both is the only way to show it                     |
 | Applicant drawer, **Not Elected** refusal      | **NEW**     | 20 (release)                       | The state a coordinator has to recognise, and it did not exist before September 13                    |
 | Stage picker with **Election Vote** saving     | **NEW**     | 20 (release)                       | Replaces any frame showing the old validation error, which could not be satisfied from the modal      |
-| Settings -> **Email**, SMTP preset list        | **REPLACE** | 20 (release)                       | Twelve providers are offered where the list previously showed Self-Hosted or Other                    |
+| Settings -> **Email**, SMTP preset list        | **REPLACE** | 20 (release), 08 (admin)           | Twelve providers are offered where the list previously showed Self-Hosted or Other                    |
 | Settings -> **Email**, inline refusal          | **NEW**     | queued, no placeholder written yet | The refusal for an enabled-but-empty Cloudflare or Other section is what an operator hits on upgrade  |
 | Shift signup **position picker**               | **REPLACE** | queued, no placeholder written yet | Offers only seats the server will grant                                                               |
 | Stage builder -> **Meeting** config            | **REPLACE** | queued, no placeholder written yet | Carries the Auto-Link Event Type warning beside the auto-advance checkbox                             |

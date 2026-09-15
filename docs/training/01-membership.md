@@ -672,6 +672,24 @@ If somebody genuinely holds an operational rank, **the fix is their class, not
 their rank**: move them out of the administrative class first, then set the
 rank.
 
+> **One of the two routes into the administrative class was not doing this**
+> _(fixed 2026-09-14)_**.** Changing a member's standing through the
+> **membership type** action validated the submitted value against your
+> department's configured membership tiers — and `administrative` is a member
+> _class_, not a tier, so it was rejected before the rank-clearing step could
+> run. The check only bit where a tier ladder exists, which is every department
+> onboarded since one began being seeded at creation, so in practice the
+> enforcement described above was reachable on that route almost nowhere.
+>
+> The route now accepts both vocabularies: your configured tier ids **and** the
+> seven membership class and status words. **Nothing became more permissive** —
+> a value in neither vocabulary is still refused, and the rank-clearing this
+> section describes is what the fix restored rather than removed.
+>
+> **No stored record was changed and no action is needed.** The other route into
+> the administrative class — the member profile's class/status pair — always
+> cleared the rank correctly, so a member moved that way was never affected.
+
 ---
 
 ## Rank and Qualification Are Different Things _(2026-08-26)_
