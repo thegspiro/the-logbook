@@ -75,9 +75,9 @@ export const EventProspectsCard: React.FC<EventProspectsCardProps> = ({ eventId,
   if (total === 0 && !createsProspects) return null;
 
   return (
-    <div className="card">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-bold">
+    <div className="card p-6">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-medium">
           <UserPlus className="h-5 w-5 text-teal-600 dark:text-teal-400" />
           <span>Prospective Members</span>
         </h2>

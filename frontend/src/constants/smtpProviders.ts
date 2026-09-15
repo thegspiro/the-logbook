@@ -37,6 +37,15 @@ export interface SmtpProviderPreset {
   helpUrl?: string;
 }
 
+/**
+ * Proton Mail Bridge is deliberately absent. It listens on 127.0.0.1:1025 with
+ * a self-signed certificate, and the sender's STARTTLS uses
+ * `ssl.create_default_context()` — `check_hostname=True`,
+ * `verify_mode=CERT_REQUIRED` — so the handshake fails every time. A preset
+ * that cannot connect is worse than no preset: it reads as a supported
+ * provider. Supporting it needs a per-connection trust decision the settings
+ * model has no field for; relaxing verification globally is not on the table.
+ */
 export const SMTP_PROVIDER_PRESETS: SmtpProviderPreset[] = [
   {
     id: 'yahoo',
@@ -96,16 +105,6 @@ export const SMTP_PROVIDER_PRESETS: SmtpProviderPreset[] = [
     encryption: 'tls',
     usernameHint: 'Your full GMX address',
     credentialHint: 'Your GMX password. POP3/IMAP access must be enabled in GMX settings first.',
-  },
-  {
-    id: 'proton-bridge',
-    label: 'Proton Mail Bridge',
-    host: '127.0.0.1',
-    port: 1025,
-    encryption: 'tls',
-    usernameHint: 'Your Proton address',
-    credentialHint:
-      'The password Proton Mail Bridge shows for this account. Bridge must be running on the same host as the server.',
   },
   {
     id: 'sendgrid',
