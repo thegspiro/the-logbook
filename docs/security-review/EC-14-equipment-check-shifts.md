@@ -1,19 +1,193 @@
 # Security Review 14 — Equipment Check & Shift Completion
 
 **Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4) · **PR:** [#1842](https://github.com/thegspiro/the-logbook/pull/1842)
+2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15
+(pass 5) · **PR:** [#1842](https://github.com/thegspiro/the-logbook/pull/1842)
 (pass 1)
 
-**Backend:** `api/v1/endpoints/equipment_check.py` (50 routes — corrected
-this pass, see below), `api/v1/endpoints/shift_completion.py` (21 routes),
+**Backend:** `api/v1/endpoints/equipment_check.py` (50 routes),
+`api/v1/endpoints/shift_completion.py` (21 routes),
 `services/equipment_check_service.py` (5,368 L),
-`services/shift_completion_service.py` (1,845 L)
+`services/shift_completion_service.py` (1,930 L)
 **Frontend:** in-app (no dedicated module directory)
 **Migrations:** none this iteration (no schema change)
 
 ---
 
-## Pass 4 (2026-09-09) — 1 fixed (a pre-existing lint violation, found on re-reading the file this pass), 0 flagged; near-zero diff since pass 3; a stale route count corrected across three rounds of Codex review
+## Pass 5 (2026-09-15) — 1 fixed (MED, a genuine concurrency gap: pitfall #27 pattern in `create_report`'s duplicate guard), 0 flagged; delta since pass 4 limited to an already-reviewed SCH-13 locking fix in `shift_completion_service.py`
+
+**Step 0.** `git fetch origin main` clean. `docs/security-review/PROGRESS.md`'s
+Open PR section read "None." with the Feature 13 (Apparatus & NFC) pass 5
+closure note beneath it and named "Next: Feature 14 (Equipment check &
+shifts), pass 5" explicitly. `list_pull_requests` (open) returned only the
+four known-unrelated PRs (#2547, #2495, dependabot #2552/#2567) — no
+Feature 14/equipment-check branch or title.
+
+**Delta since pass 4's merge (`89c399ccf`).** `git diff --stat 89c399ccf..HEAD`
+on all six pass-4-declared files (`equipment_check.py`, `shift_completion.py`,
+`equipment_check_service.py`, `shift_completion_service.py`,
+`equipment_check_pdf.py`, `models/apparatus.py`) shows exactly **one** changed
+file: `shift_completion_service.py` (+50/-10, two commits —
+`d162dd908`/`90f5b1b90`). The other five are byte-identical to pass 4's own
+baseline.
+
+**The one change is already this rotation's own, already-reviewed
+territory.** `git log 89c399ccf..HEAD -- .../shift_completion_service.py`
+traces both commits to `SCH-13`
+(`docs/security-review/SCH-15-scheduling.md`), Scheduling's own rotation —
+a locking fix for a race between a call-type deletion and a report edit
+naming that type (`_edit_preserves_org_slugs`'s organization lock gained
+`populate_existing=True`, and the lock/setattr order in `update_report` was
+reordered to close a genuine deadlock Codex review found). Read both
+`_edit_preserves_org_slugs` and `update_report` in full anyway, from this
+feature's own lens rather than trusting the other rotation's write-up on
+the strength of its title: tenant isolation intact throughout —
+`_edit_preserves_org_slugs` takes no id from the client, only
+`report.organization_id` (already validated three lines above in
+`update_report`) and reads `effective_call_type_slugs_for` scoped to that
+same id; `update_report` itself still resolves the target report through
+`get_report(report_id, organization_id)` before any of this runs. No new
+route, no permission-string change. Correctly out of this pass's own
+findings — reviewing it again here would duplicate `SCH-15`'s entry, not
+add coverage — but confirmed rather than skipped.
+
+### EC-16 — MED — `create_report`'s duplicate-report guard was a plain read-then-write; the loser of a race got a raw, unhandled `IntegrityError` instead of the intended, clean rejection — ✅ FIXED
+
+**What:** Two officers filing a shift-completion report for the same
+trainee on the same shift at the same moment both pass `create_report`'s own
+"already exists" check (a plain, non-locking `SELECT` against
+`ShiftCompletionReport`) before either has committed, and both attempt the
+insert (CLAUDE.md pitfall #27's read-then-write shape, applied to a
+duplicate-record guard rather than a capacity cap). This is the identical
+shape `submit_check` (`equipment_check_service.py`) already guards against
+for equipment checks, but `create_report` had never been given the same
+treatment across four prior passes.
+
+**Not a data-integrity gap — confirmed by writing the regression test
+first.** The obvious hypothesis was that this let two reports land in the
+database, double-crediting the trainee's hours/calls toward
+training-pipeline progress. Reading the model settled it before any fix was
+written: `ShiftCompletionReport.__table_args__` already carries
+`UniqueConstraint("shift_id", "trainee_id", name="uq_shift_report_shift_trainee")`.
+A duplicate row can never be stored, race or no race. What the race actually
+produced, confirmed with a real two-session reproduction
+(`backend/tests/test_shift_report_duplicate_race.py`, run against the
+pre-fix code via `git stash push -u`): the loser's `flush()` raises a raw
+`sqlalchemy.exc.IntegrityError` that `create_report` never catches, and the
+endpoint (`shift_completion.py:83`) only catches `ValueError` — an unhandled
+500 with a raw SQL exception logged as unexpected, in place of the method's
+own clean, existing `ValueError("A report already exists for this trainee
+on this shift")` that the endpoint already turns into an ordinary 400.
+
+**Where:** `backend/app/services/shift_completion_service.py`,
+`ShiftCompletionService.create_report`.
+
+**Fix:** matched `submit_check`'s own established idiom for this exact class
+of race instead of introducing a different one: the DB unique constraint is
+the actual concurrency authority, and the pre-insert `SELECT` is only a
+friendly fast path. `self.db.add(report)` / `flush()` now run inside a
+SAVEPOINT (`async with self.db.begin_nested()`), and an `IntegrityError` out
+of it is caught: if a report for this `shift_id` + `trainee_id` now exists,
+the caller gets the same clean `ValueError` the fast path already raises;
+otherwise the (unrelated) integrity failure is re-raised unchanged.
+
+Two subtleties, both caught by the regression test rather than reasoned out
+in advance:
+
+1. **A plain `self.db.rollback()` on the `IntegrityError` — `submit_check`'s
+   own choice — is wrong here specifically**, because
+   `batch_create_reports` calls `create_report` in a loop with `commit=False`
+   and issues one `commit()` after the loop. A full session rollback on one
+   member's `IntegrityError` would discard every other crew member's
+   already-flushed, not-yet-committed insert earlier in the same loop — a
+   regression `submit_check` never risks, since it has no equivalent
+   deferred-commit caller. `begin_nested()` (a SAVEPOINT) undoes only the one
+   failed insert, matching the identical reasoning already documented at
+   `operational_rank_service.py`'s own `IntegrityError`/`begin_nested()` site.
+2. **The post-failure existence check must itself be a locking read.** A
+   SAVEPOINT rollback does not give the transaction a fresh REPEATABLE READ
+   snapshot the way `submit_check`'s full `rollback()` does — the snapshot
+   is still the one pinned before the race began, so a plain `SELECT` here
+   still sees zero rows and misreports the winner's now-committed row as "an
+   unrelated integrity failure," re-raising the raw `IntegrityError` after
+   all. Caught by the regression test still failing after the first draft
+   of the fix (nested SAVEPOINT, plain re-check): the existence check now
+   carries `.with_for_update()`.
+
+**Regression test:** `backend/tests/test_shift_report_duplicate_race.py`
+(new file, `pytest.mark.integration`). Uses two real, independently
+committing sessions (`database_manager.session_factory()`, not the
+savepoint-based `db_session` fixture, which can never demonstrate
+cross-transaction visibility — same reasoning
+`test_call_type_deletion_race.py` documents for the identical shape) and
+pins both transactions' REPEATABLE READ snapshot before either coroutine's
+real work begins. Confirmed failing against the pre-fix code
+(`git stash push -u -- backend/app/services/shift_completion_service.py`,
+run, `git stash pop`) with the loser's result carrying a raw
+`IntegrityError` instead of the expected `ValueError`; passing after each of
+the two fix iterations above, and still passing on the final version.
+`test_shift_completion.py`'s existing 52 tests (including the pre-existing,
+non-concurrent `test_duplicate_report_for_same_shift_trainee`) re-run clean
+against the fix.
+
+### Re-verified: every prior fix and open item, read at its current location
+
+- **EC-1** (`_update_apparatus_deficiency`) — still org-scoped, file
+  unchanged since pass 3.
+- **EC-2/EC2-3/EC2-4** (`_validate_item_fks`) — still present, still called
+  from `add_items_bulk`/`replace_compartments`.
+- **EC-4** (`clone_template` apparatus XC-3) — still org-scoped.
+- **EC-6** (`create_report`'s `shift_id`-absent branch) — still validates
+  `trainee_id` in-org; read in full this pass alongside EC-16 above.
+- **EC-9** (`get_report` org-scoping) — still filters `organization_id`.
+- **EC-10** (auto-fail rule) — still applied consistently.
+- **EC-12** (`report_item_used` locking) — still locks the item then the
+  deployed lots before the read-modify-write.
+- **EC-13** (`update_deployed_lot` submitter-inflation guard) — still raises
+  `PermissionError` on a quantity increase from a submit-only caller.
+- **EC-14** (`apiCache.ts` `/equipment-checks` prefix) — still present
+  (frontend file unchanged since pass 4 — not re-diffed this pass, no
+  frontend file touched).
+- **EC-11** (compliance metrics) — still an unbuilt feature (hardcoded `0`
+  for expected/overdue counts), not a regression, not a security finding;
+  file unchanged since pass 3.
+- **`get_item_deployments` vs. `update_deployed_lot`-adjacent permission-gate
+  discrepancy** — still present, still the deliberately-unadjudicated call
+  `docs/KNOWN_LIMITATIONS.md` and `test_permission_gate_composition.py`
+  record; not re-flagged.
+- **LIKE escaping** — the module's one `.ilike()` still passes
+  `like_pattern(item_name)` with `escape=LIKE_ESCAPE_CHAR` (file unchanged).
+- **CSV export** — `export_csv` still uses `SafeCsvWriter` (file unchanged).
+- **JSON mutation (Pitfall #12)** — every nested-JSON write in
+  `shift_completion_service.py` (`score_history`, `progress_notes`,
+  `data_sources`, `review_history`) still uses `copy.deepcopy()` before
+  reassignment; grepped for a bare `dict(<obj>.<attr>)` shallow-copy pattern
+  across the file (including this pass's own new code) — zero hits.
+- **SMS allowlist (Pitfall #18)** — still zero hits for `SMSService`/
+  `SmsAlert`/`resolve_sms_recipients` in either service file.
+- **Unbounded in-memory caches (Pitfall #9)** — grepped both service files
+  and both endpoint files for a module-level dict/set tracker; every
+  `Dict[...]`/`{}` found is a local, function-scoped accumulator (name
+  lookups, per-request grouping), none module-level or persistent. No
+  finding.
+- **MCP tool module** — no feature-owned MCP tool module exists for
+  equipment check or shift completion (`find backend/app/mcp -iname
+"*equipment*" -o -iname "*shift*"` returns nothing); not in scope, as in
+  every prior pass.
+
+## Completion gate (pass 5)
+
+| Check                                                                                              | Result                                                                                |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `flake8` (touched files: `shift_completion_service.py`, new `test_shift_report_duplicate_race.py`) | ✅ 0 violations (one `PT018` combined-assertion warning found and split, then clean)  |
+| `black --check` (touched files)                                                                    | ✅ unchanged                                                                          |
+| `isort --check-only` (touched files)                                                               | ✅ clean                                                                              |
+| `python3 scripts/validate_migrations.py --strict`                                                  | ✅ 444 revisions, single head `6ab7d903fae5` (no migration this pass)                 |
+| `pytest tests/ -q -k "equipment_check or shift_completion or duplicate_race"`                      | ✅ 398 passed, 1 skipped (pre-existing, `pywebpush` not installed)                    |
+| `pytest tests/` (full backend suite)                                                               | ✅ 12574 passed, 21 skipped (pre-existing Docker/optional-dependency skips), 0 failed |
+
+No frontend file touched this pass — `npm run typecheck`/`npm run lint` not
+run (per CLAUDE.md's "match the verification to the change").
 
 **This section went through three rounds of Codex review, each finding a
 real gap the previous round missed.** Round 1: the diff scope was too

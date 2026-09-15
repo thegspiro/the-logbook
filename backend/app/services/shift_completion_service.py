@@ -12,6 +12,7 @@ from uuid import UUID
 
 from loguru import logger
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.apparatus import Apparatus, EquipmentCheckTemplate
@@ -320,6 +321,24 @@ class ShiftCompletionService:
             if shift.shift_date != shift_date:
                 raise ValueError("Report date does not match the " "linked shift date")
 
+            # A friendly fast path only — see the flush below, which is the
+            # actual concurrency authority (Pitfall #27, matching
+            # `submit_check`'s identical shape for the same class of race).
+            # Two officers filing a report for the same trainee on the same
+            # shift at once both pass this plain, non-locking check.
+            existing = (
+                await self.db.execute(
+                    select(ShiftCompletionReport.id).where(
+                        ShiftCompletionReport.shift_id == shift_id,
+                        ShiftCompletionReport.trainee_id == trainee_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing:
+                raise ValueError(
+                    "A report already exists for this " "trainee on this shift"
+                )
+
             att_check = (
                 await self.db.execute(
                     select(ShiftAttendance.id).where(
@@ -348,19 +367,6 @@ class ShiftCompletionService:
                 )
                 self.db.add(attendance)
                 await self.db.flush()
-
-            existing = (
-                await self.db.execute(
-                    select(ShiftCompletionReport.id).where(
-                        ShiftCompletionReport.shift_id == shift_id,
-                        ShiftCompletionReport.trainee_id == trainee_id,
-                    )
-                )
-            ).scalar_one_or_none()
-            if existing:
-                raise ValueError(
-                    "A report already exists for this " "trainee on this shift"
-                )
         else:
             # No shift linkage: the shift/attendance/assignment checks above are
             # skipped, so the client-supplied trainee_id would otherwise be
@@ -482,8 +488,47 @@ class ShiftCompletionService:
             data_sources=data_sources if data_sources else None,
         )
 
-        self.db.add(report)
-        await self.db.flush()
+        try:
+            # A SAVEPOINT, not a plain flush: `uq_shift_report_shift_trainee`
+            # is the actual concurrency authority for the duplicate guard
+            # above (Pitfall #27, the same shape `submit_check` already
+            # handles for equipment checks) — the "already exists" check a
+            # few lines up is only a friendly fast path, and two officers
+            # filing a report for the same trainee on the same shift at once
+            # both pass it. A plain `self.db.rollback()` on the loser's
+            # `IntegrityError` would expire every object in this request's
+            # identity map, including anything loaded earlier on this same
+            # session (`batch_create_reports` shares one session, uncommitted,
+            # across every crew member in the loop) — `begin_nested()` undoes
+            # only this insert.
+            async with self.db.begin_nested():
+                self.db.add(report)
+                await self.db.flush()
+        except IntegrityError as exc:
+            if shift_id:
+                # A locking read, not a plain one: `begin_nested()` rolls
+                # back only the failed SAVEPOINT, not the whole transaction,
+                # so this session's REPEATABLE READ snapshot is still the one
+                # pinned before the race began. A plain SELECT here would
+                # still see zero rows — the same staleness Pitfall #27 warns
+                # against — and misreport the other side's now-committed
+                # winner as "unrelated to idempotency."
+                still_exists = (
+                    await self.db.execute(
+                        select(ShiftCompletionReport.id)
+                        .where(
+                            ShiftCompletionReport.shift_id == shift_id,
+                            ShiftCompletionReport.trainee_id == trainee_id,
+                        )
+                        .with_for_update()
+                    )
+                ).scalar_one_or_none()
+                if still_exists:
+                    raise ValueError(
+                        "A report already exists for this " "trainee on this shift"
+                    ) from exc
+            # The integrity failure was unrelated to this duplicate guard.
+            raise
 
         # Training credit is released only with an approved report. Draft and
         # pending-review reports are provisional and are processed if they
