@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR #TBD** — branch `claude/security-review-feature15-pass5`, Feature 15
+(Scheduling), pass 5. Step 0 concurrent-session check: `git fetch origin
+main` clean; the Open PR section read "None." with the Feature 14
+(Equipment check & shifts, pass 5) closure note beneath it and named "Next:
+Feature 15 (Scheduling), pass 5" explicitly; `list_pull_requests` (open)
+returned only the three known-unrelated PRs — dependabot #2552/#2567, and
+#2495 (`feat(scheduling): ...`, a feature-workstream PR, not part of this
+rotation) — no concurrent Feature 15/scheduling review or closure PR.
+Baseline `058459963` (merge commit of PR #2441, pass 4's actual round-4
+landing point, confirmed from this file's own Open PR history rather than
+assumed from the findings doc's prose). Delta check against that baseline
+found real churn in four files (`scheduling.py`, `scheduling_service.py`,
+`schemas/scheduling.py`, and `shift_completion_service.py` — the last of
+which is EC-16, Feature 14 pass 5's own fix, cross-referenced not
+re-flagged) across five ordinary `fix(scheduling):` commits from the
+app-review/feature workstream, all in the safe direction (four `.view`-only
+reads widened to `.view` OR `.manage`, one call-tracking-mode write refusal
+tightened) or a data-correctness fix (open-shifts board narrowed to seats a
+member can actually claim). **0 new findings.** Standing flags re-confirmed
+unchanged: SCH-9 (fixed, still in place), SCH-10 (flagged, cross-cutting,
+`calcom_service.py` byte-identical to pass 4), SCH-13 (fixed, all four
+rounds, lock order unaffected by this pass's diff). No new migration touches
+a scheduling table (chain re-validated: single head, 444 revisions). No
+guard test added — nothing in the delta needed a fix. Completion gate:
+scoped suite (`-k "scheduling or shift or swap or calcom or position_slots
+or call_tracking or call_type"`) 1301 passed, 1 pre-existing skip; full
+backend suite 12577 passed, 21 skipped (pre-existing); `flake8`/`black`/`isort` clean on the
+feature's files; no frontend file touched. Full write-up:
+`docs/security-review/SCH-15-scheduling.md` → Pass 5.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2568's merge, Feature 14 pass 5 closure, confirming the rotation clear for Feature 15), preserved for history</summary>
+
 **None.** PR [#2568](https://github.com/thegspiro/the-logbook/pull/2568)
 (Feature 14, Equipment check & shifts, pass 5) merged clean — 17/17 CI green
 after one stale-superseded-run false failure on the `CI Success` gate (the
@@ -31,6 +64,8 @@ writing this closure note: only dependabot #2552/#2567, and #2495
 (unrelated) — no concurrent Feature 15/scheduling closure or pass PR, so
 this session proceeds with both the closure bookkeeping and launching the
 next pass itself. **Next: Feature 15 (Scheduling), pass 5.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 5, PR #2568, before it merged), preserved for history</summary>
@@ -15520,6 +15555,50 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 15 (Scheduling, pass 5) — 0 fixed, 0 flagged, 0 new findings — PR #TBD opened
+
+Delta-focused pass. Baseline `058459963` (merge commit of PR #2441, pass 4's
+actual round-4 landing point). Real churn since then in four files:
+`scheduling.py` (+115/-18), `scheduling_service.py` (+325/-11),
+`schemas/scheduling.py` (+6/-0), and `shift_completion_service.py` (+60/-15
+— confirmed via `git log` to be a single commit, `dbf489af6`, i.e. EC-16,
+Feature 14 pass 5's own fix; cross-referenced in the findings doc, not
+re-flagged here). The remaining eight declared/adjacent backend files
+(`scheduling_module_config.py`, `calcom_sync.py`,
+`scheduling_module_config_service.py`, `standing_shift_service.py`,
+`call_tracking_service.py`, `calcom_service.py`, `app/mcp/tools/
+scheduling.py`, `models/call_tracking.py`) are byte-identical to pass 4.
+
+Five ordinary `fix(scheduling):` commits make up the four-file diff — none
+from this rotation: three widen more `.view`-only reads (calendar, summary,
+swap requests, time-off requests) to `.view` OR `.manage`, continuing the
+exact pattern pass 4 already reviewed and found correct (each already
+branches internally on `scheduling.manage`, so the old gate blocked the
+branch it exists to serve); one narrows the open-shifts board to seats a
+member can actually claim (`get_claimable_shifts` / `open_positions_by_shift`,
+both new, both org-scoped on every query — read directly, not assumed); one
+gates three call-entry write paths on the organization's configured
+call-tracking mode, a business-rule tightening that sits entirely before
+SCH-13's organization-then-call lock and does not disturb its ordering.
+Route/permission enumeration re-run from scratch: 97/97 routes in
+`scheduling.py` still carry a recognized auth dependency, none added or
+removed. No new migration touches a scheduling table (three added in range,
+none scheduling-related; chain re-validated at a single head, 444
+revisions). **0 new findings.**
+
+Standing flags re-confirmed unchanged: **SCH-9** (fixed — `_all_users_in_org`
+still guards both call-write paths), **SCH-10** (flagged, cross-cutting —
+`calcom_service.py` byte-identical to pass 4, `KNOWN_LIMITATIONS.md`'s entry
+current), **SCH-13** (fixed, all four rounds — lock order unaffected).
+
+Completion gate: `flake8`/`black`/`isort` clean on all twelve feature files;
+`validate_migrations.py --strict` single head, 444 revisions; scoped suite
+(`-k "scheduling or shift or swap or calcom or position_slots or
+call_tracking or call_type"`) 1301 passed, 1 pre-existing skip; full backend
+suite 12577 passed, 21 skipped (all pre-existing Docker/no-MySQL/
+optional-dep/opt-in). No frontend file touched, so `typecheck`/`eslint` not
+re-run. Full write-up: `docs/security-review/SCH-15-scheduling.md` → Pass 5.
 
 ### 2026-09-15 — Feature 14 (Equipment check & shifts, pass 5) closed — PR #2568 merged
 

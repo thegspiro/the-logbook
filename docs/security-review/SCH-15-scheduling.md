@@ -1628,3 +1628,204 @@ inside `test_scheduling.py`.
 | `pytest tests/` (full backend suite)                                                                                                  | ✅ 11971 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep) — +1 over round 3, round 4's new guard test                      |
 | `npm run typecheck` (aliased TS7 compiler, per CLAUDE.md)                                                                             | ➖ not re-run this round — no frontend file touched                                                                                      |
 | `npx eslint .`                                                                                                                        | ➖ not re-run this round — no frontend file touched                                                                                      |
+
+## Pass 5 (2026-09-15) — 0 fixed, 0 flagged, 0 new findings; all standing flags re-confirmed
+
+**Step 0.** `git fetch origin main` clean; `PROGRESS.md`'s Open PR section
+read "None." with the Feature 14 (Equipment check & shifts) pass 5 closure
+note beneath it, naming "Next: Feature 15 (Scheduling), pass 5." explicitly.
+`list_pull_requests` (open) returned only the three known-unrelated PRs —
+dependabot #2567/#2552, and #2495 (`feat(scheduling): make "don't track
+calls" selectable in settings` — a feature-workstream PR, not a
+security-review PR; left untouched) — no concurrent Feature 15/scheduling
+review or closure PR, so this session proceeds.
+
+**Baseline:** `058459963`, the merge commit of PR #2441 — pass 4's actual
+final landing point (the SCH-13 round-4 deadlock fix), not pass 4's own
+`fda025c8` write-up point, which predates that merge. Confirmed from
+`PROGRESS.md`'s Open PR history (the "Feature 15 follow-up, round 4" note)
+rather than assumed from the findings doc's own prose.
+
+### Delta check
+
+`git diff --stat 058459963..HEAD` across the three declared endpoint files,
+`scheduling_service.py`, `scheduling_module_config_service.py`,
+`standing_shift_service.py`, `call_tracking_service.py`,
+`shift_eligibility_service.py`, `shift_completion_service.py`,
+`calcom_service.py`, `app/mcp/tools/scheduling.py`, `schemas/scheduling.py`
+and `models/call_tracking.py` found real churn in exactly **four** files:
+
+| File                          | +/-      |
+| ----------------------------- | -------- |
+| `scheduling.py`               | +115/-18 |
+| `scheduling_service.py`       | +325/-11 |
+| `shift_completion_service.py` | +60/-15  |
+| `schemas/scheduling.py`       | +6/-0    |
+
+`scheduling_module_config.py`, `calcom_sync.py`,
+`scheduling_module_config_service.py`, `standing_shift_service.py`,
+`call_tracking_service.py`, `calcom_service.py`, `app/mcp/tools/scheduling.py`
+and `models/call_tracking.py` are all byte-identical to pass 4 — confirmed by
+an empty `git diff --stat` against each, not assumed from the file list being
+unchanged in a directory listing.
+
+**No new migration touches a scheduling table.** Three migrations were added
+in this range (`d19b2c2ae9b9` — public event requests, `0533644945cd` — event
+request settlement, `6ab7d903fae5` — onboarding-status singleton); read all
+three directly rather than by filename alone, and none references `shifts`,
+`shift_`, `scheduling`, `org_calls`, or `standing_shift_claims`. Migration
+chain re-validated at a single head (`6ab7d903fae5`, 444 revisions, up from
+440 — the three above).
+
+**Route/permission enumeration re-run from scratch.** `scheduling.py` still
+carries **97** `@router.` decorators, each with a recognized auth dependency
+(`grep -c` for `Depends(get_current_user)`/`require_permission(` matches 97
+— no route with neither). No route added or removed since pass 4.
+`scheduling_module_config.py` (3) and `calcom_sync.py` (1) unchanged.
+
+**The four commits in the delta, read in full, all in the safe direction:**
+
+- `d1070ecc2`/`241bdb3cb`/`229c3af80` — three more `.view`-only reads
+  (`get_week_calendar`, `get_month_calendar`, `get_scheduling_summary`,
+  `list_swap_requests`, `get_swap_request`, `list_time_off_requests`,
+  `get_time_off_request`) widened to `.view` OR `.manage`, continuing the
+  exact pattern pass 4 already reviewed and found correct for nine other
+  routes (`permission_matches` treats the two grants as unrelated literal
+  strings, so a position holding only `.manage` was refused reads its own
+  pages render). Each carries an in-code comment naming the mechanism and,
+  for the swap/time-off pair, why: both already _branch_ internally on
+  `scheduling.manage` to decide what to return (the whole department's
+  requests for a reviewer vs. the caller's own), so gating the read on
+  `.swap`/`.view` alone put that branch behind a door the `.manage`-only
+  grant couldn't open — the reviewer role `/swap-requests/{id}/review` and
+  `/time-off/{id}/review` exist for. Strictly widening: `.manage` already
+  gated every corresponding write in this file (confirmed unchanged), so
+  pairing it onto a read is not an XC-2 downgrade. No route was narrowed to
+  a _weaker_ gate anywhere in the diff.
+- `2eee5c621` — `get_open_shifts` (`GET /shifts/open`) branches on
+  `scheduling.manage`: a holder gets the existing department-wide
+  staffing-gap view (`get_open_shifts`, unchanged), everyone else gets a new
+  `get_claimable_shifts`, which intersects the shift's unclaimed named seats
+  (a new `open_positions_by_shift` helper, mirroring
+  `_validate_assignment_candidate`'s own seat-counting rule rather than
+  `filter_shifts_with_open_positions`'s coarser one) against the caller's
+  own eligible positions (`ShiftEligibilityService.get_eligible_positions_bulk`,
+  pre-existing, unchanged, already org-scoped via
+  `Shift.organization_id == organization_id`). Both new methods take
+  `organization_id` from `current_user.organization_id` only (never a
+  client-supplied value) and every query inside them
+  (`open_positions_by_shift`'s `ShiftAssignment` scan,
+  `_open_shift_candidates`'s `Shift` scan) filters `organization_id`
+  explicitly — read directly, not inferred from the surrounding pattern.
+  `get_eligible_positions`'s new `open_positions` field on the response
+  (`EligiblePositionsResponse.open_positions`, `schemas/scheduling.py`) reuses
+  the same `open_positions_by_shift` helper and resolves the shift via the
+  existing org-scoped `get_shift_by_id`. This is a data-correctness fix (a
+  member was previously shown, and then refused at signup for, a shift whose
+  only empty seat was a position they don't hold), not a permission or
+  tenancy change — no new by-id, FK, or capacity-write surface.
+- `6df6a49a4` — `create_shift_call`/`update_shift_call`
+  (`scheduling_service.py`) and `finalize_shift`/`save_closeout_calls`'s
+  call-figure paths now refuse to write when the organization's configured
+  tracking mode doesn't match the write being attempted (`update_shift_call`
+  gated on `DETAILED` mode matching `create_shift_call`'s existing gate;
+  `finalize_shift`/`save_closeout_calls` refuse `reported_call_count`/
+  `reported_call_types`/`attach_call_ids`/`member_call_counts_in` outside
+  `COUNT_ONLY` mode, and `record_shift_calls`'s own `OrgCall` writes outside
+  `DETAILED`). A business-rule tightening (a stray write surviving a mode
+  switch was previously silently accepted or silently ignored, per the
+  in-code comments), not a security boundary — the mode value itself comes
+  from `CallTrackingService.get_settings(str(organization_id))`, already
+  org-scoped, and every refusal happens **before** any row is written or
+  locked, so it cannot interact with SCH-13's lock ordering. Verified
+  directly: the `count_only` branch inside `finalize_shift` that performs the
+  SCH-13-round-4 organization-then-call lock (`will_lock_types` /
+  `attach_response` / `record_shift_calls`) is unchanged and still reached
+  the same way; the new refusal sits entirely in the `not count_only` branch
+  that precedes it.
+
+**`shift_completion_service.py`'s +60/-15 is EC-16, not a Scheduling
+finding.** `git log 058459963..HEAD -- backend/app/services/
+shift_completion_service.py` shows exactly one commit, `dbf489af6` — the
+Feature 14 (Equipment check & shifts) pass 5 merge (PR #2568). That pass's
+own write-up (`PROGRESS.md`'s Feature 14 pass 5 log entry,
+`docs/security-review/EC-14-equipment-check-shifts.md`) already covers this
+fix: `create_report`'s duplicate-trainee-report guard was a plain
+read-then-write (Pitfall #27), fixed to a `begin_nested()`/`IntegrityError`
+catch/locking-recheck shape matching `submit_check`'s own established idiom,
+with a dedicated guard test (`tests/test_shift_report_duplicate_race.py`,
+confirmed present). Cross-referenced here per this file's declared reach
+into `shift_completion_service.py` (the same convention the task briefing for
+this pass names the other direction — SCH-13 landing in a file EC-14 also
+reads); re-verified present and unchanged in the current tree, not re-fixed
+or re-flagged.
+
+**Adjacent-file/frontend sweep.** `git log` on the four changed backend files
+shows five commits total (`229c3af80`, `241bdb3cb`, `d1070ecc2`,
+`2eee5c621`, `6df6a49a4`), all normal `fix(scheduling):` feature commits from
+the ongoing app-review/feature workstream, not from this rotation. 29
+frontend files under `modules/scheduling/` + `pages/scheduling/` changed;
+grep-swept (not read line-by-line, per pass 3/4's own disclosed practice for
+a file count this size) for `window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, the banned `.toLocale*` methods, `date-fns`
+imports, and a re-enabled `closeOnClickOutside`/scrim click handler — zero
+hits across every non-test file in the diff. One of the five commits
+(`0d3f9b833`, "Stop a click outside a dialog from discarding the form",
+`ShiftDetailPanel.tsx`) is itself a Pitfall #31 _fix_, not a regression —
+confirmed by reading the diff: it removes a scrim click handler, matching
+the rule's own "CORRECT" shape.
+
+### Standing flags re-confirmed
+
+- **SCH-9 (fixed)** — `_all_users_in_org` is still called from both
+  `create_shift_call` and `update_shift_call` before their respective writes;
+  unchanged since pass 1.
+- **SCH-10 (flagged, cross-cutting, unchanged)** — `calcom_service.py` is
+  byte-identical to pass 4; `docs/KNOWN_LIMITATIONS.md`'s entry (last updated
+  2026-09-13, tracking seven remaining `assert_outbound_url_safe` call sites
+  across two client-construction paths) still lists it correctly. Not
+  re-fixed here for the same reason every prior pass gave: closing it is a
+  cross-cutting transport change, not a scheduling-scoped one.
+- **SCH-13 (fixed, all four rounds)** — `_reject_deleting_a_used_call_type`
+  and `record_shift_calls`/`_edit_preserves_org_slugs` still take the
+  organization-then-report/call lock in that order; the round-4
+  organization-then-call reordering in `finalize_shift`/`save_closeout_calls`
+  is unchanged by this pass's `6df6a49a4` (the new mode-refusal check sits
+  entirely before the lock, in the branch that skips it — see above).
+  `tests/test_call_type_deletion_race.py`'s four classes re-run clean as part
+  of the full suite below.
+
+### No new findings
+
+Worked against all seven `CHECKLIST.md` dimensions for the delta:
+authentication (no route lost or gained a dependency), authorization (all
+five permission changes widen, none narrow, and each is justified by an
+internal branch the old gate blocked), tenant isolation (every new/changed
+query in `open_positions_by_shift`, `_open_shift_candidates`,
+`get_claimable_shifts` filters `organization_id`; no new client-supplied FK),
+injection (no new `.like()`/`.ilike()`; `scheduling_service.py` remains at
+zero), data exposure (`EligiblePositionsResponse.open_positions` carries
+position-name strings only, nothing new to cache-exclude), abuse resistance
+(`open_positions_by_shift` is bounded by the existing `max_candidates=500`
+ceiling on its caller; no new unbounded loop or dict), schema/migration
+integrity (no scheduling migration this pass; chain single-headed).
+
+### Guard tests
+
+None added — the delta's five commits (four permission widenings, one
+mode-refusal tightening) are all safe-direction, already-tested changes
+(scoped suite below re-runs unaffected and green), and `shift_completion_
+service.py`'s change carries its own guard test under EC-14's rotation entry,
+not this one.
+
+## Completion gate (pass 5)
+
+| Check                                                                                                         | Result                                                                                            |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (feature files)                                                                 | ✅ 0 violations                                                                                   |
+| `black --check app/ tests/ alembic/` (feature files)                                                          | ✅ 12 files unchanged                                                                             |
+| `isort --check-only app/ tests/ alembic/` (feature files)                                                     | ✅ clean (installed, not skipped)                                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                             | ✅ single head, 444 revisions                                                                     |
+| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type"` | ✅ 1301 passed, 1 skipped (pre-existing optional-dep skip)                                        |
+| `pytest tests/` (full backend suite)                                                                          | ✅ 12577 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep/API-contract-opt-in skips) |
+| `npm run typecheck` / `npx eslint .`                                                                          | ➖ not run — no frontend file touched this pass                                                   |
