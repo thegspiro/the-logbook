@@ -16,6 +16,55 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 21 (Admin hours), pass 5** — PR #TBD, branch
+`claude/security-review-ah-pass5-<short-random>`. Step 0 concurrent-session
+check (done twice — once at start, once immediately before push): `git fetch
+origin` clean both times; `PROGRESS.md`'s Open PR section (before this edit)
+still read the Feature 20 pass 5 note below rather than "None" — PR #2583
+(Feature 20, Compliance, pass 5) had already merged into `main`
+(`18443e916`, confirmed via `git log`) but its own docs-closure PR
+([#2584](https://github.com/thegspiro/the-logbook/pull/2584), "record PR
+#2583 merge, close Feature 20 pass 5," itself naming Feature 21 pass 5 as
+next) was still open and unmerged at both checks — a bookkeeping PR in
+flight, not a concurrent Feature 21 session, so this pass proceeded rather
+than stalling on it; `search_pull_requests` (open) returned only #2584
+itself and the three known-unrelated PRs (dependabot #2567/#2552, and #2495
+`feat(scheduling): ...`) both times — no concurrent Feature 21/admin-hours
+pass PR either check.
+
+Baseline `1fb968938` (merge commit of PR #2481, pass 4's landing point). Zero
+in-scope delta: all four declared backend files, the four external backend
+callers, the 26-file frontend module and its outside consumers, and the one
+migration that landed since pass 4 are either byte-identical or confirmed
+unrelated by direct read — see `docs/security-review/AH-21-admin-hours.md` →
+Pass 5 for the full breakdown. Re-verified by direct code read (not just by
+trusting the empty diff, the same lesson pass 4 drew from AH-15/AH-16) that
+AH-15's reactivation fix is intact, org-scoping (#14a/b/c) holds across every
+`select(...)` in the service, and the two standing "confirmed still open"
+product-decision flags plus AH-16 (`export_entries_csv` unbounded/
+non-streaming) are unchanged. **1 fixed (LOW): AH-17** — `get_summary` and
+`get_user_hours_compliance` scoped non-admin callers with a hand-rolled
+`p in ("admin_hours.manage", "*")` scan over `positions.permissions` only,
+instead of `user_has_permission()` (the matcher `require_permission()` itself
+uses, and the pattern four other files in the codebase already follow for
+this exact "programmatic scope check" shape) — missing a module-wildcard
+grant (`"admin_hours.*"`/`"compliance.*"`, legal on a custom position per
+CLAUDE.md's own wildcard convention) and an operational rank's default
+permissions, silently downgrading such a caller to a self-only view on these
+two routes while `require_permission` admitted them to the other sixteen.
+Fixed by routing both checks through `user_has_permission()`; 7 new guard
+tests, 3 of which were verified to fail against the pre-fix code specifically
+(confirming they catch the regression, not pass vacuously). Full backend
+suite: 12585 passed (12578 + 7 new), 21 pre-existing skips, 0 failed, run
+twice (before and after the fix); flake8/black/isort clean on both changed
+files. Findings doc: `docs/security-review/AH-21-admin-hours.md` → **Pass
+5**. Next: Feature 22 (Grants & fundraising), pending this PR's merge (and
+#2584's, whichever lands second, per this file's established `<details>`
+convention for a PROGRESS.md race between two rotation PRs).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 5, PR #2583, before this pass found it already merged with its own closure PR #2584 still open), preserved for history</summary>
+
 **Feature 20 (Compliance), pass 5** — PR
 [#2583](https://github.com/thegspiro/the-logbook/pull/2583), branch
 `claude/security-review-cmp-pass5-ab84fc13`. Step 0 concurrent-session check
@@ -43,6 +92,8 @@ them since. **0 fixes, 0 new findings.** Full backend suite: 12578 passed, 21
 skipped, 0 failed; flake8/black/isort clean on all seven in-scope files.
 Findings doc: `docs/security-review/CMP-20-compliance.md` → **Pass 5**. Next:
 Feature 21 (Admin hours), pending this PR's merge.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2580's merge, Feature 19 pass 5), preserved for history</summary>
@@ -15851,6 +15902,51 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 21 (Admin hours, pass 5) — 1 fixed (LOW), 0 flagged — PR #TBD opened
+
+Delta re-verification against pass 4's merge (`1fb968938`, PR #2481). All
+four declared backend files byte-identical; the four external backend
+callers, the 26-file frontend module and its outside consumers, and the one
+migration landed since pass 4 all confirmed unrelated by direct read (see
+`docs/security-review/AH-21-admin-hours.md` → Pass 5 for the line-by-line
+breakdown). AH-15's reactivation fix, the 11 `with_for_update()` sites, the
+27/27 route count, org-scoping (#14a/b/c) across every `select(...)` in
+`admin_hours_service.py`, and the two standing product-decision flags plus
+AH-16 (unbounded CSV export) all re-verified intact by direct read, not
+inferred from the empty diff.
+
+**AH-17 (LOW, FIXED):** `get_summary` and `get_user_hours_compliance` scoped
+non-admin callers with a hand-rolled `p in ("admin_hours.manage", "*")` scan
+over `current_user.positions[*].permissions` only, instead of
+`user_has_permission()` — the matcher `require_permission("admin_hours.manage")`
+itself uses (via `permission_matches()`), and the pattern already used at
+four other call sites in the codebase for this same "programmatic scope
+check outside a route dependency" shape. The hand-rolled scan missed a
+module-wildcard grant (`"admin_hours.*"`/`"compliance.*"`, legal on a custom
+position per CLAUDE.md's own permission-wildcard convention) and an
+operational rank's default permissions, silently downgrading such a caller
+to a self-only view on these two routes while `require_permission` admitted
+them to the other sixteen routes in the file. Fixed by routing both checks
+through `user_has_permission()`. 7 new guard tests
+(`test_admin_hours_endpoint_permission_scope.py`, `pytest.mark.unit`, DB
+mocked); 3 were verified to fail against the pre-fix code on the
+module-wildcard cases specifically, confirming they catch the regression.
+
+Full backend suite run twice (before and after the fix): 12578 passed / 21
+skipped / 0 failed pre-fix (confirming the baseline and the 3 expected new
+failures), 12585 passed (12578 + 7 new) / 21 skipped / 0 failed post-fix.
+flake8/black/isort clean on both changed files. `validate_migrations.py
+--strict`: single head, unaffected. Findings doc:
+`docs/security-review/AH-21-admin-hours.md` → **Pass 5**. Next: Feature 22
+(Grants & fundraising), pending this PR's merge.
+
+Step 0 concurrent-session check (twice) found PR #2583 (Feature 20,
+Compliance, pass 5) already merged into `main` but its own closure PR
+([#2584](https://github.com/thegspiro/the-logbook/pull/2584)) still open —
+a bookkeeping PR in flight rather than a concurrent Feature 21 session, so
+this pass proceeded on schedule; see the Open PR section above for the full
+note.
 
 ### 2026-09-15 — Feature 20 (Compliance, pass 5) — 0 fixes, 0 flagged — PR #2583 opened
 
