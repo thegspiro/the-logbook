@@ -16,6 +16,51 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2573](https://github.com/thegspiro/the-logbook/pull/2573)** — branch `claude/security-review-feature16-pass5`, Feature 16
+(Events & requests), pass 5. Step 0 concurrent-session check: `git fetch
+origin main` clean; the Open PR section read "None." with the Feature 15
+(Scheduling, pass 5) closure note beneath it and named "Next: Feature 16
+(Events & requests)" explicitly; `list_pull_requests` (open) returned only
+the three known-unrelated PRs — dependabot #2552/#2567, and #2495
+(`feat(scheduling): ...`, a feature-workstream PR, not part of this
+rotation) — no concurrent Feature 16/events review or closure PR. Baseline
+`32763ddbe` (merge commit of PR #2451, pass 4's landing point). Delta check
+found real churn in five files, all one feature — PR #2447, "public outreach
+event-request pipeline" (calendar sync for scheduled/postponed/cancelled
+outreach requests, plus closing the Forms-path/JSON-endpoint parity gap for
+`accept_public_requests`) — already carrying its own five rounds of Codex
+review during development. Re-verified rather than assumed safe: public-
+surface ordering (rate-limit → CAPTCHA → oracle-safe 404 → honeypot → lead
+time → daily cap) unchanged; all 9 by-id `EventRequest` queries in
+`event_requests.py` org-scoped; the new `get_linked_calendar_event` helper
+explicitly org-scopes the calendar-event join (pitfall #14a); client-supplied
+`location_id` validated via `assert_in_org` and independently re-validated
+inside `EventService` (pitfall #14c); update-payload omit-vs-null discipline
+holds through the new calendar-sync code (pitfall #1); two new migrations
+(a non-widening opt-in backfill, a stored-value canonicalization settle) both
+correctly guarded, collation-aware and documented as irreversible. **1 new
+finding, flagged not fixed:** EV-26 (P2/P3) — `LocationService.
+check_overlapping_events` is a non-locking read used as the sole concurrency
+control for room double-booking across three call sites in this feature (and
+two more in Training/Scheduling-adjacent features), so two concurrent
+schedules into the same room can both pass the check before either commits —
+the same read-then-write shape pitfall #27 covers for seat capacity, not
+previously flagged for this time-range check. Not a tenant-isolation issue
+(org/location scoping is correct throughout); flagged rather than fixed
+because a correct fix touches a shared helper's locking contract across five
+call sites in three features at once. **EV-23** (series RSVP skips the
+training phase-gate warning) re-verified still open, unregressed —
+`event_service.py` byte-identical to pass 4 in this diff. Completion gate:
+flake8/black/isort clean (no files touched — 0 fixes applied this pass);
+migrations single-head; events-scoped suite 924 passed, 1 pre-existing skip;
+full backend suite — see the findings doc's completion-gate table. No
+frontend file touched by this pass's own changes (the two pitfall #31 dialog
+files in the delta predate this pass and belong to that rule's own sweep).
+Full write-up: `docs/security-review/EV-16-events-requests.md` → Pass 5.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2570's merge, Feature 15 pass 5 closure, confirming the rotation clear for Feature 16), preserved for history</summary>
+
 **None.** PR [#2570](https://github.com/thegspiro/the-logbook/pull/2570)
 (Feature 15, Scheduling, pass 5) merged clean — 17/17 CI green after one
 stale-superseded-run false failure on the `CI Success` gate (the branch's
@@ -34,6 +79,8 @@ confirms the merge commit (`6982a99e5`) is on `main`. `list_pull_requests`
 (open) re-checked immediately before writing this closure note: only
 dependabot #2552/#2567 and #2495 (unrelated) — no concurrent Feature 16
 pass PR. **Next: Feature 16 (Events & requests).**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 5, PR #2570, before it merged), preserved for history</summary>
@@ -15579,6 +15626,78 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 16 (Events & requests, pass 5) — 0 fixed, 1 flagged (EV-26, P2/P3, cross-cutting), 1 re-flagged (EV-23) — PR #2573 opened
+
+Delta-focused pass. Baseline `32763ddbe` (merge commit of PR #2451, pass 4's
+landing point). Real churn in five files, all one feature merged since pass 4
+— PR #2447, "public outreach event-request pipeline" (calendar sync for
+scheduled/postponed/cancelled outreach requests, plus closing the
+Forms-path/JSON-endpoint parity gap for `accept_public_requests`), which
+carried its own five rounds of Codex review during its own development
+(`f9f80f798`..`055934f3f`). `models/event.py`, `models/event_request.py`,
+`utils/event_attachments.py`, `mcp/tools/events.py` and `mcp/tools/writes.py`
+byte-identical to pass 4. Two new migrations (`d19b2c2ae9b9`,
+`0533644945cd`) — both guarded on table existence (pitfall #26), both
+collation-aware, both documented as deliberately irreversible with a correct
+no-op downgrade; no finding in either.
+
+Re-verified rather than assumed safe, since the PR's own review history is
+not this pass's review: public-surface ordering on
+`submit_public_event_request` (`_rate_limit_public_request` → `require_captcha`
+→ oracle-safe 404-for-both → honeypot → lead time → daily cap) unchanged from
+EV-18/EV-19's fix; the Forms-path second entry into this pipeline
+(`FormsService._process_event_request`) inherits its own rate-limit/CAPTCHA
+pair from its own endpoint and independently orders every fallible read above
+the daily-cap INCR, matching this feature's own EV-19 discipline; all 9
+by-id `EventRequest` queries in `event_requests.py` org-scoped (enumerated,
+not sampled — lines 749/770/896/966/1014/1275/1398/1493/1574); the new
+`get_linked_calendar_event` helper explicitly org-scopes the calendar-event
+join with a comment naming pitfall #14a; client-supplied `location_id`
+validated via `assert_in_org` before storage and independently re-validated
+inside `EventService.create_event`/`update_event` (pitfall #14c, two
+independent checks, not one substituting for the other); update-payload
+omit-vs-null discipline (pitfall #1) holds through the new
+`sync_calendar_event_date` code; no new CSV export, no `.like()`/`.ilike()`,
+no new unauthenticated route. `events.py`'s only change (`list_event_attendees`
+widened `events.view` → `events.view` OR `events.manage`) is part of a
+repo-wide, already-safe permission-widening commit touching six other
+features' files too.
+
+**1 new finding, flagged not fixed: EV-26 (P2/P3, availability/correctness,
+cross-cutting).** `LocationService.check_overlapping_events`
+(`location_service.py:286`) is a non-locking `SELECT` that three of this
+feature's own write paths (`EventService.create_event`,
+`EventService.update_event`, `event_requests.py`'s `schedule_request`) treat
+as their sole concurrency control for room booking — two concurrent
+schedule/create calls into the same room can both read "no conflict" before
+either commits, double-booking the room. Same read-then-write shape as
+pitfall #27's seat-capacity examples, not previously flagged for this
+time-range check; `tests/test_capacity_locking.py`'s existing enumeration
+covers only hard seat/quantity caps, nothing for this shape. Not a
+tenant-isolation issue — org/location scoping is correct throughout, and
+every site is `events.manage`-gated. Not fixed here because the same
+unlocked call shape exists at two more call sites in two different features
+(`training_session_service.py`, `course_cohort_service.py`); a fix confined
+to this feature's two files would change a shared helper's locking contract
+out from under callers this pass did not review, and a lock-ordering survey
+across all five call sites is out of scope for a single-feature pass.
+Mirrored in `docs/KNOWN_LIMITATIONS.md`.
+
+**EV-23** (series RSVP skips the training phase-gate warning) re-verified
+still open, unregressed — `event_service.py` byte-identical to pass 4 in
+this pass's diff.
+
+Completion gate: `flake8`/`black`/`isort` clean (no backend file touched this
+pass — 0 fixes applied, one finding flagged instead); `validate_migrations.py
+--strict` single head; events-scoped suite (`-k "event"`) 924 passed, 1
+pre-existing skip; full backend suite — see the findings doc's completion-gate
+table for the exact count. No frontend file touched by this pass's own
+changes — the two `EventTemplatesPage.tsx`/`EventsPage.tsx` diffs in the
+delta are the cross-cutting pitfall #31 dialog-dismiss sweep
+(`0d3f9b833`), already covered by that rule's own guard test, not this
+feature's change. Full write-up: `docs/security-review/EV-16-events-requests.md`
+→ Pass 5.
 
 ### 2026-09-15 — Feature 15 (Scheduling, pass 5) — 0 fixed, 0 flagged, 0 new findings — PR #2570 opened
 
