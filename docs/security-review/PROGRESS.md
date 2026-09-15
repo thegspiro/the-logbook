@@ -16,6 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 20 (Compliance), pass 5** — PR #TBD, branch
+`claude/security-review-cmp-pass5-ab84fc13`. Step 0 concurrent-session check
+(done twice — once at start, once immediately before push): `git fetch origin`
+clean both times; `PROGRESS.md`'s Open PR section read "None." with the
+Feature 19 (Skills testing, pass 5) closure note beneath it and named "Next:
+Feature 20 (Compliance), pass 5" explicitly, both times; `list_pull_requests`
+(state=open) returned only the three known-unrelated PRs — dependabot
+#2567/#2552, and #2495 (`feat(scheduling): ...`) — both times. No concurrent
+Feature 20/compliance pass PR either check.
+
+Baseline `36c160f4c` (merge commit of PR #2476, pass 4's landing point). Zero
+in-scope delta: all seven declared backend files, plus the two frontend files
+and the type file pass 4 touched, are byte-identical to pass 4's merge —
+`git diff --stat` and `git log` both empty across the board. This is a
+zero-delta pass, the same shape as pass 3. Re-verified by direct code read
+(not just by trusting the empty diff) that CMP4-1's applicability filter and
+its role_ids correction are intact, org-scoping (#14a/b/c) holds across every
+by-id query and FK validation in both service files, no JSON column is
+shallow-copy-mutated (#12), and the three standing flags (CMP4-2 required_positions,
+CMP4-3 profile-unaware annual report, CMP4-5 required_roles slug/id mismatch)
+remain open and unchanged — confirmed `training_compliance.py`'s last commit
+is still TR-17 pass 4's (`569348ef2`), so no sibling feature has closed any of
+them since. **0 fixes, 0 new findings.** Full backend suite: 12578 passed, 21
+skipped, 0 failed; flake8/black/isort clean on all seven in-scope files.
+Findings doc: `docs/security-review/CMP-20-compliance.md` → **Pass 5**. Next:
+Feature 21 (Admin hours), pending this PR's merge.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2580's merge, Feature 19 pass 5), preserved for history</summary>
+
 **None.** PR [#2580](https://github.com/thegspiro/the-logbook/pull/2580)
 (Feature 19, Skills testing, pass 5) merged clean — 1 fixed (SKT5-1, MED),
 1 standing flag widened (SKT4-7), 17/17 CI green, `mergeable_state: clean`,
@@ -31,6 +61,8 @@ commit `ea9c7d820` confirmed on `main` via `git fetch`. `list_pull_requests`
 dependabot #2552/#2567, and #2495 (unrelated) — no concurrent Feature
 20/compliance closure or pass PR. Rotation row 19 stays ✅. **Next:
 Feature 20 (Compliance), pass 5.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 5, PR #2580, before it merged), preserved for history</summary>
@@ -15818,6 +15850,31 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 20 (Compliance, pass 5) — 0 fixes, 0 flagged — PR #TBD opened
+
+Zero-delta re-verification pass. Baseline `36c160f4c` (pass 4's merge, PR
+#2476). All seven backend files this feature declares in scope, plus the two
+frontend files and the type file pass 4 touched, are byte-identical to pass
+4's merge — `git diff --stat` and `git log` both empty. Same shape as pass 3.
+
+Rather than stopping at the empty diff, re-verified by direct code read:
+CMP4-1's applicability filter (both `generate_annual_report` loops through
+`requirement_applies_to_member`) and its role_ids follow-up (eager-loaded
+`User.roles`, position ids passed into both call sites) are intact;
+org-scoping holds across every by-id query and FK validation in both service
+files (#14a/b/c); no JSON column is shallow-copy-mutated (#12); the three
+standing flags (CMP4-2 `required_positions` unhandled, CMP4-3 annual report
+not profile-aware, CMP4-5 `required_roles` slug/id mismatch) remain open,
+confirmed unchanged by checking `training_compliance.py`'s last commit is
+still TR-17 pass 4's own (`569348ef2`) — no sibling feature has closed any of
+them since. #30a (route registries) does not apply — both files are backend
+API routers, not frontend pages.
+
+No new findings. Full backend suite: 12578 passed, 21 skipped, 0 failed;
+flake8/black/isort clean on all seven in-scope files. Findings doc:
+`docs/security-review/CMP-20-compliance.md` → **Pass 5**. Next: Feature 21
+(Admin hours), pending this PR's merge.
 
 ### 2026-09-15 — Feature 19 (Skills testing, pass 5)'s PR #2580 merged, watchdog recorded it
 
