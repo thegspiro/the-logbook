@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 22 (Grants & fundraising), pass 5** — PR #TBD, branch
+**Feature 22 (Grants & fundraising), pass 5** — PR
+[#2587](https://github.com/thegspiro/the-logbook/pull/2587), branch
 `claude/security-review-gf-pass5-859d4e45`. Step 0 concurrent-session
 check (done twice — once at start, once immediately before push): `git fetch
 origin` clean both times; `search_pull_requests` (open) returned no PR
@@ -15962,7 +15963,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 22 (Grants & fundraising, pass 5) — 0 fixed, 0 new findings — PR #TBD opened
+### 2026-09-15 — Feature 22 (Grants & fundraising, pass 5) — 0 fixed, 0 new findings — PR #2587 opened
 
 Delta re-verification against pass 4's actual merge (`ee5188ff5`, PR #2485 —
 the Codex-review follow-up; #2483, the earlier PR a concurrent watchdog
