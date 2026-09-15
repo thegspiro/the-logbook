@@ -17,7 +17,7 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 01 (Auth & session lifecycle), pass 6** — PR
-[#TBD](https://github.com/thegspiro/the-logbook/pull/TBD), branch
+[#2593](https://github.com/thegspiro/the-logbook/pull/2593), branch
 `claude/security-review-auth-pass6-a1f4c2`. Step 0 concurrent-session check
 (done twice — once at start, once immediately before push): `git fetch
 origin main` clean both times; `PROGRESS.md`'s Open PR row (before this edit)
@@ -16095,7 +16095,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 01 (Auth & session lifecycle, pass 6) — 0 fixed, 0 new findings — PR #TBD opened
+### 2026-09-15 — Feature 01 (Auth & session lifecycle, pass 6) — 0 fixed, 0 new findings — PR #2593 opened
 
 Step 0: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
 "Feature 00 (Cross-cutting baseline), pass 6 — PR #2592" —
