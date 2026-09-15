@@ -1,9 +1,100 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), pass 6 (this PR)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 6 (2026-09-15)
+
+**0 fixed, 0 new findings.** Zero-delta re-verification: every file this
+feature scopes is **byte-identical** to pass 5's reviewed state.
+
+**Backend:** the same nine files pass 5 scoped —
+`app/api/v1/endpoints/auth.py`, `app/services/auth_service.py`,
+`app/services/mfa_service.py`, `app/services/oauth_service.py`,
+`app/services/consent_service.py`, `app/api/dependencies.py`,
+`app/core/security.py`, `app/core/suspicious_ip.py`, `app/schemas/auth.py`
+**Frontend:** `stores/authStore.ts`, `services/apiClient.ts`,
+`services/authService.ts`
+**Migrations:** none written this pass; 444 revisions, single head
+`6ab7d903fae5` — unchanged from pass 5
+
+### Scope and method
+
+Baseline: `9170a20c2` (merge commit of PR #2536, pass 5's landing point,
+confirmed via `git log --oneline --grep="#2536"`). `git diff 9170a20c2
+origin/main` across all twelve files above (nine backend, three frontend)
+returns **zero lines** — not "no functional change", literally no diff — and
+`git rev-parse 9170a20c2:<path> origin/main:<path>` gives the identical blob
+hash for `auth.py` specifically (`f33bedbae69...`), confirmed rather than
+inferred from an empty `git diff` alone. `git log --oneline
+9170a20c2..origin/main -- app/models/user.py app/core/config.py
+app/services/scheduled_tasks.py` (the three files a fix for AUTH-15 or
+AUTH-17 would have to touch) also returns nothing, so neither standing flag's
+premise has moved either. No commit touching this feature's scope landed
+between pass 5's merge and this pass's start.
+
+Despite the zero diff, this pass re-read every file rather than trusting the
+diff alone (pass 5's own stated discipline, "still read in full ... nothing
+had reason to change, and nothing did") and specifically re-grepped the six
+fixed/flagged findings at their current line numbers rather than assuming a
+prior grep still matches:
+
+| Finding                          | Re-checked at                                          | Result                                                                                                                                                          |
+| -------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AUTH-1 (OAuth org-active check)  | `oauth_service.py:57`                                  | `.where(Organization.active.is_(True))` present, unchanged                                                                                                      |
+| AUTH-14 (password-change gate)   | `dependencies.py:84,110` (+ coupling comment at `:94`) | `/auth/change-password` still on both suffix tuples                                                                                                             |
+| AUTH-16 (non-consuming verifier) | `mfa_service.py:32-35`                                 | `verify_totp` docstring still says "Not for use by application code"                                                                                            |
+| AUTH-19 (refresh_token index)    | `models/user.py:856`                                   | `Column(String(512), index=True)` still present                                                                                                                 |
+| AUTH-20 (lockout row lock)       | `auth_service.py:238-258`                              | `.with_for_update()` re-fetch still precedes the failure-branch increment                                                                                       |
+| AUTH-21 (refresh rotation, open) | `auth_service.py:383`                                  | still a plain `select(UserSession).where(UserSession.refresh_token == ...)`, no lock — confirms the flag's premise is unchanged, not merely unfixed by omission |
+
+Route inventory unchanged: `grep -c '^@router\.' auth.py` → 26; the
+`ALLOWLISTED_PUBLIC` entries for `auth.py` in
+`tests/test_endpoint_auth_coverage.py` → still 14, still matching the public
+routes tabled in pass 4. No route added, removed, or re-gated.
+
+### Open items re-confirmed, unchanged
+
+- **AUTH-15** (HIPAA max password age enforced only in the browser) — still
+  🚩 FLAGGED. `auth_service.py:286` still only logs;
+  `auth.py:178-187,1418` still only report `password_expired` /
+  the day count. No gate added to `get_current_user`. Still needs the owner
+  decision on rollout recorded in pass 4. Still in `KNOWN_LIMITATIONS.md`.
+- **AUTH-17** (no session reaper) — still 🚩 FLAGGED. `delete(UserSession)`
+  is still reached only from `_revoke_all_user_sessions` (`auth_service.py:475`);
+  `scheduled_tasks.py` still has no session job. Still needs the
+  retention-window decision. Still in `KNOWN_LIMITATIONS.md`.
+- **AUTH-21** (app-review track, double-fired refresh can revoke every
+  session) — still 🚩 FLAGGED in `docs/app-review/auth-session.md` and
+  `KNOWN_LIMITATIONS.md`; `docs/app-review/auth-session.md` has no pass after
+  its own pass 5, so nothing to re-verify there beyond confirming the code
+  line above still matches what it describes.
+
+No new finding was raised. Nothing considered-and-rejected from prior passes
+needed re-litigating — the "Considered and deliberately not raised" sections
+under passes 4 and 5 describe code paths that did not change either.
+
+### Completion gate (pass 6)
+
+| Check                                                                                                                                                                                                | Result                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `python3 -m flake8 app/ tests/ alembic/`                                                                                                                                                             | ✅ 0 violations                                |
+| `black --check app/ tests/ alembic/` (26.5.1)                                                                                                                                                        | ✅ 1596 files unchanged                        |
+| `isort --check-only app/ tests/ alembic/` (9.0.1)                                                                                                                                                    | ✅ clean                                       |
+| `validate_migrations.py --strict`                                                                                                                                                                    | ✅ single head `6ab7d903fae5`, 444 revisions   |
+| scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission"`)                                                                                         | ✅ 684 passed, 2 skipped (both pre-existing)   |
+| standing guards (`endpoint_auth_coverage`, `org_scoping_ratchet`, `capacity_locking`, `like_escaping`, `mfa_verification_consumes`, `auth_lockout_race`, `auth_gate_remediation_paths`) run directly | ✅ 67 passed                                   |
+| backend full unit suite (`pytest tests/ -m "not integration and not slow and not docker"`)                                                                                                           | ✅ 10199 passed, 1 pre-existing skip, 0 failed |
+| `cd frontend && npm run typecheck`                                                                                                                                                                   | ✅ 0 errors (aliased 7.0.2 compiler)           |
+| `cd frontend && npm run lint`                                                                                                                                                                        | ✅ 0 errors, 0 warnings                        |
+
+No source file changed this pass — every check above is a re-verification of
+a byte-identical tree, not a regression check against a fix. Rotation row 01
+moves to `✅`.
 
 ---
 
