@@ -1,10 +1,118 @@
 # Security Review — Compliance
 
 **Prefix:** `CMP` · **Iteration:** 20 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4) · **PR:** #1902
-(pass 1, merged), [#2059](https://github.com/thegspiro/the-logbook/pull/2059)
-(pass 2, merged), #2245 (pass 3, merged),
-[#2476](https://github.com/thegspiro/the-logbook/pull/2476) (pass 4)
+2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
+(pass 5) · **PR:** #1902 (pass 1, merged),
+[#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2, merged),
+#2245 (pass 3, merged), [#2476](https://github.com/thegspiro/the-logbook/pull/2476)
+(pass 4, merged), [#2583](https://github.com/thegspiro/the-logbook/pull/2583)
+(pass 5)
+
+## Pass 5 (2026-09-15)
+
+**Scope check.** Diffed the current tree against `36c160f4c` (pass 4's merge
+commit, PR #2476) across all seven files this feature declares in scope —
+`compliance_config.py`/`compliance_officer.py` (endpoints),
+`compliance_config_service.py`/`compliance_officer_service.py` (services),
+`models/compliance_config.py`, `schemas/compliance_config.py`, and the shared
+`training_compliance.py` helper. `git diff --stat` and `git log` both return
+no output for all seven — **byte-identical to pass 4's merge, zero commits
+since.** Also checked the two frontend files pass 4 touched
+(`ComplianceRequirementsConfigPage.tsx`, `ComplianceOfficerDashboard.tsx`) and
+`frontend/src/types/training.ts` (the `AnnualReportRequirement` type CMP4-4
+named) — all three also byte-identical since pass 4's merge. This is a
+zero-delta pass, the same shape as pass 3.
+
+**Re-verification, by direct code read rather than by trusting the diff
+alone** (per this pass's instructions to re-check, not just re-diff):
+
+- **CMP4-1 (member/requirement applicability filtering) and its role_ids
+  correction — confirmed intact.** Read `generate_annual_report` in full
+  (`compliance_officer_service.py:802-1133`). Both loops still filter through
+  `requirement_applies_to_member`; the member query still eager-loads
+  `User.roles` via `selectinload` and both call sites still pass
+  `[str(r.id) for r in member.roles]`. `TestGenerateAnnualReportRoleScopedRequirements`
+  and `tests/test_annual_report_membership_scoped_requirements.py` both still
+  pass (see completion gate below).
+- **Org-scoping (#14a/b/c) — re-checked by fresh reading, not by re-running
+  pass 1-4's own inventory.** Every by-id read/update/delete in both service
+  files (`get_config`, `create_or_update_config`, `update_profile`,
+  `delete_profile`, `get_report`, `delete_report`, `email_existing_report`)
+  filters on `organization_id` directly or joins through
+  `ComplianceConfig.organization_id`. Every list/aggregate query
+  (`ISOReadinessService`, `ContributedHoursService`,
+  `RecordCompletenessService`, and all of `AnnualComplianceReportService`'s
+  `_get_*_summary` helpers) filters `organization_id` on its own model, or —
+  for the one join without its own explicit filter,
+  `ContributedHoursService`'s admin-hours-by-category query
+  (`AdminHoursEntry` joined to `AdminHoursCategory`) — the join key is
+  `AdminHoursEntry.category_id`, and `AdminHoursEntry` itself is already
+  filtered to the caller's org, so the join cannot cross tenants. FK
+  validation on profile writes (`_validate_profile_fks`, 14c) still checks
+  `required_requirement_ids`/`optional_requirement_ids` against
+  `TrainingRequirement`, `role_ids` against `Position`, and
+  `admin_hours_requirements[].category_id` against `AdminHoursCategory`, all
+  org-scoped. No endpoint in either router takes a target member/user id —
+  every result is scoped to `current_user.organization_id`, confirmed again
+  by a fresh read of both endpoint files (20/20 routes, unchanged from pass
+  1-4).
+- **JSON columns (#12) — re-checked, not just assumed from "no diff."**
+  `ComplianceConfig.report_email_recipients`/`notify_days_before_deadline`
+  and `ComplianceProfile.membership_types`/`role_ids`/
+  `required_requirement_ids`/`optional_requirement_ids`/
+  `admin_hours_requirements` are all whole-value replacements via
+  `apply_updates`/constructor kwargs — no call site reads one of these
+  columns, shallow-copies it, mutates a nested key, and reassigns. Pitfall
+  #12 does not apply to this feature's JSON columns; re-confirmed by reading
+  every write site in `compliance_config_service.py`, not by pattern-matching
+  for `dict(`.
+- **Re-derivation (#29) — CMP4-2/CMP4-3/CMP4-5 (the three standing flags)
+  re-checked against the shared helper they name, not just against last
+  pass's prose.** `requirement_applies_to_member` in `training_compliance.py`
+  is unchanged (byte-identical file) and still has no `required_positions`
+  branch (CMP4-2) and still compares `required_roles` against role/position
+  ids rather than `user.rank` (CMP4-5); `generate_annual_report` still never
+  calls `_find_matching_profile` (CMP4-3, confirmed again by `grep -n profile
+compliance_officer_service.py` returning nothing). Also checked whether a
+  sibling feature's own pass 5 (Feature 17/Training core, Feature 18/Training
+  extended) closed any of these cross-feature gaps since pass 4 — it has not:
+  `training_compliance.py`'s last commit is still `569348ef2` (TR-17 pass 4,
+  the same commit pass 4 of this feature already read), and no later commit
+  touches it. All three remain open exactly as pass 4 left them; nothing new
+  to add or widen in `docs/KNOWN_LIMITATIONS.md`.
+- **Route registries (#30a) — not applicable.** Both files under this
+  feature's scope are backend API routers (`/api/v1/...`), not frontend
+  pages; #30a's three registries (`APPLICATION_PAGES.md`,
+  `testingRegistry.ts`, `e2e/mobile-route-inventory.ts`) govern frontend
+  routes only. Confirmed no new frontend route was added for this feature
+  since pass 4 (the two compliance-facing pages are unchanged, per the scope
+  check above).
+- **CS-8/CS-9/CMP2-1 (standing, non-CMP4 flags) — re-verified still open,
+  unchanged**, same conclusion as pass 4: the attestation dual-control
+  pattern (audit-log-backed, no update/delete path) is intact in
+  `ComplianceAttestationService`; report-generation windowing (`report_type`
+  constrained to the known set, `html.escape()` on org name/type/period) is
+  intact in `ComplianceReportService`; the "Not yet active" notice for
+  `notify_non_compliant_members`/`notify_days_before_deadline` — this pass
+  confirmed the frontend file carrying it
+  (`ComplianceRequirementsConfigPage.tsx`) is byte-identical to pass 4, so the
+  notice is still present.
+
+**No new findings this pass.** Nothing to fix, nothing new to flag —
+0 fixes, 0 flagged, matching pass 3's shape.
+
+## Completion gate (pass 5)
+
+| Check                                                | Result                                |
+| ---------------------------------------------------- | ------------------------------------- |
+| `flake8` on the 7 in-scope backend files             | ✅ 0 violations                       |
+| `black --check` on the 7 in-scope backend files      | ✅ 7 files unchanged                  |
+| `isort --check-only` on the 7 in-scope backend files | ✅ clean                              |
+| `pytest tests/ -q` (full backend suite)              | ✅ 12578 passed, 21 skipped, 0 failed |
+
+No frontend files were modified this pass (zero in-scope delta), so no
+frontend suite run was needed — matching this repo's "match the verification
+to the change" guidance for a documentation-and-re-verification-only pass.
 
 ## Pass 4 (2026-09-11)
 
