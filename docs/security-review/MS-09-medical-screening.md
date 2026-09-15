@@ -1,6 +1,167 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), (this PR) (pass 4)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), (this PR) (pass 5)
+
+---
+
+## Pass 5 (2026-09-14)
+
+**Backend (declared scope, per `PROGRESS.md`'s rotation table row):**
+`endpoints/medical_screening.py` (431 L, 14 routes), `services/medical_screening_service.py` (606 L) — read in full, byte-for-byte identical to pass 4's documented content. `models/medical_screening.py` (216 L) and `schemas/medical_screening.py` (256 L) also re-read in full as import dependencies of the two declared files (same discipline as every prior pass) — likewise unchanged.
+**Scope addition, this pass:** `backend/app/mcp/tools/medical.py` (191 L, 2 tools) — this rotation's established precedent (see `PROGRESS.md`, Feature 11 pass 4 correction) is that a feature-owned MCP surface belongs to the owning feature's pass, and no prior Feature 09 pass had enumerated it into scope. Read in full this pass, along with its shared infrastructure (`app/mcp/registry.py`, `app/mcp/principal.py`, `app/mcp/redaction.py`, `app/mcp/tools/_common.py`) to the extent needed to verify this feature's two tools, not as a review of the MCP surface generally (which has its own extensive, separately-tracked review history — "Thirtieth review round on the Claude MCP integration" and similar commits).
+**Frontend:** not re-read in full this pass — `git diff` since pass 4's merge (`f8fdd1a07`) shows only accessibility/styling changes (`aria-labelledby` on two dialogs, `btn-primary` utility class adoption, a `data-mobile-scroll-region` marker on the tab strip), part of a repo-wide mobile-accessibility sweep, not feature-specific. Confirmed no security-relevant line in that diff (no handler, payload, or permission-check code touched).
+**Migrations:** unchanged since pass 4; `validate_migrations.py --strict` re-run clean (444 revisions, single head, no schema change this pass).
+
+### Scope
+
+`git log --oneline f8fdd1a07..origin/main -- <4 backend files>` returns nothing — confirmed no commit touched any of them since pass 4 merged. Rather than treat that as license to skip re-reading, all four files were read in full end to end and compared structurally against pass 4's documented content (route list, permission strings, `assert_in_org`/`apply_updates` call sites, encrypted column list): identical in every respect. Also checked, since a security posture can shift without a diff to the feature's own files: every direct dependency import (`app/utils/org_scoping.py`, `app/utils/model_updates.py`, `app/core/audit.py`, `app/core/permissions.py`) — none changed since pass 4 either. Two onboarding commits landed in this window that touch `app/core/permissions.py` (`92c8cb574`, `fb3ba0279`, both about the **Medical Supplies** inventory module's checkbox-to-permission mapping) — confirmed by direct grep that neither adds `medical_screening.*` to `_MODULE_CHECKBOX_GRANTS`/`_CHECKBOX_CONFERRED_BY`; they are a same-named-sounding but unrelated feature (Feature 23, Medical Supplies/inventory, not Feature 09, Medical Screening/PHI).
+
+Every other consumer of `MedicalScreeningService`/`ScreeningRecord`/`ScreeningRequirement` outside the four declared files was enumerated (`grep -rln` across `backend/app`) and checked for changes since pass 4: `admin_hub_service.py`, `member_anonymization_service.py`, `membership_pipeline_service.py`, `org_template_registry.py`, `data_export_service.py`, `app/mcp/tools/medical.py`. Only `membership_pipeline_service.py` changed in this window — entirely Feature 08 (Membership pipeline) work, already independently re-reviewed end to end in that feature's own pass 5/6 (PR #2555, merged the same day as this pass began); the one integration point on this feature's side, `try_advance_pipeline_stage`'s call into `try_auto_advance_current_step`, is unchanged and was re-confirmed still passing the same three arguments in the same shape.
+
+### Re-verified good ✅ (unchanged from pass 4, re-confirmed against current code, not copied forward)
+
+- No baseline grant for either permission — `app/core/permissions.py` still references `medical_screening.view`/`.manage` nowhere but their own definitions (267–276); the two onboarding commits above don't touch this feature.
+- Tenant isolation intact throughout: every by-id getter filters `organization_id`; `create_record`'s three client-supplied FKs still route through `assert_in_org(..., allow_none=True)` before the row is built (CLAUDE.md Pitfall #14a/14c).
+- PHI encryption at rest intact — `provider_name`/`result_summary`/`notes` (`EncryptedText`), `result_data` (`EncryptedJSON`).
+- `SET NULL` FKs (`requirement_id`, `reviewed_by`) both `nullable=True` (CLAUDE.md Pitfall #2).
+- Update schemas still omit every tenancy/subject FK field — no update path can reassign organization, subject, or requirement.
+- `apply_updates` (MS-5) and the audit-id fields on `*_created` events (MS-8) both still present and unchanged.
+- No CSV/spreadsheet export exists on this feature (`SafeCsvWriter`, CLAUDE.md Pitfall #15, doesn't apply — re-confirmed by the same 14-route inventory).
+- No raw exception reaches the client — both `create_record`/`update_record`/`update_requirement` wrap their service call in `except ValueError as exc: raise HTTPException(400, safe_error_detail(exc))`; nothing here raises or lets through an unguarded `Exception`.
+- No unbounded in-memory cache/tracker on this feature (CLAUDE.md Pitfall #9 doesn't apply — there is no request-scoped or process-scoped dict here at all, bounded or not).
+- No JSON-column shallow-copy mutation risk (CLAUDE.md Pitfall #12): `applies_to_roles` and `result_data` are only ever set from a freshly-deserialized Pydantic value on `create_*` (a brand-new row, nothing to alias) or via `apply_updates`' `setattr` on `update_*` (the incoming dict's value, never a shallow copy of the column's own prior value) — re-traced both write paths directly.
+- Audit logging present on every write (six `log_audit_event` calls: requirement/record × created/updated/deleted), absent on reads — unchanged from every prior pass; see "Flagged, not fixed" below for why this pass treats that as accepted rather than a new gap.
+
+### New this pass
+
+**MS-11 — LOW (doc accuracy on a PHI-adjacent surface, first review of `mcp/tools/medical.py`) — ✅ FIXED**
+
+**What:** the module's own docstring claimed "Never a result, a provider or a
+note: those columns are encrypted at rest **and on the redaction
+denylist**." Checked directly against `app/mcp/redaction.py`'s
+`DENIED_FIELDS`: `provider_name`, `result_summary`, and `result_data` are
+indeed named there. `notes` is not, and cannot be added the way the other
+three were — `grep -n '"notes"' backend/app/mcp/tools/*.py` shows the plain
+key `"notes"` is a live, legitimate field in `finance.py`, `meetings.py`,
+`scheduling.py`, and `writes.py`; the redaction module works by bare key
+name at every depth of the returned value with no source-model context, so
+adding `"notes"` to the global denylist would silently strip real content
+from four unrelated, non-PHI tools rather than protect this one.
+**Where:** `app/mcp/tools/medical.py:1-6` (module docstring).
+**Why it's a real, if narrow, gap and not a false alarm:** the redaction
+module's own architecture doc names its purpose precisely — "Tools already
+project explicit allowlists of fields; this is the second net, so that a
+field added to a model or a service response later cannot leak through a
+tool nobody remembered to update." That guarantee does not actually extend
+to `ScreeningRecord.notes` (PHI, encrypted at rest, the third of the three
+fields this file's own docstring names as never-shared) the way the
+docstring claimed. **No live leak exists today**: both tools in this file
+build their return dicts from explicit, closed field lists —
+`get_member_medical_compliance` projects `ComplianceSummary`/
+`ComplianceItem` fields, neither of which has a `notes`/`result_summary`/
+`provider_name`/`result_data` attribute at all; `list_expiring_screenings`
+hand-picks eight named fields off each `ScreeningRecord` row and never
+touches `.notes`. `grep -n "notes" app/mcp/tools/medical.py` returns
+nothing. The gap is that the _stated_ second-net guarantee for `notes`
+specifically does not hold, which is exactly the situation that invites a
+future tool addition to this file to trust redaction for a field it does
+not actually cover.
+**Fix:** corrected the docstring to state the truth — which three fields
+are named on the denylist, why `notes` deliberately is not (shared,
+legitimate use elsewhere; redaction has no per-tool or per-model scoping
+mechanism to add), and what actually keeps `notes` out today (the explicit-
+projection discipline both handlers already follow) — with an explicit note
+to keep any future addition to this file on the same discipline rather than
+relying on the denylist to catch a broader serialization. Documentation-only
+change; no runtime behavior, gating, or redaction rule modified.
+**Why not a broader fix:** giving the redaction module a per-tool or
+per-model-qualified denylist (so `notes` could be denied only when it
+originates from `ScreeningRecord`) would be a real architectural capability
+add to a shared module used by every other reviewed feature's MCP tools —
+out of scope for a same-day fix on a single feature's pass, and not
+warranted today since no live leak exists to justify the added complexity.
+Left for a future pass if a second PHI-adjacent tool needs the same
+guarantee redaction doesn't currently provide.
+
+### MS-12 — LOW (audit completeness, HIPAA §164.312(b)) — PHI reads are not audit-logged, only writes are — 🚩 FLAGGED
+
+The assignment brief for this pass calls out that "an access log for PHI
+views is itself often a compliance requirement" under HIPAA §164.312(b).
+Re-confirmed directly: none of the five `GET` routes that can return
+PHI-bearing fields (`/records`, `/records/{id}`, `/compliance/{user_id}`,
+`/compliance/prospect/{prospect_id}`, `/expiring`) call `log_audit_event` —
+only the six write routes do (MS-8 already closed the one gap in _those_
+six: the row now always carries its own id). This is unchanged from every
+prior pass, which reviewed the same six writes as "audit logging: present"
+without separately naming the seven reads as a gap. Considered explicitly
+this pass rather than re-confirmed silently:
+
+- **Not a new regression** — this has been the shape of the endpoint file
+  since pass 1; nothing shifted it.
+- **Not fixed here** — instrumenting five read routes with an audit write is
+  a real, deliberate feature addition (a new audit event type per route, a
+  volume/retention decision for what could be a high-frequency call —
+  `/records` and `/expiring` back the main list views, not just detail
+  drill-downs — and a decision on whether a _list_ of N records logs once
+  or N times), not a same-day scoped fix, and CLAUDE.md's own guidance is to
+  flag rather than guess at that shape of change.
+- **Mirrored to `docs/KNOWN_LIMITATIONS.md`** this pass (new entry) so the
+  gap has one place a future pass or the application owner can find it,
+  rather than staying implicit in four passes' worth of "audit logging
+  present" language that was true of writes only.
+
+### Re-verified open, not re-flagged (unchanged from pass 3/4)
+
+- **MS-6 — LOW (scale).** `list_requirements`/`list_records` still run bare
+  `.all()`. Unchanged; already in `KNOWN_LIMITATIONS.md`.
+- **MS-7 — MED.** `create_record`/`update_record` still place no
+  constraint between `current_user` and `data.user_id`; `get_compliance_
+status` still never reads `reviewed_by`. Unchanged; still needs a product
+  decision; already in `KNOWN_LIMITATIONS.md`.
+- **`create_record` still doesn't enforce exactly-one-of `user_id`/
+  `prospect_id`.** Unchanged.
+- **`get_compliance_status` still doesn't 404 an unknown subject.**
+  Re-confirmed not an enumeration channel (identical response shape for a
+  nonexistent, out-of-org, and zero-record subject).
+- **`grace_period_days`/`applies_to_roles` (MS-9) and `frequency_months`
+  (noted, not folded into MS-9) still unenforced.** The "Not enforced"
+  notices in `ScreeningRequirementForm.tsx` are unchanged and still present.
+
+## Schema & migration notes
+
+No migration this pass; no model/schema change. `validate_migrations.py
+--strict` re-run clean: 444 revisions, single head, unchanged count from
+Feature 08 pass 5's merge earlier the same day.
+
+## Guard tests added
+
+None new. MS-11 is a comment-only change with no behavioral surface to pin;
+the existing static sweep (`tests/test_mcp_redaction.py::
+TestToolModulesNeverProjectDeniedFields::test_module_is_clean`, which globs
+every file in `app/mcp/tools/` including `medical.py`) already asserts no
+tool module projects a denied field by name, and `test_mcp_tools.py`
+already has direct coverage of both `medical.py` tools (`test_medical_
+compliance_refuses_an_unknown_member`,
+`test_medical_compliance_never_carries_the_record_status`, and the
+superseded-record ordering tests around line 4334) confirming neither tool
+returns the record's raw `status`/detail fields, only derived compliance
+booleans and counts. Re-ran both files clean (see Completion gate).
+
+## Completion gate
+
+| Check                                                                                                                                           | Result                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `black --check app/mcp/tools/medical.py`                                                                                                        | clean                                                                                                                            |
+| `flake8 app/mcp/tools/medical.py`                                                                                                               | 0 violations                                                                                                                     |
+| `isort --check-only app/mcp/tools/medical.py`                                                                                                   | clean                                                                                                                            |
+| `python3 scripts/validate_migrations.py --strict`                                                                                               | pass — 444 revisions, single head (no migration this pass)                                                                       |
+| `pytest tests/ -q -k "medical_screening or medical-screening or grace_period"`                                                                  | **50 passed, 1 skipped** (pre-existing — optional `py_vapid` dep), 0 failed                                                      |
+| `pytest tests/test_mcp_tools.py tests/test_mcp_redaction.py tests/test_mcp_keys.py tests/test_mcp_key_endpoints.py tests/test_mcp_transport.py` | **274 passed**, 0 failed                                                                                                         |
+| `pytest tests/ -q` (full backend suite)                                                                                                         | **12563 passed, 21 skipped** (pre-existing/environmental: Docker unavailable, optional dep, opt-in API-contract suite), 0 failed |
+
+Frontend gates not run this pass — no frontend file touched (the diff since
+pass 4 is a repo-wide accessibility sweep, reviewed and confirmed not
+security-relevant, not a change made by this pass).
 
 ---
 

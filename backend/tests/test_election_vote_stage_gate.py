@@ -228,6 +228,77 @@ class TestElectionVoteStageGate:
 
         assert str(moved.current_step_id) != str(vote.id)
 
+    @pytest.mark.parametrize(
+        ("package_status", "fragment"),
+        [
+            ("added_to_ballot", "has not been decided yet"),
+            ("not_elected", "was not elected"),
+        ],
+    )
+    async def test_manual_transfer_refuses_an_undecided_or_failed_vote(
+        self, db_session: AsyncSession, org_and_admin, package_status, fragment
+    ):
+        """The door ``complete_step`` never checks: skip_current_step's own
+        refusal message ("convert or reject instead") makes manual transfer
+        the documented way to finish a final stage, and the frontend's
+        "Convert" button calls it directly — with no trip through
+        complete_step, and so no trip through the election gate above, unless
+        transfer_to_membership checks for itself."""
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, vote = await _election_stage_pipeline(
+            svc, org_id, auto_transfer=False
+        )
+        prospect = await _prospect_on_the_vote(svc, org_id, pipeline.id)
+        await _package(db_session, prospect.id, pipeline.id, vote.id, package_status)
+
+        result = await svc.transfer_to_membership(prospect.id, org_id, admin_id)
+
+        assert result is not None
+        assert result["success"] is False
+        assert fragment in result["message"]
+
+        after = await svc.get_prospect(prospect.id, org_id)
+        assert after.status == ProspectStatus.ACTIVE
+        assert after.transferred_user_id is None
+
+    async def test_manual_transfer_still_works_once_the_vote_clears(
+        self, db_session: AsyncSession, org_and_admin
+    ):
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, vote = await _election_stage_pipeline(
+            svc, org_id, auto_transfer=False
+        )
+        prospect = await _prospect_on_the_vote(svc, org_id, pipeline.id)
+        await _package(db_session, prospect.id, pipeline.id, vote.id, "elected")
+
+        result = await svc.transfer_to_membership(prospect.id, org_id, admin_id)
+
+        assert result is not None
+        assert result["success"] is True
+
+        after = await svc.get_prospect(prospect.id, org_id)
+        assert after.status == ProspectStatus.TRANSFERRED
+        assert after.transferred_user_id is not None
+
+    async def test_manual_transfer_unaffected_with_no_election_package(
+        self, db_session: AsyncSession, org_and_admin
+    ):
+        """A pipeline that never uses the election feature must transfer
+        exactly as it always has."""
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, _vote = await _election_stage_pipeline(
+            svc, org_id, auto_transfer=False
+        )
+        prospect = await _prospect_on_the_vote(svc, org_id, pipeline.id)
+
+        result = await svc.transfer_to_membership(prospect.id, org_id, admin_id)
+
+        assert result is not None
+        assert result["success"] is True
+
     async def test_the_latest_package_is_the_one_graded(
         self, db_session: AsyncSession, org_and_admin
     ):

@@ -2424,6 +2424,41 @@ break those callers; the fix needs a decision on whether `GET /users` should
 serve two shapes by permission or a narrower directory endpoint should be
 split out. (Security review USR-8, `docs/security-review/USR-07-users-organizations.md`.)
 
+## Users: A Membership-Tier Removal's Occupancy Check Can Still Miss an Unattended Batch Advancement (2026-09-14)
+
+`PUT /users/membership-tiers/config` (`update_membership_tier_config`,
+`member_status.py`) refuses to remove or rename a tier members currently
+hold, and `PATCH /users/{user_id}/membership-type` (`change_membership_type`)
+refuses to assign a tier that no longer exists. Security review pass 5 found
+and fixed the race between these two endpoints directly (both now lock the
+`Organization` row before deciding — see USR-10 in
+`docs/security-review/USR-07-users-organizations.md`), but not the same race
+against a third writer: `MembershipTierService.advance_all`, the unattended
+monthly/on-demand tier-advancement scan, writes `User.membership_type`
+without ever locking the `Organization` row. Under InnoDB's default
+REPEATABLE READ, `update_membership_tier_config`'s occupancy count is a
+plain read answering from a snapshot fixed before its own lock is acquired —
+if `advance_all` commits a member onto the tier being removed in the narrow
+window between that snapshot and the lock, the occupancy check can still
+miss it, landing a member on a tier id absent from the stored config.
+
+Not fixed: the only complete close is making `advance_all`'s member-row
+locks and this occupancy check share one consistent lock order — either
+holding the `Organization` lock for the scan's entire duration (a real,
+bounded availability cost to every settings edit in the org while the scan
+runs) or making the occupancy count itself a locking read scoped to the
+tiers being removed, which does not fully eliminate the same AB/BA deadlock
+risk USR-10's fix was designed to avoid (`advance_all` locks member rows one
+at a time across its own loop without ever touching the `Organization` row).
+Either is a deliberate change to `membership_tier_service.py`'s own,
+separately-tuned locking scheme (last touched in security review pass 2 for
+an unrelated race), not a one-file fix. Requires three conditions at once
+(the scan running, a concurrent config edit, and a narrow non-contending
+commit window) and is self-healing on the next `advance_all` run in the
+common case — an unrecognized `membership_type` is `off_ladder`-counted and
+skipped, not silently re-corrupted further. (Security review USR-10a,
+`docs/security-review/USR-07-users-organizations.md`.)
+
 ## Membership Pipeline — Election Packages Have No List Bound or Creation Cap (2026-08-25)
 
 `GET /prospective-members/election-packages` (`list_election_packages`) runs
@@ -2964,6 +2999,18 @@ document-listing/aggregate path in this service (`get_folders`,
 `get_summary`, and others), so fixing it is a wider change than this
 finding's own scope — left open rather than fixed here. (Security review
 DOC-9, `docs/security-review/DOC-10-documents-legal.md`.)
+
+**The same shape exists a second time, in the Claude MCP surface** (security
+review DOC-10 pass 5, first review of `app/mcp/tools/documents.py`):
+`_open_folder_ids` — a separate function, since an MCP service key has no
+per-user context for `accessible_folder_ids`'s own rule to apply to —
+likewise selects every `DocumentFolder` row in the organization with no
+`LIMIT` and walks each one's ancestry in Python, on every `list_documents`,
+`get_document`, and `get_document_description` call. Not a leak (the
+predicate it computes is strictly conservative — see DOC-30 in the findings
+doc), and not fixed for the same reason as the REST-side gap above: bounding
+either scan is a wider change than either finding's own scope. (Security
+review DOC-30, `docs/security-review/DOC-10-documents-legal.md`.)
 
 ## Equipment Checks — `get_item_deployments` Gates on `.view`, Its Sibling on `.manage` (2026-08-26)
 
@@ -4242,6 +4289,35 @@ recorded (the exam happened externally; the app is just where the result is
 typed in), and a full second-approver workflow is a feature, not a same-day
 fix. Found in `docs/security-review/MS-09-medical-screening.md` (feature 09,
 pass 3, MS-7).
+
+## Medical Screening — PHI Reads Are Not Audit-Logged, Only Writes Are (2026-09-14)
+
+`medical_screening.py`'s six write routes (`create`/`update`/`delete` for
+both requirements and records) each call `log_audit_event()`, and MS-8
+(pass 3) already closed the one gap in those six — the two `_created`
+events now carry the new row's own id. The five `GET` routes that can
+return PHI-bearing fields — `/records`, `/records/{id}`,
+`/compliance/{user_id}`, `/compliance/prospect/{prospect_id}`, `/expiring`
+— call `log_audit_event()` nowhere. HIPAA's audit-control expectation
+(§164.312(b)) is commonly read to cover _access_ to PHI, not only changes
+to it — so who viewed a member's drug-screening or psychological-evaluation
+result, and when, is currently undiscoverable after the fact, unlike who
+created or edited it.
+
+This has been the shape of the endpoint file since Feature 09 pass 1
+(2026-08-25); it was not a regression introduced by any later pass, and no
+prior pass named it as a gap — each one reviewed the six writes and
+described "audit logging: present" without separately weighing the seven
+reads. Surfaced explicitly in pass 5's re-review.
+
+Not fixed as a same-day change: instrumenting five read routes needs a
+volume/retention decision (`/records` and `/expiring` back the main list
+views used on every page load, not just a detail drill-down — logging once
+per request vs. once per row returned is a real design choice, not a
+formatting detail) and a new audit event taxonomy for reads, which is a
+feature addition rather than a scoped fix. Found in
+`docs/security-review/MS-09-medical-screening.md` (feature 09, pass 5,
+MS-12).
 
 ## FAC-13 — Every Facility Folder Requires the Sensitive-Family Permission Set, Silencing Three Established-Baseline Categories for Their Intended Audience (2026-09-03)
 
