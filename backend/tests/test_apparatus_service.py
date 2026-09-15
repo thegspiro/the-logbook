@@ -19,6 +19,8 @@ import pytest
 from app.models.apparatus import ApparatusOperator
 from app.schemas.apparatus import (
     ApparatusComponentNoteUpdate,
+    ApparatusCreate,
+    ApparatusEquipmentCreate,
     ApparatusMaintenanceUpdate,
     ApparatusOperatorUpdate,
     ApparatusUpdate,
@@ -108,6 +110,19 @@ class TestUpdateApparatusFKValidation:
             with pytest.raises(ValueError, match="station"):
                 await service.update_apparatus(str(uuid4()), data, org_id, "user")
 
+    async def test_foreign_current_location_rejected(self, service, mock_db, org_id):
+        # AP-18: current_location_id is the same locations.id FK as
+        # primary_station_id (just above) but was never validated on either
+        # create or update. Only current_location_id is supplied, so
+        # primary_station_id's own assert_in_org(None, allow_none=True) makes
+        # no query -> the single execute is current_location_id's Location
+        # lookup, which returns nothing -> foreign/garbage location.
+        mock_db.execute.side_effect = [_result(None)]
+        with patch.object(service, "get_apparatus", return_value=MagicMock()):
+            data = ApparatusUpdate(current_location_id=str(uuid4()))
+            with pytest.raises(ValueError, match="location"):
+                await service.update_apparatus(str(uuid4()), data, org_id, "user")
+
 
 class TestUpdateMaintenanceFKValidation:
     """update_maintenance_record must validate a supplied maintenance_type_id."""
@@ -167,3 +182,45 @@ class TestUpdateComponentNoteFKValidation:
             data = ApparatusComponentNoteUpdate(service_provider_id=str(uuid4()))
             with pytest.raises(ValueError, match="service provider"):
                 await service.update_component_note(str(uuid4()), data, org_id)
+
+
+class TestCreateApparatusCurrentLocationFKValidation:
+    """AP-18: create_apparatus must validate a supplied current_location_id,
+    the same locations.id FK as primary_station_id, which create_apparatus
+    already validates."""
+
+    async def test_foreign_current_location_rejected(self, service, mock_db, org_id):
+        # Unit-number lookup, type lookup, and status lookup all resolve
+        # in-org (get_apparatus_type/get_apparatus_status are patched, and the
+        # unit-number uniqueness check is the first raw execute); the second
+        # raw execute is primary_station_id's assert_in_org (None supplied,
+        # allow_none=True -> no query of its own); the next is
+        # current_location_id's Location lookup, which returns nothing.
+        mock_db.execute.side_effect = [_result(None), _result(None)]
+        with patch.object(
+            service, "get_apparatus_type", return_value=MagicMock()
+        ), patch.object(service, "get_apparatus_status", return_value=MagicMock()):
+            data = ApparatusCreate(
+                unit_number="E1",
+                apparatus_type_id=str(uuid4()),
+                status_id=str(uuid4()),
+                current_location_id=str(uuid4()),
+            )
+            with pytest.raises(ValueError, match="location"):
+                await service.create_apparatus(data, org_id, "user")
+
+
+class TestCreateEquipmentFKValidation:
+    """AP-17: create_equipment must validate a supplied apparatus_id in-org,
+    matching create_photo / create_document / create_component's existing
+    pattern for the same field. apparatus_id carries ondelete="CASCADE", so an
+    unvalidated foreign id leaves this org's equipment row to be deleted the
+    moment the *other* org deletes that apparatus."""
+
+    async def test_foreign_apparatus_rejected(self, service, mock_db, org_id):
+        # The only execute is assert_in_org's Apparatus lookup, which returns
+        # nothing -> foreign/nonexistent apparatus.
+        mock_db.execute.side_effect = [_result(None)]
+        data = ApparatusEquipmentCreate(apparatus_id=str(uuid4()), name="Radio")
+        with pytest.raises(ValueError, match="apparatus"):
+            await service.create_equipment(data, org_id, "user")

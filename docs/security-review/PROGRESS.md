@@ -16,6 +16,44 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR #TBD** — branch `claude/security-review-feature13-pass5`, Feature 13
+(Apparatus & NFC), pass 5 (pass 12 in the feature's own doc). Step 0
+concurrent-session check: `git fetch origin main` clean; the Open PR section
+read "None." with the Feature 12 (Facilities) pass 5 closure note beneath it
+and named "Next: Feature 13 (Apparatus & NFC), pass 5" explicitly;
+`list_pull_requests` (open) returned only #2547/#2548, dependabot
+#2550-2552, and #2495 — no Feature 13/apparatus branch or title. Loaded prior
+art (`AP-13-apparatus-nfc.md`'s pass 1–11 history) rather than re-deriving
+it. Delta check against pass 11's merge (`1005d5bac`): `git diff --stat` on
+every scope file (`apparatus.py`, `nfc_tags.py`, `apparatus_service.py`,
+`nfc_tag_service.py`, `evoc_level_service.py`, `driver_exception_service.py`,
+`models/apparatus.py`, `models/nfc_tag.py`, `schemas/apparatus.py`,
+`schemas/nfc_tag.py`) came back completely empty — zero drift since pass 11.
+Re-read all 88+5 routes and their service layer fresh, plus
+`mcp/tools/apparatus.py` (never before reviewed under this feature, despite
+being unchanged and in-scope). **2 new findings, both fixed (MED):** AP-17 —
+`ApparatusService.create_equipment` stored a client-supplied `apparatus_id`
+with no in-org validation, unlike every sibling create method on the same
+FK (`create_photo`/`create_document`/`create_component`/`create_fuel_log`/
+`create_operator` all validate it); the FK carries `ondelete="CASCADE"`, so
+the gap was live (a foreign apparatus's later deletion would silently
+cascade-delete this org's own equipment row). AP-18 — `current_location_id`
+was never validated in-org on `create_apparatus` or `update_apparatus`,
+unlike its identical-shape sibling field `primary_station_id`, which both
+methods already validate (`update_apparatus`'s own comment states the
+intent — "validate every client-supplied FK is in-org" — and missed this one
+field of it). Both fixed with the same `assert_in_org` pattern already used
+throughout this file, with regression tests in
+`backend/tests/test_apparatus_service.py` (3 new tests, all confirmed
+failing pre-fix via `git stash push -u`, passing post-fix). Full write-up:
+the **Pass 12** section of `docs/security-review/AP-13-apparatus-nfc.md`.
+Rotation row 13 confirmed `✅` (no change needed). Completion gate: scoped
+apparatus/nfc/evoc/driver_exception suite (534 passed, 1 skipped) plus the
+full backend suite (12571 passed, 21 skipped, 0 failed), both clean.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 5, PR #2563, merged), preserved for history</summary>
+
 **None.** PR [#2563](https://github.com/thegspiro/the-logbook/pull/2563)
 (Feature 12, Facilities, pass 5) merged clean — 17/17 CI green after one
 stale-superseded-run false failure on the `CI Success` gate (the branch's
@@ -30,6 +68,8 @@ this closure note: only dependabot #2550-2552, and #2547/#2548/#2495
 (unrelated) — no concurrent Feature 13/apparatus closure or pass PR, so this
 session proceeds with both the closure bookkeeping and launching the next
 pass itself. **Next: Feature 13 (Apparatus & NFC), pass 5.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 5, PR #2563, before it merged), preserved for history</summary>
@@ -15411,6 +15451,85 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 13 (Apparatus & NFC, pass 5) — 2 fixed (MED), 0 prior flags outstanding — PR #TBD opened
+
+Step 0 concurrent-session check: `git fetch origin main` clean; the Open PR
+section read "None." with the Feature 12 (Facilities) pass 5 closure note
+beneath it and named "Next: Feature 13 (Apparatus & NFC), pass 5" explicitly;
+`list_pull_requests` (open) returned only #2552/#2551/#2550 (dependabot),
+#2548/#2547 (unrelated), and #2495 — no Feature 13/apparatus branch or title,
+confirmed again immediately before opening this PR. Created
+`claude/security-review-feature13-pass5` fresh off `origin/main`.
+
+Rotation table row confirmed from the table itself: `| 13 | Apparatus & NFC |
+AP | apparatus.py, nfc_tags.py | ✅ |` — no change needed. Loaded prior art
+in full: `AP-13-apparatus-nfc.md`'s pass 1–11 history (AP-1 through AP-18 now,
+plus the unnumbered pass 9–11 frontend/scheduling-dispatch race findings),
+and `docs/KNOWN_LIMITATIONS.md`'s one apparatus-adjacent entry (the
+`TrainingCategory.subcategories` cross-reference, out of this feature's
+scope).
+
+**Delta check against pass 11's merge (`1005d5bac`, PR #2428):** `git diff
+--stat` on every declared scope file came back completely empty — zero
+drift since pass 11, across both endpoint files, both services named in the
+doc header, `evoc_level_service.py`, `driver_exception_service.py`, both
+model files, and both schema files. `mcp/tools/apparatus.py` — also
+unchanged since pass 11 — had never been reviewed under this feature despite
+being in-scope per this rotation's own brief; read fresh this pass (see
+below).
+
+**Standing flags:** none open. Every AP-N finding through AP-16, and every
+pass 9–11 frontend/scheduling-dispatch race finding, is marked ✅ FIXED.
+Pass 11's own deferred item (`CallTrackingService._partition_existing`'s
+classification aggregate query) lives in Scheduling's file, not this
+feature's, and is left to that rotation slot or a future Codex round,
+unchanged.
+
+**2 new findings, both fixed (MED):** re-read all 88+5 routes and their
+service layer end to end against CLAUDE.md Pitfall #14 (org-scoping/FK
+validation), #27 (capacity/race locking), #9 (unbounded caches), and audit
+logging, with particular attention to every `create_*`/`update_*` method
+that stores a client-supplied FK — this feature already fixes this class of
+bug (AP-1, AP2-2) at most call sites, so the search was specifically for the
+one method in each group that the sweep missed:
+
+- **AP-17** — `create_equipment` stored a client-supplied `apparatus_id`
+  with no in-org validation, unlike every sibling create method on the same
+  field (`create_photo`/`create_document`/`create_component`/
+  `create_fuel_log`/`create_operator`). The FK carries `ondelete="CASCADE"`,
+  so the gap was live: a foreign organization's own apparatus deletion would
+  silently cascade-delete this org's equipment row.
+- **AP-18** — `current_location_id` (the same `locations.id` FK as
+  `primary_station_id`) was never validated in-org on either
+  `create_apparatus` or `update_apparatus`, though both methods already
+  validate `primary_station_id` — `update_apparatus`'s own comment states
+  the intent ("validate every client-supplied FK is in-org before it is
+  written anywhere") and missed this one sibling field.
+
+Both fixed with the existing `assert_in_org` pattern already used throughout
+this file (no new pattern introduced). Regression tests:
+`backend/tests/test_apparatus_service.py` — 3 new tests
+(`TestCreateEquipmentFKValidation`, `TestCreateApparatusCurrentLocationFKValidation`,
+and a new case in `TestUpdateApparatusFKValidation`), all confirmed failing
+pre-fix (`Failed: DID NOT RAISE ValueError`) via `git stash push -u` on the
+service-file fix alone, confirmed passing with the fix restored.
+
+Also reviewed and found clean: `mcp/tools/apparatus.py` (read-only, fully
+org-scoped, PII/PHI redaction on every free-text field, no unbounded cache);
+`driver_exception_service.py`'s `review_exception`/`revoke_exception` (a
+conditional `UPDATE ... WHERE status = <expected>` with a `rowcount == 0`
+check — already the database-arbitrated equivalent of a locking read for
+that read-then-write shape); `ApparatusOperator`'s and `NfcTag`'s unique
+indexes (still back their respective create paths at the database level).
+Full write-up: the **Pass 12** section of
+`docs/security-review/AP-13-apparatus-nfc.md`. Rotation row 13 stays `✅`.
+Completion gate: `flake8`/`black`/`isort` clean on both touched files;
+`pytest tests/test_apparatus_service.py` 13 passed; scoped
+apparatus/nfc/evoc/driver_exception suite 534 passed, 1 skipped
+(pre-existing); full backend suite **12571 passed, 21 skipped (pre-existing
+Docker/optional-dependency skips), 0 failed**; no frontend file changed this
+pass.
 
 ### 2026-09-15 — Feature 12 (Facilities, pass 5) closed — PR #2563 merged
 

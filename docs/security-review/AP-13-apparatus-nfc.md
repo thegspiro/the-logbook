@@ -1,12 +1,239 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), PR #TBD (pass 12 — rotation pass 5)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (88 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py`,
-`api/v1/endpoints/nfc_tags.py` (5 routes), `services/nfc_tag_service.py`
+`api/v1/endpoints/nfc_tags.py` (5 routes), `services/nfc_tag_service.py`,
+`mcp/tools/apparatus.py`
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 12 (2026-09-15, rotation pass 5) — two XC-1 gaps in the otherwise-thorough FK-validation sweep, both fixed; `mcp/tools/apparatus.py` reviewed for the first time under this feature
+
+**Scope for this pass.** Step 0/1 per the rotation brief: `git fetch origin
+main` clean; `PROGRESS.md`'s Open PR section read "None." with the Feature 12
+(Facilities) pass 5 closure note beneath it and named "Next: Feature 13
+(Apparatus & NFC), pass 5" explicitly; `list_pull_requests` (open) returned
+only #2547/#2548, dependabot #2550-2552, and #2495 — no Feature 13/apparatus
+branch or title. Loaded `AP-13-apparatus-nfc.md`'s full pass 1–11 history and
+`docs/KNOWN_LIMITATIONS.md`'s one apparatus-adjacent entry (the
+`TrainingCategory.subcategories` cross-reference under the FAC-16-adjacent
+note — belongs to Training's own rotation slot, not this one) rather than
+re-deriving either.
+
+**Delta check.** Pass 11 merged as `1005d5bac` (PR #2428). `git diff --stat
+1005d5bac..HEAD` across every declared scope file (`apparatus.py`,
+`nfc_tags.py`, `apparatus_service.py`, `nfc_tag_service.py`,
+`evoc_level_service.py`, `driver_exception_service.py`,
+`models/apparatus.py`, `models/nfc_tag.py`, `schemas/apparatus.py`,
+`schemas/nfc_tag.py`) came back completely empty — zero drift since pass 11,
+the same clean-gap shape Facilities' own pass 5 saw. `mcp/tools/apparatus.py`
+(280 lines) is also unchanged since pass 11's merge, but — confirmed by grep
+— had never once been mentioned in this findings doc across passes 1–11,
+despite being exactly the kind of feature-owned MCP tool module this
+rotation's brief calls out as in-scope. Read fresh, end to end, for this pass
+(see "Verified good" below).
+
+**Standing flags re-confirmed.** This feature carries no open/flagged AP-N
+finding of its own as of pass 11 — every AP-6 through AP-16 finding, and
+every pass-9/10/11 frontend/backend race finding, is marked ✅ FIXED in this
+document. The one adjacent open item
+(`TrainingCategory.subcategories`, the `FAC-16-adjacent` entry in
+`docs/KNOWN_LIMITATIONS.md`) is explicitly out of this feature's scope (it
+belongs to the Training rotation slot, features 17/18) and unchanged.
+Pass 11's own "Deferred, not fixed this round" note on
+`CallTrackingService._partition_existing`'s classification aggregate query
+also stands: that method lives in `call_tracking_service.py`, which is
+Scheduling's file, not one of this feature's declared scope files, and the
+deferral reasoning (an aggregate `COUNT`/`GROUP BY` that decides
+classification, not whether a new row is created, so it does not produce a
+doubling bug) is unchanged. Left to Scheduling's own rotation slot or a
+future Codex round on that file, consistent with pass 11's own scope
+boundary.
+
+Having confirmed the delta and the standing flags, this pass re-read
+`apparatus.py`'s 88 routes and `nfc_tags.py`'s 5 routes end to end against
+CLAUDE.md Pitfall #14 (org-scoping/FK validation), #27 (capacity/race
+locking), #9 (unbounded caches), and audit-log coverage, with particular
+attention to every `create_*`/`update_*` service method that stores a
+client-supplied foreign-key id — the class of finding this feature's own
+`docs/rules/tenancy.md`-linked pattern (`assert_in_org`) exists to close, and
+the class every one of AP-1, AP2-2, and pass-4's XC-1 fixes already belong
+to.
+
+### AP-17 (pass 12) — MED (multi-tenant isolation, CLAUDE.md Pitfall #14c) — `create_equipment` stored a client-supplied `apparatus_id` with no in-org validation, unlike every sibling create method on the same FK — ✅ FIXED
+
+**What:** `ApparatusService.create_equipment` built and persisted an
+`ApparatusEquipment` row directly from `equipment_data.model_dump()` with no
+check that `equipment_data.apparatus_id` belongs to the caller's
+organization. Every other method in this same file that accepts a
+client-supplied `apparatus_id` validates it first — `create_photo` and
+`create_document` both carry an explicit `# AP-1 (XC-1)` comment and an
+`assert_in_org(self.db, Apparatus, ..., label="apparatus")` call;
+`create_component`, `create_fuel_log`, and `create_operator` all resolve the
+apparatus in-org before writing (via `get_apparatus` or `assert_in_org`).
+`create_equipment` was the one method in the group that skipped it.
+
+**Where:** `backend/app/services/apparatus_service.py`, `create_equipment`.
+
+**Impact:** `ApparatusEquipment.apparatus_id` carries `ForeignKey("apparatus.id",
+ondelete="CASCADE")` — a real, enforced FK, just against the wrong axis of
+trust: MySQL only checks that _some_ row with that id exists, not that it
+belongs to the caller's org. A caller with `apparatus.edit`/`.manage` (an
+org-scoped permission — Pitfall #14b: the permission asserts the grant in the
+caller's own org, not that the target row is in it) could point
+`apparatus_id` at another organization's apparatus row. The equipment row
+itself stays correctly org-stamped (so `list_equipment`'s own org filter
+means it is never _read_ cross-tenant — no leak), but the reference is
+dangling in a way ordinary use cannot see, and the `CASCADE` means it is not
+inert: the moment the _other_ organization deletes that apparatus, this
+org's equipment row disappears with it — an unrelated department's routine
+fleet housekeeping silently deleting this org's own equipment record, with
+nothing in this org's own audit trail to explain why.
+
+**Fix:** added the same `assert_in_org(self.db, Apparatus, apparatus_id,
+organization_id, label="apparatus")` call at the top of `create_equipment`,
+mirroring `create_photo`/`create_document`'s existing pattern for the same
+field.
+
+**A related, lower-severity gap left flagged rather than fixed:**
+`ApparatusEquipmentCreate.inventory_item_id` is the same shape — a
+client-supplied id naming a row in another module (`InventoryItem`, feature 11) — but the column carries no `ForeignKey` constraint at all (a
+deliberately loose, "optional link to inventory item" coupling per the
+model's own comment), and grep confirms it is never read back or resolved
+anywhere in this feature's code — stored and returned as a bare string, never
+joined or dereferenced. With no CASCADE risk and no reachable read path, this
+one is inert today, not a live gap the way `apparatus_id` was; validating it
+would only pay off once something resolves it, which nothing currently does.
+Left unfixed and unflagged in `KNOWN_LIMITATIONS.md` — the CLAUDE.md Hard
+Stop bar is for a fix that exceeds scope, not for a change with no
+demonstrated effect, and inventing a resolver just to have something to
+validate would be scope creep in the other direction.
+
+**Regression test:** `backend/tests/test_apparatus_service.py`,
+`TestCreateEquipmentFKValidation::test_foreign_apparatus_rejected` — mocks
+`db.execute` to return no row for the `Apparatus` lookup and asserts
+`create_equipment` raises `ValueError` (message containing "apparatus")
+before ever constructing the `ApparatusEquipment` row. Confirmed failing
+pre-fix (`Failed: DID NOT RAISE ValueError`) via `git stash push -u` on the
+fix alone (test file kept, service file stashed), confirmed passing with the
+fix restored, stash re-applied and dropped only after both were verified.
+
+### AP-18 (pass 12) — MED (multi-tenant isolation, CLAUDE.md Pitfall #14c) — `current_location_id` was never validated in-org on either `create_apparatus` or `update_apparatus`, unlike its sibling field `primary_station_id` — ✅ FIXED
+
+**What:** `Apparatus.current_location_id` and `Apparatus.primary_station_id`
+are the identical FK shape — both `ForeignKey("locations.id")`, both
+optional, both resolved through the same `Location` model — the only
+difference being what each means ("where the unit is assigned" vs. "where it
+currently sits"). `create_apparatus` and `update_apparatus` both validate
+`primary_station_id` in-org via `assert_in_org`, and `update_apparatus`'s own
+docstring-level comment says the intent explicitly: _"validate every
+client-supplied FK is in-org before it is written anywhere."_ `current_location_id`
+was the one field that comment's own enumeration missed — grepped across
+`apparatus_service.py` and confirmed it is referenced nowhere outside the
+schema and the model's relationship declaration, with no validation on
+either the create or the update path.
+
+**Where:** `backend/app/services/apparatus_service.py`, `create_apparatus`
+and `update_apparatus` (both missing a `current_location_id` check
+alongside the existing `primary_station_id` one).
+
+**Impact:** lower severity than AP-17 — `current_location_id` carries no
+`ondelete` clause at all (plain `ForeignKey("locations.id")`, so a dangling
+reference cannot cascade-delete anything), and neither `get_apparatus` nor
+`list_apparatus` eager-loads the `current_location` relationship into a
+response (`ApparatusResponse` projects only the bare `current_location_id`
+string, confirmed by reading the schema; the MCP tool's own `_apparatus()`
+resolves the display name through a separately org-scoped `_location_names`
+query, so a foreign id there degrades to a blank name rather than leaking
+the other org's location). Still a real Pitfall #14c gap — a
+dangling/mis-attributed reference that the code's own stated intent
+("every client-supplied FK") committed to closing and missed one field of —
+and the kind of thing that turns into a live leak the moment a future reader
+adds a `selectinload(Apparatus.current_location)` without knowing the field
+was never validated the way its sibling was.
+
+**Fix:** added the identical `assert_in_org(self.db, Location,
+apparatus_data.current_location_id, organization_id, allow_none=True,
+label="location")` call immediately after the existing
+`primary_station_id` check, in both `create_apparatus` and `update_apparatus`.
+
+**Regression tests:** `backend/tests/test_apparatus_service.py` — two new
+tests, one per method:
+`TestCreateApparatusCurrentLocationFKValidation::test_foreign_current_location_rejected`
+(patches `get_apparatus_type`/`get_apparatus_status` to resolve in-org,
+mocks the unit-number-uniqueness and `primary_station_id` queries to answer
+"no conflict" / "not supplied", and asserts the `current_location_id`
+lookup's empty result raises `ValueError`) and
+`TestUpdateApparatusFKValidation::test_foreign_current_location_rejected`
+(same shape, on `update_apparatus`). Confirmed both failing pre-fix
+(`Failed: DID NOT RAISE ValueError`) via `git stash push -u` on the fix alone,
+confirmed passing with the fix restored, stash re-applied and dropped only
+after both were verified.
+
+### Verified good ✅ (this pass)
+
+- **`mcp/tools/apparatus.py` (first review under this feature).** All five
+  tools (`list_apparatus`, `get_apparatus_text`, `get_fleet_summary`,
+  `list_apparatus_maintenance`, `get_maintenance_record_text`) are read-only,
+  org-scoped through `principal.organization_id` on every query (including
+  `_location_names`'s own defense-in-depth org filter, the same pattern
+  `NfcTagService._name_map` already documents), and every free-text field
+  passes through `scrub_text` (PII/PHI redaction) before being returned. A
+  client-supplied `apparatus_id`/`record_id`/`field` is parsed with
+  `parse_uuid` and resolved through the already-org-scoped
+  `get_apparatus`/`get_maintenance_record`, so a cross-org id 404s rather
+  than resolving. No mutation tools exist in this module, so the registry's
+  `gate="write"` switch does not apply here. No unbounded in-memory cache
+  (grepped for `_cache`/`defaultdict`/`lru_cache`/module-level `{}` across
+  the whole feature — none found, consistent with pass 1-11's own findings).
+- **`create_operator`/`update_operator`, `create_photo`/`create_document`,
+  `create_component`/`update_component`, `create_maintenance_record`/
+  `update_maintenance_record`, `create_nfpa_compliance`, `EvocLevelService`'s
+  `create_level`/`update_level`/`auto_add_operators_for_evoc_completion`, and
+  every method in `driver_exception_service.py`** — read fresh end to end
+  this pass specifically hunting for the AP-17/AP-18 shape (a client-supplied
+  FK the sibling methods validate but one method in the group skips); all
+  other create/update paths in this feature already validate every
+  client-supplied FK they accept, or accept none. `DriverExceptionService.review_exception`/
+  `revoke_exception` use a conditional `UPDATE ... WHERE status = <expected>`
+  with a `rowcount == 0` check rather than a row lock to close their
+  read-then-write race (Pitfall #27) — confirmed correct and already
+  equivalent to a locking read for this shape (the database, not application
+  code, arbitrates which of two concurrent reviews wins).
+- **`ApparatusOperator`'s unique index** (`idx_apparatus_operators_apparatus_user`
+  on `(apparatus_id, user_id)`) and **`NfcTag`'s** (`uq_nfc_tag_org_uid` on
+  `(organization_id, uid_hash)`, re-confirmed from pass 11) both still back
+  their respective read-then-write create paths at the database level, so a
+  race on either (two concurrent EVOC-completion auto-adds; two concurrent
+  card registrations) fails the second `INSERT` rather than duplicating a
+  row.
+- **Route auth coverage 88/88 (`apparatus.py`) + 5/5 (`nfc_tags.py`)** —
+  re-confirmed via a fresh AST walk; unchanged since pass 11 (zero diff on
+  either file).
+- **Audit logging on `nfc_tags.py`** — all four mutating routes
+  (`register_nfc_tag`, `update_nfc_tag` when `status` changes,
+  `delete_nfc_tag`, `station_check_in` on a successful check-in/out) still
+  call `log_audit_event`, unchanged since pass 2's AP-7 write-up first
+  confirmed it.
+- **LIKE escaping and `SET NULL`/`nullable=True` pairing** — re-confirmed
+  unchanged (zero diff on `apparatus_service.py`/`models/apparatus.py`/
+  `models/nfc_tag.py` since pass 11, which itself re-confirmed both).
+
+## Completion gate (pass 12)
+
+| Check                                                                                  | Result                                                                                |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `flake8 app/services/apparatus_service.py tests/test_apparatus_service.py`             | ✅ 0 violations                                                                       |
+| `black --check app/services/apparatus_service.py tests/test_apparatus_service.py`      | ✅ clean                                                                              |
+| `isort --check-only app/services/apparatus_service.py tests/test_apparatus_service.py` | ✅ clean                                                                              |
+| `pytest tests/test_apparatus_service.py`                                               | ✅ 13 passed (3 new, 10 pre-existing)                                                 |
+| `pytest -k "apparatus or nfc or evoc or driver_exception"`                             | ✅ 534 passed, 1 skipped (pre-existing optional-dependency skip)                      |
+| `pytest tests/` (full backend suite)                                                   | ✅ 12571 passed, 21 skipped (pre-existing Docker/optional-dependency skips), 0 failed |
+| `tsc --noEmit` / `eslint .`                                                            | n/a — no frontend file touched this pass                                              |
 
 ---
 

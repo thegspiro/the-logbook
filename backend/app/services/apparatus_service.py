@@ -416,6 +416,17 @@ class ApparatusService:
             allow_none=True,
             label="station",
         )
+        # AP-18 (XC-1): current_location_id is the same FK (locations.id) as
+        # primary_station_id above, just for where the unit sits today rather
+        # than where it's assigned — validate it in-org for the same reason.
+        await assert_in_org(
+            self.db,
+            Location,
+            apparatus_data.current_location_id,
+            organization_id,
+            allow_none=True,
+            label="location",
+        )
         # AP2-2: required_evoc_level_id isn't projected into any response (integrity-
         # only), but validate it in-org on both paths so a foreign/garbage id can't
         # be stored as the driving-qualification requirement.
@@ -610,6 +621,17 @@ class ApparatusService:
             organization_id,
             allow_none=True,
             label="station",
+        )
+        # AP-18 (XC-1): current_location_id is the same locations.id FK as
+        # primary_station_id just above; update validated the latter but not
+        # this sibling field, leaving it settable to another org's location.
+        await assert_in_org(
+            self.db,
+            Location,
+            apparatus_data.current_location_id,
+            organization_id,
+            allow_none=True,
+            label="location",
         )
         # AP2-2: validate required_evoc_level_id in-org (integrity-only, same as
         # create_apparatus) so update can't store a foreign/garbage EVOC-level id.
@@ -1649,6 +1671,19 @@ class ApparatusService:
         assigned_by: str,
     ) -> ApparatusEquipment:
         """Create equipment assignment"""
+        # AP-17 (XC-1): apparatus_id is client-supplied and the FK carries
+        # ondelete="CASCADE" — an unvalidated foreign id would let this org's
+        # equipment row later be deleted out from under it the moment the
+        # other org deletes that apparatus, matching create_photo /
+        # create_document / create_component's existing pattern for the same
+        # apparatus_id field.
+        await assert_in_org(
+            self.db,
+            Apparatus,
+            equipment_data.apparatus_id,
+            organization_id,
+            label="apparatus",
+        )
         equipment = ApparatusEquipment(
             organization_id=organization_id,
             assigned_by=assigned_by,
