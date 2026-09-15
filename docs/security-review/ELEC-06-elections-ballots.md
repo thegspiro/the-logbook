@@ -1,6 +1,220 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), pass 6 (this PR)
+
+---
+
+## Pass 6 (2026-09-15)
+
+**Scoping.** Step 0: `git fetch origin main` clean. The working directory was
+found checked out on `claude/security-review-fin-pass6-a3f9c2` (a leftover
+branch from the prior iteration, Feature 05) with a clean tree — left
+untouched per this run's own instructions, and a fresh branch
+(`claude/security-review-elec-pass6-<shortid>`) was cut directly from
+`origin/main`. `PROGRESS.md`'s Open PR row (at `origin/main`'s tip) named PR
+[#2599](https://github.com/thegspiro/the-logbook/pull/2599) (Feature 05,
+Finance & approvals, pass 6) as open; `pull_request_read` confirmed it
+`merged: true`, `merged_at: 2026-09-15T20:20:14Z`, and its merge commit
+(`7754eccd7`) is the tip of `origin/main`, with rotation row 05 already ✅ as
+part of that same merge — so this iteration recorded the merge and proceeded
+to Feature 06 rather than tending a still-open PR. `search_pull_requests`
+(open) returned only #2590, #2594 and #2595 — a form-stage fix, an npm
+override checker, and an attendance-gate fix, none touching
+elections/ballots/voting — and `list_branches` showed no branch referencing
+Feature 06/elections/ballots. Proceeded to Feature 06.
+
+**Baseline and delta.** Pass 5 merged as `f45f691f3` (PR #2546). `git diff
+--stat f45f691f3..origin/main` across the full established domain —
+`endpoints/elections.py`, `services/election_service.py`,
+`services/quorum_service.py`, `models/election.py`, `schemas/election.py`,
+`utils/election_ballot_pdf.py`, and the entire frontend elections surface
+(`components/BallotBuilder.tsx`, `ElectionBallot.tsx`, `ElectionResults.tsx`,
+`components/election-detail/*`, `pages/BallotVotingPage.tsx`,
+`pages/ElectionDetailPage.tsx`, `pages/ElectionsPage.tsx`,
+`pages/ElectionsSettingsPage.tsx`, `services/electionService.ts`,
+`types/election.ts`, `utils/electionHelpers.ts`) — found **exactly one file
+touched, by exactly one line-level change**: `elections.py`'s
+`list_candidates` gate widened from `require_permission("elections.view")`
+to `require_permission("elections.view", "elections.manage")`
+(`elections.py:1943-1945`). No migration since pass 5 touches an election
+table (grepped migration bodies, not filenames, for
+`elections`/`candidates`/`votes`/`voting_tokens`/`manual_ballot_batches`
+across every revision added since `f45f691f3` — none found, matching
+`validate_migrations.py`'s count of 444 revisions, unchanged from pass 5).
+
+**The one change, independently verified rather than accepted on the commit
+message.** The responsible commit, `4b7bd1adb` ("admit the manage grant to
+seven reads that branch on it"), is the same cross-module OR-gate sweep
+FIN-05 pass 6 and PUB-03 pass 6 each independently re-verified from their own
+side that pass — it widened seven reads across three features from a single
+required permission to an OR-gate admitting a `.manage` grant too, matching
+each route's own body already branching on `.manage` to widen scope past the
+default. Read `list_candidates` in full: its body computes `include_pending
+= election.status == ElectionStatus.NOMINATIONS or
+user_has_permission(current_user, "elections.manage")` — a plain
+`elections.view` holder still sees only accepted candidates outside the
+nomination window, and only a caller who actually holds `elections.manage`
+sees pending/unaccepted candidates, regardless of which permission in the
+OR-gate got them past `Depends`. The commit widened who can **reach** the
+handler (a caller holding `elections.manage` without `elections.view`, an
+unusual grant shape but not one the permission model forbids), not what the
+body does once inside — no new exposure. `check_route_permissions.py
+--strict` and a fresh `grep -c "require_permission("` / `grep -c
+"Depends(get_current_user)"` / `grep -c "^@router\."` sweep confirm the
+route/gate counts are unchanged from pass 5 (56 permission-gated, 5
+authenticated-only, 4 public token routes, 65 total; the raw
+`Depends(require_permission` substring count dropped from 56 to 55 only
+because `black` line-wrapped this one call across two lines — a formatting
+artifact, not a dropped gate).
+
+**First review of `app/mcp/tools/elections.py` under this feature**, per the
+precedent this rotation's own pass-5 lap established for other features
+(`docs/security-review/DOC-10-documents-legal.md` pass 5,
+`AP-13-apparatus-nfc.md` pass 12, `FAC-12-facilities.md` pass 5 — each added
+a first read of that feature's own `app/mcp/*` surface). This 184-line file
+(present since `663333b46`, well before pass 5, but never mentioned in this
+findings doc across five prior passes) registers three read-only tools for
+Claude's MCP integration: `list_elections`, `get_election_description`,
+`get_election_results`. Read fresh, end to end:
+
+- **Org-scoping.** `list_elections` filters `Election.organization_id ==
+principal.organization_id` directly (`elections.py:101`, the MCP module's
+  own file, not the REST endpoint of the same name);
+  `get_election_description` / `get_election_results` both resolve through
+  the shared `_election()` helper (`mcp/tools/elections.py:74-82`), which
+  calls `ElectionService(db).get_election(id, org_uuid(principal))` — the
+  same already-org-scoped service method every REST endpoint in this feature
+  uses — and raises before either tool touches the row. No 14a/14b/14c gap.
+- **No ballot-secrecy exposure.** `get_election_results` returns
+  `ElectionResults` (`schemas/election.py:922`): aggregate tallies
+  (`total_votes`, `turnout`, `results_by_position`, `overall_results`) with
+  no per-voter, per-IP, or forensics field — the schema carries nothing
+  `get_election_forensics` guards. It is additionally **more conservative
+  than the REST endpoint it wraps**: the tool refuses unless
+  `election.status == ElectionStatus.CLOSED` (`mcp/tools/elections.py:171`),
+  where the REST path also honors a per-election
+  `results_visible_immediately` flag to show a live tally while voting is
+  still open — the MCP tool's own comment
+  (`mcp/tools/elections.py:168-170`) states this is deliberate ("a live
+  tally is never shown here, whatever that flag says"), and the code matches
+  the comment.
+- **No roster/eligibility leak.** `list_elections`' per-item projection
+  (id, title, description, type, status, positions, dates, voting method,
+  anonymity flag, quorum) carries none of what R-2 (module-audit, 2026-07)
+  found and fixed on the public ballot path — no `attendees`,
+  `eligible_voters`, `email_recipients`, or `created_by`.
+- **Bounded, scrubbed free text.** `_clip`/`_chunk`/`_positions`
+  (`mcp/tools/elections.py:22-71`) cap description and position-name length
+  and run every string through `scrub_text` (the same PII-redaction pass
+  every other MCP tool module uses) before it leaves the tool — consistent
+  with `ELECTION_TEXT_CHARS`/`POSITION_NAME_CHARS` being feature-specific
+  instances of the same paging pattern `mcp/tools/documents.py` and
+  `mcp/tools/apparatus.py` already use.
+- **Framework-level gating and audit unchanged.** `logbook_tool`
+  (`app/mcp/registry.py`) — shared by every module, not elections-specific —
+  refuses a call when the org has the `elections` module disabled
+  (`principal.module_enabled`) before the handler runs, and records an audit
+  row (`mcp.tool_call`) for every outcome including a refusal; none of the
+  three elections tools declare a `gate=` (no write/finance/medical_screening
+  switch applies to read-only election data), which is correct — these are
+  read-only informational tools, not the write-capable "create a draft"
+  shape `gate="write"` exists for.
+
+**Gap found, not a leak: no test previously exercised elections'
+org-scoping.** Unlike `list_members` (`test_list_members_is_org_scoped`,
+`tests/test_mcp_tools.py:159`) and every other listing tool with an explicit
+cross-org test in this file, nothing asserted that a second organization's
+principal gets an empty result from `list_elections` or a "not found" from
+the two by-id tools. The code is correct (see above), but the invariant was
+unverified — exactly the shape CLAUDE.md Pitfall #14 warns a later refactor
+can silently reopen. Added
+`TestThirtyFirstRoundFindings::test_elections_are_org_scoped`
+(`tests/test_mcp_tools.py`), asserting a foreign-org principal sees
+`total == 0` from `list_elections` and a `ToolError` ("not found") from both
+`get_election_description` and `get_election_results` against the same-org
+election's real id, with a final assertion that the owning org's principal
+still sees it (proving the empty result above is org-scoping, not a broken
+fixture). Confirmed the test fails against deliberately broken code (removed
+`list_elections`' `organization_id` filter, re-ran, got the expected
+`AssertionError`; restored and re-ran clean) before counting it as a real
+guard.
+
+**Re-checked client-supplied FK validation across every create/update path
+that accepts one**, specifically hunting for the AP-17/AP-18 shape (a
+sibling method in the same group validates a foreign-org id, one method in
+the group does not): `create_nomination`'s `nominee_user_id`
+(`election_service.py:3385`, explicitly commented `# XC-1`, resolves the
+nominee through an org-scoped `User` lookup and rejects an inactive/foreign
+member); `add_proxy_authorization`'s `delegating_user_id`/`proxy_user_id`/
+`authorized_by` (`election_service.py:5735`, all three resolved via
+org-scoped `User` lookups before the authorization record is built);
+`merge_write_in_candidates`'s `source_candidate_ids`/`target_candidate_id`
+(`election_service.py:4267`, both resolved as a single `IN` query scoped to
+`Candidate.election_id == <the already org-scoped election>`, with a
+`missing = wanted - set(by_id)` check that rejects any id outside that set);
+`send_ballot_emails`'s `recipient_user_ids`
+(`election_service.py:6169-6174`, filtered by `User.organization_id` in the
+query itself, so a foreign id simply resolves to nothing rather than
+sending a cross-org email). No gap found in any of the four.
+
+**5 prior findings re-verified, no drift:** ELEC-12 (`SavedBallotTemplate`
+list/create still unbounded, `elections.py:391-401`, byte-identical since
+pass 4), ELEC-14 (`verify_vote_receipt`'s `receipt: str` GET query param,
+`elections.py:3846-3849`), ELEC-16 (`list_manual_ballot_batches` unbounded,
+`election_service.py:3958-3974`), ELEC-28 (public ballot UI still cannot
+render a plain-position contest — confirmed zero diff on
+`BallotVotingPage.tsx` since pass 4), ELEC-40 (pre-ELEC-34 vote
+collision-avoidance gap, documented known limitation, no code path changed).
+Each re-confirmed against the current file/line, not carried forward from
+the write-up. `docs/KNOWN_LIMITATIONS.md`'s corresponding entries are
+unchanged and still accurate.
+
+**0 new defects found. 0 application-code changes this pass** — the one
+in-scope commit only widened who can reach an already-correct branch, and
+the MCP surface reviewed for the first time is already correctly scoped.
+**1 regression test added** closing a previously-unverified (but, on
+inspection, correctly-implemented) invariant.
+
+### Verified good ✅ (this pass)
+
+- Every by-id query in `elections.py` and `election_service.py` still
+  org-scopes correctly — re-confirmed via the FK-validation sweep above and
+  pass 5's own full independent re-read (unchanged, since the file is
+  byte-identical apart from the one gate widening).
+- `app/mcp/tools/elections.py` — first review under this feature (see above):
+  org-scoped, read-only, ballot-secrecy-safe, no roster leak, bounded and
+  scrubbed text, correctly deferring to the shared `logbook_tool`
+  gating/audit framework.
+- ELEC-41/ELEC-42 rate-limit wrappers — unchanged (`elections.py` diff is
+  confined to `list_candidates`, nowhere near `_ballot_read_rate_limit`/
+  `_ballot_vote_rate_limit`); not re-run in isolation this pass since the
+  scoped test run below re-executes `test_election_ballot_rate_limit.py`
+  unchanged.
+- Zero `csv.writer` calls remain (Pitfall #15 n/a — PDF exports only, matching
+  every prior pass).
+
+## Completion gate (pass 6)
+
+| Check                                                                                 | Result                                                                                                                                        |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                         | ✅ 0 violations                                                                                                                               |
+| `black --check app/ tests/ alembic/`                                                  | ✅ clean (1596 files) — one reformat applied to the new test before commit                                                                    |
+| `isort --check-only app/ tests/ alembic/`                                             | ✅ clean                                                                                                                                      |
+| `python3 scripts/validate_migrations.py --strict`                                     | ✅ 444 revisions, single head (`6ab7d903fae5`) — no migration this pass                                                                       |
+| `python3 scripts/check_route_permissions.py --strict`                                 | ✅ 228 routes, 0 errors, 0 warnings                                                                                                           |
+| `pytest tests/ -q -k "election or ballot or quorum or candidate or mcp"`              | ✅ 928 passed (927 + 1 new), 1 skipped (pre-existing `py_vapid`), 0 failed                                                                    |
+| `pytest tests/ -m "not integration and not slow and not docker" -q` (full unit suite) | ✅ 10199 passed, 1 skipped, 0 failed — unchanged from FIN-05 pass 6, since the one new test is `integration`-marked and this job deselects it |
+| `npm run typecheck` (frontend)                                                        | ✅ 0 errors — no frontend file changed this pass, run anyway per gate                                                                         |
+| `npm run lint` (frontend)                                                             | ✅ 0 errors — no frontend file changed this pass, run anyway per gate                                                                         |
+
+## Guard tests added
+
+- `backend/tests/test_mcp_tools.py::TestThirtyFirstRoundFindings::test_elections_are_org_scoped`
+  — asserts a foreign-org `McpPrincipal` gets an empty `list_elections`
+  result and a "not found" `ToolError` from `get_election_description` /
+  `get_election_results` against another org's election id, and that the
+  owning org still sees it. Confirmed failing against deliberately
+  reintroduced unscoped code before counting it as a guard.
 
 ---
 
