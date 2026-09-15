@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #TBD** — branch `claude/security-review-feature15-pass5`, Feature 15
+**PR [#2570](https://github.com/thegspiro/the-logbook/pull/2570)** — branch `claude/security-review-feature15-pass5`, Feature 15
 (Scheduling), pass 5. Step 0 concurrent-session check: `git fetch origin
 main` clean; the Open PR section read "None." with the Feature 14
 (Equipment check & shifts, pass 5) closure note beneath it and named "Next:
@@ -15556,7 +15556,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 15 (Scheduling, pass 5) — 0 fixed, 0 flagged, 0 new findings — PR #TBD opened
+### 2026-09-15 — Feature 15 (Scheduling, pass 5) — 0 fixed, 0 flagged, 0 new findings — PR #2570 opened
 
 Delta-focused pass. Baseline `058459963` (merge commit of PR #2441, pass 4's
 actual round-4 landing point). Real churn since then in four files:
