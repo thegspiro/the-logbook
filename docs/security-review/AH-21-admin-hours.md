@@ -1,6 +1,123 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), pass 4 (this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, this PR)
+
+## Pass 5 (2026-09-15) — 1 fixed (LOW), zero admin-hours-behavioral drift
+
+**Delta re-verification against pass 4's merge (`1fb968938`, PR #2481).** All
+four declared backend files (`admin_hours.py`, `admin_hours_service.py`,
+`models/admin_hours.py`, `schemas/admin_hours.py`) came back byte-identical to
+that commit — `git diff --stat` empty across the board. The four external
+backend callers (`training_session_service.py`, `scheduled_tasks.py`,
+`event_service.py`, `nfc_tag_service.py`) and the 26-file frontend module plus
+its outside consumers were re-diffed too: `scheduled_tasks.py` picked up an
+unrelated four-line change (an org-settings email-config read refactor,
+`stored_email_section()`), confirmed by line number to sit nowhere near
+`run_admin_hours_auto_close` (line 5838, over 2000 lines away); one migration
+landed since pass 4 (`3a875bee1`, an onboarding singleton fix) and does not
+reference `admin_hours`/`AdminHours` by content; the frontend registries
+(`APPLICATION_PAGES.md`, `testingRegistry.ts`, `mobile-route-inventory.ts`)
+each picked up one line for an unrelated onboarding route
+(`/onboarding/prepare`), not an admin-hours route. Zero in-scope delta.
+
+**Re-verified directly, not inferred from the empty diff** (the same lesson
+pass 4 drew from AH-15/AH-16, which the diff could not have surfaced either):
+AH-15's reactivation fix (`update_event_hour_mapping`'s
+`reactivating = is_active is True and not mapping.is_active` branch, the
+`populate_existing=True` locking query, and `effective_percentage` read from
+the locked `source_mappings` set rather than the pre-lock `mapping`
+reference) is intact at its current lines. The 11 `with_for_update()` call
+sites and the 27/27 route count are unchanged (mechanically recounted, not
+assumed). Every `select(...)` in `admin_hours_service.py` (~40 sites)
+re-swept for org-scoping (#14a/b/c): none missing an `organization_id` filter
+or a resolved-in-org parent. No `JSON`/`Mutable` column exists on any of the
+three admin-hours models, so #12 does not apply here. The two "confirmed
+still open" product-decision items (the unconditional per-org SoD
+self-approval guard; `credit_event_attendance`'s resync path growing an
+already-`APPROVED` entry without re-review) and AH-16 (`export_entries_csv`
+unbounded/non-streaming) are unchanged — re-read at their current lines, not
+re-cited from pass 4.
+
+**AH-17 — LOW — `get_summary`/`get_user_hours_compliance` scoped
+non-admin callers with a hand-rolled permission scan instead of the shared
+matcher — ✅ FIXED**
+
+**What:** both endpoints decide whether a caller may view _another_ member's
+data (rather than being silently downgraded to their own) with their own
+inline check —
+
+```python
+if not any(
+    p in ("admin_hours.manage", "*")
+    for role in current_user.positions
+    for p in (role.permissions or [])
+):
+    effective_user_id = str(current_user.id)
+```
+
+— instead of `user_has_permission(current_user, "admin_hours.manage")`, the
+helper `require_permission("admin_hours.manage")` itself resolves through
+(`app/api/dependencies.py`, wrapping `permission_matches()`) and that every
+other hand-rolled scope check elsewhere in the codebase (`dashboard.py`,
+`course_cohorts.py`, `admin_hub.py`) already routes through. The literal
+`in (...)` scan matches only the exact strings `"admin_hours.manage"`,
+`"compliance.view"` and the bare global `"*"`. It misses two grant shapes
+`permission_matches()` treats as equivalent to the exact string:
+
+1. **A module wildcard.** `"admin_hours.*"` (or `"compliance.*"`) is a
+   legal permission to assign to a custom position — CLAUDE.md's own
+   permissions section documents `"module.*"` wildcards as supported, and
+   `require_permission("admin_hours.manage")` (the dependency gating the
+   other 16 routes in this file, including the ones that list, edit,
+   approve, and bulk-approve _every_ member's entries) already honors it via
+   `permission_matches()`. A department that grants an officer
+   `"admin_hours.*"` on a custom position can fully manage every member's
+   admin-hours entries through this file's other routes, but their own "My
+   Hours"-style summary and compliance screens for a member they picked would
+   silently swap to the officer's own (near-empty) data instead — a
+   correctness bug in the restrictive direction (nobody sees data they
+   shouldn't), but a visible one: an officer configured with exactly the
+   permission this module's own registry entry (`ADMIN_HOURS_MANAGE`)
+   recommends, granted the module-wildcard way, gets a different answer from
+   two routes in the same file than from the other sixteen.
+2. **An operational rank's default permissions.** `_collect_user_permissions`
+   folds in `get_rank_default_permissions(user.rank)` alongside a user's
+   assigned positions; the hand-rolled scan only ever read
+   `current_user.positions`. No shipped `OPERATIONAL_RANKS` entry currently
+   grants `admin_hours.manage` by rank (verified: absent from every rank's
+   `default_permissions` list in `app/core/permissions.py`), so this half is
+   dormant today rather than exploitable, but it is the same class of gap and
+   the same fix closes both without adding a second check.
+
+**Fix:** both call sites now route through `user_has_permission(current_user,
+"admin_hours.manage")` (and, for compliance, `... or user_has_permission(
+current_user, "compliance.view")`), imported from `app.api.dependencies` —
+the same helper, same import, same call shape already used at the four other
+sites in the codebase doing this exact "programmatic OR-logic permission
+check outside a route dependency" pattern. No behavior changes for a caller
+holding the exact string or no grant at all; only the module-wildcard/rank-
+default cases (previously silently downgraded) now see the member they asked
+for, matching what the route-level `require_permission` gate already allows
+them to do elsewhere in this file.
+
+**Guard tests:** `tests/test_admin_hours_endpoint_permission_scope.py` (new,
+7 tests, `pytest.mark.unit` — pure permission-gate logic, DB mocked). Three
+of the seven were verified to fail against the pre-fix code specifically on
+the module-wildcard grant (both endpoints, plus the `compliance.*` variant),
+confirming they catch the regression rather than passing vacuously; the
+exact-grant and no-grant cases pass unchanged before and after, confirming
+the fix does not loosen access for anyone who didn't already have it.
+
+**Completion gate (pass 5):** `flake8`/`black --check`/`isort --check-only`
+on both changed files — clean. `pytest -k admin_hours` — 99 passed (92 + 7
+new), 1 pre-existing skip. Full backend suite — 12585 passed (12578 + 7 new),
+21 pre-existing skips, 0 failed, run twice (once before the fix to confirm
+the pre-fix baseline and the new tests' three expected failures, once after
+to confirm the fix and the full gate). `validate_migrations.py --strict` —
+single head, unaffected (no model changed). No frontend files touched this
+pass (zero frontend delta, confirmed above).
+
+---
 
 ## Pass 4 (2026-09-11) — 1 fixed (P1), 1 flagged, zero admin-hours-behavioral drift
 

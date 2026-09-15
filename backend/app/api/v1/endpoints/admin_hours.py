@@ -13,7 +13,12 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.seed_admin_hours import seed_admin_hours_data
@@ -820,13 +825,18 @@ async def get_summary(
     parsed_start = _parse_optional_date(start_date, "start_date")
     parsed_end = _parse_optional_date(end_date, "end_date")
 
-    # Non-admins can only see their own summary
+    # Non-admins can only see their own summary. Routed through
+    # user_has_permission() (the same wildcard/rank-default/legacy-alias
+    # matcher `require_permission()` uses on every other route in this file)
+    # rather than a hand-rolled `p in (...)` scan over `positions.permissions`
+    # alone — the hand-rolled form missed a module wildcard grant
+    # ("admin_hours.*", legal per CLAUDE.md's permission conventions and
+    # assignable to a custom position) and any permission an operational rank
+    # grants by default, silently downgrading such an officer to a
+    # self-only summary despite `require_permission("admin_hours.manage")`
+    # admitting them everywhere else in this file.
     effective_user_id = user_id
-    if not any(
-        p in ("admin_hours.manage", "*")
-        for role in current_user.positions
-        for p in (role.permissions or [])
-    ):
+    if not user_has_permission(current_user, "admin_hours.manage"):
         effective_user_id = str(current_user.id)
 
     summary = await service.get_summary(
@@ -1008,14 +1018,15 @@ async def get_user_hours_compliance(
     """
     from datetime import date
 
-    # Non-admins can only see their own compliance
+    # Non-admins can only see their own compliance. Same fix as get_summary
+    # above: route through user_has_permission() rather than a hand-rolled
+    # scan that missed module-wildcard grants ("admin_hours.*",
+    # "compliance.*") and rank-default permissions.
     effective_user_id = user_id
     if user_id != str(current_user.id):
-        has_perm = any(
-            p in ("admin_hours.manage", "compliance.view", "*")
-            for role in current_user.positions
-            for p in (role.permissions or [])
-        )
+        has_perm = user_has_permission(
+            current_user, "admin_hours.manage"
+        ) or user_has_permission(current_user, "compliance.view")
         if not has_perm:
             effective_user_id = str(current_user.id)
 
