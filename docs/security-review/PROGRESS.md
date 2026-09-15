@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2580](https://github.com/thegspiro/the-logbook/pull/2580)
+(Feature 19, Skills testing, pass 5) merged clean — 1 fixed (SKT5-1, MED),
+1 standing flag widened (SKT4-7), 17/17 CI green, `mergeable_state: clean`,
+no unresolved review threads (only the informational Codex usage-limit
+comment and the PR's own explanatory comment about a stale-superseded-run
+false failure on the `CI Success` gate for the branch's first commit — no
+code push needed). Sat idle with nothing further pending, so a 30-minute
+watchdog check merged it directly (squash, `expectedHeadSha` pinned)
+rather than leaving it idle, matching the bar prior watchdog merges in this
+log have used (Features 04, 05, 06, 14, 15, 23, 25, 31, 33, 34). Merge
+commit `ea9c7d820` confirmed on `main` via `git fetch`. `list_pull_requests`
+(open) re-checked immediately before writing this closure note: only
+dependabot #2552/#2567, and #2495 (unrelated) — no concurrent Feature
+20/compliance closure or pass PR. Rotation row 19 stays ✅. **Next:
+Feature 20 (Compliance), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 5, PR #2580, before it merged), preserved for history</summary>
+
 **Feature 19 (Skills testing), pass 5** — PR
 [#2580](https://github.com/thegspiro/the-logbook/pull/2580), branch
 `claude/security-review-feature19-pass5`. Step 0 concurrent-session check
@@ -47,6 +66,8 @@ remedy is the same already-declined-to-guess-at API-contract decision.
 All six pass 1–3 fixes and all four pass-4 fixes re-verified intact by
 direct code read; route surface unchanged at 29/29. Full write-up:
 `docs/security-review/SKT-19-skills-testing.md` → **Pass 5**.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 5, PR #2578, merged), preserved for history</summary>
@@ -15797,6 +15818,22 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 19 (Skills testing, pass 5)'s PR #2580 merged, watchdog recorded it
+
+PR #2580 (delta-focused pass 5 over `skills_testing_service.py`; 1 fixed —
+SKT5-1, MED, `redact_test_for_view`'s `scores` branch not scrubbing the new
+`waive_reason` field — plus the standing SKT4-7 flag widened to cover the
+same completion-guard bypass) went fully green (17/17 checks including
+`CI Success`), `mergeable_state: clean`, with no unresolved review threads
+(only the informational Codex usage-limit comment and the PR's own
+explanation of a stale-superseded-run false failure on its first commit).
+Sat idle with nothing further pending, so a 30-minute watchdog check
+merged it directly (squash, `expectedHeadSha` pinned) rather than leaving
+it idle, matching the bar prior watchdog merges in this log have used
+(Features 04, 05, 06, 14, 15, 23, 25, 31, 33, 34). Merge commit `ea9c7d820`
+confirmed on `main` via `git fetch`. Rotation row 19 stays ✅. Next:
+Feature 20 (Compliance), pass 5.
 
 ### 2026-09-15 — Feature 19 (Skills testing, pass 5) — 1 fixed, 1 flag widened — PR #2580 opened
 
