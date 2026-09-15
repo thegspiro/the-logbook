@@ -1,6 +1,120 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+
+---
+
+## Pass 6 (2026-09-15) — near-zero-delta, one collaborator commit re-verified sound, 0 new findings
+
+**Scope.** `git log 6613919e2..origin/main -- backend/app/api/v1/endpoints/finance.py
+backend/app/services/finance_service.py backend/app/api/public/finance_approvals.py
+backend/app/models/finance.py backend/app/schemas/finance.py
+backend/app/utils/model_updates.py backend/app/utils/csv_export.py
+backend/app/utils/sql_search.py backend/app/utils/org_scoping.py
+backend/app/core/audit.py frontend/src/modules/finance` (`6613919e2` is pass
+5's own closing merge, PR #2544) surfaces exactly **one** commit,
+`4b7bd1adb` — despite 74 unrelated commits landing on `main` since pass 5.
+`finance_service.py`, `public/finance_approvals.py`, `models/finance.py`,
+`schemas/finance.py`, every migration under the finance domain, the shared
+collaborators (`core/permissions.py`, `api/dependencies.py`,
+`core/database.py`, `core/utils.py`, `utils/model_updates.py`,
+`utils/csv_export.py`, `utils/sql_search.py`, `utils/org_scoping.py`,
+`core/audit.py`), and the entire `frontend/src/modules/finance` tree are
+byte-identical to pass 5's reviewed state (`git diff 6613919e2 origin/main`
+across that set returns no lines).
+
+**The one commit, read in full rather than trusted on its message.**
+`4b7bd1adb` ("admit the manage grant to seven reads that branch on it") is an
+unrelated cross-module sweep (the scheduling-module defect class from
+`#2511`/`#2524`) that touched four finance routes:
+`list_expense_reports`/`get_expense_report`/`list_member_dues`/
+`list_dues_payments` were gated `require_permission("finance.view")` alone
+while each one's own body branches on `finance.manage`
+(`user_has_permission(current_user, "finance.manage")`) to decide whether to
+widen the query past the caller's own records. A custom position holding
+`finance.manage` without the paired `finance.view` (no seeded rank does this,
+but a hand-configured one could) was refused before that branch ever ran —
+the exact CHECKLIST §2 "OR-gate: check every alternative" shape, mirroring
+FIN-05's own pass-4/5 verification that every `require_permission` OR-gate be
+walked rather than sampled.
+
+Independently re-verified rather than deferred to the commit message: read
+all four current handlers (`finance.py:956` `list_expense_reports`, `:1010`
+`get_expense_report`, `:1412` `list_member_dues`, `:1470`
+`list_dues_payments`) —
+each now reads `require_permission("finance.view", "finance.manage")`, and
+each body's own `user_has_permission(current_user, "finance.manage")` /
+`restrict_to_user` narrowing is unchanged beneath the widened gate, so a
+plain `finance.view` holder still sees only their own reimbursements/dues
+(FIN-5's scoping) and a `finance.manage` holder still sees the full org
+queue — the gate widened who can _reach_ the branch, not what the branch
+does. No handler gained a new code path, no new permission string was
+introduced, and the change is covered by
+`tests/test_permission_gate_branch_sweep.py`'s registry-driven check (run
+independently below, not taken on the commit's own claim of coverage).
+
+**Every prior pass's open item re-confirmed still open and unchanged, at
+current line numbers, by direct read (not re-derived from a prior pass's
+word):**
+
+- **FIN-30** — `list_dues_payments` (`finance_service.py:2392`, moved from
+  `:2325` since pass 5 — the file grew 67 lines from unrelated additions,
+  citation corrected here) still
+  eager-loads a member's entire payment ledger with no `.offset()`/`.limit()`;
+  still correctly flagged rather than fixed (a response-shape change, not a
+  security gap this review closes unilaterally).
+- **`get_pending_approvals` per-assignee filtering** — still returns every
+  applicable step for the caller's org rather than filtering to steps
+  assigned specifically to the caller; there is still no per-step assignee
+  column to filter on.
+- **The eight non-ledger status-transition locks** (`submit_purchase_request`/
+  `submit_expense_report`/`submit_check_request`/`mark_pr_ordered`/
+  `mark_pr_received`/`update_purchase_request`/`update_expense_report`/
+  `update_check_request`) — still unlocked plain-`SELECT` reads, per FIN-31's
+  own pass-5 scope decision; `docs/KNOWN_LIMITATIONS.md`'s row is unchanged
+  and still names the exact fix pattern for whoever picks it up.
+
+**Disposition: 0 fixed, 0 new findings.** The one in-scope commit is a
+correctness improvement (widening an under-scoped OR-gate), independently
+re-verified sound rather than merely accepted, and changes no finding's
+status.
+
+**Verified good ✅ (re-confirmed by direct read of the current four widened
+handlers and a fresh route/test run, not re-derived from pass 5's word):**
+all 66 routes still carry `require_permission` (route count unchanged, per
+`check_route_permissions.py --strict` below); the four widened gates'
+underlying `restrict_to_user`/`viewer_user_id`/`user_id` narrowing logic is
+byte-identical to pass 5's read of it; `approve_step`/`deny_step`/
+`approve_by_token`/`deny_by_token` still `.with_for_update()` and call
+`_ensure_current_step`; `mark_pr_paid`/`cancel_purchase_request`/
+`mark_expense_paid`/`issue_check`/`void_check` still take their locked read
+per FIN-31; `mark_pr_paid`/`mark_expense_paid`/`issue_check`/`waive_dues`
+still call `assert_different_person`; `_validate_finance_fks` and its three
+siblings unchanged; the one `.like()` still declares
+`escape=LIKE_ESCAPE_CHAR`; `export_transactions` still uses only
+`SafeCsvWriter`, still caps at `max_records=10_000`; every `except` routes
+through `safe_error_detail()`; `public/finance_approvals.py`'s token
+bounds/pattern, rate limit, 404-before-400 ordering, self-approval guard, and
+the two `log_audit_event` calls FIN-32 added are all unchanged (also
+independently re-verified by PUB-03 pass 6 for the same file, from the other
+feature's side, with the same conclusion: no PII in the audit payload, org
+resolved from the eager-loaded chain rather than the token payload, and an
+audit-write failure isolated by a SAVEPOINT).
+
+**Completion gate (pass 6):** `flake8`/`black --check`/`isort --check-only`
+on `app/ tests/ alembic/` — clean. `validate_migrations.py --strict` — 444
+revisions, single head `6ab7d903fae5` (unchanged). `check_route_permissions.py
+--strict` — 228 routes, 0 errors, 0 warnings. `pytest tests/ -q -k "finance or
+dues or approval or budget or export"` — 332 passed (unchanged from pass 5),
+1 skipped (pre-existing, `py_vapid`), 0 failed.
+`tests/test_permission_gate_branch_sweep.py` — 3 passed. Cross-cutting guard
+tests (org-scoping ratchet, capacity locking, LIKE escaping, CSV writer
+sweep) — 67 passed. Full backend unit suite (`pytest tests/ -m "not
+integration and not slow and not docker"`) — 10,199 passed, 1 skipped
+(pre-existing, `py_vapid`), 0 failed. Frontend: `npm run typecheck` — 0
+errors; `npm run lint` — 0 errors, 0 warnings (no frontend file in this
+feature's domain changed since pass 5, run anyway per the completion-gate
+checklist).
 
 ---
 

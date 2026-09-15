@@ -16,6 +16,69 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 05 (Finance & approvals), pass 6** — branch
+`claude/security-review-fin-pass6-a3f9c2`, PR pending creation. Step 0
+concurrent-session check (done twice — once at start, once immediately before
+push): the working directory was found checked out on
+`claude/security-review-sf-pass6-75cab9` (a leftover branch from the prior
+iteration) with a clean tree, so per this run's own instructions it was left
+untouched and a fresh branch was cut directly from `origin/main` instead of
+whatever was checked out. `git fetch origin main` clean both times.
+`PROGRESS.md`'s Open PR row (before this edit) read "Feature 04 (Storefront &
+payments), pass 6 — PR pending creation" — `pull_request_read` confirmed the
+PR that note describes, #2598, `state: closed`, `merged: true`, `merged_at:
+2026-09-15T20:06:13Z`, and its merge commit (`a16635e60`) is the tip of
+`origin/main`, with rotation row 04 already marked ✅ as part of that same
+merge — so this iteration proceeded to Feature 05 rather than tending a
+still-open PR. `search_pull_requests` (open) returned #2590 (a
+prospective-members form-stage fix), #2594 (an npm-override conflict
+checker) and #2595 (a bulk-advance meeting-attendance-gate fix, split from
+#2590) both checks — all unrelated feature/tooling work from other sessions,
+none touching finance/approvals/purchase-request/budget surfaces;
+`list_branches` showed no `security-review`/`feature05`/`finance`/
+`approvals`/`fin` branch in flight either check.
+
+Baseline `6613919e2` (merge commit of PR #2544, pass 5's landing point).
+**Near-zero-delta re-verification: exactly one commit touched this feature's
+declared domain since pass 5** — `4b7bd1adb`, an unrelated cross-module
+sweep (the scheduling-defect class from #2511/#2524) that widened four
+finance routes' `require_permission` gate from `finance.view` alone to
+`finance.view` OR `finance.manage`, matching each route's own body already
+branching on `finance.manage` to widen scope. Independently re-verified
+sound (not accepted on the commit message alone): read all four current
+handlers, confirmed the body-level `restrict_to_user`/`viewer_user_id`
+narrowing beneath the widened gate is unchanged, so a plain `finance.view`
+holder still sees only their own records and a `finance.manage` holder still
+sees the full org queue — the gate widened who can reach the branch, not
+what the branch does. Every other file in the feature's domain — 10 declared
+backend files, every finance migration, the shared collaborators
+(`core/permissions.py`, `api/dependencies.py`, `core/database.py`,
+`core/utils.py`, `utils/model_updates.py`, `utils/csv_export.py`,
+`utils/sql_search.py`, `utils/org_scoping.py`, `core/audit.py`), and the
+entire `frontend/src/modules/finance` tree — is byte-identical to pass 5's
+reviewed state, despite 74 unrelated commits landing on `main` since pass
+5's merge. Re-confirmed by direct read that all three still-open items sit
+unchanged: FIN-30 (`list_dues_payments`'s unbounded payment-ledger read,
+`finance_service.py:2392`), `get_pending_approvals`' lack of per-assignee
+filtering (no schema field to filter on), and the eight non-ledger
+status-transition methods FIN-31 (pass 5) deliberately left unlocked
+(`finance_service.py`, per `KNOWN_LIMITATIONS.md`'s row). **0 fixed, 0 new
+findings.** Full backend unit suite: 10,199 passed, 1 pre-existing skip, 0
+failed; scoped finance/dues/approval/budget/export tests: 332 passed
+(unchanged from pass 5), 1 skipped (`py_vapid`, pre-existing);
+`test_permission_gate_branch_sweep.py`: 3 passed; cross-cutting guard tests
+(org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep): 67
+passed; flake8/black/isort clean; `validate_migrations.py --strict`: 444
+revisions, single head `6ab7d903fae5`, unchanged; `check_route_permissions.py
+--strict`: 228 routes, 0 errors, 0 warnings; frontend typecheck and lint
+(`eslint --max-warnings 10`) both clean (no frontend file in this feature's
+domain changed, run anyway per the completion-gate checklist).
+Findings doc: `docs/security-review/FIN-05-finance-approvals.md` →
+**Pass 6**. Next: Feature 06 (Elections & ballots), pending this PR's merge.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 6, PR #2598, merged clean — 0 fixed, 0 new findings; rotation row 04 marked ✅ as part of that PR), preserved for history</summary>
+
 **Feature 04 (Storefront & payments), pass 6** — branch
 `claude/security-review-sf-pass6-75cab9`, PR pending creation. Step 0
 concurrent-session check (done twice — once at start, once immediately before
@@ -63,6 +126,8 @@ single head `6ab7d903fae5`, unchanged; `check_route_permissions.py
 (`eslint --max-warnings 10`) both clean (no frontend file modified).
 Findings doc: `docs/security-review/SF-04-storefront-payments.md` →
 **Pass 6**. Next: Feature 05 (Finance & approvals), pending this PR's merge.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 6, PR #2597, merged clean — 0 fixed, 0 new findings; rotation row 03 marked ✅ as part of that PR), preserved for history</summary>
@@ -16213,7 +16278,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
@@ -16250,6 +16315,39 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 05 (Finance & approvals, pass 6) — 0 fixed, 0 new findings
+
+Step 0: working directory was on a leftover branch
+(`claude/security-review-sf-pass6-75cab9`) from the prior iteration with a
+clean tree — left untouched, new branch cut from `origin/main` directly.
+`git fetch origin main` clean both times. `PROGRESS.md`'s Open PR row read
+"Feature 04 (Storefront & payments), pass 6 — PR pending creation" —
+`pull_request_read` confirmed the PR it describes, #2598, merged
+(`merged_at 2026-09-15T20:06:13Z`) and at the tip of `origin/main`
+(`a16635e60`), with rotation row 04 already ✅ as part of that same merge.
+`search_pull_requests`/`list_branches` showed no concurrent Feature
+05/finance/approvals work. Baseline `6613919e2` (PR #2544, pass 5's merge).
+Diffed the full established domain — 10 backend files, every finance
+migration, all nine shared collaborators, and the entire
+`frontend/src/modules/finance` tree — against current `HEAD`: exactly **one**
+commit touched it, `4b7bd1adb`, an unrelated cross-module OR-gate widening
+(finance's four `finance.view`-only reads that branch on `finance.manage`
+now admit either), despite 74 unrelated commits landing on `main` since pass 5. Read the commit in full and independently re-verified its four widened
+handlers rather than accepting the message: the body-level narrowing beneath
+each gate is unchanged, so no exposure widened, only who can reach the
+branch. All three prior passes' open items (FIN-30's unbounded dues-payment
+list, `get_pending_approvals`' missing per-assignee filter, and FIN-31's
+eight deliberately-unlocked non-ledger status transitions) re-confirmed
+unchanged at their existing citations. Completion gate: flake8/black/isort
+clean; `validate_migrations.py --strict` 444 revisions, single head
+`6ab7d903fae5`; `check_route_permissions.py --strict` 228 routes, 0 errors;
+scoped finance tests 332 passed (unchanged), 1 pre-existing skip;
+`test_permission_gate_branch_sweep.py` 3 passed; cross-cutting guard tests 67
+passed; full backend unit suite 10,199 passed, 1 pre-existing skip, 0
+failed; frontend typecheck and lint both clean. Findings doc:
+`docs/security-review/FIN-05-finance-approvals.md` → **Pass 6**. Rotation
+row 05 → ✅. Next: Feature 06 (Elections & ballots).
 
 ### 2026-09-15 — Feature 04 (Storefront & payments, pass 6) — 0 fixed, 0 new findings
 
