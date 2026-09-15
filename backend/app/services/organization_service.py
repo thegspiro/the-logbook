@@ -448,6 +448,19 @@ class OrganizationService:
         if "email_service" in settings_update and isinstance(email_section, dict):
             for legacy_key in _LEGACY_EMAIL_OAUTH_FIELDS:
                 email_section.pop(legacy_key, None)
+            # Settle the platform before anything judges it. Two ways a write
+            # arrives without a usable one, both of which validated fine
+            # before the "other" check existed: a legacy label from a row
+            # written when the field was a free string, and no platform key
+            # at all — the full-settings PATCH dumps with exclude_unset, which
+            # propagates into the nested model, so a partial email_service
+            # payload omits it. Left unnormalized, the first spuriously
+            # differs from the normalized stored platform and wipes the
+            # organization's saved secrets, and the second is refused with
+            # "Email cannot be enabled without an email platform" for a
+            # configuration that names a perfectly good SMTP host.
+            email_section = normalize_stored_platform(email_section)
+            updated_settings["email_service"] = email_section
             # A saved email secret belongs to the server / account it was
             # saved for. The identity is judged on the merged section — a
             # partial PATCH that changes only the host still changes it —

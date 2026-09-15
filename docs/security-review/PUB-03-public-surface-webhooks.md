@@ -1,6 +1,154 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** #1806 (pass 1)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** #1806 (pass 1)
+
+---
+
+## Pass 6 (2026-09-15) — re-verified, no new findings
+
+**Backend:** all 12 files under `app/api/public/` (2 482 L, 20 routes) plus
+`app/core/public_portal_security.py` (556 L) — **read in full, not diffed**,
+continuing pass 4/5's methodology — plus the collaborators prior passes
+named: `app/schemas/public_portal.py`, `app/utils/webhook_replay.py`,
+`app/services/integration_services/webhook_service.py`'s two verifiers,
+`paypal_service.verify_webhook_signature`, `finance_service.approve_by_token`
+/ `deny_by_token`, `forms_service.submit_public_form` /
+`_create_public_submission` / `_sanitize_submission_data`,
+`membership_pipeline_service.get_prospect_by_token`,
+`scheduling_service.get_user_by_calendar_token` / `get_shifts_for_user_feed`,
+`security_middleware.public_rate_limit` / `daily_cap_exceeded`,
+`core/database.get_session`
+**Frontend:** none modified — Feature 03 declares no frontend files
+**Migrations:** none written
+
+### Scope
+
+`git log 2a4ea671a..origin/main -- backend/app/api/public/ backend/app/core/public_portal_security.py`
+(`2a4ea671a` is pass 5's own closing merge commit, PR #2540) returns **zero**
+commits, and `git diff 2a4ea671a origin/main` across the full 13-file set
+returns no lines — every one of the 12 `api/public/` files plus
+`public_portal_security.py` is byte-identical to pass 5's reviewed state.
+File count unchanged at 12; route count re-derived and unchanged at 20
+(`grep -rc "@router\." backend/app/api/public/*.py` sums to 20).
+
+**One collaborator file changed, read against its full commit rather than
+trusted on its own description:** `backend/app/api/public/finance_approvals.py`
+(a declared Feature 03 file, since the token-authenticated finance-approval
+routes live there) gained 25 lines in commit `6613919e2` — Feature 05's own
+pass 5 work (PR #2544), which added `log_audit_event` calls to
+`approve_via_token` and `deny_via_token` recording
+`finance.approval_step_approved` / `finance.approval_step_denied`. Checked
+independently rather than deferred to Feature 05's own write-up, since the
+file is in this feature's declared scope:
+
+- **No PII/PHI in the event payload** — `event_data` carries only
+  `step_record_id` (an internal UUID, already opaque to the caller),
+  `entity_type.value`, and the literal string `"email_token"`
+  (`finance_approvals.py:153-157`, `:198-202`).
+- **Org resolution is not payload-derived** — `organization_id` is
+  `record.chain.organization_id` (`:158`, `:203`), and `record.chain` is
+  eager-loaded via `contains_eager(ApprovalStepRecord.chain)` inside
+  `FinanceService.approve_by_token`/`deny_by_token`
+  (`finance_service.py:956`, and the equivalent `.options()` in
+  `deny_by_token`), so this is not a lazy-load-outside-greenlet risk and not
+  a value the anonymous caller controls.
+- **A failure in the audit write cannot roll back or corrupt the approval.**
+  `log_audit_event` → `AuditLogger.create_log_entry` wraps its insert in
+  `async with db.begin_nested()` (`app/core/audit.py:190`), a SAVEPOINT
+  isolating an audit-logging failure from the caller's transaction — the
+  same pattern already relied on elsewhere in this codebase, not a new one
+  introduced here.
+- **Ordering is safe against PUB-10's class of bug.** The audit call sits
+  between the service call and `db.commit()`, and both success responses
+  (`ApprovalActionResponse`) are static-shape models built from
+  `record.status.value` and a fixed string — nothing here can fail
+  response-model validation after commit the way `/events/public` (PUB-7)
+  can, so this addition does not reopen PUB-10's ordering hazard on a
+  different route.
+
+No finding. This is Feature 05's territory and already reviewed there
+(`docs/security-review/FIN-05-finance-approvals.md`); recorded here because
+the file itself is declared in this feature's scope and pass 6's convention
+is to read every in-scope diff directly rather than trust another feature's
+write-up for a shared file.
+
+Also re-checked the collaborator set for drift, since PUB-03 depends on
+functions defined elsewhere: `git log 2a4ea671a..origin/main --
+backend/app/services/membership_pipeline_service.py` shows one commit
+(`bcbeb9c72`, Feature 08's MP-30 fix, closing the election-vote gate's
+transfer-path bypass) — confirmed it does not touch
+`get_prospect_by_token` (still at line 5864, well outside the diff's
+1811-3198 hunk range), the only function this feature's
+`GET /application-status/{token}` route calls into that file for. No other
+declared collaborator file changed since `2a4ea671a`.
+
+### Re-verified still current
+
+All "Verified good" items from pass 4/5 re-checked at current line numbers
+and still hold: all four webhook receivers verify (HMAC or PayPal's own API)
+before acting and fail closed when unconfigured; none trusts the payload for
+tenancy; replay fingerprinting is still ordered after verification at all
+four, and after payload-shape validation at Salesforce (PUB-1 round 2); the
+finance token path still holds `with_for_update()`, the `PENDING` re-check,
+expiry, and PUB-4's self-approval guard (`finance_service.py:964-992`),
+token cleared before flush; `display.py`'s guest check-in still resolves
+org/location from the display code and both rejection gates still precede
+the daily-cap `INCR`; zero `csv.writer` and zero `like`/`ilike` in the 13
+files; no public response is reachable by the frontend response cache;
+`public_portal_security.py`'s two in-memory caches are still bounded with
+eviction (Pitfall #9); `PublicPortalAccessLog.organization_id`/`config_id`
+are still `nullable=False` (PUB-8's flagged half is unchanged); `PublicEvent`
+still requires `id`/`event_type`/`start_time`/`location`/`is_public` while
+the handler at `portal.py:500-511` still doesn't produce them (PUB-7 is
+unchanged, still correctly flagged); PUB-5/5b/6/9/10's fixes are all in place
+unchanged.
+
+**Line-number correction (documentation only, not a code change):**
+`docs/KNOWN_LIMITATIONS.md`'s PUB-7 and PUB-8 rows cited `portal.py:482-493`,
+`public_portal.py:269-279`, `public_portal_security.py:322-334` and
+`public_portal.py:202-211` — accurate as of pass 4 (2026-09-08), but the file
+grew between pass 4 and pass 5 (539 L → 556 L for
+`public_portal_security.py`, per both passes' own headers) without the
+citations being refreshed, and neither file has changed since. Corrected to
+the current, verified line numbers: `portal.py:500-511`,
+`public_portal.py:280-290`, `public_portal_security.py:337-347`, and
+`public_portal.py:202-210`. No change in substance — both findings' status,
+mechanism and disposition are exactly as pass 4/5 recorded them.
+
+### Findings
+
+**None new.** No route was added or removed (still 20); the one in-scope
+file change is a correctness/observability addition from a different
+feature's own pass, independently re-verified above and found to introduce
+no PII exposure, no tenancy risk, and no PUB-10-class ordering hazard; every
+security-relevant control this feature owns — signature verification,
+replay ordering, tenancy resolution, rate limiting, the two flagged items —
+is byte-identical to pass 5's fixed/flagged state.
+
+### Guard tests
+
+No new guard tests — no application code change in this feature's scope.
+Pass 4/5's suites (`TestCheckRateLimitDbReconciliation`,
+`test_public_portal_whitelist_shape.py`,
+`test_public_portal_access_log_persistence.py`,
+`TestApproveByTokenSelfApprovalGuard`) re-run as part of the scoped and full
+suites below; all still pass.
+
+### Completion gate
+
+| Check                                                                       | Result                                              |
+| --------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.3.0, flake8-pytest-style 2.2.0)            | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/` (26.5.1)                               | ✅ 1 596 files unchanged                            |
+| `isort --check-only app/ tests/ alembic/` (9.0.1)                           | ✅ clean                                            |
+| `validate_migrations.py --strict`                                           | ✅ single head `6ab7d903fae5`, 444 revisions        |
+| `check_route_permissions.py --strict`                                       | ✅ 228 routes, 0 errors, 0 warnings                 |
+| `check_docs_links.py`                                                       | ✅ 358 files, 0 broken links                        |
+| scoped pytest (`-k "public or portal or webhook or salesforce or ..."`)     | ✅ 588 passed, 1 skipped (`py_vapid`, pre-existing) |
+| ratchet + public-portal + finance-token suites                              | ✅ 112 passed                                       |
+| **full backend suite** (`-m "not integration and not slow and not docker"`) | ✅ 10 199 passed, 1 skipped, 0 failed               |
+| `tsc --noEmit`                                                              | ✅ 0 errors (no frontend file modified)             |
+| `eslint .` (`--max-warnings 10`)                                            | ✅ 0 errors, 0 warnings                             |
 
 ---
 

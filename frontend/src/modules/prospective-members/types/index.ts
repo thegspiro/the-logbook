@@ -292,7 +292,12 @@ export type StageConfig =
  * objects, so editing one stage cannot mutate the default for the next.
  */
 export const DEFAULT_STAGE_CONFIGS: Record<StageType, () => StageConfig> = {
-  form_submission: () => ({ form_id: '', form_name: '' }),
+  // `auto_advance` is stored explicitly, and defaults to on. The backend
+  // reads a missing key as on too — the seeded pipelines carry no config at
+  // all, and reading absence as off would strand their applicants on the
+  // first stage at upgrade — so a checkbox rendered unchecked by default
+  // would have been showing the opposite of what the stage does.
+  form_submission: () => ({ form_id: '', form_name: '', auto_advance: true }),
   document_upload: () => ({ required_document_types: [''], allow_multiple: true }),
   election_vote: () => ({
     voting_method: VotingMethodValues.SIMPLE_MAJORITY,

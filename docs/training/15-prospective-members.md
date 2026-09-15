@@ -91,6 +91,20 @@ Each pipeline stage has a type that determines its behavior:
 | **Form Dropdown**   | ListChecks  | Coordinator selects a form for the applicant to fill     | No — manual action required                    |
 | **Meeting**         | Calendar    | Schedule an interview, orientation, or ride-along        | Optional — when attendance is recorded         |
 
+> **What a form submission does to a Form Submission stage.** A submission of
+> the stage's linked form completes that stage and advances the applicant.
+> Un-tick **Auto-advance when form is submitted** to hold them there instead:
+> the answers are still recorded against the stage for you to read, and you
+> advance them by hand. A stage saved before this setting existed keeps
+> advancing, so nothing changes unless you turn it off.
+>
+> A submission only ever affects the stage the applicant is **currently on**. A
+> second submission of the same form — a duplicate application, or an applicant
+> re-sending the interest form months later — records the new answers and moves
+> nobody. It used to complete the form stage wherever the applicant had got to
+> and advance them to the stage after it, which pulled people _backward_: an
+> applicant at the membership vote landed back on the welcome email.
+
 > **What counts as attendance on a Meeting stage.** A meeting stage set to
 > auto-advance moves the applicant on when they are **checked in at the
 > meeting**, from the moment that meeting's **check-in window** opens. That is

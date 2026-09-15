@@ -1,6 +1,131 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 6 (2026-09-15) — zero-delta re-verification, 0 new findings
+
+**Scope, same `git diff`-between-tree-states method passes 3–5 used.** Diffed
+pass 5's own closing merge (`11de49d61`, PR #2542) against current `HEAD`
+(`origin/main` at the time of this pass) across the full domain established
+since pass 3: `storefront.py`, `storefront_service.py`,
+`storefront_notification_service.py`, `email_templates_storefront.py`,
+`storefront_preview_service.py`, `storefront_payments.py`, `paypal_webhook.py`,
+`models/storefront.py`, `schemas/storefront.py`, `utils/size_order.py`,
+`utils/embroidery.py`, the entire `frontend/src/modules/storefront/` tree, and
+every migration under `alembic/versions/` whose filename or content matches
+storefront/embroidery/personalization/thread/grant. Also re-checked, as pass 4
+and pass 5 did, the shared collaborators this feature calls into:
+`admin_hub_service.py`/`admin_hub.py` (the "Needs attention" queue and headline
+metrics `StoreAdminPage` reads), `core/permissions.py`, `api/dependencies.py`,
+`core/security_middleware.py`, `models/notification.py`, `core/database.py`,
+`core/utils.py`.
+
+**True zero-delta: every file in the full list above is byte-identical to pass
+5's reviewed state.** `git diff 11de49d61 origin/main` across the entire set —
+the 13 declared/established backend files, the frontend module tree, the
+migrations glob, and all seven shared collaborators — returns no lines, and
+`git log 11de49d61..origin/main` over the same set returns zero commits.
+75 commits landed on `main` between pass 5's merge and this pass; none of them
+touch anything in this feature's domain or its previously-identified
+collaborator set. This is a stronger result than pass 5's own "one in-scope
+collaborator file changed" (`finance_approvals.py`, that pass) — this pass
+found nothing to independently re-verify beyond re-confirming the prior
+findings' own citations, because nothing moved.
+
+**Verified the zero-diff claim is real, not diff-tool noise, by reading the
+still-open findings' own cited lines directly against current code** rather
+than trusting an empty `git diff` alone:
+
+- **SF-9 (app-review, MED, still open)** — `record_payment`
+  (`storefront_service.py:1918`) is still a plain
+  `get_order` read (`:1930`) followed by
+  `order.amount_paid = _money(Decimal(order.amount_paid or 0) + applied)`
+  (`:1951`) with no `for_update` lock anywhere in the method, matching pass
+  5's citation exactly at the same line numbers. The
+  `assert_different_person` separation-of-duties guard (`:1943`) is present
+  and unrelated to this finding — it prevents self-settlement, not the
+  concurrent-write race. No fix attempted here, for the same reason pass 5
+  gave: the change moves transaction boundaries shared by `bulk_mark_paid`'s
+  per-order commit loop and the unauthenticated PayPal webhook, with two
+  non-equivalent remediation options that need an owner call in a payments
+  path, not a guess.
+- **SF-11 (app-review, LOW, still open)** — `StoreOrderItemInput`'s parent
+  list (`StoreOrderCreate.items`, `schemas/storefront.py:675`) is still
+  `Field(..., min_length=1)` with no `max_length`/`max_items` — confirmed by
+  direct read of the current schema file, same line number as pass 5.
+- **Order export unbounded (carried forward since pass 1, LOW/MED, still
+  open)** — `export_orders_csv` (`storefront_service.py:3150`) is unchanged;
+  still the same `SafeCsvWriter`-based, unbounded-pages shape tracked in
+  `KNOWN_LIMITATIONS.md` alongside `AH-21`'s and `reportExportService`'s
+  siblings, deliberately not fixed as a drive-by per that entry's own
+  reasoning (a page-size/streaming decision needs to land consistently across
+  all three siblings, not piecemeal).
+
+**All five self-settlement separation-of-duties guards re-confirmed present
+and unmodified, at their pass-5-cited line numbers:** `record_payment`
+(`:1943`), `mark_order_paid` (`:2016`), `waive_order_payment` (`:2058`),
+`refund_order` (`:2244`), and `update_order_status`'s `settles_payment` branch
+(`:1868`).
+
+**48/48 endpoints still gated** (`check_route_permissions.py --strict`: 228
+routes total, 0 errors, 0 warnings — the same route inventory pass 4/5
+enumerated, with no route added, removed, or re-gated). Every by-id method
+this feature exposes (`get_order`, `get_product`, `get_window`,
+`get_payment_event`, `find_order_by_reference`) still resolves at the line
+numbers pass 5 named, unmoved. Price integrity (`_price_lines` derives every
+line from the catalog; `StoreOrderItemInput` carries no client-supplied price
+field), money-as-`Decimal` (no `float(` in either file), the PayPal webhook's
+signature verification/replay guard/audit logging, and the absence of any
+unbounded in-memory tracker or JSON-column shallow-copy mutation are all
+unchanged from pass 5's re-verification, and were not re-derived from
+scratch given the confirmed zero diff on every file that could affect them.
+
+**No new findings.**
+
+## Route inventory
+
+Unchanged since pass 4 (re-enumerated via `check_route_permissions.py
+--strict` rather than assumed) — all 48 routes, same permission table, same
+one documented exception (`GET /permissions`, a deliberate
+`get_current_user`-only self-probe). See pass 4's section for the full table;
+it was not worth reproducing a third time verbatim against an unchanged file.
+
+## Schema & migration notes
+
+No storefront model or migration touched since pass 5 (confirmed by the `git
+diff`/`git log` above, which return nothing under `alembic/versions/` for any
+storefront/embroidery/personalization/thread/grant filename or content match).
+
+## Guard tests added
+
+None by this pass — nothing changed to need a new guard, and the existing
+suite (`test_storefront_order_deadlock.py`,
+`test_the_service_locks_the_org_before_the_window_and_tallies`,
+`test_both_availability_tallies_are_locking_reads`, the SF-6/SF-7
+self-settlement tests, `test_refund_amount_must_be_positive`/
+`_may_be_omitted`) was re-run rather than re-written.
+
+## Completion gate
+
+| Check                                                                                                            | Result                                                  |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                    | ✅ 0 violations                                         |
+| `black --check app/ tests/ alembic/`                                                                             | ✅ 1596 files unchanged                                 |
+| `isort --check-only app/ tests/ alembic/`                                                                        | ✅ clean                                                |
+| `python3 scripts/validate_migrations.py --strict`                                                                | ✅ 444 revisions, single head (`6ab7d903fae5`)          |
+| `python3 scripts/check_route_permissions.py --strict`                                                            | ✅ 228 routes, 0 errors, 0 warnings                     |
+| backend tests (scoped: `-k "storefront or payment"`, DB available)                                               | ✅ 725 passed, 1 skipped (environment-only: `py_vapid`) |
+| cross-cutting guard tests (org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep, storefront deadlock) | ✅ 71 passed                                            |
+| backend tests (full suite, `pytest tests/ -m "not integration and not slow and not docker"`)                     | ✅ 10,199 passed, 1 skipped, 0 failed                   |
+| `npm run typecheck`                                                                                              | ✅ 0 errors                                             |
+| `npm run lint` (`eslint --max-warnings 10`)                                                                      | ✅ 0 errors, 0 warnings                                 |
+
+No file in this feature's scope, or in any of its previously-identified
+shared collaborators, was changed by this pass or needed to be — the finding
+is that nothing moved since pass 5, verified by diff and by re-reading the
+open findings' own cited lines directly, not inferred from the diff alone.
 
 ---
 
