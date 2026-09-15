@@ -16,6 +16,59 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 03 (Public surface & webhooks), pass 6** — PR TBD, branch
+`claude/security-review-pub-pass6-e7a219`. Step 0 concurrent-session check
+(done twice — once at start, once immediately before push): `git fetch
+origin main` clean both times; `PROGRESS.md`'s Open PR row (before this edit)
+read "Feature 02 (Permissions & roles), pass 6 — PR #2596" —
+`pull_request_read` confirmed #2596 `state: closed`, `merged: true`,
+`merged_at: 2026-09-15T19:11:44Z`, and it is the tip of `origin/main`
+(`ea2b1ef87`), with rotation row 02 already marked ✅ as part of that same
+merge — so this iteration proceeded to Feature 03 rather than tending a
+still-open PR. `search_pull_requests` (open) returned #2590
+(`claude/affectionate-meitner-vlaka4`, a prospective-members form-stage fix),
+#2594 (an npm-override conflict checker) and #2595 (a bulk-advance
+meeting-attendance-gate fix, split from #2590) both checks — all unrelated
+feature/tooling work from other sessions, none touching
+public/webhooks/portal/finance-approval surfaces; `list_branches` showed no
+`security-review`/`feature03`/`pub`/`public`/`webhooks` branch in flight
+either check.
+
+Baseline `2a4ea671a` (merge commit of PR #2540, pass 5's landing point).
+**Zero-delta re-verification: all 12 `api/public/` files plus
+`public_portal_security.py` are byte-identical to pass 5's reviewed state**
+— `git diff 2a4ea671a origin/main` across the full 13-file set returns no
+lines, and `git log 2a4ea671a..origin/main` over the same set returns zero
+commits. One collaborator file in this feature's declared scope,
+`finance_approvals.py`, gained 25 lines (Feature 05's own pass 5
+audit-logging addition, PR #2544) — independently re-verified rather than
+deferred to Feature 05's write-up: no PII in the audit payload, org resolved
+from an eager-loaded `record.chain.organization_id` (not the payload),
+audit-write failures isolated by a SAVEPOINT (`app/core/audit.py:190`) so
+they cannot corrupt the approval, and no PUB-10-class
+response-validation-after-commit hazard introduced (both success responses
+are static-shape models with nothing that can fail post-commit). PUB-1
+through PUB-10's fixes all re-verified intact at current line numbers; both
+flagged items (PUB-7's `/events/public` response-model mismatch, PUB-8's
+unreachable failed-auth logging) remain open, unchanged, and correctly
+mirrored in `KNOWN_LIMITATIONS.md` — whose PUB-7/PUB-8 line citations were
+themselves refreshed this pass (file growth between pass 4 and pass 5 had
+left them 11-19 lines stale; no change in substance or disposition).
+**0 fixed, 0 new findings.** Full backend suite: 10199 passed, 1
+pre-existing skip, 0 failed; scoped public/portal/webhook/salesforce/paypal/
+finance-approval/legal/display/calendar/forms tests: 588 passed, 1 skipped
+(`py_vapid`, pre-existing); ratchet + public-portal + finance-token suites:
+112 passed; flake8/black/isort clean; `validate_migrations.py --strict`: 444
+revisions, single head `6ab7d903fae5`, unchanged; `check_route_permissions.py
+--strict`: 228 routes, 0 errors; `check_docs_links.py`: 358 files, 0 broken
+links; frontend typecheck (`tsc --noEmit`) and lint
+(`eslint --max-warnings 10`) clean (no frontend file modified). Findings doc:
+`docs/security-review/PUB-03-public-surface-webhooks.md` → **Pass 6**. Next:
+Feature 04 (Storefront & payments), pending this PR's merge.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 6, PR #2596, merged clean — 0 fixed, 0 new findings; rotation row 02 marked ✅ as part of that PR), preserved for history</summary>
+
 **Feature 02 (Permissions & roles), pass 6** — PR
 [#2596](https://github.com/thegspiro/the-logbook/pull/2596), branch
 `claude/security-review-perm-pass6-b4e29a`. Step 0 concurrent-session check
@@ -59,6 +112,8 @@ files) run directly: 195 passed; flake8/black/isort clean;
 Findings doc: `docs/security-review/PERM-02-permissions-roles.md` →
 **Pass 6**. Next: Feature 03 (Public surface & webhooks), pending this PR's
 merge.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #2593, Feature 01 pass 6, merged clean — 0 fixed, 0 new findings; rotation row 01 marked ✅ as part of that PR), preserved for history</summary>
@@ -16102,7 +16157,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
@@ -16141,6 +16196,39 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 03 (Public surface & webhooks, pass 6) — 0 fixed, 0 new findings — PR TBD opened
+
+Step 0: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
+"Feature 02 (Permissions & roles), pass 6 — PR #2596" — `pull_request_read`
+confirmed #2596 merged (`merged_at 2026-09-15T19:11:44Z`) and the tip of
+`origin/main`, with rotation row 02 already ✅ as part of that merge.
+`search_pull_requests` (open) returned #2590 (a prospective-members
+form-stage fix), #2594 (an npm override conflict checker) and #2595 (a
+bulk-advance attendance-gate fix) — all unrelated feature/tooling work from
+other sessions, none touching public/webhooks/portal/finance-approval
+surfaces; `list_branches` showed no
+`security-review`/`feature03`/`pub`/`public`/`webhooks` branch in flight.
+Proceeded to Feature 03.
+
+Zero-delta re-verification against pass 5's baseline (`2a4ea671a`, PR
+#2540): all 12 `api/public/` files plus `public_portal_security.py`
+byte-identical; one in-scope collaborator, `finance_approvals.py`, gained 25
+lines from Feature 05's own pass 5 (audit-logging on the two token-approval
+routes) — independently re-verified for PII exposure, tenancy resolution,
+and the PUB-10 ordering hazard, none found. Every prior fix (PUB-1 through
+PUB-10) re-verified intact; PUB-7 and PUB-8 remain open/flagged, unchanged,
+still mirrored in `KNOWN_LIMITATIONS.md` (whose line citations for both were
+refreshed this pass — documentation-accuracy only, no change in substance).
+Full write-up: `docs/security-review/PUB-03-public-surface-webhooks.md` →
+**Pass 6**. Gate: flake8/black/isort clean; `validate_migrations.py
+--strict` 444 revisions, single head `6ab7d903fae5`; `check_route_permissions.py
+--strict` 228 routes, 0 errors; `check_docs_links.py` 358 files, 0 broken
+links; scoped tests 588 passed, 1 pre-existing skip; ratchet + public-portal
+
+- finance-token suites 112 passed; full backend suite 10199 passed, 1
+  pre-existing skip, 0 failed; frontend `tsc --noEmit` and `eslint
+--max-warnings 10` clean (no frontend file modified).
 
 ### 2026-09-15 — Feature 02 (Permissions & roles, pass 6) — 0 fixed, 0 new findings — PR #2596 opened
 
