@@ -1372,3 +1372,174 @@ adversarial review on a "nothing to see here" docs PR to surface three real
 defects, get each genuinely and completely fixed rather than half-fixed or
 newly-broken, and flag four more that need a product/content decision this
 rotation correctly declined to guess at.
+
+---
+
+## Pass 5 (2026-09-15)
+
+**Prefix:** `SKT5` · **PR:** TBD
+
+**Scope check:** diffed the current tree against `4c4253cc0c77` (the pass-4
+merge commit, PR #2473). `app/models/skills_testing.py` is byte-identical; no
+new migration touches a skills-testing table. Unlike passes 2–4, this is
+**not** a zero-diff pass: one real feature commit landed directly on `main`
+since pass 4 — `7cf5f1cbb` ("Skills testing: block blank scorecards, state why
+a test failed", 2026-09-12, not itself a security-review commit) — touching
+`app/api/v1/endpoints/skills_testing.py` (+54/-7), `app/schemas/skills_testing.py`
+(+56), and `app/services/skills_testing_service.py` (+152/-10), plus 12
+frontend files and a `docs/UPGRADING.md` entry. Read the full diff directly
+(`git diff 4c4253cc0c77..7cf5f1cbb -- <each backend path>`), not the commit
+message alone.
+
+**What the commit does:** completion (`POST /tests/{id}/complete`) now refuses
+a scorecard with any unmarked, non-statement step (400, listing them), and
+introduces a **waiver**: `CriterionResultSchema.waived: Optional[bool]` +
+`waive_reason: Optional[str] = Field(None, max_length=500)`, letting an
+examiner record a step as not-observed (excluded from both the earned and
+available point pools) with a required reason. A **critical** step can never
+be waived — `waived_critical_criteria()` blocks completion if one is. Also
+added: `SkillCriterionSchema.validate_scoring_bounds` (rejects
+`passing_score > max_score` and a `score`-type criterion with no positive
+`max_score`, both previously silent at scoring time), and
+`CriterionResultSchema.score` gained a `ge=0` floor (previously unbounded
+below) with the earned total separately clamped to each step's point value in
+`build_score_breakdown` (`min(float(recorded), point_value)`) so an
+over-`max_score` submission can no longer push a percentage past 100. All new
+numeric/enum validation lands on `model_validator`/`field_validator`s in the
+same file and style as the existing `type`/`score_mode`/`result_disclosure`
+validators — no parallel scoring path introduced (Pitfall #29: the single
+`calculate_test_result` → `build_score_breakdown` pipeline still computes both
+the stored `overall_score` and the displayed breakdown from the same
+arithmetic; verified by reading `calculate_test_result`, which still just
+calls `build_score_breakdown` and reads its `percentage`/`meets_threshold`/
+`critical_failures` keys — nothing recomputes a score independently).
+
+### Re-verification of pass 1–4 fixes
+
+Read the current code directly for each:
+
+- **SKT-1** — `update_template` still routes through `apply_updates`
+  (`skills_testing.py:700`).
+- **SKT-2** / **SKT-3** — `void_test` and `return_test_for_correction` still
+  call `assert_different_person(...)` before any mutation (`:2762`, `:2932`,
+  confirmed by direct grep of all four `assert_different_person` call sites:
+  `create_test:1315`, `validate_test:2115`, `void_test:2762`,
+  `return_test_for_correction:2932`).
+- **SKT-4** — `lock_attempt_capacity`'s `TrainingRequirement` lock and
+  `assert_attempts_remaining`'s `.with_for_update(of=SkillTest)` count are both
+  still present (`skills_testing_service.py:751`, `:857`).
+- **SKT2-1** — zero `is_practice ==` comparisons in the endpoint file (`grep -c`
+  returns 0); still `.is_(...)`.
+- **SKT3-1** — `add_test_viewer` still rejects naming the examiner
+  (`skills_testing.py:2491`).
+
+All standing guard-test files re-run clean (see completion gate). **Route
+surface unchanged: 29/29**, re-enumerated with a fresh `ast` walk over every
+`@router.<verb>` decorator and its `Depends(...)` defaults — same paths, same
+methods, same gates as every prior pass's table.
+
+### SKT5-1 — MED — the `scores` disclosure view did not redact the new `waive_reason` field — ✅ FIXED
+
+**What:** `redact_test_for_view`'s `scores` branch (the tier a department can
+configure so a candidate sees marks and points but not written commentary) has
+scrubbed each criterion's `notes` field since before this rotation began, and
+its own docstring states the contract: "removes every piece of written
+commentary while leaving the marks and points intact." The 2026-09-12 commit
+added a second free-text field to the exact same `criteria_results` entries —
+`waive_reason`, the examiner's required explanation of why a step could not be
+observed — but did not add it to this function's per-criterion scrub, which
+still only clears `notes`.
+**Where:** `app/services/skills_testing_service.py:1275-1277` (the
+`criteria_results` loop inside `redact_test_for_view`'s `scores` branch).
+**Failure scenario:** an organization configures (or a template/test sets)
+`result_disclosure: "scores"`. An examiner marks a step `waived: true` with
+`waive_reason: "Could not verify — candidate was on the roof, no visual"` (or
+anything else an examiner might write believing it is reviewer-only
+commentary, the same category `notes` already exists to protect). The
+candidate requests their own result: `resolve_result_view` returns
+`"scores"`, `redact_test_for_view` nulls `notes` at every level but leaves
+`waive_reason` on the criterion untouched, and the candidate reads the
+examiner's free-text explanation directly in the API response — precisely the
+disclosure tier's own stated guarantee, broken for one specific field added
+after the function was last touched.
+**Impact:** a written-commentary leak under a `scores`-only disclosure policy,
+the same class of defect `test_scores_view_drops_every_note` and
+`test_scores_view_drops_the_section_review_note` exist to prevent for `notes`
+— just not extended to the sibling field added three days before this pass.
+No privilege escalation and no cross-tenant exposure; confined to a
+candidate's own test, under one specific disclosure configuration, to one new
+field.
+**Fix:** added `scrubbed["waive_reason"] = None` immediately after
+`scrubbed["notes"] = None` in the same loop — identical pattern, same
+function, same branch. The `waived` boolean itself is left visible (a mark,
+not commentary, matching how `passed`/`score` already survive this
+redaction). Guard test:
+`TestRedaction::test_scores_view_drops_the_waive_reason` in
+`tests/test_skill_result_disclosure.py`, confirmed to fail against the
+pre-fix code (`git stash push -u` on the service-file fix, re-run, restored)
+before the fix landed.
+
+### SKT4-7 — MED — pass 5 note: the new completion guard is also bypassed by `PUT /tests/{id}`
+
+Re-read against the current code, not just re-cited: the finding stands
+exactly as pass 4 described it (`_authorize_test_write` still lets any
+member holding `examiner_id` on an unvalidated test call `update_test`, and
+`SkillTestUpdate.status`/`.result`/`.overall_score` are still unrestricted
+fields the handler assigns straight to the ORM row with no route through
+`complete_test`). What changed since pass 4: `complete_test` now runs the
+2026-09-12 commit's `unresolved_criteria`/`waived_critical_criteria` checks
+(see the pass-5 scope note above) — but **only inside `complete_test`**.
+`update_test` applies no equivalent check anywhere in its body. An examiner
+who was already able to fabricate a result via a direct `PUT` (the original
+SKT4-7 finding) can therefore also bypass the brand-new anti-blank-scorecard
+and anti-waived-critical-step guards the same release built specifically to
+stop a silently-wrong result from being filed — the two problems compound
+rather than sitting side by side, since the new guard's entire purpose is to
+catch exactly the kind of scorecard a bare `PUT`-to-`completed` can file
+without ever passing it. Confirmed no frontend caller exercises this path: `ActiveSkillTestPage.tsx`
+has two direct `updateTest(...)` calls (both send `status: 'in_progress'`)
+and five more that go through its `saveTest()` wrapper (`section_results`/
+`elapsed_seconds`/`notes`/`resumed`-shaped payloads only) — none of the
+seven ever sends `status: 'completed'`; that transition is always requested
+through the dedicated `completeTest()` call. So the gap is API-surface-only,
+not something the shipped UI does today. Left **OPEN /
+FLAGGED**, not fixed, for the same reason pass 4 gave: the correct remedy —
+whether `update_test` should refuse `status: "completed"` outright and
+require the dedicated endpoint, or should itself run the same two guard
+functions before accepting that transition — is the state-machine/API-contract
+decision pass 4 already declined to guess at, and this pass's finding is a
+widening of that same open question rather than a new one requiring a
+different remedy. `docs/KNOWN_LIMITATIONS.md`'s SKT4-7 entry updated to name
+this.
+
+### Corrections to prior write-ups
+
+None. Passes 1–4's findings, fixes, and flagged items are all re-verified
+intact above; nothing in this pass contradicts anything a prior pass recorded.
+
+## Guard tests added
+
+- `tests/test_skill_result_disclosure.py::TestRedaction::test_scores_view_drops_the_waive_reason` —
+  asserts `redact_test_for_view(..., "scores")` clears `waive_reason` while
+  leaving the `waived` flag itself visible (SKT5-1).
+
+## Completion gate (pass 5)
+
+| Check                                               | Result                                                                          |
+| --------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                       | ✅ 0 violations                                                                 |
+| `black --check app/ tests/ alembic/`                | ✅ unchanged                                                                    |
+| `isort --check-only app/ tests/ alembic/`           | ✅ clean                                                                        |
+| `python3 scripts/validate_migrations.py --strict`   | ✅ 444 revisions, single head `6ab7d903fae5`                                    |
+| `pytest tests/ -q -k "skill"`                       | ✅ 464 passed, 1 skipped (pre-existing optional-dependency skip)                |
+| `pytest tests/ -q` (full backend suite)             | ✅ 12578 passed, 21 skipped (pre-existing Docker/no-MySQL/optional skips), 356s |
+| `cd frontend && npm run typecheck` / `npm run lint` | not run — no frontend file touched this pass                                    |
+
+**Final disposition: 1 real fix (SKT5-1, MED), 1 standing finding widened in
+place (SKT4-7, still OPEN/FLAGGED, now also covers the new completion-guard
+bypass), 0 findings closed, 0 new flags beyond the widening.** All six
+pass 1–3 fixes and all four pass-4 fixes re-verified intact by direct code
+read; all four still-open pass-3/pass-4 flags (SKT3-2, SKT4-1, SKT4-2,
+SKT4-3) re-confirmed unchanged in scope (no code touching their surfaces
+changed since pass 4, beyond the `score`/`checklist_completed`-adjacent
+tightening this pass's SKT5-1/SKT4-7 sections already account for).
