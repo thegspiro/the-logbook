@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2565](https://github.com/thegspiro/the-logbook/pull/2565)
+(Feature 13, Apparatus & NFC, pass 5) merged clean — 17/17 CI green after one
+stale-superseded-run false failure on the `CI Success` gate (the branch's
+first commit's run was cancelled by the immediate PROGRESS.md-fill-in
+follow-up commit; every real job showed `cancelled` except `Migration
+Chain`, which finished `success` before the cancellation — only the gate
+itself showed `failure` — resolved with one explanatory PR comment, no code
+push, per the established pattern) — merged by this session via
+`merge_pull_request`, squash, `expectedHeadSha` pinned to the head commit.
+`git fetch origin main` confirms the merge commit (`229c7bd06`) is on
+`main`. `list_pull_requests` (open) re-checked immediately before writing
+this closure note: only dependabot #2550/#2552, and #2547/#2495 (unrelated)
+— no concurrent Feature 14/equipment-check closure or pass PR, so this
+session proceeds with both the closure bookkeeping and launching the next
+pass itself. **Next: Feature 14 (Equipment check & shifts), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 5, PR #2565, before it merged), preserved for history</summary>
+
 **PR [#2565](https://github.com/thegspiro/the-logbook/pull/2565)** — branch `claude/security-review-feature13-pass5`, Feature 13
 (Apparatus & NFC), pass 5 (pass 12 in the feature's own doc). Step 0
 concurrent-session check: `git fetch origin main` clean; the Open PR section
@@ -50,6 +69,8 @@ the **Pass 12** section of `docs/security-review/AP-13-apparatus-nfc.md`.
 Rotation row 13 confirmed `✅` (no change needed). Completion gate: scoped
 apparatus/nfc/evoc/driver_exception suite (534 passed, 1 skipped) plus the
 full backend suite (12571 passed, 21 skipped, 0 failed), both clean.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 5, PR #2563, merged), preserved for history</summary>
@@ -15451,6 +15472,18 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 13 (Apparatus & NFC, pass 5) closed — PR #2565 merged
+
+The branch's first-commit run hit the classic stale-superseded-run pattern
+again (every real job `cancelled` except `Migration Chain`, only the `CI
+Success` gate `failure`) — confirmed via `list_workflow_jobs`, resolved with
+one explanatory comment, no code push. The current head's own fresh run
+then went 17/17 green (`mergeable_state: clean`), and the PR was merged
+(squash, `expectedHeadSha` pinned to `9b6d6b70`, merge commit `229c7bd06`).
+`list_pull_requests` (open) re-checked before writing this entry: no
+concurrent Feature 14 pass or closure PR, so this session proceeds directly
+to launching Feature 14 (Equipment check & shifts), pass 5.
 
 ### 2026-09-15 — Feature 13 (Apparatus & NFC, pass 5) — 2 fixed (MED), 0 prior flags outstanding — PR #2565 opened
 
