@@ -340,7 +340,7 @@ Enums:
 - `POST /finance/dues-schedules/{id}/generate` (bulk-create member_dues for all eligible members)
 - `GET /finance/dues` (list with member/status filters)
 - `PUT /finance/dues/{id}` (record payment — appends to the ledger; idempotent on `transaction_reference`; refuses `WAIVED`/`EXEMPT`)
-- `GET /finance/dues/{id}/payments` _(2026-08-02)_ — the payment ledger, oldest first. `finance.view`. The only place earlier payments can be read back, since the dues record itself carries only the derived total and the newest payment's detail
+- `GET /finance/dues/{id}/payments` _(2026-08-02)_ — the payment ledger, oldest first. `finance.view` or `finance.manage`; a `finance.view` holder sees only their own, because the handler narrows to the caller for anyone without `finance.manage`. The only place earlier payments can be read back, since the dues record itself carries only the derived total and the newest payment's detail
 - `POST /finance/dues/{id}/waive`
 - `POST /finance/dues/{id}/unwaive` _(2026-08-02; reason handling reversed 2026-08-13)_ — reverse a waiver. `finance.manage`, reason required. Restores whatever the ledger says (PENDING / PARTIAL / PAID) and writes a `finance.dues_waiver_reversed` audit event. **Free-text reasons are kept out of the immutable audit log**: the original waive reason is erased from the record and _not_ copied into the event (it may carry personal information that must remain eligible for privacy scrubbing) — the event records only the dues id and restored status
 - `GET /finance/dues/summary` (collection rates, outstanding totals)
