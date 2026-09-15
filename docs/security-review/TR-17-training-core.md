@@ -1519,3 +1519,195 @@ Changed files: `backend/app/services/training_compliance.py`,
 `backend/tests/test_compliance_matrix_endpoint.py`,
 `backend/tests/test_training_compliance.py`,
 `backend/tests/test_member_period_status.py`.
+
+---
+
+## Pass 5 (2026-09-15) — 0 fixes, 0 new findings; delta was one out-of-scope shared file
+
+**Prefix:** `TR5` · **PR:** [#TBD](#)
+
+**Scope check:** diffed all eight declared files (three endpoints, three
+services, `training_compliance.py`, `app/mcp/tools/training.py`) against
+`569348ef2` (the pass-4 merge commit, PR #2455) via `git diff --stat`. Seven
+of eight are byte-for-byte unchanged. The eighth, `backend/app/schemas/
+training.py`, has a real +23/-0 diff — but tracing it (`git log
+569348ef2..HEAD -- backend/app/schemas/training.py`) attributes the entire
+change to a single commit, `security(training-extended): TRX-18 pass 4 — 0
+code fixes, 1 doc correction (#2460)`: a `field_validator` on
+`ExternalTrainingProviderResponse.config` that redacts
+`additional_headers` values before they're ever serialized to the response
+(a credential-exposure fix for `external_training.py`'s provider-config
+screen). `ExternalTrainingProviderResponse`/`ExternalTrainingProvider` are
+feature 18 ("training extended")'s own models/schema, already reviewed and
+fixed under that feature's own security-review pass — not new surface of
+this feature, and not re-reported here. **Net: zero in-scope code delta
+since pass 4.**
+
+Also checked, per the pass-3/pass-4 precedent of sweeping for newly-added
+call sites: `grep -rl "TrainingService(\|TrainingProgramService(\|
+TrainingSessionService("` across `backend/app` — the only callers are the
+three endpoint files already in scope, `app/mcp/tools/training.py` (already
+swept in at pass 3), and four feature-18/feature-19/scheduling files
+(`external_training.py`, `training_enhancements.py`, `course_cohort_
+service.py`, `scheduled_tasks.py`, `shift_completion_service.py`,
+`skills_testing_service.py`, `training_submission_service.py`) that were
+already accounted for as other features' territory in earlier passes. No
+new migration touches any table this feature owns (`git log
+569348ef2..HEAD -- backend/alembic/versions/` cross-referenced against a
+content grep for the six training-core table names — nothing new).
+
+### Re-verification of all standing fixes
+
+All confirmed present and unchanged, by direct inspection of current line
+numbers rather than assumed from prior passes' prose:
+
+- **TR-11** — `_resolve_or_create_requirement`'s `assert_all_in_org` call on
+  `category_ids` (`training_program_service.py:5141`).
+- **TR-12** — both `User` lookups filter `organization_id`
+  (`training_service.py`, `get_all_requirements_progress` and
+  `generate_training_report`'s tier-exemption block).
+- **TR-13** — `course_id` validated in-org on all three write paths
+  (`training.py`, `create_record`/`create_records_bulk`/
+  `confirm_historical_import`, all three still carry their `# XC-1` comment
+  markers).
+- **TR2-1 / TR2-3** — `/training/competency-matrix`, `/training/dashboard-
+summary`, `/training/sessions/approve/` all still present in
+  `frontend/src/utils/apiCache.ts`'s `UNCACHEABLE_PREFIXES`.
+- **TR3-1 (all 9 rounds)** — `create_requirement`/`update_requirement`
+  still null out a stale `due_date` for any `due_date_type` other than
+  `fixed_date`/unset (`training.py`, confirmed at the current line numbers);
+  the backfill migration is still the sole revision touching
+  `training_requirements.due_date`.
+- **TR4-1 (all 3 rounds)** — `requirement_applies_to_member()` in
+  `training_compliance.py` is still the single shared implementation, and
+  all five call sites (`get_compliance_matrix`, `compute_org_compliance_pct`,
+  `get_compliance_summary`, `get_training_dashboard_summary`,
+  `get_member_period_status`) still call it rather than hand-rolling the
+  check.
+
+### Re-verification of all standing flags
+
+Re-read the current code at each cited location; every flag still
+accurately describes the code as it stands today, none has been fixed,
+none has regressed further, and none is stale:
+
+- **TR2-2** — `list_records` (`training.py:540`) still takes no
+  `skip`/`limit`.
+- **TR2-4** — `get_training_dashboard_summary` (`training.py:101`) still
+  loads every active user/requirement/record for the org with no date or
+  row bound.
+- **TR3-2** — `app/mcp/tools/training.py`'s `get_member_requirements_
+progress` still only bounds the returned page, not the underlying
+  `get_applicable_requirements`/`_preload_window` scan.
+- **TR4-2** — `get_compliance_matrix` (`training.py:2738`) still has its
+  own separate unbounded record scan.
+- **TR4-3** — `get_training_dashboard_summary` still ignores compliance
+  profiles/thresholds entirely (`if not unmet: compliant += 1`), disagreeing
+  with the matrix/percentage pair.
+- **TR4-4** — `classify_standing`'s `total_count <= 0` → `("compliant",
+100.0)` convention is unchanged.
+- **Enum-validation gap** (bulk/historical-import) — `BulkTrainingRecordEntry.
+training_type`/`.status`, `HistoricalImportConfirmRequest.default_status`/
+  `.default_training_type`, `CourseMappingEntry.new_training_type` still
+  carry no `@field_validator`, and the per-row error-boundary wrapping
+  (`db.flush()` per row in `create_records_bulk`, `db.begin_nested()` per
+  row in `confirm_historical_import`) is unchanged.
+- **`enroll_member`'s duplicate-active-enrollment race** —
+  `training_program_service.py:2105` still runs a plain `SELECT` for an
+  existing ACTIVE enrollment followed by an unlocked `INSERT`, with no
+  unique constraint or `with_for_update()` backing it (confirmed by reading
+  the full method body, not just the two lines pass 1 quoted).
+
+All eight `docs/KNOWN_LIMITATIONS.md` mirrors for these still describe the
+current code accurately; no edits needed.
+
+### Fresh sweep against CLAUDE.md pitfalls (no findings)
+
+- **#2 (SET NULL nullability):** no schema change this pass; re-confirmed
+  no `ondelete="SET NULL"` column in this feature's scope.
+- **#9 (unbounded in-memory caches):** grepped for module-level
+  dict/set/list assignments across all eight files — every hit is a
+  function-local accumulator inside a request handler or service method
+  (e.g. `training.py`'s `by_user`, `email_to_user`, `course_map`), not
+  process-lifetime state. No module-level cache found.
+- **#14 (org-scoping):** route-by-route re-enumeration (below) found no
+  new by-id query, no new client-supplied FK, and no permission-gate that
+  substitutes for an org-scoped fetch — same as pass 2's finding, now
+  re-run against the current tree rather than assumed unchanged.
+- **#15 (SafeCsvWriter):** the only `csv` usage in scope is `csv.DictReader`
+  (import parsing, `training.py:2013` and `:3246`) — reading, not writing.
+  No `csv.writer` call anywhere in the eight files.
+- **#27 (capacity/concurrency locking):** re-read the three `with_for_update()`
+  sites in `training_session_service.py` (`reopen_training_session`'s
+  session-row lock, its pending-approval lock, and `submit_training_approval`'s
+  token lock) — these serialize the finalize/reopen/approve race, which is
+  correct and unchanged; not the same shape as the `enroll_member` race
+  above, which remains unlocked and stays flagged. `training_program_
+service.py`'s `RequirementProgress` row lock
+  (`.with_for_update(of=RequirementProgress)`, pass-1-verified) is likewise
+  unchanged.
+- **#29 (single source of truth for compliance):** this is exactly what
+  TR4-1/TR4-3/TR4-4 already cover; no new re-derivation found outside the
+  five call sites `requirement_applies_to_member()` already unifies.
+- **#30b (integration marker on DB-touching tests):** every guard test file
+  this feature has added across all five passes was re-checked:
+  `test_training_program_import_scoping.py`,
+  `test_training_service_user_scoping.py`, and
+  `test_training_records_course_scoping.py` use a hand-rolled mock session
+  (`AsyncMock`/`MagicMock`, no `db_session` fixture) and correctly carry no
+  marker; `test_training_compliance_integration.py`,
+  `test_compute_org_compliance_pct_profile_overrides.py`,
+  `test_compliance_matrix_endpoint.py`,
+  `test_training_requirement_due_date_write_normalization.py`, and
+  `test_backfill_stale_training_due_date_migration.py` all use the real
+  `db_session` fixture and all carry `pytestmark = [pytest.mark.integration]`
+  at module level. No mismatch found.
+
+### Route inventory (re-enumerated, not re-read from prior prose)
+
+Programmatic AST-adjacent walk (regex over `@router.<verb>(...)` decorators
+paired with each handler's `Depends(...)` parameters) over all three
+endpoint files, cross-checked by hand for the two multi-line-decorator
+routes the regex under-matched (`POST /training/sessions/recurring` and
+`GET /training-programs/programs/{program_id}/enrollments`, both confirmed
+correctly gated on manual inspection — `Depends(require_permission(...))`
+split across lines, not a missing dependency):
+
+| File                   | Routes | Auth-gated | Permission-gated (write or PHI read)  |
+| ---------------------- | -----: | ---------: | ------------------------------------- |
+| `training.py`          |     36 |      36/36 | all mutating + all officer-only reads |
+| `training_programs.py` |     46 |      46/46 | all mutating routes                   |
+| `training_sessions.py` |      9 |        9/9 | all mutating routes                   |
+
+91 routes total, matching pass 2's independently-derived count exactly — no
+route added, removed, or renamed since. No unauthenticated route found. The
+two deliberately member-scoped mutation routes in `training_programs.py`
+(`PATCH /progress/{id}`, `POST /enrollments/{id}/withdraw`) still push
+ownership/officer checks into the service layer rather than the route
+decorator, matching pass 1's documented design (not a permission
+inversion).
+
+### Verdict
+
+No new findings. This is a re-verification pass: the feature's own code
+had zero net change since pass 4 (the one real diff in a declared file
+belongs to and was already reviewed by feature 18's own pass), every prior
+fix still holds at inspection, every standing flag still accurately
+describes the code, and a fresh sweep against the CLAUDE.md pitfalls this
+rotation specifically checks (`#2`, `#9`, `#14`, `#15`, `#27`, `#29`,
+`#30b`) turned up nothing new.
+
+## Completion gate (pass 5)
+
+| Check                                               | Result                                               |
+| --------------------------------------------------- | ---------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                       | ✅ 0 violations (no files touched this pass)         |
+| `black --check app/ tests/ alembic/`                | ✅ 1595 files unchanged                              |
+| `isort --check-only app/ tests/ alembic/`           | ✅ clean (`isort==9.0.1`, CI's pin)                  |
+| `python3 scripts/validate_migrations.py --strict`   | ✅ 444 revisions, single head `6ab7d903fae5`         |
+| `pytest tests/ -q -k "training or compliance"`      | ✅ 1135 passed, 1 skipped (pre-existing)             |
+| `pytest tests/ -q` (full backend suite)             | ✅ 12577 passed, 21 skipped (pre-existing), 0 failed |
+| `cd frontend && npm run typecheck` / `npm run lint` | n/a — no frontend file touched this pass             |
+
+No files changed by this pass other than this findings doc and
+`docs/security-review/PROGRESS.md`.
