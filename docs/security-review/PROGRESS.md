@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2580](https://github.com/thegspiro/the-logbook/pull/2580)
+(Feature 19, Skills testing, pass 5) merged clean — SKT5-1 fixed (MED,
+examiner waiver-reason disclosure leak), SKT4-7 correctly widened rather
+than force-fixed. Merged directly by the repo owner (`thegspiro`), not by
+this session — confirmed via `pull_request_read`'s `merged_by` field.
+`git fetch origin main` confirms the merge commit (`ea9c7d820`) is on
+`main`. `list_pull_requests` (open) re-checked immediately before writing
+this closure note: only dependabot #2552/#2567, and #2495 (unrelated) —
+no concurrent Feature 20/compliance closure or pass PR, so this session
+proceeds with both the closure bookkeeping and launching the next pass
+itself. **Next: Feature 20 (Compliance), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 5, PR #2580, before it merged), preserved for history</summary>
+
 **Feature 19 (Skills testing), pass 5** — PR
 [#2580](https://github.com/thegspiro/the-logbook/pull/2580), branch
 `claude/security-review-feature19-pass5`. Step 0 concurrent-session check
@@ -47,6 +62,8 @@ remedy is the same already-declined-to-guess-at API-contract decision.
 All six pass 1–3 fixes and all four pass-4 fixes re-verified intact by
 direct code read; route surface unchanged at 29/29. Full write-up:
 `docs/security-review/SKT-19-skills-testing.md` → **Pass 5**.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 5, PR #2578, merged), preserved for history</summary>
@@ -15797,6 +15814,15 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 19 (Skills testing, pass 5) closed — PR #2580 merged
+
+Merged directly by the repo owner (`thegspiro`) rather than by this
+session — confirmed via `pull_request_read`'s `merged_by` field, merge
+commit `ea9c7d820` on `main`. `list_pull_requests` (open) re-checked
+before writing this entry: no concurrent Feature 20 pass or closure PR,
+so this session proceeds directly to launching Feature 20 (Compliance),
+pass 5.
 
 ### 2026-09-15 — Feature 19 (Skills testing, pass 5) — 1 fixed, 1 flag widened — PR #2580 opened
 
