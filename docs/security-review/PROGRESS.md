@@ -16,6 +16,43 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 22 (Grants & fundraising), pass 5** — PR
+[#2587](https://github.com/thegspiro/the-logbook/pull/2587), branch
+`claude/security-review-gf-pass5-859d4e45`. Step 0 concurrent-session
+check (done twice — once at start, once immediately before push): `git fetch
+origin` clean both times; `search_pull_requests` (open) returned no PR
+touching `grants.py`/`grant_service.py`/`fundraising_service.py` or a
+Feature 22-specific pass/closure note either check — only PR #2586 (Feature
+21's own docs-closure PR, "record PR #2585 merge, close Feature 21 pass 5"),
+a bookkeeping PR in flight per the established pattern and not a concurrent
+Feature 22 session, plus the two dependabot PRs (#2567, #2552) and #2495
+(`feat(scheduling): ...`), all unrelated.
+
+Baseline `ee5188ff5` (merge commit of PR #2485, pass 4's Codex-review
+follow-up and actual landing point — not the earlier #2483 a concurrent
+watchdog session briefly and incorrectly marked as the close). Effectively
+zero in-scope delta: all six declared backend files byte-identical; the one
+changed frontend file (`GrantDetailPage.tsx`) is a one-line, unrelated,
+already-correct fix (removing the modal backdrop's `onClick={onClose}` per
+CLAUDE.md Pitfall #31's 2026-09-13 dialog-dismiss sweep); the one migration
+that landed since pass 4 touches only onboarding-status tables. Re-verified
+by direct code read (not just an empty-diff check) that every GF-13 through
+GF-38 fix is intact, org-scoping (#14a/b/c) holds across every `select(...)`
+in both services, the LIKE-pattern escaping (#25) and lock-before-flush
+aggregate recomputes (#27) are unchanged, and the five standing
+product-decision flags (GF-7, GF-8, GF-9, GF-27a, GF-33) are unchanged and
+still correctly mirrored in `KNOWN_LIMITATIONS.md`. **0 fixed, 0 new
+findings** — this pass is docs-only (the findings doc's own Pass 5 section)
+plus this note. 620 grant/fundraising-scoped backend tests pass (1
+pre-existing skip); full backend suite: 12,585 passed, 21 pre-existing
+skips, 0 failed; flake8/black/isort clean on all six declared backend
+files (unchanged, so nothing to reformat). Findings doc:
+`docs/security-review/GF-22-grants-fundraising.md` → **Pass 5**. Next:
+Feature 23 (Medical supplies), pending this PR's merge.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2585's merge, Feature 21 pass 5 — the state this pass's PR #2587 conflicted with), preserved for history</summary>
+
 **None.** PR [#2585](https://github.com/thegspiro/the-logbook/pull/2585)
 (Feature 21, Admin hours, pass 5) merged clean via squash, merge commit
 `b31954ef5` — 1 fixed (AH-17, LOW: `get_summary`/`get_user_hours_compliance`
@@ -31,6 +68,8 @@ back green (17/17) on the resulting head, `mergeable_state: clean`.
 closure note: only dependabot #2552/#2567, and #2495 (unrelated) — no
 concurrent Feature 22 pass or closure PR. Rotation row 21 stays ✅. **Next:
 Feature 22 (Grants & fundraising), pass 5** (last closed at pass 4).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 5, PR #2585, before it merged — including the in-flight merge-conflict resolution against #2584), preserved for history</summary>
@@ -15944,6 +15983,48 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 22 (Grants & fundraising, pass 5) — 0 fixed, 0 new findings — PR #2587 opened
+
+Delta re-verification against pass 4's actual merge (`ee5188ff5`, PR #2485 —
+the Codex-review follow-up; #2483, the earlier PR a concurrent watchdog
+session briefly marked as the close, predates it). All six declared backend
+files byte-identical; the one changed frontend file (`GrantDetailPage.tsx`)
+is a one-line, unrelated, already-correct fix from CLAUDE.md Pitfall #31's
+2026-09-13 dialog-dismiss sweep (backdrop `onClick={onClose}` removed); the
+one migration since pass 4 touches only onboarding-status tables; no other
+caller of `GrantService`/`FundraisingService` exists outside the declared
+files (confirmed by repo-wide grep). GF-13 through GF-38 all re-verified
+intact by direct read of the current files, not inferred from the empty
+diff: the opportunity→application cascade fix, idempotent compliance-task
+generation, locked aggregate recomputes with lock-before-flush ordering,
+`apply_updates` on all ten update methods, org-scoped note-author lookup,
+the GF-35 pagination fix (all 11 `list_*` methods with `.offset().limit()`
+and an `id.asc()` tie-breaker, no eager-loading of a parent's children ahead
+of the page cap), GF-36's `populate_existing=True` reload fix, and GF-38's
+three-round opportunity-merge fix are all unchanged. Endpoint count
+re-confirmed at 45/45, every one permission-gated with `.view`/`.manage`
+matching its HTTP verb, no gap in `DEFAULT_POSITIONS` (Pitfall #23).
+Org-scoping (#14a/b/c) holds across every by-id query and client-supplied
+FK in both services; LIKE-pattern escaping (#25) intact on both `.ilike()`
+call sites; no JSON column in this module is ever shallow-copy-mutated
+(Pitfall #12 does not apply — every write goes through `apply_updates`, a
+dict-spread, or a full constructor); no CSV export exists (Pitfall #15
+not applicable); no new route since pass 4 (Pitfall #30a not applicable).
+Frontend permission gating, banned-pattern sweep, form payload discipline,
+outbound-URL safety, and the GF-27–GF-34 status-filter chain all
+re-verified intact; the module's dialogs re-checked directly against
+Pitfall #31 (postdating pass 4) with no gap beyond the already-correct
+one-line diff noted above; the four test files re-checked against Pitfalls
+#28/#28a with no gap. The five standing product-decision flags (GF-7, GF-8,
+GF-9, GF-27a, GF-33) are unchanged and still correctly mirrored in
+`KNOWN_LIMITATIONS.md`. **0 fixed, 0 new findings.** Backend completion
+gate: flake8/black/isort clean on all six declared files (unchanged);
+`validate_migrations.py --strict` passed (444 revisions, single head);
+620 grant/fundraising-scoped tests passed (1 pre-existing skip); full
+backend suite: 12,585 passed, 21 pre-existing skips, 0 failed. Findings
+doc: `docs/security-review/GF-22-grants-fundraising.md`
+→ **Pass 5**. Next: Feature 23 (Medical supplies), pending this PR's merge.
 
 ### 2026-09-15 — Feature 21 (Admin hours, pass 5) merged — PR #2585, 1 fixed (AH-17, LOW)
 
