@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2570](https://github.com/thegspiro/the-logbook/pull/2570)
+(Feature 15, Scheduling, pass 5) merged clean — 17/17 CI green after one
+stale-superseded-run false failure on the `CI Success` gate (the branch's
+first commit's run was cancelled by the immediate PROGRESS.md-fill-in
+follow-up commit; every real job showed `cancelled` except `Migration
+Chain`, which finished `success` before the cancellation — only the gate
+itself showed `failure` — resolved by the PR's own explanatory comment, no
+code push, per the established pattern). Only other comment was the
+informational Codex usage-limit notice; no reviews, no unresolved threads.
+PR sat fully green (17/17 including `CI Success`) and `mergeable_state:
+clean` with no further activity, so a 30-minute watchdog check merged it
+directly (`merge_pull_request`, squash, `expectedHeadSha` pinned to the head
+commit `31efd0a4`) rather than leaving it idle, matching the established bar
+(Features 04, 05, 06, 14, 23, 25, 31, 33, 34). `git fetch origin main`
+confirms the merge commit (`6982a99e5`) is on `main`. `list_pull_requests`
+(open) re-checked immediately before writing this closure note: only
+dependabot #2552/#2567 and #2495 (unrelated) — no concurrent Feature 16
+pass PR. **Next: Feature 16 (Events & requests).**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 5, PR #2570, before it merged), preserved for history</summary>
+
 **PR [#2570](https://github.com/thegspiro/the-logbook/pull/2570)** — branch `claude/security-review-feature15-pass5`, Feature 15
 (Scheduling), pass 5. Step 0 concurrent-session check: `git fetch origin
 main` clean; the Open PR section read "None." with the Feature 14
@@ -45,6 +67,8 @@ or call_tracking or call_type"`) 1301 passed, 1 pre-existing skip; full
 backend suite 12577 passed, 21 skipped (pre-existing); `flake8`/`black`/`isort` clean on the
 feature's files; no frontend file touched. Full write-up:
 `docs/security-review/SCH-15-scheduling.md` → Pass 5.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2568's merge, Feature 14 pass 5 closure, confirming the rotation clear for Feature 15), preserved for history</summary>
@@ -21846,3 +21870,20 @@ frontend `npm run typecheck` 0 errors; `npm run lint` 0 errors/0 warnings
 (frontend read for the sweep above, not edited, this pass). Findings doc:
 `docs/security-review/ONB3-30-onboarding.md` (Pass 4). Rotation row 30 ->
 ✅ (pending PR merge). Next: Feature 31 (Scheduled tasks).
+
+### 2026-09-15 — Feature 15 (Scheduling, pass 5)'s PR #2570 merged, watchdog recorded it
+
+PR #2570 (delta-focused pass 5 over `scheduling.py`,
+`scheduling_service.py`, and their service layer; 0 new findings — four
+already-reviewed `fix(scheduling):` commits from the separate feature/app-
+review workstream, none of them a security regression, plus EC-16 cross-
+referenced rather than re-flagged) went fully green (17/17 checks including
+`CI Success`), `mergeable_state: clean`, with no unresolved review threads
+(only the informational Codex usage-limit comment and the PR's own
+explanation of a stale-superseded-run false failure on an earlier commit).
+Sat idle with nothing further pending, so a 30-minute watchdog check merged
+it directly (squash, `expectedHeadSha` pinned) rather than leaving it idle,
+matching the bar prior watchdog merges in this log have used (Features 04,
+05, 06, 14, 23, 25, 31, 33, 34). Merge commit `6982a99e5` confirmed on
+`main` via `git fetch`. Rotation row 15 stays ✅. Next: Feature 16 (Events &
+requests).
