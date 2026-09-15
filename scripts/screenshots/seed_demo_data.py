@@ -663,6 +663,16 @@ RECRUIT_USERNAMES = {"vbrennan", "snolan", "eadeyemi"}
 # captured images state outright.
 ADMINISTRATIVE_USERNAMES = {"jwhitfield", "bhollis"}
 
+# What "administrative" is written as. The pair, always: a member on a
+# membership tier has no class or status on file, so sending one without the
+# other is refused rather than guessed. Moving to this class also clears the
+# rank server-side -- a rank's default permissions union into the member's
+# effective set, and an administrative member is outside that chain of command.
+ADMINISTRATIVE_STANDING = {
+    "member_class": "administrative",
+    "member_status": "regular",
+}
+
 # Riding positions in the order a crew fills them. Sliced to a shift's minimum
 # staffing, so a four-person engine asks for an officer, a driver and two
 # firefighters while a two-person brush truck asks for an officer and a driver.
@@ -1125,20 +1135,23 @@ class Seeder:
                     and pick(current, "membership_type") != wanted_type
                     and pick(current, "id")
                 ):
-                    # `/users/{id}/profile` is the wrong route for this and
-                    # says nothing about it: `UserUpdate` has no
-                    # `membership_type` field, so the PATCH is accepted and the
-                    # value dropped. The tier change has its own endpoint,
-                    # which also validates against the configured tiers.
+                    # Sent as the class/status PAIR, not as `membership_type`.
+                    # `UserUpdate` has no `membership_type` field, so naming it
+                    # here would be accepted and dropped -- but it does carry
+                    # `member_class`, and those two columns are the authority
+                    # whenever they disagree with the legacy one, which the
+                    # flush-time reconciler then derives.
+                    #
+                    # Sending one of the pair alone is refused for a member on
+                    # a tier, because the other would be rewritten from a value
+                    # nobody supplied.
                     try:
                         self.api.patch(
-                            f"/users/{pick(current, 'id')}/membership-type",
-                            {
-                                "membership_type": wanted_type,
-                                "reason": ("Moved to non-operational support role."),
-                            },
+                            f"/users/{pick(current, 'id')}/profile",
+                            ADMINISTRATIVE_STANDING,
                         )
                         current["membership_type"] = wanted_type
+                        current["rank"] = None
                     except ApiError as exc:
                         self.blocked.append(f"membership type: {exc}")
                 continue
@@ -1176,13 +1189,11 @@ class Seeder:
             if username in ADMINISTRATIVE_USERNAMES and pick(record, "id"):
                 try:
                     self.api.patch(
-                        f"/users/{pick(record, 'id')}/membership-type",
-                        {
-                            "membership_type": "administrative",
-                            "reason": "Moved to non-operational support role.",
-                        },
+                        f"/users/{pick(record, 'id')}/profile",
+                        ADMINISTRATIVE_STANDING,
                     )
                     record["membership_type"] = "administrative"
+                    record["rank"] = None
                 except ApiError as exc:
                     self.blocked.append(f"membership type: {exc}")
             created.append(record)
