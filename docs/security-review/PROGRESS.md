@@ -16,6 +16,43 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2578](https://github.com/thegspiro/the-logbook/pull/2578)** — branch
+`claude/security-review-feature18-pass5`, Feature 18 (Training extended),
+pass 5. Step 0 concurrent-session check: `git fetch origin main` clean; the
+Open PR section read "None." with the Feature 17 (Training core, pass 5)
+closure note beneath it and named "Next: Feature 18 (Training extended),
+pass 5" explicitly; `list_pull_requests` (open) returned only the three
+known-unrelated PRs — dependabot #2552/#2567, and #2495
+(`feat(scheduling): ...`, a feature-workstream PR, not part of this
+rotation) — no concurrent Feature 18/training-extended review or closure
+PR. Baseline `21470e693` (merge commit of PR #2460, pass 4's landing
+point). Delta check against every declared file (twelve feature files,
+`training_program_service.py`, `schemas/training.py`, plus the wider
+name-based glob pass 2/3/4 established, and the eleven established
+frontend files) found **zero** in-scope change since pass 4. All standing
+fixes (TRX-1 through TRX-10, TRX2-1, TRX3-1, TRX4-1 through TRX4-8)
+re-verified present at inspection, including a direct re-check of TRX4-7/
+TRX4-8's `additional_headers` redaction-and-preserve-on-update behavior
+(cross-referenced by Feature 17's own pass 5 write-up). Fresh route
+re-enumeration: 88/88 routes authenticated, matching pass 2's independently-
+derived count exactly, TRX4-2/TRX4-6's OR-gates intact. Fresh sweep against
+CLAUDE.md pitfalls #2, #9, #12, #14, #15, #25, #27, #29, #30b: no new
+findings — confirmed this feature does not duplicate Feature 17's
+compliance computation (it only feeds `TrainingRecord` rows and a shared
+waiver-adjustment helper into that engine), confirmed no MCP tool module
+exists for this feature, and confirmed `CourseCohortService`'s roster
+enrollment shares the already-tracked `enroll_member` duplicate-active-
+enrollment race (`docs/KNOWN_LIMITATIONS.md`, owned by Feature 17) rather
+than a new, separate race. **0 fixes, 0 new findings this pass.**
+Completion gate: flake8/black/isort clean (thirteen files, no changes);
+migrations single head, 444 revisions; training-scoped suite 1101 passed,
+1 pre-existing skip; full backend suite 12577 passed, 21 skipped
+(pre-existing), 0 failed. No frontend file touched. Full write-up:
+`docs/security-review/TRX-18-training-extended.md` → Pass 5.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2575's merge, Feature 17 pass 5 closure, confirming the rotation clear for Feature 18), preserved for history</summary>
+
 **None.** PR [#2575](https://github.com/thegspiro/the-logbook/pull/2575)
 (Feature 17, Training core, pass 5) merged clean — 0 fixes, 0 new findings,
 zero in-scope code delta since pass 4. Merged directly by the repo owner
@@ -27,6 +64,8 @@ and #2495 (unrelated) — no concurrent Feature 18/training-extended closure
 or pass PR, so this session proceeds with both the closure bookkeeping and
 launching the next pass itself. **Next: Feature 18 (Training extended),
 pass 5.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 5, PR #2575, before it merged), preserved for history</summary>
@@ -15699,6 +15738,46 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 18 (Training extended, pass 5) — 0 fixed, 0 new findings — PR #2578 opened
+
+Delta-focused pass. Baseline `21470e693` (merge commit of PR #2460, pass
+4's landing point). `git diff --stat` against every declared backend/schema
+artifact (twelve feature files, `training_program_service.py`,
+`schemas/training.py`), the wider name-based glob pass 2/3/4 established,
+and the eleven established frontend files (`CohortWizard.tsx` and the rest)
+all came back empty — zero net in-scope change of any kind since pass 4.
+
+Re-verified every standing fix by direct inspection of current code:
+TRX-1 through TRX-10 (org-scoped lookups, `apply_updates`/`assert_in_org`/
+`assert_all_in_org` on every client-supplied FK, the four
+`_validate_references` methods, `XAPIService`'s provider-validation flags),
+TRX2-1 (`/training/effectiveness/evaluations` in `UNCACHEABLE_PREFIXES`),
+TRX3-1 (`external_training_service.py`'s resolve-once-and-pin SSRF
+transport, its own test file still passing), TRX4-1 through TRX4-8
+(the instructor-qualification and multi-agency OR-gates, the multi-agency
+and bare-provider-list cache exclusions, and — specifically re-confirmed
+per this pass's own brief — the `additional_headers` redact-on-read /
+preserve-on-update pair in `ExternalTrainingProviderResponse` and
+`update_provider`). Independent AST-based route re-enumeration: 88/88
+routes authenticated, matching pass 2's count exactly.
+
+Fresh sweep against CLAUDE.md pitfalls #2, #9, #12, #14, #15, #25, #27,
+#29, #30b found no new findings. Two cross-feature checks specific to this
+pass's brief: (1) this feature does not duplicate Feature 17's compliance
+computation — it feeds a shared waiver-adjustment helper and plain
+`TrainingRecord` rows into that engine, never re-implementing a pass/fail
+judgment itself; (2) `CourseCohortService`'s roster-enrollment path calls
+straight into `TrainingProgramService.enroll_member`, sharing the
+already-tracked `enroll_member` duplicate-active-enrollment race
+(`docs/KNOWN_LIMITATIONS.md`, owned by Feature 17) rather than presenting a
+second, independent race — noted in the findings doc, no new
+`KNOWN_LIMITATIONS.md` entry needed. No MCP tool module exists for this
+feature. Completion gate: flake8/black/isort clean on all thirteen scoped
+files (no changes); migrations single head, 444 revisions; training-scoped
+suite 1101 passed, 1 pre-existing skip; full backend suite 12577 passed, 21
+skipped (pre-existing), 0 failed. No frontend file touched. Full write-up:
+`docs/security-review/TRX-18-training-extended.md` → Pass 5.
 
 ### 2026-09-15 — Feature 17 (Training core, pass 5) closed — PR #2575 merged
 

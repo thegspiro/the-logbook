@@ -1143,3 +1143,228 @@ placeholder string).
 | `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors                                                             |
 | `cd frontend && npx eslint src/utils/apiCache.ts src/utils/apiCache.test.ts`                                      | ✅ 0 errors                                                             |
 | `cd frontend && npx vitest run src/utils/apiCache.test.ts`                                                        | ✅ 89 passed (TRX4-4, TRX4-5, one corrected pre-existing test)          |
+
+---
+
+## Pass 5 (2026-09-15)
+
+**Prefix:** `TRX5` · **PR:** [#2578](https://github.com/thegspiro/the-logbook/pull/2578)
+
+**Scope check:** diffed the current tree against `21470e693` (the pass-4
+merge commit for PR #2460) across all fifteen declared backend/schema
+artifacts (the twelve feature files, `training_program_service.py`,
+`schemas/training.py`, and `app/mcp/tools/training.py` — this feature has no
+own MCP tool module; `training.py` is Feature 17's) plus the wider glob
+pass 2/3/4 established (`api/v1/endpoints/*training*`,
+`api/v1/endpoints/course_*`, `services/*training*`, `services/course_*`,
+`schemas/*training*`, to catch a file the declared list wouldn't). **Zero**
+diff across every path in either check. Also diffed the eleven established
+frontend files (`CohortWizard.tsx`, `CourseSyllabusBuilder.tsx`,
+`ExternalTrainingPage.tsx`, `ReviewSubmissionsPage.tsx`,
+`SubmitTrainingPage.tsx`, `TrainingEnhancementsTab.tsx`,
+`TrainingWaiversTab.tsx`, `WaiverManagementPage.tsx`,
+`pages/training/CohortDetailPage.tsx`, `pages/training/CohortsPage.tsx`,
+`apiCache.test.ts`) against the same baseline — also zero. This pass is a
+full fresh re-verification, not a first read of grown files.
+
+### Re-verification of pass 1-4 fixes and standing flags
+
+Re-read the current code directly for each (not re-cited from the doc):
+
+- **TRX-1** — `training_program_service.py`'s `bulk_enroll_members`
+  prerequisite-error name lookup still filters `User.organization_id`.
+- **TRX-2 / TRX-5 / TRX-5b** — `update_provider`, `CourseCohortService.
+update_cohort`, and `CourseSyllabusService.update_class` all still route
+  through `apply_updates`.
+- **TRX-3 / TRX2-1** — `get_effectiveness_evaluations` still calls
+  `can_view_officer_training_data` and confines non-officers to their own
+  `user_id`; `TrainingEffectivenessService.get_evaluations` still accepts
+  and applies the parameter; `/training/effectiveness/evaluations` is still
+  in `UNCACHEABLE_PREFIXES`.
+- **TRX-4** — `_get_cohort_class` still takes `cohort_id`, threaded into
+  both `reschedule_class`/`cancel_class` before any write.
+- **TRX-6** — `training_waivers.py` still calls `assert_all_in_org` on
+  `requirement_ids` (create and update), and still org-scopes the
+  target-member lookup on create.
+- **TRX-7** — `training_submission_service.py` still calls `assert_in_org`
+  on `category_id` (create and update).
+- **TRX-8 / TRX-9** — the `_validate_references` methods (Recertification,
+  Instructor Qualification, Training Effectiveness, Multi-Agency services)
+  are all still present and still called from create/update;
+  `MultiAgencyService` still calls `assert_in_org` (allow_none) on
+  `training_session_id`/`training_record_id`.
+- **TRX-10** — `XAPIService.ingest_statement`'s `_provider_validated` flag
+  and `ingest_batch`'s once-per-batch validation are both still present.
+- **TRX3-1** — `external_training_service.py`'s `SSRFSafeAsyncTransport`
+  (resolve-once-and-pin, `follow_redirects=False`) is unchanged; its own
+  test file (`test_external_training_ssrf_transport.py`) still passes.
+- **TRX4-2 / TRX4-6** — the OR-gate
+  `require_permission("training.view_all", "training.manage")` is still on
+  all three instructor-qualification GET routes and on `GET /multi-agency`
+  (confirmed by an independent AST-based route re-enumeration, below); the
+  write-side POST/PATCH routes on both resources are still `training.manage`
+  only.
+- **TRX4-4 / TRX4-5** — `'/training/multi-agency'` and the bare
+  `'/training/external/providers'` (no trailing slash) are both still in
+  `UNCACHEABLE_PREFIXES`.
+- **TRX4-7 / TRX4-8** — `ExternalTrainingProviderResponse`'s
+  `field_validator("config", mode="after")` still redacts every
+  `additional_headers` value to `REDACTED_SECRET` while keeping keys; the
+  task brief for this pass specifically asked this be re-confirmed since a
+  different feature's own pass 5 (Feature 17, Training core) cross-
+  referenced it — read `update_provider` directly: the pre-update
+  `provider.config` is still captured before `apply_updates` mutates the
+  row, and any submitted `additional_headers` value equal to
+  `REDACTED_SECRET` is still replaced with that captured prior value (or
+  `None` if the key is new) before the write, so a load→edit→save round
+  trip still cannot overwrite an untouched header with the literal marker.
+
+**Independent route re-enumeration** (AST walk over all six files, not a
+re-read of pass 2's prose, using the same `Depends(...)` extraction
+approach): 18 + 29 + 5 + 16 + 14 + 6 = **88 routes**, matching pass 2's
+count exactly (unchanged since — TRX4-2/TRX4-6 changed three existing
+routes' permission dependency, they did not add routes). Every one carries
+`get_current_user` or a `require_permission(...)` dependency; none falls
+through to neither.
+
+### Cross-feature checks specific to this pass's brief
+
+- **Compliance computation (CLAUDE.md Pitfall #29 / Feature 17's TR4-3/
+  TR4-4):** none of this feature's six files compute a compliance
+  percentage, a compliant/non-compliant threshold, or an at-risk
+  determination — they only _feed_ Feature 17's engine. Read the two
+  feed paths directly: (1) waiver/leave-of-absence adjustment is a single
+  shared helper — `training_waiver_service.fetch_org_waivers`/
+  `fetch_user_waivers` — that `training_compliance.py` (Feature 17's own
+  file) imports and calls; this feature does not duplicate the "which
+  month counts as waived" logic anywhere in its own six files. (2) all
+  three places this feature turns an approval into compliance-relevant
+  data (`training_submission_service.py`'s `record = TrainingRecord(...)`
+  on approval, `external_training.py`'s two import routes, and
+  `training_enhancement_service.py`'s renewal-task completion path) create
+  a `TrainingRecord` row and stop — none of them re-implements
+  `certification_record_matches`/`classify_standing`/any pass/fail
+  judgment; Feature 17's compliance engine reads the resulting
+  `TrainingRecord` rows itself. No duplication found in this feature's own
+  scope.
+- **Secrets/credentials beyond `additional_headers` in `external_training.py`
+  and its schemas:** grepped both for every credential-shaped field.
+  `ExternalTrainingProviderResponse` already omits `api_key`/`api_secret`/
+  `client_secret` entirely (confirmed by reading the schema's field list,
+  not the docstring's claim alone) and TRX4-7 redacts `additional_headers`.
+  `ImportRecordRequest`/`BulkImportRequest`/`TestConnectionResponse` carry
+  no credential-shaped field. `connection_error` (free text on
+  `TestConnectionResponse` and the provider list/detail responses) can echo
+  back part of a failed request — read as an existing, accepted trade-off
+  (an admin diagnosing a broken integration needs to see why the test
+  failed) rather than a new finding; it was already visible in TRX4-5's
+  own write-up as a documented risk on the same response, not silently
+  missed. No new credential-shaped field found unredacted.
+- **MCP tool module:** `backend/app/mcp/tools/` has no
+  `training_extended.py` or similarly-named file. The one training tool
+  module, `training.py`, is Feature 17's (Training core) own — grepped it
+  for every model/table name this feature owns (cohort, syllabus, waiver,
+  external_training, enhancement, effectiveness, multi_agency, instructor,
+  recertif, competency, xapi); only one incidental match
+  (`record.instructor`, a `TrainingRecord` field name collision with the
+  unrelated `InstructorQualification` model, not a call into this
+  feature's code). Nothing in this feature's scope has an MCP surface to
+  review.
+- **`docs/KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" entry**
+  re-read in full: `documenso_service.py`'s own missing-call gap (added to
+  the list by this feature's own pass 4) was closed 2026-09-13 by security
+  review INT-27 pass 4, correctly reflected in the entry's own text and
+  revision history. The seven remaining narrowed-not-closed sites are
+  named accurately; none is one of this feature's own six files (this
+  feature's own site, `external_training_service.py`, was closed by
+  TRX3-1 and is correctly absent from the list). No correction needed.
+
+### Fresh sweep against CLAUDE.md pitfalls #2, #9, #12, #14, #15, #25, #27, #30b
+
+No new findings. Notes from the sweep, none rising to a flaggable issue:
+
+- **#2 (SET NULL nullability):** no schema change this pass; re-confirmed
+  by the zero-diff check rather than re-read model-by-model.
+- **#9 (unbounded in-memory caches):** no module-level tracking dict/set in
+  any of the six service files — every `Dict`/`{}` found by grep is a
+  local, per-request accumulator (e.g. `course_cohort_service.py`'s
+  `phase_by_section`, `training_waiver_service.py`'s `by_user`), scoped to
+  one request and discarded on return.
+- **#12 (JSON column mutation):** every JSON-column write in this feature's
+  scope (`attachments` on both `TrainingSubmission` and `TrainingRecord`,
+  `blackout_dates` on `CourseCohort`) reassigns with a fresh list/dict and
+  either calls `flag_modified` or uses `copy.deepcopy` — confirmed by
+  reading each of the four call sites directly, not by grep alone.
+- **#14a/14b/14c (org-scoping):** re-read every by-id fetch helper across
+  all six files and their services (`get_submission`, `get_cohort`,
+  `_get_cohort_class`, `_get_class`/`_get_course`, `_load_record_for_
+attachment`, `_load_submission_for_attachment`, the provider/mapping/
+  import lookups in `external_training.py`) — every one filters
+  `organization_id` at the query, and every client-supplied FK this
+  feature's create/update paths accept (`category_id`, `requirement_ids`,
+  `location_id`, `internal_user_id`, `internal_category_id`,
+  `class_course_id`, phase/program references) is validated in-org via
+  `assert_in_org`/`assert_all_in_org`/`is_in_org`/`_validate_references`
+  before being stored.
+- **#15 (CSV exports):** every `csv`-shaped output in this feature's scope
+  (`training_enhancement_service.py`'s five report generators) instantiates
+  `SafeCsvWriter`; no bare `csv.writer` anywhere in the twelve files.
+- **#25 (LIKE patterns):** no `.like()`/`.ilike()` call anywhere in the
+  twelve files (confirmed by direct grep, not carried over from pass 2's
+  same finding).
+- **#27 (capacity locking):** re-confirmed pass 2's "no capacity/quota
+  concept in this feature's tables" finding still holds — `CourseCohort`
+  itself carries no seat cap; `TrainingCourse.max_participants` (the only
+  capacity-shaped column reachable from this feature) is read exactly once
+  in the whole codebase, as a UI pre-fill default for a _training session's_
+  `max_attendees` (`CreateTrainingSessionPage.tsx`, Feature 17's own
+  screen) — it is never read or enforced by anything in this feature's own
+  six files, so there is no seat cap for `add_members`/roster-join to race
+  against. **A related, already-tracked race does run through this
+  feature's own file, worth naming explicitly rather than re-discovering
+  next pass:** `CourseCohortService._add_members`/`_enroll_member`
+  (`course_cohort_service.py:1159`) calls straight into
+  `TrainingProgramService.enroll_member`, which is exactly the function
+  `docs/KNOWN_LIMITATIONS.md`'s "`enroll_member`'s Duplicate-Active-
+  Enrollment Guard Is a Race" entry already tracks (a plain SELECT-then-
+  INSERT with no unique constraint or row lock, owned by Feature 17's own
+  `TR-17` residual). Enrolling a roster through a cohort is one more
+  caller of the same racy function, not a second, independent race — no
+  new `KNOWN_LIMITATIONS.md` entry needed, and the existing one's fix
+  (a partial unique index or row-locking guard on `ProgramEnrollment`)
+  would close this call path too, for free, the day it lands.
+- **#30b (integration tests marked correctly):** no new backend test file
+  added this pass (zero-diff, zero fixes), so nothing to mis-mark; spot-
+  checked that this feature's existing `db_session`-using test files
+  (`test_instructor_qualification_endpoint_permissions.py`,
+  `test_multi_agency_endpoint_permissions.py`,
+  `test_external_provider_header_redaction.py`,
+  `test_external_training_ssrf_transport.py`) all still carry
+  `pytest.mark.integration` at module or class level.
+
+### Verified good ✅ (pass 5, not previously stated this way)
+
+- **No new endpoint, model, service, schema, MCP tool, or migration touches
+  any training-extended table since pass 4** — confirmed via the zero-diff
+  scope check above (including the wider name-based glob and the eleven
+  frontend files) rather than inferred from a diff-stat alone.
+- **Route/permission surface is stable and matches pass 2's independently-
+  derived count exactly** (88/88, all authenticated) — see the route
+  re-enumeration above.
+
+**0 fixes, 0 new findings this pass.**
+
+## Completion gate (pass 5)
+
+| Check                                                                                                             | Result                                               |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `flake8` (feature scope, thirteen files)                                                                          | ✅ 0 violations                                      |
+| `black --check` (feature scope, thirteen files)                                                                   | ✅ 13 files unchanged                                |
+| `isort --check-only` (feature scope, thirteen files)                                                              | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 444 revisions, single head (no schema change)     |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ 1101 passed, 1 skipped (pre-existing)             |
+| `pytest tests/` (full backend suite)                                                                              | ✅ 12577 passed, 21 skipped (pre-existing), 0 failed |
+
+No frontend file touched (zero-diff scope check); frontend `typecheck`/
+`lint` not run per CLAUDE.md's "Match the Verification to the Change"
+guidance for a pass with no frontend delta.
