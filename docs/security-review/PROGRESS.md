@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #TBD** — branch `claude/security-review-feature13-pass5`, Feature 13
+**PR [#2565](https://github.com/thegspiro/the-logbook/pull/2565)** — branch `claude/security-review-feature13-pass5`, Feature 13
 (Apparatus & NFC), pass 5 (pass 12 in the feature's own doc). Step 0
 concurrent-session check: `git fetch origin main` clean; the Open PR section
 read "None." with the Feature 12 (Facilities) pass 5 closure note beneath it
@@ -15452,7 +15452,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 13 (Apparatus & NFC, pass 5) — 2 fixed (MED), 0 prior flags outstanding — PR #TBD opened
+### 2026-09-15 — Feature 13 (Apparatus & NFC, pass 5) — 2 fixed (MED), 0 prior flags outstanding — PR #2565 opened
 
 Step 0 concurrent-session check: `git fetch origin main` clean; the Open PR
 section read "None." with the Feature 12 (Facilities) pass 5 closure note
