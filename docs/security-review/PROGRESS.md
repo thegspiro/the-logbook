@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2568](https://github.com/thegspiro/the-logbook/pull/2568)** — branch `claude/security-review-feature14-pass5`, Feature 14
+(Equipment check & shifts), pass 5. Step 0 concurrent-session check: `git
+fetch origin main` clean; the Open PR section read "None." with the
+Feature 13 (Apparatus & NFC) pass 5 closure note beneath it and named
+"Next: Feature 14 (Equipment check & shifts), pass 5" explicitly;
+`list_pull_requests` (open) returned only the four known-unrelated PRs
+(#2547, #2495, dependabot #2552/#2567) — no Feature 14/equipment-check
+branch or title. Delta check against pass 4's merge (`89c399ccf`) found a
+single-file diff (`shift_completion_service.py`), already reviewed under
+Scheduling's own `SCH-13` rotation entry. One new finding this pass, fixed
+(MED): **EC-16** — `create_report`'s duplicate-report guard was a plain
+read-then-write (Pitfall #27); the DB's own `uq_shift_report_shift_trainee`
+unique constraint already prevented a stored duplicate, but the race let
+the loser hit it as a raw, unhandled `IntegrityError` instead of the
+method's own clean, caught `ValueError`. Fixed to match `submit_check`'s
+established idiom for this exact race shape. New regression test
+(`test_shift_report_duplicate_race.py`), confirmed failing pre-fix via
+`git stash push -u`, passing post-fix. Full write-up: the Log entry below
+and the **Pass 5** section of
+`docs/security-review/EC-14-equipment-check-shifts.md`. Completion gate:
+scoped suite 398 passed, 1 pre-existing skip; full backend suite 12574
+passed, 21 skipped (pre-existing), 0 failed; `flake8`/`black`/`isort` clean
+on both touched files.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 5, PR #2565, merged), preserved for history</summary>
+
 **None.** PR [#2565](https://github.com/thegspiro/the-logbook/pull/2565)
 (Feature 13, Apparatus & NFC, pass 5) merged clean — 17/17 CI green after one
 stale-superseded-run false failure on the `CI Success` gate (the branch's
@@ -15472,6 +15499,80 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 14 (Equipment check & shifts, pass 5) — 1 fixed (MED), 0 flagged — PR #2568 opened
+
+Step 0 concurrent-session check: `git fetch origin main` clean; the Open PR
+section read "None." with the Feature 13 (Apparatus & NFC) pass 5 closure
+note beneath it and named "Next: Feature 14 (Equipment check & shifts),
+pass 5" explicitly; `list_pull_requests` (open) returned only the four
+known-unrelated PRs (#2547, #2495, dependabot #2552/#2567) — no Feature 14/
+equipment-check branch or title, confirmed again immediately before opening
+this PR. Created `claude/security-review-feature14-pass5` fresh off
+`origin/main`.
+
+Rotation table row confirmed from the table itself: `| 14 | Equipment check
+& shifts | EC | equipment_check.py, shift_completion.py | ✅ |` — no change
+needed. Loaded prior art in full: `EC-14-equipment-check-shifts.md`'s pass
+1–4 history (EC-1 through EC-15), and `docs/KNOWN_LIMITATIONS.md`'s
+equipment-check entries (all already reflected in the findings doc's
+standing-flags list). No feature-owned MCP tool module exists for this
+feature (`find backend/app/mcp -iname "*equipment*" -o -iname "*shift*"`
+returns nothing).
+
+**Delta check against pass 4's merge (`89c399ccf`):** `git diff --stat` on
+all six pass-4-declared files came back with exactly one changed file,
+`shift_completion_service.py` (+50/-10) — traced to `SCH-13`, Scheduling's
+own rotation (a locking fix for a call-type-deletion/report-edit race), and
+read in full from this feature's own lens rather than trusted on the
+strength of its title: tenant isolation intact, no new route, no
+permission-string change. Correctly out of this pass's own findings.
+
+**1 new finding, fixed (MED):** re-read both endpoint files and their
+service layer fresh against CLAUDE.md's pitfalls, with particular attention
+to pitfall #27 (concurrent-submission races) per this pass's own brief.
+**EC-16** — `ShiftCompletionService.create_report`'s duplicate-report guard
+("A report already exists for this trainee on this shift") was a plain
+read-then-write: two officers filing a report for the same trainee on the
+same shift at once both pass the check and both attempt the insert. Writing
+the regression test first (a real two-session reproduction) settled what
+the race actually does before assuming the worst: `ShiftCompletionReport`
+already carries a DB-level `UniqueConstraint("shift_id", "trainee_id")`, so
+no duplicate row can ever be stored — the race instead lets the loser hit
+that constraint as a raw, unhandled `IntegrityError` (an ugly 500) instead
+of the method's own intended, caught `ValueError` (a clean 400). Fixed by
+matching `submit_check`'s own established idiom for this exact class of
+race (the DB constraint is the concurrency authority, the pre-insert read
+only a fast path) rather than introducing a new pattern — with two
+adjustments the regression test caught: a SAVEPOINT (`begin_nested()`)
+instead of `submit_check`'s plain `rollback()`, because `batch_create_
+reports` shares one uncommitted session across a whole crew loop and a full
+rollback would discard every other member's pending insert; and the
+post-failure existence re-check made a locking read
+(`.with_for_update()`), because a SAVEPOINT rollback doesn't give the
+transaction a fresh REPEATABLE READ snapshot the way a full rollback does,
+so a plain re-check still missed the winner's just-committed row. New
+regression test: `backend/tests/test_shift_report_duplicate_race.py`,
+confirmed failing against the pre-fix code via `git stash push -u`
+(the loser surfaced a raw `IntegrityError` instead of the expected
+`ValueError`) and passing after the fix. Full write-up: the **Pass 5**
+section of `docs/security-review/EC-14-equipment-check-shifts.md`.
+
+Standing flags re-confirmed at their current locations (all still hold,
+all files unchanged since pass 4 except the SCH-13 diff above): EC-1,
+EC-2/EC2-3/EC2-4, EC-4, EC-6, EC-9, EC-10, EC-12, EC-13, EC-14 (frontend
+cache prefix), EC-11 (unbuilt compliance-cadence feature, not a
+regression), the `get_item_deployments`/`update_deployed_lot` permission
+discrepancy (deliberately unadjudicated, per `KNOWN_LIMITATIONS.md`), LIKE
+escaping, CSV export (`SafeCsvWriter`), JSON-column deep-copy discipline,
+SMS allowlist (zero hits), and no unbounded in-memory caches in either
+service or endpoint file. Rotation row 14 stays `✅`. Completion gate:
+`flake8`/`black`/`isort` clean on both touched files (one `PT018`
+combined-assertion warning found and split during the pass); scoped
+`equipment_check`/`shift_completion`/`duplicate_race` suite 398 passed, 1
+skipped (pre-existing, `pywebpush`); full backend suite **12574 passed, 21
+skipped (pre-existing Docker/optional-dependency skips), 0 failed**; no
+frontend file touched this pass.
 
 ### 2026-09-15 — Feature 13 (Apparatus & NFC, pass 5) closed — PR #2565 merged
 
