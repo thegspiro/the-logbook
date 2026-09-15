@@ -299,15 +299,15 @@ When enabled, auto-purge permanently deletes inactive applicant records after th
 
 ### Actions
 
-| Action     | Available When            | Effect                                                                                                                                                          |
-| ---------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Advance    | Active                    | Moves applicant to the next pipeline stage; auto-creates election package if target is election_vote stage; auto-sends email if target is automated_email stage |
-| Regress    | Active (not first stage)  | Moves applicant back to the previous pipeline stage; resets that stage's progress to `IN_PROGRESS`. Logged as `prospect_regressed`                              |
-| Hold       | Active                    | Sets status to on_hold                                                                                                                                          |
-| Reject     | Active, On Hold, Inactive | Sets status to rejected                                                                                                                                         |
-| Withdraw   | Active, On Hold           | Sets status to withdrawn; archives the application                                                                                                              |
-| Reactivate | Inactive, Withdrawn       | Returns applicant to active status at their previous stage                                                                                                      |
-| Convert    | Active (final stage)      | Creates member record, sets status to converted                                                                                                                 |
+| Action     | Available When            | Effect                                                                                                                                                                                                                                                                                                                              |
+| ---------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Advance    | Active                    | Moves applicant to the next pipeline stage; auto-creates election package if target is election_vote stage; auto-sends email if target is automated_email stage. **Refused off an `election_vote` stage whose package reads _Added to Ballot_ or _Not Elected_** — see [Stage completion gates](#stage-completion-gates-2026-09-13) |
+| Regress    | Active (not first stage)  | Moves applicant back to the previous pipeline stage; resets that stage's progress to `IN_PROGRESS`. Logged as `prospect_regressed`                                                                                                                                                                                                  |
+| Hold       | Active                    | Sets status to on_hold                                                                                                                                                                                                                                                                                                              |
+| Reject     | Active, On Hold, Inactive | Sets status to rejected                                                                                                                                                                                                                                                                                                             |
+| Withdraw   | Active, On Hold           | Sets status to withdrawn; archives the application                                                                                                                                                                                                                                                                                  |
+| Reactivate | Inactive, Withdrawn       | Returns applicant to active status at their previous stage                                                                                                                                                                                                                                                                          |
+| Convert    | Active (final stage)      | Creates member record, sets status to converted. Carries the same `election_vote` gate as Advance _(2026-09-14, MP-30)_                                                                                                                                                                                                             |
 
 ### Withdraw / Archive
 
@@ -774,13 +774,13 @@ The setting is stored as `auto_advance: boolean` in the stage's `FormStageConfig
 
 ### Edge Cases
 
-| Scenario                                                  | Behavior                                                                     |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Auto-advance disabled (default)                           | Coordinator must manually advance the prospect                               |
-| Auto-advance enabled, form submitted                      | **Only the prospect bound to that submission** moves to the next stage       |
-| Auto-advance enabled, last stage                          | Auto-advance does not trigger conversion — coordinator must manually convert |
-| Stage config missing auto_advance field                   | Treated as `false` (defaults to off)                                         |
-| Several prospects parked on the same auto-advancing stage | Unaffected by another prospect's submission — see below                      |
+| Scenario                                                  | Behavior                                                                                              |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Auto-advance un-ticked                                    | Coordinator must manually advance the prospect; the submitted answers are still recorded on the stage |
+| Auto-advance enabled, form submitted                      | **Only the prospect bound to that submission** moves to the next stage                                |
+| Auto-advance enabled, last stage                          | Auto-advance does not trigger conversion — coordinator must manually convert                          |
+| Stage config missing auto_advance field                   | Treated as **on** — see [Absence means advance](#absence-means-advance-2026-09-15)                    |
+| Several prospects parked on the same auto-advancing stage | Unaffected by another prospect's submission — see below                                               |
 
 > **Fixed 2026-08-17: one submission advanced everybody on the stage.**
 > `FormsService._auto_advance_pipeline_step` selected _every_ `ACTIVE` prospect
@@ -798,6 +798,85 @@ The setting is stored as `auto_advance: boolean` in the stage's `FormStageConfig
 > tell is a stage-completion history entry reading "Auto-advanced on form
 > submission" against a prospect with no matching submission of their own. Use
 > [stage regression](#stage-regression-2026-03-14) to move them back.
+
+### Absence means advance _(2026-09-15)_
+
+`auto_advance` is read as `True` when the key is missing. That is deliberate and
+is the opposite of what the table above said until this date.
+
+Two paths advance a prospect on a form submission, and they read the setting
+differently because they reach different stages:
+
+| Path                             | Reads `auto_advance`         | Reaches                                                                                                               |
+| -------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `_auto_advance_pipeline_step`    | Requires an explicit `true`  | Only the submission that **created** the prospect — `form_submission_id` is written once and is protected from update |
+| `_complete_form_submission_step` | `.get("auto_advance", True)` | Every later form stage, because the pipeline service stamps each attached form `membership_interest`                  |
+
+Reading a missing key as off would strand every existing installation's
+applicants on their first stage at the upgrade: the checkbox writes its key only
+once somebody toggles it, and the seeded pipelines store no config at all
+(CLAUDE.md Pitfall #19). The checkbox renders ticked by default to match, and a
+form stage's default config now stores the key explicitly, so a stage created
+from here on says what it means rather than relying on the default.
+
+**Recording is separate from moving on every path.** A submission that does not
+advance still stores its answers on the stage's progress row via
+`_store_form_answers`, so declining to advance never silently drops what was
+submitted.
+
+### Stage completion gates _(2026-09-13)_
+
+`_validate_step_completion` refuses a completion that the stage's own evidence
+does not support. Eight stage types carry a gate; two of them changed in this
+window, and they are gated differently on purpose.
+
+| Stage type              | Gate                                                                                         | Applies to a coordinator's click? |
+| ----------------------- | -------------------------------------------------------------------------------------------- | --------------------------------- |
+| `election_vote`         | The applicant's latest election package must not read _Added to Ballot_ or _Not Elected_     | **Yes**                           |
+| `meeting`               | An `EventExternalAttendee` row with `checked_in` set, at an event the stage's config accepts | No — automatic advances only      |
+| `document_upload`       | The configured documents are present                                                         | Yes                               |
+| `reference_check`       | The configured references are recorded                                                       | Yes                               |
+| `checklist`             | The checklist items are ticked                                                               | Yes                               |
+| `interview_requirement` | The interview is recorded                                                                    | Yes                               |
+| `multi_approval`        | The approvals are recorded                                                                   | Yes                               |
+| `medical_screening`     | The screening is recorded                                                                    | Yes                               |
+
+**Why `election_vote` binds the coordinator and `meeting` does not.** A ballot
+result is a decision the department has already made, recorded by the Elections
+module — a coordinator clicking past it is overriding the membership, not
+exercising judgement. Attendance is evidence that may simply never have been
+recorded, so the manual **Advance** stays as the escape hatch, exactly as
+`_assert_meeting_attended` already documented.
+
+**The package graded is the one the drawer shows** — latest by `created_at` — so
+`ElectionPackageSection` and the Advance button cannot disagree (CLAUDE.md
+Pitfall #29). A stage with no package, or one still _Draft_ or _Ready_, advances
+as before: a department that holds its vote at a meeting and records the outcome
+by hand is unaffected.
+
+**A meeting stage that names no event now matches no event.**
+`meeting_config_matches_event` used to fall through to `True` when the config
+named neither an event type nor an event id, on the reasoning that a stage which
+cannot discriminate should take whatever attendance arrives. Guest check-in is
+department-wide and departments enable it on public events, so a stage reading
+"Meeting with the Fire Chief" advanced an applicant who signed in at a
+fundraiser. That shape is the stage builder's **default**, not an exotic one.
+`meeting_type` (`chief_meeting`, `president_meeting`) names the stage's purpose
+for whoever reads it and is read nowhere on the backend — it is a label, not a
+matcher. The stage builder now refuses to save an auto-advancing meeting stage
+with no event type. Cal.com stages are exempt throughout: they advance off the
+booking webhook, never off an attendance record.
+
+**Election Vote and Manual Approval became creatable from the stage picker.**
+`validate()` required `eligible_voter_roles` and `approver_roles` to be
+non-empty, and neither has an input anywhere in the modal — both default to `[]`.
+Manual Approval is the modal's default type and its error was never rendered, so
+Save failed in silence; Election Vote showed a message with no field to satisfy.
+Only the quick-add presets, which seed the keys, could create either. Nothing
+reads either key — the ballot item takes `eligible_voter_types` off
+`recommended_ballot_item`, and approval authority comes from
+`prospective_members.manage` — so both were stored-but-inert config and the
+validation is dropped.
 
 ---
 

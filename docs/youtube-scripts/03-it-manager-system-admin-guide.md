@@ -614,6 +614,36 @@ member preview.]**
 > For Cloudflare, enter your Account ID and API Token — Cloudflare handles
 > all the DNS authentication automatically."
 
+**[SCREEN: Open the Self-Hosted SMTP preset list — Yahoo, iCloud, Zoho, Fastmail, AOL, GMX, SendGrid, Amazon SES, Mailgun, Postmark, Brevo, Mailjet]**
+
+> "If your department runs on something that isn't Gmail or Microsoft — Yahoo,
+> Fastmail, Zoho, or a sending service like SendGrid or SES — **that's
+> Self-Hosted SMTP**, and there's a preset for it. Twelve of them, each filling
+> in the host, port and encryption that provider documents. Don't be put off by
+> the name: 'Self-Hosted' means you're giving it an SMTP server, not that you
+> have to run one."
+
+> "Most of them want an **app password**, not your account password — generated
+> in the provider's own security settings once you've got two-factor sign-in
+> on. That is far and away the commonest reason a correct host and port still
+> won't authenticate."
+
+**[CALLOUT: "'Other' stores nothing and cannot send — it is not a fallback"]**
+
+> "One trap to call out, because it has bitten departments. **'Other' is not a
+> catch-all.** It stores nothing and it cannot send. And here's the part that
+> makes it worse than it sounds: **an enabled email section short-circuits your
+> deployment's own SMTP settings.** So a department that was sending perfectly
+> well through the server-level configuration, then came in here and
+> half-filled a section, stopped sending — with a green 'saved' toast and no
+> error anywhere."
+
+> "Since September 2026 that save is refused: an enabled section that's missing
+> what it needs tells you which field, right there on the screen. But if your
+> mail went quiet before then and you never worked out why, this is the first
+> place to look. **Either complete the section, or switch it off** — a disabled
+> section hands sending back to the deployment's configuration."
+
 **[SCREEN: Show Cloudflare configuration fields with Account ID and API Token]**
 
 > "Once configured, use the **Test Connection** button to verify everything
@@ -637,6 +667,12 @@ member preview.]**
 > "One thing to note: Cloudflare Email Service doesn't support file
 > attachments. If your department sends compliance reports or other files
 > by email, use one of the SMTP-based platforms instead."
+
+> "Cloudflare departments can send **ballot email** as of September 2026 — the
+> election fan-out used to hand Cloudflare a message format its API doesn't
+> accept and fall back to an SMTP server those departments don't have. And if
+> you've set a deployment-wide Cloudflare account, it's a **default for
+> organizations that haven't chosen**, not an override for ones that have."
 
 ### CALENDAR SYNC (25:30 – 26:00)
 

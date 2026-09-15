@@ -1,5 +1,61 @@
 # Script currency
 
+## Flagged by the 2026-09-12 → 09-15 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-09-12_TO_09-15.md`](../CHANGE_AUDIT_2026-09-12_TO_09-15.md#documentation-and-media-disposition).
+
+This window produced **three Wrong**, one each in scripts 03, 04 and 06, and
+**all three are rewritten in-script**. Determinations were made by **reading the
+script files**, not by inferring from the change list — which is what produced
+the two negative findings below, both of which contradict what the change list
+on its own would have suggested.
+
+**No script changed address**, because nothing in the application did. There is
+no retired URL anywhere in this window, so no beat is pointing at a dead path.
+
+### Rewritten in-script this window
+
+| Script | Beat                      | Was                                                                                                                                | Now                                                                                                                                                                                                            |
+| ------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **03** | Email platform selection  | Named the five platforms and explained Gmail, Microsoft 365, SMTP and Cloudflare. **"Other" was listed and never explained**       | Adds the twelve SMTP presets, the app-password rule behind most of them, and the trap: **"Other" stores nothing and cannot send**, and an enabled section short-circuits the deployment's own SMTP             |
+| **04** | "Convert to Member"       | "When an applicant completes the pipeline, you can convert them directly to a full member — their data carries over automatically" | **Convert now waits for the ballot.** An applicant still on a ballot, or voted down, is refused. The old line is kept and the limit added after it, because the line is still true for a pipeline with no vote |
+| **06** | Dashboard **Open Shifts** | "**Open Shifts** is what nobody's covering yet"                                                                                    | "...**that you're cleared to cover**", plus why the board is shorter than it was and what the old "position was just filled" message actually meant                                                            |
+
+### Two findings the change list would have got wrong
+
+**The dialog change needs no script edit.** A click outside a dialog no longer
+discards the form in it, which sounds like a re-record trigger for every take
+that closes one. **No script in the series closes a dialog that way.** Searched
+all seventeen for "click outside", "clicking outside", "click away" and "click
+off": the only hit anywhere in the documentation set is the inventory guide
+describing an inline number field committing on blur, which is unrelated and
+unchanged. Nothing to re-record.
+
+**Script 06 has no Open Shifts chapter to rewrite.** The board's own screen is
+never walked in the member guide — the only mention is the dashboard tile, which
+is where the edit above went. A department that wants the full board explained
+to members is better served by
+[`training/03-scheduling.md`](../training/03-scheduling.md#what-the-board-lists-and-what-it-leaves-out-2026-09-13),
+which now carries it. **Do not add a chapter for it** without deciding that the
+member guide's scope is changing; it is currently a dashboard-and-mobile script
+by design.
+
+### Considered and left alone
+
+- **05 — Training Officer.** Nothing in this window touches training.
+- **07 — Secretary / Administrative.** The inspection-clock fix would sit here
+  if anywhere — this script carries the gear material — but the script does not
+  currently walk maintenance records at all, so there is no beat to correct. If
+  a gear chapter is ever added, the forward-only caveat belongs in it:
+  **inspection dates that already slid keep the wrong value.**
+- **08 — Quick Tips & Shorts.** Two shorts are _available_ from this window —
+  what the Open Shifts board now hides, and the SMTP preset list — but neither
+  is a correction to an existing short, so they are an opportunity rather than a
+  currency item.
+- **12 — Elections deep dive.** The vote gate is enforced in the _pipeline_, not
+  in Elections; this script's own material is unchanged.
+
 ## Flagged by the 2026-09-06 → 09-12 changes
 
 Full reason/data-path context in

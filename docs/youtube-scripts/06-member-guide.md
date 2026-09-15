@@ -108,7 +108,15 @@ Administrative]**
 > "Shifts come in **two** panels, and they're different things."
 
 > "**My Upcoming Shifts** is what you're signed up for. **Open Shifts** is what
-> nobody's covering yet — that's where you pick up an extra."
+> nobody's covering yet **that you're cleared to cover** — that's where you pick
+> up an extra."
+
+> "That second half matters. Open Shifts only lists a shift when one of its
+> empty seats is a position you're actually cleared for. So if a shift needs a
+> driver and you're not signed off to drive, you won't see it — even though the
+> shift is short-handed. Before September 2026 you'd have seen it, tapped sign
+> up, and been told the position was just filled, which wasn't true. Your board
+> is shorter now, and what's gone is what you'd have been refused."
 
 **[SCREEN: Point to the "and N more" line under Open Shifts]**
 

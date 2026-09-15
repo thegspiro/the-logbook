@@ -84,7 +84,7 @@ Navigate to **Shift Scheduling** in the sidebar. The scheduling page is organize
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Schedule**        | Calendar view of all shifts                                                                                                                      |
 | **My Shifts**       | Your personal shift assignments                                                                                                                  |
-| **Open Shifts**     | Shifts available for sign-up                                                                                                                     |
+| **Open Shifts**     | Shifts with a seat you are cleared for and nobody has claimed. `scheduling.manage` sees the department-wide staffing-gap view instead              |
 | **Requests**        | Time-off and swap requests                                                                                                                       |
 | **Shift Templates** | Reusable shift configurations                                                                                                                    |
 | **Reports**         | Hours, coverage, and compliance reports                                                                                                          |
@@ -163,6 +163,38 @@ You can also **withdraw** from an open shift you signed up for, as long as it ha
 ![Open Shifts tab showing shifts with vacant positions](./images/03-05-open-shifts.png)
 
 > **Hint:** Open shifts are a great way to pick up additional hours toward shift-based training requirements.
+
+### What the board lists, and what it leaves out _(2026-09-13)_
+
+**A shift appears on your board only when one of its unclaimed seats is a
+position you are cleared for.** A shift that still needs a driver, where every
+firefighter seat is taken, does not appear to a firefighter — because signing up
+for it would be refused.
+
+That refusal is what this changed. The board used to ask "does this shift still
+need somebody?" while the signup check asked "is this member cleared for a seat
+that is actually free?", and the two were never compared. The shift was offered,
+the signup was declined, and the message said **"Position was filled after this
+request was submitted"** — which describes a race that had not happened, for a
+seat that had been taken for days.
+
+So the board is shorter than it used to be, and what it drops is what the system
+would have refused. Two things follow from the same fix:
+
+- **The position picker offers only seats the server will grant.**
+- **"Every seat you are cleared for on this shift has been filled"** is now
+  distinguished from **"you are not eligible"**. They have different remedies —
+  the first means come back later, the second means talk to an officer about
+  your qualifications — and both used to read as the second.
+
+**Holders of `scheduling.manage` see the department-wide view instead**, because
+this tab is also where a scheduling admin looks for staffing gaps. If an officer
+and a member compare boards and see different lists, that is why.
+
+> **Screenshot needed:**
+> _[Scheduling → Open Shifts as an ordinary member beside the same board as a
+> scheduling admin, so the difference is visible in one frame. Caption which is
+> which.]_
 
 ---
 
