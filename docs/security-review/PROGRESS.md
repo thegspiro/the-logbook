@@ -16,6 +16,57 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 04 (Storefront & payments), pass 6** — branch
+`claude/security-review-sf-pass6-75cab9`, PR pending creation. Step 0
+concurrent-session check (done twice — once at start, once immediately before
+push): `git fetch origin main` clean both times; `PROGRESS.md`'s Open PR row
+(before this edit) read "Feature 03 (Public surface & webhooks), pass 6 — PR
+#2597" — `pull_request_read` confirmed #2597 `state: closed`, `merged: true`,
+`merged_at: 2026-09-15T19:28:26Z`, and it is at the tip of `origin/main`,
+with rotation row 03 already marked ✅ as part of that same merge — so this
+iteration proceeded to Feature 04 rather than tending a still-open PR.
+`search_pull_requests` (open) returned #2590 (a prospective-members
+form-stage fix), #2594 (an npm-override conflict checker) and #2595 (a
+bulk-advance meeting-attendance-gate fix, split from #2590) — all unrelated
+feature/tooling work from other sessions, none touching
+storefront/payments/checkout/PayPal/Stripe surfaces; `list_branches` showed
+no `security-review`/`feature04`/`storefront`/`payments`/`sf` branch in
+flight either check.
+
+Baseline `11de49d61` (merge commit of PR #2542, pass 5's landing point).
+**True zero-delta re-verification: every file in this feature's full domain
+— the 13 declared/established backend files, the entire
+`frontend/src/modules/storefront/` tree, every storefront/embroidery/
+personalization/thread/grant-matching migration, and all seven previously-
+identified shared collaborators (`admin_hub_service.py`, `admin_hub.py`,
+`core/permissions.py`, `api/dependencies.py`, `core/security_middleware.py`,
+`models/notification.py`, `core/database.py`, `core/utils.py`) — is
+byte-identical to pass 5's reviewed state.** `git diff 11de49d61 origin/main`
+across that full set returns no lines, and `git log 11de49d61..origin/main`
+over the same set returns zero commits, despite 75 unrelated commits landing
+on `main` since pass 5's merge. Re-confirmed by direct read (not diff alone)
+that the three still-open findings sit at pass 5's exact cited lines: SF-9
+(app-review, MED — `record_payment`'s unlocked read-modify-write on
+`amount_paid`, `storefront_service.py:1918/1930/1951`), SF-11 (app-review,
+LOW — `StoreOrderCreate.items` has no cart-size maximum,
+`schemas/storefront.py:675`), and the unbounded `export_orders_csv`
+(`storefront_service.py:3150`, carried since pass 1). All five self-
+settlement separation-of-duties guards (SF-6, SF-7, and siblings) re-read at
+their pass-5 line numbers and confirmed unmodified. **0 fixed, 0 new
+findings.** Full backend suite: 10,199 passed, 1 pre-existing skip, 0
+failed; scoped storefront/payment tests: 725 passed, 1 skipped (`py_vapid`,
+pre-existing); cross-cutting guard tests (org-scoping ratchet, capacity
+locking, LIKE escaping, CSV sweep, storefront deadlock): 71 passed;
+flake8/black/isort clean; `validate_migrations.py --strict`: 444 revisions,
+single head `6ab7d903fae5`, unchanged; `check_route_permissions.py
+--strict`: 228 routes, 0 errors, 0 warnings; frontend typecheck and lint
+(`eslint --max-warnings 10`) both clean (no frontend file modified).
+Findings doc: `docs/security-review/SF-04-storefront-payments.md` →
+**Pass 6**. Next: Feature 05 (Finance & approvals), pending this PR's merge.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 6, PR #2597, merged clean — 0 fixed, 0 new findings; rotation row 03 marked ✅ as part of that PR), preserved for history</summary>
+
 **Feature 03 (Public surface & webhooks), pass 6** — PR
 [#2597](https://github.com/thegspiro/the-logbook/pull/2597), branch
 `claude/security-review-pub-pass6-e7a219`. Step 0 concurrent-session check
@@ -66,6 +117,8 @@ links; frontend typecheck (`tsc --noEmit`) and lint
 (`eslint --max-warnings 10`) clean (no frontend file modified). Findings doc:
 `docs/security-review/PUB-03-public-surface-webhooks.md` → **Pass 6**. Next:
 Feature 04 (Storefront & payments), pending this PR's merge.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 6, PR #2596, merged clean — 0 fixed, 0 new findings; rotation row 02 marked ✅ as part of that PR), preserved for history</summary>
@@ -16159,7 +16212,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
@@ -16197,6 +16250,35 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 04 (Storefront & payments, pass 6) — 0 fixed, 0 new findings
+
+Step 0: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
+"Feature 03 (Public surface & webhooks), pass 6 — PR #2597" —
+`pull_request_read` confirmed #2597 merged (`merged_at 2026-09-15T19:28:26Z`)
+and at the tip of `origin/main`, with rotation row 03 already ✅ as part of
+that merge. `search_pull_requests`/`list_branches` showed no concurrent
+Feature 04/storefront/payments work. Baseline `11de49d61` (PR #2542, pass
+5's merge). Diffed the full established domain — 13 backend/frontend/
+migration scope files plus all seven previously-identified shared
+collaborators (`admin_hub_service.py`, `admin_hub.py`, `core/permissions.py`,
+`api/dependencies.py`, `core/security_middleware.py`, `models/notification.py`,
+`core/database.py`, `core/utils.py`) — against current `HEAD`: **zero lines
+changed anywhere in that set**, despite 75 unrelated commits landing on
+`main` since pass 5. Re-confirmed by direct read (not diff alone) that all
+three still-open findings sit at pass 5's exact cited lines: SF-9 (MED,
+app-review — `record_payment`'s unlocked read-modify-write,
+`storefront_service.py:1918/1930/1951`), SF-11 (LOW, app-review — no cart
+line-count maximum, `schemas/storefront.py:675`), and the unbounded
+`export_orders_csv` (`storefront_service.py:3150`, carried since pass 1).
+All five self-settlement guards (SF-6/SF-7/siblings) re-read unmodified.
+Completion gate: flake8/black/isort clean; `validate_migrations.py --strict`
+444 revisions, single head `6ab7d903fae5`; `check_route_permissions.py
+--strict` 228 routes, 0 errors; scoped storefront/payment tests 725 passed,
+1 pre-existing skip; cross-cutting guard tests 71 passed; full backend suite
+10,199 passed, 1 pre-existing skip, 0 failed; frontend typecheck and lint
+both clean. Findings doc: `docs/security-review/SF-04-storefront-payments.md`
+→ **Pass 6**. Rotation row 04 → ✅. Next: Feature 05 (Finance & approvals).
 
 ### 2026-09-15 — Feature 03 (Public surface & webhooks, pass 6) — 0 fixed, 0 new findings — PR #2597 opened
 
