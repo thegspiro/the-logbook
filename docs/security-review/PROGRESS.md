@@ -59,12 +59,32 @@ tests, 3 of which were verified to fail against the pre-fix code specifically
 suite: 12585 passed (12578 + 7 new), 21 pre-existing skips, 0 failed, run
 twice (before and after the fix); flake8/black/isort clean on both changed
 files. Findings doc: `docs/security-review/AH-21-admin-hours.md` → **Pass
-5**. Next: Feature 22 (Grants & fundraising), pending this PR's merge (and
-#2584's, whichever lands second, per this file's established `<details>`
-convention for a PROGRESS.md race between two rotation PRs).
+5**. Next: Feature 22 (Grants & fundraising), pending this PR's merge. (The
+anticipated #2584 race resolved on its own: #2584, Feature 20's docs-closure
+PR, merged first — merge commit `d9f83cf`, confirmed via `git fetch` while
+resolving this PR's resulting merge conflict against `main` — so only this
+PR's own merge is now pending.)
 
 <details>
-<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 5, PR #2583, before this pass found it already merged with its own closure PR #2584 still open), preserved for history</summary>
+<summary>Superseded — prior Open PR note ("None" after PR #2583's merge, Feature 20 pass 5 — the state PR #2584 recorded, and the note this pass's PR #2585 conflicted with), preserved for history</summary>
+
+**None.** PR [#2583](https://github.com/thegspiro/the-logbook/pull/2583)
+(Feature 20, Compliance, pass 5) merged clean — a zero-delta re-verification
+pass (0 fixes, 0 new findings; all seven in-scope files byte-identical to
+pass 4's merge), 17/17 CI green on the current head, `mergeable_state: clean`.
+The `CI Success` failure on the branch's first commit was the known
+stale-superseded-run artifact (all real jobs `cancelled`, confirmed via
+`list_workflow_jobs`) — resolved with one explanatory PR comment, no code
+push needed. Merge commit `18443e916` confirmed on `main` via `git pull`.
+`list_pull_requests` (open) re-checked immediately before writing this
+closure note: only dependabot #2552/#2567, and #2495 (unrelated) — no
+concurrent Feature 21 pass or closure PR. Rotation row 20 stays ✅. **Next:
+Feature 21 (Admin hours), pass 5** (last closed at pass 4, PR #2482).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 5, PR #2583, before it merged), preserved for history</summary>
 
 **Feature 20 (Compliance), pass 5** — PR
 [#2583](https://github.com/thegspiro/the-logbook/pull/2583), branch
@@ -15903,6 +15923,16 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 20 (Compliance, pass 5)'s PR #2583 merged, watchdog recorded it
+
+PR #2583 (zero-delta re-verification pass over `compliance_config.py`/
+`compliance_officer.py`; 0 fixes, 0 new findings) merged clean via squash,
+merge commit `18443e916`. 17/17 CI green on the current head; the `CI Success`
+failure on the branch's first commit was the known stale-superseded-run
+artifact (all real jobs `cancelled`) and needed only an explanatory PR
+comment, no push. Rotation row 20 stays ✅. Next: Feature 21 (Admin hours),
+pass 5.
 
 ### 2026-09-15 — Feature 21 (Admin hours, pass 5) — 1 fixed (LOW), 0 flagged — PR #2585 opened
 
