@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 03 (Public surface & webhooks), pass 6** — PR TBD, branch
+**Feature 03 (Public surface & webhooks), pass 6** — PR
+[#2597](https://github.com/thegspiro/the-logbook/pull/2597), branch
 `claude/security-review-pub-pass6-e7a219`. Step 0 concurrent-session check
 (done twice — once at start, once immediately before push): `git fetch
 origin main` clean both times; `PROGRESS.md`'s Open PR row (before this edit)
@@ -16197,7 +16198,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 03 (Public surface & webhooks, pass 6) — 0 fixed, 0 new findings — PR TBD opened
+### 2026-09-15 — Feature 03 (Public surface & webhooks, pass 6) — 0 fixed, 0 new findings — PR #2597 opened
 
 Step 0: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
 "Feature 02 (Permissions & roles), pass 6 — PR #2596" — `pull_request_read`
