@@ -42,6 +42,15 @@ Findings doc: `docs/security-review/SEC-00-cross-cutting-baseline.md` →
 **Pass 6**. Next: Feature 01 (Auth & session lifecycle), pending this PR's
 merge.
 
+**Merge-conflict note:** this branch's Step 0 check ran before PR #2591
+(the pass-5-close-and-reset watchdog PR) had merged, so this PR's own base
+predates it; both PRs touched this Open PR section (this pass's own note
+vs. #2591's "None" + rotation reset). Resolved here by merging `main` in
+(merge commit noted in this branch's history, no rebase/force-push) and
+keeping both notes, this pass's note first, per this file's established
+nested-`<details>` convention — matching how #2584/#2585 and #2586/#2587
+resolved the same shape of collision.
+
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2587's merge, Feature 22 pass 5 — the state this pass's PR conflicted with, plus the rotation reset to ⬜ for pass 6), preserved for history</summary>
 
