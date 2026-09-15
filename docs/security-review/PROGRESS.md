@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2585](https://github.com/thegspiro/the-logbook/pull/2585)
+(Feature 21, Admin hours, pass 5) merged clean via squash, merge commit
+`b31954ef5` — 1 fixed (AH-17, LOW: `get_summary`/`get_user_hours_compliance`
+routed through `user_has_permission()` instead of a hand-rolled scan that
+missed module-wildcard/rank-default grants), 7 new regression tests, full
+backend suite 12585 passed/21 skipped/0 failed. The branch picked up a real
+merge conflict against `main` on `docs/security-review/PROGRESS.md` (both
+this PR and #2584's Feature 20 closure touched the Open PR section) —
+resolved by merging `main` into the PR branch (merge commit `b5940c19`, no
+force-push, no rewritten history) once #2584 merged first; CI Success came
+back green (17/17) on the resulting head, `mergeable_state: clean`.
+`list_pull_requests` (open) re-checked immediately before writing this
+closure note: only dependabot #2552/#2567, and #2495 (unrelated) — no
+concurrent Feature 22 pass or closure PR. Rotation row 21 stays ✅. **Next:
+Feature 22 (Grants & fundraising), pass 5** (last closed at pass 4).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 5, PR #2585, before it merged — including the in-flight merge-conflict resolution against #2584), preserved for history</summary>
+
 **Feature 21 (Admin hours), pass 5** — PR
 [#2585](https://github.com/thegspiro/the-logbook/pull/2585), branch
 `claude/security-review-ah-pass5-3edf486d`. Step 0 concurrent-session
@@ -64,6 +83,8 @@ anticipated #2584 race resolved on its own: #2584, Feature 20's docs-closure
 PR, merged first — merge commit `d9f83cf`, confirmed via `git fetch` while
 resolving this PR's resulting merge conflict against `main` — so only this
 PR's own merge is now pending.)
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2583's merge, Feature 20 pass 5 — the state PR #2584 recorded, and the note this pass's PR #2585 conflicted with), preserved for history</summary>
@@ -15923,6 +15944,18 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 21 (Admin hours, pass 5) merged — PR #2585, 1 fixed (AH-17, LOW)
+
+PR #2585 merged clean via squash, merge commit `b31954ef5`. AH-17 fixed:
+`get_summary`/`get_user_hours_compliance` routed through
+`user_has_permission()` instead of a hand-rolled permission scan that missed
+module-wildcard and operational-rank-default grants — 7 new regression
+tests, full backend suite 12585 passed/21 skipped/0 failed. The branch hit a
+real merge conflict against `main` on this file's Open PR section (racing
+#2584's Feature 20 closure) — resolved with a merge commit into the PR
+branch, no force-push; CI came back 17/17 green afterward. Rotation row 21
+stays ✅. Next: Feature 22 (Grants & fundraising), pass 5.
 
 ### 2026-09-15 — Feature 20 (Compliance, pass 5)'s PR #2583 merged, watchdog recorded it
 
