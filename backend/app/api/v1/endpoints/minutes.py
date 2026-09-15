@@ -5,6 +5,7 @@ Endpoints for meeting minutes management including CRUD, approval workflow,
 motions, action items, and full-text search.
 """
 
+import math
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -1011,10 +1012,28 @@ async def set_meeting_quorum_config(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="quorum_type must be 'count' or 'percentage'",
         )
-    if quorum_threshold <= 0:
+    # MM-15: `inf`/`-inf`/`nan` all pass an ordinary `<= 0` comparison (NaN
+    # compares False against everything), so isfinite() must be checked
+    # explicitly before any other bound. Without it, `inf`/`nan` reach
+    # pymysql's float encoder on commit (`ProgrammingError: inf can not be
+    # used with MySQL`) as an unhandled 500, and `calculate_quorum`'s
+    # `int(q_threshold)` for the "count" branch raises OverflowError on inf
+    # even if a write did succeed.
+    if not math.isfinite(quorum_threshold) or quorum_threshold <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="quorum_threshold must be positive",
+            detail="quorum_threshold must be a positive, finite number",
+        )
+    # A percentage above 100 can never be met, permanently blocking quorum
+    # for this meeting with no error to say why; a "count" is capped well
+    # under MySQL FLOAT's representable range so an oversized-but-finite
+    # value can't overflow the column either.
+    max_threshold = 100.0 if quorum_type == "percentage" else 100_000.0
+    if quorum_threshold > max_threshold:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"quorum_threshold must not exceed {max_threshold:g}"
+            f" for {quorum_type} quorum",
         )
 
     result = await db.execute(

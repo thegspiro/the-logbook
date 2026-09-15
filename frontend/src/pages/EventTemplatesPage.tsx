@@ -293,7 +293,7 @@ export const EventTemplatesPage: React.FC = () => {
           role="dialog"
           aria-modal="true"
         >
-          <div className="modal-overlay" onClick={handleFormCancel} aria-hidden="true" />
+          <div className="modal-overlay" aria-hidden="true" />
           <DialogPanel onClose={handleFormCancel} className="relative mx-4 w-full max-w-3xl">
             <div className="border-theme-surface-border border-b px-6 py-4">
               <h2 className="text-theme-text-primary text-lg font-semibold">

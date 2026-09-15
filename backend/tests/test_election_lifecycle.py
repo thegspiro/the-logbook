@@ -392,13 +392,16 @@ class TestElectionLifecycleTask(TestLifecycleSetup):
         assert send_batch.await_count == 1, "reminder must fire exactly once"
         messages = send_batch.await_args.args[0]
         assert messages
+        # Entries are BuiltMessage, which carries the MIME alongside the
+        # structured fields the Cloudflare backend sends. Read the MIME by
+        # name rather than unpacking a pair.
         assert all(
             any(
                 "https://fd.example/ballot#token=" in part.get_content()
-                for part in Parser(policy=policy.default).parsestr(message).walk()
+                for part in Parser(policy=policy.default).parsestr(message.mime).walk()
                 if part.get_content_maintype() == "text"
             )
-            for _recipients, message in messages
+            for message in messages
         ), "automatic reminders must include a fresh ballot link"
         election = await self._get_election(db_session, election_id)
         assert election.reminder_sent_at is not None

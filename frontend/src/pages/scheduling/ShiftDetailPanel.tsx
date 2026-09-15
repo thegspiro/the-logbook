@@ -337,8 +337,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   // Which seats on this shift this member may claim. The signup endpoint is
   // the gate; these buttons are only the affordance — so offering a seat the
   // server will refuse is what we are removing here, not adding a second rule.
+  // The open subset, not the cleared one: a seat someone already holds is one
+  // the server refuses, so offering it is exactly the affordance this is here
+  // to remove.
   const {
-    positions: eligiblePositions,
+    openPositions: eligiblePositions,
     loading: eligibilityLoading,
     error: eligibilityError,
   } = useEligiblePositions(shift.id);
@@ -389,6 +392,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           setChecksUnknown(!checkData.ok);
           setMyAttendance(attendanceData);
           setAllAttendance(allAttData);
+          // The detail response is the only one carrying the server's own
+          // verdicts — `checkin_open`, `signup_closed_reason` — and this panel
+          // prefers them over its local re-derivation wherever it has them.
+          // Taking only the platoon roster off it left the first render with
+          // neither, so the check-in button was offered outside its window
+          // until some later action happened to call `refreshAssignments`,
+          // which does read the whole record back.
+          if (detail) setShift(detail);
           setPlatoonRoster(detail?.platoon_roster ?? []);
           setHandoff(handoffData);
         }
@@ -460,10 +471,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   }, [memberSearch, memberOptions, unavailableIds]);
 
   const refreshAssignments = async () => {
+    // `unavailable-members` requires `scheduling.assign`, and only the assign
+    // form reads what it returns. Fetching it unconditionally made every
+    // *member* self-service action fail loudly after it had already
+    // succeeded: confirm, decline, sign up and withdraw all refresh through
+    // here, so a plain member saw "Insufficient permissions (LB-PERM-001)"
+    // from the read that followed their write — and, on confirm, watched the
+    // optimistic status revert to Assigned on a row the server had confirmed.
     const [assignData, shiftData, unavailable] = await Promise.all([
       schedulingService.getShiftAssignments(shift.id),
       schedulingService.getShift(shift.id),
-      schedulingService.getUnavailableMembers(shift.id),
+      canAssign ? schedulingService.getUnavailableMembers(shift.id) : Promise.resolve(null),
     ]);
     setAssignments(assignData);
     // Keep the shift we already have if the refetch comes back empty — a
@@ -474,7 +492,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       setShift(shiftData);
       setPlatoonRoster(shiftData.platoon_roster ?? []);
     }
-    setUnavailableIds(new Set(unavailable));
+    // Left alone rather than cleared when it was not fetched: an empty set
+    // means "everybody is available", which is a claim, not an absence.
+    if (unavailable) setUnavailableIds(new Set(unavailable));
   };
 
   // One-click fill-in / hold-over: assign an available platoon member to the
@@ -599,6 +619,52 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       toast.error(getErrorMessage(err, 'Failed to withdraw from shift'));
     } finally {
       setPendingFlag('withdrawing', false);
+    }
+  };
+
+  /**
+   * Re-read the shift so its check-in verdict catches up.
+   *
+   * `checkin_open` is a decision about *now*, taken when the panel loaded, so
+   * a refusal is often the window having moved since. Re-reading only the
+   * shift — not `refreshAssignments`, whose other two calls are not in
+   * question here — lets the button and its reason follow the server.
+   */
+  const refreshShift = async () => {
+    const latest = await schedulingService.getShift(shift.id).catch(() => null);
+    if (latest) setShift(latest);
+  };
+
+  const handleCheckIn = async () => {
+    setCheckingIn(true);
+    try {
+      const result = await schedulingService.checkIn(shift.id);
+      setMyAttendance(result);
+      toast.success('Checked in');
+    } catch (err) {
+      // Show what the server said. A bare "Failed to check in" threw away the
+      // one sentence that explains an early tap — "This shift has not started
+      // yet. Check-in opens 2 hours before the shift starts." — and left the
+      // member with nothing to act on. `ShiftCheckInPage` already reports the
+      // same refusal this way.
+      toast.error(getErrorMessage(err, 'Failed to check in'));
+      await refreshShift();
+    } finally {
+      setCheckingIn(false);
+    }
+  };
+
+  const handleCheckOut = async () => {
+    setCheckingOut(true);
+    try {
+      const result = await schedulingService.checkOut(shift.id);
+      setMyAttendance(result);
+      toast.success(`Checked out (${formatHours((result.duration_minutes ?? 0) / 60)} hrs)`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to check out'));
+      await refreshShift();
+    } finally {
+      setCheckingOut(false);
     }
   };
 
@@ -940,39 +1006,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     else onClose();
   }, [editingNotesId, onClose]);
 
-  /**
-   * Close only on a press that both began and ended on the backdrop.
-   *
-   * A click resolves to the common ancestor of its mousedown and mouseup, so
-   * either half of a drag between the panel and the backdrop arrives here with
-   * `target === currentTarget` — indistinguishable, on the click alone, from a
-   * deliberate backdrop click. Both directions happen: selecting a member's
-   * notes to copy and releasing past the panel edge, and pressing just outside
-   * the panel then dragging in. Closing on either discards a half-typed
-   * cancellation reason or a screen of close-out hours with no undo.
-   *
-   * So the gesture has to start and finish on the backdrop. mouseup runs before
-   * click, which is what lets the release invalidate a press that qualified.
-   */
-  const backdropPressRef = useRef(false);
-
-  const handleBackdropMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    backdropPressRef.current = event.target === event.currentTarget;
-  }, []);
-
-  const handleBackdropMouseUp = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) backdropPressRef.current = false;
-  }, []);
-
-  const handleBackdropClick = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      const fromBackdrop = backdropPressRef.current;
-      backdropPressRef.current = false;
-      if (fromBackdrop && event.target === event.currentTarget) onClose();
-    },
-    [onClose]
-  );
-
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');
   const isPast = shift.shift_date < getTodayLocalDate(tz);
 
@@ -1291,13 +1324,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           aria-modal="true"
           aria-labelledby="shift-detail-title"
           inert={driverBlock !== null || printDialogOpen}
-          onMouseDown={handleBackdropMouseDown}
-          onMouseUp={handleBackdropMouseUp}
-          onClick={handleBackdropClick}
         >
           {/* Scrim as an empty sibling of the panel, so it carries no z-index
-              of its own (see the modal-overlay utility) and no pointer events —
-              closing on a backdrop click is the container's job. */}
+              of its own (see the modal-overlay utility) and no pointer events. */}
           <div className="modal-overlay pointer-events-none" aria-hidden="true" />
 
           {/* DialogPanel supplies `modal-panel` plus the shared focus trap,
@@ -2709,70 +2738,60 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
                   {/* Check-in / Check-out buttons */}
                   {!shift.is_finalized && (
-                    <div className="flex items-center gap-2 pt-1">
-                      {!myAttendance?.checked_in_at ? (
-                        <button
-                          onClick={() => {
-                            void (async () => {
-                              setCheckingIn(true);
-                              try {
-                                const result = await schedulingService.checkIn(shift.id);
-                                setMyAttendance(result);
-                                toast.success('Checked in');
-                              } catch {
-                                toast.error('Failed to check in');
-                              } finally {
-                                setCheckingIn(false);
-                              }
-                            })();
-                          }}
-                          disabled={checkingIn}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-800 disabled:opacity-50"
-                        >
-                          {checkingIn ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <LogIn className="h-3.5 w-3.5" />
-                          )}
-                          Check In
-                        </button>
-                      ) : !myAttendance?.checked_out_at ? (
-                        <>
-                          <span className="text-xs text-green-700 dark:text-green-400">
-                            Checked in at {formatTime(myAttendance.checked_in_at, tz)}
-                          </span>
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center gap-2">
+                        {!myAttendance?.checked_in_at ? (
                           <button
                             onClick={() => {
-                              void (async () => {
-                                setCheckingOut(true);
-                                try {
-                                  const result = await schedulingService.checkOut(shift.id);
-                                  setMyAttendance(result);
-                                  toast.success(
-                                    `Checked out (${formatHours((result.duration_minutes ?? 0) / 60)} hrs)`
-                                  );
-                                } catch {
-                                  toast.error('Failed to check out');
-                                } finally {
-                                  setCheckingOut(false);
-                                }
-                              })();
+                              void handleCheckIn();
                             }}
-                            disabled={checkingOut}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
+                            /* `=== false` deliberately: a shift handed in from
+                            a list response carries no verdict, and the server
+                            refuses either way, so unknown leaves the button
+                            offered rather than blocking a check-in it would
+                            have accepted. */
+                            disabled={checkingIn || shift.checkin_open === false}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-800 disabled:opacity-50"
                           >
-                            {checkingOut ? (
+                            {checkingIn ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
-                              <LogOut className="h-3.5 w-3.5" />
+                              <LogIn className="h-3.5 w-3.5" />
                             )}
-                            Check Out
+                            Check In
                           </button>
-                        </>
-                      ) : (
-                        <span className="text-theme-text-muted text-xs">
-                          {formatHours((myAttendance.duration_minutes ?? 0) / 60)} hrs recorded
-                        </span>
+                        ) : !myAttendance?.checked_out_at ? (
+                          <>
+                            <span className="text-xs text-green-700 dark:text-green-400">
+                              Checked in at {formatTime(myAttendance.checked_in_at, tz)}
+                            </span>
+                            <button
+                              onClick={() => {
+                                void handleCheckOut();
+                              }}
+                              disabled={checkingOut}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
+                            >
+                              {checkingOut ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <LogOut className="h-3.5 w-3.5" />
+                              )}
+                              Check Out
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-theme-text-muted text-xs">
+                            {formatHours((myAttendance.duration_minutes ?? 0) / 60)} hrs recorded
+                          </span>
+                        )}
+                      </div>
+                      {/* Why the button is unavailable, in the server's own
+                      words. Shown only before an arrival is recorded: once
+                      somebody is checked in, a closed window is the state of
+                      the shift rather than an obstacle in front of them. */}
+                      {shift.checkin_closed_reason && !myAttendance?.checked_in_at && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">{shift.checkin_closed_reason}</p>
                       )}
                     </div>
                   )}

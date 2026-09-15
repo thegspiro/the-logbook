@@ -502,12 +502,14 @@ async def unsubscribe_from_push(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    """Drop a device endpoint. Org-scoped, so a known endpoint belonging to
-    another tenant cannot be deleted by submitting it here."""
+    """Drop a device endpoint. Scoped to the caller's own org and id, so a
+    known endpoint belonging to another tenant — or another member of the
+    same department — cannot be deleted by submitting it here."""
     service = PushService(db)
     try:
         await service.unsubscribe(
             organization_id=current_user.organization_id,
+            user_id=current_user.id,
             endpoint=payload.endpoint,
         )
     except Exception as e:

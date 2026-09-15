@@ -27,6 +27,7 @@ import re
 import textwrap
 import tokenize
 
+from app.api.v1.endpoints import member_status
 from app.services import (
     event_request_service,
     event_service,
@@ -333,6 +334,71 @@ class TestFinanceBudgetCeilingOnUpdate:
         )
 
 
+class TestFinanceDisbursementLocking:
+    """mark_pr_paid/cancel_purchase_request/mark_expense_paid/issue_check/
+    void_check each read-then-write a status field and, on the money-movement
+    ones, a Budget total the same way approve_step/deny_step did before
+    FIN-10 -- two concurrent calls on the same request/report/check both pass
+    the precondition check off a plain SELECT and both mutate the ledger.
+    cancel_purchase_request has to lock too, not just mark_pr_paid: an
+    unlocked cancel racing a locked mark_pr_paid would otherwise flush a
+    stale status=CANCELLED write over an already-committed PAID row once its
+    own write finally lands."""
+
+    def test_mark_pr_paid_locks_the_request(self):
+        source = _source_of(finance_service.FinanceService.mark_pr_paid)
+        assert "with_for_update()" in source, (
+            "Two concurrent mark-paid calls on the same request both see "
+            "APPROVED off a plain SELECT and both move budget from "
+            "encumbered to spent -- unless this read locks the row."
+        )
+
+    def test_cancel_purchase_request_locks_the_request(self):
+        source = _source_of(finance_service.FinanceService.cancel_purchase_request)
+        assert "with_for_update()" in source, (
+            "An unlocked cancel can read a stale pre-payment snapshot and "
+            "overwrite an already-committed PAID status with CANCELLED once "
+            "mark_pr_paid's lock clears."
+        )
+
+    def test_mark_expense_paid_locks_the_report(self):
+        source = _source_of(finance_service.FinanceService.mark_expense_paid)
+        assert "with_for_update()" in source, (
+            "Two concurrent mark-paid calls on the same report both see "
+            "APPROVED off a plain SELECT and both add every line item's "
+            "amount to spent -- unless this read locks the row."
+        )
+
+    def test_issue_check_locks_the_request(self):
+        source = _source_of(finance_service.FinanceService.issue_check)
+        assert "with_for_update()" in source, (
+            "Two concurrent issue calls on the same check request both see "
+            "APPROVED off a plain SELECT and both add the amount to spent "
+            "-- unless this read locks the row."
+        )
+
+    def test_void_check_locks_the_request(self):
+        source = _source_of(finance_service.FinanceService.void_check)
+        assert "with_for_update()" in source, (
+            "Two concurrent void calls on the same check both see ISSUED "
+            "off a plain SELECT and both subtract the amount from spent -- "
+            "unless this read locks the row."
+        )
+
+    def test_void_check_reverses_spend_through_the_shared_locked_mutator(self):
+        source = _source_of(finance_service.FinanceService.void_check)
+        assert "_mutate_budget(" in source, (
+            "void_check must reverse spend through _mutate_budget (like "
+            "_encumber_budget/_release_encumbrance/_add_to_spent), not a "
+            "duplicated inline read-then-write on Budget.amount_spent -- "
+            "that plain read can answer from a stale REPEATABLE READ "
+            "snapshot and silently discard a concurrent writer's spend."
+        )
+        assert (
+            "budget.amount_spent -" not in source
+        ), "void_check must not mutate Budget.amount_spent directly."
+
+
 class TestTestingRunImplicitFirstRun:
     """The department's first mark opens a run implicitly. Two testers tapping
     at the same moment both saw no run and both opened one, splitting the
@@ -537,4 +603,83 @@ class TestStorefrontStockCapacity:
         assert "for_update" not in source, (
             "_build_offers renders the member-facing store. Taking row locks "
             "there would block order submission behind every page view."
+        )
+
+
+class TestMembershipTierEligibility:
+    """A tier id is what `User.membership_type` stores, and two different
+    endpoints decide whether one is a legal value to write or a safe one to
+    delete: `change_membership_type` reads the ladder to accept or reject a
+    caller's chosen tier, and `update_membership_tier_config` counts who
+    holds each rung before letting one be removed or renamed. Unserialized,
+    the two can pass each other: a member gets set to a tier the other
+    request is mid-way through deleting, or a tier is deleted out from under
+    a member the other request just placed on it — either way, a member
+    lands on a tier id `split_membership_type` does not recognise and falls
+    out of the operational body and the electorate with nothing reporting it
+    (USR-07 pass 5).
+
+    Both lock the same `Organization` row before deciding, which is enough
+    to serialize the two against *each other* — whichever gets the lock
+    first is fully committed before the other's own lock request is granted,
+    so neither can act on a config the other is still in the middle of
+    changing. It is deliberately not extended to
+    `_tier_member_counts`/`MembershipTierService.advance_all`: making the
+    roster count itself a locking read would need per-member row locks that
+    `advance_all` already acquires one at a time across its own unattended
+    scan, and the two lock orders are not consistently nested today — closing
+    that edge is a change to that service's own locking scheme, flagged
+    rather than reached for here (see USR-10 in the security-review findings
+    doc).
+    """
+
+    def test_change_membership_type_locks_the_organization_row(self):
+        """Asserts two locks, not one: the User lock here predates this
+        finding (pass 2, a different race) and would satisfy a bare
+        "with_for_update() in source" check whether or not the Organization
+        row is ever locked -- exactly the false-pass shape this file's own
+        module docstring warns a plain-presence check can produce.
+        """
+        source = _source_of(member_status.change_membership_type)
+        assert source.count("with_for_update()") == 2, (
+            "change_membership_type must lock both the target member row "
+            "(pre-existing) and the organization row (this finding) before "
+            "reading the tier ladder, or a config edit removing the tier it "
+            f"just validated can commit before this request does; found "
+            f"{source.count('with_for_update()')} lock(s)."
+        )
+
+    def test_update_membership_tier_config_locks_the_organization_row(self):
+        source = _source_of(member_status.update_membership_tier_config)
+        assert "with_for_update()" in source, (
+            "update_membership_tier_config must lock the organization row "
+            "before counting who holds each tier, or a concurrent "
+            "change_membership_type can land a member on a tier this "
+            "request is about to remove."
+        )
+
+    def test_the_organization_lock_is_taken_before_the_member_lock(self):
+        """Lock order matters, not just presence. `change_membership_type`
+        also locks its target `User` row (a pre-existing, unrelated lock for
+        the rank/class invariant). `update_membership_tier_config` never
+        locks an individual member row — if it ever grew to, taking the
+        organization lock second would open exactly the AB/BA deadlock this
+        suite exists to keep out: one transaction holding a member row and
+        waiting on the organization row, the other holding the organization
+        row and waiting on that same member row.
+        """
+        source = _source_of(member_status.change_membership_type)
+        org_lock_pos = source.find("select(Organization)")
+        user_lock_pos = source.find(".with_for_update()")
+        assert 0 <= user_lock_pos < org_lock_pos, (
+            "change_membership_type's own User lock must be taken before "
+            "the Organization lock so update_membership_tier_config (which "
+            "only ever locks Organization) can never deadlock against it."
+        )
+
+        no_member_lock_source = _source_of(member_status.update_membership_tier_config)
+        assert "select(User)" not in no_member_lock_source, (
+            "update_membership_tier_config taking an individual member row "
+            "lock would reintroduce the AB/BA ordering this test guards "
+            "against — see the class docstring."
         )

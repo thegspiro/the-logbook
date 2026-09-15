@@ -275,11 +275,7 @@ const ChargeManagementPanel: React.FC = () => {
           }}
         >
           <div className="flex min-h-screen items-center justify-center px-4">
-            <div
-              className="modal-overlay"
-              onClick={() => setActionModal({ open: false, item: null, action: '' })}
-              aria-hidden="true"
-            />
+            <div className="modal-overlay" aria-hidden="true" />
             <DialogPanel
               onClose={() => setActionModal({ open: false, item: null, action: '' })}
               className="relative w-full max-w-md"

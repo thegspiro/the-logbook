@@ -623,7 +623,7 @@ const SchedulingPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="modal-overlay" onClick={() => setShowCreateShift(false)} aria-hidden="true" />
+              <div className="modal-overlay" aria-hidden="true" />
               <div ref={dialogRef} className="modal-panel relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">

@@ -162,14 +162,38 @@ def effective_step_type(step: MembershipPipelineStep) -> PipelineStepType:
 def meeting_config_matches_event(config: Dict[str, Any], event: Event) -> bool:
     """Whether a meeting stage's config accepts ``event`` as its meeting.
 
-    So the type the coordinator actually chose wins, the pinned id is the
-    fallback for a stage built without one, and a stage naming no event at
-    all takes any recorded attendance.
+    The type the coordinator actually chose wins, and the pinned id is the
+    fallback for a stage built without one. Grading the pinned id first would
+    strand every recurring stage the moment that occurrence passed — an
+    applicant at March's business meeting would not satisfy a stage pinned to
+    January's.
 
-    Lives here rather than on ``GuestCheckInService`` because two callers now
-    need it: the check-in hook that offers an advance, and the stage gate that
-    decides whether an advance has its evidence. ``GuestCheckInService``
-    keeps its own method, delegating, so its behaviour is unchanged.
+    A stage naming **neither** matches nothing, and this is the part that is
+    easy to get backwards. It used to take any recorded attendance, on the
+    reasoning that a stage which names no event cannot discriminate — but that
+    assumes the only attendance a prospect can accrue is at the meeting the
+    stage is about, and guest check-in is org-wide. The events departments
+    actually enable it on are the public ones: open houses, fundraisers,
+    public education. So a stage reading "Meeting with the Fire Chief"
+    advanced on a pancake breakfast.
+
+    That shape is not exotic, it is the stage builder's default:
+    ``DEFAULT_STAGE_CONFIGS.meeting`` sets only ``meeting_type`` and
+    ``meeting_description``, and "Auto-Link Event Type" starts at None. The
+    ``meeting_type`` the coordinator picks (``chief_meeting``,
+    ``president_meeting``) names the stage's purpose and is read by nothing
+    here — it is a label, not a matcher, so it cannot stand in for the event
+    type (CLAUDE.md Pitfall #19).
+
+    Matching nothing only withholds the *automated* advance. A coordinator who
+    watched the applicant walk in still advances by hand, ungated — the same
+    escape hatch :meth:`_assert_meeting_attended` documents for attendance
+    that was never recorded.
+
+    Lives here rather than on ``GuestCheckInService`` because two callers need
+    it: the check-in hook that offers an advance, and the stage gate that
+    decides whether an advance has its evidence. Both must answer identically
+    or one will offer what the other refuses.
     """
     linked_event_type = config.get("linked_event_type")
     if linked_event_type:
@@ -187,7 +211,7 @@ def meeting_config_matches_event(config: Dict[str, Any], event: Event) -> bool:
     if linked_event_id:
         return str(linked_event_id) == str(event.id)
 
-    return True
+    return False
 
 
 def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
@@ -1764,8 +1788,74 @@ class MembershipPipelineService:
                         f"Medical screenings not yet passed: " f"{', '.join(missing)}."
                     )
 
+        elif step_type == PipelineStepType.ELECTION_VOTE:
+            await self._assert_election_decided(prospect)
+
         elif step_type == PipelineStepType.MEETING and automated:
             await self._assert_meeting_attended(prospect, step, action_result)
+
+    # The two election-package states that are provably not a pass. "draft"
+    # and "ready" are deliberately absent, and their absence is the whole
+    # shape of this gate: a department that holds its vote at a meeting and
+    # records the outcome by hand never assigns a package to a ballot, so
+    # those two states have to keep advancing exactly as they did before this
+    # gate existed. Only a package that actually reached a ballot is graded.
+    _ELECTION_BLOCK_REASON = {
+        "added_to_ballot": (
+            "is on a ballot and the vote has not been decided yet. Advance "
+            "once the election is closed and the result has been recorded."
+        ),
+        "not_elected": (
+            "was not elected by the membership vote and cannot be advanced. "
+            "Reject or withdraw the application, or hold a new vote."
+        ),
+    }
+
+    async def _election_block_reason(
+        self, prospect: ProspectiveMember
+    ) -> Optional[str]:
+        """The reason a pending/failed election vote blocks this applicant, if any.
+
+        ``ProspectElectionPackage.status`` is system-derived and already
+        authoritative: ``assign_package_to_election`` sets "added_to_ballot",
+        and ``election_service._sync_package_statuses`` tallies the closed
+        ballot into "elected"/"not_elected". This is the single read both
+        doors that can make an applicant a member share — the stage-completion
+        gate (:meth:`_assert_election_decided`, for advancing off an
+        ``election_vote`` stage) and the manual transfer path
+        (:meth:`_do_transfer`, callable directly on any stage) — so a
+        not-elected applicant cannot become a member through one door because
+        only the other was taught to check (CLAUDE.md Pitfall #29).
+
+        The package graded here is selected exactly as
+        :meth:`get_election_package` selects the one the coordinator is shown
+        in the applicant drawer — latest by ``created_at``, not filtered by
+        ``step_id``. Re-deriving "which package counts" differently here would
+        let the drawer read "was not elected" beside an action that works.
+        """
+        result = await self.db.execute(
+            select(ProspectElectionPackage.status)
+            .where(ProspectElectionPackage.prospect_id == prospect.id)
+            .order_by(ProspectElectionPackage.created_at.desc())
+            .limit(1)
+        )
+        status = result.scalars().first()
+        return self._ELECTION_BLOCK_REASON.get(str(status or ""))
+
+    async def _assert_election_decided(self, prospect: ProspectiveMember) -> None:
+        """Refuse an advance off an election stage the vote has not cleared.
+
+        Nothing read ``ProspectElectionPackage.status`` when deciding whether
+        an applicant could move, so the one stage whose entire purpose is to
+        make the membership vote binding was the one stage with no gate — an
+        applicant the department had voted *down* advanced on a click, and on
+        a pipeline with ``auto_transfer_on_approval`` a final election stage
+        converted them into a member. See :meth:`_election_block_reason` for
+        what is actually graded.
+        """
+        reason = await self._election_block_reason(prospect)
+        if reason:
+            raise ValueError(f"This applicant {reason}")
 
     async def _assert_meeting_attended(
         self,
@@ -1806,6 +1896,11 @@ class MembershipPipelineService:
         stage auto-links the next matching *future* event
         (``_auto_link_event_for_step``), so treating the link as attendance
         would re-create the bug in a new place.
+
+        A stage that names no event at all matches nothing — see
+        :func:`meeting_config_matches_event` — so it is refused here with its
+        own message. That is a stage-configuration problem, not a missing
+        attendance record, and the two have different remedies.
         """
         # Local import: event_service imports no pipeline code today, but this
         # module is imported by guest_check_in_service, which imports both.
@@ -1840,6 +1935,16 @@ class MembershipPipelineService:
                 event
             ):
                 return
+
+        # A stage naming no event can never satisfy the match above, so say
+        # that rather than asking for attendance it would ignore anyway. The
+        # remedy is a change to the stage, not to the applicant's record.
+        if not config.get("linked_event_type") and not config.get("linked_event_id"):
+            raise ValueError(
+                f"'{step.name}' has no linked event, so no attendance can "
+                "advance it automatically. Set an Auto-Link Event Type on the "
+                "stage, or advance the applicant by hand."
+            )
 
         raise ValueError(
             f"No attendance has been recorded for '{step.name}' yet. "
@@ -3065,6 +3170,27 @@ class MembershipPipelineService:
         membership_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer"""
+
+        # The manual "Convert" action is the documented, ordinary way to
+        # complete a pipeline's final stage (see skip_current_step's own
+        # refusal message: "convert or reject instead") and the frontend
+        # routes it here directly — POST /prospects/{id}/transfer, calling
+        # transfer_to_membership -> _do_transfer, with no trip through
+        # complete_step at all. So the election_vote stage gate in
+        # _validate_step_completion, which exists specifically to keep a
+        # not-elected applicant from becoming a member, protected only the
+        # auto-transfer-on-approval door and not this one: a coordinator
+        # (or a compromised members.manage session) could transfer an
+        # applicant the department voted down, or one still awaiting a
+        # ballot result, regardless of which stage they were actually on.
+        # Checked here, at the one place every transfer — manual or
+        # automatic — has to pass through, rather than re-derived per caller.
+        election_block = await self._election_block_reason(prospect)
+        if election_block:
+            return {
+                "success": False,
+                "message": f"This applicant {election_block}",
+            }
 
         # A rank that matches nothing the department has configured resolves to
         # no eligible seats and no default permissions, so the new member is

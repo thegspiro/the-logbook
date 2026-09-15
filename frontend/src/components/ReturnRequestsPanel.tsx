@@ -226,11 +226,7 @@ const ReturnRequestsPanel: React.FC = () => {
           }}
         >
           <div className="flex min-h-screen items-center justify-center px-4">
-            <div
-              className="modal-overlay"
-              onClick={() => setReviewModal({ open: false, request: null })}
-              aria-hidden="true"
-            />
+            <div className="modal-overlay" aria-hidden="true" />
             <DialogPanel
               onClose={() => setReviewModal({ open: false, request: null })}
               className="relative w-full max-w-md"

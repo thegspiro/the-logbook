@@ -776,3 +776,124 @@ class TestStatusStopsProgression:
             )
 
         mock_advance.assert_called_once_with(prospect, "s1")
+
+
+class TestElectionVoteGate:
+    """An election stage refuses an advance the ballot has not cleared.
+
+    ``ProspectElectionPackage.status`` was already authoritative — the
+    Elections module writes "added_to_ballot" on assignment and
+    "elected"/"not_elected" when the closed ballot is tallied — and nothing
+    consulted it when an applicant was moved. The stage whose stated purpose
+    is to make the membership vote binding was the one typed stage with no
+    completion gate.
+
+    Only the two states that reached a ballot are graded. "draft" and "ready"
+    still advance: a department that votes at a meeting and records the
+    outcome by hand never assigns a package, and gating those would refuse
+    every one of those advances.
+    """
+
+    @staticmethod
+    def _step():
+        return SimpleNamespace(
+            id="step-1",
+            step_type=PipelineStepType.ELECTION_VOTE,
+            action_type=None,
+            config={"voting_method": "simple_majority"},
+        )
+
+    @staticmethod
+    def _service(package_status):
+        db = AsyncMock()
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = package_status
+        db.execute = AsyncMock(return_value=result)
+        return MembershipPipelineService(db)
+
+    @staticmethod
+    def _prospect():
+        return SimpleNamespace(id="p1", step_progress=[], interviews=[])
+
+    @pytest.mark.parametrize("automated", [False, True])
+    async def test_awaiting_the_result_is_refused(self, automated):
+        service = self._service("added_to_ballot")
+        with pytest.raises(ValueError, match="has not been decided yet"):
+            await service._validate_step_completion(
+                self._prospect(), self._step(), automated=automated
+            )
+
+    @pytest.mark.parametrize("automated", [False, True])
+    async def test_a_rejected_applicant_is_refused(self, automated):
+        """The one that converted somebody the department voted down."""
+        service = self._service("not_elected")
+        with pytest.raises(ValueError, match="was not elected"):
+            await service._validate_step_completion(
+                self._prospect(), self._step(), automated=automated
+            )
+
+    async def test_an_elected_applicant_advances(self):
+        service = self._service("elected")
+        await service._validate_step_completion(self._prospect(), self._step())
+
+    @pytest.mark.parametrize("package_status", ["draft", "ready"])
+    async def test_a_package_that_never_reached_a_ballot_advances(self, package_status):
+        service = self._service(package_status)
+        await service._validate_step_completion(self._prospect(), self._step())
+
+    async def test_a_stage_with_no_package_at_all_advances(self):
+        """The off-platform vote: recorded by hand, no package ever created.
+        This is the backward-compatible case the gate must not break."""
+        service = self._service(None)
+        await service._validate_step_completion(self._prospect(), self._step())
+
+    async def test_complete_step_refuses_a_final_election_stage_and_converts_nobody(
+        self,
+    ):
+        """The defect end to end: a final election stage on a pipeline with
+        auto_transfer_on_approval turned an applicant the department voted
+        down into a full member on one click."""
+        step = SimpleNamespace(
+            id="s1",
+            sort_order=0,
+            step_type=PipelineStepType.ELECTION_VOTE,
+            action_type=None,
+            config={"voting_method": "simple_majority"},
+            is_final_step=True,
+            notify_prospect_on_completion=False,
+        )
+        prospect = SimpleNamespace(
+            id="p1",
+            email=None,
+            status=ProspectStatus.ACTIVE,
+            pipeline=SimpleNamespace(steps=[step], auto_transfer_on_approval=True),
+            step_progress=[],
+            interviews=[],
+            current_step_id="s1",
+        )
+        db = AsyncMock()
+        db.add = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = "not_elected"
+        db.execute = AsyncMock(return_value=result)
+        svc = MembershipPipelineService(db)
+
+        with patch.object(
+            svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
+        ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
+            svc, "_advance_current_step", new_callable=AsyncMock
+        ) as mock_advance, patch.object(
+            svc, "_do_transfer", new_callable=AsyncMock
+        ) as mock_transfer:
+            with pytest.raises(ValueError, match="was not elected"):
+                await svc.complete_step(
+                    prospect_id="p1",
+                    organization_id="org1",
+                    step_id="s1",
+                    completed_by="u1",
+                )
+
+        mock_transfer.assert_not_called()
+        mock_advance.assert_not_called()
+        db.add.assert_not_called()
+        db.commit.assert_not_called()

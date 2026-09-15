@@ -1,9 +1,210 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 5 (2026-09-14)
+
+**Backend:** same ten files pass 4 named, all read in full again:
+`app/api/dependencies.py`, `app/core/permissions.py`,
+`app/api/v1/endpoints/roles.py` + `app/services/role_service.py`,
+`app/api/v1/endpoints/operational_ranks.py` +
+`app/services/operational_rank_service.py`,
+`app/api/v1/endpoints/officers.py` + `app/services/officer_service.py`,
+`app/api/v1/endpoints/org_chart.py` + `app/services/org_chart_service.py`,
+`app/services/admin_continuity_service.py`, and the position/rank-assignment
+handlers in `app/api/v1/endpoints/users.py`.
+**Frontend:** none modified this pass.
+**Migrations:** none written this pass; 444 revisions, single head
+`6ab7d903fae5`.
+
+### Scope
+
+`git diff a96b7370..HEAD -- <the ten files>` (`a96b7370`, PR #2391, is pass
+4's merge commit) reports exactly **three** files changed and seven
+byte-identical:
+
+| File                                    |    Δ     | Commits (all 2026-09-08/09)                                                                      |
+| --------------------------------------- | :------: | ------------------------------------------------------------------------------------------------ |
+| `api/v1/endpoints/operational_ranks.py` | +114/−14 | `3f09b9c43`, `09c6c904e`, `849af0251`, `bb93f270c` (merge)                                       |
+| `core/permissions.py`                   |   +175   | `92c8cb574`, `849af0251`, `fb3ba0279`, `1e939465b`, `9c3a6111c`                                  |
+| `services/operational_rank_service.py`  |   +40    | `3f09b9c43`, `92c8cb574`                                                                         |
+| the other seven                         |    0     | byte-identical to pass 4, whose verdicts (including open **PERM-5**) stand without re-derivation |
+
+Despite the narrow diff, all ten files were read in full this pass, not
+diffed, for the same reason pass 4 gave: an escalation question is answered
+by how files interact, not by one file's own patch.
+
+`core/permissions.py`'s +175 lines are `module_checkbox_tier` /
+`module_checkbox_grants` / `module_checkbox_is_held` / `module_for_permission`
+— a lookup table for what the onboarding wizard's per-module View/Manage
+checkboxes actually write, replacing a same-named-prefix assumption that broke
+for four modules (`medical_supplies`, `mobile`, `integrations`, `positions`).
+Read in full because the file is in this feature's scope, but the only callers
+are in `app/api/v1/onboarding.py` (feature 30's own surface, excluded from this
+pass's scope the same way `save_session_roles` was excluded in pass 4) — the
+functions are pure lookups over static data, add no new permission string to
+the registry, and change no existing `permission_matches` /
+`get_all_permissions` / ceiling behavior this feature's endpoints rely on.
+`tests/test_module_checkbox_grants.py` (14 tests) covers them; re-run clean.
+
+The other two changed files are this pass's real subject: **`Let members.manage
+edit the operational rank ladder`** (`3f09b9c43`) moved five of
+`operational_ranks.py`'s seven routes (`create`, `update`, `delete`,
+`reorder`, `validate`) from `settings.manage`-only to `settings.manage` OR
+`members.manage`, because the ladder screen itself moved into Members
+Administration. This is exactly the shape this rotation exists to catch —
+a permission gate widened out from under a ceiling that used to be
+redundant — and it already went through its own two rounds of review
+(`09c6c904e` "Address Codex review: five findings, all real",
+`849af0251` a CI fix + second Codex round, `1e939465b` "address the nine
+open Codex findings on this branch", `9c3a6111c` closing four more) before
+landing in `main`, all dated 2026-09-08/09, before this rotation reached it.
+
+### Route inventory
+
+Unchanged count — 28 routes, same four routers
+(`grep -c '^@router\.' *.py` re-run: 13 + 5 + 3 + 7). The permission column
+for five `operational_ranks.py` routes changed:
+
+| Method | Path         | Permission (was → now)                                    | Org-scoped | Notes                                                                                                                            |
+| ------ | ------------ | --------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | ``           | authenticated only (unchanged)                            | org        | seeds defaults on first load                                                                                                     |
+| POST   | ``           | `settings.manage` → `settings.manage` OR `members.manage` | org        | `_enforce_rank_grant_ceiling(rank_code)` before create; ordering forced to append unless the caller also holds `settings.manage` |
+| GET    | `/validate`  | `settings.manage` → `settings.manage` OR `members.manage` | org        | disclosure unchanged (member name + rank-code mismatch), just a wider audience matching where the page moved                     |
+| GET    | `/{rank_id}` | authenticated only (unchanged)                            | org        | `get_rank(id, org)`                                                                                                              |
+| PATCH  | `/{rank_id}` | `settings.manage` → `settings.manage` OR `members.manage` | org        | ceiling on **both** the old and new `rank_code` when it changes; `sort_order` refused without `settings.manage`                  |
+| DELETE | `/{rank_id}` | `settings.manage` → `settings.manage` OR `members.manage` | org        | unchanged member-count refusal; deleting an unused label grants nothing (see below)                                              |
+| POST   | `/reorder`   | `settings.manage` (unchanged — deliberately not widened)  | org        | `_refuse_ordering` runs unconditionally, ahead of the service call                                                               |
+
+The other 23 routes (`roles.py` 13, `officers.py` 3, `org_chart.py` 5,
+`operational_ranks.py`'s two unchanged reads) are byte-identical to pass 4's
+inventory; not re-tabulated.
+
+### Verified good ✅
+
+- **The ceiling is enforced on both the create path and both directions of a
+  rename, and is missing from neither.** `create_rank` runs
+  `_enforce_rank_grant_ceiling(current_user, data.rank_code, …)` before the
+  service call (`operational_ranks.py:137`); `update_rank` runs it against
+  `existing.rank_code` **and then** `update_data["rank_code"]`
+  (`operational_ranks.py:252,255`) when the code is actually changing — the
+  rename-out direction matters because `update_rank`'s service cascades the
+  new code onto every member holding the old one, so renaming a rank a
+  members.manage caller does not have the authority to grant is also stripping
+  those members without the authority to strip them. Both directions have a
+  dedicated test in `TestRenameCeiling` (`test_operational_rank_permissions.py`),
+  and `TestCreateCeiling::test_the_ceiling_runs_before_the_row_is_written`
+  confirms the check happens before any write, not after.
+- **The ordering carve-out actually closes the hole it names.** Verified the
+  mechanism it's built against, not just that a docstring claims one:
+  `inventory_service.py:9287` (`_passes_restrictions`) admits a member when
+  `rank_order <= min_rank_order` — lower `sort_order` is more senior — so a
+  members.manage caller minting a rank at order 0 and assigning it to
+  themselves (a custom code carries no default permissions, so the rank
+  ceiling at assignment time would not have stopped that) would have cleared
+  every rank-based inventory restriction in the org without touching a single
+  permission. `_may_order_ladder`/`_refuse_ordering` gates `sort_order` on
+  `update_rank`, `reorder_ranks` unconditionally, and forces `create_rank` to
+  append **one past the highest existing `sort_order`** — checked that this is
+  the max, not the row count, because `delete_rank` never renumbers survivors
+  and a count-based append would land above a sparse ladder's only rung
+  (`TestLadderOrdering::test_a_new_rung_clears_a_gapped_ladder_rather_than_counting_rows`
+  exercises exactly that). All five ordering tests pass.
+- **A case-differing `rank_code` cannot use `dict.get`'s case sensitivity to
+  slip past the ceiling and later grant anything.** Worth checking directly,
+  since `OPERATIONAL_RANKS.get(rank)` (`core/permissions.py:1644`) and
+  `get_rank_default_permissions` are exact-string lookups with no case
+  folding — a `members.manage` caller submitting `rank_code="Fire_Chief"`
+  makes `get_rank_default_permissions("Fire_Chief") == []`, so the ceiling
+  finds nothing to exceed and passes trivially. Two independent things close
+  the gap this opens: (1) the database's default collation is
+  `utf8mb4_unicode_ci` (`docker-compose.yml:28`), so the `UniqueConstraint`
+  and the service's own duplicate check (`OperationalRank.rank_code ==
+data.rank_code`, both `create_rank` and `update_rank` in
+  `operational_rank_service.py`) already reject a case-variant of a rank the
+  org has, seeded or not; (2) even bypassing that, no downstream consumer of
+  `User.rank` reads this feature's raw row — every writer of `User.rank`
+  (`create_member`, `update_user_profile`, `_do_transfer`) goes through
+  `OperationalRankService.resolve_rank_code`, which folds to lowercase and
+  matches the static `DEFAULT_RANK_CODES` **before** it ever queries the
+  per-org table, so `"Fire_Chief"`, `"FIRE_CHIEF"` or `"fire_chief"` all
+  resolve to the same canonical `"fire_chief"` at assignment time — the exact
+  string `_enforce_rank_grant_ceiling` is checked against at that call site,
+  independent of whatever the ladder's own display row is spelled. A
+  case-variant row is at worst a confusing, permission-inert duplicate label
+  (and `RankResponse.default_permission_count` would correctly show `0` for
+  it, since that computed field runs the same case-sensitive lookup) — not a
+  privilege escalation. This is deliberate design, documented in
+  `resolve_rank_code`'s own docstring, not something this pass added.
+- **`delete_rank` needed no ceiling of its own.** The per-org `operational_ranks`
+  row carries no permissions (confirmed again: `grep -n permissions
+models/operational_rank.py` — none); deleting one that no member currently
+  holds (the existing `member_count` refusal, unchanged) removes a label, not
+  an authority, and recreating a rank coded for something the caller cannot
+  grant still has to clear `create_rank`'s ceiling. No path from delete to
+  escalation.
+- **PERM-6, PERM-7, PERM-8's fixes are all still in place, re-verified at
+  current line numbers, not merely grepped for presence:**
+  `is_read_only_permission`'s word-boundary match plus
+  `_READ_ONLY_PERMISSION_EXCEPTIONS` (`core/permissions.py:1025,1032`, PERM-6);
+  `assign_role_to_user`/`remove_role_from_user`'s required keyword-only
+  `organization_id` with `assert_in_org` on both ids
+  (`role_service.py:24-60` area, PERM-7); `MAX_RANKS_PER_REORDER = 500` on
+  `RankReorderRequest` (`operational_rank_service.py` schema import,
+  `schemas/operational_rank.py:105`, PERM-8). All three guard test files pass.
+- **PERM-5 is unchanged and still open.** `users.py`,
+  `admin_continuity_service.py` are byte-identical to pass 4
+  (confirmed by the zero-length diff above) — the three user↔position
+  assignment routes still carry only `_enforce_role_grant_ceiling` (a no-op on
+  a removal) and `assert_positions_retain_administrator` (counts, doesn't
+  compare caller to target), and neither guard has moved. Still mirrored in
+  `docs/KNOWN_LIMITATIONS.md`, still awaiting an owner decision among the
+  three options pass 4 laid out.
+- **All 28 routes still carry an auth dependency**, mechanism unchanged:
+  `tests/test_endpoint_auth_coverage.py` + `tests/test_require_permission_registry.py`,
+  both re-run clean.
+- **No injection surface, no unbounded in-memory tracker, no new migration** —
+  re-confirmed by the same greps pass 4 ran, unchanged results.
+
+### Findings
+
+**None.** Zero new findings this pass. The one real behavioral change since
+pass 4 — widening five `operational_ranks.py` routes to `members.manage` — was
+built with the ceiling and ordering carve-outs described above and had already
+been through its own review rounds (four follow-up commits, 2026-09-08/09)
+before this rotation reached it; independently re-deriving rather than
+trusting that history, the mechanism holds under all three angles checked
+(ceiling completeness, the inventory-order attack this was written to close,
+and the case-folding edge this pass went looking for). PERM-5 remains the
+rotation's one open item for this feature.
+
+### Schema & migration notes
+
+No model or migration touched this pass. `operational_ranks` table unchanged
+since pass 4 (still `organization_id` `ondelete="CASCADE"` +
+`nullable=False`, still `UniqueConstraint(organization_id, rank_code)`).
+`validate_migrations.py --strict`: 444 revisions, single head
+`6ab7d903fae5`.
+
+### Completion gate
+
+| Check                                                                                                                                                                                                                                                                                                                                                                                                 | Result                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (7.3.0, CI's pin — via `python3 -m flake8`, since the bare `flake8` on `PATH` resolves an isolated install missing the pytest-style plugin)                                                                                                                                                                                                                             | ✅ 0 violations                                                    |
+| `black --check app/ tests/ alembic/` (26.5.1, CI's pin — via `python3 -m black`, since bare `black` on `PATH` resolves 26.3.1)                                                                                                                                                                                                                                                                        | ✅ 1592 files unchanged                                            |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                                                                                                                                                                                                                                                                                                                           | ✅ clean                                                           |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                                                     | ✅ 444 revisions, single head `6ab7d903fae5`                       |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                                                                                                                                                                 | ✅ 228 routes checked, 0 errors, 0 warnings                        |
+| `python3 scripts/check_docs_links.py`                                                                                                                                                                                                                                                                                                                                                                 | ✅ 358 Markdown files, 0 broken links                              |
+| backend tests, scoped (`-k "permission or role or rank or officer or org_chart or org_scoping or scoping"`)                                                                                                                                                                                                                                                                                           | ✅ 1087 passed, 1 skipped (`py_vapid` not installed — environment) |
+| `test_org_scoping_ratchet.py` + `test_require_permission_registry.py` + `test_endpoint_auth_coverage.py` + `test_permission_gate_composition.py` + `test_read_permission_gates.py` + `test_privilege_ceiling_wiring.py` + `test_permission_read_write_tiers.py` + `test_role_service.py` + `test_operational_rank_service.py` + `test_operational_rank_permissions.py` + `test_rank_grant_ceiling.py` | ✅ 195 passed                                                      |
+| backend full unit suite (`pytest tests/ -m "not integration and not slow and not docker"`)                                                                                                                                                                                                                                                                                                            | ✅ 10158 passed, 1 skipped (environment), 0 failed                 |
+| `tsc --noEmit` / `eslint .`                                                                                                                                                                                                                                                                                                                                                                           | n/a — no frontend file modified                                    |
 
 ---
 

@@ -1,6 +1,224 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 5 (2026-09-14) — 0 new findings; the app-review track closed SF-8 (the capacity race) between passes
+
+**Scope, same `git diff`-between-tree-states method passes 3 and 4 used.** Diffed
+pass 4's own closing merge (`c71b5fb26`, PR #2395) against current `HEAD`
+across the full domain established since pass 3: `storefront.py`,
+`storefront_service.py`, `storefront_notification_service.py`,
+`email_templates_storefront.py`, `storefront_preview_service.py`,
+`storefront_payments.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, `utils/size_order.py`, `utils/embroidery.py`, the
+entire `frontend/src/modules/storefront/` tree, and every migration whose
+filename or content matches storefront/embroidery/personalization/thread/grant
+terms. No migration in that domain changed.
+
+**Real changes, all in `storefront_service.py` (+104/-11), none from this
+track.** Three commits landed between pass 4's merge and this pass, all from
+the **app-review** track's own Tier-A pass 5
+(`docs/app-review/storefront.md`, 2026-09-09), which applied the concurrency
+lens this security-review track had not yet applied to this feature:
+
+- **SF-8 (app-review, HIGH, fixed): stock and per-member caps counted from a
+  stale snapshot.** `_ordered_quantities` was a plain `SELECT` compared against
+  a `SELECT ... FOR UPDATE`-locked product row — the second half of CLAUDE.md
+  Pitfall #27 was missing. Fixed in two rounds, both measured against a real
+  database rather than argued: the first version locked only the product rows
+  and traded a rare same-product oversell for a _frequent_ cross-cart deadlock
+  (InnoDB gap locks on the still-empty order-window range collide even for
+  disjoint carts); the shipped version locks `store_settings` (one row per
+  org) before the window, before the products, before the now-`for_update=True`
+  tallies — `organisation → window → products → tallies`, a fixed order on
+  every path so the four locks cannot invert. Guarded by
+  `tests/test_storefront_order_deadlock.py`, which drives two real concurrent
+  `create_order` calls through a rendezvous (not a fixed `sleep`) and clears
+  orders between rounds so every round starts from the empty range the gap
+  lock actually needs; 6/6 detection with the regression re-injected, 3/3 clean
+  with the fix in place.
+- **A same-day follow-up (app-review, still SF-8's fix) closed two further
+  review findings on that lock**, per its own commit message: the source-level
+  guard (`test_the_service_locks_the_org_before_the_window_and_tallies`) was
+  checking lock _order_ but not that the three reads were actually locking
+  reads — a mutation that dropped `.with_for_update()` from the org-level
+  `SELECT` left the whole suite green because the two DB-backed deadlock tests
+  drive their own hard-coded SQL rather than calling the service. Now an AST
+  walk asserts all three positions **and** that both tallies still pass
+  `for_update=True`. Separately, `_price_lines` had gone back to one
+  `get_product` call per distinct cart line inside the (now org-wide) critical
+  section — proportional-to-cart work inside a critical section that already
+  serializes the whole organisation is exactly what SF-11 (below) warns is
+  reachable, since the cart has no line-count maximum. Fixed by fetching every
+  cart line's product in one query, guarded by asserting the query count does
+  not grow with cart size (2 lines vs. 8).
+- **Everything else in the diff is frontend, and is contrast/accessibility,
+  not this feature's.** `OrderStatusStepper.tsx` / `StoreWindowCard.tsx`
+  (`emerald-600` → `emerald-700`) and `headingLevel` props added to three
+  `EmptyState` call sites in `StorePaymentsTab.tsx` / `StorefrontPage.tsx` —
+  all from the same-week mobile-accessibility review sweep across the whole
+  app, confirmed by `git log` to carry no storefront-specific content.
+
+**Read in full this pass** (not merely diffed, since a security pass owns
+verifying the _result_ of someone else's concurrency fix, not just noting it
+landed): all 48 endpoint handlers in `storefront.py`; every method in
+`storefront_service.py` that resolves a client-supplied id (`get_order`,
+`get_product`, `get_window`, `get_payment_event`, `find_order_by_reference`)
+or mutates the payment ledger (`record_payment`, `mark_order_paid`,
+`waive_order_payment`, `refund_order`, `update_order_status`,
+`bulk_mark_paid`, `bulk_update_status`, `apply_payment_event`,
+`record_external_payment`); `create_order`/`_price_lines`/`_lock_products` in
+full, including the new org-lock block; `export_orders_csv`; the dashboard and
+rollup aggregations; `run_window_lifecycle`/`run_payment_reminders`; and
+`storefront_payments.py` end to end. `paypal_webhook.py` returned a byte-for-byte
+empty diff against pass 4, so it was read again anyway rather than trusted on
+that alone — signature verification (`verify_webhook_signature`, 401 on
+failure), the replay guard (`is_duplicate_webhook`, ack'd 200 on a repeat), and
+the audit-log call on every accepted delivery are all unchanged.
+
+**48/48 endpoints still gated**, re-enumerated independently rather than
+carried over — same count and same one exception (`GET /permissions`, a
+deliberate `get_current_user`-only self-probe) as pass 4's table, which still
+matches the live code.
+
+**Every by-id query traced confirms org-scoping (Pitfall #14a).** `get_order`,
+`get_product`, `get_window`, `get_payment_event` all filter
+`organization_id == organization_id` in the same `WHERE` as the id; nothing in
+the service resolves a `StoreOrder`/`StoreProduct`/`StoreOrderWindow`/
+`StorePaymentEvent` by id without it. `apply_payment_event`'s client-supplied
+`order_id` (14b/14c: a permission check alone would not scope it) resolves
+through `get_order(target_id, organization_id)`, so an org-B order id 404s
+rather than being adopted. `create_product`/`update_product`'s
+`inventory_item_id` and `_replace_offerings`'s `product_id` are both validated
+with `assert_in_org` before being stored (14c). No new by-id surface was added
+this pass — the diff added no endpoint and no new client-facing id parameter.
+
+**Price integrity unchanged.** `_price_lines` still derives `unit_price` only
+from `product.price` / `offering.price_override` / `variant.price_delta` /
+`product.personalization_price` — the request schema's `items` carries no
+price field for the server to trust in the first place, confirmed by re-reading
+`StoreOrderItemInput` in `schemas/storefront.py` (`product_id`, `variant_id`,
+`quantity`, `personalization_text` only).
+
+**Idempotency / replay on the money paths unchanged and adequate.**
+`record_external_payment` de-duplicates on `(organization_id, provider,
+external_id)` before insert, so a redelivered PayPal capture cannot apply
+twice (the pass-2/pass-5-app-review-noted degrade-to-500 on a _simultaneous_
+duplicate delivery is self-healing — PayPal retries, the webhook's own
+body-hash replay guard catches the retry — and is not re-litigated here, since
+it belongs with SF-9's transaction-boundary work per the app-review track's own
+note). `apply_payment_event` short-circuits on `event.status ==
+StorePaymentEventStatus.APPLIED` before doing anything. Manual `record_payment`
+has no request-level idempotency key, which is correct for its purpose (a
+quartermaster recording two genuinely separate Venmo transfers on the same
+order is two payments, not a duplicate) rather than a gap.
+
+**Money storage/arithmetic unchanged.** `Decimal` end to end via the shared
+`_money()` helper; grep for `float(` in `storefront_service.py` and
+`storefront_payments.py` returns nothing.
+
+**CSV export still `SafeCsvWriter`.** `export_orders_csv` (`storefront_service.py:3150`)
+constructs `SafeCsvWriter(output, quoting=csv.QUOTE_MINIMAL)`; still unbounded
+(pages to exhaustion rather than a fixed cap) — carried forward again, not
+re-litigated here, matching AH-16/AH-21's decision to solve the
+`export_entries_csv`/`reportExportService`/storefront trio consistently rather
+than as three separate drive-by fixes (see `KNOWN_LIMITATIONS.md`).
+
+**No unbounded in-memory tracker (Pitfall #9).** The only module-level mutable
+state in the two files is a handful of `re.compile()` patterns, a frozen
+label dict, and a status-code tuple — no dict/set that accumulates per request.
+
+**No JSON-column shallow-copy mutation (Pitfall #12).** The three `JSON`
+columns this feature owns (`StoreSettings.accepted_payment_methods`,
+`StoreSettings.notify_emails`, `StorePaymentEvent.raw_payload`) are each either
+replaced wholesale through `apply_updates`/direct assignment or written once at
+row creation and never mutated in place afterward — there is no
+`dict(obj.json_column)`-then-reassign pattern to check.
+
+**SF-9 (app-review, MED, still open) re-confirmed at its cited lines, still
+correctly left flagged rather than fixed here.** `record_payment` is still a
+plain-`SELECT`-then-`order.amount_paid = amount_paid + applied`-then-commit
+(`storefront_service.py:1930`, `:1951`) with no row lock — a concurrent
+webhook auto-apply and an admin working the same order in the hub can still
+lose a payment off the ledger. This is the app-review track's own finding
+(their SF-9, distinct from this track's SF-6/SF-7 — the two tracks share the
+`SF-` prefix, documented in both files), deliberately not fixed there because
+the change moves transaction boundaries shared by `bulk_mark_paid`'s per-order
+commit loop and the unauthenticated webhook, with two non-equivalent options
+(lock the order row vs. a relative `SET amount_paid = amount_paid + :n` SQL
+write) that need an owner call rather than a guess in a payments path. This
+pass re-derived the same conclusion independently before checking
+`KNOWN_LIMITATIONS.md`'s existing entry: not a HIGH-severity, freshly
+discovered race this pass is obligated to fix-with-a-red-test-first per
+CLAUDE.md Pitfall #27/#22 — it is a previously identified, already-reasoned,
+MED-severity, deliberately-deferred one, and second-guessing that reasoning
+from inside a different review track's pass would be exactly the "wrong fix in
+a payments path is worse than an accurate finding" failure mode this rotation
+exists to avoid. Left flagged, unchanged, still mirrored in
+`KNOWN_LIMITATIONS.md`.
+
+**SF-11 (app-review, LOW, still open) re-confirmed unchanged.**
+`StoreOrderItemInput`'s parent list (`StoreOrderCreate.items`) is still
+`Field(..., min_length=1)` with no maximum — a `storefront.order` holder can
+submit an arbitrarily large cart, bounded only by the 60 MiB request-body cap.
+Worth re-stating given this pass's own scope: the _server-side cost_ of a large
+cart was fixed by the app-review round above (one query instead of one per
+line), but the _request-contract_ question — what a legitimate maximum is,
+given a quartermaster placing a bulk roster-wide order is a real case — is
+still a product decision, not a security gap this review can close by picking
+a number.
+
+**All five self-settlement guards (SF-6, SF-7, and the three siblings) still
+present and unmodified**, re-read directly rather than assumed from the diff:
+`assert_different_person` in `record_payment` (:1943), `mark_order_paid`
+(:2016), `waive_order_payment` (:2058), `refund_order` (:2244), and
+`update_order_status`'s `settles_payment` branch (:1868) — all positioned
+before any mutation, all exempt for `actor_id=None` (the reconciliation path).
+
+**No new findings.**
+
+## Route inventory (re-enumerated this pass, not carried over)
+
+All 48 routes, permission dependency read directly from each handler's
+signature; identical to pass 4's table (reproduced there, not repeated here)
+— no route added, removed, or re-gated since pass 4.
+
+## Schema & migration notes
+
+No storefront model or migration touched this pass (confirmed by the `git
+diff` above, which returns nothing under `alembic/versions/` for any
+storefront/embroidery/personalization/thread/grant filename or content match).
+
+## Guard tests added
+
+None by this pass — `tests/test_storefront_order_deadlock.py` and the
+`test_the_service_locks_the_org_before_the_window_and_tallies` /
+`test_both_availability_tallies_are_locking_reads` guards were added by the
+app-review track's own SF-8 fix (2026-09-09/10), ahead of this pass; this pass
+re-ran them rather than re-writing them, per the rotation's rule to re-verify
+what a prior pass already closed rather than re-deriving it.
+
+## Completion gate
+
+| Check                                                                                        | Result                                                                |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                | ✅ 0 violations                                                       |
+| `black --check app/ tests/ alembic/`                                                         | ✅ 1592 files unchanged                                               |
+| `isort --check-only app/ tests/ alembic/`                                                    | ✅ clean                                                              |
+| `python3 scripts/validate_migrations.py --strict`                                            | ✅ 444 revisions, single head (`6ab7d903fae5`)                        |
+| `python3 scripts/check_route_permissions.py --strict`                                        | ✅ 228 routes, 0 errors, 0 warnings                                   |
+| backend tests (scoped: `-k "storefront or payment"`, DB available)                           | ✅ 725 passed, 1 skipped (environment-only: `py_vapid` not installed) |
+| cross-cutting guard tests (org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep)  | ✅ 58 passed                                                          |
+| backend tests (full suite, `pytest tests/ -m "not integration and not slow and not docker"`) | ✅ 10,158 passed, 1 skipped, 0 failed                                 |
+| `npm run typecheck`                                                                          | ✅ 0 errors                                                           |
+| `npm run lint` (`eslint --max-warnings 10`)                                                  | ✅ 0 errors, 0 warnings                                               |
+| `vitest run src/modules/storefront/ src/components/admin/`                                   | ✅ 205 passed (18 files)                                              |
+
+No file in this feature's scope was changed by this pass — the finding was
+that nothing needed to be, and the gate above is a direct re-run against the
+current tree rather than a diff-only inference.
 
 ---
 

@@ -1,7 +1,8 @@
 import React from 'react';
 import { SettingsToggle as Toggle } from './SettingsToggle';
-import { Loader2, Mail, Server, Cloud, Info, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Mail, Server, Cloud, Info, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { MicrosoftAuthMethod } from '../../constants/enums';
+import { SMTP_PROVIDER_PRESETS, findSmtpProviderPreset } from '../../constants/smtpProviders';
 import type { EmailServiceSettings } from '../../types/user';
 
 interface EmailSettingsSectionProps {
@@ -79,6 +80,19 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
   const showMicrosoftOAuth = isMicrosoft && microsoftAuthMethod === MicrosoftAuthMethod.OAUTH;
   const busy = savingEmail || testingEmail;
 
+  // Which quick-fill provider was last chosen, so its credential guidance
+  // stays on screen. It is a hint about a choice just made, not part of the
+  // configuration — the stored settings only ever hold the host, port and
+  // encryption it filled in, which the administrator can then edit freely.
+  const [quickFillPreset, setQuickFillPreset] = React.useState<string>('');
+  const quickFill = quickFillPreset ? findSmtpProviderPreset(quickFillPreset) : undefined;
+
+  // Saving this combination is refused by the backend, which is right — an
+  // enabled section with no platform has no host to send through, and it
+  // suppresses whatever server-wide SMTP settings the deployment has. Say so
+  // here rather than letting Save be the thing that explains it.
+  const enabledWithoutPlatform = emailSettings.enabled && emailSettings.platform === 'other';
+
   return (
     <div className="space-y-6">
       <div>
@@ -118,9 +132,9 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
             [
               { id: 'gmail', label: 'Gmail', icon: <Mail className="h-4 w-4" /> },
               { id: 'microsoft', label: 'Microsoft 365', icon: <Mail className="h-4 w-4" /> },
-              { id: 'selfhosted', label: 'Self-Hosted SMTP', icon: <Server className="h-4 w-4" /> },
+              { id: 'selfhosted', label: 'SMTP (any provider)', icon: <Server className="h-4 w-4" /> },
               { id: 'cloudflare', label: 'Cloudflare', icon: <Cloud className="h-4 w-4" /> },
-              { id: 'other', label: 'Other / None', icon: <Mail className="h-4 w-4" /> },
+              { id: 'other', label: 'Not configured', icon: <Mail className="h-4 w-4" /> },
             ] as const
           ).map((p) => (
             <button
@@ -355,7 +369,64 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
 
       {emailSettings.platform === 'selfhosted' && (
         <div className="border-theme-surface-border space-y-4 border-t pt-4">
-          <p className="text-theme-text-primary text-sm font-medium">Self-Hosted SMTP</p>
+          <div>
+            <p className="text-theme-text-primary text-sm font-medium">SMTP Server</p>
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Your own mail server, or any provider that sends over SMTP — Yahoo, iCloud, Zoho, Fastmail, SendGrid,
+              Amazon SES and others. Most of them issue an app password rather than accepting your account password.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="smtp-quick-fill" className="text-theme-text-muted mb-1 block text-xs">
+              Fill in settings for a known provider
+            </label>
+            <select
+              id="smtp-quick-fill"
+              value=""
+              onChange={(e) => {
+                const preset = findSmtpProviderPreset(e.target.value);
+                if (!preset) return;
+                setQuickFillPreset(preset.id);
+                // Server details only. The username and password are the
+                // department's own credentials and are never touched.
+                onEmailSettingsChange((s) => ({
+                  ...s,
+                  smtp_host: preset.host,
+                  smtp_port: preset.port,
+                  smtp_encryption: preset.encryption,
+                }));
+              }}
+              className="form-input sm:w-1/2"
+            >
+              <option value="">Choose a provider…</option>
+              {SMTP_PROVIDER_PRESETS.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.label}
+                </option>
+              ))}
+            </select>
+            {quickFill && (
+              <div className="text-theme-text-muted mt-2 flex items-start gap-2 text-xs">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  <span className="font-medium">{quickFill.label}</span> — Username: {quickFill.usernameHint}.{' '}
+                  {quickFill.credentialHint}{' '}
+                  {quickFill.helpUrl && (
+                    <a
+                      href={quickFill.helpUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-theme-accent-blue underline"
+                    >
+                      Open provider settings
+                    </a>
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label className="text-theme-text-muted mb-1 block text-xs">SMTP Host</label>
@@ -391,7 +462,9 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="text-theme-text-muted mb-1 block text-xs">Username</label>
+              <label className="text-theme-text-muted mb-1 block text-xs">
+                Username <span className="font-normal">(leave blank for an unauthenticated relay)</span>
+              </label>
               <input
                 type="text"
                 value={emailSettings.smtp_user || ''}
@@ -462,6 +535,16 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
               Domain DNS must be managed by Cloudflare. Emails are sent via REST API — no SMTP server required.
             </span>
           </div>
+        </div>
+      )}
+
+      {enabledWithoutPlatform && (
+        <div className="alert-warning flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+          <p className="text-theme-text-secondary text-sm">
+            Email notifications are switched on but no platform is selected, so nothing can be sent. Choose Gmail,
+            Microsoft 365, SMTP or Cloudflare above, or switch email notifications off.
+          </p>
         </div>
       )}
 

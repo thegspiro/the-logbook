@@ -2759,3 +2759,56 @@ class TestIPLoggingMiddlewareRequestIdValidation:
     async def test_no_incoming_id_generates_one(self, monkeypatch):
         response_request_id = await self._run(monkeypatch, None)
         assert len(response_request_id) == 16
+
+
+class TestExportEndpointsCoverage:
+    """SecurityMonitoringMiddleware.EXPORT_ENDPOINTS (data-exfiltration
+    monitoring) is a hand-maintained exact-match set of route paths, not
+    derived from the route table at runtime. It has already drifted once:
+    CI3-33 built the set from a point-in-time grep, and a later,
+    independent PR (finance-approvals pass 4, 2026-09-08) added two new
+    `/finance/export/*` GET routes with no reason to know this set existed,
+    silently leaving them unmonitored (CI4-33, see
+    docs/security-review/CI4-33-core-infra.md). This pins the set against
+    the live OpenAPI schema — the actual registered routes — so the next
+    new export route fails CI instead of silently going unmonitored.
+    """
+
+    @pytest.fixture(scope="module")
+    def schema(self) -> dict:
+        from main import app
+
+        return app.openapi()
+
+    @pytest.mark.unit
+    def test_every_non_parameterized_export_route_is_covered(self, schema):
+        from app.core.security_middleware import SecurityMonitoringMiddleware
+
+        # A path parameter (e.g. training_programs.py's
+        # "/programs/{program_id}/export") can never equal a fixed string,
+        # so EXPORT_ENDPOINTS structurally cannot cover it — a known,
+        # documented limitation (CI3-33-13's comment), not new drift.
+        real_export_paths = {
+            path
+            for path, _methods in schema["paths"].items()
+            if "export" in path and "{" not in path
+        }
+
+        missing = real_export_paths - SecurityMonitoringMiddleware.EXPORT_ENDPOINTS
+        assert not missing, (
+            "New export route(s) exist that SecurityMonitoringMiddleware."
+            "EXPORT_ENDPOINTS does not cover — data-exfiltration monitoring "
+            f"will never run for them: {sorted(missing)}. Add each to "
+            "EXPORT_ENDPOINTS in app/core/security_middleware.py."
+        )
+
+    @pytest.mark.unit
+    def test_no_stale_entries_for_routes_that_no_longer_exist(self, schema):
+        from app.core.security_middleware import SecurityMonitoringMiddleware
+
+        real_paths = set(schema["paths"])
+        stale = SecurityMonitoringMiddleware.EXPORT_ENDPOINTS - real_paths
+        assert not stale, (
+            "EXPORT_ENDPOINTS names route(s) that no longer exist — remove "
+            f"them from app/core/security_middleware.py: {sorted(stale)}"
+        )

@@ -417,11 +417,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div
-                className="modal-overlay"
-                aria-hidden="true"
-                onClick={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })}
-              ></div>
+              <div className="modal-overlay" aria-hidden="true" />
               <DialogPanel
                 onClose={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })}
                 className="relative z-10 w-full max-w-md"
@@ -504,11 +500,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div
-                className="modal-overlay"
-                aria-hidden="true"
-                onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })}
-              ></div>
+              <div className="modal-overlay" aria-hidden="true" />
               <DialogPanel
                 onClose={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })}
                 className="relative z-10 w-full max-w-sm"

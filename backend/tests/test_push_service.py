@@ -620,16 +620,53 @@ class TestOrgScoping:
         """Endpoints appear in client-side code and logs. Without the org
         filter, knowing one would be enough to silence another department."""
         org_a, user_a = two_orgs["a"]
-        org_b, _ = two_orgs["b"]
+        org_b, user_b = two_orgs["b"]
         endpoint = "https://push.example/abc"
         p256dh, auth = _client_keys()
         svc = PushService(db_session)
         await svc.subscribe(org_a, user_a, endpoint, p256dh, auth)
 
-        assert await svc.unsubscribe(org_b, endpoint) is False
+        assert await svc.unsubscribe(org_b, user_b, endpoint) is False
         assert await _count(db_session, "endpoint_hash", hash_endpoint(endpoint)) == 1
 
-        assert await svc.unsubscribe(org_a, endpoint) is True
+        assert await svc.unsubscribe(org_a, user_a, endpoint) is True
+        assert await _count(db_session, "endpoint_hash", hash_endpoint(endpoint)) == 0
+
+    async def test_another_member_of_the_same_org_cannot_unsubscribe_this_endpoint(
+        self, db_session, two_orgs
+    ):
+        """MSG-16: a device endpoint is a client-supplied id like any other,
+        and this route is self-scoped (mark-read, pin, and subscribe all
+        filter on the caller's own id, not merely the org) -- so a plain
+        org filter alone let any member of the same department silence a
+        colleague's push notifications by submitting an endpoint they
+        should not know but might obtain (a shared device, a leaked log
+        line, a bug elsewhere)."""
+        org_a, user_a = two_orgs["a"]
+        colleague_id = str(uuid.uuid4())
+        await db_session.execute(
+            text(
+                "INSERT INTO users (id, organization_id, username, email)"
+                " VALUES (:i,:o,:u,:e)"
+            ),
+            {
+                "i": colleague_id,
+                "o": org_a,
+                "u": f"user-{colleague_id[:8]}",
+                "e": f"user-{colleague_id[:8]}@example.org",
+            },
+        )
+        await db_session.commit()
+
+        endpoint = "https://push.example/colleague-device"
+        p256dh, auth = _client_keys()
+        svc = PushService(db_session)
+        await svc.subscribe(org_a, user_a, endpoint, p256dh, auth)
+
+        assert await svc.unsubscribe(org_a, colleague_id, endpoint) is False
+        assert await _count(db_session, "endpoint_hash", hash_endpoint(endpoint)) == 1
+
+        assert await svc.unsubscribe(org_a, user_a, endpoint) is True
         assert await _count(db_session, "endpoint_hash", hash_endpoint(endpoint)) == 0
 
     async def test_send_is_scoped_by_org_and_user(

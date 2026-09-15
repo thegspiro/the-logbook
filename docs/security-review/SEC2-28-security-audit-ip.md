@@ -1,7 +1,8 @@
 # Security Review — Security, Audit & IP
 
 **Prefix:** `SEC2` · **Iteration:** 28 · **Reviewed:** 2026-08-27 (pass 1, PR
-#1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3) · **PR:** #1911 (pass 1)
+#1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4) · **PR:**
+#1911 (pass 1)
 
 **Backend:** `app/api/v1/endpoints/security_monitoring.py` (677 L),
 `app/api/v1/endpoints/ip_security.py` (555 L), `app/api/v1/endpoints/audit_logs.py`
@@ -712,3 +713,332 @@ scope correction). Ran the gate against the full repo, matching CI's scope.
 | backend tests, scope (audit/security_monitoring/ip_security/error_log/privilege_ceiling/middleware) | 335/335 passed, 1 skipped (env-only)                              |
 | backend tests, full suite                                                                           | 11,505 passed, 21 skipped (env-only, all pre-existing/documented) |
 | frontend `tsc`/`eslint`/`vitest`                                                                    | n/a — no frontend file touched this pass                          |
+
+---
+
+## Pass 4 (2026-09-13)
+
+Full re-read of all nine files this doc covers (`security_monitoring.py`
+endpoint (677 L) + service (1,338 L — grown from pass 3's stated size;
+byte-for-byte re-read start to finish, not diffed against a prior commit,
+because this repo's squash-merge history makes the file's own git log an
+unreliable diff baseline — the same caveat pass 2 hit on
+`security_middleware.py`), `ip_security.py` (555 L) + `ip_security_service.py`
+(722 L), `audit_logs.py` (169 L), `error_logs.py` (342 L), `core/audit.py`
+(939 L), `core/geoip.py` (267 L), `audit_ship_service.py` (165 L), plus
+`core/suspicious_ip.py` (236 L, named explicitly in `CLAUDE.md`'s Attack
+Protection table and read for the first time under this feature's own file
+list) and the `IPBlockingMiddleware`/`SecurityMonitoringMiddleware` sections of
+`core/security_middleware.py`. `git log` confirms none of the nine core files
+changed since pass 3 (2026-09-06) — the only touch in that window
+(`f14370f`, onboarding navigation-layout work) doesn't touch this feature.
+
+### Route inventory — 35 routes, all enumerated, all correctly gated
+
+| Method | Path                                     | Auth dependency      | Permission                                            | Org-scoped                                                      | Notes                                                                                 |
+| ------ | ---------------------------------------- | -------------------- | ----------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| GET    | `/security/status`                       | `require_permission` | `audit.view`                                          | yes (via `organization_id` param)                               |                                                                                       |
+| GET    | `/security/alerts`                       | `require_permission` | `audit.view`                                          | yes                                                             |                                                                                       |
+| POST   | `/security/alerts/{id}/acknowledge`      | `require_permission` | `audit.export`                                        | yes (fetch filters `organization_id`)                           |                                                                                       |
+| POST   | `/security/alerts/{id}/resolve`          | `require_permission` | `audit.export`                                        | yes                                                             |                                                                                       |
+| GET    | `/security/audit-log/integrity`          | `require_permission` | `audit.view`                                          | n/a — chain-level stats, by design                              |                                                                                       |
+| GET    | `/security/audit-log/status`             | `require_permission` | `audit.view`                                          | n/a — chain-level stats                                         |                                                                                       |
+| POST   | `/security/audit-log/checkpoint`         | `require_permission` | `audit.export`                                        | n/a — global chain checkpoint                                   |                                                                                       |
+| POST   | `/security/audit-log/rehash`             | `require_permission` | `audit.export`                                        | n/a — global chain, break-glass `AUDIT_ALLOW_CHAIN_REHASH` gate |                                                                                       |
+| GET    | `/security/audit-log/entries`            | `require_permission` | `audit.view`                                          | yes (`AuditLog.organization_id` filter)                         | `user_id` query filter is AND'd with the org filter, not a substitute for it          |
+| GET    | `/security/audit-log/export`             | `require_permission` | `audit.export`                                        | yes                                                             | `session_id` fingerprinted (SEC-9)                                                    |
+| GET    | `/security/intrusion-detection/status`   | `require_permission` | `audit.view`                                          | yes                                                             |                                                                                       |
+| GET    | `/security/data-exfiltration/status`     | `require_permission` | `audit.view`                                          | yes                                                             |                                                                                       |
+| POST   | `/security/manual-check`                 | `require_permission` | `audit.export`                                        | yes                                                             |                                                                                       |
+| POST   | `/ip-security/exceptions`                | `get_current_user`   | any authenticated                                     | self (user-scoped create)                                       |                                                                                       |
+| GET    | `/ip-security/exceptions/me`             | `get_current_user`   | any authenticated                                     | self                                                            |                                                                                       |
+| GET    | `/ip-security/exceptions/pending`        | `require_permission` | `security.manage` OR `settings.manage`                | yes                                                             |                                                                                       |
+| GET    | `/ip-security/exceptions`                | `require_permission` | `security.manage` OR `settings.manage`                | yes                                                             |                                                                                       |
+| POST   | `/ip-security/exceptions/{id}/approve`   | `require_permission` | `security.manage` OR `settings.manage`                | yes                                                             |                                                                                       |
+| POST   | `/ip-security/exceptions/{id}/reject`    | `require_permission` | `security.manage` OR `settings.manage`                | yes                                                             |                                                                                       |
+| POST   | `/ip-security/exceptions/{id}/revoke`    | `require_permission` | `security.manage` OR `settings.manage`                | yes                                                             |                                                                                       |
+| GET    | `/ip-security/exceptions/{id}/audit-log` | `require_permission` | `security.manage`, `settings.manage`, OR `audit.view` | yes (`ensure_found` 404s pre-check + join filter)               |                                                                                       |
+| GET    | `/ip-security/blocked-attempts`          | `require_permission` | `security.manage`, `settings.manage`, OR `audit.view` | n/a — pre-auth edge data, org-agnostic by design                |                                                                                       |
+| GET    | `/ip-security/blocked-countries`         | `require_permission` | `security.manage` OR `settings.manage`                | n/a — platform-wide edge control                                |                                                                                       |
+| POST   | `/ip-security/blocked-countries`         | `require_permission` | `security.manage` OR `settings.manage`                | n/a                                                             | + `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` gate                                          |
+| DELETE | `/ip-security/blocked-countries/{code}`  | `require_permission` | `security.manage` OR `settings.manage`                | n/a                                                             | + `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` gate                                          |
+| GET    | `/audit-logs`                            | `require_permission` | `audit.view`                                          | yes                                                             | search escaped via `like_pattern()`/`LIKE_ESCAPE_CHAR`                                |
+| GET    | `/audit-logs/stats`                      | `require_permission` | `audit.view`                                          | yes                                                             |                                                                                       |
+| GET    | `/audit-logs/{log_id}`                   | `require_permission` | `audit.view`                                          | yes                                                             |                                                                                       |
+| POST   | `/errors/log`                            | `get_current_user`   | any authenticated                                     | self-stamped org                                                | per-user rate limit (120/min), fail-open on Redis down (non-security-critical ingest) |
+| GET    | `/errors`                                | `require_permission` | `audit.view`                                          | yes                                                             |                                                                                       |
+| GET    | `/errors/codes`                          | `get_current_user`   | any authenticated                                     | n/a — static reference data                                     |                                                                                       |
+| GET    | `/errors/stats`                          | `require_permission` | `audit.view`                                          | yes                                                             |                                                                                       |
+| DELETE | `/errors`                                | `require_permission` | `audit.manage`                                        | yes                                                             | audit-logged before commit                                                            |
+| GET    | `/errors/export`                         | `require_permission` | `audit.export`                                        | yes                                                             |                                                                                       |
+
+35/35 carry an auth dependency; the two intentionally-open ones
+(`POST /ip-security/exceptions`, `GET /ip-security/exceptions/me`) are
+self-scoped by design (a member requesting/viewing their own exception) and
+`GET /errors/codes` is static documentation, not log data — none is a gap.
+No route's permission is looser than the sensitivity of what it returns
+(XC-2 n/a); no `require_permission(a, b)` OR-list includes a broadly-seeded
+grant (all three real gates here — `security.manage`, `settings.manage`,
+`audit.view`/`audit.export`/`audit.manage` — are admin-tier permissions, none
+on `DEFAULT_POSITIONS["member"]` or the `firefighter` rank).
+
+### Re-verified — all prior findings hold, nothing regressed
+
+- **SEC-1 through SEC-9** (module-audit iteration 23) and **all of pass
+  1–3's SEC2-28-1 through SEC2-28-9**: re-read the actual code (not assumed
+  from the doc) and confirmed every fix is still present exactly as pass 3
+  described — hash v4 covering `event_category`/`severity`; genesis-head
+  anchor + tail-truncation checkpoint cross-check; keyed-row rehash
+  fail-closed + `AUDIT_ALLOW_CHAIN_REHASH` break-glass; `security_alerts`
+  org-scoped on all four methods; `GEOIP_FAIL_CLOSED` + private-IP-first +
+  `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`; `BlockedAccessAttempt` written
+  alongside the audit log; `add_blocked_country` updates-in-place;
+  `audit_ship_service.py`'s watermark `.with_for_update()` lock (SEC2-28-9).
+- **SEC2-28-5** (HIGH, flagged) — still open, unchanged.
+  `IPBlockingMiddleware.__call__` (`security_middleware.py:1341`) is still
+  the only production call site of `is_ip_blocked`, still
+  `geoip.is_ip_blocked(client_ip, set())` with a hardcoded empty set, for the
+  documented reason (pre-auth, no tenant context). Still needs the owner
+  decision from pass 1; still mirrored in `KNOWN_LIMITATIONS.md`.
+- **SEC2-28-6** (LOW, flagged) — still open, unchanged.
+  `request_ip_exception`'s existing-exception check
+  (`ip_security_service.py:90-106`) is still a plain read-then-insert, no
+  lock, no unique constraint.
+- **SEC2-28-7** (HIGH, flagged) — still open, unchanged. `securityService` in
+  `frontend/src/services/adminServices.ts` re-exported from `services/api.ts`
+  and called from zero components (re-confirmed by grep this pass); the
+  `organization_id=NULL` brute-force-alert invisibility gap and the
+  `Content-Length`-gated exfiltration gap are both still present in the code
+  exactly as described.
+- **Dead detector code** (`analyze_request`, `_check_rate_limit`,
+  `_check_injection_patterns`) — re-confirmed zero production callers
+  (`grep` across `app/` outside `security_monitoring.py` itself returns
+  nothing). Still flagged, not fixed, same as pass 3.
+- **The `system.run_tasks` blast-radius tangential note from pass 1 is now
+  settled, not just re-verified.** `app/core/permissions.py:456-464`
+  documents in-line why the permission is seeded to no default role — "so
+  this is intentionally granted to no default role — only the wildcard
+  'System Owner' ... matches it" — closing the open question pass 1 raised
+  about whether an org's own admin could hold it. No finding; recorded so a
+  future pass doesn't re-open it.
+- **Frontend** (`ip-security` module, `AuditLogPage`, `ErrorMonitoringPage`,
+  `adminServices.ts`): `git log` shows none of these files changed since pass
+  2's fix. Spot-re-verified the fix itself still holds:
+  `modules/ip-security/routes.tsx`'s `/ip-security` route still declares
+  `requiredAnyPermission={['security.manage', 'settings.manage']}`, and
+  `testingRegistry.ts`'s matching entry still reads
+  `anyPermission: ['security.manage', 'settings.manage']`.
+
+### New finding
+
+### SEC2-28-10 — HIGH — The audit hash chain has no concurrency control: two simultaneous writes fork the chain and `verify_integrity` reports the fork as tampering
+
+**What:** `AuditLogger.create_log_entry` determines the new row's
+`previous_hash` with a plain, non-locking read —
+`select(AuditLog).order_by(AuditLog.id.desc()).limit(1)` — inside
+`db.begin_nested()` (a SAVEPOINT, not a serializing lock). Under MySQL's
+default `REPEATABLE READ`, two audit-log writes racing on two different
+`AsyncSession`s (i.e. two different concurrent HTTP requests, or two
+independent short-lived sessions such as the ones `IPBlockingMiddleware` and
+`SecurityMonitoringMiddleware` open per call) can both read the same "last
+row" before either commits, and both then insert a new row carrying the
+_same_ `previous_hash`. There is no DB-level constraint (unique or otherwise)
+on `previous_hash`/`current_hash` to catch this — it is caught, if at all,
+only later by `verify_integrity`'s chain-link check, which reports it
+indistinguishably from real tampering: `"Chain broken - previous hash does
+not match"`.
+
+**Where:** `backend/app/core/audit.py:205-210` (the unlocked read),
+consumed by every caller of `log_audit_event`/`log_event`
+(48 endpoint files) and, at higher frequency, the two independent
+per-request sessions in `core/security_middleware.py`
+(`IPBlockingMiddleware._log_blocked_attempt`,
+`SecurityMonitoringMiddleware.__call__`'s session-hijack check).
+
+**Failure scenario — reproduced directly, not inferred.** Using two real,
+independently-committing `AsyncSession`s (`database_manager.session_factory()`)
+and `asyncio.gather`, exactly the pattern `tests/test_audit_shipping.py`'s
+`TestConcurrentShipRuns` already uses for the sibling watermark race
+(SEC2-28-9):
+
+```python
+session_a = database_manager.session_factory()
+session_b = database_manager.session_factory()
+
+async def write(db, tag):
+    r = await audit_logger.create_log_entry(
+        db, event_type=f"race_{tag}", event_category="security",
+        severity="info", event_data={"tag": tag},
+    )
+    await db.commit()
+    return r
+
+a, b = await asyncio.gather(write(session_a, "A"), write(session_b, "B"))
+```
+
+Both rows come back with the **identical** `previous_hash` (the genesis
+value, in an empty table — the same shape occurs mid-chain against any
+shared "last row"). A subsequent `verify_audit_log_integrity()` against the
+same rows returns `verified: False` with `"Chain broken - previous hash does
+not match"` naming the second-committed row — reproduced reliably, not
+occasionally, in a fresh MySQL instance with no other traffic. Under real
+concurrent load (or two workers/pods) the same race applies to any two
+audit-log writes that overlap in time, not just a contrived pair.
+
+**Why this is more than a lab curiosity:**
+
+- **48 endpoint files** call `log_audit_event`/`log_event`, and several fire
+  on plain reads (e.g. `security_status_viewed` on every `GET
+/security/status`), so ordinary concurrent traffic — including, by this
+  codebase's own documentation elsewhere in this file
+  (`security_monitoring.py`'s comments on the SPA firing "several API calls
+  in parallel on one page load"), routine single-user browsing — produces
+  overlapping audit writes routinely, not just under adversarial load.
+- **It is reachable, at will, by an unauthenticated attacker.**
+  `IPBlockingMiddleware._log_blocked_attempt` opens a brand-new
+  `async_session_factory()` session and writes an audit row for _every_
+  blocked request, pre-auth. Sending a burst of concurrent requests from a
+  blocked IP/country (or several blocked IPs at once) reliably produces the
+  overlapping-write pattern above, with no credentials needed — a
+  denial-of-service against the integrity-monitoring subsystem itself, not
+  against the app's availability.
+- **The failure mode is a false CRITICAL alert, not a missed one** — the
+  opposite direction from most findings in this file, but just as damaging
+  to the feature's purpose: `verify_log_integrity` (called from
+  `get_security_status`, which every `/security/*` GET route calls) fires a
+  `LOG_TAMPERING` `CRITICAL` alert and logs
+  `event_type="log_tampering_detected"` whenever `verified` is `False`. A
+  tamper-detection system that cries wolf under ordinary concurrent use
+  trains operators to distrust or dismiss its alerts — exactly the alert
+  fatigue that lets a _real_ tamper event go unnoticed, and is triggerable
+  by anyone who can send the app concurrent requests.
+
+**Why this was not fixed in this pass, and why a narrow fix is unsafe:** the
+obvious mechanical fix — mirror `audit_ship_service.py`'s SEC2-28-9 fix by
+adding `.with_for_update()` to the "last row" read — does not transfer safely
+here, for a reason that fix didn't have to contend with. `AuditShipState`'s
+lock is held only across one dedicated, short function that commits and
+returns; `create_log_entry`'s SAVEPOINT lives inside whatever the _caller's_
+outer transaction is, and that transaction's lifetime is the caller's to
+control, not this function's. A row lock taken here would be held by MySQL
+until the _caller's_ transaction commits or rolls back — which, for a
+request that logs an audit event early and then does more work afterward
+(most of them), could be the rest of the request. Since this function is on
+the hot path of a large fraction of the app's endpoints, and the "last
+row" is a single shared resource with no per-tenant partitioning (the chain
+is deliberately one cross-org sequence, same as SEC-7's rehash op), a naive
+`.with_for_update()` here would serialize an unbounded, unrelated set of
+concurrent requests app-wide behind whichever one happens to hold the audit
+row lock longest — a global-availability risk this environment cannot
+load-test with confidence, and exactly the kind of change CLAUDE.md's
+Attack-Protection guidance warns against making unilaterally in this
+feature. The **correct-shaped fix** most likely mirrors SEC2-28-9's own
+watermark pattern more precisely than a direct copy: a small, dedicated
+"chain head" row (id, last row's `current_hash`) updated in its **own**
+short, self-contained transaction — acquire the lock, read the head,
+compute the hash, insert the row, advance the head, commit, release, all
+inside `create_log_entry` itself rather than depending on the caller's
+transaction boundary. That is a schema change (new table + migration) and a
+behavior change to a function called from nearly every endpoint in the
+codebase, so it needs an owner decision and a load-tested rollout, not a
+drive-by fix in a review pass. **Flagged, not fixed.** Mirrored into
+`docs/KNOWN_LIMITATIONS.md`. No guard test was added — per this repo's own
+convention (see SEC2-28-5/-6/-7, none of which carry one either), a guard
+test is added for a fix, not for an open finding; a permanently-red test
+would itself be a new CI failure this pass would be leaving behind.
+
+### Completion gate (Pass 4)
+
+No code changed this pass (findings-only: all prior fixes re-verified
+intact, one new finding flagged). Ran the gate against the full repo per
+this file's own established practice.
+
+| Check                                                                                                                      | Result                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                              | clean                                                                                                                                                 |
+| `black --check app/ tests/ alembic/`                                                                                       | clean                                                                                                                                                 |
+| `isort --check-only app/ tests/ alembic/`                                                                                  | clean                                                                                                                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                                          | PASSED — 444 revisions, single head (no migration of this feature's own; +1 unrelated migration picked up by the `origin/main` merge below)           |
+| backend tests, scope (audit/security_monitoring/ip_security/error_log/privilege_ceiling/security_middleware/suspicious_ip) | 369 passed, 1 skipped (env-only: optional `pywebpush`)                                                                                                |
+| backend tests, full suite                                                                                                  | 12,490 passed, 21 skipped (all environment-only: optional `pywebpush`, Docker registry/daemon unavailable in this sandbox, opt-in API-contract suite) |
+| frontend `tsc --noEmit`                                                                                                    | 0 errors (no frontend file touched this pass; run anyway per convention)                                                                              |
+| frontend `eslint --max-warnings 10`                                                                                        | 0 errors / 0 warnings                                                                                                                                 |
+
+**Note on how SEC2-28-10 was verified:** the reproduction used two real,
+independently-committing sessions against this sandbox's live MySQL instance
+(the same technique `test_audit_shipping.py`'s `TestConcurrentShipRuns`
+already uses) rather than a script against a mocked session, run outside the
+`pytest`/`db_session` fixture and cleaned up (`DELETE FROM audit_logs` /
+verified `audit_ship_state` untouched) before the completion-gate runs above
+— confirmed by re-running the scoped suite clean afterward. No test was
+added to the suite for this finding (see SEC2-28-10's own writeup for why).
+
+**Post-merge re-run:** `origin/main` moved (a scheduling fix and an
+onboarding-singleton migration/fix, neither touching this feature's files)
+between branching and pushing; merged in with no conflicts in this file or
+`KNOWN_LIMITATIONS.md`, applied the new migration
+(`6ab7d903fae5_enforce_onboarding_status_singleton`) to this sandbox's test
+database, and re-ran the full gate above against the merged tree — all
+green, counts updated to reflect it (444 revisions, 12,490 full-suite
+passes, up from the pre-merge 443/12,450).
+
+---
+
+## Pass 4 addendum (2026-09-13) — second, independently-branched review (PR #2515)
+
+A second pass-4 review of this feature branched from `origin/main` before
+the pass 4 above (PR #2513) had merged — branch
+`claude/security-review-security-audit-ip`, PR #2515 — and, working
+independently, reached the same conclusion: every prior finding
+re-verified intact, no new exploitable bug. Its own re-verification
+narrative duplicated the above and is not repeated here. It did surface one
+item this review missed:
+
+### SEC2-28-11 — LOW — stale "dead code removed" claim in the module-audit doc — ✅ FIXED (documentation only)
+
+**What:** `docs/module-audit/security-audit-ip.md`'s SEC-9 section claimed
+"the unused org-scoped `get_all_active_allowed_ips` service method was
+deleted (only the pre-auth `_global` variant is called)." Re-checked against
+the current `ip_security_service.py`: the org-scoped method is present
+(`ip_security_service.py:477-500`), correctly scoped
+(`organization_id`/`valid_from`/`valid_until` all filtered), and has its own
+passing unit tests (`test_ip_security_service.py::TestGetAllActiveAllowedIps`
+— confirmed by name/behavior, not just presence) — but grepping all of
+`backend/app` finds **zero production callers**, and there is no `_global`
+variant anywhere in the current codebase. The doc's claim was stale, not a
+new defect: it most likely described an intermediate state before PR #1544
+(SEC2-28-5) removed the middleware's allowlist union entirely rather than
+routing it through a safe per-tenant lookup.
+
+**Where:** `docs/module-audit/security-audit-ip.md` (doc only; no
+application code defect — the method is unreachable, not unsafe).
+
+**Impact:** none functionally (dead code opens nothing); a reviewer trusting
+the stale claim could wrongly assume this method no longer exists, which
+matters if/when SEC2-28-5's proposed fix (a) — a per-IP-only allowlist
+lookup — is ever built, since this method is exactly the building block
+that fix would adapt.
+
+**Fix:** corrected the module-audit doc in place to describe the current,
+re-verified state and cross-reference SEC2-28-5 and this entry, rather than
+silently leaving a wrong "resolved" claim standing next to accurate
+neighboring bullets. Not mirrored into `KNOWN_LIMITATIONS.md` — it is a
+documentation correction about an existing, already-tracked finding
+(SEC2-28-5, and the same "written but not wired" shape as the pass-3
+dead-detector note), not a new open item.
+
+**Renumbering note:** PR #2515 itself labeled this finding SEC2-28-10,
+which collides with the unrelated audit-hash-chain-race finding recorded
+under that same ID in the Pass 4 section above (from PR #2513, which
+merged first). Renumbered SEC2-28-11 here to keep this file's ID space
+collision-free; PR #2515's own commit history and PR description still
+read "SEC2-28-10" and are left as-is as the historical record of that
+branch.
+
+No code fix, no guard test — documentation only, nothing to pin. PR #2515's
+own completion gate (`flake8`/`black --check`/`isort --check-only` clean;
+`validate_migrations.py --strict` passed, 444 revisions single head; scoped
+backend tests 165/165 passed; full suite 12,490 passed, 1 skipped
+(env-only); frontend `tsc --noEmit` 0 errors, `eslint --max-warnings 10` 0
+errors/warnings) verified the same tree state this file's Pass 4 gate above
+already covers, and is not duplicated here.

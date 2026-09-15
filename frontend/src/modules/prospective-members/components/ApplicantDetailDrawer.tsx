@@ -36,7 +36,7 @@ import { STAGE_TYPE_ICONS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
+import { useDialog } from '../../../hooks/useDialog';
 import { DialogPortal } from '../../../components/DialogPortal';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { toDisplayString } from '../../../utils/displayValue';
@@ -117,8 +117,11 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   isFirstStage,
 }) => {
   // Rendered by the parent whether open or not, so the flag is what counts.
-  // Takes the mobile bottom bar off the drawer while it is showing.
-  useOverlaySurface(isOpen);
+  // useDialog rather than useOverlaySurface alone (which only takes the mobile
+  // bottom bar off the drawer): this drawer dismissed on a backdrop click and
+  // had no Escape handler, so removing the former would have left the X button
+  // as the only way out of a panel holding six editable fields.
+  const drawerRef = useDialog<HTMLDivElement>({ isOpen, onClose });
 
   const tz = useTimezone();
 
@@ -248,10 +251,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   return (
     <DialogPortal>
       {/* Overlay */}
-      <div className="modal-overlay z-40" onClick={onClose} />
+      <div className="modal-overlay z-40" aria-hidden="true" />
 
       {/* Drawer */}
-      <div className="drawer-panel">
+      <div ref={drawerRef} className="drawer-panel" role="dialog" aria-modal="true" aria-label="Applicant details">
         {/* Loading */}
         {isLoadingApplicant && (
           <div className="flex flex-1 items-center justify-center" role="status" aria-live="polite">

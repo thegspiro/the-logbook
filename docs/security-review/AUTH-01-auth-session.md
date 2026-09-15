@@ -1,9 +1,226 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 5 (2026-09-14)
+
+**0 new findings.** This is the first pass of the rotation's second full lap
+(00 through 34) to reach this feature — Feature 00 (Cross-cutting baseline)
+ran its own pass 5 immediately before this one and also found 0 new findings.
+
+**Backend:** the same four files pass 4 scoped (`app/api/v1/endpoints/auth.py`,
+`app/services/auth_service.py`, `app/services/mfa_service.py`,
+`app/services/oauth_service.py`), plus `app/services/consent_service.py`,
+`app/api/dependencies.py` (`get_current_user` / `get_current_active_user` /
+`get_optional_current_user`), `app/core/security.py` (JWT issue/decode block),
+`app/core/suspicious_ip.py`, and `app/schemas/auth.py`
+**Frontend:** `stores/authStore.ts`, `services/apiClient.ts`,
+`services/authService.ts` — diffed against pass 4's baseline, not modified
+**Migrations:** none written this pass; 444 revisions, single head `6ab7d903fae5`
+
+### Scope and method
+
+Unlike pass 4 (which could not diff because of a history squash), this pass
+could diff cleanly: PR #2389 merged at `a68d674dd9` is a real, reachable
+ancestor of current `main`, so the delta is exact rather than reasoned from a
+re-read. `git diff a68d674dd origin/main` across every file in this feature's
+scope shows changes in exactly two files:
+
+| File              | Diff    | Source                                                                                                                                |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth.py`         | +27/-10 | `feat(onboarding): make the navigation layout a department setting` (`f14370f4a`) — `GET /branding` gains a `navigation_layout` field |
+| `auth_service.py` | +45/-4  | `docs(app-review): auth & session lifecycle pass 5 — 1 fix, 1 flagged` (`b61120c73`) — app-review's AUTH-20 lockout-race fix          |
+
+`mfa_service.py`, `oauth_service.py`, `consent_service.py`,
+`app/api/dependencies.py`, `app/core/suspicious_ip.py`, `app/core/security.py`,
+`app/schemas/auth.py`, and all three frontend files are **byte-identical** to
+pass 4's reviewed state (`git diff` against `a68d674dd` is empty for every one
+of them). Each was still read in full this pass rather than assumed clean —
+Pitfall #10's "when you encounter pre-existing violations, fix them" spirit
+applies equally to "when you encounter a file you've already reviewed, still
+read it" for a feature this sensitive — but nothing in any of them had reason
+to change, and nothing did.
+
+Both changes to the two diffed files were made by other tracks (a feature PR
+and this rotation's own app-review track, respectively) before this pass
+started, not by this pass. Both are reviewed here under the full seven-
+dimension checklist anyway, since neither track's own review is a substitute
+for this rotation's — pass 3's own history (AUTH-7) is the standing argument
+for why a security-adjacent change should get an independent second look
+rather than being taken on the strength of who last touched it.
+
+### Route inventory — unchanged
+
+Still 26 routes (`grep -c '^@router\.'` in `auth.py`), still 14 public / 12
+private, still exactly `ALLOWLISTED_PUBLIC`'s 14 `auth.py` entries. No route
+was added, removed, or had its auth dependency changed. `navigation_layout`
+is a new **field** on an already-public, already-unauthenticated route
+(`GET /branding`), not a new route — checklist dimension 1 has nothing new to
+enumerate.
+
+### The two changes since pass 4, reviewed
+
+**`GET /branding` gains `navigation_layout` (dimension 5 — data exposure):**
+reads `Organization.settings["appearance"]["navigation_layout"]`, validates it
+against the literal allowlist `("top", "left")`, and falls back to the schema
+default (`AppearanceSettings().navigation_layout`, currently `"left"`) on a
+missing, malformed, or absent value — the same fail-safe shape the route's
+existing `name`/`logo` fields already used, extended to a third field rather
+than a new pattern. Nothing sensitive is exposed: whether a department's
+navigation is a sidebar or a top bar is visible to anyone who opens the login
+page after authenticating, and carries no PII, no secret, and no cross-tenant
+information (still the single oldest-active-org lookup every other pre-auth
+route on this file already uses). No new route, so dimension 1 is n/a; no
+by-id lookup, so dimension 3 is n/a.
+
+**`authenticate_user`'s failed-password branch now locks the row (app-review
+AUTH-20, re-verified here):** the increment of `failed_login_attempts` — read
+off the `candidates` query's unlocked object at line 128 — now goes through a
+`.with_for_update().execution_options(populate_existing=True)` re-fetch first,
+structurally identical to `_verify_and_consume_totp` (AUTH-9) and
+`_verify_and_consume_recovery_code` (AUTH-13). Re-verified rather than taken
+on trust: read the fix in full (`auth_service.py:217-273`), confirmed the lock
+sits _inside_ the failure branch and never around the Argon2 `verify_password`
+call above it (holding the row for the ~100-300ms of a hash would serialize
+that account's logins into a cheaper DoS than the counter defends against —
+`test_the_lock_is_not_taken_around_the_password_verify` pins this), confirmed
+the `locked_user is None` branch (row deleted between the candidate read and
+the lock) rolls back and returns the same generic message rather than raising,
+and ran `test_auth_lockout_race.py` directly — passes, and its own two-real-
+session harness is the same shape `test_two_real_sessions_racing_the_same_code`
+(AUTH-9) already established, not a new harness invented for this fix. No
+gap found in the fix; nothing to add.
+
+### Re-verified: all 19 prior findings' fixes still hold
+
+Checked each at current line numbers, not merely "still present" by grep:
+
+- **AUTH-1** (OAuth org-active check) — `oauth_service.py:57` still filters
+  `Organization.active.is_(True)`; empty result still returns
+  `(None, "no_account")`. `test_resolve_user_no_active_organization` passes.
+- **AUTH-7/9/13** (TOTP/recovery-code verify-and-consume, row-locked) —
+  `_verify_and_consume_totp` (`auth.py:802`) and
+  `_verify_and_consume_recovery_code` (`auth.py:854`) both still re-fetch with
+  `.with_for_update().execution_options(populate_existing=True)` before
+  checking/mutating. All four call sites (`mfa_login`, `mfa_verify_setup`,
+  `mfa_disable`, `mfa_regenerate_recovery_codes`) still route through them.
+- **AUTH-8/10** (brute-force detector wiring) — `login`'s
+  `detect_brute_force(success=True)` call is still positioned after the
+  `if user.mfa_enabled:` branch (`auth.py:748-761`); `mfa_login` still calls
+  it on both its failure (`:976`) and success (`:1003`) paths.
+- **AUTH-11** (alert-write savepoint isolation) — not re-read line-by-line
+  this pass (`security_monitoring.py` is outside this feature's four-file
+  scope and had zero diff against pass 4), re-confirmed only via the standing
+  guard test: `TestAddAlertSavepointIsolation` in
+  `tests/test_security_monitoring.py` passes.
+- **AUTH-12** (`mfa_last_timestep` cleared on secret change) — both
+  `mfa_setup` (`auth.py:1056`) and `mfa_disable` (`auth.py:1141`) still clear
+  it.
+- **AUTH-14** (password-change/MFA-enrollment gate deadlock) — `dependencies.py:83-115`'s
+  two suffix tuples still both carry `/auth/change-password`, with the
+  comment explaining the coupling still in place.
+  `tests/test_auth_gate_remediation_paths.py` passes.
+- **AUTH-16** (`verify_totp` has zero callers; consuming helpers have exactly
+  one each) — `tests/test_mfa_verification_consumes.py` passes.
+- **AUTH-19** (`sessions.refresh_token` indexed) — `models/user.py:856` is
+  still `Column(String(512), index=True)`.
+- **AUTH-2/5/6/18** (doc-only corrections) — nothing to re-verify against
+  code; re-read to confirm they still match, and they do.
+
+**AUTH-15 and AUTH-17 remain open, unchanged, re-confirmed still accurate:**
+
+- **AUTH-15** — `HIPAA_MAXIMUM_PASSWORD_AGE_DAYS` still has the same three
+  readers and none of them refuses a request (`auth_service.py:286-298` logs
+  and proceeds; `auth.py:178-187` and `auth.py:1418` both still only report
+  the flag/number). Still needs an owner decision on rollout before the gate
+  can go in `get_current_user`, for the reason recorded at the time (locks
+  out every member whose password predates enforcement, on an installation
+  that has never enforced this, on the day it deploys). Still in
+  `KNOWN_LIMITATIONS.md`.
+- **AUTH-17** — still no session reaper; `delete(UserSession)` is still only
+  reached from `_revoke_all_user_sessions`, and `scheduled_tasks.py` still has
+  no counterpart job. Still needs a retention-window product decision. Still
+  in `KNOWN_LIMITATIONS.md`.
+
+**Cross-track note, not a re-verification of this file's own findings:** the
+app-review track's AUTH-20 (fixed, see above) and AUTH-21 (a double-fired
+`/refresh` can revoke every session a member has — still flagged, unfixed,
+in `docs/app-review/auth-session.md` and mirrored in `KNOWN_LIMITATIONS.md`)
+share the `AUTH-` prefix with this file's own findings by number collision,
+documented at the top of that file's own pass 5 section. Recorded here only
+so a reader of _this_ file's numbering does not mistake AUTH-20/21 for
+entries this track allocated — this pass did not re-derive or re-fix either.
+
+### Considered and deliberately not raised as findings
+
+- **`reset_password_with_token` has the same unlocked-read-then-write shape
+  AUTH-9/13/(app-review AUTH-20) fixed, on the reset-token row.** Two
+  concurrent submissions of the same valid reset token could both pass the
+  expiry check and both write a password, last-commit-wins, before the token
+  is cleared. Structurally similar, but not the same risk: TOTP/recovery-code
+  replay let an _attacker_ who merely observed a code in transit open an
+  independent session without ever possessing the credential itself. Racing a
+  reset token requires already holding that 48-byte token — which alone is
+  already enough to fully take over the account through a single, sequential
+  use of the same endpoint. The race changes nothing about what an attacker
+  who has the token can do; at most it is a same-user double-submit (a retried
+  click) landing on two different typed passwords, which is the same
+  exactly-once-delivery shape already flagged and left unfixed for
+  `/mfa/recovery-codes` (pass 3, "Also raised (Codex)") for the same reason:
+  fixing one instance of a generic problem shared by every secret-shown-once
+  or token-consumed-once response in this file is not a meaningful security
+  improvement in isolation. Not raised as a new numbered finding.
+- **`mfa_setup` writes `current_user.mfa_secret` without a row lock.** Same
+  shape, same reasoning: two concurrent `/mfa/setup` calls by the legitimate
+  user's own already-authenticated session race only against themselves —
+  there is no attacker-observable secret to replay, since the secret is
+  freshly generated server-side and not yet confirmed by
+  `/mfa/verify-setup`. Worst case is the same non-security "second call wins"
+  UX race already accepted elsewhere in this file.
+- **Re-checked whether the identity-map assumption `_verify_and_consume_totp`
+  and `_verify_and_consume_recovery_code` depend on is real, not assumed.**
+  Both helpers take `user: User` (already loaded, unlocked) and return a
+  fresh `locked_user` from a `.with_for_update()` re-query — but the calling
+  routes (`mfa_disable`, `mfa_verify_setup`, `mfa_regenerate_recovery_codes`)
+  go on to mutate `current_user` directly afterward (e.g.
+  `current_user.mfa_enabled = False`), not the helper's returned
+  `locked_user`. This only stays correct because SQLAlchemy's identity map
+  returns the _same Python object_ for a second query against a primary key
+  already loaded in the session, and `populate_existing=True` refreshes that
+  same object in place rather than returning a detached copy — so
+  `locked_user is current_user` and the later mutations land on the still-
+  locked row inside the same transaction. Confirmed by reading
+  `AsyncSession`'s identity-map behavior against the actual query shape used
+  (`select(User).where(User.id == user.id)` — same PK, same session) rather
+  than assumed; the existing guard tests (`TestVerifyAndConsumeTotpConcurrency`,
+  `TestVerifyAndConsumeRecoveryCodeConcurrency`) exercise this same reliance
+  and pass. Not a finding — recorded so a future pass does not have to
+  re-derive why this is safe when it looks, at a glance, like the caller is
+  mutating an object the lock was never taken on.
+
+### Completion gate (pass 5)
+
+| Check                                                                                                                  | Result                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                          | ✅ 0 violations                                                                     |
+| `python3 -m black --check app/ tests/ alembic/` (26.5.1, CI's pin)                                                     | ✅ 1592 files unchanged                                                             |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                                            | ✅ clean                                                                            |
+| `validate_migrations.py --strict`                                                                                      | ✅ single head `6ab7d903fae5`, 444 revisions                                        |
+| scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission"`)           | ✅ 674 passed, 2 skipped (both pre-existing: optional `pywebpush`, Docker registry) |
+| backend full unit suite (`pytest tests/ -m "not integration and not slow and not docker"`)                             | ✅ **10158 passed, 1 skipped**                                                      |
+| standing guards (`endpoint_auth_coverage`, `org_scoping_ratchet`, `capacity_locking`, `like_escaping`)                 | ✅ 47 passed                                                                        |
+| `test_mfa_verification_consumes.py`, `test_auth_lockout_race.py`, `test_auth_gate_remediation_paths.py` (run directly) | ✅ 11 passed                                                                        |
+| `tsc --noEmit` / `npm run lint`                                                                                        | n/a — no frontend source changed this pass                                          |
+
+No source files were changed this pass — every check above is a
+re-verification, not a regression check against a fix, so there is no
+behavior-neutrality diff to run. Rotation row 01 stays `✅` per this file's
+own convention.
 
 ---
 

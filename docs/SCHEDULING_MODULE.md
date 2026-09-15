@@ -729,9 +729,33 @@ not a number.
 > `/scheduling/admin` and would be refused the reads those pages are built on.
 > Nine reads therefore accept either grant: the shift list, a shift and its
 > assignments, attendance and calls, and templates and patterns with their
-> detail routes. The member's own surfaces — the week and month calendars, the
-> summary, time-off — keep `scheduling.view` alone, and
-> `test_scheduling_endpoints.py` pins both halves so neither drifts.
+> detail routes.
+>
+> **Seven more joined them on 2026-09-13**, and the reasons differ. The week
+> and month calendars and the summary went because `/scheduling` and the
+> dashboard carry no route-level permission at all, so a `manage`-only position
+> lands on them regardless and was refused the shifts they draw — and every one
+> of those shifts is already readable through the shift list, so the narrower
+> gate hid nothing and only produced a half-broken screen.
+>
+> The two time-off reads and the two swap reads went for a different reason:
+> each already **branches on `scheduling.manage`** to decide its own scope —
+> the department's requests for a reviewer, the caller's own for everyone else
+> — so the gate had put that branch behind a door the grant it tests for could
+> not open, leaving the reviewer `/time-off/{id}/review` and
+> `/swap-requests/{id}/review` exist for unable to reach the queue. The swap
+> pair differs only in its base grant: `scheduling.swap`, which every line
+> member holds, rather than `scheduling.view`. A `manage`-only position holds
+> neither, so the pairing is the same.
+>
+> The **writes** on both resources stay narrow and are not part of that: not
+> one of them branches on `manage`, because proposing and cancelling a request
+> are the member's own actions.
+>
+> What stays narrow is what no `manage` page reads and no handler widens for a
+> reviewer. `test_scheduling_endpoints.py` pins each group with its own
+> reasoning, so a later change has to argue with the specific case rather than
+> with a shared list.
 
 ### Shift Close-Out _(2026-09-05)_
 

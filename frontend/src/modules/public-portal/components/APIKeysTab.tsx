@@ -73,7 +73,6 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
       onClose={onClose}
       title="Create API Key"
       size="sm"
-      closeOnClickOutside={!isSubmitting}
       closeOnEscape={!isSubmitting}
       footer={footer}
     >

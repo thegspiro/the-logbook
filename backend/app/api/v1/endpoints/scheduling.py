@@ -651,7 +651,11 @@ async def get_open_shifts(
 ):
     """
     Get upcoming shifts (optionally filtered by date range and apparatus).
-    Returns shifts that still have open positions.
+
+    For a member, "open" means a seat *they* can claim — a shift whose only
+    empty seats are positions they are not cleared for is not listed. A holder
+    of ``scheduling.manage`` gets the department-wide staffing-gap view.
+
     Must be registered before /shifts/{shift_id} to avoid route shadowing.
     """
     service = SchedulingService(db)
@@ -678,14 +682,30 @@ async def get_open_shifts(
     # Date window, finalized status, and apparatus are filtered in SQL; the
     # result is every open shift in the window with shifts the current user is
     # already on removed (computed in a single assignment scan).
-    shifts_list = await service.get_open_shifts(
-        current_user.organization_id,
-        start,
-        end,
-        apparatus_id=apparatus_id,
-        exclude_user_id=str(current_user.id),
-    )
-    shifts_list = await _member_visible_shifts(service, current_user, shifts_list)
+    #
+    # A member gets the seat-level answer: a shift is listed only when one of
+    # its *unclaimed* seats is a position they are cleared for. The shift-level
+    # answer — "does the department still need somebody here" — put a shift
+    # with an empty driver's seat in front of a firefighter, who was then
+    # refused at signup with a message about a race that had not happened.
+    # `scheduling.manage` keeps the department-wide view it has always had:
+    # this tab is also how a scheduling admin finds the gaps.
+    if user_has_permission(current_user, "scheduling.manage"):
+        shifts_list = await service.get_open_shifts(
+            current_user.organization_id,
+            start,
+            end,
+            apparatus_id=apparatus_id,
+            exclude_user_id=str(current_user.id),
+        )
+    else:
+        shifts_list = await service.get_claimable_shifts(
+            current_user,
+            current_user.organization_id,
+            start,
+            end,
+            apparatus_id=apparatus_id,
+        )
 
     return await _enrich_shifts(service, current_user.organization_id, shifts_list)
 
@@ -1487,11 +1507,20 @@ async def get_my_attendance(
 # ============================================
 
 
+# The calendar and the summary below take either grant, like `/shifts`.
+# `permission_matches` is literal, so `scheduling.manage` does not imply
+# `scheduling.view`: a position granted `manage` alone reached the board and
+# the dashboard — neither is permission-gated as a route — and was refused the
+# shifts they exist to draw. Widening leaks nothing, because every shift these
+# two return is already readable through `/shifts`, which admits both grants;
+# what it buys is that one grant no longer produces a half-broken screen.
 @router.get("/calendar/week", response_model=list[ShiftResponse])
 async def get_week_calendar(
     week_start: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get shifts for a specific week"""
     service = SchedulingService(db)
@@ -1515,7 +1544,9 @@ async def get_month_calendar(
     year: int | None = None,
     month: int | None = Query(None, ge=1, le=12),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get shifts for a specific month"""
     service = SchedulingService(db)
@@ -1535,7 +1566,9 @@ async def get_month_calendar(
 @router.get("/summary", response_model=SchedulingSummary)
 async def get_scheduling_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get scheduling module summary statistics"""
     service = SchedulingService(db)
@@ -2341,13 +2374,26 @@ async def decline_assignment(
 # ============================================
 
 
+# Both swap reads take either grant, for the reason the time-off pair below
+# does: each already *branches* on `scheduling.manage` to decide what it
+# returns, so gating them on `scheduling.swap` alone put that branch behind a
+# door the grant it tests for could not open. The base grant differs — swaps
+# are gated on `scheduling.swap`, which every line member holds, rather than
+# `scheduling.view` — but a position granted `manage` alone holds neither, and
+# it is the position `/swap-requests/{id}/review` exists for.
+#
+# The writes below stay on `scheduling.swap` alone and are not part of this:
+# none of them branches on `manage`, because proposing and cancelling a swap
+# are the member's own actions, not an officer's.
 @router.get("/swap-requests", response_model=ShiftSwapRequestsPage)
 async def list_swap_requests(
     status_filter: str | None = Query(None, alias="status"),
     mine: bool = False,
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.swap")),
+    current_user: User = Depends(
+        require_permission("scheduling.swap", "scheduling.manage")
+    ),
 ):
     """List shift swap requests.
 
@@ -2417,7 +2463,9 @@ async def create_swap_request(
 async def get_swap_request(
     request_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.swap")),
+    current_user: User = Depends(
+        require_permission("scheduling.swap", "scheduling.manage")
+    ),
 ):
     """Get a specific swap request"""
     service = SchedulingService(db)
@@ -2526,13 +2574,22 @@ async def cancel_swap_request(
 # ============================================
 
 
+# Both time-off reads take either grant, because both already *branch* on
+# `scheduling.manage` to decide what they return — the whole department's
+# requests for a reviewer, the caller's own for everyone else. Gating the pair
+# on `scheduling.view` alone put that branch behind a door the grant it tests
+# for could not open: a position granted `manage` alone is exactly who
+# `/time-off/{id}/review` is for, and could not reach the list that finds a
+# request to review.
 @router.get("/time-off", response_model=ShiftTimeOffRequestsPage)
 async def list_time_off_requests(
     status_filter: str | None = Query(None, alias="status"),
     user_id: UUID | None = None,
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """List time-off requests"""
     service = SchedulingService(db)
@@ -2599,7 +2656,9 @@ async def create_time_off_request(
 async def get_time_off_request(
     time_off_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get a specific time-off request"""
     service = SchedulingService(db)
@@ -3447,7 +3506,9 @@ async def get_eligible_positions(
 
     When ``shift_id`` is provided, the result is intersected with the
     shift's defined positions and accounts for the shift's
-    ``open_to_all_members`` flag.
+    ``open_to_all_members`` flag, and ``open_positions`` narrows it further to
+    the seats nobody has claimed yet — what a signup picker should offer, since
+    the seat cap refuses the rest.
 
     **Authentication required**
     """
@@ -3458,7 +3519,43 @@ async def get_eligible_positions(
         shift_id=shift_id,
     )
     is_excluded = len(positions) == 0 and not shift_id
-    return EligiblePositionsResponse(positions=positions, is_excluded=is_excluded)
+
+    open_positions: list[str] = []
+    if shift_id and positions:
+        scheduling_service = SchedulingService(db)
+        shift = await scheduling_service.get_shift_by_id(
+            shift_id, current_user.organization_id
+        )
+        if shift is not None and shift.is_outreach:
+            # An outreach sheet's seats are roles, reported with their own
+            # `remaining` counts; its positions are all the one placeholder
+            # seat, so narrowing by them would empty a picker the client does
+            # not use for these shifts anyway.
+            open_positions = list(positions)
+        elif shift is not None:
+            seats = (
+                await scheduling_service.open_positions_by_shift(
+                    current_user.organization_id, [shift]
+                )
+            ).get(str(shift.id))
+            if seats is None or not seats.has_named_seats:
+                # A shift that names no seats caps by headcount, not by
+                # position, so every eligible position stays on offer while the
+                # crew is short — and an unsized shift is capped at nothing.
+                if seats is None or seats.unnamed_headroom is not False:
+                    open_positions = list(positions)
+            else:
+                open_positions = [
+                    position
+                    for position in positions
+                    if str(position).lower() in seats.positions
+                ]
+
+    return EligiblePositionsResponse(
+        positions=positions,
+        is_excluded=is_excluded,
+        open_positions=open_positions,
+    )
 
 
 @router.get(

@@ -17,6 +17,7 @@ import { ConfirmDialog, EmptyState } from '../components/ux';
 import { Modal } from '../components/Modal';
 import { getErrorMessage } from '../utils/errorHandling';
 import { MIN_VOID_REASON_LENGTH } from '../components/training/SkillTestOfficerActions';
+import { formatScore } from '../utils/skillScoreFormat';
 import { ClipboardList } from 'lucide-react';
 
 /** Sentinel for the status dropdown. Not a SkillTestStatus — pending validation
@@ -116,7 +117,7 @@ const TestCard: React.FC<{
         <div className="ml-auto flex shrink-0 items-center gap-3 pl-4">
           <div className="text-right">
             {test.overall_score != null && (
-              <p className="text-theme-text-primary text-lg font-bold">{Math.round(test.overall_score)}%</p>
+              <p className="text-theme-text-primary text-lg font-bold">{formatScore(test.overall_score)}</p>
             )}
             {/* An unfinished test is the one row on this screen with work
                 waiting on it, and it read as muted grey status text — nothing

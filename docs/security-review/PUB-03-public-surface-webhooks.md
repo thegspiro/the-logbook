@@ -1,6 +1,152 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4) · **PR:** #1806 (pass 1)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** #1806 (pass 1)
+
+---
+
+## Pass 5 (2026-09-14) — re-verified, no new findings
+
+**Backend:** all 12 files under `app/api/public/` (2 482 L, 20 routes) plus
+`app/core/public_portal_security.py` (556 L) — **read in full, not diffed**,
+continuing pass 4's methodology — plus the collaborators pass 4 named:
+`app/schemas/public_portal.py`, `app/utils/webhook_replay.py`,
+`app/services/integration_services/webhook_service.py`'s two verifiers,
+`paypal_service.verify_webhook_signature`, `finance_service.approve_by_token`,
+`forms_service.submit_public_form` / `_create_public_submission` /
+`_sanitize_submission_data`, `membership_pipeline_service.get_prospect_by_token`,
+`scheduling_service.get_user_by_calendar_token` / `get_shifts_for_user_feed`,
+`security_middleware.public_rate_limit` / `daily_cap_exceeded`,
+`core/database.get_session`
+**Frontend:** none modified
+**Migrations:** none written
+
+### Scope
+
+`git log d03530fc..origin/main -- backend/app/api/public/ backend/app/core/public_portal_security.py`
+(`d03530fc` is pass 4's own closing merge commit) returns **one** commit,
+`93364039` — feature 27's membership-pipeline meeting-stage-advance fix,
+touching only `integrations_webhook.py` (+18/-6). File count unchanged at 12;
+route count re-derived and unchanged at 20 (`grep -rc "@router\."` across all
+12 files sums to 20).
+
+**The one in-scope change, read against its full commit rather than trusted
+on its own description:** `documenso_inbound_webhook` and
+`calcom_inbound_webhook` used to pass `completed_by="integration:documenso"` /
+`"integration:calcom"` — a descriptive sentinel into a column that is a FK to
+`users.id`, so the advance silently died on the constraint. Both now pass
+`completed_by=None`, with the acting integration recorded in `action_result`
+and the audit event instead (unchanged). Separately, `calcom_inbound_webhook`
+now gates on `event["attended"]` instead of `event["created"]` — Cal.com's
+`MEETING_ENDED` trigger rather than `BOOKING_CREATED`, so picking a future
+slot no longer advances a stage whose own checkbox says "attendance". Neither
+change touches signature verification, replay ordering, or org resolution,
+which sit above this code and are unchanged (`_load_integration` still filters
+`(id, integration_type, enabled)`; `_require_webhook_secret` still fails
+closed; both signature checks still run, and `is_duplicate_webhook` still
+runs after them, before this line). Traced the ripple into
+`guest_check_in_service.py` (outside this feature's 13-file scope, but the
+service `display.py`'s public guest-check-in route calls): its own copy of
+the meeting-matching predicate was replaced by a call to a new shared
+`membership_pipeline_service.meeting_config_matches_event`, whose docstring
+claims a behavior change (a stage naming neither event type nor id now
+matches nothing, rather than matching any attendance) — verified against the
+function body (`return False` at the fall-through, not `True`), so the shared
+helper is a tightening, not a new gap; the change is a correctness fix
+belonging to features 15/27, not a regression this feature introduces.
+
+Also diffed the wider collaborator set pass 4 named, since several changed
+substantially since pass 4 for reasons unrelated to this feature
+(`forms_service.py` +294/-, `membership_pipeline_service.py` +762/-,
+`scheduling_service.py` +517/-, mostly the same membership-pipeline commit
+plus unrelated scheduling work). Checked specifically whether the four
+functions this feature's public routes actually call
+(`submit_public_form`, `_sanitize_submission_data`, `get_prospect_by_token`,
+`get_user_by_calendar_token`, `get_shifts_for_user_feed`) were touched: none
+were (`git log d03530fc..origin/main -- <file> | grep "def <name>"` returns
+nothing for each). `_create_public_submission`'s call into
+`_process_integrations` gained an `is_public=submitted_by is None` argument —
+Events-request-pipeline territory (feature 19), not this feature's, and
+narrows an existing gate rather than widening public reach. `webhook_service.py`,
+`paypal_service.py` and `webhook_replay.py` — the actual signature-verification
+and replay code all four webhooks depend on — are byte-identical to pass 4.
+`security_middleware.py` gained two more CSV-export paths to its unrelated
+export-endpoint list (+2 lines, nothing this feature reaches); `database.py`
+gained a `"refresh"` event listener alongside the existing `"load"` one so a
+`populate_existing=True` re-read also gets its naive datetimes stamped UTC — a
+strictly wider application of the invariant PUB-03's "checked and deliberately
+not raised" section already relied on, not a narrower one;
+`finance_service.py`'s only change is an unrelated `float` → `Decimal`
+pass-through in the authenticated pending-approvals list, not the token path.
+
+### Re-verified still current
+
+All ten "Verified good" items from pass 4 re-checked at current line numbers
+and still hold: all four webhook receivers verify (HMAC or PayPal's own API)
+before acting and fail closed when unconfigured; none trusts the payload for
+tenancy, all four resolving `organization_id` from the integration row;
+replay fingerprinting is still ordered after verification at all four, and
+after payload-shape validation at Salesforce (PUB-1 round 2); the finance
+token path still holds `with_for_update()`, the `PENDING` re-check, expiry,
+and PUB-4's self-approval guard, token cleared before flush;
+`display.py`'s guest check-in still resolves org/location from the display
+code and both rejection gates still precede the daily-cap `INCR`; zero
+`csv.writer` and zero `like`/`ilike` in the 13 files; no public response is
+reachable by the frontend response cache (all seven call sites still use bare
+`axios`/`fetch`/`createApiClient()`, re-checked); `public_portal_security.py`'s
+two in-memory caches are still bounded with eviction (Pitfall #9);
+`PublicPortalAccessLog.organization_id`/`config_id` are still `nullable=False`
+(PUB-8's flagged half is unchanged, still correctly mirrored in
+`KNOWN_LIMITATIONS.md`); `PublicEvent` still requires `id`/`event_type`/
+`start_time`/`location`/`is_public` while the handler still doesn't produce
+them under a non-empty whitelist (PUB-7 is unchanged, still correctly
+flagged and mirrored). PUB-5/5b/6/9/10's fixes are all in place unchanged in
+`portal.py` and `public_portal_security.py` — `max(current_count, db_count)`
+scoped to the fixed hour bucket, every field on both organization models
+defaulting to `None`, both organization routes carrying
+`response_model_exclude_unset=True`, and all three success paths
+constructing (and thereby validating) the response object before calling
+`log_public_api_request`.
+
+Also re-ran the "checked and deliberately not raised" list's premises rather
+than re-deriving them from scratch: `core/database.py`'s UTC-stamping
+listener (now firing on `"refresh"` too, see above) still closes the naive/
+aware `token_expires_at` comparison in `finance_service.py`; the legacy-prefix
+bcrypt fan-out and `PublicFormResponse.id` items are unchanged code, so the
+prior conclusions stand; `get_user_by_calendar_token` still doesn't filter
+`is_active` (confirmed untouched, see Scope above); the Salesforce route's
+`payload.get(...)` on a signed-but-possibly-non-dict body is unchanged.
+
+### Findings
+
+**None new.** No route was added or removed (still 20); the one in-scope
+commit is a correctness fix from a different feature that, if anything,
+tightens an adjacent gate rather than loosening one, and every
+security-relevant control this feature owns — signature verification, replay
+ordering, tenancy resolution, rate limiting, the two flagged items — is
+byte-identical to pass 4's fixed/flagged state.
+
+### Guard tests
+
+No new guard tests — no code change in scope. Pass 4's suites
+(`TestCheckRateLimitDbReconciliation`, `test_public_portal_whitelist_shape.py`,
+`test_public_portal_access_log_persistence.py`) re-run as part of the scoped
+and full suites below; all still pass, confirming their fixes have not
+regressed.
+
+### Completion gate
+
+| Check                                                                   | Result                                              |
+| ----------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.3.0, flake8-pytest-style 2.2.0)        | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/` (26.5.1)                           | ✅ 1 592 files unchanged                            |
+| `isort --check-only app/ tests/ alembic/` (9.0.1)                       | ✅ clean                                            |
+| `validate_migrations.py --strict`                                       | ✅ single head `6ab7d903fae5`, 444 revisions        |
+| `check_route_permissions.py --strict`                                   | ✅ 228 routes, 0 errors                             |
+| `check_docs_links.py`                                                   | ✅ 358 files, 0 broken links                        |
+| scoped pytest (`-k "public or portal or webhook or salesforce or ..."`) | ✅ 547 passed, 1 skipped (`py_vapid`, pre-existing) |
+| ratchet suites (org-scoping, endpoint-auth, LIKE, CSV, capacity)        | ✅ 59 passed                                        |
+| **full backend suite**                                                  | ✅ 10 158 passed, 1 skipped, 0 failed               |
+| `tsc --noEmit` / `eslint .`                                             | n/a — no frontend file modified                     |
 
 ---
 

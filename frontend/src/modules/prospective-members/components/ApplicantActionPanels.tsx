@@ -64,6 +64,18 @@ const getStageRequirementHint = (applicant: Applicant): string | null => {
         ? `Required screenings: ${screenings.map((screening) => screening.replace(/_/g, ' ')).join(', ')}.`
         : null;
     }
+    case StageType.DOCUMENT_UPLOAD: {
+      const types = 'required_document_types' in config ? config.required_document_types : [];
+      const named = types.filter((docType) => docType.trim());
+      return named.length > 0
+        ? `Upload ${named.length} required document${named.length === 1 ? '' : 's'} before advancing: ${named.join(', ')}.`
+        : null;
+    }
+    case StageType.ELECTION_VOTE:
+      // Config-derived like the rest, so it states the rule rather than this
+      // applicant's ballot position — ElectionPackageSection, one panel up,
+      // is what reports whether their own vote is pending, passed or failed.
+      return 'Once the applicant is on a ballot, they cannot advance until the election closes and the result is recorded.';
     case StageType.MEETING: {
       // Only when auto-advance is on: that is the setting whose gate the
       // coordinator can be surprised by, because it will not fire until the

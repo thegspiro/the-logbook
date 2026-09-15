@@ -62,16 +62,3 @@ export const savedReportsService = {
     return response.data;
   },
 };
-
-// ============================================================================
-// Export
-// ============================================================================
-
-export const reportExportService = {
-  async exportReport(request: ReportRequest & { format: 'csv' | 'pdf' }): Promise<Blob> {
-    const response = await api.post('/reports/export', request, {
-      responseType: 'blob',
-    });
-    return response.data as Blob;
-  },
-};

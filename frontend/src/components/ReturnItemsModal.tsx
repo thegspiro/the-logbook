@@ -253,7 +253,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
   const showResults = results !== null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Return Items" size="lg" closeOnClickOutside={false}>
+    <Modal isOpen={isOpen} onClose={onClose} title="Return Items" size="lg">
       <div className="space-y-4">
         {/* Member info */}
         <div className="bg-theme-surface-secondary flex items-center gap-3 rounded-lg p-3">

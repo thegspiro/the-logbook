@@ -171,3 +171,164 @@ decision this doc declines to make.
 | `pytest tests/test_reports_saved_caps_and_analytics_input.py -q` (modified file)           | ✅ **15 passed**                                   |
 | `tsc --noEmit` (frontend)                                                                  | ✅ 0 errors                                        |
 | `eslint .` (frontend)                                                                      | ✅ 0 errors (no frontend files changed this round) |
+
+---
+
+## Pass 6 (2026-09-13) — findings-history fragmentation resolved; two lint/hygiene fixes
+
+**Prefix:** `RPT5` (continued) · **Rotation pass:** 6 · **PR:** #2517
+
+### Fragmentation note
+
+This feature's findings history is split across four files with no single
+linear numbering: `RPT-29-reports-analytics-pass3.md` (pass 3, PR #2091,
+2026-08-31), `RPT2-29-reports-analytics.md` (pass 2, PR #1912, 2026-08-27 —
+chronologically _before_ the "pass3"-named file despite the plain `RPT2`
+prefix sorting after `RPT`), `RPT4-29-reports-analytics.md` (pass 4,
+2026-09-06, delta-only), and this file, `RPT5-29-reports-analytics.md` (pass
+5, 2026-09-06, PR #2344, extending pass 4's same PR/branch — a full
+end-to-end re-read of the four large files pass 4 explicitly deferred).
+Cross-checked against `PROGRESS.md`'s own running log (search terms
+"Reports"/"RPT"), which confirms this ordering and that PR #2344 (covering
+both pass 4 and pass 5's commits) merged 2026-09-06 21:58:57Z as `cf18d329`.
+`RPT5-29-reports-analytics.md` is therefore the chronologically latest
+findings file, and this pass continues it as "Pass 6" with `RPT5-29-3`
+continuing its own id sequence (skipping no numbers: RPT5-29-1 and
+RPT5-29-2 were the two findings pass 5 opened).
+
+No commit has touched any of this feature's ten files since PR #2344 merged
+(`git log --oneline -- <the ten files>` shows only one intervening commit,
+`f8fdd1a`, which is an unrelated squash-merge boundary in this repo's history
+that reintroduces the whole tree rather than a targeted edit — confirmed by
+its diff touching essentially every file in the repository, not a
+reports/analytics-specific change). So this pass re-verifies a codebase
+byte-identical to what pass 5 last reviewed, plus does its own full,
+independent read rather than trusting that byte-identity implies nothing was
+missed.
+
+### Re-verified, unchanged
+
+Every item closed or flagged by module-audit iteration 16, the four
+app-review passes, and security-review passes 2 through 5 was re-checked
+against current source (not re-derived from the docs) and holds exactly as
+last recorded:
+
+- All 30 routes re-enumerated from source; every one carries a recognized
+  auth dependency (table in pass 4, unchanged).
+- `platform_analytics.py`'s all 16 aggregate queries independently re-read
+  line by line this pass — every one filters
+  `<model>.organization_id == current_user.organization_id` (or its
+  `org_id` alias). Gated on `settings.manage`, which is an ordinary
+  per-org permission here, not a platform-wide superadmin role — the
+  endpoint's name is misleading (module-audit's original observation) but
+  it cannot leak one org's data to another org's admin, confirmed again by
+  reading every query rather than sampling.
+- `reports_service.py`'s 15 report generators re-checked for org-scoping by
+  bounding each function to its next `def` and confirming every DB query
+  either filters `organization_id` directly or resolves through an
+  already-org-scoped parent id list (e.g. `_generate_event_attendance`'s
+  RSVP aggregate keyed off `event_ids` drawn from an org-filtered `Event`
+  query; `_generate_apparatus_status`'s maintenance-count query keyed off
+  `apparatus_ids` from an org-filtered `Apparatus` query). `PII_REPORT_
+PERMISSIONS` (RPT-3/pass-3-round-2) still covers all eight PII-bearing
+  report types.
+- `SavedReportUpdate`'s explicit-`null` path (RPT5-29-2's `apply_updates`
+  fix) still in place at `reports.py:243-248`.
+- Labels/label-printer transport hardening (port allowlist, blocked address
+  classes, operator network allowlist, resolve-then-connect-to-IP-literal)
+  re-read in `printer_transport.py` and unchanged; `_filter_ids`'s
+  prospect-self-access normalization still wired into all three label paths
+  (preview, generate, print).
+- `apiCache.ts`: `/dashboard/action-items` (pass 3) and `/analytics/export`
+  (raw per-user analytics events) both still present in
+  `UNCACHEABLE_PREFIXES`.
+- Frontend CSV export (`modules/reports/utils/export.ts`) still routes every
+  cell through `escapeCsvCell`; no backend CSV export exists in this feature
+  (`analytics.py`'s `/export` returns JSON) — `SafeCsvWriter` is therefore
+  n/a here, confirmed again by grep (zero `csv.writer`/`csv.DictWriter`
+  across all ten files).
+- Zero `.like`/`.ilike` calls across all ten files (n/a, unchanged).
+- Migrations: 444 revisions now (was 431 at pass 5 — unrelated features'
+  migrations landed in between), single head, `validate_migrations.py
+--strict` passes. `SavedReport.created_by` and `LabelPrinter.created_by_id`
+  (`ondelete="SET NULL"`) both still `nullable=True`.
+
+### RPT5-29-3 — LOW (hygiene) — `dashboard.py`/`attendance_dashboard_service.py` had 6 real `# noqa: E712` suppressions the pass-2 sweep missed, plus a stray leftover marker — ✅ FIXED
+
+**What:** Pass 2 (`RPT2-1`) swept `== True`/`== False` boolean comparisons to
+`.is_(True)`/`.is_(False)` in `reports.py` and `platform_analytics.py` "both
+files are now E712-free" — but never touched `dashboard.py` or
+`attendance_dashboard_service.py`, which carry the identical pattern and were
+already part of this feature's file list at the time. CLAUDE.md Pitfall #10
+is explicit that a `# noqa` suppression is not a fix and applies to every
+flake8 violation, not only the enumerated codes — E712 is exactly the kind of
+"suppress instead of fix" the pitfall exists to catch, and having already
+fixed the identical pattern in two sibling files in this same feature makes
+the remaining six a clear oversight rather than a deliberate choice.
+
+**Where:** `dashboard.py:941,1022,1307,1316,1333,1350` (`Event.is_cancelled ==
+False`, `EventRSVP.checked_in == True`, `EventExternalAttendee.checked_in ==
+True`, each with a `# noqa: E712`) and
+`attendance_dashboard_service.py:93` (`MemberLeaveOfAbsence.active == True`,
+same marker). A seventh spot, `dashboard.py:763`, carried a stray `# noqa:
+E712` left over on the closing paren of a query whose comparison had already
+been fixed to `.is_(False)` at some earlier point — dead marker, not masking
+anything, but confusing to a future reader who might assume the query still
+needs it.
+
+**Impact:** none behaviorally — `==` against a SQLAlchemy boolean column
+produces the same SQL as `.is_()` (both compile to `= 1`/`= 0` /
+`IS TRUE`/`IS FALSE` depending on dialect), so no query result was ever wrong.
+This is a lint-hygiene and consistency finding, not a correctness or security
+bug, but it is a real, present flake8 violation being silently suppressed
+rather than fixed, and app-wide precedent already established the fix.
+
+**Fix:** replaced all six with `.is_(True)`/`.is_(False)` and removed the six
+`# noqa: E712` markers, plus the one stray marker. `flake8` on both files is
+now clean with no suppression.
+
+### RPT5-29-4 — Informational (hygiene) — Dead `reportExportService` deleted — ✅ FIXED
+
+Pass 3 found `modules/reports/services/api.ts`'s `reportExportService.
+exportReport()` posts to a `/reports/export` route that has never existed in
+`reports.py`, with zero callers anywhere in the frontend, and flagged it for
+"whoever next touches this file to delete rather than fixing here." Re-
+confirmed zero callers repo-wide (`grep -rn "reportExportService" frontend/
+src/` — the only other hit is an unrelated, actually-used export of the same
+name in `services/trainingServices.ts`, a different module) and deleted the
+dead block. Not exploitable as it stood (a call would have 404'd), so this is
+cleanup rather than a vulnerability fix.
+
+### Findings this pass
+
+Two fixed (RPT5-29-3, RPT5-29-4), both hygiene-class, both low-risk and
+mechanical. No new correctness, tenant-isolation, or data-exposure findings —
+the org-scoping, PII-gating, and injection sweeps above all re-confirmed
+clean. RPT5-29-1 (compliance-metric re-derivation, Pitfall #29 shape) remains
+flagged, unchanged, per its own architectural-decision reasoning; no new
+information this pass. `RPT2-29-2` (saved-report scheduling has no reader),
+`LBL-29-2` (`GET /label-printers` authentication-only), `LBL-29-4` (no PDF
+label-count cap), `DASH-2` (`GET /dashboard/stats` has no frontend caller),
+and `RPT-5c`/`RPT-6` (inventory float, hardcoded `last_inspection_date`,
+double-enrollment completion-% overcounting) are all re-confirmed unchanged,
+same reasoning as every prior pass — not re-litigated here.
+
+### Guard tests
+
+None added. Both fixes are mechanical (a lint-clean rewrite with no behavior
+change, and a dead-code deletion) with no new invariant to protect — matching
+pass 2's precedent for the identical E712 pattern, which also added no test.
+
+### Completion gate
+
+| Check                                                                                      | Result                                                       |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                              | ✅ 0 violations                                              |
+| `black --check app/ tests/ alembic/`                                                       | ✅ unchanged                                                 |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.1`, matches CI pin)                 | ✅ clean                                                     |
+| `python3 scripts/validate_migrations.py --strict`                                          | ✅ passed, single head (444 revisions)                       |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard"` | ✅ **545 passed, 1 skipped** (0 failed)                      |
+| `pytest tests/` (full backend suite)                                                       | ✅ **12,490 passed, 21 skipped** (Docker/pywebpush env-only) |
+| `npm run typecheck` (frontend)                                                             | ✅ 0 errors                                                  |
+| `npm run lint` (frontend)                                                                  | ✅ 0 errors, 0 warnings                                      |
+| `npx vitest run src/modules/reports` (scoped)                                              | ✅ **42 passed** (5 files)                                   |

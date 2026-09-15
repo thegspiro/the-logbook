@@ -649,4 +649,56 @@ describe('ItemFormModal', () => {
     await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
     expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ vendor_id: null });
   });
+
+  /**
+   * The reported bug: filling in a uniform, clicking just outside the box, and
+   * finding the dialog gone and every selection with it. The parent keeps this
+   * modal mounted, so closing does not unmount it — the reset effect keyed on
+   * `isOpen` re-seeds every field, and reopening gives a blank form with no
+   * draft and no confirmation. `components/Modal.tsx` no longer closes on a
+   * backdrop click at all; this pins that at the screen it was reported on.
+   */
+  describe('a click outside the box', () => {
+    // Per CLAUDE.md pitfall #28: state the implementations this block depends
+    // on rather than inheriting what a neighbouring describe left behind.
+    beforeEach(() => {
+      mockGetVendors.mockReset();
+      mockGetVendors.mockResolvedValue([]);
+      mockCreateItem.mockReset();
+      mockCreateItem.mockResolvedValue({});
+      mockCreateSizeVariants.mockReset();
+      mockCreateSizeVariants.mockResolvedValue({ created_count: 1, items: [] });
+    });
+
+    it('keeps the dialog open and every size and style selection intact', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<ItemFormModal {...baseProps} onClose={onClose} isOpen />);
+
+      await user.type(nameInput(), 'Dept Polo');
+      await user.click(screen.getByRole('switch', { name: /Generate Sizes & Styles/i }));
+      await user.click(screen.getByRole('button', { name: 'M' }));
+      await user.click(screen.getByRole('button', { name: 'Long Sleeve' }));
+
+      await user.click(screen.getByTestId('modal-backdrop'));
+
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByText('Add Item')).toBeInTheDocument();
+      expect(nameInput()).toHaveValue('Dept Polo');
+      // The submit label counts the pending combinations, so it going stale
+      // would be the same loss wearing different clothes.
+      expect(screen.getByRole('button', { name: /Create 1 Item/ })).toBeInTheDocument();
+    });
+
+    it('still closes on the Cancel button', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<ItemFormModal {...baseProps} onClose={onClose} isOpen />);
+
+      await user.type(nameInput(), 'Dept Polo');
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
 });

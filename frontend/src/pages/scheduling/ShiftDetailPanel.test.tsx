@@ -7,6 +7,7 @@ import { ShiftDetailPanel } from './ShiftDetailPanel';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import { formatTime } from '../../utils/dateFormatting';
+import toast from 'react-hot-toast';
 
 const shift = {
   id: 'shift-1',
@@ -26,12 +27,16 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getMyAttendance: vi.fn().mockResolvedValue(null),
     getShiftAttendance: vi.fn().mockResolvedValue([]),
     getShift: vi.fn().mockResolvedValue(null),
+    getShiftCalls: vi.fn().mockResolvedValue([]),
     getShiftHandoff: vi.fn().mockResolvedValue(null),
     getEligiblePositions: vi.fn().mockResolvedValue({ positions: ['firefighter'], is_excluded: false }),
     getUnavailableMembers: vi.fn().mockResolvedValue([]),
     signupForShift: vi.fn().mockResolvedValue({}),
     openLateSignup: vi.fn().mockResolvedValue({}),
     closeLateSignup: vi.fn().mockResolvedValue({}),
+    confirmAssignment: vi.fn().mockResolvedValue({}),
+    checkIn: vi.fn().mockResolvedValue({}),
+    checkOut: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -293,6 +298,30 @@ describe('ShiftDetailPanel crew board signup gating', () => {
     expect(await screen.findAllByRole('button', { name: /Sign myself up/ })).toHaveLength(2);
     expect(screen.queryByText(/None of the open seats on this shift match/)).not.toBeInTheDocument();
   });
+
+  it('withholds a seat the member is cleared for but somebody already holds', async () => {
+    // Cleared for both; the driver's seat is taken. Offering it produced a
+    // signup refusal worded as a race that had not happened.
+    mockEligibility.mockResolvedValue({
+      positions: ['driver', 'ems'],
+      is_excluded: false,
+      open_positions: ['ems'],
+    });
+
+    renderWithRouter(<ShiftDetailPanel shift={crewShift as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: 'Sign myself up as EMT' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sign myself up as Driver/Operator' })).not.toBeInTheDocument();
+  });
+
+  it('offers every cleared seat when the server does not report open ones', async () => {
+    // A backend predating `open_positions` must behave exactly as before.
+    mockEligibility.mockResolvedValue({ positions: ['driver', 'ems'], is_excluded: false });
+
+    renderWithRouter(<ShiftDetailPanel shift={crewShift as never} onClose={vi.fn()} />);
+
+    expect(await screen.findAllByRole('button', { name: /Sign myself up/ })).toHaveLength(2);
+  });
 });
 
 /**
@@ -310,6 +339,7 @@ describe('ShiftDetailPanel signup window', () => {
     end_time: new Date(Date.now() + 11 * 60 * 60_000).toISOString(),
   });
 
+  const mockGetShift = vi.mocked(schedulingService.getShift);
   const mockEligibility = vi.mocked(schedulingService.getEligiblePositions);
   const mockOpen = vi.mocked(schedulingService.openLateSignup);
   const mockClose = vi.mocked(schedulingService.closeLateSignup);
@@ -328,10 +358,17 @@ describe('ShiftDetailPanel signup window', () => {
     // the window, so the reopen banner is not offered to them at all — these
     // cases would have been exercising the one actor the feature is not for.
     grantedPermissions.current = ['scheduling.assign'];
+    // Stated here so the one test below that installs a shift has a default to
+    // return to. `vi.clearAllMocks()` would not undo it (pitfall #28), and
+    // this block's reopened shift leaked into every describe after it.
+    mockGetShift.mockReset();
+    mockGetShift.mockResolvedValue(null as never);
   });
 
   afterEach(() => {
     grantedPermissions.current = null;
+    mockGetShift.mockReset();
+    mockGetShift.mockResolvedValue(null as never);
   });
 
   it('does not offer a scheduling admin a window to reopen', async () => {
@@ -369,8 +406,6 @@ describe('ShiftDetailPanel signup window', () => {
     // state, so without a refetch the toast said reopened and the banner
     // carried on saying closed until the drawer was reopened.
     const user = userEvent.setup();
-    const mockGetShift = vi.mocked(schedulingService.getShift);
-    mockGetShift.mockReset();
     mockGetShift.mockResolvedValue({
       ...startedShift(),
       late_signup_until: new Date(Date.now() + 30 * 60_000).toISOString(),
@@ -643,38 +678,6 @@ describe('ShiftDetailPanel dialog shell', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('does not close when a selection drag starts inside the panel and ends on the backdrop', async () => {
-    // The browser resolves such a click to the common ancestor — the backdrop
-    // container — so `target === currentTarget` is true and the click alone
-    // cannot tell it from a deliberate backdrop click. Losing the dialog here
-    // would discard a half-typed cancellation reason or close-out hours.
-    const onClose = vi.fn();
-    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
-
-    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
-    fireEvent.mouseDown(screen.getByRole('heading', { name: 'Shift Details' }));
-    fireEvent.click(dialog);
-
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it('does not close when a press starts on the backdrop and is released inside the panel', async () => {
-    // The mirror of the case above, and it reaches the handler identically:
-    // the click still resolves to the container. mouseup is what distinguishes
-    // them, so it has to be able to invalidate a press that already qualified.
-    const onClose = vi.fn();
-    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
-
-    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
-    const heading = screen.getByRole('heading', { name: 'Shift Details' });
-
-    fireEvent.mouseDown(dialog);
-    fireEvent.mouseUp(heading);
-    fireEvent.click(dialog);
-
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
   it('goes inert while the driver-qualification dialog is on top of it', async () => {
     // Both dialogs portal to the body, so they are siblings rather than nested:
     // two aria-modal surfaces at once leave assistive technology to guess which
@@ -759,17 +762,196 @@ describe('ShiftDetailPanel dialog shell', () => {
     expect(document.body).not.toHaveFocus();
   });
 
-  it('closes on a backdrop click but not on a click inside the panel', async () => {
+  it('never closes on a click outside the panel, however the gesture is made', async () => {
+    // This panel carries close-out hours and a cancellation reason, and used to
+    // close on a click that merely resolved to the backdrop container — which a
+    // text-selection drag out of the panel does too. It was guarded by
+    // reconciling mousedown with mouseup; the guard is gone because the dialog
+    // no longer closes on any of them. Escape and the Close button remain.
     const user = userEvent.setup();
     const onClose = vi.fn();
     renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
 
-    // Inside the panel first: the container's handler sees a click whose target
-    // is a descendant, not the backdrop itself.
-    await user.click(await screen.findByRole('heading', { name: 'Shift Details' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
+    const heading = screen.getByRole('heading', { name: 'Shift Details' });
+
+    await user.click(heading);
+    await user.click(dialog);
+
+    // A selection drag out of the panel, then the mirror case back into it.
+    fireEvent.mouseDown(heading);
+    fireEvent.click(dialog);
+    fireEvent.mouseDown(dialog);
+    fireEvent.mouseUp(heading);
+    fireEvent.click(dialog);
+
     expect(onClose).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole('dialog', { name: 'Shift Details' }));
+    await user.click(screen.getByRole('button', { name: 'Close panel' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * A member's own attendance and roster answers, from inside this panel.
+ *
+ * Every one of these is a *member* action on a shift they are seated on, and
+ * they share two failure modes that were invisible from the officer's side of
+ * the panel — which is the side the rest of this file exercises.
+ */
+const futureShift = {
+  ...shift,
+  shift_date: '2099-06-01',
+  start_time: '2099-06-01T08:00:00Z',
+  end_time: '2099-06-01T16:00:00Z',
+  // Not the viewer: `isShiftOfficer` grants `canAssign` outright and would
+  // hide the permission half of what these tests are about.
+  shift_officer_id: 'officer-2',
+};
+
+const myAssignment = {
+  id: 'assign-1',
+  user_id: 'user-1',
+  user_name: 'Test Member',
+  status: 'assigned',
+  assignment_status: 'assigned',
+  position: 'firefighter',
+};
+
+// What a line member actually holds — `scheduling.assign` is an officer grant.
+const MEMBER_PERMISSIONS = ['scheduling.view', 'scheduling.swap'];
+
+describe('ShiftDetailPanel member check-in', () => {
+  beforeEach(() => {
+    vi.mocked(schedulingService.getShiftAssignments).mockReset();
+    vi.mocked(schedulingService.getShiftAssignments).mockResolvedValue([myAssignment as never]);
+    vi.mocked(schedulingService.getMyAttendance).mockReset();
+    vi.mocked(schedulingService.getMyAttendance).mockResolvedValue(null);
+    vi.mocked(schedulingService.getShift).mockReset();
+    vi.mocked(schedulingService.getShift).mockResolvedValue(null as never);
+    vi.mocked(schedulingService.checkIn).mockReset();
+    vi.mocked(schedulingService.checkIn).mockResolvedValue({} as never);
+    vi.mocked(toast.error).mockReset();
+  });
+
+  afterEach(() => {
+    vi.mocked(schedulingService.getShiftAssignments).mockResolvedValue([]);
+    vi.mocked(schedulingService.getMyAttendance).mockResolvedValue(null);
+    vi.mocked(schedulingService.getShift).mockResolvedValue(null as never);
+    grantedPermissions.current = null;
+  });
+
+  it('reports the reason the server gave for refusing an early check-in', async () => {
+    const user = userEvent.setup();
+    const reason = 'This shift has not started yet. Check-in opens 2 hours before the shift starts.';
+    vi.mocked(schedulingService.checkIn).mockRejectedValue({
+      response: { status: 400, data: { detail: reason } },
+    });
+
+    renderWithRouter(<ShiftDetailPanel shift={futureShift as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: /Check In/ }));
+
+    // The whole point: a bare "Failed to check in" threw this sentence away,
+    // and the member had no way to learn when check-in opens.
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(reason));
+  });
+
+  it('does not offer check-in the server has already said is closed', async () => {
+    const closed = {
+      ...futureShift,
+      checkin_open: false,
+      checkin_closed_reason: 'This shift has not started yet. Check-in opens 2 hours before the shift starts.',
+    };
+    vi.mocked(schedulingService.getShift).mockResolvedValue(closed as never);
+
+    renderWithRouter(<ShiftDetailPanel shift={closed as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: /Check In/ })).toBeDisabled();
+    expect(screen.getByText(/Check-in opens 2 hours before/)).toBeInTheDocument();
+    expect(schedulingService.checkIn).not.toHaveBeenCalled();
+  });
+
+  it('leaves check-in offered on a shift whose verdict it has not been told', async () => {
+    // A shift handed in from a list response carries no `checkin_open`. The
+    // server refuses either way, so unknown must not block a check-in it
+    // would have accepted.
+    renderWithRouter(<ShiftDetailPanel shift={futureShift as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: /Check In/ })).toBeEnabled();
+  });
+});
+
+describe('ShiftDetailPanel member confirming their own assignment', () => {
+  beforeEach(() => {
+    grantedPermissions.current = MEMBER_PERMISSIONS;
+    vi.mocked(schedulingService.getShiftAssignments).mockReset();
+    vi.mocked(schedulingService.getShiftAssignments).mockResolvedValue([myAssignment as never]);
+    vi.mocked(schedulingService.getShift).mockReset();
+    vi.mocked(schedulingService.getShift).mockResolvedValue(futureShift as never);
+    vi.mocked(schedulingService.getUnavailableMembers).mockReset();
+    vi.mocked(schedulingService.getUnavailableMembers).mockRejectedValue({
+      response: { status: 403, data: { detail: 'Insufficient permissions', code: 'LB-PERM-001' } },
+    });
+    vi.mocked(schedulingService.confirmAssignment).mockReset();
+    vi.mocked(schedulingService.confirmAssignment).mockResolvedValue({} as never);
+    vi.mocked(toast.error).mockReset();
+    vi.mocked(toast.success).mockReset();
+  });
+
+  afterEach(() => {
+    grantedPermissions.current = null;
+    vi.mocked(schedulingService.getShiftAssignments).mockResolvedValue([]);
+    vi.mocked(schedulingService.getShift).mockResolvedValue(null as never);
+    vi.mocked(schedulingService.getUnavailableMembers).mockResolvedValue([]);
+  });
+
+  it('never asks for the staffing read that needs scheduling.assign', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={futureShift as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Confirm assignment' }));
+
+    await waitFor(() => expect(schedulingService.confirmAssignment).toHaveBeenCalledWith('assign-1'));
+    // `unavailable-members` is gated on `scheduling.assign`, and only the
+    // assign form reads it. Asking for it from the refresh that follows a
+    // member's own write is what turned a successful confirm into a 403.
+    expect(schedulingService.getUnavailableMembers).not.toHaveBeenCalled();
+  });
+
+  it('does not report an error on a confirmation the server accepted', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={futureShift as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Confirm assignment' }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Assignment confirmed'));
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('keeps the row confirmed rather than reverting it to Assigned', async () => {
+    const user = userEvent.setup();
+    // Two distinct responses so the refresh is observable: the first call is
+    // the panel's own load and must still show a row to confirm, every call
+    // after it is the refresh. The refreshed name is what proves the refresh
+    // landed — without it, a status of "confirmed" could be the optimistic
+    // update alone, which is exactly what the revert used to undo.
+    vi.mocked(schedulingService.getShiftAssignments).mockResolvedValue([
+      {
+        ...myAssignment,
+        user_name: 'Test Member Refreshed',
+        status: 'confirmed',
+        assignment_status: 'confirmed',
+      } as never,
+    ]);
+    vi.mocked(schedulingService.getShiftAssignments).mockResolvedValueOnce([myAssignment as never]);
+
+    renderWithRouter(<ShiftDetailPanel shift={futureShift as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Confirm assignment' }));
+
+    expect(await screen.findByText(/Test Member Refreshed/)).toBeInTheDocument();
+    expect(screen.getByText('confirmed')).toBeInTheDocument();
+    expect(screen.queryByText('assigned')).not.toBeInTheDocument();
   });
 });

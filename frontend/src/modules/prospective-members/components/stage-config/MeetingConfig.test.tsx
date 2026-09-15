@@ -7,7 +7,12 @@ const baseConfig: MeetingStageConfig = {
   meeting_type: 'chief_meeting',
 };
 
-const renderConfig = (overrides: Partial<MeetingStageConfig>, calcomConnected: boolean, integrationsReady = true) => {
+const renderConfig = (
+  overrides: Partial<MeetingStageConfig>,
+  calcomConnected: boolean,
+  integrationsReady = true,
+  errors: Record<string, string> = {}
+) => {
   const setConfig = vi.fn();
   render(
     <MeetingConfig
@@ -18,6 +23,7 @@ const renderConfig = (overrides: Partial<MeetingStageConfig>, calcomConnected: b
       renderEventPreview={() => null}
       calcomConnected={calcomConnected}
       integrationsReady={integrationsReady}
+      errors={errors}
     />
   );
   return { setConfig };
@@ -62,5 +68,40 @@ describe('MeetingConfig Cal.com scheduling', () => {
     expect(setConfig).toHaveBeenLastCalledWith(
       expect.objectContaining({ calcom_booking_url: 'https://cal.com/dept/x' })
     );
+  });
+});
+
+/**
+ * Auto-advance on a meeting stage means "advance when attendance is recorded
+ * at the linked event", and the matcher accepts nothing when no event is
+ * named. The box cannot do what it says without one — and this is the stage
+ * builder's default shape, since Auto-Link Event Type starts at None.
+ */
+describe('MeetingConfig auto-advance without a linked event', () => {
+  it('warns when auto-advance is on and no event is named', () => {
+    renderConfig({ auto_advance: true }, false);
+    expect(screen.getByText(/without one, this stage names no event/i)).toBeInTheDocument();
+  });
+
+  it('says nothing once an event type is chosen', () => {
+    renderConfig({ auto_advance: true, linked_event_type: 'business_meeting' }, false);
+    expect(screen.queryByText(/without one, this stage names no event/i)).not.toBeInTheDocument();
+  });
+
+  it('says nothing when auto-advance is off', () => {
+    renderConfig({ auto_advance: false }, false);
+    expect(screen.queryByText(/without one, this stage names no event/i)).not.toBeInTheDocument();
+  });
+
+  it('exempts a Cal.com stage, which advances off the booking webhook', () => {
+    renderConfig({ auto_advance: true, scheduling_provider: 'calcom' }, true);
+    expect(screen.queryByText(/without one, this stage names no event/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the save refusal beside the event-type select', () => {
+    renderConfig({ auto_advance: true }, false, true, {
+      linked_event_type: 'Choose an Auto-Link Event Type, or turn off auto-advance.',
+    });
+    expect(screen.getByText('Choose an Auto-Link Event Type, or turn off auto-advance.')).toBeInTheDocument();
   });
 });

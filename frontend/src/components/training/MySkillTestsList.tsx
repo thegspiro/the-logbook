@@ -23,6 +23,7 @@ import { formatDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { Skeleton } from '../ux/Skeleton';
+import { formatScore } from '../../utils/skillScoreFormat';
 
 interface MySkillTestsListProps {
   /** The viewing member's user id — scopes the list to tests they took. */
@@ -138,7 +139,7 @@ export const MySkillTestsList: React.FC<MySkillTestsListProps> = ({ userId }) =>
                   </p>
                 )}
                 {test.overall_score != null && isComplete && (
-                  <p className="text-theme-text-muted text-xs">{Math.round(test.overall_score)}%</p>
+                  <p className="text-theme-text-muted text-xs">{formatScore(test.overall_score)}</p>
                 )}
               </div>
               <ChevronRight className="text-theme-text-muted h-4 w-4" />

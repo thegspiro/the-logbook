@@ -336,7 +336,8 @@ function detectWrongPathname(page, route) {
  * half cut off is the defect, not a near miss.
  */
 async function detectSubjectOutOfFrame(page, shot) {
-  const want = typeof shot.expect === "string" ? { text: shot.expect } : shot.expect;
+  const want =
+    typeof shot.expect === "string" ? { text: shot.expect } : shot.expect;
   if (!want) return null;
   const subject = want.selector
     ? page.locator(want.selector).first()
@@ -349,7 +350,11 @@ async function detectSubjectOutOfFrame(page, shot) {
   } catch {
     return { reason: "not on the page", want: want.selector ?? want.text };
   }
-  if (!box) return { reason: "on the page but not rendered", want: want.selector ?? want.text };
+  if (!box)
+    return {
+      reason: "on the page but not rendered",
+      want: want.selector ?? want.text,
+    };
 
   const frame = await captureFrame(page, shot);
   if (!frame) return null;
@@ -633,8 +638,14 @@ async function main() {
       // top bar to photograph it, and without this every admin shot captured
       // after it rendered with the top bar instead of the default sidebar —
       // silently, and dependent on manifest order. Clearing the key restores
-      // AppLayout's own `|| 'left'` default; the shot that wants the top bar
-      // sets it again in its prepare step.
+      // AppLayout's own `|| 'left'` seed.
+      //
+      // Since 2026-09-11 the layout is a department setting and /auth/branding
+      // has the last word — AppLayout overwrites both its state and this key
+      // with whatever branding returns. So this clear now only governs the
+      // FIRST paint, before that fetch resolves. It is still worth doing (it
+      // stops a leftover `top` painting a frame the shot might catch), but it
+      // is no longer what decides the layout: 08-62 mocks branding for that.
       await page
         .evaluate(() => localStorage.removeItem("navigationLayout"))
         .catch(() => {});

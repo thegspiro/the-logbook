@@ -16,6 +16,7 @@ import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { MicrosoftAuthMethod } from '@/constants/enums';
+import { SMTP_PROVIDER_PRESETS, findSmtpProviderPreset } from '@/constants/smtpProviders';
 import { nextStepPath, stepPath } from '../config/steps';
 
 interface EmailConfig {
@@ -54,6 +55,28 @@ interface EmailConfig {
  * because the backend reads an absent method as App Password, which is what
  * every row written before OAuth existed means by it.
  */
+/**
+ * Why a self-hosted / provider SMTP configuration cannot be used yet, or null.
+ *
+ * Mirrors `missing_for_enabled` on the backend, which is what actually decides
+ * whether the configuration saves. A username is optional there — a relay that
+ * accepts unauthenticated submission is a complete configuration — so
+ * demanding one here only blocked departments whose server does not want one.
+ * A username with no password is still refused, by both: the connection test
+ * reads a missing password as "no authentication" and reports any reachable
+ * server as a success, so a half-entered login would test green and then fail
+ * to sign in.
+ */
+const smtpCredentialProblem = (config: EmailConfig): string | null => {
+  if (!config.smtpHost?.trim()) return 'Please enter the SMTP server address';
+  if (!config.smtpPort?.trim()) return 'Please enter the SMTP port';
+  if (!isValidPort(parseInt(config.smtpPort, 10))) return 'Please enter a valid port number (1-65535)';
+  if (config.smtpUsername?.trim() && !config.smtpPassword) {
+    return 'Please enter the password for this username, or clear the username if the server needs no sign-in';
+  }
+  return null;
+};
+
 const microsoftCredentialProblem = (config: EmailConfig, method: MicrosoftAuthMethod): string | null => {
   if (method === MicrosoftAuthMethod.OAUTH) {
     if (!config.microsoftTenantId?.trim()) return 'Please enter your Microsoft 365 directory (tenant) ID';
@@ -81,6 +104,11 @@ const EmailConfiguration: React.FC = () => {
   });
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionTested, setConnectionTested] = useState(false);
+  // The provider whose guidance is on screen. A hint about the choice just
+  // made, not configuration — only the host, port and encryption it filled in
+  // are saved, and those stay editable.
+  const [quickFillPreset, setQuickFillPreset] = useState<string>('');
+  const quickFill = quickFillPreset ? findSmtpProviderPreset(quickFillPreset) : undefined;
 
   // API request hooks - separate instances for test and save
   const {
@@ -144,21 +172,9 @@ const EmailConfiguration: React.FC = () => {
     }
 
     if (emailPlatform === 'selfhosted') {
-      // Check for missing SMTP fields and list them
-      const missingFields = [];
-      if (!config.smtpHost) missingFields.push('Server Address');
-      if (!config.smtpPort) missingFields.push('Port');
-      if (!config.smtpUsername) missingFields.push('Username');
-      if (!config.smtpPassword) missingFields.push('Password');
-
-      if (missingFields.length > 0) {
-        toast.error(`Missing required SMTP fields: ${missingFields.join(', ')}`);
-        return;
-      }
-
-      const portNumber = parseInt(config.smtpPort || '0', 10);
-      if (!isValidPort(portNumber)) {
-        toast.error('Please enter a valid port number (1-65535)');
+      const problem = smtpCredentialProblem(config);
+      if (problem) {
+        toast.error(problem);
         return;
       }
     }
@@ -229,22 +245,9 @@ const EmailConfiguration: React.FC = () => {
     }
 
     if (emailPlatform === 'selfhosted') {
-      // Check for missing SMTP fields and list them
-      const missingFields = [];
-      if (!config.smtpHost) missingFields.push('Server Address');
-      if (!config.smtpPort) missingFields.push('Port');
-      if (!config.smtpUsername) missingFields.push('Username');
-      if (!config.smtpPassword) missingFields.push('Password');
-
-      if (missingFields.length > 0) {
-        toast.error(`Missing required SMTP fields: ${missingFields.join(', ')}`);
-        return;
-      }
-
-      // Validate SMTP port number
-      const portNumber = parseInt(config.smtpPort || '0', 10);
-      if (!isValidPort(portNumber)) {
-        toast.error('Please enter a valid port number (1-65535)');
+      const problem = smtpCredentialProblem(config);
+      if (problem) {
+        toast.error(problem);
         return;
       }
     }
@@ -528,6 +531,58 @@ const EmailConfiguration: React.FC = () => {
           <>
             <div className="space-y-4">
               <div>
+                <label
+                  htmlFor="onboarding-smtp-quick-fill"
+                  className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                >
+                  Fill in settings for a known provider
+                </label>
+                <select
+                  id="onboarding-smtp-quick-fill"
+                  value=""
+                  onChange={(e) => {
+                    const preset = findSmtpProviderPreset(e.target.value);
+                    if (!preset) return;
+                    setQuickFillPreset(preset.id);
+                    // Server details only — the credentials below are the
+                    // department's own and are never filled in for them.
+                    setConfig((prev) => ({
+                      ...prev,
+                      smtpHost: preset.host,
+                      smtpPort: String(preset.port),
+                      smtpEncryption: preset.encryption,
+                    }));
+                    setConnectionTested(false);
+                  }}
+                  className="form-input py-3"
+                >
+                  <option value="">My own mail server, or a provider not listed…</option>
+                  {SMTP_PROVIDER_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+                {quickFill && (
+                  <div className="alert-info mt-3 text-sm">
+                    <p className="mb-1 font-medium">{quickFill.label}</p>
+                    <p>Username: {quickFill.usernameHint}</p>
+                    <p className="mt-1">{quickFill.credentialHint}</p>
+                    {quickFill.helpUrl && (
+                      <a
+                        href={quickFill.helpUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-theme-accent-blue mt-1 inline-block underline"
+                      >
+                        Open provider settings
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div>
                 <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
                   SMTP Host <span className="text-theme-accent-red">*</span>
                 </label>
@@ -572,7 +627,10 @@ const EmailConfiguration: React.FC = () => {
 
               <div>
                 <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
-                  Username <span className="text-theme-accent-red">*</span>
+                  Username{' '}
+                  <span className="text-theme-text-muted font-normal">
+                    (leave blank if the server needs no sign-in)
+                  </span>
                 </label>
                 <input
                   type="text"
@@ -585,7 +643,8 @@ const EmailConfiguration: React.FC = () => {
 
               <div>
                 <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
-                  Password <span className="text-theme-accent-red">*</span>
+                  Password{' '}
+                  <span className="text-theme-text-muted font-normal">(required when a username is entered)</span>
                 </label>
                 <input
                   type="password"

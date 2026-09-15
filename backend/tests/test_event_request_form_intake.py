@@ -196,3 +196,30 @@ async def test_a_request_with_enough_notice_carries_no_warning():
 
     assert _added_request(db).reviewer_notes is None
     assert "lead_time_warning" not in _added_activity_actions(db)
+
+
+@pytest.mark.asyncio
+async def test_a_form_request_result_never_carries_the_status_token():
+    """`status_token` is a bearer credential: whoever holds it can view — and
+    self-service cancel — the request at the public, unauthenticated
+    `/event-requests/status/{token}` page. KNOWN_LIMITATIONS.md documents that
+    it is meant to reach a requester only via a coordinator's "Copy status
+    link" control (`events.manage`).
+
+    The dict this method returns is persisted to
+    `submission.integration_result`, which `FormSubmissionResponse` serializes
+    back to any `forms.manage` admin (`get_submission`, `list_submissions`,
+    `reprocess_submission_integrations`) and to the authenticated
+    `submit_form` caller — neither of which requires `events.manage`. Carrying
+    the token here would let a `forms.manage`-only holder harvest it for any
+    event request in the org and reach `events.manage`-gated capability
+    (view + cancel) without the permission that is supposed to guard it.
+    """
+    org = _org({"default_assignee_id": COORDINATOR_ID})
+    service, _ = _service(org)
+
+    result, _ = await _process(service, _submission(_data()), _integration(_mappings()))
+
+    assert result["success"] is True
+    assert "status_token" not in result
+    assert set(result.keys()) == {"success", "event_request_id", "message"}

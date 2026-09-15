@@ -8,7 +8,6 @@ Cloudflare is verified through its REST API.
 """
 
 import json
-import re
 import smtplib
 import ssl
 import urllib.error
@@ -19,6 +18,7 @@ from typing import Any, NamedTuple, Optional
 from loguru import logger
 
 from app.utils.email_providers import (
+    is_valid_cloudflare_account_id,
     normalize_app_password,
     resolve_smtp_settings,
     uses_microsoft_oauth,
@@ -511,7 +511,7 @@ def test_cloudflare_email(
             {"required": ["cloudflareAccountId", "cloudflareApiToken"]},
         )
 
-    if not re.fullmatch(r"[a-f0-9]{32}", account_id):
+    if not is_valid_cloudflare_account_id(account_id):
         return (
             False,
             "Invalid Account ID format. It should be a 32-character hex string "

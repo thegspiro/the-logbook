@@ -47,7 +47,7 @@ from app.schemas.election import (
     PositionResults,
     VoterEligibility,
 )
-from app.services.email_service import EmailService
+from app.services.email_service import BuiltMessage, EmailService
 from app.services.email_theme import TABLE_STYLE, TD_STYLE, TH_STYLE
 
 # " - Runoff Round 2" and friends, only at the very end of a title.
@@ -6525,11 +6525,12 @@ Best regards,
                 }
             )
 
-        # ---- Phase 2: Render + batch send via single SMTP connection ----
-        # Render each email using the pre-loaded template (or default),
-        # build MIME messages, then send all through one SMTP connection
-        # to avoid per-email TCP+TLS+auth overhead.
-        mime_messages = []
+        # ---- Phase 2: Render, then send the whole batch at once ----
+        # Render each email using the pre-loaded template (or default), then
+        # hand the batch to the service: SMTP departments get one connection
+        # for all of them rather than per-email TCP+TLS+auth overhead, and
+        # Cloudflare departments get the REST API.
+        mime_messages: List[Optional[BuiltMessage]] = []
         # Track which user ID corresponds to each slot in mime_messages
         # so we can correlate send results back to specific users.
         mime_user_ids: List[Optional[str]] = []
@@ -6554,7 +6555,10 @@ Best regards,
                         template=ballot_template,
                     )
                 )
-                recipients, msg_str = email_service.build_message(
+                # build_batch_message, not build_message: the pair the latter
+                # returns is MIME only, which the Cloudflare backend cannot
+                # send — a Cloudflare department's ballots all failed on it.
+                built = email_service.build_batch_message(
                     to_email=params["to_email"],
                     subject=subj,
                     html_body=html_body,
@@ -6565,7 +6569,7 @@ Best regards,
                         f"mailto:{admin_contact_email}" if admin_contact_email else None
                     ),
                 )
-                mime_messages.append((recipients, msg_str))
+                mime_messages.append(built)
                 mime_user_ids.append(rid)
             except Exception as e:
                 logger.error(

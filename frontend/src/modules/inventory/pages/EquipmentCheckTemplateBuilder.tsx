@@ -4782,9 +4782,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="template-details-title"
-        onClick={(event) => {
-          if (event.target === event.currentTarget) setDrawerOpen(false);
-        }}
       >
         <DialogPanel
           onClose={() => setDrawerOpen(false)}

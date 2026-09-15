@@ -1590,6 +1590,8 @@ class SecurityMonitoringMiddleware:
         "/api/v1/equipment-checks/reports/export/csv",
         "/api/v1/equipment-checks/reports/export/pdf",
         "/api/v1/errors/export",
+        "/api/v1/finance/export/logs",
+        "/api/v1/finance/export/mappings",
         "/api/v1/finance/export/transactions",
         "/api/v1/inventory/items/export",
         "/api/v1/organization/template/export",

@@ -143,6 +143,115 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Two prospective-member stages now hold applicants where they should (2026-09-13)
+
+Both changes are to the membership pipeline. Neither touches an existing
+record, and a coordinator's **Advance** button remains ungated in every case
+described below — these withhold _automatic_ movement, not the coordinator's.
+
+**An Election Vote stage now waits for the ballot.** A stage of that type
+refuses **Advance** while the applicant's election package reads _Added to
+Ballot_, and refuses it outright when the package comes back _Not Elected_.
+
+**Why.** The package status was already the authoritative record of the vote —
+the Elections module writes it when a package is put on a ballot and again
+when the closed ballot is tallied — and nothing consulted it when moving an
+applicant. An applicant the department had voted _down_ advanced on a click,
+beside a panel reading "This applicant was not elected by the membership
+vote"; on a pipeline with **Auto-transfer on approval** and the vote as its
+final stage, that click made them a member.
+
+**What you will see.** If your department holds its vote at a meeting and
+records the result by hand, nothing changes: a stage with no package, or one
+still _Draft_ or _Ready_, advances exactly as before. Only a package that
+actually reached a ballot is held. If a ballot closed but the result was never
+synced, the applicant stays put — un-tick **Required** on the stage and use
+**Skip**, which stays audited, or record the result.
+
+**A Meeting stage that names no event no longer auto-advances at all.** The
+stage builder's **Auto-Link Event Type** is what tells a meeting stage which
+event counts. A stage that named none used to accept attendance at _any_ event
+in the department; it now accepts none, and the stage builder refuses to save
+an auto-advancing meeting stage until a type is chosen.
+
+**Why.** Guest check-in is department-wide and is usually enabled on public
+events — open houses, fundraisers, public education — which is exactly where a
+prospective member turns up casually. So a stage reading "Meeting with the Fire
+Chief" advanced an applicant who signed in at a pancake breakfast. **Meeting
+Type** does not stand in for the event type: that field names the stage's
+purpose for whoever reads it and is read by nothing.
+
+**What you will see.** Check your meeting stages: any with _Auto-advance when
+attendance is recorded_ ticked and **Auto-Link Event Type** set to _None_ will
+stop advancing on their own after this upgrade. Set the event type and they
+resume; the coordinator can advance by hand meanwhile. Stages that
+self-schedule through **Cal.com** are unaffected — they advance when Cal.com
+reports the meeting ended, not off an attendance record, so they need no
+linked event.
+
+### A skills test can no longer be filed with unmarked steps (2026-09-12)
+
+Completing a skills evaluation now requires a result against every step on the
+sheet. `POST /api/v1/skills-testing/tests/{id}/complete` returns **400** when
+any step is still blank, listing them in `detail.unresolved_criteria`, and the
+examiner screen will not offer Submit until they are resolved.
+
+**Why.** A blank step was never neutral. A point-carrying one enlarged the
+denominator and earned nothing, so it silently cost the candidate full marks,
+and under `require_all_critical` a blank critical step already scored exactly
+like a failure. Neither was visible anywhere on the filed result — and the two
+rules pointed opposite ways, because an unmarked _deduct_ step has always been
+charged nothing on the grounds that the examiner made no judgement. There was
+no way to tell, reading a finished scorecard, which of those had happened.
+
+**The way out for a step nobody could watch:** the review screen lists every
+blank step and offers **Not observed** on each, which records a required reason
+and takes the step out of the point pool in both directions — it credits and
+penalises nothing. A **critical** step cannot be waived: that is a skill the
+candidate must demonstrate, so "did not apply" is never the right answer, and
+the API rejects it. This takes nothing away from an examiner, since a blank
+critical step already scored as a failure.
+
+**What you will see:** nothing changes for a test that was already fully
+marked, and no stored result is re-scored. An evaluation left part-marked when
+you upgrade is not stranded — reopen it, and the review screen names the steps
+that still need a call.
+
+**If you drive the API directly** (a kiosk, an import, a script), a completion
+posted with blanks will now be rejected rather than filed. Send a mark for
+every non-statement step, or a `{"waived": true, "waive_reason": "..."}` on the
+ones that could not be observed. Statements are exempt — they are read aloud
+and mark themselves.
+
+**Also in this release, and worth knowing if you author sheets by API:** a
+criterion whose `passing_score` exceeds its `max_score`, and a `score`-type
+criterion with no `max_score`, are now rejected at the write. The template
+builder has always refused both in the browser; a sheet posted by a script
+could previously save either, and both are silent at scoring time — the first
+is a step nobody can pass, the second a step that appears scored out of
+something and carries no points. Existing stored templates are untouched.
+
+### A setup wizard stuck on a 500 is fixed by this upgrade (2026-09-12)
+
+Only relevant if you have an installation whose **first-run setup never
+finished**, returning a 500 from the setup screen with no way past it. If your
+department is already set up, this changes nothing you will notice.
+
+`onboarding_status` is meant to hold exactly one row and nothing enforced it.
+Two concurrent first-run requests — which the wizard's own page load issues in
+parallel — could each create one, and the reader then raised on finding two, so
+`GET /api/v1/onboarding/status` returned 500 **permanently**. Recovery needed
+direct database access at the one moment no account exists to sign in with.
+
+Migration `6ab7d903fae5` **collapses the duplicate rows and adds a unique
+index** so they cannot recur. The surviving row is the completed one if there
+is one, otherwise the furthest-progressed — so setup resumes where it actually
+got to, not where an accidental twin did. Duplicate rows are deleted; they were
+partial copies of a singleton, and the survivor carries the progress.
+
+**What to do:** nothing. If setup was stuck, reload it after upgrading and it
+will continue.
+
 ### Navigation layout became a department setting (2026-09-11)
 
 Setup has always asked whether a department wants navigation across the top or
@@ -161,9 +270,88 @@ browser's local storage and was not reachable from the server, so there was
 nothing to migrate.
 
 **What to do:** if the department wants the top bar, set it once at
-**Settings → Organization → Profile → Navigation Layout**. It applies to every
+**Settings → General → Profile → Navigation Layout**. It applies to every
 member from their next page load. Departments already on the default need do
 nothing.
+
+### Published event-request forms keep working (2026-09-09)
+
+`events.request_pipeline.accept_public_requests` shipped read by exactly one of
+the two intake paths. `POST /api/v1/event-requests/public` honoured it; the
+**Forms** path — the one your own "Generate Event Request Form" button
+produces, and the one the settings screen tells you to publish — never looked
+at it. The same release makes the Forms path honour it too.
+
+Left alone, that would have silently stopped community requests arriving at
+every installation with a published request form, **with the toggle already
+showing off and no error anywhere**.
+
+Migration `d19b2c2ae9b9` writes down what was already true: every organization
+with a **published, public** form that would actually create a request today is
+recorded as accepting public event requests. It sets the flag unconditionally
+for those organizations rather than only where the key is absent — a stored
+`false` on such an organization cannot have meant "do not take requests from my
+published form", because the toggle never controlled that form.
+
+**Organizations with no such form are untouched** and keep the shipped default
+of `false`.
+
+**What to check:** if you publish an event-request form and do _not_ want
+public submissions, the toggle now genuinely controls it — turn it off at
+**Events → Settings → Pipeline**.
+
+### Property-return reports are no longer readable department-wide (2026-09-07)
+
+`PropertyReturnService.save_as_document` filed each generated property-return
+report into the `Reports` system folder, which carries the default
+`organization` visibility. Every holder of plain `documents.view` could read a
+report that names a departed member, quotes the reason for the separation —
+involuntary ones included — and prints their home address so the letter can be
+posted.
+
+Reports now file into a `member-separations` folder with
+`FolderVisibility.LEADERSHIP`. Migration `b1e7c3a92f45` creates that folder for
+organizations whose system folders were already initialised (the service's own
+`initialize_system_folders` returns early for them) and moves the reports
+already written into `Reports`.
+
+**No action needed.** This is listed so you know what was exposed, and to whom,
+before the upgrade.
+
+**The downgrade restores the disclosure.** It moves the reports back to
+`Reports` and drops the folders the revision created, restoring the prior state
+exactly — which is correct for a schema rollback and wrong as a decision.
+
+### Your Treasurer can now approve purchase requests (2026-09-06)
+
+`finance.approve` and `finance.configure_approvals` are both defined and both
+gate real endpoints, but **no seeded position held either**. Only `it_manager`
+could reach them, and only through its `*` wildcard — the IT administrator
+rather than a finance role.
+
+**What that cost a department.** With no chain configured,
+`submit_purchase_request` skips approval entirely, so requests quietly bypass
+the workflow rather than failing visibly. Configure a chain _without_ also
+granting `finance.approve`, and every submitted request lands in
+`PENDING_APPROVAL` with nobody able to action it. The half-configured state is
+the one that strands records, and the settings screen that produces it was
+itself unreachable.
+
+Migration `ee7390dcdf47` grants both to the Treasurer position.
+
+**What you will see after upgrading:** the Treasurer can action the approval
+chain. This does **not** enable self-approval — `FinanceService.approve_step`
+calls `assert_different_person` and refuses it whoever holds the permission.
+Denial is left unguarded on purpose: withdrawing your own request is not a
+conflict.
+
+**What to check.** The grant is **gated**, not unconditional: it applies only
+where the position's finance grants are exactly
+`{finance.view, finance.manage}` — what the registry seeded. A row already
+holding either new grant, or any other finance shape, is left alone. **If you
+deliberately curated your Treasurer to exactly view + manage, meaning "no
+approval powers", review that position after upgrading** — nothing in the
+stored row distinguishes that decision from the untouched seed.
 
 ## When adding a change that can block startup
 

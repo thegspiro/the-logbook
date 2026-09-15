@@ -15,6 +15,7 @@ from typing import Any
 from loguru import logger
 
 from app.services.integration_services.base import create_integration_client
+from app.utils.url_validator import assert_outbound_url_safe
 
 # Default Documenso Cloud API base. Self-hosted orgs override this with their
 # own https://<host>/api/v1 in the integration config.
@@ -121,11 +122,22 @@ class DocumensoService:
             "Content-Type": "application/json",
         }
 
+    def _assert_base_url_safe(self) -> None:
+        # SSRF: api_base_url is client-supplied (a self-hosted Documenso
+        # deployment) — re-validate at send time, mirroring calcom_service.py's
+        # identical shape. Config-save-time validation alone leaves a
+        # DNS-rebinding TOCTOU window open; see KNOWN_LIMITATIONS.md's
+        # "Outbound Integration Requests" entry, which named this file as the
+        # one create_integration_client-family connector missing this call.
+        # Raises ValueError on an unsafe host.
+        assert_outbound_url_safe(self.api_base_url)
+
     async def test_connection(self) -> str:
         """Verify the API token by listing one document."""
         if not self.api_token:
             raise Exception("No Documenso API token configured")
 
+        self._assert_base_url_safe()
         async with create_integration_client() as client:
             response = await client.get(
                 f"{self.api_base_url}/documents",
@@ -165,6 +177,7 @@ class DocumensoService:
         payload = build_create_document_payload(
             title, recipients, external_id=external_id
         )
+        self._assert_base_url_safe()
         async with create_integration_client() as client:
             response = await client.post(
                 f"{self.api_base_url}/documents",

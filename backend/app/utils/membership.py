@@ -77,6 +77,15 @@ _SPLIT = {
     "honorary": (MemberClass.SOCIAL, MemberStatus.HONORARY),
 }
 
+# The vocabulary ``membership_type`` holds BESIDES org-configurable tier ids.
+#
+# Exported because a writer of the column has to accept both and there is no
+# other way to ask: gating only on the configured tiers rejects "administrative"
+# in every organization that has a ladder, which is every organization onboarded
+# since one is seeded at creation. Derived from ``_SPLIT`` rather than retyped,
+# so a value added there cannot be forgotten here.
+LEGACY_MEMBERSHIP_TYPES = frozenset(_SPLIT)
+
 # The operational statuses that have their own legacy spelling. Anything else
 # on the operational class falls back to "active".
 _OPERATIONAL_LEGACY = {

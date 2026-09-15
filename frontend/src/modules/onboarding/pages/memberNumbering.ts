@@ -2,11 +2,11 @@
  * The member-numbering answer collected in step 1, on its way to the API.
  *
  * `organization.settings["membership_id"]` holds a counter that only numbers
- * members created after it is switched on. The wizard creates the System Owner
- * in step 9 and the IT team in step 10, so a department that answered this on a
- * members screen afterwards ended up with its first accounts holding no number
- * and the roster import starting at the number they should have had — an
- * off-by-a-few nobody notices until a badge is printed.
+ * members created after it is switched on. The wizard creates the administrator
+ * account in step 2 and the IT team in step 7, so a department that answered
+ * this on a members screen afterwards ended up with its first accounts holding
+ * no number and the roster import starting at the number they should have had —
+ * an off-by-a-few nobody notices until a badge is printed.
  *
  * Kept out of `OrganizationSetup.tsx` so a module exporting a component exports
  * only that (`react-refresh/only-export-components`), which is why
