@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 21 (Admin hours), pass 5** — PR #TBD, branch
-`claude/security-review-ah-pass5-<short-random>`. Step 0 concurrent-session
+**Feature 21 (Admin hours), pass 5** — PR
+[#2585](https://github.com/thegspiro/the-logbook/pull/2585), branch
+`claude/security-review-ah-pass5-3edf486d`. Step 0 concurrent-session
 check (done twice — once at start, once immediately before push): `git fetch
 origin` clean both times; `PROGRESS.md`'s Open PR section (before this edit)
 still read the Feature 20 pass 5 note below rather than "None" — PR #2583
@@ -15903,7 +15904,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 21 (Admin hours, pass 5) — 1 fixed (LOW), 0 flagged — PR #TBD opened
+### 2026-09-15 — Feature 21 (Admin hours, pass 5) — 1 fixed (LOW), 0 flagged — PR #2585 opened
 
 Delta re-verification against pass 4's merge (`1fb968938`, PR #2481). All
 four declared backend files byte-identical; the four external backend

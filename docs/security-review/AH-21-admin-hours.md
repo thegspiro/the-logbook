@@ -1,6 +1,6 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), #TBD (pass 5, this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, this PR)
 
 ## Pass 5 (2026-09-15) — 1 fixed (LOW), zero admin-hours-behavioral drift
 
