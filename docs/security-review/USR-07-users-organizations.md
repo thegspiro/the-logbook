@@ -1,6 +1,150 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4)
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4)
+
+---
+
+## Pass 6 (2026-09-15)
+
+**Scope:** full domain since pass 5's merge commit `d245a9e21` (PR #2553):
+`endpoints/users.py`, `endpoints/organizations.py`, `endpoints/member_status.py`,
+`endpoints/member_leaves.py`, `services/user_service.py`,
+`services/organization_service.py`, `services/member_leave_service.py`,
+`models/user.py`, `schemas/user.py`, `schemas/organization.py`.
+
+**Near-zero delta since pass 5.** `git diff d245a9e21..origin/main --stat` across
+all ten declared files: eight are **byte-identical** to pass 5's own reviewed
+state (`users.py`, `member_leaves.py`, `services/user_service.py`,
+`services/member_leave_service.py`, `models/user.py`, `schemas/user.py`,
+`schemas/organization.py`, `organizations.py`), despite unrelated commits
+landing on `main` since pass 5's merge. Two files changed, both from unrelated
+feature work, both read in full and independently re-verified sound:
+
+- **`member_status.py` (+25/-4, commit `9451d44bd`)** — `change_membership_type`'s
+  tier-id gate previously rejected the legacy `LEGACY_MEMBERSHIP_TYPES` vocabulary
+  (e.g. `"administrative"`) whenever an org had at least one tier configured, which
+  made the very next line's rank-clearing enforcement (an administrative member
+  must drop any operational rank, since a rank's default permissions union into
+  the member's effective set) dead code for every org running the tier ladder —
+  the one value that satisfies `is_administrative` was the one value the gate
+  rejected. Fixed by widening the accepted set to
+  `set(valid_tier_ids) | LEGACY_MEMBERSHIP_TYPES`. Re-verified from this pass's
+  own angle (tenancy and locking, not the eligibility question the commit
+  itself was about): the row lock ordering, `populate_existing=True`, and the
+  Organization-row lock USR-10 added are all still present and unchanged at
+  their documented lines (`member_status.py:836-859`); the widened `accepted`
+  set only changes which values pass validation, not what is locked or how —
+  no new by-id query, no new client-supplied FK, no regression on USR-10's fix.
+- **`organization_service.py` (+13/-0, commit `468d4feab`)** — `email_section =
+normalize_stored_platform(email_section)` added inside
+  `update_organization_settings`'s email-secret-handling block, to settle a
+  legacy or absent platform label before the identity-change secret-clearing
+  logic judges it. Re-verified: `email_section` at this point is a key inside
+  `updated_settings`, itself the return value of `_deep_merge_settings(current_settings,
+settings_update)` where `current_settings = copy.deepcopy(org.settings or
+{})` (`organization_service.py:409`) — the mutation lands on a fresh
+  deep-merged structure, never a reference into `org.settings` itself, so
+  Pitfall #12 does not apply here (there is nothing shared with SQLAlchemy's
+  committed state to mutate through). No new by-id query, no new secret
+  exposure — `normalize_stored_platform` only rewrites a label, and the
+  existing secret-redaction/identity-change logic three lines below it is
+  unchanged.
+
+**First review of this feature's own MCP surface**
+(`app/mcp/tools/members.py`, `app/mcp/tools/organization.py`), per the
+precedent Elections/Documents/Apparatus/Facilities established reviewing
+their own MCP surfaces in recent passes:
+
+- `members.py`'s `list_members`/`get_member` filter
+  `User.organization_id == principal.organization_id` directly (no
+  parent-resolution needed — `User` carries the column itself). The response
+  projection (`_member()`) carries no contact/PII fields at all — no phone,
+  email, address, DOB, username, or membership number — a narrower shape than
+  even `GET /users`' `UserListResponse` (USR-8's open finding), and
+  `compliance_exempt` is explicitly and deliberately omitted by a code
+  comment matching this feature's own USR-8 reasoning about that field's
+  sensitivity. Search goes through `like_pattern()` with
+  `escape=LIKE_ESCAPE_CHAR` (Pitfall #25); both the listing and the count
+  query are bounded via `clamp_limit`/`clamp_offset` and SQL-level
+  `.offset()/.limit()`, not an in-memory slice (Checklist §6).
+- `organization.py`'s `get_department_profile` returns only name, type,
+  timezone, county, website, founded year, FDID, enabled modules and an
+  active-location count — no settings secrets, no email/auth configuration,
+  matching the redaction discipline `organizations.py`'s own `/settings`
+  route already enforces for non-`settings.manage` callers. `list_locations`/
+  `get_location_description` filter `Location.organization_id ==
+principal.organization_id`, are bounded/paged the same way, and run
+  free-text location descriptions through `scrub_text()` before they leave
+  the tool.
+- **Unlike `elections.py` before ELEC-06 pass 6**, `members.py`'s tools
+  already had org-scoping, PII-exclusion, wildcard-escaping and pagination
+  coverage in `tests/test_mcp_tools.py` (`TestRoster`, `TestEleventhRoundFindings`)
+  before this pass — confirmed by reading the tests, not inferred from their
+  names: `test_list_members_is_org_scoped`, `test_list_members_never_carries_contact_details`,
+  and `test_roster_filters_and_pages_in_sql`'s `search="%"` case (asserts
+  `total == 0`, proving the escape is live, not merely present in the call).
+  `get_department_profile` also had coverage (`test_department_profile`,
+  secret-field assertions).
+- **Gap found, not a leak, in `organization.py`'s location tools
+  specifically:** unlike every other listing tool audited under this
+  rotation's own precedent, nothing exercised `list_locations`/
+  `get_location_description`'s org-scoping — `test_locations_are_paged_and_bounded`
+  covers pagination, chunking and text-scrubbing for a single org, but no
+  test constructs a second org's principal. The code was already correct
+  (`_active_locations()` filters `organization_id` directly, same shape as
+  every other tool). Added `TestThirtySecondRoundFindings::test_locations_are_org_scoped`,
+  confirmed to fail against deliberately reintroduced unscoped code (removed
+  the `organization_id` clause from `_active_locations`, re-ran — got
+  `assert 1 == 0` — then restored and re-ran clean) before counting it as a
+  guard, mirroring exactly how ELEC-06 pass 6 validated its own new test.
+
+**Re-verified, not re-derived — all three open findings unchanged:**
+
+- **USR-5** (LOW/MED, unbounded lists) — `get_archived_members`
+  (`member_status.py:751`), `list_users_with_roles` (`users.py:700`),
+  `leave_widget_summary` (`member_leaves.py:52`), and
+  `MemberLeaveService.list_leaves` (`member_leave_service.py:160`) all still
+  read the full table with no pagination. Line numbers checked against the
+  current (post-pass-5) file state; `member_status.py`'s citation is
+  unchanged from pass 5 (its 25-line diff landed above this function, not
+  inside it). Still open, still mirrored in `KNOWN_LIMITATIONS.md`.
+- **USR-8** (MED, over-broad `GET /users` field set) — `UserService.get_
+users_for_organization` (`user_service.py:24`), `UserListResponse`
+  (`schemas/user.py:349` — shifted from pass 3's original 271-298 citation by
+  ordinary file growth across three intervening passes, not a regression;
+  `schemas/user.py` is byte-identical to pass 5), and `list_users`
+  (`users.py:102`) unchanged. Still open, still mirrored.
+- **USR-10a** (LOW, `_tier_member_counts` not a locking read against
+  `MembershipTierService.advance_all`) — `member_status.py:1031` (helper) and
+  `:1068` (`update_membership_tier_config`), both within this pass's
+  independently-re-verified `member_status.py` diff region; the
+  Organization-row lock USR-10 added, and the deliberate choice not to
+  extend it into a member-row lock (deadlock-avoidance argument), both
+  re-read and confirmed unchanged. Still flagged, still mirrored.
+
+**0 application-code defects found. 1 regression test added** (closing a
+previously-unverified, already-correct org-scoping gap in the MCP location
+tools — the same class of finding, and the same "verify the negative before
+counting it" discipline, as ELEC-06 pass 6's `test_elections_are_org_scoped`).
+
+## Completion gate (pass 6)
+
+| Check                                                                                                                                                                                                                                                                                 | Result                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                         | ✅ 0 violations                                                                                                                        |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                  | ✅ clean (1596 files unchanged)                                                                                                        |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                             | ✅ clean                                                                                                                               |
+| `validate_migrations.py --strict`                                                                                                                                                                                                                                                     | ✅ 444 revisions, single head `6ab7d903fae5` — unchanged (no migration this pass)                                                      |
+| `check_route_permissions.py --strict`                                                                                                                                                                                                                                                 | ✅ 228 routes, 0 errors, 0 warnings                                                                                                    |
+| `pytest tests/ -k "member_status or member_leave or property_return or user_list or platoon or users or organization or rank_grant or role_edit or audit_history or ceiling or administrative or membership_tier or capacity_locking or navigation_layout or setup_checklist or mcp"` | ✅ 840 passed, 1 pre-existing skip (`py_vapid`), 0 failed                                                                              |
+| `pytest tests/ -m "not integration and not slow and not docker"` (full unit suite — run broadly since this pass touched the shared `test_mcp_tools.py`)                                                                                                                               | ✅ 10,199 passed, 1 pre-existing skip, 0 failed (unchanged from pass 5's own count)                                                    |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                    | ✅ 0 errors                                                                                                                            |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                         | ✅ 0 errors, 0 warnings (no frontend file in this feature's domain changed since pass 5; run anyway per the completion-gate checklist) |
+
+The new `test_locations_are_org_scoped` guard test was confirmed to fail
+against deliberately reintroduced unscoped code (a second org's principal
+seeing the first org's location; `assert 1 == 0`) before being counted as
+covering the gap, and restored/re-run clean afterward.
 
 ---
 

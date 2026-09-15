@@ -4752,3 +4752,53 @@ class TestThirtyFirstRoundFindings:
         owner = _principal(org_id, admin_id)
         owned = await _call(server, owner, "list_elections")
         assert owned["total"] == 1
+
+
+class TestThirtySecondRoundFindings:
+    """Security-review 07 (Users & organizations), pass 6.
+
+    ``mcp/tools/organization.py``'s location tools (``list_locations``,
+    ``get_location_description``) filter ``Location.organization_id``
+    directly, same as every other listing tool in this file, but — like
+    ``elections.py`` before ELEC-06 pass 6 — nothing exercised it. Added
+    rather than left as a read-only finding, for the same reason: the
+    assertion is cheap and the shape (a second org's principal reading
+    another org's location) is exactly what CLAUDE.md Pitfall #14 warns a
+    refactor can reintroduce silently. ``list_members``/``get_member`` and
+    ``get_department_profile`` already had org-scoping/redaction coverage
+    (``TestRoster.test_list_members_is_org_scoped``,
+    ``test_department_profile``) before this pass.
+    """
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_locations_are_org_scoped(self, server, org_with_members, db_session):
+        from app.models.location import Location
+
+        org_id, admin_id, _ = org_with_members
+        location = Location(
+            organization_id=org_id,
+            name="Station 9",
+            description="Confidential gate code: 1234.",
+            is_active=True,
+        )
+        db_session.add(location)
+        await db_session.flush()
+
+        other = _principal(str(uuid.uuid4()), admin_id)
+        listed = await _call(server, other, "list_locations")
+        assert listed["total"] == 0
+        assert listed["items"] == []
+
+        with pytest.raises(ToolError, match="not found"):
+            await _call(
+                server,
+                other,
+                "get_location_description",
+                location_id=location.id,
+            )
+
+        # The owning org still sees it — proves the empty result above is
+        # org-scoping, not a broken fixture.
+        owner = _principal(org_id, admin_id)
+        owned = await _call(server, owner, "list_locations")
+        assert owned["total"] == 1

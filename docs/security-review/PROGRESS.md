@@ -16,6 +16,86 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 07 (Users & organizations), pass 6** — PR
+[#2602](https://github.com/thegspiro/the-logbook/pull/2602), branch
+`claude/security-review-usr-pass6-9d2e47`. Step 0
+concurrent-session check (done twice — once at start, once immediately
+before push): the working directory was found checked out on
+`claude/security-review-elec-pass6-7f3a91` (a leftover branch from the
+prior iteration) with a clean tree, so per this run's own instructions it
+was left untouched and a fresh branch was cut directly from `origin/main`
+instead. `git fetch origin main` clean both times. `PROGRESS.md`'s Open PR
+row (before this edit) read "Feature 06 (Elections & ballots), pass 6 — PR
+#2600" — `pull_request_read` confirmed #2600 `state: closed`, `merged:
+true`, `merged_at: 2026-09-15T21:45:46Z` (merged directly by the repo owner
+rather than through the usual bot-merge path), and its merge commit
+(`79f37957c`) is the tip of `origin/main`, with rotation row 06 already
+marked ✅ as part of that same merge — so this iteration proceeded to
+Feature 07 rather than tending a still-open PR. `search_pull_requests`
+(open) returned #2590 (a prospective-members form-stage fix), #2594 (an
+npm-override conflict checker), #2595 (a bulk-advance meeting-attendance-gate
+fix), and **#2601** (a watchdog-authored bookkeeping PR that records this
+same #2600 merge in `PROGRESS.md`'s Open PR section — created by another
+session/process before this iteration reached Step 0, and still open as of
+this check) — none of the four touch users/organizations/member-status/
+member-leaves surfaces or claim Feature 07, so this iteration proceeded
+rather than treating #2601 as blocking under the "one PR at a time" rule
+(its only effect is the same bookkeeping edit this note itself makes;
+resolved by merging `origin/main` again immediately before push per this
+run's own working-directory instructions, so whichever of the two lands
+first is not lost). `list_branches` showed no
+`security-review`/`feature07`/`usr`/`users`/`organizations` branch in
+flight either check.
+
+Baseline `d245a9e21` (merge commit of PR #2553, pass 5's landing point).
+**Near-zero delta since pass 5: two files changed, both from unrelated
+feature work, both independently re-verified sound.**
+`member_status.py` (+25/-4, `9451d44bd`) widened `change_membership_type`'s
+tier-id gate to also accept the legacy class/status vocabulary, fixing dead
+rank-clearing enforcement for administrative members on orgs with a tier
+ladder configured — re-verified the USR-10 lock ordering and
+`populate_existing=True` are unchanged, no new by-id query or FK.
+`organization_service.py` (+13/-0, `468d4feab`) added a stored-platform
+normalization call inside the settings-secret-handling block — re-verified
+it mutates a fresh deep-merged dict, never `org.settings` itself (Pitfall
+#12 does not apply). Every other declared-scope file — `users.py`,
+`member_leaves.py`, `services/user_service.py`,
+`services/member_leave_service.py`, `models/user.py`, `schemas/user.py`,
+`schemas/organization.py`, `organizations.py` — is byte-identical to pass
+5's reviewed state. **First review of this feature's own MCP surface**
+(`app/mcp/tools/members.py`, `app/mcp/tools/organization.py`), per the
+ELEC-06-pass-6 precedent: `members.py`'s tools were already org-scoped,
+PII-excluded (narrower than `GET /users`, USR-8's open finding) and had
+existing test coverage (org-scoping, PII exclusion, LIKE-escape). One real
+gap found — not a leak — in `organization.py`'s location tools:
+`list_locations`/`get_location_description` were already correctly
+org-scoped in code but had no test proving it. Added
+`test_locations_are_org_scoped`, confirmed it fails against deliberately
+reintroduced unscoped code before counting it as a guard. **0 defects
+found, 0 application-code changes, 1 regression test added.** All three
+open findings (USR-5, USR-8, USR-10a) re-confirmed unchanged at their
+current citations. Completion gate: flake8/black/isort clean;
+`validate_migrations.py --strict` 444 revisions, single head
+`6ab7d903fae5`; `check_route_permissions.py --strict` 228 routes, 0 errors;
+scoped user/org/member-status/member-leave/mcp tests 840 passed, 1
+pre-existing skip; full backend unit suite 10,199 passed, 1 pre-existing
+skip, 0 failed (unchanged from pass 5 — run broadly since this pass touched
+the shared `test_mcp_tools.py`); frontend typecheck and lint both clean
+(no frontend file in this feature's domain changed). Findings doc:
+`docs/security-review/USR-07-users-organizations.md` → **Pass 6**. Rotation
+row 07 → ✅. **Next: Feature 08 (Membership pipeline), pending this PR's
+merge.**
+
+**Merge-conflict note:** while this pass was in flight, PR #2601 (the
+watchdog bookkeeping PR flagged above) merged, landing the same "#2600
+merged" edit to this Open PR section from the other side. Resolved by
+merging `origin/main` into this branch (merge commit, no rebase/force-push)
+and keeping both notes, this pass's own note first, per this file's
+established nested-`<details>` convention.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 6, PR #2600, merged directly by the repo owner — 0 fixed, 0 new findings, 1 guard test added; rotation row 06 marked ✅ as part of that merge), preserved for history</summary>
+
 **None.** PR [#2600](https://github.com/thegspiro/the-logbook/pull/2600)
 (Feature 06, Elections & ballots, pass 6) was fully green (17/17 checks,
 `mergeable_state: clean`, no unresolved review threads — only the
@@ -25,6 +105,8 @@ its last push, so a 30-minute watchdog check merged it directly (squash,
 log have used (Features 04, 05, 06, 14, 15, 23, 25, 31, 33, 34). Merge
 commit `79f37957c` confirmed on `main` via `git fetch`. Rotation row 06
 stays ✅. Next: Feature 07 (Users & organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 6, PR #2600, merged clean — 0 fixed, 0 new findings, 1 regression test added; rotation row 06 marked ✅ as part of that PR), preserved for history</summary>
@@ -16360,7 +16442,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
@@ -16395,6 +16477,44 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 07 (Users & organizations, pass 6) — 0 fixed, 0 new findings, 1 regression test added — PR #2602 opened
+
+Step 0: working directory was on a leftover branch
+(`claude/security-review-elec-pass6-7f3a91`) from the prior iteration with a
+clean tree — left untouched, new branch cut from `origin/main` directly.
+`git fetch origin main` clean both times. `PROGRESS.md`'s Open PR row read
+"Feature 06 (Elections & ballots), pass 6 — PR #2600" — `pull_request_read`
+confirmed #2600 merged (`merged_at 2026-09-15T21:45:46Z`, merged directly by
+the repo owner) and at the tip of `origin/main` (`79f37957c`), with rotation
+row 06 already ✅ as part of that same merge. `search_pull_requests`/
+`list_branches` showed no concurrent Feature 07/users/organizations work —
+the only security-review-adjacent open item was #2601, a watchdog bookkeeping
+PR making the same "#2600 merged" note this entry itself makes, which does
+not claim Feature 07 and was resolved by re-merging `origin/main` before
+push rather than treated as blocking. Baseline `d245a9e21` (PR #2553, pass
+5's merge). Diffed the full ten-file declared domain against current `HEAD`:
+two files changed (`member_status.py` +25/-4, `organization_service.py`
++13/-0), both unrelated feature fixes, both independently re-verified sound
+(USR-10's lock ordering unchanged; the new email-platform normalization
+mutates a fresh deep-merged dict, not `org.settings` itself — Pitfall #12
+does not apply). Eight of ten files byte-identical to pass 5. **First
+review of this feature's own MCP surface** (`app/mcp/tools/members.py`,
+`app/mcp/tools/organization.py`, per the ELEC-06-pass-6 precedent):
+`members.py` already had org-scoping/PII-exclusion/LIKE-escape test
+coverage; found one real gap — `organization.py`'s `list_locations`/
+`get_location_description` were correctly org-scoped in code but untested
+for it. Added `test_locations_are_org_scoped`, confirmed it fails against
+deliberately reintroduced unscoped code before counting it as a guard. **0
+application-code changes, 1 regression test added.** USR-5, USR-8, USR-10a
+(all previously open/flagged) re-confirmed unchanged. Completion gate:
+flake8/black/isort clean; `validate_migrations.py --strict` 444 revisions,
+single head `6ab7d903fae5`; `check_route_permissions.py --strict` 228
+routes, 0 errors; scoped tests 840 passed, 1 pre-existing skip; full backend
+unit suite 10,199 passed, 1 pre-existing skip, 0 failed (unchanged from pass
+5); frontend typecheck/lint clean. Findings doc:
+`docs/security-review/USR-07-users-organizations.md` → **Pass 6**. Rotation
+row 07 → ✅. Next: Feature 08 (Membership pipeline).
 
 ### 2026-09-15 — Feature 06 (Elections & ballots, pass 6)'s PR #2600 merged, watchdog recorded it
 
