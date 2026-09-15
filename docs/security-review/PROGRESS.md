@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2583](https://github.com/thegspiro/the-logbook/pull/2583)
+(Feature 20, Compliance, pass 5) merged clean — a zero-delta re-verification
+pass (0 fixes, 0 new findings; all seven in-scope files byte-identical to
+pass 4's merge), 17/17 CI green on the current head, `mergeable_state: clean`.
+The `CI Success` failure on the branch's first commit was the known
+stale-superseded-run artifact (all real jobs `cancelled`, confirmed via
+`list_workflow_jobs`) — resolved with one explanatory PR comment, no code
+push needed. Merge commit `18443e916` confirmed on `main` via `git pull`.
+`list_pull_requests` (open) re-checked immediately before writing this
+closure note: only dependabot #2552/#2567, and #2495 (unrelated) — no
+concurrent Feature 21 pass or closure PR. Rotation row 20 stays ✅. **Next:
+Feature 21 (Admin hours), pass 5** (last closed at pass 4, PR #2482).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 5, PR #2583, before it merged), preserved for history</summary>
+
 **Feature 20 (Compliance), pass 5** — PR
 [#2583](https://github.com/thegspiro/the-logbook/pull/2583), branch
 `claude/security-review-cmp-pass5-ab84fc13`. Step 0 concurrent-session check
@@ -43,6 +59,8 @@ them since. **0 fixes, 0 new findings.** Full backend suite: 12578 passed, 21
 skipped, 0 failed; flake8/black/isort clean on all seven in-scope files.
 Findings doc: `docs/security-review/CMP-20-compliance.md` → **Pass 5**. Next:
 Feature 21 (Admin hours), pending this PR's merge.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2580's merge, Feature 19 pass 5), preserved for history</summary>
@@ -15851,6 +15869,16 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 20 (Compliance, pass 5)'s PR #2583 merged, watchdog recorded it
+
+PR #2583 (zero-delta re-verification pass over `compliance_config.py`/
+`compliance_officer.py`; 0 fixes, 0 new findings) merged clean via squash,
+merge commit `18443e916`. 17/17 CI green on the current head; the `CI Success`
+failure on the branch's first commit was the known stale-superseded-run
+artifact (all real jobs `cancelled`) and needed only an explanatory PR
+comment, no push. Rotation row 20 stays ✅. Next: Feature 21 (Admin hours),
+pass 5.
 
 ### 2026-09-15 — Feature 20 (Compliance, pass 5) — 0 fixes, 0 flagged — PR #2583 opened
 
