@@ -431,21 +431,25 @@ The settings screen (and the onboarding email step) has a **"Fill in settings
 for a known provider"** picker that enters the host, port and encryption for
 the providers below. You supply the username and the credential.
 
-| Provider           | Host                                 | Port | Encryption | Username                  | Credential                                 |
-| ------------------ | ------------------------------------ | ---- | ---------- | ------------------------- | ------------------------------------------ |
-| Yahoo Mail         | `smtp.mail.yahoo.com`                | 465  | SSL        | Full Yahoo address        | App password (Yahoo Account Security)      |
-| iCloud Mail        | `smtp.mail.me.com`                   | 587  | STARTTLS   | iCloud address            | App-specific password (appleid.apple.com)  |
-| Zoho Mail          | `smtp.zoho.com` (EU: `smtp.zoho.eu`) | 587  | STARTTLS   | Full Zoho address         | Application-specific password if 2FA is on |
-| Fastmail           | `smtp.fastmail.com`                  | 465  | SSL        | Full Fastmail address     | App password with SMTP access              |
-| AOL Mail           | `smtp.aol.com`                       | 465  | SSL        | Full AOL address          | App password (AOL Account Security)        |
-| GMX                | `mail.gmx.com`                       | 587  | STARTTLS   | Full GMX address          | Account password, POP3/IMAP enabled first  |
-| Proton Mail Bridge | `127.0.0.1`                          | 1025 | STARTTLS   | Proton address            | The password Bridge shows for the account  |
-| SendGrid           | `smtp.sendgrid.net`                  | 587  | STARTTLS   | The literal word `apikey` | Your API key                               |
-| Amazon SES         | `email-smtp.<region>.amazonaws.com`  | 587  | STARTTLS   | SES SMTP username         | SES SMTP password (not an AWS secret key)  |
-| Mailgun            | `smtp.mailgun.org`                   | 587  | STARTTLS   | `postmaster@your-domain`  | Domain SMTP password                       |
-| Postmark           | `smtp.postmarkapp.com`               | 587  | STARTTLS   | Server API token          | The same server API token                  |
-| Brevo              | `smtp-relay.brevo.com`               | 587  | STARTTLS   | Brevo login address       | SMTP key (Brevo → SMTP & API)              |
-| Mailjet            | `in-v3.mailjet.com`                  | 587  | STARTTLS   | API key                   | Secret key                                 |
+| Provider    | Host                                 | Port | Encryption | Username                  | Credential                                 |
+| ----------- | ------------------------------------ | ---- | ---------- | ------------------------- | ------------------------------------------ |
+| Yahoo Mail  | `smtp.mail.yahoo.com`                | 465  | SSL        | Full Yahoo address        | App password (Yahoo Account Security)      |
+| iCloud Mail | `smtp.mail.me.com`                   | 587  | STARTTLS   | iCloud address            | App-specific password (appleid.apple.com)  |
+| Zoho Mail   | `smtp.zoho.com` (EU: `smtp.zoho.eu`) | 587  | STARTTLS   | Full Zoho address         | Application-specific password if 2FA is on |
+| Fastmail    | `smtp.fastmail.com`                  | 465  | SSL        | Full Fastmail address     | App password with SMTP access              |
+| AOL Mail    | `smtp.aol.com`                       | 465  | SSL        | Full AOL address          | App password (AOL Account Security)        |
+| GMX         | `mail.gmx.com`                       | 587  | STARTTLS   | Full GMX address          | Account password, POP3/IMAP enabled first  |
+| SendGrid    | `smtp.sendgrid.net`                  | 587  | STARTTLS   | The literal word `apikey` | Your API key                               |
+| Amazon SES  | `email-smtp.<region>.amazonaws.com`  | 587  | STARTTLS   | SES SMTP username         | SES SMTP password (not an AWS secret key)  |
+| Mailgun     | `smtp.mailgun.org`                   | 587  | STARTTLS   | `postmaster@your-domain`  | Domain SMTP password                       |
+| Postmark    | `smtp.postmarkapp.com`               | 587  | STARTTLS   | Server API token          | The same server API token                  |
+| Brevo       | `smtp-relay.brevo.com`               | 587  | STARTTLS   | Brevo login address       | SMTP key (Brevo → SMTP & API)              |
+| Mailjet     | `in-v3.mailjet.com`                  | 587  | STARTTLS   | API key                   | Secret key                                 |
+
+**Proton Mail Bridge is not supported.** Bridge serves a self-signed
+certificate on `127.0.0.1:1025`, and the sender verifies certificates on every
+STARTTLS connection, so the handshake always fails. There is no per-connection
+trust setting to opt out of that, and verification is not relaxed globally.
 
 **The most common failure is using the account password.** Yahoo, iCloud, Zoho,
 Fastmail and AOL all refuse an ordinary password over SMTP once two-factor
