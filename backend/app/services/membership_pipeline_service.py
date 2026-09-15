@@ -1811,25 +1811,27 @@ class MembershipPipelineService:
         ),
     }
 
-    async def _assert_election_decided(self, prospect: ProspectiveMember) -> None:
-        """Refuse an advance off an election stage the vote has not cleared.
+    async def _election_block_reason(
+        self, prospect: ProspectiveMember
+    ) -> Optional[str]:
+        """The reason a pending/failed election vote blocks this applicant, if any.
 
         ``ProspectElectionPackage.status`` is system-derived and already
         authoritative: ``assign_package_to_election`` sets "added_to_ballot",
         and ``election_service._sync_package_statuses`` tallies the closed
-        ballot into "elected"/"not_elected". Nothing read it when deciding
-        whether an applicant could move, so the one stage whose entire purpose
-        is to make the membership vote binding was the one stage with no gate —
-        an applicant the department had voted *down* advanced on a click, and
-        on a pipeline with ``auto_transfer_on_approval`` a final election stage
-        converted them into a member.
+        ballot into "elected"/"not_elected". This is the single read both
+        doors that can make an applicant a member share — the stage-completion
+        gate (:meth:`_assert_election_decided`, for advancing off an
+        ``election_vote`` stage) and the manual transfer path
+        (:meth:`_do_transfer`, callable directly on any stage) — so a
+        not-elected applicant cannot become a member through one door because
+        only the other was taught to check (CLAUDE.md Pitfall #29).
 
         The package graded here is selected exactly as
         :meth:`get_election_package` selects the one the coordinator is shown
         in the applicant drawer — latest by ``created_at``, not filtered by
         ``step_id``. Re-deriving "which package counts" differently here would
-        let the drawer read "was not elected" beside an Advance that works
-        (CLAUDE.md Pitfall #29).
+        let the drawer read "was not elected" beside an action that works.
         """
         result = await self.db.execute(
             select(ProspectElectionPackage.status)
@@ -1838,7 +1840,20 @@ class MembershipPipelineService:
             .limit(1)
         )
         status = result.scalars().first()
-        reason = self._ELECTION_BLOCK_REASON.get(str(status or ""))
+        return self._ELECTION_BLOCK_REASON.get(str(status or ""))
+
+    async def _assert_election_decided(self, prospect: ProspectiveMember) -> None:
+        """Refuse an advance off an election stage the vote has not cleared.
+
+        Nothing read ``ProspectElectionPackage.status`` when deciding whether
+        an applicant could move, so the one stage whose entire purpose is to
+        make the membership vote binding was the one stage with no gate — an
+        applicant the department had voted *down* advanced on a click, and on
+        a pipeline with ``auto_transfer_on_approval`` a final election stage
+        converted them into a member. See :meth:`_election_block_reason` for
+        what is actually graded.
+        """
+        reason = await self._election_block_reason(prospect)
         if reason:
             raise ValueError(f"This applicant {reason}")
 
@@ -3155,6 +3170,27 @@ class MembershipPipelineService:
         membership_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer"""
+
+        # The manual "Convert" action is the documented, ordinary way to
+        # complete a pipeline's final stage (see skip_current_step's own
+        # refusal message: "convert or reject instead") and the frontend
+        # routes it here directly — POST /prospects/{id}/transfer, calling
+        # transfer_to_membership -> _do_transfer, with no trip through
+        # complete_step at all. So the election_vote stage gate in
+        # _validate_step_completion, which exists specifically to keep a
+        # not-elected applicant from becoming a member, protected only the
+        # auto-transfer-on-approval door and not this one: a coordinator
+        # (or a compromised members.manage session) could transfer an
+        # applicant the department voted down, or one still awaiting a
+        # ballot result, regardless of which stage they were actually on.
+        # Checked here, at the one place every transfer — manual or
+        # automatic — has to pass through, rather than re-derived per caller.
+        election_block = await self._election_block_reason(prospect)
+        if election_block:
+            return {
+                "success": False,
+                "message": f"This applicant {election_block}",
+            }
 
         # A rank that matches nothing the department has configured resolves to
         # no eligible seats and no default permissions, so the new member is

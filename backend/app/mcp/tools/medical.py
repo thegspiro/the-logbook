@@ -1,8 +1,21 @@
 """Medical screening *status*. Listed only when the department turns it on.
 
-Never a result, a provider or a note: those columns are encrypted at rest
-and on the redaction denylist. What these tools say is whether a member is
-current on each screening requirement and when it lapses.
+Never a result, a provider or a note. All three are encrypted at rest, but
+only `provider_name`, `result_summary` and `result_data` are also named on
+the MCP redaction denylist (`app/mcp/redaction.py`) — `notes` is not, since
+that field name is shared with several non-PHI modules (meetings, finance,
+scheduling, generic write-ups), and denying it globally would strip their
+legitimate content instead. What actually keeps `ScreeningRecord.notes` out
+of these tools is that neither one reads it: both build their return dicts
+from an explicit, closed field list (`ComplianceSummary`/`ComplianceItem`
+for the first, a hand-picked projection for the second), so there is no
+code path that touches it. A future addition to this file that serializes
+a `ScreeningRecord` more broadly (e.g. `record.__dict__`, or the response
+schema's own dump) would **not** be caught by the denylist for `notes` the
+way it would for the other three — keep new tools on the same explicit-
+projection discipline rather than relying on redaction to catch it. What
+these tools say is whether a member is current on each screening
+requirement and when it lapses.
 """
 
 from datetime import date, datetime, timedelta, timezone

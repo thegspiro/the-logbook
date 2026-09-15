@@ -1,6 +1,251 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5)
+
+---
+
+## Pass 5 (2026-09-14) — 0 new findings; all 5 standing flags re-verified unchanged; the independently-landed diff since pass 4 reviewed and found correct
+
+**Backend:** `api/v1/endpoints/inventory.py` (144 routes, 1 WebSocket —
+unchanged count from pass 4; the only change in this file's diff is a
+rewrite of the body of one existing route, `GET /items/export`, not a new
+route), `services/inventory_service.py` (~11,150 L), `api/v1/endpoints/labels.py`
+(12 routes) and `services/label_service.py`/`services/label_printer_service.py`
+(zero diff on all three since pass 4's merge, re-confirmed by `git log`),
+`app/mcp/tools/inventory.py` / the inventory slice of `app/mcp/tools/writes.py`
+(zero diff since pass 4's first review of this surface)
+**Frontend:** `modules/inventory/*` — see scope note below
+**Migrations:** none landed touching this module's tables since pass 4's five
+(`f2a91c7d4e86`/`b8e3f1a97c24`/`c4f7a2e91b38`/`d3f8b6a24c91`/`a1c7e93b2d54`,
+all re-confirmed unchanged); `validate_migrations.py --strict` reports 444
+revisions total (up from 439), single head — the growth is repo-wide, not
+this module's
+
+### Scope
+
+Per this rotation's own precedent (Feature 09/10 pass 5s), prior art was
+loaded rather than re-derived: `CHECKLIST.md`, `SEC-00`'s pass 5 (13
+standing sweep classes, all clean against 485 intervening commits — none of
+which is inventory-specific, so nothing there needed independent
+re-checking here), and this file's own pass 2–4 history.
+
+**Step 1 — re-verify the five standing flags.** `git diff
+92a4917e7..origin/main` (`92a4917e7` is pass 4's squash-merge commit) against
+every scope file confirmed `inventory_service.py`'s `check_member_allowance`/
+`get_member_size_preferences` gates (INV-8/INV-9), `update_reorder_request`
+(INV-16), and `get_fulfillment_options`/`get_requestable_categories` (INV-22)
+have **zero** diff since pass 4 — grepped for each method name in the diff,
+zero hits, then each read directly at its current (shifted, since unrelated
+code earlier in the file grew) line number to confirm the actual body, not
+just the diff's silence, matches pass 4's description exactly. The frontend
+half of INV-17 (`InventoryMaintenancePage.tsx`'s `createMaintenanceRecord`
+call site) is also outside this pass's diff (see frontend scope below) — not
+independently re-read line-by-line this pass, taken as unchanged on the
+strength of `git log` showing the file untouched since pass 4's merge. All
+five: still open/flagged, unchanged. See
+[Re-verified still open](#re-verified-still-open-pass-5) below.
+
+**Step 2 — review everything that changed since pass 4's merge.** The range
+is real but narrow this time: `inventory.py` gained 279 lines / lost 116 (net
++163, one route rewritten, not added — confirmed by the route-count check
+below), `inventory_service.py` gained 128 lines net. All of it landed through
+two independent, already-merged PRs (`64207d727`, `cfd28fef9`, plus the
+repo-wide `0d3f9b833` dialog-dismiss sweep touching two files under this
+module's frontend tree) — not a security-review branch, but this pass's job
+is to review whatever the scope files now contain, regardless of which door
+it came in through, per this rotation's standing instruction to review the
+feature's current code rather than only its own prior diffs.
+
+- **`GET /items/export` was rewritten from a single `limit=10000` fetch into
+  a page-at-a-time `StreamingResponse`** (`inventory.py:930-1130` roughly;
+  read in full, along with the new `get_items_page`/`_joined_items_query`/
+  `_run_items_page` split in `inventory_service.py` it calls). Checked
+  against all seven checklist dimensions:
+  - **Auth/permission unchanged.** Still `Depends(require_permission("inventory.manage"))`
+    — same gate as pass 1–4 confirmed. No new route was added; the endpoint's
+    method/path/permission triple is identical to the row already in this
+    file's route inventory, so the 144-route count and its route table both
+    still hold without needing to be reprinted.
+  - **Org-scoping preserved by construction, not merely unchanged.**
+    `organization_id = current_user.organization_id` is read once, before the
+    generator function is defined, into a plain local the closure captures by
+    value — it cannot later observe a mutated `current_user` object even in
+    principle. It is threaded into every page fetch
+    (`service.get_items_page(organization_id=organization_id, ...)` →
+    `_joined_items_query` → `_build_items_query`, which applies
+    `.where(InventoryItem.organization_id == str(organization_id))` as the
+    query's base clause before any other filter is added) — read
+    `_build_items_query` in full (`inventory_service.py:1853-2010`) to confirm
+    every one of the newly-exposed filter params (`condition`, `item_type`,
+    `location_id`, `unassigned_location`, `storage_area_id`, `vendor_id`) is
+    ANDed onto that base clause, never substituted for it.
+  - **The new `_enum_filter` fails closed on a bad `status`/`condition`/
+    `item_type` value** (`raise HTTPException(400, ...)`) instead of the
+    pre-existing code's silent `except ValueError: pass` for `status` alone —
+    a strict improvement (the old behavior quietly exported the whole
+    catalog under a filename implying it was filtered), not a regression;
+    checked that the raise happens in the synchronous part of the handler,
+    before `StreamingResponse` is constructed, so it reaches the client as an
+    ordinary 400 rather than a mid-stream failure.
+  - **LIKE escaping intact.** `search` flows through the same
+    `_build_items_query` → `like_pattern()` + `escape=LIKE_ESCAPE_CHAR` path
+    every other inventory search already used (Pitfall #25); this endpoint
+    added no new `.ilike()` call of its own.
+  - **CSV injection protection intact.** Still `SafeCsvWriter`
+    (`inventory.py`'s import and construction unchanged; `_export_item_row`
+    is the same field list/order as the pre-rewrite inline version, moved
+    into a named function, not altered).
+  - **Abuse resistance: the rewrite closes a real gap rather than opening
+    one.** The pre-rewrite endpoint capped at 10,000 items with no signal to
+    the caller that rows past the cap were silently dropped from a file
+    whose name and headers imply completeness — a correctness/abuse-adjacent
+    defect in its own right, now gone. The new per-page query
+    (`get_items_page`, 500 rows/page) is itself bounded, and the loop's own
+    stopping condition (`if len(items) < _EXPORT_PAGE_SIZE: return`) is
+    correct against `_run_items_page`'s tie-broken sort (id as the final sort
+    key, confirmed unchanged in the diff), so offset paging cannot skip or
+    repeat a row — matches this rotation's own INV-18/19-era reasoning for
+    why a tiebreaker matters under concurrent writes.
+  - **The generator's own DB session is a separate, already-established
+    pattern** (`async_session_factory()`, read in `core/database.py:247-269`
+    — the same factory `scheduled_tasks.py` and other background contexts
+    already use outside request-scoped `Depends(get_db)`), not a new
+    trust boundary: the session is opened and closed entirely inside one
+    `async with`, after authorization has already run, and only ever issues
+    the same org-scoped `SELECT`s `get_items_page` would run under the
+    ordinary per-request session. No commit/write occurs on this path, so
+    there is nothing for an abandoned/disconnected stream to leave
+    half-written.
+  - **No new by-id fetch, no new client-supplied FK persisted** — the
+    endpoint is read-only and every new parameter is a query filter, not an
+    id resolved to a row and returned; XC-1/XC-3 do not apply to a pure
+    equality filter that participates in an org-scoped `WHERE`.
+- **`update_maintenance_record` now gates writing `item.last_inspection_date`
+  on `is_inspection_type(record.maintenance_type)`, mirroring the guard
+  `create_maintenance_record` already had** (`inventory_service.py`, the
+  `complete_maintenance`/PATCH branch). This is a correctness fix (a repair
+  or cleaning could previously push an NFPA 1851 inspection deadline out by a
+  full interval with nothing logged), not a security defect, but it sits in
+  a compliance-relevant safety-tracking path this rotation has treated as
+  in-scope before (INV-3's original finding was exactly this shape). Read
+  `is_inspection_type` (`app/schemas/inventory.py:112-124`) and confirmed it
+  is applied consistently on both the create and update paths, reads the
+  type off the persisted `record` rather than the incoming payload (so a
+  request that both completes a record and corrects its type in the same
+  call is judged on the corrected type), and normalizes both the plain-string
+  and stored-enum spellings — no gap left between the two call sites.
+  No tenant-isolation, auth, or injection dimension is touched by this
+  change; it does not introduce a new by-id query or FK.
+- **Frontend (`InventoryItemsPage.tsx`, 491-line diff — the largest frontend
+  change since pass 4, a member-facing variant-clustering/group-header UI
+  plus the CSV export's filter-parity fix and an auto-top-up retry-guard
+  fix) read in full**, checked against the same three dimensions pass 4's
+  own frontend scope addition used: no `dangerouslySetInnerHTML`/raw
+  `innerHTML`/`eval` (every rendered string — item names, category chips,
+  location labels — is plain JSX interpolation); no `window.confirm`/
+  `alert`/`prompt`; no direct `axios`/`fetch` call (still routes through
+  `inventoryService`) and no client-side re-derivation of a permission or
+  role-based filtering of a fetched list (Pitfall #29's shape, not present —
+  the clustering/grouping logic operates on whatever the already
+  org/permission-scoped API response contains, it does not decide who may
+  see a row). `exportItemsCsv`'s frontend service wrapper
+  (`services/inventoryService.ts:688-707`) still goes through the shared
+  `api` axios instance (`withCredentials`/CSRF interceptor inherited), and
+  its new parameter list matches the backend's new query params 1:1 — no
+  parameter silently dropped between the two, which is what the export's own
+  filter-parity fix was for. The five hand-typed `?? ''`/`?? undefined`
+  fallbacks the diff adds are all lookup/display fallbacks
+  (`.find(...)?.name ?? ''`, a `Set` key default), not a form-value-to-API
+  coercion — Pitfall #1 does not apply to any of them.
+- **`EquipmentCheckForm.tsx`, `EquipmentCheckFormUnmount.test.tsx`,
+  `EquipmentCheckTemplateBuilder.tsx`** also changed in this range, but as
+  part of the repo-wide `0d3f9b833` dialog-dismiss sweep (CLAUDE.md's new
+  Pitfall #31, its own guard test `dialogDismissIntegrity.test.ts`) and
+  feature 14's own equipment-check surface — out of this feature's scope per
+  pass 3/4's identical reasoning (these files live under
+  `modules/inventory/` for historical/directory reasons but are feature 14's
+  code, reviewed on feature 14's own pass). Not read line-by-line here;
+  noted rather than silently skipped. `ItemFormModal.test.tsx`'s new test
+  (asserting the Add Item dialog no longer discards on an outside click) is
+  this module's own regression coverage for that same repo-wide fix,
+  confirmed present and passing (see [Completion gate](#completion-gate-2)).
+
+**No fixable defect found in the diff.** Every change since pass 4 either
+already shipped with its own tests (the two correctness fixes) or was
+reviewed fresh here and found to preserve every invariant pass 1–4
+established (the export rewrite, read as a first-time review of a
+functionally new code path rather than trusted by association).
+
+### Re-verified still open (pass 5)
+
+- **INV-8 / INV-9** — `GET /allowances/check/{user_id}/{category_id}`
+  (`inventory.py:5921`) and `GET /members/{user_id}/size-preferences`
+  (`inventory.py:6888`) both still gated on the baseline `inventory.view`
+  rather than a self-or-quartermaster/`.manage` shape. Zero diff on either
+  handler since pass 4. Still mirrored in `KNOWN_LIMITATIONS.md`; still an
+  owner decision (narrow the grant vs. accept any inventory-viewing member
+  can read any other member's allowance/size data).
+- **INV-16** — `update_reorder_request` (`inventory_service.py:8202`) still a
+  plain `get_reorder_request` fetch with no `.with_for_update()` and no
+  version bump, unlike the sibling `/transition`/`/correct-status`/`/receipts`
+  paths. Zero diff since pass 4.
+- **INV-17** — `InventoryMaintenancePage.tsx`'s "Complete work" flow still
+  unconditionally calls `createMaintenanceRecord` rather than attempting to
+  locate and close an existing open record. File unchanged since pass 4 per
+  `git log`; not independently re-read line-by-line this pass (see Scope).
+- **INV-22** — `get_fulfillment_options`/`get_requestable_categories`
+  (`inventory_service.py`) still materialize their full pre-decision working
+  set in Python before applying `limit`. Zero diff on either method since
+  pass 4; the DOC-9-shape reasoning for why a SQL-level cap would silently
+  wrong-answer past the cutoff still holds and was not re-litigated.
+
+### Verified good ✅ (pass 5)
+
+- **Auth coverage unchanged and re-confirmed by a fresh programmatic count**,
+  not carried forward from pass 4's number on faith: an AST walk of every
+  `@router.{get,post,put,patch,delete,websocket}`-decorated handler in
+  `inventory.py` this pass found **144** routes, matching pass 4 exactly (one
+  route's body changed, none added or removed), and confirmed the WebSocket
+  is the only one without a `require_permission`/`get_current_user` in its
+  signature — consistent with its established manual-auth pattern, re-read
+  and unchanged.
+- **The `GET /items/export` rewrite fixes a real, if minor, data-completeness
+  defect** (the prior silent 10,000-row cap) as a side effect of the
+  streaming redesign, without weakening any of the seven checklist
+  dimensions — detailed above.
+- **`update_maintenance_record`'s new inspection-date guard closes a
+  compliance-relevant correctness gap** (an NFPA 1851 inspection deadline
+  silently sliding on a repair/cleaning record) on the maintenance-completion
+  path this rotation's own INV-3 finding was originally about — not itself a
+  security finding, but exactly the class of defect this rotation treats as
+  worth confirming rather than skimming past.
+- **The inventory-owned MCP surface** (`app/mcp/tools/inventory.py`,
+  `writes.py::create_reorder_request`) **has zero diff since pass 4's first
+  review** — `git log` against both files since `92a4917e7` returns nothing,
+  so pass 4's findings (gating, org-scoping, redaction, bounds — all clean)
+  stand without re-reading the files line-by-line this pass.
+- **`labels.py`/`label_service.py`/`label_printer_service.py` have zero diff
+  since pass 3's merge** (three passes running), re-confirmed by `git log`.
+
+### Completion gate {#completion-gate-2}
+
+| Check                                             | Result                                                                  |
+| ------------------------------------------------- | ----------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                         |
+| `black --check app/ tests/ alembic/`              | ✅ clean (1592 files unchanged)                                         |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                                                |
+| `python3 scripts/validate_migrations.py --strict` | ✅ single head (`6ab7d903fae5`), 444 revisions (no migration this pass) |
+| `pytest tests/ -k "inventory or label"`           | ✅ 1030 passed, 1 pre-existing skip, 0 failed                           |
+| `npm run typecheck` (`tsc-native.mjs --noEmit`)   | ✅ clean                                                                |
+| `npm run lint` (`eslint --max-warnings 10`)       | ✅ 0 errors                                                             |
+| `npx vitest run src/modules/inventory`            | ✅ 1232 passed (74 files)                                               |
+
+No code changes were made this pass (zero fixes needed — every standing flag
+re-verified unchanged, and the diff since pass 4 was independently-landed,
+already-tested correctness work found to preserve every invariant on review),
+so the full backend suite was not re-run beyond the scoped selection above,
+per CLAUDE.md's "match the verification to the change" guidance — nothing in
+this pass's own diff (none) could regress a file outside inventory/labels.
 
 ---
 

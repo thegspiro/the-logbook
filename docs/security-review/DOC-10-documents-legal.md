@@ -1,6 +1,266 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), (this PR) (pass 4)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5)
+
+---
+
+## Pass 5 (2026-09-14)
+
+**Scope.** The rotation's three declared files (`documents.py`,
+`station_documents.py`, `legal_documents.py`) plus their backing services
+(`documents_service.py`, `legal_service.py`, `print_document_service.py`,
+`document_service.py`), `models/document.py`, `models/legal.py`,
+`schemas/documents.py`, `schemas/legal.py`, and `app/api/public/legal.py`.
+
+**Scope addition, this pass:** `backend/app/mcp/tools/documents.py` (213 L, 3
+tools) — this rotation's established precedent (`PROGRESS.md`, Feature 11
+pass 4 correction; followed again by Feature 09 pass 5) is that a
+feature-owned MCP surface belongs to the owning feature's pass, and no prior
+Feature 10 pass had enumerated it into scope. Read in full this pass, along
+with its shared infrastructure (`app/mcp/registry.py`, `app/mcp/principal.py`,
+`app/mcp/redaction.py`, `app/mcp/tools/_common.py`) to the extent needed to
+verify this feature's three tools, not as a review of the MCP surface
+generally.
+
+**Delta since pass 4.** Pass 4 merged as `070a28c2c` (PR #2411).
+`git log 070a28c2c..origin/main` against every file above returns **no
+commits** — nothing in this feature's scope, its backing services, or the
+shared utilities it depends on (`utils/model_updates.py`,
+`utils/org_scoping.py`, `utils/sql_search.py`, `core/audit.py`,
+`core/utils.py`, `mcp/registry.py`, `mcp/redaction.py`,
+`utils/printer_transport.py`, `services/label_printer_service.py`) has
+changed since pass 4 closed. `core/permissions.py` did change (two commits,
+`fb3ba0279`/`92c8cb574`), but both are purely additive — a new
+`module_checkbox_*` helper family for the onboarding wizard's position
+editor — and do not touch `LEADERSHIP_PERMISSIONS`,
+`get_rank_default_permissions`, `permission_matches_any`,
+`permission_matches_any_write`, or `permission_matches`, the functions this
+feature's services actually call; confirmed by reading the diff directly, not
+inferred from the commit summary. Frontend: one commit touched
+`DocumentsPage.tsx` (`0d3f9b833`, "Stop a click outside a dialog from
+discarding the form") — CLAUDE.md Pitfall #31 applied to this page's three
+modals (upload, create-folder, delete-confirm), removing each `onClick`
+overlay-dismiss handler. Read the diff directly: correct application of an
+established rule, not a regression — `Escape` and the header close button
+remain the ways out, matching every other dialog in the app since that rule
+landed. No migration since pass 4 touches `document_folders`,
+`legal_document_revisions`, `documents`, or `legal_documents` (content-grepped
+every migration file added in the window, not filename-matched).
+
+Given the merge-base diff is empty, this pass's work is full re-verification
+by reading current code end to end (not trusting "unchanged since pass 4"
+from git log alone) plus the MCP scope addition, rather than reviewing a
+diff.
+
+### Re-verified still fixed — all of DOC-1 through DOC-29
+
+Read `documents.py` (760 L), `station_documents.py` (114 L),
+`legal_documents.py` (368 L), `documents_service.py` (2301 L, in full — every
+folder/document CRUD method, every `ensure_*_folder` get-or-create and its
+peek/lock helper pair, `get_summary`, `accessible_folder_ids`,
+`can_access_folder`/`_folder_admits_user`), `legal_service.py` (323 L),
+`print_document_service.py` (541 L), `document_service.py` (472 L,
+`initialize_system_folders` and `publish_minutes`), `models/document.py`,
+`models/legal.py`, `schemas/legal.py`, and `app/api/public/legal.py` in full
+against current `main`, not the pass-4 diff. Every fix pass 4 (and earlier
+passes) recorded is intact:
+
+- **DOC-1/2/3/6/11–16/18/20/22–26** (upload hardening, folder-ACL
+  correctness, `_parse_uuid_or_400`, `apply_updates`/explicit-null handling,
+  cycle rejection, the download endpoint and its org-subdirectory path
+  containment, the has-file gating, the All Documents view) — present and
+  unchanged, verified by reading each call site directly rather than
+  trusting the prior write-up.
+- **DOC-4/5** (hierarchical folder ACL via `can_access_folder`'s ancestor
+  walk; `get_summary` applying `accessible_folder_ids`) — intact.
+- **DOC-7/27** (`_assert_may_modify` test coverage; audit logging on
+  folder create/update/delete, document update, and revision update/discard)
+  — every one of the six `log_audit_event` calls DOC-27 added is present with
+  the same event types and severities.
+- **DOC-9's N+1 fix** (`get_folders`'s single grouped-subquery document
+  count, `skip`/`limit` pagination) — intact; **DOC-9's still-open half**
+  (`accessible_folder_ids` scanning every folder in the org with no bound,
+  ahead of the paginated query) — unchanged, still open, re-confirmed by
+  reading the method directly (see DOC-30 below for a second instance of the
+  same shape, found this pass in the MCP surface).
+- **DOC-10/19** (per-document-type effective-date keys, the legacy-fallback
+  key-presence-not-truthiness fix) — `legal_service.py`'s `_write_settings`
+  and `effective_date_for` unchanged, both still correct.
+- **DOC-14** (printer-error redaction) — `station_documents.py`'s
+  `print_station_document` still catches `PrinterUnreachableError` and
+  returns the generic 502, never the transport's host/port-bearing message.
+- **DOC-15** (locked publish/revert) — `_get_organization_for_update` +
+  `_archive_published`'s locking read both present in `legal_service.py`.
+- **DOC-17/21/25** (route-inventory/doc corrections; `test_public_legal.py`
+  folded into the completion-gate command; the deprecated `lastUpdated`
+  back-compat alias) — the route inventory below still reflects the
+  corrected `/legal-documents` prefix; `app/api/public/legal.py` still emits
+  all five fields.
+- **DOC-28/29 and the four Codex-round follow-ons** (`ensure_member_folder`,
+  `initialize_system_folders`, `ensure_apparatus_folder`/`ensure_event_folder`,
+  and `PropertyReturnService._get_or_create_separations_folder`'s fast-path
+  peek) — every peek/lock helper pair and every post-lock predicate re-check
+  (the `parent_id`/`slug` or `parent_id`/`owner_user_id` check after
+  `_lock_folder_by_id`) is present exactly as pass 4 left it. Traced the full
+  fast/slow, peek-then-lock shape for all four `ensure_*_folder` methods plus
+  `DocumentService.initialize_system_folders`, not spot-checked.
+- **Facilities-driven hardening in `documents_service.py`** (the FAC-22
+  through FAC-45 lock-ordering work that shares this file, credited to the
+  Facilities rotation, not this one) — re-confirmed it still does not
+  regress this feature's own ACL invariants: `require_write` is still
+  threaded through every mutation call site in `documents.py` that resolves
+  a folder's ACL (`create_folder`'s destination check, `update_folder`'s
+  own-folder and destination checks, `delete_folder`'s own-folder check and
+  subtree walk, `upload_document`'s destination check, `update_document`'s
+  own-document and destination checks, `delete_document`'s own-document
+  check) — traced call site by call site again this pass, not assumed
+  unchanged.
+- **No CSV/spreadsheet export exists in this feature** (re-grepped
+  `documents.py`, `station_documents.py`, `legal_documents.py`, and every
+  service above for `csv`/`SafeCsvWriter` — none; CLAUDE.md Pitfall #15 does
+  not apply).
+- **`LIKE`/`ilike` escaping intact everywhere this pass touched**:
+  `Document.name`/`.description`/`.tags` in `get_documents`,
+  `FacilityDocument`/`FacilityPhoto.file_path` in
+  `_match_facility_document_references`, and the new MCP `list_documents`
+  tool's `search` parameter (passes through `get_documents`, so it inherits
+  the same escaping — not a separate query).
+- **No raw exception detail reaches the client anywhere in this feature.**
+  Every `except ValueError`/`except Exception` in the three endpoint files
+  routes through `safe_error_detail()`; the MCP wrapper (`registry.py`)
+  applies the same function to a tool's `ValueError`/generic exception before
+  it reaches the model.
+- **No JSON-column shallow-copy bug.** `legal_service._write_settings` still
+  uses `copy.deepcopy(organization.settings or {})` before mutating the
+  nested `"legal"` key.
+
+### DOC-30 — LOW — The MCP surface's own folder-ACL scan is the same unbounded shape as DOC-9's open half — 🚩 flagged, not fixed
+
+**What:** `app/mcp/tools/documents.py`'s `_open_folder_ids` selects and
+materializes **every `DocumentFolder` row in the organization** with no
+`LIMIT`, then walks each one's ancestor chain in Python to decide whether it
+is open to every member — on **every** call to `list_documents`,
+`get_document`, and `get_document_description` (the last two through
+`_visible_document`, which calls it to check one specific document's
+folder). This is a distinct function from `documents_service.py`'s
+`accessible_folder_ids` (the MCP surface has no per-user context — a service
+key is not a member — so it computes a stricter, "every member can read
+this" predicate rather than one caller's own access), but it is the exact
+same scaling shape DOC-9 already named and left open for the authenticated
+surface: unbounded work proportional to the organization's total folder
+count, paid on every read, with no ceiling.
+
+**Why not fixed here:** DOC-9's own write-up (pass 4) already rejected "bounded
+by organizational structure" as a justification — any `documents.manage`
+holder can create folders with no per-org cap, so folder count is
+user-generated, not structural, for the identical reason on both surfaces.
+Bounding either scan is a wider change (a cached/incremental accessible-set
+computation, or a per-organization folder cap) than a single finding's scope,
+and `accessible_folder_ids` is shared by every folder/document listing and
+aggregate path in `documents_service.py` — fixing one without the other would
+leave the REST API's identical gap open while claiming the class resolved.
+Left flagged, consistent with this rotation's established treatment of DOC-8/
+DOC-9/FIN-9/ELEC-12/USR-5/MP-10/MS-6.
+
+**Not a leak.** `_open_folder_ids`'s own predicate is strictly conservative —
+only `FolderVisibility.ORGANIZATION` folders with no `required_permissions`,
+`allowed_roles`, or `owner_user_id`, and only when every ancestor up to a
+root satisfies the same rule (fails closed on a missing/cyclic ancestor,
+mirroring `can_access_folder`'s own ancestor walk) — so this is purely a
+cost/availability concern, not an access-control one. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`'s existing DOC-9 entry as an addendum (see Doc
+updates) rather than a new entry, since it is the same underlying gap
+surfacing a second time.
+
+### Verified good ✅ (MCP surface, first review)
+
+- **Org-scoped and fails closed throughout.** `_visible_document` resolves a
+  document via `DocumentsService.get_document_by_id(document_id, org_uuid)`
+  (Pitfall #14a-compliant — both id and org filter in the same query),
+  rejects it unless `status == ACTIVE`, and 404s (as a `ValueError`, which
+  the wrapper turns into a client-facing "not found") rather than 403 on a
+  restricted document — matching the same "don't confirm existence to a
+  guesser" behavior `documents.py`'s own `get_document` uses.
+- **Generated documents are categorically excluded**
+  (`doc.source_type is not None` → not found), because a property-return
+  report or filed minutes embeds structured member data (an address, a
+  membership number, a separation reason) that the redaction boundary's
+  regex-based email/phone scrub cannot recognize — the same reasoning
+  `human_authored_only` encodes on the REST-adjacent `get_documents` call.
+  Covered directly: `test_mcp_tools.py::test_generated_documents_are_never_exposed`.
+- **`_open_folder_ids`'s "open" predicate is strictly narrower than
+  `can_access_folder`'s own bypass set**, by design — no leadership bypass,
+  no rank/role matching, no `required_permissions` OR-admission, because a
+  service key is not a specific member for any of those to apply to. Only a
+  folder (and every ancestor) with `visibility == ORGANIZATION`,
+  `required_permissions` empty, `allowed_roles` empty, and `owner_user_id`
+  null is "open" — correctly excludes every leadership-only root
+  (`apparatus`, `member-separations`), every member's personal folder
+  (`owner_user_id` set), and every facility-sensitive tree
+  (`required_permissions` set). Covered:
+  `test_mcp_tools.py::test_documents_honour_ancestor_folder_restrictions`.
+- **Chunked content (`_chunk`) cannot reassemble a scrubbed value across a
+  page boundary** — `scrub_text` runs before the string is sliced, not
+  after, so an email or phone number that would straddle a
+  `DOCUMENT_CONTENT_CHARS` boundary is already replaced with its placeholder
+  before the cut point is chosen. Covered:
+  `test_mcp_tools.py::test_document_chunks_cannot_reassemble_a_number`.
+- **Every call is audited independent of outcome.** `logbook_tool`'s wrapper
+  (shared by all three tools; none declares a `gate`, so every one is a
+  plain, always-available read under the `documents`/essential-module
+  treatment) writes an `mcp.tool_call` audit row for `ok`, `refused`,
+  `rejected`, and `error` outcomes alike — a service key probing for a
+  document id it cannot see leaves the same trail a successful read does.
+  This is shared infrastructure, not something this feature's tools opt
+  into per-call, so it needed no additional wiring here — verified it is
+  not bypassable from within the three handlers (none catches and swallows
+  an exception before it reaches the wrapper).
+- **Redaction is defense-in-depth, not the only boundary.** Every result
+  passes through `redact()` after the handler returns, scrubbing embedded
+  emails/phones from `description`/`tags`/`content_html` — but the fields
+  `_document()` projects (`id`, `name`, `description`, `folder_id`,
+  `file_name`, `file_type`, `file_size`, `document_type`, `status`,
+  `source_type`, `version`, `tags`, `created_at`, `updated_at`, and the
+  content-chunk fields) are an explicit allowlist to begin with, matching
+  every other reviewed tool module's pattern rather than projecting a whole
+  ORM row and relying on redaction alone to strip what shouldn't leave.
+- **`list_documents`'s folder filter fails closed on a restricted
+  folder id**, not merely omits it: passing a `folder_id` outside
+  `_open_folder_ids`' set raises `ValueError("Folder not found")` before
+  `get_documents` ever runs, rather than silently falling back to an
+  unfiltered (but still access-predicate-scoped) listing.
+- **No `gate` restricts these three tools** (unlike medical/finance/write
+  tools) — deliberate: this is a read-only "department library, published
+  and unrestricted only" surface per the module's own docstring, gated
+  entirely by the folder-openness predicate rather than an
+  administrator-configured MCP switch, and `module=None` (the "essential
+  module" default) matches the docstring's characterization of documents as
+  one of the three modules (members, events, documents) that cannot be
+  switched off for Claude specifically because the underlying REST module
+  itself has no enablement flag either (see CLAUDE.md's "Module Enablement"
+  section).
+
+## Doc updates
+
+- `docs/KNOWN_LIMITATIONS.md` — the existing "Documents — Folder Listing Is
+  Unbounded and N+1" entry (DOC-9) gets one addendum paragraph noting the MCP
+  surface's `_open_folder_ids` (first reviewed this pass) shares the same
+  unbounded-scan shape, rather than a new top-level entry for what is the
+  same underlying gap found a second time.
+
+## Completion gate
+
+| Check                                                                                                                                                                                                                                                                     | Result                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Code changes this pass                                                                                                                                                                                                                                                    | none — full re-verification found every prior fix intact; one new finding (DOC-30) flagged, not fixed, per established precedent for this class                    |
+| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_facility_folder_access.py tests/test_facilities_folders.py tests/test_property_return_service.py tests/test_document_service.py` | 282 passed                                                                                                                                                         |
+| `pytest tests/test_mcp_tools.py tests/test_mcp_redaction.py tests/test_mcp_keys.py tests/test_mcp_key_endpoints.py tests/test_mcp_transport.py`                                                                                                                           | 274 passed                                                                                                                                                         |
+| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                      | 12563 passed, 21 skipped (pre-existing: Docker/registry unavailable, `pywebpush` not installed, API-contract server-mode opt-in), 0 failed                         |
+| `tsc --noEmit` / `eslint .` (frontend)                                                                                                                                                                                                                                    | not run — no frontend file changed this pass (verified by `git status`; the one frontend commit since pass 4, `0d3f9b833`, was read for review only, not modified) |
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 
