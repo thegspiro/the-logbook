@@ -5,7 +5,8 @@
 (pass 5) · **PR:** #1902 (pass 1, merged),
 [#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2, merged),
 #2245 (pass 3, merged), [#2476](https://github.com/thegspiro/the-logbook/pull/2476)
-(pass 4, merged), #TBD (pass 5)
+(pass 4, merged), [#2583](https://github.com/thegspiro/the-logbook/pull/2583)
+(pass 5)
 
 ## Pass 5 (2026-09-15)
 

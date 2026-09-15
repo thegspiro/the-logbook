@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 20 (Compliance), pass 5** — PR #TBD, branch
+**Feature 20 (Compliance), pass 5** — PR
+[#2583](https://github.com/thegspiro/the-logbook/pull/2583), branch
 `claude/security-review-cmp-pass5-ab84fc13`. Step 0 concurrent-session check
 (done twice — once at start, once immediately before push): `git fetch origin`
 clean both times; `PROGRESS.md`'s Open PR section read "None." with the
@@ -15851,7 +15852,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 20 (Compliance, pass 5) — 0 fixes, 0 flagged — PR #TBD opened
+### 2026-09-15 — Feature 20 (Compliance, pass 5) — 0 fixes, 0 flagged — PR #2583 opened
 
 Zero-delta re-verification pass. Baseline `36c160f4c` (pass 4's merge, PR
 #2476). All seven backend files this feature declares in scope, plus the two
