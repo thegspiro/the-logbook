@@ -1092,4 +1092,75 @@ describe('StageConfigModal', () => {
 
     expect(defaultProps.onSave).toHaveBeenCalledWith(expect.objectContaining({ stage_type: 'meeting' }));
   });
+
+  // =========================================================================
+  // A form stage's auto-advance box
+  //
+  // The box decided nothing in either direction: ticked or un-ticked, a
+  // submission advanced the applicant. Now it holds them. It renders checked
+  // by default because the backend reads a missing key as on — the seeded
+  // pipelines carry no config, so absence has to keep meaning the behaviour
+  // those installations already have.
+  // =========================================================================
+
+  it('starts a new form stage with auto-advance on', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Form Submission'));
+
+    expect(screen.getByLabelText(/auto-advance when form is submitted/i)).toBeChecked();
+  });
+
+  it('stores the opt-out when the box is un-ticked', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Form Submission'));
+    await waitFor(() => {
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+    });
+    await user.type(screen.getByLabelText(/stage name/i), 'Application Received');
+    await user.selectOptions(screen.getByRole('combobox'), 'form-1');
+    await user.click(screen.getByLabelText(/auto-advance when form is submitted/i));
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage_type: 'form_submission',
+        config: expect.objectContaining({ auto_advance: false }) as unknown,
+      })
+    );
+  });
+
+  it('shows a stage saved with auto-advance off as off', async () => {
+    const user = userEvent.setup();
+    const editingStage = {
+      id: 'stage-9',
+      pipeline_id: 'pipeline-1',
+      name: 'Application Received',
+      description: '',
+      stage_type: 'form_submission' as const,
+      config: { form_id: 'form-1', form_name: 'New Member Application', auto_advance: false },
+      sort_order: 0,
+      is_required: true,
+      notify_prospect_on_completion: false,
+      public_visible: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    render(<StageConfigModal {...defaultProps} editingStage={editingStage} />);
+    await waitFor(() => {
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText(/auto-advance when form is submitted/i)).not.toBeChecked();
+    await user.click(screen.getByText('Update Stage'));
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({ auto_advance: false }) as unknown,
+      })
+    );
+  });
 });

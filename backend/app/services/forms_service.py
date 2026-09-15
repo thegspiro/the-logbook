@@ -1698,6 +1698,15 @@ class FormsService:
 
             for step in steps:
                 # Find prospects on this step
+                # Narrower than it looks, and deliberately left so:
+                # `form_submission_id` is written once at creation and is in
+                # `_PROSPECT_PROTECTED_FIELDS`, so this matches only the
+                # submission that created the prospect — never a later form
+                # stage's. `_complete_form_submission_step` is what carries
+                # those, for every form attached to a form stage (the pipeline
+                # service stamps them `membership_interest`). Keeping both is
+                # safe because the first to run advances the applicant off the
+                # stage, and the other then matches nothing.
                 prospect_result = await self.db.execute(
                     select(ProspectiveMember).where(
                         ProspectiveMember.current_step_id == step.id,
@@ -1724,6 +1733,11 @@ class FormsService:
                                 "form_submission_id": str(submission.id),
                                 "auto_advanced": True,
                             },
+                            # Nobody clicked this, same as the path above.
+                            # Inert for a form stage today — only the meeting
+                            # gate reads it — but the flag is what tells
+                            # complete_step which kind of caller it has.
+                            automated=True,
                         )
                         logger.info(
                             f"Auto-advanced prospect "
@@ -2236,18 +2250,47 @@ class FormsService:
         mapped_data: Dict[str, Any],
         logger: Any,
     ) -> None:
-        """Mark the form_submission pipeline step as COMPLETED.
+        """Record a form submission against its pipeline stage, and advance.
 
-        After ``create_prospect()`` the prospect exists and its first
-        step is ``IN_PROGRESS``, but nobody told the pipeline that the
-        form was actually submitted.  This method:
+        After ``create_prospect()`` the prospect exists and its first step is
+        ``IN_PROGRESS``, but nothing has told the pipeline the form was
+        actually submitted. This finds the ``form_submission`` step whose
+        ``config.form_id`` matches, stores the mapped answers on its progress
+        row so coordinators can review them, and — when the stage opts in —
+        completes it through ``complete_step``.
 
-        1. Finds the ``form_submission`` step whose ``config.form_id``
-           matches this form.
-        2. Marks its ``ProspectStepProgress`` as COMPLETED.
-        3. Stores the mapped submission data in ``action_result`` so
-           coordinators can review the original answers.
-        4. Advances the prospect to the next step.
+        Three things this used to get wrong, all of them because it wrote the
+        progress row by hand and called the private ``_advance_current_step``
+        rather than going through the one progression path:
+
+        **It never checked the applicant was on the stage it completed.** It
+        resolved the stage from the *form*, so a second submission of the
+        interest form found stage one and advanced the applicant to stage two
+        — from wherever they actually were. An applicant at the membership
+        vote was dragged back to the welcome email. The ``COMPLETED`` early
+        return hid this for most applicants, but it is an equality check
+        against one status: ``SKIPPED`` falls through, and a coordinator who
+        un-ticks Required and skips a paper-form stage leaves exactly that.
+        The public form endpoint runs this same path, so anyone who knew an
+        applicant's email could move them.
+
+        **It bypassed every guard.** No ``_assert_movable``, no stage gate, no
+        row lock, and no activity-log entry — the one advance in this system
+        that moved an applicant leaving no audit trail.
+
+        **It ignored ``auto_advance``.** The stage builder's "Auto-advance when
+        form is submitted" box did nothing here, and the path that does read it
+        (``_auto_advance_pipeline_step``) only ever matches the submission that
+        *created* the prospect, so on any later form stage it is unreachable.
+        Between them the box decided nothing in either direction: ticked or
+        un-ticked, the applicant advanced (CLAUDE.md Pitfall #19).
+
+        ``auto_advance`` absent means advance, and that is deliberate: the box
+        writes the key only once somebody toggles it, and the seeded
+        "Standard Membership Pipeline" stores no config at all — so reading a
+        missing key as "off" would strand every existing installation's
+        applicants on their first stage at upgrade. Only an explicit ``false``
+        holds them (Pitfall #19's "absence must mean current behaviour").
         """
         from app.models.membership_pipeline import (
             MembershipPipelineStep,
@@ -2284,7 +2327,25 @@ class FormsService:
             )
             return
 
-        # Find the progress record for this step.
+        answers = {
+            "form_submission_id": str(submission.id),
+            "form_id": form_id,
+            "mapped_data": mapped_data,
+        }
+
+        # The applicant has to be *on* this stage for a submission to complete
+        # it. Anywhere else, the answers are still worth storing — a
+        # re-submission is something the coordinator should be able to read —
+        # but they are not a reason to move anybody.
+        if str(prospect.current_step_id or "") != str(target_step.id):
+            await self._store_form_answers(prospect, target_step, answers)
+            logger.info(
+                f"Stored form submission {submission.id} against step "
+                f"{target_step.id} for prospect {prospect.id}, which is not "
+                f"their current stage — recorded without advancing"
+            )
+            return
+
         progress_result = await self.db.execute(
             select(ProspectStepProgress).where(
                 ProspectStepProgress.prospect_id == str(prospect.id),
@@ -2293,49 +2354,90 @@ class FormsService:
         )
         progress = progress_result.scalars().first()
 
-        if not progress:
-            logger.warning(
-                f"No progress record for prospect {prospect.id} / "
-                f"step {target_step.id} — cannot auto-complete"
-            )
-            return
-
-        if progress.status == StepProgressStatus.COMPLETED:
-            # Already done (e.g. reprocess) — update action_result with
-            # the latest mapped_data but don't re-advance the prospect.
-            progress.action_result = {
-                "form_submission_id": str(submission.id),
-                "form_id": str(submission.form_id),
-                "mapped_data": mapped_data,
-            }
+        if progress is not None and progress.status == StepProgressStatus.COMPLETED:
+            # Already done (e.g. reprocess) — refresh the stored answers but
+            # do not re-advance.
+            progress.action_result = answers
             logger.debug(
                 f"Form step {target_step.id} already completed for "
                 f"prospect {prospect.id} — updated action_result only"
             )
             return
 
-        progress.status = StepProgressStatus.COMPLETED
-        progress.completed_at = datetime.now(timezone.utc)
-        progress.notes = "Auto-completed: form submitted"
-        progress.action_result = {
-            "form_submission_id": str(submission.id),
-            "form_id": form_id,
-            "mapped_data": mapped_data,
-        }
+        if not (target_step.config or {}).get("auto_advance", True):
+            await self._store_form_answers(prospect, target_step, answers)
+            logger.info(
+                f"Recorded form submission {submission.id} for prospect "
+                f"{prospect.id} without advancing — auto-advance is off on "
+                f"step {target_step.id}"
+            )
+            return
 
-        # Advance the prospect to the next step.
+        # One progression path: complete_step applies the status guard, the
+        # stage gates, the row lock and the audit entry, and refuses a step
+        # that is not the applicant's current one.
         try:
-            await pipeline_service._advance_current_step(prospect, str(target_step.id))
+            await pipeline_service.complete_step(
+                prospect_id=str(prospect.id),
+                organization_id=str(prospect.organization_id),
+                step_id=str(target_step.id),
+                # No user did this. `completed_by` lands on two nullable FKs
+                # to users.id, so a descriptive sentinel is not a free-text
+                # label — it fails the constraint and loses the advance.
+                completed_by=None,
+                notes="Auto-completed: form submitted",
+                action_result=answers,
+                automated=True,
+            )
+        except ValueError as e:
+            # A stage gate or the status guard refused it — an applicant put
+            # on hold, say. Ordinary, not a fault. complete_step raises before
+            # writing anything, so store the answers here instead: the
+            # submission is still the coordinator's to read, and they advance
+            # once the stage is satisfied.
+            logger.info(
+                f"Form submission recorded for prospect {prospect.id}; "
+                f"stage {target_step.id} not advanced: {e}"
+            )
+            await self._store_form_answers(prospect, target_step, answers)
+            return
         except Exception as e:
             logger.warning(
                 f"Failed to advance prospect {prospect.id} past "
                 f"step {target_step.id}: {e}"
             )
+            return
 
         logger.info(
             f"Auto-completed form_submission step {target_step.id} for "
             f"prospect {prospect.id} (submission {submission.id})"
         )
+
+    async def _store_form_answers(
+        self, prospect: Any, step: Any, answers: Dict[str, Any]
+    ) -> None:
+        """Put a submission's mapped answers on its stage's progress row.
+
+        Used on every path that records a submission without completing the
+        stage. Reassigns rather than mutating in place so SQLAlchemy sees the
+        JSON column change (CLAUDE.md Pitfall #12), and creates the row when
+        the applicant reached the stage before it existed.
+        """
+        from app.models.membership_pipeline import ProspectStepProgress
+
+        result = await self.db.execute(
+            select(ProspectStepProgress).where(
+                ProspectStepProgress.prospect_id == str(prospect.id),
+                ProspectStepProgress.step_id == str(step.id),
+            )
+        )
+        progress = result.scalars().first()
+        if progress is None:
+            return
+        stored = (
+            progress.action_result if isinstance(progress.action_result, dict) else {}
+        )
+        progress.action_result = {**stored, **answers}
 
     async def _entity_in_org(
         self, model: Any, entity_id: Any, organization_id: Any

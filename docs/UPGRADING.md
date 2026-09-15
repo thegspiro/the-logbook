@@ -143,6 +143,45 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A membership form submission no longer moves the wrong applicant (2026-09-15)
+
+Three changes to how a submitted form affects a **Form Submission** pipeline
+stage. The first is a fix with no setting attached; the second is a setting
+that now does something; the third changes nothing for a stage you have not
+edited.
+
+**A submission only affects the stage the applicant is currently on.** It used
+to find the stage by matching the _form_, complete it wherever the applicant
+had actually got to, and advance them to the stage after it — pulling people
+**backward**. An applicant at the membership vote landed back on the welcome
+email. A guard normally hid this, but it tested for one status only, so a
+stage a coordinator had **skipped** fell straight through: hand an applicant a
+paper form, un-tick Required, Skip the stage, and any later submission of that
+form for their email dragged them back. The public form endpoint runs the same
+path, so this did not require an account. Duplicate detection only ever matches
+an **active** application, so held, rejected and withdrawn applicants were
+never reachable.
+
+**The advance now goes through the same path as every other.** It previously
+wrote the progress row by hand and moved the applicant directly, which skipped
+the status guard, the stage gates, the row lock and the activity log — the one
+advance in the system that moved somebody leaving no audit trail. A held
+applicant is no longer advanced by a submission, and every form advance now
+appears in the applicant's history.
+
+**"Auto-advance when form is submitted" now decides something.** The box was
+inert in both directions: ticked or un-ticked, a submission advanced the
+applicant. Un-tick it and they stay on the stage with their answers recorded
+for you to review.
+
+**What you will see.** Nothing, unless you want to. A stage that carries no
+auto-advance setting — which includes every stage in the seeded pipelines and
+any stage where nobody touched the box — keeps advancing exactly as it does
+today; absence means on, not off. The box now renders ticked by default to
+match. If you had deliberately left it un-ticked expecting it to hold
+applicants, it will now do that, which is a change from what you have been
+getting.
+
 ### Two prospective-member stages now hold applicants where they should (2026-09-13)
 
 Both changes are to the membership pipeline. Neither touches an existing
