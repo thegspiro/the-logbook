@@ -15,6 +15,7 @@ import smtplib
 import threading
 import time
 import urllib.error
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -23,6 +24,7 @@ import pytest
 # Imported as a module: the helpers are named test_* and pytest would collect
 # them as tests if they were bound in this namespace.
 import app.api.v1.email_test_helper as email_test_helper
+import app.services.email_service as email_service_module
 import app.utils.microsoft_oauth as microsoft_oauth
 from app.api.v1.endpoints.organizations import (
     _administers_settings,
@@ -38,10 +40,12 @@ from app.api.v1.onboarding import (
 )
 from app.core.config import settings as app_settings
 from app.core.security import encrypt_data
+from app.models.user import Organization
 from app.schemas.organization import (
     _EMAIL_SECRET_FIELDS,
     _LEGACY_EMAIL_OAUTH_FIELDS,
     EmailServiceSettings,
+    decrypt_settings_secrets,
     encrypt_settings_secrets,
 )
 from app.services.email_service import EmailService
@@ -3360,3 +3364,291 @@ class TestOnboardingSelfHostedLogin:
 
         assert response.success is True
         smtp_test.assert_called_once()
+
+
+class TestListUnsubscribeOnCloudflare:
+    """RFC 8058 one-click survives the Cloudflare backend.
+
+    The SMTP path sets List-Unsubscribe / List-Unsubscribe-Post directly on
+    the MIME message. The Cloudflare API takes structured fields, so the
+    header has to be carried in its ``headers`` object or the same ballot
+    notice reaches Gmail with the header over SMTP and without it over
+    Cloudflare — and Gmail and Yahoo require it of bulk senders.
+
+    Cloudflare allowlists header names and rejects an unknown one at API
+    time, so only the two documented names are sent.
+    """
+
+    def _service(self) -> EmailService:
+        return EmailService(_cloudflare_org())
+
+    async def _headers_from(self, coro_factory) -> dict:
+        captured: list = []
+
+        async def fake_post(_self, _client, _url, _headers, _to, payload, _sem):
+            captured.append(payload.get("headers"))
+            return True
+
+        with patch.object(EmailService, "_cloudflare_post", fake_post):
+            await coro_factory()
+        return captured[0]
+
+    async def test_the_batch_path_carries_it(self):
+        service = self._service()
+        message = service.build_batch_message(
+            to_email="member@dept.example",
+            subject="Ballot",
+            html_body="<p>Vote</p>",
+            list_unsubscribe="mailto:chief@dept.example",
+        )
+
+        headers = await self._headers_from(lambda: service.send_batch([message]))
+
+        assert headers == {
+            "List-Unsubscribe": "<mailto:chief@dept.example>",
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        }
+
+    async def test_the_single_send_path_carries_it(self):
+        # send_email dropped it on the Cloudflare branch too — same gap,
+        # wider than the batch path it was found on.
+        service = self._service()
+
+        headers = await self._headers_from(
+            lambda: service.send_email(
+                to_emails=["member@dept.example"],
+                subject="Notice",
+                html_body="<p>Body</p>",
+                list_unsubscribe="mailto:chief@dept.example",
+            )
+        )
+
+        assert headers == {
+            "List-Unsubscribe": "<mailto:chief@dept.example>",
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        }
+
+    async def test_no_headers_key_when_none_was_asked_for(self):
+        # An unknown header is rejected at API time, so never send an empty
+        # or speculative headers object.
+        service = self._service()
+
+        headers = await self._headers_from(
+            lambda: service.send_email(
+                to_emails=["member@dept.example"],
+                subject="Notice",
+                html_body="<p>Body</p>",
+            )
+        )
+
+        assert headers is None
+
+    def test_it_is_stripped_of_header_injection(self):
+        built = EmailService(_cloudflare_org()).build_batch_message(
+            to_email="member@dept.example",
+            subject="s",
+            html_body="<p>h</p>",
+            list_unsubscribe="mailto:x@y.co\r\nBcc: evil@z.co",
+        )
+        payload = EmailService._cloudflare_payload(
+            {"address": "fd@dept.example"},
+            built.to_email,
+            built.subject,
+            built.html_body,
+            list_unsubscribe=built.list_unsubscribe,
+        )
+
+        assert "\r" not in payload["headers"]["List-Unsubscribe"]
+        assert "\n" not in payload["headers"]["List-Unsubscribe"]
+
+
+class TestDeploymentCloudflareDoesNotHijackAConfiguredOrg:
+    """The global Cloudflare account is a default, not an override.
+
+    ``CLOUDFLARE_EMAIL_ENABLED`` names an account for organizations that have
+    not configured email themselves. An organization running its own SMTP
+    fell through to it, so its mail went out through an account it has no
+    relationship with, from the deployment's global SMTP_FROM_EMAIL.
+    """
+
+    def _with_global_cloudflare(self):
+        return (
+            patch.object(
+                email_service_module.settings,
+                "CLOUDFLARE_EMAIL_ENABLED",
+                True,
+                create=True,
+            ),
+            patch.object(
+                email_service_module.settings,
+                "CLOUDFLARE_ACCOUNT_ID",
+                "a" * 32,
+                create=True,
+            ),
+            patch.object(
+                email_service_module.settings,
+                "CLOUDFLARE_API_TOKEN",
+                "tok",
+                create=True,
+            ),
+        )
+
+    def test_an_org_on_its_own_smtp_keeps_its_smtp(self):
+        enabled, account, token = self._with_global_cloudflare()
+        org = _org(
+            {
+                "enabled": True,
+                "platform": "selfhosted",
+                "smtp_host": "mail.dept.example",
+                "from_email": "fd@dept.example",
+                "smtp_user": "fd@dept.example",
+                "smtp_password": "secret",
+            }
+        )
+
+        with enabled, account, token:
+            service = EmailService(org)
+
+        assert service._use_cloudflare is False
+        assert service._smtp_config["host"] == "mail.dept.example"
+
+    def test_an_unconfigured_org_still_gets_the_deployment_default(self):
+        enabled, account, token = self._with_global_cloudflare()
+
+        with enabled, account, token:
+            service = EmailService(_org({"enabled": False}))
+
+        assert service._use_cloudflare is True
+
+    def test_an_org_on_cloudflare_uses_its_own_account(self):
+        enabled, account, token = self._with_global_cloudflare()
+
+        with enabled, account, token:
+            service = EmailService(_cloudflare_org())
+
+        assert service._use_cloudflare is True
+        assert service._cloudflare_config["from_email"] == "fd@dept.example"
+
+
+class TestMergedSectionIsNormalizedBeforeItIsJudged:
+    """A write is validated against a settled platform, not a raw one.
+
+    ``organization_service`` normalized only the *stored* section, so the
+    merged one reached both the identity comparison and the enabled-check
+    carrying whatever the client left there. Two shapes arrive without a
+    usable platform and both used to save fine:
+
+    * a legacy label, from when ``platform`` was a free string;
+    * no ``platform`` key at all — the full-settings PATCH dumps with
+      ``exclude_unset=True``, which propagates into the nested model, so a
+      partial ``email_service`` payload simply omits it.
+    """
+
+    def test_a_partial_patch_without_a_platform_is_not_refused(self):
+        section = {
+            "enabled": True,
+            "smtp_host": "mail.dept.example",
+            "from_email": "fd@dept.example",
+            "smtp_user": "fd@dept.example",
+            "smtp_password": "secret",
+        }
+
+        # Raw, it reads as "no platform" and the save is refused for a
+        # configuration that names a working SMTP host.
+        assert missing_for_enabled(section) == "platform"
+        assert missing_for_enabled(normalize_stored_platform(section)) is None
+        assert normalize_stored_platform(section)["platform"] == "selfhosted"
+
+    def test_a_legacy_label_is_not_refused(self):
+        section = {
+            "enabled": True,
+            "platform": "sendgrid",
+            "smtp_host": "mail.dept.example",
+            "from_email": "fd@dept.example",
+        }
+
+        assert missing_for_enabled(section) == "platform"
+        assert missing_for_enabled(normalize_stored_platform(section)) is None
+
+    def test_a_section_with_nothing_to_send_through_is_still_refused(self):
+        # Normalizing must not turn the real case into a pass: no host and
+        # no platform is "other", which cannot send.
+        section = {"enabled": True, "from_email": "fd@dept.example"}
+
+        assert missing_for_enabled(normalize_stored_platform(section)) == "platform"
+        assert normalize_stored_platform(section)["platform"] == "other"
+
+    def test_an_unchanged_legacy_row_is_not_read_as_a_server_change(self):
+        # The identity comparison comes first, and it compared a normalized
+        # stored platform against an unnormalized merged one — so an
+        # untouched legacy row looked like a move to a different server and
+        # every saved secret was cleared on the next unrelated save.
+        stored = {
+            "platform": "sendgrid",
+            "smtp_host": "mail.dept.example",
+            "smtp_port": 587,
+            "smtp_user": "fd@dept.example",
+            "smtp_encryption": "tls",
+            "smtp_password": "secret",
+        }
+        merged = dict(stored)
+        stored_norm = normalize_stored_platform(stored)
+
+        def identity(section):
+            return connection_identity(section.get("platform"), section)
+
+        assert identity(stored_norm) != identity(merged)
+        assert identity(stored_norm) == identity(normalize_stored_platform(merged))
+
+
+@pytest.mark.integration
+class TestEmailSettingsWriteEndToEnd:
+    """The regression, through the service that actually performs the write."""
+
+    async def _org(self, db_session, email_section: dict):
+        org = Organization(
+            name="Test FD",
+            slug=f"fd-{uuid.uuid4().hex[:8]}",
+            settings=encrypt_settings_secrets({"email_service": email_section}),
+        )
+        db_session.add(org)
+        await db_session.flush()
+        return org
+
+    async def test_a_partial_update_of_a_legacy_row_saves(self, db_session):
+        org = await self._org(
+            db_session,
+            {
+                "enabled": True,
+                "platform": "sendgrid",
+                "smtp_host": "mail.dept.example",
+                "smtp_port": 587,
+                "smtp_user": "fd@dept.example",
+                "smtp_password": "secret",
+                "smtp_encryption": "tls",
+                "from_email": "fd@dept.example",
+            },
+        )
+        service = OrganizationService(db_session)
+
+        updated = await service.update_organization_settings(
+            org.id, {"email_service": {"from_name": "Falls Church FD"}}
+        )
+
+        assert updated.email_service.platform == "selfhosted"
+        assert updated.email_service.from_name == "Falls Church FD"
+        # The password was neither submitted nor changed; it must survive.
+        stored = decrypt_settings_secrets(org.settings)["email_service"]
+        assert stored["smtp_password"] == "secret"
+
+    async def test_enabling_with_nothing_to_send_through_is_still_refused(
+        self, db_session
+    ):
+        org = await self._org(db_session, {"enabled": False, "platform": "other"})
+        service = OrganizationService(db_session)
+
+        with pytest.raises(ValueError, match="without an email platform"):
+            await service.update_organization_settings(
+                org.id,
+                {"email_service": {"enabled": True, "platform": "other"}},
+            )

@@ -394,6 +394,7 @@ class BuiltMessage(NamedTuple):
     cc_emails: Optional[List[str]]
     bcc_emails: Optional[List[str]]
     reply_to: Optional[str]
+    list_unsubscribe: Optional[str]
 
 
 # What send_batch accepts: the historical (recipients, mime) pair, or a
@@ -591,6 +592,7 @@ class EmailService:
         Returns None when Cloudflare is not the active email platform,
         signalling that the SMTP path should be used instead.
         """
+        org_email: Dict[str, Any] = {}
         if self.organization and self.organization.settings:
             decrypted = decrypt_settings_secrets(self.organization.settings)
             org_email = stored_email_section(decrypted)
@@ -606,6 +608,15 @@ class EmailService:
                         "from_name": org_email.get("from_name")
                         or self._smtp_config.get("from_name"),
                     }
+
+        # An organization that configured its own platform is not a candidate
+        # for the deployment's Cloudflare account, even when one is set. The
+        # deployment-wide account is a *default* for organizations that have
+        # not chosen, and falling through to it for a department running its
+        # own SMTP sent their mail from the global SMTP_FROM_EMAIL through an
+        # account they have no relationship with.
+        if org_email.get("enabled"):
+            return None
 
         if getattr(settings, "CLOUDFLARE_EMAIL_ENABLED", False):
             account_id = getattr(settings, "CLOUDFLARE_ACCOUNT_ID", None)
@@ -901,13 +912,30 @@ class EmailService:
         bcc_emails: Optional[List[str]] = None,
         reply_to: Optional[str] = None,
         attachments: Optional[List[Dict[str, str]]] = None,
+        list_unsubscribe: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """One recipient's request body for the Email Sending API."""
+        """One recipient's request body for the Email Sending API.
+
+        ``headers`` carries what the SMTP path sets directly on the MIME
+        message. Cloudflare allowlists header names and rejects an unknown
+        one at API time, so only headers documented as accepted are sent —
+        putting the whole set through would fail the send rather than drop
+        the header.
+        """
         payload: Dict[str, Any] = {
             "to": [to_email],
             "from": from_field,
             "subject": _sanitize_header(subject),
         }
+        if list_unsubscribe:
+            # RFC 8058 one-click. Gmail and Yahoo require it of bulk senders,
+            # so a ballot notice that carries it over SMTP has to carry it
+            # here too or the same message is treated differently depending
+            # on which backend the department happens to use.
+            payload["headers"] = {
+                "List-Unsubscribe": f"<{_sanitize_header(list_unsubscribe)}>",
+                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+            }
         if html_body:
             payload["html"] = html_body
         if text_body:
@@ -984,6 +1012,7 @@ class EmailService:
         bcc_emails: Optional[List[str]] = None,
         reply_to: Optional[str] = None,
         attachments: Optional[List[Dict[str, str]]] = None,
+        list_unsubscribe: Optional[str] = None,
     ) -> List[bool]:
         """Send one rendered body to many recipients via the Cloudflare API.
 
@@ -1015,6 +1044,7 @@ class EmailService:
                             bcc_emails,
                             reply_to,
                             attachments,
+                            list_unsubscribe=list_unsubscribe,
                         ),
                         concurrency,
                     )
@@ -1060,6 +1090,7 @@ class EmailService:
                             message.cc_emails,
                             message.bcc_emails,
                             message.reply_to,
+                            list_unsubscribe=message.list_unsubscribe,
                         ),
                         concurrency,
                     )
@@ -1170,6 +1201,7 @@ class EmailService:
             cc_emails=cc_emails,
             bcc_emails=bcc_emails,
             reply_to=reply_to,
+            list_unsubscribe=list_unsubscribe,
         )
 
     async def send_batch(self, messages: Sequence[BatchMessage]) -> List[bool]:
@@ -1295,6 +1327,7 @@ class EmailService:
                     bcc_emails=bcc_emails,
                     reply_to=reply_to,
                     attachments=cf_attachments,
+                    list_unsubscribe=list_unsubscribe,
                 )
             except Exception as e:
                 logger.error("Cloudflare email send failed: {}", e)
