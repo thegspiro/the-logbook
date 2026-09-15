@@ -16,23 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2599](https://github.com/thegspiro/the-logbook/pull/2599)
-(Feature 05, Finance & approvals, pass 6) merged clean — merge commit
-`7754eccd7` confirmed at the tip of `origin/main` via `pull_request_read`
-(`merged: true`, `merged_at: 2026-09-15T20:20:14Z`), with rotation row 05
-already marked ✅ as part of that same merge. Step 0 concurrent-session check
+**Feature 06 (Elections & ballots), pass 6** — PR
+[#2600](https://github.com/thegspiro/the-logbook/pull/2600), branch
+`claude/security-review-elec-pass6-7f3a91`. Step 0 concurrent-session check
 (done twice — once at start, once immediately before push): the working
 directory was found checked out on `claude/security-review-fin-pass6-a3f9c2`
 (a leftover branch from the prior iteration) with a clean tree, so per this
-run's own instructions it was left untouched and a fresh branch
-(`claude/security-review-elec-pass6-<shortid>`) was cut directly from
-`origin/main` instead. `git fetch origin main` clean both times.
-`search_pull_requests` (open) returned only #2590 (a prospective-members
-form-stage fix), #2594 (an npm-override conflict checker) and #2595 (a
-bulk-advance meeting-attendance-gate fix) — all unrelated feature/tooling
-work from other sessions, none touching elections/ballots/voting surfaces;
-`list_branches` showed no `security-review`/`feature06`/`elections`/
-`ballots`/`elec` branch in flight either check.
+run's own instructions it was left untouched and a fresh branch was cut
+directly from `origin/main` instead. `git fetch origin main` clean both
+times (both checks). `PROGRESS.md`'s Open PR row (before this edit) read
+"Feature 05 (Finance & approvals), pass 6 — PR #2599" — `pull_request_read`
+confirmed #2599 `state: closed`, `merged: true`, `merged_at:
+2026-09-15T20:20:14Z`, and its merge commit (`7754eccd7`) is the tip of
+`origin/main`, with rotation row 05 already marked ✅ as part of that same
+merge — so this iteration proceeded to Feature 06 rather than tending a
+still-open PR. `search_pull_requests` (open) returned only #2590 (a
+prospective-members form-stage fix), #2594 (an npm-override conflict
+checker) and #2595 (a bulk-advance meeting-attendance-gate fix) — all
+unrelated feature/tooling work from other sessions, none touching
+elections/ballots/voting surfaces; `list_branches` showed no
+`security-review`/`feature06`/`elections`/`ballots`/`elec` branch in flight
+either check.
 
 Baseline `f45f691f3` (merge commit of PR #2546, pass 5's landing point).
 **Near-zero delta since pass 5: exactly one file changed by one line-level
@@ -68,7 +72,8 @@ scoped election/ballot/quorum/candidate/mcp tests 928 passed (927 + 1 new),
 skip, 0 failed (unchanged — the new test is `integration`-marked and this
 job deselects it); frontend typecheck and lint both clean. Findings doc:
 `docs/security-review/ELEC-06-elections-ballots.md` → **Pass 6**. Rotation
-row 06 → ✅. **Next: Feature 07 (Users & organizations).**
+row 06 → ✅. **Next: Feature 07 (Users & organizations), pending this PR's
+merge.**
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 6, PR #2599, merged clean — 0 fixed, 0 new findings; rotation row 05 marked ✅ as part of that PR), preserved for history</summary>
@@ -16376,7 +16381,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 06 (Elections & ballots, pass 6) — 0 fixed, 0 new findings, 1 regression test added
+### 2026-09-15 — Feature 06 (Elections & ballots, pass 6) — 0 fixed, 0 new findings, 1 regression test added — PR #2600 opened
 
 Step 0: working directory was on a leftover branch
 (`claude/security-review-fin-pass6-a3f9c2`) from the prior iteration with a
