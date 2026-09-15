@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 07 (Users & organizations), pass 6** — branch
-`claude/security-review-usr-pass6-9d2e47`, PR pending creation. Step 0
+**Feature 07 (Users & organizations), pass 6** — PR
+[#2602](https://github.com/thegspiro/the-logbook/pull/2602), branch
+`claude/security-review-usr-pass6-9d2e47`. Step 0
 concurrent-session check (done twice — once at start, once immediately
 before push): the working directory was found checked out on
 `claude/security-review-elec-pass6-7f3a91` (a leftover branch from the
@@ -85,8 +86,30 @@ the shared `test_mcp_tools.py`); frontend typecheck and lint both clean
 row 07 → ✅. **Next: Feature 08 (Membership pipeline), pending this PR's
 merge.**
 
+**Merge-conflict note:** while this pass was in flight, PR #2601 (the
+watchdog bookkeeping PR flagged above) merged, landing the same "#2600
+merged" edit to this Open PR section from the other side. Resolved by
+merging `origin/main` into this branch (merge commit, no rebase/force-push)
+and keeping both notes, this pass's own note first, per this file's
+established nested-`<details>` convention.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 6, PR #2600, merged directly by the repo owner — 0 fixed, 0 new findings, 1 guard test added; rotation row 06 marked ✅ as part of that merge), preserved for history</summary>
+
+**None.** PR [#2600](https://github.com/thegspiro/the-logbook/pull/2600)
+(Feature 06, Elections & ballots, pass 6) was fully green (17/17 checks,
+`mergeable_state: clean`, no unresolved review threads — only the
+informational Codex usage-limit comment) and idle for over 30 minutes since
+its last push, so a 30-minute watchdog check merged it directly (squash,
+`expectedHeadSha` pinned), matching the bar prior watchdog merges in this
+log have used (Features 04, 05, 06, 14, 15, 23, 25, 31, 33, 34). Merge
+commit `79f37957c` confirmed on `main` via `git fetch`. Rotation row 06
+stays ✅. Next: Feature 07 (Users & organizations).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 6, PR #2600, merged clean — 0 fixed, 0 new findings, 1 regression test added; rotation row 06 marked ✅ as part of that PR), preserved for history</summary>
 
 **Feature 06 (Elections & ballots), pass 6** — PR
 [#2600](https://github.com/thegspiro/the-logbook/pull/2600), branch
@@ -16455,7 +16478,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 07 (Users & organizations, pass 6) — 0 fixed, 0 new findings, 1 regression test added — PR pending creation
+### 2026-09-15 — Feature 07 (Users & organizations, pass 6) — 0 fixed, 0 new findings, 1 regression test added — PR #2602 opened
 
 Step 0: working directory was on a leftover branch
 (`claude/security-review-elec-pass6-7f3a91`) from the prior iteration with a
@@ -16492,6 +16515,20 @@ unit suite 10,199 passed, 1 pre-existing skip, 0 failed (unchanged from pass
 5); frontend typecheck/lint clean. Findings doc:
 `docs/security-review/USR-07-users-organizations.md` → **Pass 6**. Rotation
 row 07 → ✅. Next: Feature 08 (Membership pipeline).
+
+### 2026-09-15 — Feature 06 (Elections & ballots, pass 6)'s PR #2600 merged, watchdog recorded it
+
+PR #2600 (Feature 06, Elections & ballots, pass 6 — near-zero-delta
+re-verification plus a first review of the feature's own MCP surface; 0
+new findings, 1 regression test added) went fully green (17/17 checks
+including `CI Success`), `mergeable_state: clean`, with no unresolved
+review threads (only the informational Codex usage-limit comment). Sat
+idle for over 30 minutes since its last push with nothing further pending,
+so a 30-minute watchdog check merged it directly (squash, `expectedHeadSha`
+pinned) rather than leaving it idle, matching the bar prior watchdog
+merges in this log have used (Features 04, 05, 06, 14, 15, 23, 25, 31, 33,
+34). Merge commit `79f37957c` confirmed on `main` via `git fetch`. Rotation
+row 06 stays ✅. Next: Feature 07 (Users & organizations).
 
 ### 2026-09-15 — Feature 06 (Elections & ballots, pass 6) — 0 fixed, 0 new findings, 1 regression test added — PR #2600 opened
 
