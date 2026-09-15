@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Branch `claude/security-review-feature12-pass5`** — Feature 12
-(Facilities), pass 5. Step 0 concurrent-session check: `git fetch origin
+**PR [#2563](https://github.com/thegspiro/the-logbook/pull/2563)** — branch
+`claude/security-review-feature12-pass5`, Feature 12 (Facilities), pass 5.
+Step 0 concurrent-session check: `git fetch origin
 main` clean; the prior Open PR note read "None." with the Feature 11 pass 5
 closure note beneath it and named "Next: Feature 12 (Facilities), pass 5"
 explicitly; `list_pull_requests` (open) returned only #2547/#2548,
@@ -43,8 +44,7 @@ same precedent, with a regression test file
 pre-fix via `git stash`). Full write-up: the **Pass 5** section of
 `docs/security-review/FAC-12-facilities.md`. Rotation row 12 stays `✅`.
 Completion gate: scoped facility suite (186 passed, 1 skipped) plus the full
-backend suite, both clean — see the Log entry once the full-suite count is
-recorded. PR pending.
+backend suite (12568 passed, 21 skipped, pre-existing), both clean.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 5, PR #2561, merged), preserved for history</summary>
@@ -15392,7 +15392,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 12 (Facilities, pass 5) — 1 fixed (MED), 4 prior flags re-verified open; opening PR
+### 2026-09-15 — Feature 12 (Facilities, pass 5) — 1 fixed (MED), 4 prior flags re-verified open — PR #2563 opened
 
 Step 0 concurrent-session check: `git fetch origin main` clean (branch at
 `ffafe640f`, matching `origin/main` exactly — no drift while working); the
