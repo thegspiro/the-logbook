@@ -1274,6 +1274,11 @@ def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
                 continue
             scrubbed = dict(criterion)
             scrubbed["notes"] = None
+            # The examiner's reason a step could not be observed is written
+            # commentary, the same shape as `notes` — this view's own contract
+            # is to keep the marks and points but drop the prose. The `waived`
+            # flag itself is a mark, not commentary, so it is left alone.
+            scrubbed["waive_reason"] = None
             criteria.append(scrubbed)
         clean_section = dict(section)
         clean_section["criteria_results"] = criteria

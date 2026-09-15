@@ -307,6 +307,24 @@ class TestRedaction:
         assert "section-0-review-notes" not in ids
         assert "criterion-0-0" in ids
 
+    def test_scores_view_drops_the_waive_reason(self):
+        """`waive_reason` is examiner free text ("why this step could not be
+        observed"), the same shape as `notes` — the `scores` view's own
+        docstring promises to remove "every piece of written commentary while
+        leaving the marks and points intact". The `waived` flag itself is a
+        mark, not commentary, so it stays.
+        """
+        payload = self._payload()
+        payload["section_results"][0]["criteria_results"][0].update(
+            {"waived": True, "waive_reason": "Ladder was in use by another crew"}
+        )
+
+        result = redact_test_for_view(payload, "scores")
+
+        criterion = result["section_results"][0]["criteria_results"][0]
+        assert criterion["waived"] is True
+        assert criterion["waive_reason"] is None
+
     def test_redaction_does_not_mutate_the_input(self):
         """The payload is built from ORM-loaded JSON; editing it in place would
         write the redaction back to the database on the next flush."""

@@ -16,6 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 19 (Skills testing), pass 5** — PR
+[#2580](https://github.com/thegspiro/the-logbook/pull/2580), branch
+`claude/security-review-feature19-pass5`. Step 0 concurrent-session check
+(done twice — once at start, once immediately before push): `git fetch
+origin main` clean both times; `PROGRESS.md`'s Open PR section read "None."
+with the Feature 18 (Training extended, pass 5) closure note beneath it and
+named "Next: Feature 19 (Skills testing), pass 5" explicitly, both times;
+`list_pull_requests` (state=open) returned only the three known-unrelated
+PRs — dependabot #2567/#2552, and #2495 (`feat(scheduling): ...`, a
+feature-workstream PR, not part of this rotation) — both times. No
+concurrent Feature 19/skills-testing pass or closure PR either check.
+
+Baseline `4c4253cc0c77` (merge commit of PR #2473, pass 4's landing point).
+Unlike passes 2–4, this was **not** a zero-diff pass: `7cf5f1cbb`, a
+non-security-review feature commit ("block blank scorecards, state why a
+test failed", 2026-09-12), landed on `main` between pass 4 and this pass,
+touching the endpoint, schema, and service files. Read in full. One real
+finding: `redact_test_for_view`'s `scores` disclosure branch scrubbed
+`notes` but not the commit's new `waive_reason` free-text field, so a
+`scores`-only disclosure policy leaked an examiner's not-observed
+explanation to the candidate — fixed (SKT5-1), with a guard test confirmed
+failing pre-fix via `git stash push -u`. Also found and flagged: the same
+commit's new anti-blank-scorecard/anti-waived-critical-step guard lives
+only in `complete_test`, so the pre-existing SKT4-7 bypass
+(`PUT /tests/{id}` setting `status`/`result`/`overall_score` directly) now
+also evades it — widened the standing SKT4-7 entry in both the findings
+doc and `KNOWN_LIMITATIONS.md` rather than filing a new id, since the
+remedy is the same already-declined-to-guess-at API-contract decision.
+All six pass 1–3 fixes and all four pass-4 fixes re-verified intact by
+direct code read; route surface unchanged at 29/29. Full write-up:
+`docs/security-review/SKT-19-skills-testing.md` → **Pass 5**.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 5, PR #2578, merged), preserved for history</summary>
+
 **None.** PR [#2578](https://github.com/thegspiro/the-logbook/pull/2578)
 (Feature 18, Training extended, pass 5) merged clean — 0 fixes, 0 new
 findings, zero in-scope code delta since pass 4 — 17/17 CI green after one
@@ -32,6 +67,8 @@ immediately before writing this closure note: only dependabot #2552/#2567,
 and #2495 (unrelated) — no concurrent Feature 19/skills-testing closure or
 pass PR, so this session proceeds with both the closure bookkeeping and
 launching the next pass itself. **Next: Feature 19 (Skills testing), pass 5.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 5, PR #2578, before it merged), preserved for history</summary>
@@ -15760,6 +15797,55 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 19 (Skills testing, pass 5) — 1 fixed, 1 flag widened — PR #2580 opened
+
+Delta-focused pass. Baseline `4c4253cc0c77` (pass-4 merge, PR #2473).
+`app/models/skills_testing.py` byte-identical; no new migration. Unlike
+passes 2–4 this was not a zero-diff pass: `7cf5f1cbb`, a feature commit
+("block blank scorecards, state why a test failed", 2026-09-12, not itself
+a security-review commit) landed on `main` since pass 4, adding a
+completion-time guard against blank/waived-critical scorecard steps plus a
+new `waived`/`waive_reason` field pair on criterion results. Read the full
+diff directly across the endpoint, schema, and service files.
+
+One real finding, fixed: `redact_test_for_view`'s `scores` disclosure
+branch — which exists specifically to strip written examiner commentary
+while leaving marks/points visible — scrubbed the pre-existing `notes`
+field at every level but not the new `waive_reason` field carrying the
+same kind of free text, so a candidate under a `scores`-only policy could
+read an examiner's not-observed explanation directly (SKT5-1). Guard test
+added and confirmed failing against the pre-fix code via
+`git stash push -u` before the fix landed.
+
+One standing finding widened, not newly filed: the already-open SKT4-7
+(`PUT /tests/{id}` can set `status`/`result`/`overall_score` directly,
+bypassing `complete_test`) now also bypasses the 2026-09-12 commit's new
+blank-scorecard/waived-critical guard, since that guard lives only inside
+`complete_test`. Confirmed no shipped frontend caller exercises the
+bypass (`ActiveSkillTestPage.tsx`'s seven `updateTest`/`saveTest` call
+sites never send `status: "completed"`). Left OPEN/FLAGGED for the same
+state-machine/API-contract reason pass 4 gave; `KNOWN_LIMITATIONS.md`'s
+SKT4-7 entry updated in place.
+
+Re-verified all six pass 1–3 fixes and all four pass-4 fixes by direct
+code read (all intact); re-enumerated routes via a fresh `ast` walk:
+29/29 unchanged, same gates as every prior pass's table. The other three
+standing flags (SKT3-2, SKT4-1, SKT4-2, SKT4-3) re-confirmed unchanged in
+scope — no code touching their surfaces changed since pass 4.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/services/skills_testing_service.py` and
+`tests/test_skill_result_disclosure.py` all clean;
+`python3 scripts/validate_migrations.py --strict` passed (444 revisions,
+single head `6ab7d903fae5`); `pytest tests/ -q -k "skill"` — 464 passed, 1
+skipped (pre-existing); full backend suite — 12578 passed, 21 skipped
+(pre-existing Docker/no-MySQL/optional skips), 356s. No frontend file
+touched. Full write-up:
+`docs/security-review/SKT-19-skills-testing.md` → **Pass 5**. Rotation
+row 19 remains `✅` (pending this PR's merge, per the tracker's existing
+convention of leaving a feature `✅` through its tending passes). PR
+opened and subscribed.
 
 ### 2026-09-15 — Feature 18 (Training extended, pass 5) closed — PR #2578 merged
 
