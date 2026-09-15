@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 00 (Cross-cutting baseline), pass 6** — PR pending (branch
-`claude/security-review-sec00-pass6`, to be filled in once opened). Step 0
+**Feature 00 (Cross-cutting baseline), pass 6** — PR
+[#2592](https://github.com/thegspiro/the-logbook/pull/2592), branch
+`claude/security-review-sec00-pass6-dd17b29b`. Step 0
 concurrent-session check: `git fetch origin main` clean; `PROGRESS.md`'s
 Open PR row read "None." with the pass-5 watchdog note naming "Feature 00
 (Cross-cutting baseline), pass 6" as next; `search_pull_requests` (open)
@@ -16043,7 +16044,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 00 (Cross-cutting baseline, pass 6) — 0 fixed, 0 new findings — PR pending
+### 2026-09-15 — Feature 00 (Cross-cutting baseline, pass 6) — 0 fixed, 0 new findings — PR #2592 opened
 
 Step 0: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
 "None." with the pass-5 watchdog note naming Feature 00 pass 6 as next.
