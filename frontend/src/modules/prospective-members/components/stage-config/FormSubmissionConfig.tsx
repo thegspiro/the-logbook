@@ -181,14 +181,16 @@ const FormSubmissionConfig: React.FC<FormSubmissionConfigProps> = ({
       <label className="text-theme-text-secondary mt-4 flex items-center gap-2 text-sm">
         <input
           type="checkbox"
-          checked={(config as FormStageConfig).auto_advance ?? false}
+          checked={(config as FormStageConfig).auto_advance ?? true}
           onChange={(e) => setConfig({ ...(config as FormStageConfig), auto_advance: e.target.checked })}
           className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
         />
         Auto-advance when form is submitted
       </label>
       <p className="text-theme-text-muted ml-6 text-xs">
-        Automatically complete this step and advance the prospect when the linked form is submitted.
+        Automatically complete this step and advance the prospect when the linked form is submitted. Turn this off to
+        hold applicants here after they submit — their answers are still recorded for you to review, and you advance
+        them by hand.
       </p>
     </div>
   );
