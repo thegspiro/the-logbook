@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 05 (Finance & approvals), pass 6** — branch
-`claude/security-review-fin-pass6-a3f9c2`, PR pending creation. Step 0
+**Feature 05 (Finance & approvals), pass 6** — PR
+[#2599](https://github.com/thegspiro/the-logbook/pull/2599), branch
+`claude/security-review-fin-pass6-a3f9c2`. Step 0
 concurrent-session check (done twice — once at start, once immediately before
 push): the working directory was found checked out on
 `claude/security-review-sf-pass6-75cab9` (a leftover branch from the prior
