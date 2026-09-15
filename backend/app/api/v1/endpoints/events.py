@@ -1715,7 +1715,7 @@ async def list_event_attendees(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.view")),
+    current_user: User = Depends(require_permission("events.view", "events.manage")),
 ):
     """
     List the members who are going to an event.
@@ -1731,7 +1731,7 @@ async def list_event_attendees(
     this endpoint returns exactly one status, always.
 
     **Authentication required**
-    **Requires permission: events.view**
+    **Requires permission: events.view or events.manage**
     """
     service = EventService(db)
     event, rsvps = await service.list_event_attendees_for_member(
