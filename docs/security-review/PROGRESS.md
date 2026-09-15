@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #TBD** — branch `claude/security-review-feature17-pass5`, Feature 17
+**PR [#2575](https://github.com/thegspiro/the-logbook/pull/2575)** — branch `claude/security-review-feature17-pass5`, Feature 17
 (Training core), pass 5. Step 0 concurrent-session check: `git fetch origin
 main` clean; the Open PR section read "None." with the Feature 16 (Events &
 requests, pass 5) closure note beneath it and named "Next: Feature 17
@@ -15683,7 +15683,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 17 (Training core, pass 5) — 0 fixed, 0 new findings — PR #TBD opened
+### 2026-09-15 — Feature 17 (Training core, pass 5) — 0 fixed, 0 new findings — PR #2575 opened
 
 Delta-focused pass. Baseline `569348ef2` (merge commit of PR #2455, pass 4's
 landing point). `git diff --stat` against every declared file (three
