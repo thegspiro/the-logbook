@@ -1,5 +1,76 @@
 # Screenshot currency
 
+## Audited 2026-09-15 — recaptured 15-08, and a real gap found: 50 shots ship with no `expect`
+
+Routine maintenance pass per the currency job's standing brief. Branch was
+already rebased onto `origin/main` by the prior session with nothing further
+to replay (`git merge-base --is-ancestor origin/main HEAD` true, 0 commits
+`HEAD..origin/main`), so no rebase was needed this pass.
+
+**Cleared the queued recapture.** Brought up the full stack
+(`npm install`, `scripts/screenshots/dev_env.sh`, `bootstrap_demo.py`,
+`seed_demo_data.py` — the same benign blocked-item list as every prior
+full-stack pass: the `administrative` membership-tier 400, the count-only
+closeout 400, and the self-approval minutes guard, none of them new) and
+recaptured `15-08-election-package.png`
+(`node scripts/screenshots/capture.mjs --only 15-08`), queued since the
+2026-09-13 second pass for the `StageType.ELECTION_VOTE` requirement-hint
+line added by `98d218c6c`. Viewed the PNG: the captured applicant
+(Sam Okafor, Membership Vote stage) already has a closed, elected package, so
+the panel shows the resolved "This applicant was elected..." message rather
+than the new hint — correct, since the hint only renders for an
+undecided package, and `seed_membership_vote_outcome` closes this one. No
+markdown change — the image was already applied at
+`docs/training/15-prospective-members.md:441`, only the PNG needed
+refreshing.
+
+`status_report.py`: 580/580, unchanged. `audit_images.py --baseline
+scripts/screenshots/audit_baseline.txt`: no new findings across all 580
+images (including the freshly recaptured one) — only the pre-known dark-page
+scrollbar-gutter edge finding, already in the baseline. `check_docs_links.py`:
+358 files, 0 broken links.
+
+**New finding, not fixed this pass — escalated per CLAUDE.md's Hard Stop:**
+with a live stack up anyway, ran `scripts/test_screenshot_landing_assertion.py`
+(mentioned by the README as required reading for "adding a screenshot" but
+not wired into any CI job or npm script — confirmed by grepping
+`.github/workflows/*.yml` and `package.json` for its name; nothing calls it).
+It fails: **50 shots across 12 guides have no `expect`**, so nothing at
+capture time checks they landed on the screen their id and alt text claim —
+exactly the class of defect the README's own `expect` section says shipped
+wrong images twice before the assertion existed (`03-25`, `03-69`). These are
+not part of the 509-shot `landing_assertion_baseline.txt` ratchet (checked —
+none of the 50 ids appear there), so they were never grandfathered in; they
+were simply added without the required field and no prior pass caught it, over
+the 15 consecutive "audit pass, no drift found" commits since `54d51f685`
+("capture the last placeholder") landed at the same timestamp as this
+pattern's start. `git log -S` on two sample ids (`20-17-email-microsoft-oauth-
+test`, `00-26-sidebar-officer-checklists`) confirms they were introduced by
+that same placeholder-filling push, not by this pass or an intervening one.
+
+By guide: `00-getting-started` (1), `01-membership` (3), `02-training` (2),
+`03-scheduling` (4), `04-events-meetings` (1), `05-inventory` (2),
+`06-apparatus-facilities` (1), `08-admin-reports` (7), `10-mobile-pwa` (1),
+`16-integrations` (2), `19-august-2026-release-changes` (9),
+`20-september-2026-release-changes` (17). Full id list saved this pass at
+`/tmp/screenshot-logs/missing_expect.txt` (not committed — scratch output);
+reproduce with `python3 -m pytest scripts/test_screenshot_landing_assertion.py
+-q` from the repo root.
+
+**Why not fixed here:** writing a correct `expect` for each requires opening
+the live screen the shot's `prepare` (if any) drives to and picking text that
+is absent from whatever screen a broken `prepare`/route would land on instead
+— per the README, "pick something that would be absent from the screen you'd
+land on by mistake," not a nav label. Doing that honestly for 50 shots across
+12 guides, several of them recent/unfamiliar features (Claude MCP connect,
+org-chart diagram/outline/node-modal, the testing-module home/report
+screens), is not a single unattended pass's worth of work without risking
+exactly the wrong-`expect`-assertion mistake this session was warned against
+rushing into. Flagging as a dedicated follow-up pass rather than guessing.
+**Do not silence this by adding these ids to `landing_assertion_baseline.txt`**
+— the README is explicit that list only shrinks; these were never on it and
+adding them now would launder a gap as a grandfathered one.
+
 ## Audited 2026-09-14 (fourth watchdog pass) — no drift found
 
 Routine maintenance pass per the currency job's standing brief. This pass
