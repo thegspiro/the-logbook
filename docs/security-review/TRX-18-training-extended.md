@@ -1148,7 +1148,7 @@ placeholder string).
 
 ## Pass 5 (2026-09-15)
 
-**Prefix:** `TRX5` · **PR:** [#TBD](https://github.com/thegspiro/the-logbook/pull/TBD)
+**Prefix:** `TRX5` · **PR:** [#2578](https://github.com/thegspiro/the-logbook/pull/2578)
 
 **Scope check:** diffed the current tree against `21470e693` (the pass-4
 merge commit for PR #2460) across all fifteen declared backend/schema
