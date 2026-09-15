@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2563](https://github.com/thegspiro/the-logbook/pull/2563)
+(Feature 12, Facilities, pass 5) merged clean — 17/17 CI green after one
+stale-superseded-run false failure on the `CI Success` gate (the branch's
+first commit's run was cancelled by the immediate PROGRESS.md-fill-in
+follow-up commit; every real job showed `cancelled`, only the gate itself
+showed `failure` — resolved with one explanatory PR comment, no code push,
+per the established pattern) — merged by this session via
+`merge_pull_request`, squash, `expectedHeadSha` pinned to the head commit.
+`git fetch origin main` confirms the merge commit (`771908943`) is on
+`main`. `list_pull_requests` (open) re-checked immediately before writing
+this closure note: only dependabot #2550-2552, and #2547/#2548/#2495
+(unrelated) — no concurrent Feature 13/apparatus closure or pass PR, so this
+session proceeds with both the closure bookkeeping and launching the next
+pass itself. **Next: Feature 13 (Apparatus & NFC), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 5, PR #2563, before it merged), preserved for history</summary>
+
 **PR [#2563](https://github.com/thegspiro/the-logbook/pull/2563)** — branch
 `claude/security-review-feature12-pass5`, Feature 12 (Facilities), pass 5.
 Step 0 concurrent-session check: `git fetch origin
@@ -45,6 +63,8 @@ pre-fix via `git stash`). Full write-up: the **Pass 5** section of
 `docs/security-review/FAC-12-facilities.md`. Rotation row 12 stays `✅`.
 Completion gate: scoped facility suite (186 passed, 1 skipped) plus the full
 backend suite (12568 passed, 21 skipped, pre-existing), both clean.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 5, PR #2561, merged), preserved for history</summary>
@@ -15391,6 +15411,18 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 12 (Facilities, pass 5) closed — PR #2563 merged
+
+`list_workflow_jobs` on the branch's first-commit run confirmed the classic
+stale-superseded-run pattern (every real job `cancelled`, only the `CI
+Success` gate `failure`) — posted one explanatory comment, no code push.
+The current head's own fresh run then went 17/17 green
+(`mergeable_state: clean`), and the PR was merged (squash,
+`expectedHeadSha` pinned to `fbb48720a`, merge commit `771908943`).
+`list_pull_requests` (open) re-checked before writing this entry: no
+concurrent Feature 13 pass or closure PR, so this session proceeds directly
+to launching Feature 13 (Apparatus & NFC), pass 5.
 
 ### 2026-09-15 — Feature 12 (Facilities, pass 5) — 1 fixed (MED), 4 prior flags re-verified open — PR #2563 opened
 
