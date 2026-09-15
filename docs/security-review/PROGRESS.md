@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR #TBD** — branch `claude/security-review-feature17-pass5`, Feature 17
+(Training core), pass 5. Step 0 concurrent-session check: `git fetch origin
+main` clean; the Open PR section read "None." with the Feature 16 (Events &
+requests, pass 5) closure note beneath it and named "Next: Feature 17
+(Training core), pass 5" explicitly; `list_pull_requests` (open) returned
+only the three known-unrelated PRs — dependabot #2552/#2567, and #2495
+(`feat(scheduling): ...`, a feature-workstream PR, not part of this
+rotation) — no concurrent Feature 17/training review or closure PR. Baseline
+`569348ef2` (merge commit of PR #2455, pass 4's landing point). Delta check
+against every declared file (three endpoints, three services,
+`training_compliance.py`, `app/mcp/tools/training.py`) found zero in-scope
+change: the only file with a diff, `schemas/training.py` (+23/-0), traces
+entirely to `security(training-extended): TRX-18 pass 4` (#2460) — a
+credential-redaction fix for `ExternalTrainingProviderResponse`, feature
+18's own model/schema, already reviewed under that feature's own pass, not
+re-reported here. All standing fixes (TR-11, TR-12, TR-13, TR2-1, TR2-3,
+TR3-1's 9 rounds, TR4-1's 3 rounds) re-verified present at inspection; all
+standing flags (TR2-2, TR2-4, TR3-2, TR4-2, TR4-3, TR4-4, the bulk/
+historical-import enum-validation gap, `enroll_member`'s duplicate-active-
+enrollment race) re-verified still accurately describe the current code,
+none fixed, none regressed. Fresh route re-enumeration: 91/91 routes
+authenticated (36 + 46 + 9, matching pass 2's independently-derived count
+exactly), no new route. Fresh sweep against CLAUDE.md pitfalls #2, #9, #14,
+#15, #27, #29, #30b: no new findings. **0 fixes, 0 new findings this
+pass.** Completion gate: flake8/black/isort clean (no files touched);
+migrations single head, 444 revisions; training/compliance-scoped suite
+1135 passed, 1 pre-existing skip; full backend suite 12577 passed, 21
+skipped (pre-existing), 0 failed. No frontend file touched. Full write-up:
+`docs/security-review/TR-17-training-core.md` → Pass 5.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2573's merge, Feature 16 pass 5 closure, confirming the rotation clear for Feature 17), preserved for history</summary>
+
 **None.** PR [#2573](https://github.com/thegspiro/the-logbook/pull/2573)
 (Feature 16, Events & requests, pass 5) merged clean — 17/17 CI green after
 one stale-superseded-run false failure on the `CI Success` gate (the
@@ -31,6 +64,8 @@ immediately before writing this closure note: only dependabot #2552/#2567,
 and #2495 (unrelated) — no concurrent Feature 17/training closure or pass
 PR, so this session proceeds with both the closure bookkeeping and
 launching the next pass itself. **Next: Feature 17 (Training core), pass 5.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 5, PR #2573, before it merged), preserved for history</summary>
@@ -15647,6 +15682,68 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 17 (Training core, pass 5) — 0 fixed, 0 new findings — PR #TBD opened
+
+Delta-focused pass. Baseline `569348ef2` (merge commit of PR #2455, pass 4's
+landing point). `git diff --stat` against every declared file (three
+endpoints, three services, `training_compliance.py`, `app/mcp/tools/
+training.py`) came back with a diff in exactly one file — `schemas/
+training.py`, +23/-0 — and tracing it (`git log 569348ef2..HEAD --
+backend/app/schemas/training.py`) attributed the whole change to
+`security(training-extended): TRX-18 pass 4` (#2460): a `field_validator`
+redacting `ExternalTrainingProviderResponse.config.additional_headers`
+before serialization. That model/schema belongs to feature 18 ("training
+extended"), already reviewed and fixed under that feature's own pass — not
+new surface of this feature. Zero net in-scope code delta since pass 4.
+
+Re-verified every standing fix by direct inspection of current line
+numbers rather than trusting prior passes' prose: TR-11 (`assert_all_in_org`
+on `category_ids` in `_resolve_or_create_requirement`), TR-12 (both `User`
+lookups org-filtered in `training_service.py`), TR-13 (`course_id`
+org-validated on all three write paths), TR2-1/TR2-3
+(`UNCACHEABLE_PREFIXES` entries), TR3-1 (all 9 rounds — the due-date
+normalization on `create_requirement`/`update_requirement`, plus its
+backfill migration), TR4-1 (all 3 rounds — the shared
+`requirement_applies_to_member()` helper, all five call sites). All present,
+unchanged, correct.
+
+Re-verified every standing flag still accurately describes the current
+code: TR2-2 (`list_records` unpaginated), TR2-4 (`get_training_dashboard_
+summary` unbounded scan), TR3-2 (MCP tool's underlying scan unbounded),
+TR4-2 (`get_compliance_matrix`'s separate unbounded scan), TR4-3 (three
+definitions of "compliant"), TR4-4 (zero-requirement member counts
+compliant), the bulk/historical-import enum-validation gap, and
+`enroll_member`'s duplicate-active-enrollment race (still a plain
+SELECT-then-INSERT, no lock, no unique constraint). None fixed, none
+regressed, all `docs/KNOWN_LIMITATIONS.md` mirrors still accurate — no
+edits needed there this pass.
+
+Fresh, independent route re-enumeration (regex walk over `@router.<verb>`
+decorators paired with each handler's `Depends(...)`, hand-verified against
+the two multi-line-decorator routes the regex under-matched): 91/91 routes
+across all three files carry an auth dependency, matching pass 2's
+independently-derived count exactly (36 + 46 + 9) — no route added,
+removed, or renamed since pass 1. Fresh sweep against the CLAUDE.md
+pitfalls this rotation specifically calls out for this feature — #2 (no
+`SET NULL` columns in scope), #9 (no module-level cache; every dict/list
+hit is a function-local accumulator), #14 (no new by-id query or
+client-supplied FK; permission gates don't substitute for org-scoped
+fetches), #15 (only `csv.DictReader`, no `csv.writer`), #27 (the three
+`with_for_update()` sites in `training_session_service.py` still correctly
+serialize the finalize/reopen/approve race; `enroll_member`'s race is the
+one still-unlocked exception, already flagged), #29 (no new re-derivation
+outside the five call sites `requirement_applies_to_member()` already
+unifies), #30b (every guard test using the real `db_session` fixture
+carries `pytest.mark.integration`; the three mock-based scoping test files
+correctly carry none) — found nothing new.
+
+Completion gate: flake8/black/isort all clean (0 files touched this pass);
+`validate_migrations.py --strict` single head, 444 revisions; training/
+compliance-scoped suite 1135 passed, 1 pre-existing skip; full backend
+suite 12577 passed, 21 skipped (pre-existing), 0 failed. No frontend file
+touched. Full write-up: `docs/security-review/TR-17-training-core.md` →
+Pass 5.
 
 ### 2026-09-15 — Feature 16 (Events & requests, pass 5) closed — PR #2573 merged
 
