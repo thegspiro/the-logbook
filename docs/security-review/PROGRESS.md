@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2575](https://github.com/thegspiro/the-logbook/pull/2575)
+(Feature 17, Training core, pass 5) merged clean — 0 fixes, 0 new findings,
+zero in-scope code delta since pass 4. Merged directly by the repo owner
+(`thegspiro`), not by this session — confirmed via `pull_request_read`'s
+`merged_by` field. `git fetch origin main` confirms the merge commit
+(`6b9bcb5c6`) is on `main`. `list_pull_requests` (open) re-checked
+immediately before writing this closure note: only dependabot #2552/#2567,
+and #2495 (unrelated) — no concurrent Feature 18/training-extended closure
+or pass PR, so this session proceeds with both the closure bookkeeping and
+launching the next pass itself. **Next: Feature 18 (Training extended),
+pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 5, PR #2575, before it merged), preserved for history</summary>
+
 **PR [#2575](https://github.com/thegspiro/the-logbook/pull/2575)** — branch `claude/security-review-feature17-pass5`, Feature 17
 (Training core), pass 5. Step 0 concurrent-session check: `git fetch origin
 main` clean; the Open PR section read "None." with the Feature 16 (Events &
@@ -45,6 +60,8 @@ migrations single head, 444 revisions; training/compliance-scoped suite
 1135 passed, 1 pre-existing skip; full backend suite 12577 passed, 21
 skipped (pre-existing), 0 failed. No frontend file touched. Full write-up:
 `docs/security-review/TR-17-training-core.md` → Pass 5.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2573's merge, Feature 16 pass 5 closure, confirming the rotation clear for Feature 17), preserved for history</summary>
@@ -15682,6 +15699,15 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 17 (Training core, pass 5) closed — PR #2575 merged
+
+Merged directly by the repo owner (`thegspiro`) rather than by this
+session — confirmed via `pull_request_read`'s `merged_by` field, merge
+commit `6b9bcb5c6` on `main`. `list_pull_requests` (open) re-checked before
+writing this entry: no concurrent Feature 18 pass or closure PR, so this
+session proceeds directly to launching Feature 18 (Training extended),
+pass 5.
 
 ### 2026-09-15 — Feature 17 (Training core, pass 5) — 0 fixed, 0 new findings — PR #2575 opened
 
