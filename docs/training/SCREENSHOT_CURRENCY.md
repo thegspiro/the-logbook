@@ -1,5 +1,22 @@
 # Screenshot currency
 
+## Audited 2026-09-15 (second watchdog pass) — no drift found
+
+Routine maintenance pass per the currency job's standing brief. Rebased onto
+`origin/main` (1 commit, `dbf489af6` → `adb77807c`): PR #2569 recording the
+merge of PR #2568 (Feature 14, Equipment check & shifts, security-review pass
+5) — docs-only, touching `docs/security-review/PROGRESS.md` — no frontend/UI
+change. Clean replay, no conflicts.
+
+`status_report.py`: 580/580, unchanged. `audit_images.py --baseline
+scripts/screenshots/audit_baseline.txt`: no new findings across all 580
+images — only the pre-known dark-page scrollbar-gutter edge finding, already
+in the baseline. `check_docs_links.py`: 358 files, 0 broken links.
+
+The 50-shots-missing-`expect` gap flagged in the prior pass (above) remains
+open, awaiting its own dedicated pass; nothing in this range touches it
+further.
+
 ## Audited 2026-09-15 — recaptured 15-08, and a real gap found: 50 shots ship with no `expect`
 
 Routine maintenance pass per the currency job's standing brief. Branch was
