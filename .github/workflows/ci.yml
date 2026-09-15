@@ -250,6 +250,13 @@ jobs:
         working-directory: .
         run: python3 scripts/check_security_scan_policy.py
 
+      # Lives here, not in a frontend job, because `npm ci` is the step a
+      # drifted override kills -- nothing downstream of the install runs.
+      - name: Check npm overrides agree with workspace pins
+        if: "!cancelled()"
+        working-directory: .
+        run: python3 scripts/check_npm_overrides.py
+
   backend-security:
     name: Backend Security Scan
     runs-on: ubuntu-latest
