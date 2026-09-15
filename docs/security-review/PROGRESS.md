@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2575](https://github.com/thegspiro/the-logbook/pull/2575)
+(Feature 17, Training core, pass 5) merged clean — 17/17 CI green after one
+stale-superseded-run false failure on the `CI Success` gate (the branch's
+first commit's run was cancelled by the immediate PROGRESS.md-fill-in
+follow-up commit; every real job showed `cancelled` except `Migration
+Chain`, which finished `success` before the cancellation — only the gate
+itself showed `failure` — resolved by the PR's own explanatory comment, no
+code push, per the established pattern). Only other comment was the
+informational Codex usage-limit notice; no reviews, no unresolved threads.
+Zero in-scope code delta this pass (the only file diff traced to Feature
+18's own already-reviewed TRX-18 pass 4 fix). PR sat fully green (17/17
+including `CI Success`) and `mergeable_state: clean` with no further
+activity for about 45 minutes, so a 30-minute watchdog check merged it
+directly (`merge_pull_request`, squash, `expectedHeadSha` pinned to the head
+commit `fcc6fd4cb`) rather than leaving it idle, matching the established
+bar (Features 04, 05, 06, 14, 15, 23, 25, 31, 33, 34). `git fetch origin
+main` confirms the merge commit (`6b9bcb5c6`) is on `main`.
+`list_pull_requests` (open) re-checked immediately before writing this
+closure note: only dependabot #2552/#2567 and #2495 (unrelated) — no
+concurrent Feature 18/training-extended pass PR. **Next: Feature 18
+(Training extended), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 5, PR #2575, before it merged), preserved for history</summary>
+
 **PR [#2575](https://github.com/thegspiro/the-logbook/pull/2575)** — branch `claude/security-review-feature17-pass5`, Feature 17
 (Training core), pass 5. Step 0 concurrent-session check: `git fetch origin
 main` clean; the Open PR section read "None." with the Feature 16 (Events &
@@ -45,6 +70,8 @@ migrations single head, 444 revisions; training/compliance-scoped suite
 1135 passed, 1 pre-existing skip; full backend suite 12577 passed, 21
 skipped (pre-existing), 0 failed. No frontend file touched. Full write-up:
 `docs/security-review/TR-17-training-core.md` → Pass 5.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2573's merge, Feature 16 pass 5 closure, confirming the rotation clear for Feature 17), preserved for history</summary>
@@ -22136,3 +22163,21 @@ matching the bar prior watchdog merges in this log have used (Features 04,
 05, 06, 14, 23, 25, 31, 33, 34). Merge commit `6982a99e5` confirmed on
 `main` via `git fetch`. Rotation row 15 stays ✅. Next: Feature 16 (Events &
 requests).
+
+### 2026-09-15 — Feature 17 (Training core, pass 5)'s PR #2575 merged, watchdog recorded it
+
+PR #2575 (delta-focused pass 5 over `training.py`, `training_programs.py`,
+`training_sessions.py`, their three backing services, `training_compliance.py`
+and `app/mcp/tools/training.py`; zero in-scope code delta since pass 4 — the
+one file diff in the branch, `schemas/training.py`, traces entirely to
+Feature 18's own already-merged TRX-18 pass 4 fix — 0 new findings, all
+standing fixes and flags re-verified unchanged) went fully green (17/17
+checks including `CI Success`), `mergeable_state: clean`, with no unresolved
+review threads (only the informational Codex usage-limit comment and the
+PR's own explanation of a stale-superseded-run false failure on an earlier
+commit). Sat idle with nothing further pending for about 45 minutes, so a
+30-minute watchdog check merged it directly (squash, `expectedHeadSha`
+pinned) rather than leaving it idle, matching the bar prior watchdog merges
+in this log have used (Features 04, 05, 06, 14, 15, 23, 25, 31, 33, 34).
+Merge commit `6b9bcb5c6` confirmed on `main` via `git fetch`. Rotation row
+17 stays ✅. Next: Feature 18 (Training extended), pass 5.
