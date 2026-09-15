@@ -13,6 +13,242 @@ read, extracted from `event_requests.py`)
 
 ---
 
+## Pass 5 (2026-09-15) — 0 fixed, 1 new finding flagged (EV-26, P2/P3, cross-cutting), EV-23 re-flagged, full re-verification against pass 4
+
+**Scoped since pass 4's merge:** `32763ddbe` (PR #2451). Real churn in five
+files: `api/v1/endpoints/event_requests.py` (+259/-49),
+`api/v1/endpoints/events.py` (+2/-2), `schemas/event.py` (+11/-2),
+`schemas/event_request.py` (+94/-13), `services/event_request_service.py`
+(+~250 net) — `models/event.py`, `models/event_request.py`,
+`utils/event_attachments.py`, `mcp/tools/events.py` and `mcp/tools/writes.py`
+are **byte-identical** to pass 4 (`git diff --stat` confirms zero output for
+all five). Two new migrations touch `organizations.settings`/`event_requests`:
+`d19b2c2ae9b9` (enables `accept_public_requests` on orgs whose published form
+already produces requests today — a careful, non-widening backfill, read in
+full) and `0533644945cd` (settles off-list `date_flexibility`/
+`venue_preference`/`preferred_time_of_day` values already stored, per pitfall
+#20). Both guard on the target table existing (pitfall #26), are collation-
+and MariaDB-aware, and document their own irreversibility correctly. No
+finding in either.
+
+**The whole diff is one feature: PR #2447, "public outreach event-request
+pipeline" — tying `event_requests` to the department calendar and closing the
+Forms-path/JSON-endpoint parity gap for the `accept_public_requests` toggle.**
+This PR carried its own five rounds of Codex review during development
+(`f9f80f798` through `055934f3f`, all visible in `git log`), so this pass's
+job was to re-verify the merged result rather than assume the review history
+implies safety. Read in full against all seven checklist dimensions:
+
+- **Public-surface additions re-checked at the same bar as EV-5/EV-18/EV-19.**
+  `submit_public_event_request`'s dependency order
+  (`_rate_limit_public_request` → `require_captcha`), the 404-for-both
+  (nonexistent org vs. opted-out org) oracle prevention, the honeypot's
+  no-write/no-counter-spend contract, and the "every rejection above the
+  daily-cap INCR" ordering are all **unchanged and re-confirmed** at their
+  current line numbers (`event_requests.py:256-353`). The new
+  `normalize_request_preferences` call sits _above_ the lead-time check,
+  which is correct — it settles `date_flexibility` before the gate measures
+  it, and neither reads nor writes anything metered.
+- **The Forms-path second public entry into this pipeline
+  (`FormsService._process_event_request`, `forms_service.py:2570-2820`) is
+  Forms-owned code, not re-owned here** — its own `POST /public/forms/{slug}`
+  endpoint carries its own `_rate_limit_submit` + `require_captcha` pair
+  (`api/public/forms.py:143`), so it inherits rate-limiting and CAPTCHA
+  independently rather than through this feature's dependency. Read anyway
+  because it now calls seven functions this feature owns
+  (`normalize_request_preferences`, `clamp_text_fields`,
+  `parse_audience_size`, `public_daily_limit`, `lead_time_error`,
+  `apply_default_assignee`, `get_pipeline_settings`): every fallible read
+  (`parse_audience_size`, `_parse_request_date`) is ordered above the
+  `daily_cap_exceeded` INCR, matching the JSON endpoint's own EV-19 discipline
+  and explicitly commented as doing so (`forms_service.py:2727-2762`) — a
+  malformed answer costs the one field, never the department's daily
+  allowance. `clamp_text_fields` truncates (never rejects) free text to the
+  columns' widths before that same counter, closing the one gap unique to
+  this path: the JSON endpoint's schema already bounds every string via
+  Pydantic `max_length`, but a generated public form's fields sit at
+  `FormsService.MAX_TEXT_LENGTH` (5000), so nothing before this fix stopped an
+  over-long mapped value reaching MySQL as a `DataError` _after_ the counter
+  was already spent. Confirmed present, not merely commented.
+- **Org-scoping (14a) re-verified by direct enumeration, not sampling.** Every
+  `EventRequest.id == request_id` site in `event_requests.py` (9 occurrences:
+  lines 749, 770, 896, 966, 1014, 1275, 1398, 1493, 1574) carries
+  `EventRequest.organization_id == current_user.organization_id` (or, at
+  `_load_request_for_staffing:1574`, the caller-supplied `organization_id`
+  parameter, itself always `current_user.organization_id` at every call site —
+  confirmed by grep) in the same `.where()`. The new
+  `get_linked_calendar_event` helper (`event_request_service.py:429-451`)
+  resolves the request's `event_id` through `Event.organization_id ==
+event_request.organization_id` explicitly, with a comment naming pitfall
+  #14a — a request row edited by any other path cannot be made to point at
+  another org's calendar event and reach it through this link.
+- **Client-supplied FK validation (14c) re-verified.** `schedule_request`'s
+  `data.location_id` is checked with `assert_in_org` before being stored on
+  the request (`event_requests.py:1046-1056`), and independently re-validated
+  inside `EventService.update_event`/`create_event` when it actually reaches
+  either (`event_service.py:727-733`, `:189-190`) — two checks, not one
+  substituting for the other, both still present.
+- **Update-payload omitted-vs-null discipline (pitfall #1) holds through the
+  new calendar-sync code.** `sync_calendar_event_date`'s `update_fields` dict
+  only ever contains `location_id` when the caller actually supplied one
+  (`event_request_service.py:567-573`), matching `schedule_request`'s own
+  `EventUpdate(**update_fields)` construction — a reschedule that names no new
+  room does not clear the room the linked event already had.
+- **JSON-column / dirty-tracking discipline (pitfall #12) — not applicable to
+  this diff.** No JSON column is touched by any of the new functions;
+  `event_request.event_end_date`/`event_date` are plain `DateTime` columns
+  reassigned directly.
+- **`_as_utc`/`_as_aware` datetime-awareness helpers, read in full.** Both
+  correctly special-case a naive value as "already UTC" rather than raising or
+  guessing, matching the model comment CLAUDE.md's Date/time rule requires;
+  the schema-level one (`schemas/event_request.py:_as_utc`) is also careful to
+  convert (not merely accept) an aware-but-non-UTC value before storage, since
+  the MySQL driver formats by wall clock and silently drops the offset —
+  confirmed this is exactly the bug the docstring says it fixes by reading the
+  pymysql behavior claim against the driver's own datetime-formatting
+  contract, not just trusting the comment.
+- **No new CSV export, no `.like()`/`.ilike()`, no new unauthenticated route.**
+  Re-confirmed by grep across the full diff; `import_events_csv` remains the
+  only CSV-adjacent code in this feature (an import, unaffected).
+- **Frontend:** two files changed since pass 4 (`EventTemplatesPage.tsx`,
+  `EventsPage.tsx`), both from the cross-cutting pitfall #31 sweep
+  (`0d3f9b833`, "Stop a click outside a dialog from discarding the form") —
+  removed a `modal-overlay` click handler in each, matching the rule's
+  mechanical fix exactly. Not this feature's own change and not re-litigated;
+  confirmed the diff is nothing but that one-line removal in both files.
+- **Route inventory:** 23/23 routes in `event_requests.py` (unchanged from
+  pass 4), permission gates re-extracted programmatically and diffed —
+  identical except the two lines already covered under events.py below. The
+  five public/low-auth routes are the same ones prior passes named.
+- **`events.py`'s only change:** `list_event_attendees` widened from
+  `events.view` to `events.view` OR `events.manage` (`events.py:1718`) —
+  the safe direction (a manager who lost the baseline `events.view` grant can
+  still see who is coming), part of the same repo-wide "admit the manage
+  grant to seven reads that branch on it" commit (`4b7bd1adb`) that touched
+  several other features' files in this range; confirmed the other six reads
+  it touched are outside this feature's two files.
+
+### Re-verified from pass 4, not re-derived
+
+- **EV-23 still open, unregressed.** `rsvp_to_series` still passes
+  `override=True` unconditionally (`event_service.py`, byte-identical to
+  pass 4 in this exact function per `git diff --stat`). Left **FLAGGED**,
+  same reasoning as pass 3/4 — a product decision on what "the" phase-gate
+  warning means for a series is still outstanding.
+- **`ondelete="SET NULL"` nullability** — re-grepped all FKs across
+  `models/event.py` and `models/event_request.py` (byte-identical to pass 4,
+  so this is a re-confirmation of an unchanged file, not a fresh audit); all
+  `nullable=True`.
+- **RSVP capacity locking, both halves of Pitfall #27**, re-read at their
+  current line numbers in `create_or_update_rsvp` and `promote_from_waitlist`
+  — unchanged since `event_service.py` did not change in this pass's diff.
+- **Events-specific MCP tools** (`app/mcp/tools/events.py`,
+  `app/mcp/tools/writes.py`) — byte-identical to pass 4, no re-read needed.
+- **`check_request_status`'s 256-bit token** — `generate_status_token()`
+  unchanged (`models/event_request.py` byte-identical to pass 4); confirmed
+  `secrets.token_urlsafe(32)` still the source. Neither public token route
+  (`GET /status/{token}`, `POST /status/{token}/cancel`) carries a
+  `_rate_limit_public_request` dependency, same as every prior pass — not a
+  gap, since brute-forcing a 256-bit token is not the threat a per-IP limiter
+  addresses and both routes require possessing the token to do anything.
+
+## Findings (pass 5)
+
+### EV-26 — P2/P3 (availability/correctness, cross-cutting) — room double-booking check has no row lock; two concurrent schedules can double-book the same location — FLAGGED, not fixed
+
+**What:** `LocationService.check_overlapping_events` (`location_service.py:286`)
+is a plain, non-locking `SELECT` — no `.with_for_update()` — that every write
+path in this feature treats as its sole concurrency control for room booking:
+`EventService.create_event` (`event_service.py:193`), `EventService.update_event`
+(`event_service.py:741`), and `event_request_service`'s scheduling path via
+`event_requests.py:1129` (`schedule_request`'s "create calendar event" branch).
+Two coordinators (or one coordinator double-clicking, or two browser tabs)
+scheduling different events into the same room for overlapping times can both
+read "no conflict" before either has committed, and both commit — the same
+read-then-write shape CLAUDE.md pitfall #27 describes for RSVP/shift seat
+capacity, applied to a time-range instead of a seat count.
+
+**This is not new code and not introduced by this pass's diff** — `create_event`'s
+call site predates pass 1, and pass 1-4 never flagged it. Found this pass by
+following pitfall #27 as a checklist item rather than only re-verifying the two
+sites (RSVP, waitlist promotion) prior passes had already named — the same kind
+of scope gap pass 2's own retrospective describes ("re-read the mechanisms
+[the prior pass] had named" rather than searching for ones no pass had). Owned
+here per CLAUDE.md's "no acceptable pre-existing errors": found while reviewing
+this feature's own write paths, regardless of age.
+
+**Failure scenario:** a department has one training room. Two officers, in two
+tabs, each schedule a different outreach request (or one outreach request and
+one ordinary training event) into that room for the same Tuesday evening.
+Both `schedule_request`/`create_event` calls run `check_overlapping_events`
+before either has written its new `Event` row; both see zero overlapping
+events (the other transaction's insert isn't visible yet, and nothing locks
+the location or the time range to prevent it); both proceed to create/update
+their `Event`. The department now has two events booked into the same
+physical room at the same time, discovered only when someone actually shows
+up.
+
+**Impact:** LOW/MED. No tenant-isolation or authorization boundary is
+crossed — `location_id` and `organization_id` are both correctly scoped
+throughout, so this cannot double-book _across_ organizations, only within
+one. Every write site requiring this check already sits behind
+`events.manage`, so the actors who can trigger it are coordinators, not
+arbitrary members — this is a data-correctness/availability bug (a
+physically double-booked room), not a security exposure, but for a fire
+department a double-booked apparatus bay or training room has a real
+operational cost.
+
+**Why not fixed here.** This is genuinely cross-cutting, not confined to
+Events & Requests: `check_overlapping_events` has the identical
+no-lock shape at every one of its five call sites, and two of the other three
+belong to different features entirely — `training_session_service.py:240`
+and `course_cohort_service.py:220` (Training/Scheduling-adjacent, each with
+their own rotation entry). A same-pass fix confined to this feature's two
+call sites (`event_service.py`, `event_requests.py`) would leave the other
+two callers of the identical unlocked helper unfixed while changing the
+shared helper's locking contract out from under them — exactly the kind of
+change CLAUDE.md's pitfall #22 warns is delicate to get right when a resource
+is shared across independently-reasoned-about call sites. The correct fix
+(most likely: `LocationService.get_location(..., for_update=True)` to lock
+the `Location` row before running the overlap check and before the
+create/update commits, mirroring the "lock the parent row, then take a
+locking read" shape `create_or_update_rsvp`/`promote_from_waitlist` already
+established for seat capacity) needs a single pass across all five call sites
+at once, plus a check that no code path ever needs to hold a lock on both a
+`Location` row and an `Event`/`Shift`/`Cohort` row in an order that could
+deadlock against another path doing the reverse — that survey is out of scope
+for a single-feature review.
+
+**Recommendation for whoever picks this up:** add an optional
+`for_update: bool = False` parameter to `LocationService.get_location`
+(mirroring `get_shift_by_id`'s own `for_update` parameter, already
+established in Scheduling), have every `check_overlapping_events` caller
+lock the `Location` row first via that parameter before running the overlap
+query and before the write, and add the new site to
+`tests/test_capacity_locking.py`'s enumeration — that guard test currently
+covers only hard seat/quantity caps (RSVP, shift assignment, budgets,
+inventory) and has no entry for a time-range overlap check, so this class of
+bug has no ratchet today. Mirrored in `docs/KNOWN_LIMITATIONS.md`.
+
+## Completion gate (pass 5)
+
+| Check                                             | Result                                                                                                                                                            |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations (no files touched this pass)                                                                                                                      |
+| `black --check app/ tests/ alembic/`              | ✅ 1595 files unchanged                                                                                                                                           |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                                                                                                                                          |
+| `python3 scripts/validate_migrations.py --strict` | ✅ single head, 444 revisions (two new since pass 4)                                                                                                              |
+| `pytest tests/ -k "event"`                        | ✅ 924 passed, 1 skipped (pre-existing, pywebpush)                                                                                                                |
+| `pytest tests/` (full backend suite)              | ✅ 12577 passed, 21 skipped (all pre-existing: Docker/no-MySQL/optional-dep/opt-in), 0 failed                                                                     |
+| `tsc --noEmit` / `eslint .`                       | not run — no frontend file touched by this pass's own changes (the two pitfall #31 files predate this pass and are already covered by that rule's own guard test) |
+
+No backend or frontend file was modified in this pass — the one new finding
+(EV-26) is cross-cutting and flagged rather than fixed, and every standing
+flag/mechanism re-verified matched the code exactly, so there was nothing to
+change.
+
+---
+
 ## Pass 4 (2026-09-10) — 1 fix (EV-24, P2), EV-23 re-flagged, full re-verification against pass 3
 
 **Scoped since pass 3's merge:** `7af79795` (PR #2216). Diffed the nine

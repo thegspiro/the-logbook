@@ -4734,6 +4734,48 @@ on that field with a test at the boundary, and — separately — a rate limit o
 checkout, which is its own control with its own configuration rather than part
 of this one.
 
+## EV-26 — Room Double-Booking Check Has No Row Lock (2026-09-15, security review EV-16 pass 5)
+
+`LocationService.check_overlapping_events` (`backend/app/services/location_service.py:286`)
+is a plain, non-locking `SELECT` that every caller treats as its sole
+concurrency control for booking a room: `EventService.create_event`,
+`EventService.update_event`, and `event_request_service`'s scheduling path
+(`api/v1/endpoints/event_requests.py`'s `schedule_request`) all read "any
+overlapping events?" and then write, with nothing locking the room or the
+time range in between. Two coordinators (or two tabs) scheduling different
+events into the same room for overlapping times can both read "no conflict"
+before either transaction commits, and both proceed — the same read-then-write
+shape CLAUDE.md pitfall #27 describes for RSVP/shift seat capacity, applied to
+a time range instead of a seat count.
+
+**Not a tenant-isolation or authorization gap.** `location_id` and
+`organization_id` are both correctly scoped throughout, so this cannot
+double-book a room _across_ organizations, and every write site sits behind
+`events.manage` — only coordinators can trigger it. It is a data-correctness/
+availability bug: a physically double-booked room, discovered only when
+someone shows up to use it.
+
+**Why it is here rather than fixed.** The unlocked shape is not confined to
+Events & Requests — `check_overlapping_events` has the identical no-lock
+call pattern at two other sites in different features
+(`training_session_service.py`, `course_cohort_service.py`). A fix confined
+to one feature's call sites would leave the other callers of the same shared
+helper unfixed while changing its locking contract out from under them. The
+correct fix needs a single pass across all five call sites plus a check that
+no path ever needs to hold a lock on both a `Location` row and an
+`Event`/`Shift`/`Cohort` row in an order that could deadlock against another
+path doing the reverse — out of scope for a single-feature review.
+
+**What would fix it.** Add an optional `for_update: bool = False` parameter
+to `LocationService.get_location` (mirroring the `for_update` parameter
+`SchedulingService.get_shift_by_id` already has), have every
+`check_overlapping_events` caller lock the `Location` row first via that
+parameter before running the overlap query and before the write, and add the
+new site to `tests/test_capacity_locking.py`'s enumeration — that guard test
+covers only hard seat/quantity caps today (RSVP, shift assignment, budgets,
+inventory) and has no entry for a time-range overlap check. Full write-up:
+`docs/security-review/EV-16-events-requests.md` → Pass 5 (EV-26).
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
