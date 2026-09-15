@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 19 (Skills testing), pass 5** — PR #TBD, branch
+**Feature 19 (Skills testing), pass 5** — PR
+[#2580](https://github.com/thegspiro/the-logbook/pull/2580), branch
 `claude/security-review-feature19-pass5`. Step 0 concurrent-session check
 (done twice — once at start, once immediately before push): `git fetch
 origin main` clean both times; `PROGRESS.md`'s Open PR section read "None."
@@ -15797,7 +15798,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-15 — Feature 19 (Skills testing, pass 5) — 1 fixed, 1 flag widened — PR #TBD opened
+### 2026-09-15 — Feature 19 (Skills testing, pass 5) — 1 fixed, 1 flag widened — PR #2580 opened
 
 Delta-focused pass. Baseline `4c4253cc0c77` (pass-4 merge, PR #2473).
 `app/models/skills_testing.py` byte-identical; no new migration. Unlike
