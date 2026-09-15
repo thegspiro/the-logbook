@@ -16,6 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 01 (Auth & session lifecycle), pass 6** — PR
+[#TBD](https://github.com/thegspiro/the-logbook/pull/TBD), branch
+`claude/security-review-auth-pass6-a1f4c2`. Step 0 concurrent-session check
+(done twice — once at start, once immediately before push): `git fetch
+origin main` clean both times; `PROGRESS.md`'s Open PR row (before this edit)
+read "Feature 00 (Cross-cutting baseline), pass 6 — PR #2592" —
+`pull_request_read` confirmed #2592 `state: closed`, `merged: true`,
+`merged_at: 2026-09-15T17:52:47Z`, and it is the tip of `origin/main`
+(`1bf12e3de`), with rotation row 00 already marked ✅ as part of that same
+merge — so this iteration proceeded to Feature 01 rather than tending a
+still-open PR. `search_pull_requests` (open) returned only #2590
+(`claude/affectionate-meitner-vlaka4`, an unrelated prospective-members fix
+from a different session) both checks; `list_branches` showed no
+`security-review`/`feature01`/`auth`/`session` branch in flight either
+check.
+
+Baseline `9170a20c2` (merge commit of PR #2536, pass 5's landing point).
+**Zero-delta re-verification: all twelve in-scope files (nine backend, three
+frontend) are byte-identical to pass 5's reviewed state** — `git diff
+9170a20c2 origin/main` across the full set returns no lines, and `auth.py`'s
+blob hash matches exactly on both sides. Re-verified by direct grep at
+current line numbers (not by trusting the empty diff alone) that AUTH-1,
+AUTH-14, AUTH-16, AUTH-19 and AUTH-20's fixes are all intact, and that
+AUTH-15, AUTH-17 (this file's own flagged items) and AUTH-21 (app-review
+track, mirrored here) are all still open for the same reasons previously
+recorded — no reader/gate/reaper/lock was added for any of the three. **0
+fixed, 0 new findings.** Full backend suite: 10199 passed, 1 pre-existing
+skip, 0 failed; scoped auth/mfa/oauth tests: 684 passed, 2 pre-existing
+skips; standing guards (`endpoint_auth_coverage`, `org_scoping_ratchet`,
+`capacity_locking`, `like_escaping`, `mfa_verification_consumes`,
+`auth_lockout_race`, `auth_gate_remediation_paths`) run directly: 67 passed;
+flake8/black/isort clean; `validate_migrations.py --strict`: 444 revisions,
+single head `6ab7d903fae5`, unchanged; frontend typecheck and lint clean.
+Findings doc: `docs/security-review/AUTH-01-auth-session.md` → **Pass 6**.
+Next: Feature 02 (Users & permissions), pending this PR's merge.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2592, Feature 00 pass 6, merged clean — 0 fixed, 0 new findings; rotation row 00 marked ✅ as part of that PR), preserved for history</summary>
+
 **Feature 00 (Cross-cutting baseline), pass 6** — PR
 [#2592](https://github.com/thegspiro/the-logbook/pull/2592), branch
 `claude/security-review-sec00-pass6-dd17b29b`. Step 0
@@ -15973,6 +16012,9 @@ findings are all resolved with no open items. Rotation row 33 -> done.
 </details>
 
 </details>
+
+</details>
+
 ---
 
 ## Relationship to the existing review passes
@@ -16011,7 +16053,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
@@ -16052,6 +16094,33 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 01 (Auth & session lifecycle, pass 6) — 0 fixed, 0 new findings — PR #TBD opened
+
+Step 0: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
+"Feature 00 (Cross-cutting baseline), pass 6 — PR #2592" —
+`pull_request_read` confirmed #2592 merged (`merged_at 2026-09-15T17:52:47Z`)
+and the tip of `origin/main`, with rotation row 00 already ✅ as part of that
+merge. `search_pull_requests` (open) returned only #2590
+(`claude/affectionate-meitner-vlaka4`, an unrelated prospective-members fix);
+`list_branches` showed no `security-review`/`feature01`/`auth`/`session`
+branch in flight. Proceeded to Feature 01.
+
+Diffed the full twelve-file scope (nine backend, three frontend) against
+pass 5's baseline (`9170a20c2`, merge commit of PR #2536): zero lines of
+diff across every file — confirmed by blob-hash comparison on `auth.py`, not
+just an empty `git diff`. Re-verified by direct grep at current line numbers
+that AUTH-1, AUTH-14, AUTH-16, AUTH-19 and AUTH-20's fixes are intact, and
+that the three standing flags (AUTH-15 — HIPAA max password age enforced
+only in the browser; AUTH-17 — no session reaper; AUTH-21, app-review
+track — double-fired refresh can revoke every session) are unchanged and
+still correctly mirrored in `KNOWN_LIMITATIONS.md`. Route inventory
+unchanged: 26 routes, 14 public / 12 private. **0 fixed, 0 new findings.**
+Full backend suite: 10199 passed, 1 pre-existing skip, 0 failed;
+flake8/black/isort clean; `validate_migrations.py --strict`: 444 revisions,
+unchanged single head; frontend typecheck and lint clean. Findings doc:
+`docs/security-review/AUTH-01-auth-session.md` → **Pass 6**. Next: Feature 02
+(Users & permissions), pending this PR's merge.
 
 ### 2026-09-15 — Feature 00 (Cross-cutting baseline, pass 6) — 0 fixed, 0 new findings — PR #2592 opened
 
