@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on two call sites (the root and per-facility folder lookups); FAC-45 fixed — a same-facility concurrent-creation deadlock the FAC-43 fix left in the per-facility check — pass 3 continued, closing this PR), [#2425](https://github.com/thegspiro/the-logbook/pull/2425) (pass 4, FAC-46 fixed — two unconditional `TypeError`s that broke `create_compliance_item` and `create_emergency_contact` on every call)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15 (pass 5) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on two call sites (the root and per-facility folder lookups); FAC-45 fixed — a same-facility concurrent-creation deadlock the FAC-43 fix left in the per-facility check — pass 3 continued, closing this PR), [#2425](https://github.com/thegspiro/the-logbook/pull/2425) (pass 4, FAC-46 through FAC-57 fixed across 7 Codex rounds), [#2563](https://github.com/thegspiro/the-logbook/pull/2563) (pass 5, FAC-58 fixed — access-key create/update/delete had no audit trail)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes), `services/facilities_service.py`
 (~3,290 L), `services/documents_service.py` (the new folder-bridge methods),
@@ -9,6 +9,153 @@ model `app/models/facilities.py`
 **Migrations:** none this iteration (no schema change)
 
 ---
+
+## Pass 5 (2026-09-15)
+
+Delta-focused re-verification against pass 4's merge commit (`d24934d67`,
+squash of PR #2425). `git diff --stat d24934d67..origin/main` for every
+scope file (`facilities.py`, `facilities_service.py`, `models/facilities.py`,
+`schemas/facilities.py`, `mcp/tools/facilities.py`) came back **empty** — the
+only touch anywhere near this feature's frontend surface since pass 4 is an
+unrelated `ranksService.getRankLadder` addition to the shared
+`frontend/src/services/facilitiesServices.ts` file (that file also hosts
+`ranksService`, `locationsService`, etc. — Feature 02/Permissions territory,
+not this feature's own code). No migration touching a `facility_*` table
+landed in the window either (`git log d24934d67..origin/main --
+backend/alembic/versions/` — 16 commits, all outreach-pipeline/membership work,
+none mentioning facilities). This is the cleanest gap this rotation has seen
+between two passes on this feature: zero code drift to re-verify a regression
+against.
+
+**All four standing flags re-confirmed still open, byte-for-byte unchanged
+since pass 3/4:** `FACILITY_SENSITIVE_PERMISSIONS` in `documents_service.py`
+still excludes `facilities.delete` (FAC-30); `get_facility_folders`'s
+FAC-13 comment and behavior (`facilities.py:3889-3891` in the pre-pass-5 line
+numbering) are unchanged; `_match_facility_document_references`,
+`_lock_facilities_root`, and `_lock_facility_folder` (FAC-41/FAC-44) are
+unchanged. Confirmed by re-reading each function directly, not by trusting
+the diff-empty result alone — the diff only proves nothing in this feature's
+own files changed, not that a dependency didn't shift the facts underneath
+them (it didn't: `documents_service.py`'s folder-ACL machinery, `Facility`'s
+model, and `core/permissions.py`'s `permission_matches_any` were all
+independently re-read and match what pass 4 described).
+
+Read `facilities.py` (all 98 routes), `facilities_service.py` (all 116
+methods), `models/facilities.py`, `schemas/facilities.py`, and
+`mcp/tools/facilities.py` fresh, end to end — not spot-checked — against
+CLAUDE.md Pitfall #14 (14a/14b/14c), #2 (SET NULL nullability), #27
+(capacity-style locking), #12 (JSON shallow-copy), #9 (unbounded caches), #15
+(CSV export), and audit-log coverage. Every by-id read/update/delete method
+filters `organization_id` (independently re-verified, not assumed from pass
+3/4's own count); every client-supplied facility_id/utility_account_id/
+assigned_to_user_id/checklist_id FK on a create or update path is validated
+in-org via `assert_in_org`, `_assert_facility_in_org`, or an org-scoped
+`get_facility`/`get_utility_account` lookup (FAC-3/FAC2-1's fixes, both still
+in place and unregressed). No `ondelete="SET NULL"` column lacks
+`nullable=True` (all 24 SET NULL foreign keys checked programmatically). No
+unbounded in-memory tracking dict. No JSON column (`attachments`, four of
+them) is ever shallow-copied and nested-mutated — each is replaced wholesale
+via `apply_updates`, never partially edited in place. No CSV/spreadsheet
+export exists in this module (nothing to apply `SafeCsvWriter` to). No
+`detail=str(e)` or f-string exception interpolation bypassing
+`safe_error_detail()` anywhere in the endpoint file. "Station" in this module
+means a facility **type** (Fire Station/EMS Station), not a per-user station
+assignment — access is org-and-permission-scoped throughout, by design (the
+module's own docstring says so), so there is no station-level ACL gap to
+find here; that is a documented design choice, not an oversight this pass
+found reason to revisit.
+
+### FAC-58 — MED (audit-trail gap) — creating, reassigning, or deleting a facility access key/fob/door-code left no audit record at all — ✅ FIXED
+
+**What:** `FacilityAccessKey` rows are physical security credentials — the
+model's own docstring calls them "Keys, fobs, codes, and access credentials
+for a facility," and the columns back that up: `key_type`, `key_identifier`
+(the literal key number/code/fob ID), and `assigned_to_user_id`/
+`assigned_to_name` tracking who currently holds it. Of this router's 98
+routes, only two — `create_facility_type`/`update_facility_type` — ever
+called `log_audit_event`; `create_facility_access_key`,
+`update_facility_access_key`, and `delete_facility_access_key` had no audit
+call at all, on either side of pass 1 through 4's combined 57 findings. A
+department that revokes a departing member's door code, reissues a lost fob,
+or deletes a stale key record left no trace of who did it or when — exactly
+the kind of security-sensitive action CLAUDE.md's Backend Patterns section
+calls out ("Audit-sensitive operations should call `log_audit_event()`...
+for security-sensitive operations"), and the established precedent for a
+comparable physical credential in this codebase (`nfc_tags.py`'s
+`nfc_tag_issued`/`nfc_tag_status_changed`/`nfc_tag_deleted`, all audited)
+already draws the line this endpoint sat on the wrong side of. Not a data
+leak or an access-control bypass — every route was already correctly
+permission-gated and org-scoped — so this is an audit-trail gap, not an
+authorization one: MED rather than HIGH, since nothing here lets anyone reach
+data or perform an action they weren't authorized for, but a chief
+investigating "who changed the north-station alarm code" had no record to
+check.
+
+**Where:** `backend/app/api/v1/endpoints/facilities.py`
+(`create_facility_access_key`, `update_facility_access_key`,
+`delete_facility_access_key`).
+
+**Fix:** added `log_audit_event` calls to all three routes, following the
+two established precedents in this codebase rather than inventing a new
+shape: `event_category="security"` (matching `users.py`'s and
+`security_monitoring.py`'s own security-relevant events, since this is a
+physical-access-credential record, closer to that class of event than to
+"administration," which the existing `facility_type` calls use for a
+lookup-table edit); severity `info` on create and `warning` on update/delete
+(matching `nfc_tag_issued`=info vs. `nfc_tag_status_changed`/
+`nfc_tag_deleted`=warning — creating a credential is routine, changing or
+removing one who holds an active credential is not). Deliberately **never
+logs `key_identifier`'s value** — only its presence as a changed field name
+on update (`fields_changed`), never the literal code/fob-ID string — because
+the audit log is read by a broader set of admins than
+`facilities.view_sensitive`/`.edit`/`.manage` gates the record itself behind;
+logging the value would duplicate the credential into a second place with a
+wider read audience than the record it's protecting. The delete route now
+fetches the key via `get_access_key` before calling `delete_access_key`
+(which itself only returns a bool) solely so the audit event can name which
+facility the deleted credential belonged to.
+
+**Regression tests:** `tests/test_facility_access_key_audit.py` (new file),
+five tests following `test_training_program_delete_endpoint.py`'s established
+mock-service pattern (no DB): `test_create_access_key_records_audit_event`,
+`test_update_access_key_records_audit_event_with_field_names_only` (asserts
+`fields_changed` names only, and separately asserts `key_identifier` never
+appears as a value anywhere in `event_data`), `test_delete_access_key_records_audit_event`,
+and two "not found" tests confirming update/delete do **not** call
+`log_audit_event` when the target doesn't exist (mirroring
+`test_missing_training_program_is_not_audited`). All 4 audit-asserting tests
+confirmed to fail against the pre-fix source (`git stash push -u` isolating
+`backend/app/api/v1/endpoints/facilities.py` only, test file kept): each
+failed with "Expected mock to have been awaited once. Awaited 0 times." —
+the pre-fix endpoints simply never called `log_audit_event` — and the delete
+"not found" test additionally caught that pre-fix code called
+`delete_access_key` a second, redundant time internally (pre-fix, the route
+didn't pre-fetch the key, so a request for an already-deleted key still hit
+`service.delete_access_key`, which itself performs the existence check;
+post-fix, the route's own pre-fetch raises 404 first, matching the same
+external behavior with one fewer wasted DB round-trip on the 404 path).
+`git stash pop` restored the fix; all 5 passed.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a straightforward
+audit-logging addition with no remaining product decision.
+
+## Completion gate (pass 5)
+
+| Check                                                                               | Result                                                       |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `flake8 app/api/v1/endpoints/facilities.py tests/test_facility_access_key_audit.py` | ✅ 0 violations                                              |
+| `black --check` (same files)                                                        | ✅ clean                                                     |
+| `isort --check-only` (same files)                                                   | ✅ clean                                                     |
+| `pytest tests/test_facility_access_key_audit.py`                                    | ✅ 5 passed (new file)                                       |
+| `pytest tests/ -k "facilit"`                                                        | ✅ 186 passed, 1 skipped (pre-existing, optional dependency) |
+| `pytest tests/` (full backend suite)                                                | ✅ see Log entry for the final count                         |
+| `tsc --noEmit` / `eslint`                                                           | n/a — no frontend file changed this pass                     |
+
+**FAC-58's regression tests independently confirmed against pre-fix code:**
+`git stash push -u` isolating `backend/app/api/v1/endpoints/facilities.py`
+only (test file kept) — 4 of 5 tests failed pre-fix with the exact
+"never awaited" / redundant-call signatures described above; `git stash pop`
+restored the fix and all 5 passed. See FAC-58's own write-up for detail.
 
 ## Pass 4 (2026-09-09)
 

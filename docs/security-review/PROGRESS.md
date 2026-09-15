@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2563](https://github.com/thegspiro/the-logbook/pull/2563)** — branch
+`claude/security-review-feature12-pass5`, Feature 12 (Facilities), pass 5.
+Step 0 concurrent-session check: `git fetch origin
+main` clean; the prior Open PR note read "None." with the Feature 11 pass 5
+closure note beneath it and named "Next: Feature 12 (Facilities), pass 5"
+explicitly; `list_pull_requests` (open) returned only #2547/#2548,
+dependabot #2550-2552, and #2495 — no Feature 12/facilities branch or title.
+Loaded prior art (`FAC-12-facilities.md`'s pass 1-4 history, all 57 prior
+findings) rather than re-deriving it. Delta check against pass 4's merge
+(`d24934d67`): `git diff --stat` on every scope file
+(`facilities.py`/`facilities_service.py`/`models/facilities.py`/
+`schemas/facilities.py`/`mcp/tools/facilities.py`) came back completely
+empty — zero drift since pass 4, the cleanest gap this rotation has seen on
+this feature. Re-verified all four standing flags (FAC-13, FAC-30, FAC-41,
+FAC-44) against current code: unchanged since pass 3/4. Read all 98 routes
+and all 116 service methods fresh end to end against CLAUDE.md Pitfall #14
+(org-scoping/FK validation), #2 (SET NULL nullability), #27 (capacity
+locking), #12 (JSON mutation), #9 (unbounded caches), #15 (CSV export), and
+audit-log coverage — all clean except one gap: **1 new finding (FAC-58, MED)**
+— `create_facility_access_key`/`update_facility_access_key`/
+`delete_facility_access_key` (physical door codes/fobs — see the model's own
+docstring) had no audit trail at all, unlike the comparable `nfc_tags.py`
+credential routes. Fixed by adding `log_audit_event` calls following that
+same precedent, with a regression test file
+(`tests/test_facility_access_key_audit.py`, 5 tests, all confirmed to fail
+pre-fix via `git stash`). Full write-up: the **Pass 5** section of
+`docs/security-review/FAC-12-facilities.md`. Rotation row 12 stays `✅`.
+Completion gate: scoped facility suite (186 passed, 1 skipped) plus the full
+backend suite (12568 passed, 21 skipped, pre-existing), both clean.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 5, PR #2561, merged), preserved for history</summary>
+
 **None.** PR [#2561](https://github.com/thegspiro/the-logbook/pull/2561)
 (Feature 11, Inventory, pass 5) merged clean — 17/17 CI green, no flakes —
 merged by this session via `merge_pull_request`. `git fetch origin main`
@@ -33,6 +66,8 @@ auth, org-scoping, LIKE-escaping, and CSV-injection protection, with no new
 by-id query or client-supplied FK. Full write-up: the **Pass 5** section of
 `docs/security-review/INV-11-inventory.md`. Rotation row 11 stays `✅`.
 **Next: Feature 12 (Facilities), pass 5.**
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 5, PR #2561, before it merged), preserved for history</summary>
@@ -15356,6 +15391,85 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 12 (Facilities, pass 5) — 1 fixed (MED), 4 prior flags re-verified open — PR #2563 opened
+
+Step 0 concurrent-session check: `git fetch origin main` clean (branch at
+`ffafe640f`, matching `origin/main` exactly — no drift while working); the
+Open PR section read "None." with the Feature 11 (Inventory) pass 5 closure
+note beneath it and named "Next: Feature 12 (Facilities), pass 5" explicitly;
+`list_pull_requests` (open) returned only #2552/#2551/#2550 (dependabot),
+#2548/#2547 (unrelated member/rank fixes), and #2495 — no Feature 12/
+facilities branch or title, confirmed again immediately before opening this
+PR. Created `claude/security-review-feature12-pass5` fresh off `origin/main`.
+
+Rotation table row confirmed from the table itself (not assumed): `| 12 |
+Facilities | FAC | endpoints/facilities.py (3724 L), facilities_service.py |
+✅ |`. Loaded prior art in full: `FAC-12-facilities.md`'s pass 1–4 history
+(57 prior findings, FAC-1 through FAC-57), `docs/KNOWN_LIMITATIONS.md`'s
+three still-open facilities entries (FAC-13, FAC-30, FAC-41/FAC-44), and
+confirmed the feature-owned MCP surface (`app/mcp/tools/facilities.py`) was
+already reviewed in pass 4 (clean) with zero diff since.
+
+**Delta check against pass 4's merge (`d24934d67`):** `git diff --stat` on
+every scope file (`facilities.py`, `facilities_service.py`,
+`models/facilities.py`, `schemas/facilities.py`, `mcp/tools/facilities.py`)
+came back completely empty. The only touch anywhere near this feature since
+pass 4 is an unrelated `ranksService.getRankLadder` addition to the shared,
+multi-feature `frontend/src/services/facilitiesServices.ts` file (Feature
+02/Permissions territory). No migration touching a `facility_*` table
+landed either. This is the cleanest zero-drift gap this rotation has
+observed between two passes on the same feature.
+
+**All four standing flags re-confirmed still open, unchanged since pass
+3/4:** FAC-13 (folder-tree over-restriction — `FACILITY_SENSITIVE_PERMISSIONS`
+still silences three baseline-grant categories), FAC-30 (`facilities.delete`
+still can't pass the generic Documents ACL), FAC-41 and FAC-44 (the two
+org-wide/unindexed lock scans). Verified by re-reading each function
+directly, not by trusting the diff-empty result alone.
+
+Read all 98 routes in `facilities.py` and all 116 methods in
+`facilities_service.py` fresh, end to end, against CLAUDE.md Pitfall #14
+(14a/14b/14c org-scoping and FK validation), #2 (SET NULL nullability,
+programmatically checked across all 24 such columns), #27 (capacity-style
+locking), #12 (JSON shallow-copy mutation), #9 (unbounded in-memory
+caches), #15 (CSV export — module has none), and audit-log coverage. Every
+by-id query is org-scoped; every client-supplied FK on a create/update path
+is validated in-org. "Station" in this module means a facility **type**, not
+a per-user station assignment — access is org-and-permission-scoped
+throughout by design, so there is no per-station ACL gap to find (a
+documented design choice, re-confirmed, not an oversight).
+
+**1 new finding, fixed:** **FAC-58 (MED, audit-trail gap)** —
+`create_facility_access_key`/`update_facility_access_key`/
+`delete_facility_access_key` (physical door codes/fobs — see
+`FacilityAccessKey`'s own model docstring: "Keys, fobs, codes, and access
+credentials for a facility") had zero audit logging, on either side of 57
+prior findings across 4 passes. Of this router's 98 routes, only
+`create_facility_type`/`update_facility_type` ever called
+`log_audit_event`. Fixed by adding `log_audit_event` calls to all three
+routes, `event_category="security"`, severity `info` on create /
+`warning` on update and delete — mirroring the established precedent for a
+comparable physical credential in `nfc_tags.py`. Deliberately never logs
+`key_identifier`'s _value_ (only its name, as a changed field, on update),
+since the audit log is read by a broader admin population than the
+`facilities.view_sensitive`/`.edit`/`.manage` grants gating the record
+itself. Regression tests: `tests/test_facility_access_key_audit.py` (new,
+5 tests, mock-service pattern matching
+`test_training_program_delete_endpoint.py`), all 4 audit-asserting tests
+confirmed to fail pre-fix via `git stash` ("Expected mock to have been
+awaited once. Awaited 0 times.") and pass post-fix. Full write-up: the
+**Pass 5** section of `docs/security-review/FAC-12-facilities.md`.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on both
+changed files — clean. `pytest tests/test_facility_access_key_audit.py` — 5
+passed (new file). `pytest tests/ -k "facilit"` — 186 passed, 1 skipped
+(pre-existing, optional `pywebpush` dependency). `pytest tests/` (full
+backend suite) — **12568 passed, 21 skipped** (all pre-existing
+Docker/optional-dependency/manual-trigger skips), exit code 0, no new
+failures. No frontend file touched this pass, so `tsc`/`eslint` are n/a.
+
+Rotation row 12 stays `✅`. Next: Feature 13 (Apparatus & NFC), pass 5.
 
 ### 2026-09-14 — Feature 11 (Inventory, pass 5) — 0 fixed, 0 new findings; opening PR
 

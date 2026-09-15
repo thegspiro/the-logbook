@@ -2234,6 +2234,28 @@ async def create_facility_access_key(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
+    # Physical access credentials (keys/fobs/codes) get an audit trail like
+    # any other access-granting record (compare nfc_tag_issued in
+    # nfc_tags.py) — never the key_identifier value itself, since that field
+    # can hold the literal code and the audit log is read by a broader set
+    # of admins than facilities.view_sensitive/.edit/.manage.
+    await log_audit_event(
+        db=db,
+        event_type="facilities.access_key_created",
+        event_category="security",
+        severity="info",
+        event_data={
+            "key_id": key.id,
+            "facility_id": key.facility_id,
+            "key_type": (
+                key.key_type.value if hasattr(key.key_type, "value") else key.key_type
+            ),
+            "assigned_to_user_id": key.assigned_to_user_id,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return key
 
 
@@ -2308,6 +2330,25 @@ async def update_facility_access_key(
             status_code=status.HTTP_404_NOT_FOUND, detail="Access key not found"
         )
 
+    # warning, not info: this covers reassignment (assigned_to_user_id) and
+    # deactivation (is_active) of a physical access credential, not routine
+    # metadata edits — matching nfc_tag_status_changed's severity in
+    # nfc_tags.py for the same class of event. Field names only, never
+    # values (key_identifier can hold the literal code).
+    await log_audit_event(
+        db=db,
+        event_type="facilities.access_key_updated",
+        event_category="security",
+        severity="warning",
+        event_data={
+            "key_id": key_id,
+            "facility_id": key.facility_id,
+            "fields_changed": list(key_data.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return key
 
 
@@ -2331,6 +2372,18 @@ async def delete_facility_access_key(
     """
     service = FacilitiesService(db)
 
+    # Fetched before delete solely so the audit event can name the facility
+    # the credential belonged to — delete_access_key itself returns a bool.
+    key = await service.get_access_key(
+        key_id=key_id,
+        organization_id=current_user.organization_id,
+    )
+    if not key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Access key not found"
+        )
+    facility_id = key.facility_id
+
     deleted = await service.delete_access_key(
         key_id=key_id,
         organization_id=current_user.organization_id,
@@ -2340,6 +2393,16 @@ async def delete_facility_access_key(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Access key not found"
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="facilities.access_key_deleted",
+        event_category="security",
+        severity="warning",
+        event_data={"key_id": key_id, "facility_id": facility_id},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ============================================================================
