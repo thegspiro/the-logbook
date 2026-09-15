@@ -16,6 +16,44 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 00 (Cross-cutting baseline), pass 6** — PR
+[#2592](https://github.com/thegspiro/the-logbook/pull/2592), branch
+`claude/security-review-sec00-pass6-dd17b29b`. Step 0
+concurrent-session check: `git fetch origin main` clean; `PROGRESS.md`'s
+Open PR row read "None." with the pass-5 watchdog note naming "Feature 00
+(Cross-cutting baseline), pass 6" as next; `search_pull_requests` (open)
+returned only #2590 (`claude/affectionate-meitner-vlaka4`, an unrelated
+forms-pipeline fix from a different session) — no concurrent security-review
+PR; `list_branches` showed no in-flight `security-review`/`feature00`/
+`cross-cutting` branch either.
+
+Re-swept all 13 established sweep classes against the 80 commits landed
+since pass 5's merge (`2e6dcf3d1`) — almost entirely the parent rotation's
+own Feature 01–22 pass-5 re-verifications, each already reviewed under its
+own feature file, plus three dependabot merges and one post-merge
+self-review fix. **0 fixed, 0 new findings** — every class re-verified
+clean by a fresh AST/grep pass (not a diff against pass 5's numbers); the
+outbound-URL DNS-rebinding TOCTOU re-confirmed open and left flagged for
+the same reasons pass 5 gave. Route count (228) and migration count (444)
+are byte-identical to pass 5's. Full backend suite: 10199 passed, 1
+pre-existing skip, 0 failed; flake8/black/isort clean; frontend typecheck
+and lint clean; all standing guard tests (backend and frontend) pass.
+Findings doc: `docs/security-review/SEC-00-cross-cutting-baseline.md` →
+**Pass 6**. Next: Feature 01 (Auth & session lifecycle), pending this PR's
+merge.
+
+**Merge-conflict note:** this branch's Step 0 check ran before PR #2591
+(the pass-5-close-and-reset watchdog PR) had merged, so this PR's own base
+predates it; both PRs touched this Open PR section (this pass's own note
+vs. #2591's "None" + rotation reset). Resolved here by merging `main` in
+(merge commit noted in this branch's history, no rebase/force-push) and
+keeping both notes, this pass's note first, per this file's established
+nested-`<details>` convention — matching how #2584/#2585 and #2586/#2587
+resolved the same shape of collision.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2587's merge, Feature 22 pass 5 — the state this pass's PR conflicted with, plus the rotation reset to ⬜ for pass 6), preserved for history</summary>
+
 **None.** PR [#2587](https://github.com/thegspiro/the-logbook/pull/2587)
 (Feature 22, Grants & fundraising, pass 5) merged clean, merge commit
 `fe69a54e6` — 0 fixed, 0 new findings (delta re-verification against pass
@@ -39,6 +77,8 @@ did not run. Recorded here so the next iteration (and anyone reviewing the
 loop's health) can see the gap rather than infer it from timestamps alone.
 
 Next: Feature 00 (Cross-cutting baseline), pass 6.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 5, PR #2587, before it merged), preserved for history</summary>
@@ -15970,7 +16010,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ⬜     |
+| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
@@ -16012,6 +16052,58 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 00 (Cross-cutting baseline, pass 6) — 0 fixed, 0 new findings — PR #2592 opened
+
+Step 0: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
+"None." with the pass-5 watchdog note naming Feature 00 pass 6 as next.
+`search_pull_requests` (open) returned only #2590
+(`claude/affectionate-meitner-vlaka4`, an unrelated forms-pipeline fix from
+a different session); `list_branches` showed no `security-review`/
+`feature00`/`cross-cutting` branch in flight. Proceeded.
+
+Re-swept all 13 established sweep classes from passes 1–5 against the 80
+commits landed since pass 5's merge (`2e6dcf3d1`) — a fresh AST walk or grep
+for each, not a diff against pass 5's stated counts. All 13 re-verified
+clean: formula injection (0 sites), `SET NULL`/`nullable` (passes),
+proxy-IP attribution (same 3 documented hits), Alembic chain (444
+revisions, unchanged, single head), LIKE-escaping (passes), `BaseHTTPMiddleware`
+(0 usages), unbounded in-memory trackers (same 25, all bounded — the raw
+230-hit AST output was fully triaged, not sampled: ~200 static lookup
+tables and 7 Pydantic response-schema field defaults, neither being a
+process-global cache), `window.confirm`/`alert`/`prompt` (0 raw calls),
+JSON shallow-copy-then-nested-mutate (the one known site, `salesforce_sync.py:564`,
+still only a top-level key set on the copy), org-scoping/IDOR ratchet
+(passes), capacity-check locking (passes), route auth coverage (passes),
+raw exception text reaching the client (198 hits, 0 unwrapped). Route count
+(228) and migration count (444) are byte-identical to pass 5's, confirming
+the intervening commits — almost entirely the parent rotation's own
+Feature 01–22 pass-5 re-verifications plus three dependabot merges and one
+post-merge self-review fix — added no new route or migration in this
+window. A wider re-check of `log_audit_event` PII-shaped keys (ad hoc, not
+a numbered class) surfaced two proximity near-misses (`users.py:1054`,
+`training.py:705`, both `full_name`) beyond pass 5's stated 13; both read
+directly and confirmed to be the route's own return payload and a
+background notification argument respectively, not `event_data` — 0
+genuine new findings. The outbound-URL DNS-rebinding TOCTOU
+(`KNOWN_LIMITATIONS.md`) re-confirmed open at the same 7 call sites, left
+flagged for the reasons pass 5 gave (the shared client factory's own
+docstring documents four already-shipped regressions from prior attempts
+to change it, and IP-pinning is in tension with the factory's proxy
+support — a design decision, not a mechanical fix within this sweep's
+scope).
+
+**0 fixed, 0 new findings.** No source files changed. Gate: `flake8`/
+`black`/`isort` clean on `app/`, `tests/`, `alembic/`; `validate_migrations.py
+--strict` 444 revisions, single head; `check_route_permissions.py --strict`
+228 routes, 0 errors/warnings; 141 cross-cutting backend guard tests pass;
+full backend unit suite 10199 passed/1 pre-existing skip/0 failed; frontend
+`typecheck` and `lint` both clean; frontend structural guards
+(`dialogScrollIntegrity`, `dialogDismissIntegrity`, `testingRegistry` —
+16/16 combined) and `mobile-route-integrity.spec.ts` (1/1) all pass.
+Findings doc: `docs/security-review/SEC-00-cross-cutting-baseline.md` →
+**Pass 6**. Next: Feature 01 (Auth & session lifecycle), pending this PR's
+merge.
 
 ### 2026-09-15 — Pass 5 complete; rotation reset to ⬜ for pass 6; PR #2587 (Feature 22) merge recorded
 
