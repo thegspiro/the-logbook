@@ -16,6 +16,68 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 06 (Elections & ballots), pass 6** — PR
+[#2600](https://github.com/thegspiro/the-logbook/pull/2600), branch
+`claude/security-review-elec-pass6-7f3a91`. Step 0 concurrent-session check
+(done twice — once at start, once immediately before push): the working
+directory was found checked out on `claude/security-review-fin-pass6-a3f9c2`
+(a leftover branch from the prior iteration) with a clean tree, so per this
+run's own instructions it was left untouched and a fresh branch was cut
+directly from `origin/main` instead. `git fetch origin main` clean both
+times (both checks). `PROGRESS.md`'s Open PR row (before this edit) read
+"Feature 05 (Finance & approvals), pass 6 — PR #2599" — `pull_request_read`
+confirmed #2599 `state: closed`, `merged: true`, `merged_at:
+2026-09-15T20:20:14Z`, and its merge commit (`7754eccd7`) is the tip of
+`origin/main`, with rotation row 05 already marked ✅ as part of that same
+merge — so this iteration proceeded to Feature 06 rather than tending a
+still-open PR. `search_pull_requests` (open) returned only #2590 (a
+prospective-members form-stage fix), #2594 (an npm-override conflict
+checker) and #2595 (a bulk-advance meeting-attendance-gate fix) — all
+unrelated feature/tooling work from other sessions, none touching
+elections/ballots/voting surfaces; `list_branches` showed no
+`security-review`/`feature06`/`elections`/`ballots`/`elec` branch in flight
+either check.
+
+Baseline `f45f691f3` (merge commit of PR #2546, pass 5's landing point).
+**Near-zero delta since pass 5: exactly one file changed by one line-level
+edit** — the same cross-module OR-gate sweep (`4b7bd1adb`) FIN-05 and PUB-03
+pass 6 each independently verified from their own side — widening
+`list_candidates`' gate to admit `elections.manage` alongside
+`elections.view`, matching the handler's own body already branching on
+`elections.manage` to decide whether pending nominations are included.
+Independently re-verified sound: the body-level branch is unchanged, so the
+gate widened who can reach the handler, not what it returns. Every other
+declared scope file — `election_service.py`, `quorum_service.py`,
+`models/election.py`, `schemas/election.py`, every election migration, and
+the entire frontend elections surface — is byte-identical to pass 5's
+reviewed state, despite dozens of unrelated commits landing on `main` since.
+**First review of this feature's own MCP surface**
+(`app/mcp/tools/elections.py`, present since before pass 5 but never
+previously reviewed under this feature, per the precedent Documents/
+Apparatus/Facilities established in their own recent passes): confirmed
+org-scoped, read-only, ballot-secrecy-safe (aggregate tallies only, and
+gated to closed elections even more conservatively than the REST endpoint),
+with no roster/eligibility leak. **0 defects found, 0 application-code
+changes.** Added one regression test
+(`test_elections_are_org_scoped`) closing a previously-unverified (and, on
+inspection, already-correct) org-scoping gap in that MCP surface — confirmed
+it fails against deliberately reintroduced unscoped code before counting it
+as a guard. All 5 prior open/flagged findings (ELEC-12, ELEC-14, ELEC-16,
+ELEC-28, ELEC-40) re-confirmed unchanged at their current citations.
+Completion gate: flake8/black/isort clean (one `black` reformat applied to
+the new test); `validate_migrations.py --strict` 444 revisions, single head
+`6ab7d903fae5`; `check_route_permissions.py --strict` 228 routes, 0 errors;
+scoped election/ballot/quorum/candidate/mcp tests 928 passed (927 + 1 new),
+1 pre-existing skip; full backend unit suite 10,199 passed, 1 pre-existing
+skip, 0 failed (unchanged — the new test is `integration`-marked and this
+job deselects it); frontend typecheck and lint both clean. Findings doc:
+`docs/security-review/ELEC-06-elections-ballots.md` → **Pass 6**. Rotation
+row 06 → ✅. **Next: Feature 07 (Users & organizations), pending this PR's
+merge.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 6, PR #2599, merged clean — 0 fixed, 0 new findings; rotation row 05 marked ✅ as part of that PR), preserved for history</summary>
+
 **Feature 05 (Finance & approvals), pass 6** — PR
 [#2599](https://github.com/thegspiro/the-logbook/pull/2599), branch
 `claude/security-review-fin-pass6-a3f9c2`. Step 0
@@ -76,6 +138,8 @@ revisions, single head `6ab7d903fae5`, unchanged; `check_route_permissions.py
 domain changed, run anyway per the completion-gate checklist).
 Findings doc: `docs/security-review/FIN-05-finance-approvals.md` →
 **Pass 6**. Next: Feature 06 (Elections & ballots), pending this PR's merge.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 6, PR #2598, merged clean — 0 fixed, 0 new findings; rotation row 04 marked ✅ as part of that PR), preserved for history</summary>
@@ -16280,7 +16344,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
@@ -16316,6 +16380,57 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 06 (Elections & ballots, pass 6) — 0 fixed, 0 new findings, 1 regression test added — PR #2600 opened
+
+Step 0: working directory was on a leftover branch
+(`claude/security-review-fin-pass6-a3f9c2`) from the prior iteration with a
+clean tree — left untouched, new branch cut from `origin/main` directly.
+`git fetch origin main` clean both times. `PROGRESS.md`'s Open PR row read
+"Feature 05 (Finance & approvals), pass 6 — PR #2599" — `pull_request_read`
+confirmed #2599 merged (`merged_at 2026-09-15T20:20:14Z`) and at the tip of
+`origin/main` (`7754eccd7`), with rotation row 05 already ✅ as part of that
+same merge. `search_pull_requests`/`list_branches` showed no concurrent
+Feature 06/elections/ballots work. Baseline `f45f691f3` (PR #2546, pass 5's
+merge). Diffed the full established domain — `elections.py`,
+`election_service.py`, `quorum_service.py`, `models/election.py`,
+`schemas/election.py`, `utils/election_ballot_pdf.py`, and the entire
+frontend elections surface — against current `HEAD`: exactly **one**
+line-level change, `4b7bd1adb` (the same cross-module OR-gate widening
+FIN-05/PUB-03 pass 6 each independently re-verified from their own side),
+widening `list_candidates`' gate to admit `elections.manage` alongside
+`elections.view`. Read the handler in full: the body-level
+`include_pending` branch on `elections.manage` is unchanged, so the gate
+widened who can reach it, not what it returns — no new exposure. **First
+review of this feature's own MCP surface** (`app/mcp/tools/elections.py`,
+present since before pass 5 but never previously covered under this
+feature, per the precedent Documents/Apparatus/Facilities established in
+their own recent passes): all three tools (`list_elections`,
+`get_election_description`, `get_election_results`) are read-only,
+org-scoped through `principal.organization_id`/the shared
+`ElectionService.get_election`, ballot-secrecy-safe (aggregate tallies
+only, gated to closed elections even more conservatively than the REST
+endpoint's own `results_visible_immediately` allowance), and carry no
+roster/eligibility leak. Also re-checked client-supplied FK validation
+across every create/update path that accepts one (`create_nomination`,
+`add_proxy_authorization`, `merge_write_in_candidates`,
+`send_ballot_emails`) — all correctly org-scoped, no AP-17/AP-18-shaped gap
+found. All 5 prior open/flagged findings (ELEC-12, ELEC-14, ELEC-16,
+ELEC-28, ELEC-40) re-confirmed unchanged at current citations. **0 new
+findings, 0 application-code changes** — added one regression test
+(`test_elections_are_org_scoped` in `test_mcp_tools.py`) closing a
+previously-unverified (and, on inspection, already-correct) org-scoping gap
+in the MCP surface; confirmed it fails against deliberately reintroduced
+unscoped code before counting it as a guard. Completion gate:
+flake8/black/isort clean (one `black` reformat applied to the new test);
+`validate_migrations.py --strict` 444 revisions, single head
+`6ab7d903fae5`; `check_route_permissions.py --strict` 228 routes, 0 errors;
+scoped election/ballot/quorum/candidate/mcp tests 928 passed (927 + 1 new),
+1 pre-existing skip; full backend unit suite 10,199 passed, 1 pre-existing
+skip, 0 failed (unchanged — the new test is `integration`-marked and this
+job deselects it); frontend typecheck and lint both clean. Findings doc:
+`docs/security-review/ELEC-06-elections-ballots.md` → **Pass 6**. Rotation
+row 06 → ✅. Next: Feature 07 (Users & organizations).
 
 ### 2026-09-15 — Feature 05 (Finance & approvals, pass 6) — 0 fixed, 0 new findings
 

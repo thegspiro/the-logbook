@@ -4698,3 +4698,57 @@ class TestThirtiethRoundFindings:
         assert window([fresh], today) == (date(2026, 3, 7), today)
         assert window([annual, cert], today) is None
         assert window([annual, biannual], today) is None
+
+
+class TestThirtyFirstRoundFindings:
+    """Security-review 06 (Elections & ballots), pass 6.
+
+    ``mcp/tools/elections.py``'s first review under this rotation found the
+    tools already org-scoped correctly (``list_elections`` filters
+    ``organization_id`` directly; ``get_election_description`` /
+    ``get_election_results`` resolve through the already-org-scoped
+    ``ElectionService.get_election``), but — unlike ``list_members`` and
+    every other listing tool in this file — nothing exercised it. Added
+    rather than left as a read-only finding, since the assertion is cheap
+    and the shape (a second org's principal seeing another org's rows) is
+    exactly what CLAUDE.md Pitfall #14 warns a refactor can reintroduce
+    silently.
+    """
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_elections_are_org_scoped(self, server, org_with_members, db_session):
+        from app.models.election import Election, ElectionStatus
+
+        org_id, admin_id, _ = org_with_members
+        now = datetime.now(timezone.utc)
+        election = Election(
+            organization_id=org_id,
+            title="Officer election",
+            start_date=now - timedelta(days=1),
+            end_date=now + timedelta(days=1),
+            status=ElectionStatus.OPEN,
+            description="Ballot for the 2027 term.",
+        )
+        db_session.add(election)
+        await db_session.flush()
+
+        other = _principal(str(uuid.uuid4()), admin_id)
+        listed = await _call(server, other, "list_elections")
+        assert listed["total"] == 0
+        assert listed["items"] == []
+
+        with pytest.raises(ToolError, match="not found"):
+            await _call(
+                server,
+                other,
+                "get_election_description",
+                election_id=election.id,
+            )
+        with pytest.raises(ToolError, match="not found"):
+            await _call(server, other, "get_election_results", election_id=election.id)
+
+        # The owning org still sees it — proves the empty result above is
+        # org-scoping, not a broken fixture.
+        owner = _principal(org_id, admin_id)
+        owned = await _call(server, owner, "list_elections")
+        assert owned["total"] == 1
