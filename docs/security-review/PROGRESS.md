@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2568](https://github.com/thegspiro/the-logbook/pull/2568)
+(Feature 14, Equipment check & shifts, pass 5) merged clean — 17/17 CI green
+after one stale-superseded-run false failure on the `CI Success` gate (the
+branch's first commit's run was cancelled by the immediate
+PROGRESS.md-fill-in follow-up commit; every real job showed `cancelled`
+except `Migration Chain`, which finished `success` before the cancellation
+— only the gate itself showed `failure` — resolved with one explanatory PR
+comment, no code push, per the established pattern) — merged by this
+session via `merge_pull_request`, squash, `expectedHeadSha` pinned to the
+head commit. `git fetch origin main` confirms the merge commit (`dbf489af6`)
+is on `main`. `list_pull_requests` (open) re-checked immediately before
+writing this closure note: only dependabot #2552/#2567, and #2495
+(unrelated) — no concurrent Feature 15/scheduling closure or pass PR, so
+this session proceeds with both the closure bookkeeping and launching the
+next pass itself. **Next: Feature 15 (Scheduling), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 5, PR #2568, before it merged), preserved for history</summary>
+
 **PR [#2568](https://github.com/thegspiro/the-logbook/pull/2568)** — branch `claude/security-review-feature14-pass5`, Feature 14
 (Equipment check & shifts), pass 5. Step 0 concurrent-session check: `git
 fetch origin main` clean; the Open PR section read "None." with the
@@ -39,6 +58,8 @@ and the **Pass 5** section of
 scoped suite 398 passed, 1 pre-existing skip; full backend suite 12574
 passed, 21 skipped (pre-existing), 0 failed; `flake8`/`black`/`isort` clean
 on both touched files.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 5, PR #2565, merged), preserved for history</summary>
@@ -15499,6 +15520,18 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 14 (Equipment check & shifts, pass 5) closed — PR #2568 merged
+
+The branch's first-commit run hit the classic stale-superseded-run pattern
+again (every real job `cancelled` except `Migration Chain`, only the `CI
+Success` gate `failure`) — confirmed via `list_workflow_jobs`, resolved with
+one explanatory comment, no code push. The current head's own fresh run
+then went 17/17 green (`mergeable_state: clean`), and the PR was merged
+(squash, `expectedHeadSha` pinned to `9fde49bf`, merge commit `dbf489af6`).
+`list_pull_requests` (open) re-checked before writing this entry: no
+concurrent Feature 15 pass or closure PR, so this session proceeds directly
+to launching Feature 15 (Scheduling), pass 5.
 
 ### 2026-09-15 — Feature 14 (Equipment check & shifts, pass 5) — 1 fixed (MED), 0 flagged — PR #2568 opened
 
