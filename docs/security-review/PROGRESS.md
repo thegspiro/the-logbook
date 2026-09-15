@@ -16,6 +16,52 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 02 (Permissions & roles), pass 6** — PR TBD, branch
+`claude/security-review-perm-pass6-b4e29a`. Step 0 concurrent-session check
+(done twice — once at start, once immediately before push): `git fetch
+origin main` clean both times; `PROGRESS.md`'s Open PR row (before this edit)
+read "Feature 01 (Auth & session lifecycle), pass 6 — PR #2593" —
+`pull_request_read` confirmed #2593 `state: closed`, `merged: true`,
+`merged_at: 2026-09-15T18:28:11Z`, and it is the tip of `origin/main`
+(`6da437f21`), with rotation row 01 already marked ✅ as part of that same
+merge — so this iteration proceeded to Feature 02 rather than tending a
+still-open PR. `search_pull_requests` (open) returned #2590
+(`claude/affectionate-meitner-vlaka4`, a prospective-members form-stage fix),
+#2595 (a bulk-advance meeting-attendance-gate fix, split from #2590) and
+#2594 (an npm-override conflict checker) both checks — all unrelated
+feature/tooling work from other sessions, none touching
+permissions/roles/officers/org-chart; `list_branches` showed no
+`security-review`/`feature02`/`perm`/`roles` branch in flight either check.
+
+Baseline `916488124` (merge commit of PR #2538, pass 5's landing point).
+**Zero-delta re-verification: all eleven in-scope files are byte-identical to
+pass 5's reviewed state** — `git diff 916488124 origin/main` across the full
+set returns no lines, and `git log 916488124..origin/main` over the same set
+returns zero commits. Re-verified by direct grep at current line numbers (not
+by trusting the empty diff alone) that PERM-1 through PERM-8's fixes, and
+pass 5's ceiling/ordering/case-folding arguments, are all intact. PERM-5 (a
+position manager can permanently demote a more privileged member) remains
+open, unchanged, still correctly mirrored in `KNOWN_LIMITATIONS.md`. One
+correction made to pass 5's own route-inventory table (not to application
+code): `POST /operational-ranks/reorder`'s `Depends()` is actually
+`settings.manage` OR `members.manage`, not the unwidened `settings.manage`
+pass 5's table stated — the net behavior pass 5 described is still correct,
+because `_refuse_ordering()` independently requires `settings.manage` by name
+before any read or write, and an existing guard test covers both directions.
+**0 fixed, 0 new findings.** Full backend suite: 10199 passed, 1
+pre-existing skip, 0 failed; scoped permission/role/rank/officer/org_chart
+tests: 1250 passed, 1 pre-existing skip; standing guards (11 named test
+files) run directly: 195 passed; flake8/black/isort clean;
+`validate_migrations.py --strict`: 444 revisions, single head
+`6ab7d903fae5`, unchanged; `check_route_permissions.py --strict`: 228 routes,
+0 errors; frontend typecheck and lint clean (no frontend file modified).
+Findings doc: `docs/security-review/PERM-02-permissions-roles.md` →
+**Pass 6**. Next: Feature 03 (Public surface & webhooks), pending this PR's
+merge.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #2593, Feature 01 pass 6, merged clean — 0 fixed, 0 new findings; rotation row 01 marked ✅ as part of that PR), preserved for history</summary>
+
 **Feature 01 (Auth & session lifecycle), pass 6** — PR
 [#2593](https://github.com/thegspiro/the-logbook/pull/2593), branch
 `claude/security-review-auth-pass6-a1f4c2`. Step 0 concurrent-session check
@@ -16054,7 +16100,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
@@ -16094,6 +16140,50 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 02 (Permissions & roles, pass 6) — 0 fixed, 0 new findings — PR TBD opened
+
+Step 0: `git fetch origin main` clean; `PROGRESS.md`'s Open PR row read
+"Feature 01 (Auth & session lifecycle), pass 6 — PR #2593" —
+`pull_request_read` confirmed #2593 merged (`merged_at 2026-09-15T18:28:11Z`)
+and the tip of `origin/main`, with rotation row 01 already ✅ as part of that
+merge. `search_pull_requests` (open) returned #2590 (a prospective-members
+form-stage fix), #2595 (a bulk-advance attendance-gate fix) and #2594 (an npm
+override conflict checker) — all unrelated feature/tooling work from other
+sessions, none touching permissions/roles/officers/org-chart; `list_branches`
+showed no `security-review`/`feature02`/`perm`/`roles` branch in flight.
+Proceeded to Feature 02.
+
+Diffed the full eleven-file scope against pass 5's baseline (`916488124`,
+merge commit of PR #2538): zero lines of diff across every file, and zero
+commits in `git log 916488124..origin/main` over that file set. Despite the
+zero diff, every file was read in full and every one of PERM-1 through
+PERM-8's fixes (plus pass 5's ceiling/ordering/case-folding arguments) was
+re-verified by direct grep at current line numbers, not by trusting the empty
+diff. PERM-5 (a position manager can permanently demote a more privileged
+member) remains open, unchanged, still correctly mirrored in
+`KNOWN_LIMITATIONS.md`. One correction made to pass 5's own route-inventory
+table (not to application code): it described `POST
+/operational-ranks/reorder`'s `Depends()` as unwidened `settings.manage`,
+but the actual dependency is `settings.manage` OR `members.manage` — matching
+the widening commit pass 5's own prose named two paragraphs earlier. The net
+behavior pass 5 described is still correct: `_refuse_ordering()` runs first
+in the handler and independently requires `settings.manage` by name before
+any read or write, and the existing `test_reorder_is_refused_without_the_
+ordering_grant` guard test covers it. Route inventory unchanged: 28 routes
+across the four routers, cross-checked against `check_route_permissions.py
+--strict` (228 app-wide routes, 0 errors). Also checked one outside-scope
+caller for drift: `membership_pipeline_service.py` picked up one unrelated
+commit since the baseline (`bcbeb9c72`, an election-vote gate fix) that
+doesn't touch the rank-ceiling call PERM-3 depends on. **0 fixed, 0 new
+findings.** Full backend suite: 10199 passed, 1 pre-existing skip, 0 failed;
+scoped permission/role/rank/officer/org_chart tests: 1250 passed, 1
+pre-existing skip; standing guards (11 named test files): 195 passed;
+flake8/black/isort clean; `validate_migrations.py --strict`: 444 revisions,
+unchanged single head `6ab7d903fae5`; frontend typecheck and lint clean (no
+frontend file modified). Findings doc:
+`docs/security-review/PERM-02-permissions-roles.md` → **Pass 6**. Next:
+Feature 03 (Public surface & webhooks), pending this PR's merge.
 
 ### 2026-09-15 — Feature 01 (Auth & session lifecycle, pass 6) — 0 fixed, 0 new findings — PR #2593 opened
 

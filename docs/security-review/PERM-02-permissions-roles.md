@@ -1,9 +1,209 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), TBD (pass 6)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 6 (2026-09-15)
+
+**Backend:** the same eleven files pass 4/5 named, all read in full again:
+`app/api/dependencies.py`, `app/core/permissions.py`,
+`app/api/v1/endpoints/roles.py` + `app/services/role_service.py`,
+`app/api/v1/endpoints/operational_ranks.py` +
+`app/services/operational_rank_service.py`,
+`app/api/v1/endpoints/officers.py` + `app/services/officer_service.py`,
+`app/api/v1/endpoints/org_chart.py` + `app/services/org_chart_service.py`,
+`app/services/admin_continuity_service.py`, and the position/rank-assignment
+handlers in `app/api/v1/endpoints/users.py`.
+**Frontend:** none modified this pass.
+**Migrations:** none written this pass; 444 revisions, single head
+`6ab7d903fae5` (unchanged from pass 5).
+
+### Scope
+
+Baseline `916488124` (merge commit of PR #2538, pass 5's landing point).
+`git diff 916488124 origin/main -- <the eleven files>` (`origin/main` =
+`6da437f21`, the tip after PR #2593 — Feature 01's own pass-6 — merged)
+returns **zero lines across all eleven files**, byte-identical to pass 5's
+reviewed state. `git log 916488124..origin/main -- <the eleven files>` also
+returns zero commits.
+
+Despite the zero diff, every file was read in full this pass, not diffed, and
+every claim below was re-checked by direct grep/read at current line numbers —
+not by trusting the empty diff alone, the same discipline AUTH-01's own pass 6
+and this feature's own pass 3/4/5 established. One outside-scope file this
+feature's fixes depend on was also checked for drift:
+`app/services/membership_pipeline_service.py` (PERM-3's other call site) has
+one new commit since the baseline — `bcbeb9c72`, "close the election-vote
+gate's transfer-path bypass (MP-30)" — but it touches only the unrelated
+election-vote gate inside `_do_transfer`, not the rank-ceiling logic; the
+`_enforce_rank_grant_ceiling` call in `membership_pipeline.py:1596` still runs
+at the endpoint layer, before the service method (and therefore before
+MP-30's new `_election_block_reason` check) is ever reached, so PERM-3's fix
+and its alert-noise correction are both unaffected. `inventory_service.py`,
+`operational_rank_service.py` and `users.py` all show zero diff against the
+baseline as well.
+
+### Route inventory
+
+Unchanged count — 28 routes, same four routers (`grep -c '^@router\.' *.py`
+re-run: 13 `roles.py` + 7 `operational_ranks.py` + 3 `officers.py` + 5
+`org_chart.py`). Re-enumerated every route's `Depends()` directly against
+pass 4/5's tables rather than trusting them:
+
+- **`roles.py` (13 routes)** — every permission string at its current line
+  number matches pass 4's table exactly: `create_role`
+  (`roles.py:214-216`, `positions.create`/`positions.manage_permissions`/
+  `roles.create`), `update_role`, `delete_role` (`:367-369`), `clone_role`
+  (`:426-428`), `get_role_users` (`:496`), `get_user_permissions` (`:554`,
+  target `user_id` resolved in-org at `:565-571` before the unscoped
+  `get_user_permissions`/`get_user_roles` calls), `get_my_roles`/
+  `get_my_permissions`/`check_admin_access` (auth-only, self-scoped by
+  `current_user.id`). No drift.
+- **`officers.py` (3 routes)** — all three still gated
+  `require_permission("settings.manage", "organization.update_settings")`
+  (`officers.py:36,61,114`); `set_officer` still validates the client-supplied
+  `user_id` in-org before storing it (`officer_service.py:336-344`) and
+  rejects an unknown `office_key` against the `OFFICE_KEYS` allowlist
+  (`officer_service.py:333`); the settings-JSON mutation is still a
+  `copy.deepcopy()` (`officer_service.py:315`).
+- **`org_chart.py` (5 routes)** — `GET ""` is still auth-only by design
+  (`org_chart.py:74-79`), deferring to `_can_manage` (`:41-42`) to decide
+  whether unpublished nodes and the member/role/rank option lists are
+  included; all four mutations still gate on `orgchart.manage` OR
+  `settings.manage` (`:89,131,170,215`). `MAX_DEPTH=8`, `MAX_NODES=500`,
+  `MAX_HOLDERS_PER_NODE=25` and `assert_in_org` on every client-supplied FK
+  (`parent_id`, holder `user_id`) are all still present in
+  `org_chart_service.py` at the line numbers pass 1 recorded them.
+- **`operational_ranks.py` (7 routes)** — matches pass 5's table with **one
+  correction to the table itself**, below. `create_rank` and `update_rank`
+  still run `_enforce_rank_grant_ceiling` before the service write
+  (`operational_ranks.py:137`, and `:252`+`:255` for both the old and new
+  code on a rename); `_refuse_ordering`/`_may_order_ladder` still gate
+  `sort_order` on `settings.manage` specifically (`:52-69`), and
+  `create_rank` still appends one past the highest existing `sort_order`
+  rather than counting rows (`:152-155`).
+
+**Correction to pass 5's own route inventory table:** pass 5 listed `POST
+/operational-ranks/reorder`'s permission as `` `settings.manage` (unchanged —
+deliberately not widened) ``. That is wrong about the `Depends()` value,
+though right about the net effect. The actual dependency, unchanged since the
+widening commit pass 5 itself describes two paragraphs earlier ("moved five
+of `operational_ranks.py`'s seven routes (`create`, `update`, `delete`,
+`reorder`, `validate`)..."), is
+`require_permission("settings.manage", "members.manage")`
+(`operational_ranks.py:295-297`) — `reorder` **was** one of the five widened
+routes at the FastAPI-dependency level, matching the opening paragraph and
+contradicting the table two paragraphs later. What is true, and what makes
+this a documentation fix rather than a security finding, is that
+`_refuse_ordering(current_user)` runs as the unconditional first line of
+`reorder_ranks` (`:307`, before any query) and independently requires
+`settings.manage` by name (`ORDERING_PERMISSION = "settings.manage"`,
+`:52`) — so a `members.manage`-only caller reaches the handler but is refused
+with a 403 before any read or write, exactly the behavior the docstring at
+`:303-305` describes. `TestReorder`-adjacent
+`test_reorder_is_refused_without_the_ordering_grant` and
+`test_reorder_is_allowed_with_it` in `tests/test_operational_rank_permissions.py`
+already cover both directions and were re-run clean. The table entry above
+is corrected to state the actual `Depends()` and name the second gate that
+does the real enforcement, so a future pass reading the table alone is not
+misled about what the route accepts.
+
+### Verified good ✅
+
+- **All eight prior fixes (PERM-1, PERM-2, PERM-3, PERM-4, PERM-6, PERM-7,
+  PERM-8, and pass 5's ceiling/ordering/case-folding verifications) are
+  intact, re-checked by direct grep at current line numbers, not by trusting
+  the zero diff:**
+  - PERM-1: `GET /operational-ranks/validate` still requires `settings.manage`
+    OR `members.manage` (`operational_ranks.py:170`) — widened from
+    `settings.manage`-only by the pass-5 commit, correctly following the
+    ladder screen it backs, still a `require_permission` gate rather than
+    auth-only.
+  - PERM-2: `seed_defaults`'s savepoint-based concurrent-insert handling —
+    confirmed present in `operational_rank_service.py` (unchanged, zero diff).
+  - PERM-3: `transfer_prospect` still resolves the prospect and checks
+    existence/transferred-status **before** `_enforce_rank_grant_ceiling`
+    (`membership_pipeline.py:1574-1598`), so the CRITICAL-alert ceiling check
+    still cannot be spammed with garbage prospect ids.
+  - PERM-4: `update_rank`'s ceiling on both the old and new `rank_code`
+    (`operational_ranks.py:252,255`), before `service.update_rank` at `:260`.
+  - PERM-6: `is_read_only_permission`'s word-boundary match plus
+    `_READ_ONLY_PERMISSION_EXCEPTIONS` (`core/permissions.py:1032,1025`).
+  - PERM-7: `assign_role_to_user`/`remove_role_from_user`/`set_user_roles`
+    all still take `organization_id` as a required, keyword-only parameter
+    (`role_service.py:536-543` and neighbours) with no default.
+  - PERM-8: `MAX_RANKS_PER_REORDER = 500` still caps `RankReorderRequest.ranks`
+    (`schemas/operational_rank.py:105,112`).
+  - Pass 5's case-folding argument: `resolve_rank_code` still folds to a
+    canonical spelling before any downstream `User.rank` write
+    (`operational_rank_service.py:394-414`), and `get_all_permissions()`
+    still returns only `ALL_PERMISSIONS` names — `"*"` appears exactly once
+    in the whole file, at the seeded `it_manager` position
+    (`core/permissions.py:1745`), confirmed by grep, so a role cannot be
+    minted or edited to hold it (`create_role`/`update_role` validate against
+    `get_all_permissions()`).
+- **PERM-5 is unchanged and still open**, re-verified directly rather than by
+  the empty diff alone: `assign_user_roles` (`users.py:932`) and
+  `remove_role_from_user` (`users.py:1168`) still call only
+  `_enforce_role_grant_ceiling` (a no-op on a removal — it walks the
+  **incoming** role list) and `assert_positions_retain_administrator`, whose
+  signature (`admin_continuity_service.py:194-201`) takes no caller/current
+  user argument at all — confirmed by reading the full signature, it compares
+  the target's resulting permissions against nothing but "would some member
+  still hold `members.manage`", never against the caller's own authority.
+  Still mirrored in `docs/KNOWN_LIMITATIONS.md`, still awaiting an owner
+  decision among the three options pass 4 laid out.
+- **All 28 routes still carry an auth dependency and the route/permission
+  inventory matches `docs/APPLICATION_PAGES.md`** — mechanism:
+  `python3 scripts/check_route_permissions.py --strict` re-run directly,
+  228 routes checked (whole app), 0 errors, 0 warnings; `git diff` confirms
+  no route was added, removed, or renamed in this feature since pass 5.
+- **No injection surface, no unbounded in-memory tracker, no new migration** —
+  re-confirmed by the same greps prior passes ran (zero raw SQL, zero
+  `.like(`/`.ilike(`, zero `csv.writer`, no new module-level dict/set), all
+  unchanged.
+
+### Findings
+
+**None.** Zero new findings this pass — a true zero-delta re-verification,
+with the one correction above being to pass 5's own prose (the `Depends()`
+value on `/operational-ranks/reorder`), not to application code, which was
+already and remains correct. PERM-5 remains the rotation's one open item for
+this feature, unchanged since pass 4.
+
+### Schema & migration notes
+
+No model or migration touched this pass. `operational_ranks` table unchanged
+since pass 4/5 (`organization_id` `ondelete="CASCADE"` + `nullable=False`,
+`UniqueConstraint(organization_id, rank_code)`); `organization_officers.user_id`
+and all three `org_chart_nodes` FKs remain `ondelete="SET NULL"` +
+`nullable=True`. `validate_migrations.py --strict`: 444 revisions, single head
+`6ab7d903fae5`, unchanged.
+
+### Guard tests added
+
+None — no new fix in this pass. All standing guard tests from passes 1-5
+re-run clean (see completion gate).
+
+### Completion gate
+
+| Check                                                                                                                                                                                                                                                                                                                                                                                                 | Result                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `python3 -m flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                              | ✅ 0 violations                                                    |
+| `python3 -m black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                       | ✅ 1596 files unchanged                                            |
+| `python3 -m isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                  | ✅ clean                                                           |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                                                     | ✅ 444 revisions, single head `6ab7d903fae5`                       |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                                                                                                                                                                 | ✅ 228 routes checked, 0 errors, 0 warnings                        |
+| `python3 scripts/check_docs_links.py`                                                                                                                                                                                                                                                                                                                                                                 | ✅ 358 Markdown files, 0 broken links                              |
+| backend tests, scoped (`-k "permission or role or rank or officer or org_chart or org_scoping or scoping"`)                                                                                                                                                                                                                                                                                           | ✅ 1250 passed, 1 skipped (`py_vapid` not installed — environment) |
+| `test_org_scoping_ratchet.py` + `test_require_permission_registry.py` + `test_endpoint_auth_coverage.py` + `test_permission_gate_composition.py` + `test_read_permission_gates.py` + `test_privilege_ceiling_wiring.py` + `test_permission_read_write_tiers.py` + `test_role_service.py` + `test_operational_rank_service.py` + `test_operational_rank_permissions.py` + `test_rank_grant_ceiling.py` | ✅ 195 passed                                                      |
+| backend full unit suite (`pytest tests/ -m "not integration and not slow and not docker"`)                                                                                                                                                                                                                                                                                                            | ✅ 10199 passed, 1 skipped (environment), 0 failed                 |
+| `npm run typecheck` (frontend)                                                                                                                                                                                                                                                                                                                                                                        | ✅ 0 errors (no frontend file modified)                            |
+| `npm run lint` (frontend)                                                                                                                                                                                                                                                                                                                                                                             | ✅ 0 errors, 0 warnings (no frontend file modified)                |
 
 ---
 
