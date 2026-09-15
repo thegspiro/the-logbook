@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2570](https://github.com/thegspiro/the-logbook/pull/2570)
+(Feature 15, Scheduling, pass 5) merged clean — 0 new findings, docs-only
+change (no application code touched). Merged directly by the repo owner
+(`thegspiro`), not by this session — confirmed via `pull_request_read`'s
+`merged_by` field. `git fetch origin main` confirms the merge commit
+(`6982a99e5`) is on `main`. `list_pull_requests` (open) re-checked
+immediately before writing this closure note: only dependabot #2552/#2567,
+and #2495 (`feat(scheduling): ...`, unrelated feature-workstream PR) — no
+concurrent Feature 16/events closure or pass PR, so this session proceeds
+with both the closure bookkeeping and launching the next pass itself.
+**Next: Feature 16 (Events & requests), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 5, PR #2570, before it merged), preserved for history</summary>
+
 **PR [#2570](https://github.com/thegspiro/the-logbook/pull/2570)** — branch `claude/security-review-feature15-pass5`, Feature 15
 (Scheduling), pass 5. Step 0 concurrent-session check: `git fetch origin
 main` clean; the Open PR section read "None." with the Feature 14
@@ -45,6 +60,8 @@ or call_tracking or call_type"`) 1301 passed, 1 pre-existing skip; full
 backend suite 12577 passed, 21 skipped (pre-existing); `flake8`/`black`/`isort` clean on the
 feature's files; no frontend file touched. Full write-up:
 `docs/security-review/SCH-15-scheduling.md` → Pass 5.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2568's merge, Feature 14 pass 5 closure, confirming the rotation clear for Feature 15), preserved for history</summary>
@@ -15555,6 +15572,15 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 15 (Scheduling, pass 5) closed — PR #2570 merged
+
+Merged directly by the repo owner (`thegspiro`) rather than by this
+session — confirmed via `pull_request_read`'s `merged_by` field, merge
+commit `6982a99e5` on `main`. `list_pull_requests` (open) re-checked before
+writing this entry: no concurrent Feature 16 pass or closure PR, so this
+session proceeds directly to launching Feature 16 (Events & requests),
+pass 5.
 
 ### 2026-09-15 — Feature 15 (Scheduling, pass 5) — 0 fixed, 0 flagged, 0 new findings — PR #2570 opened
 
