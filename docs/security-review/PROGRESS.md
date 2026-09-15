@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2573](https://github.com/thegspiro/the-logbook/pull/2573)
+(Feature 16, Events & requests, pass 5) merged clean — 17/17 CI green after
+one stale-superseded-run false failure on the `CI Success` gate (the
+branch's first commit's run was cancelled by the immediate
+PROGRESS.md-fill-in follow-up commit; every real job showed `cancelled`
+except `Migration Chain`, which finished `success` before the cancellation
+— only the gate itself showed `failure` — resolved with one explanatory PR
+comment, no code push, per the established pattern) — merged by this
+session via `merge_pull_request`, squash, `expectedHeadSha` pinned to the
+head commit. `git fetch origin main` confirms the merge commit
+(`5836dd9d4`) is on `main`. `list_pull_requests` (open) re-checked
+immediately before writing this closure note: only dependabot #2552/#2567,
+and #2495 (unrelated) — no concurrent Feature 17/training closure or pass
+PR, so this session proceeds with both the closure bookkeeping and
+launching the next pass itself. **Next: Feature 17 (Training core), pass 5.**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 5, PR #2573, before it merged), preserved for history</summary>
+
 **PR [#2573](https://github.com/thegspiro/the-logbook/pull/2573)** — branch `claude/security-review-feature16-pass5`, Feature 16
 (Events & requests), pass 5. Step 0 concurrent-session check: `git fetch
 origin main` clean; the Open PR section read "None." with the Feature 15
@@ -57,6 +76,8 @@ full backend suite — see the findings doc's completion-gate table. No
 frontend file touched by this pass's own changes (the two pitfall #31 dialog
 files in the delta predate this pass and belong to that rule's own sweep).
 Full write-up: `docs/security-review/EV-16-events-requests.md` → Pass 5.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2570's merge, Feature 15 pass 5 closure, confirming the rotation clear for Feature 16), preserved for history</summary>
@@ -15626,6 +15647,18 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 16 (Events & requests, pass 5) closed — PR #2573 merged
+
+The branch's first-commit run hit the classic stale-superseded-run pattern
+again (every real job `cancelled` except `Migration Chain`, only the `CI
+Success` gate `failure`) — confirmed via `list_workflow_jobs`, resolved with
+one explanatory comment, no code push. The current head's own fresh run
+then went 17/17 green (`mergeable_state: clean`), and the PR was merged
+(squash, `expectedHeadSha` pinned to `58fb7fc7`, merge commit `5836dd9d4`).
+`list_pull_requests` (open) re-checked before writing this entry: no
+concurrent Feature 17 pass or closure PR, so this session proceeds directly
+to launching Feature 17 (Training core), pass 5.
 
 ### 2026-09-15 — Feature 16 (Events & requests, pass 5) — 0 fixed, 1 flagged (EV-26, P2/P3, cross-cutting), 1 re-flagged (EV-23) — PR #2573 opened
 
