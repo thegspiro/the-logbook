@@ -51,7 +51,28 @@ files (unchanged, so nothing to reformat). Findings doc:
 Feature 23 (Medical supplies), pending this PR's merge.
 
 <details>
-<summary>Superseded — prior Open PR note (Feature 21, pass 5, PR #2585, before it merged), preserved for history</summary>
+<summary>Superseded — prior Open PR note ("None" after PR #2585's merge, Feature 21 pass 5 — the state this pass's PR #2587 conflicted with), preserved for history</summary>
+
+**None.** PR [#2585](https://github.com/thegspiro/the-logbook/pull/2585)
+(Feature 21, Admin hours, pass 5) merged clean via squash, merge commit
+`b31954ef5` — 1 fixed (AH-17, LOW: `get_summary`/`get_user_hours_compliance`
+routed through `user_has_permission()` instead of a hand-rolled scan that
+missed module-wildcard/rank-default grants), 7 new regression tests, full
+backend suite 12585 passed/21 skipped/0 failed. The branch picked up a real
+merge conflict against `main` on `docs/security-review/PROGRESS.md` (both
+this PR and #2584's Feature 20 closure touched the Open PR section) —
+resolved by merging `main` into the PR branch (merge commit `b5940c19`, no
+force-push, no rewritten history) once #2584 merged first; CI Success came
+back green (17/17) on the resulting head, `mergeable_state: clean`.
+`list_pull_requests` (open) re-checked immediately before writing this
+closure note: only dependabot #2552/#2567, and #2495 (unrelated) — no
+concurrent Feature 22 pass or closure PR. Rotation row 21 stays ✅. **Next:
+Feature 22 (Grants & fundraising), pass 5** (last closed at pass 4).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 5, PR #2585, before it merged — including the in-flight merge-conflict resolution against #2584), preserved for history</summary>
 
 **Feature 21 (Admin hours), pass 5** — PR
 [#2585](https://github.com/thegspiro/the-logbook/pull/2585), branch
@@ -16004,6 +16025,18 @@ gate: flake8/black/isort clean on all six declared files (unchanged);
 backend suite: 12,585 passed, 21 pre-existing skips, 0 failed. Findings
 doc: `docs/security-review/GF-22-grants-fundraising.md`
 → **Pass 5**. Next: Feature 23 (Medical supplies), pending this PR's merge.
+
+### 2026-09-15 — Feature 21 (Admin hours, pass 5) merged — PR #2585, 1 fixed (AH-17, LOW)
+
+PR #2585 merged clean via squash, merge commit `b31954ef5`. AH-17 fixed:
+`get_summary`/`get_user_hours_compliance` routed through
+`user_has_permission()` instead of a hand-rolled permission scan that missed
+module-wildcard and operational-rank-default grants — 7 new regression
+tests, full backend suite 12585 passed/21 skipped/0 failed. The branch hit a
+real merge conflict against `main` on this file's Open PR section (racing
+#2584's Feature 20 closure) — resolved with a merge commit into the PR
+branch, no force-push; CI came back 17/17 green afterward. Rotation row 21
+stays ✅. Next: Feature 22 (Grants & fundraising), pass 5.
 
 ### 2026-09-15 — Feature 20 (Compliance, pass 5)'s PR #2583 merged, watchdog recorded it
 
