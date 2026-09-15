@@ -1,7 +1,8 @@
 # Security Review — Grants & Fundraising
 
 **Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4) · **PR:**
+2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
+(pass 5) · **PR:**
 [#1904](https://github.com/thegspiro/the-logbook/pull/1904) (pass 1)
 
 ---
@@ -1804,3 +1805,178 @@ GF-36's Codex-review extension); plus a docstring-only correction in
 
 Rotation row 22 (Grants & fundraising) → ✅ (pending merge). Next: Feature
 23 (Medical supplies).
+
+---
+
+## Pass 5 (2026-09-15)
+
+**Re-verification pass.** Confirmed no concurrent Feature 22 session (`git
+fetch origin` clean at both checks; `search_pull_requests` returned no open
+PR touching `grants.py`/`grant_service.py`/`fundraising_service.py` or a
+Feature 22-specific note — only the expected Feature 21 docs-closure PR
+#2586, in flight per the established pattern, which is not a collision).
+
+**Backend:** `app/api/v1/endpoints/grants.py` (1,916 L, 45 endpoints),
+`app/services/grant_service.py` (1,309 L), `app/services/fundraising_service.py`
+(798 L), `app/models/grant.py`, `app/schemas/grant.py`,
+`app/services/dashboard_widget_service.py` (its `fundraising()` method only).
+**Frontend:** `frontend/src/modules/grants-fundraising/` (all 8 pages,
+services, store, routes, types).
+**Migrations:** none touching a grants/fundraising table since pass 4.
+
+### Diff-scoping methodology
+
+Verified pass 4's merge commit (`ee5188ff5`, PR #2485 — the Codex-review
+follow-up that actually closed pass 4, not the earlier #2483 a concurrent
+watchdog session briefly and incorrectly marked as the close) is reachable
+from `HEAD` via `git merge-base --is-ancestor ee5188ff5 HEAD`. `git diff
+ee5188ff5 HEAD --stat` against all six declared backend files plus
+`frontend/src/modules/grants-fundraising/` came back with exactly **one**
+changed file: `GrantDetailPage.tsx`, a one-line change
+(`onClick={onClose}` removed from the modal's backdrop `<div>`, replaced
+with `aria-hidden="true"`). Read directly and confirmed this is CLAUDE.md
+Pitfall #31's dialog-dismiss sweep (2026-09-13) landing on this module's
+hand-rolled `Modal` shell — the backdrop no longer closes the dialog on an
+outside click, matching every other dialog in the app; `DialogPanel` (used
+in the same shell, per GF-21-era code) already supplies Escape handling
+and a focus trap. Correctly applied, not a regression. No other backend or
+frontend file in scope changed. The one migration that landed since pass 4
+(`20260912_2140_6ab7d903fae5_enforce_onboarding_status_singleton.py`) was
+read directly and touches only onboarding-status tables — no
+grant/donation/pledge/campaign/donor table. A repo-wide grep for
+`GrantService`/`FundraisingService` usage outside the declared files
+returned nothing, confirming `dashboard_widget_service.py` (which queries
+the four grant/fundraising models directly, not through either service
+class) remains the module's only external caller.
+
+**Conclusion: effectively zero code drift since pass 4**, one line of
+which was itself a correct, unrelated cross-cutting fix. This pass is a
+full independent re-verification of unchanged code, not a diff review.
+
+### Re-verification of GF-13 through GF-38
+
+Read the current `grants.py`, `grant_service.py`, `fundraising_service.py`,
+`grant.py`, `schemas/grant.py` in full (not cited from this doc), plus
+`dashboard_widget_service.py`'s `fundraising()` method and its caller in
+`dashboard.py`. Every fix re-confirmed intact at its current line:
+
+- **GF-13** — `GrantOpportunity.applications` still carries no cascade and
+  `passive_deletes=True`; `GrantApplication.opportunity_id` is still
+  `ondelete="SET NULL"` with `nullable=True` (Pitfall #2).
+- **GF-14 / Codex P2** — `_generate_compliance_tasks` still checks
+  `application.compliance_tasks_generated` first, not a `task_type` query.
+- **GF-15 / Codex P1** — `_update_budget_item_spent`, `_update_campaign_total`,
+  `_update_donor_stats` all still lock the parent row first and make the
+  SUM itself a locking read; `_lock_budget_item`/`_lock_campaign`/
+  `_lock_donor` are still called before the child row flush in both
+  create and update paths, for old and (if reassigned) new parents
+  (Pitfall #27).
+- **GF-16** — all ten update methods still route through `apply_updates`.
+- **GF-17** — `_notes_with_authors`' `User` lookup still filters
+  `organization_id`.
+- **GF-18** — `_update_budget_item_spent`'s budget-item fetch still joins
+  through `GrantApplication` and filters `organization_id`.
+- **GF-24 / GF-24a** — `get_grant_report`, `get_fundraising_report`, and
+  `list_donations` all still build the upper bound with
+  `datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)`;
+  the hard-coded-UTC limitation is unchanged and still correctly flagged
+  in `KNOWN_LIMITATIONS.md`, not fixed.
+- **GF-35** — all 11 `list_*` methods still carry `.offset(skip).limit(limit)`
+  plus an `id.asc()` tie-breaker; `list_budget_items`/`list_expenditures`/
+  `list_notes` still use the lightweight `_application_in_org()` check
+  rather than `get_application()`'s full eager-load, and `list_applications`
+  still carries no `selectinload` for `budget_items`/`compliance_tasks`.
+- **GF-36 (+ Codex extension)** — `create_application`/`update_application`
+  still build their response via `_notes_with_authors`, and
+  `get_application()` still runs with `.execution_options(populate_existing=True)`.
+- **GF-37** — the dead `approved_by` validation block is still absent from
+  `_validate_application_fks` (only `linked_campaign_id`/`assigned_to`
+  checked).
+- **GF-38 (+ two Codex extensions)** — `GrantApplicationFormPage.tsx` still
+  seeds `opportunityId` from `useSearchParams()`, still fetches a linked
+  opportunity outside the dropdown's unfiltered first page via
+  `getOpportunity`, and the merge-fetch's `catch` block still distinguishes
+  a 404 (fall through silently) from any other failure (toast) while
+  clearing `formData.opportunityId` on both branches.
+
+Endpoint count re-confirmed at **45/45** by two independent checks
+(`grep -c "^@router\."` and `grep -c 'require_permission("fundraising'`),
+every one still `.view` on `GET` / `.manage` on `POST`/`PUT`/`DELETE` with
+no exception, and neither permission string appears in
+`DEFAULT_POSITIONS["member"]`/`"firefighter"` (Pitfall #23). Every by-id
+query and client-supplied FK across both services re-swept directly for a
+missing `organization_id` filter or in-org validation (Pitfall #14a/b/c) —
+no gap: `_entity_in_org`/`_opportunity_in_org`/`_application_in_org`/
+`_budget_item_in_application`/`assert_in_org` are unchanged and still
+called ahead of every stored-only FK and every by-id mutation.
+`.ilike()` calls (`list_opportunities`, `list_donors`) still pass
+`escape=LIKE_ESCAPE_CHAR` via `like_pattern()` (Pitfall #25). No JSON
+column in this module (`budget_summary`, `key_contacts`,
+`suggested_amounts`, `note_metadata`) is ever read, nested-mutated and
+reassigned in place — every write goes through `apply_updates`,
+`_json_safe_amounts`'s dict-spread, or a full model constructor, so
+Pitfall #12's shallow-copy trap does not apply anywhere in this module.
+No CSV/spreadsheet export exists anywhere in the module (confirmed again
+by grep for `SafeCsvWriter`/`csv.writer` under a grants/fundraising path)
+— Pitfall #15 remains not applicable. No route was added since pass 4, so
+no new registry entry was owed (Pitfall #30a).
+
+On the frontend: permission gating (routes + `canManage` control-wrapping),
+the banned-patterns sweep (`window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, banned `.toLocale*`/`date-fns`, direct
+`fetch(`), form payload discipline (`|| undefined` on create,
+`blankToNull`/`numberOrNull` on update), outbound-URL safety
+(`isSafeExternalUrl` + `rel="noopener noreferrer"`), and the GF-27
+through GF-34 status-filter/pagination/race-condition chain all
+re-verified intact with fresh file:line citations. Re-checked the
+module's dialogs specifically against Pitfall #31 (2026-09-13, postdating
+pass 4): grepped for `closeOnClickOutside`, a scrim `onClick`, and a
+`target === currentTarget` container-click check across the whole module
+— the only `onClick` on a backdrop-adjacent element is the header close
+button in `GrantDetailPage.tsx`'s `Modal`, not the scrim itself (see
+"Diff-scoping methodology" above); `src/dialogDismissIntegrity.test.ts`
+and `src/dialogScrollIntegrity.test.ts` scan for this shape repo-wide and
+were not run locally this pass (frontend `node_modules` were not
+installed in this worktree and no frontend file needed a change — see
+"Completion gate" below), but the module's dialogs were confirmed clean by
+direct read, matching the diff-scoping conclusion that this file's only
+change already applied the correct fix. The module's four test files
+were also re-checked against Pitfalls #28/#28a (mock-config leakage,
+un-pinned viewport assertions): all four use `mockReset()` before setting
+a mock implementation in `beforeEach`, and none assert viewport-dependent
+output — clean on both, unchanged from pass 4.
+
+**Re-confirmed still open (unchanged, per every prior pass):** GF-7
+(state-machine/overspend guards), GF-8 (`is_anonymous` not enforced in
+`DonationResponse`/`DonorResponse`), GF-9 (float money math in both report
+methods), GF-27a (dashboard KPI multi-status aggregate vs. single-status
+link), GF-33 (applications page still capped at 1,000, no real pagination
+UI). All product/design decisions, unchanged, already in
+`KNOWN_LIMITATIONS.md` — re-checked against the current file and every
+row's citation still matches the finding it describes.
+
+### New this pass
+
+None. Zero backend drift, one frontend line that was itself a correct,
+unrelated fix, and a full independent re-read surfaced nothing pass
+1 through 4 missed.
+
+### Completion gate (pass 5)
+
+| Check                                                   | Result                               |
+| ------------------------------------------------------- | ------------------------------------ |
+| `flake8` (all six declared backend files)               | 0 violations                         |
+| `black --check` (all six declared backend files)        | clean, unchanged                     |
+| `isort --check-only` (all six declared backend files)   | clean                                |
+| `python3 scripts/validate_migrations.py --strict`       | PASSED — 444 revisions, single head  |
+| `python3 -m pytest tests/ -q -k "grant or fundraising"` | 620 passed, 1 pre-existing skip      |
+| `python3 -m pytest tests/ -q` (full backend suite)      | 12,585 passed, 21 pre-existing skips |
+
+No frontend files were changed this pass (the one in-scope diff since pass
+4 was itself a correct prior fix, not something this pass needed to touch)
+and frontend `node_modules` were not installed in this worktree, so no
+`tsc`/`eslint`/`vitest` run is reported separately — matching pass 3's own
+precedent for a pass with zero frontend drift and no frontend finding.
+
+Rotation row 22 (Grants & fundraising) → ✅ (pending merge). Next: Feature
+23 (Medical supplies), once this PR merges.
