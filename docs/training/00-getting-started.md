@@ -158,6 +158,28 @@ Two practical differences:
 
 ---
 
+### Dialogs close on Escape or the X, not on a click beside them _(2026-09-13)_
+
+Clicking in the margin around an open dialog does nothing. Use **Escape** or the
+**X** in the dialog's header.
+
+This changed deliberately, and in the direction that loses less. A dialog here is
+usually a form — adding an inventory item, filing a request, editing a template —
+and nothing in the application drafts what you have typed. A click in the gutter
+used to close the dialog and discard the form: no confirmation, no undo, and on
+reopening, a blank box. That click is also far more often a slip than an
+intention; a text selection that starts inside the panel and ends outside it
+lands in exactly the same place.
+
+Five things still close when you click away, because none of them holds anything
+you could lose: the **command palette**, the two equipment-check **jump sheets**,
+the **checklist picker**, and the **before publishing** sheet. Menus and
+dropdowns are unaffected — closing on an outside click is how a menu is meant to
+behave.
+
+**If your department trains new members from a recording**, a take that closes a
+dialog by clicking beside it no longer matches the application.
+
 ## Navigation Sidebar
 
 The sidebar is organized into sections based on your role. Not all sections are visible to every member -- what you see depends on your assigned positions and permissions.

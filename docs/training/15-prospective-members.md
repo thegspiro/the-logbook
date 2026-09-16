@@ -458,14 +458,26 @@ When an applicant advances to an **Election Vote** stage, the system automatical
 > **Advance** is refused until the election closes and the result is recorded,
 > and a package that comes back **Not Elected** is refused outright — reject or
 > withdraw the application, or hold a new vote. This is what stops an applicant
-> the department voted down from being advanced, and — on a pipeline with
-> **Auto-transfer on approval** and the vote as its final stage — converted
-> into a member.
+> the department voted down from being advanced into membership.
 >
 > A department that holds its vote at a meeting and records the outcome by hand
 > is unaffected: a stage with no package, or one still **Draft** or **Ready**,
 > advances exactly as before. Nothing is gated until a package is actually put
 > on a ballot.
+
+> **…and it holds Convert too** _(2026-09-14)_**.** The gate above originally
+> covered **Advance** alone, which left the commoner route open: **Convert** is
+> the button shown whenever an applicant is on the pipeline's last stage, and
+> it is what a coordinator is told to use — the refusal on **Skip** says
+> "convert or reject instead". It runs through a different code path and never
+> consulted the package. So for a day, an applicant the membership had voted
+> **down** could still be converted to a full member on a click, with the
+> drawer beside the button reading _This applicant was not elected by the
+> membership vote_.
+>
+> **Both buttons now refuse the same two states, with the same wording and the
+> same way out.** This is not limited to pipelines with **Auto-transfer on
+> approval** — a coordinator pressing Convert by hand is gated identically.
 
 See [Elections & Voting > Prospective Member Election Packages](./14-elections.md#prospective-member-election-packages) for the voting workflow.
 
@@ -474,6 +486,12 @@ See [Elections & Voting > Prospective Member Election Packages](./14-elections.m
 ## Converting to a Full Member
 
 When an applicant has completed all pipeline stages:
+
+> **If your pipeline ends in a membership vote, check the election package
+> first.** Convert is refused while the package reads **Added to Ballot** and
+> refused outright when it reads **Not Elected** — see [The ballot holds the
+> stage](#election-vote-stage) above. A package still **Draft** or **Ready**, or
+> no package at all, converts normally.
 
 1. Click **Convert to Member** in the applicant detail view
 2. **Step 1 — Review Applicant** summarises what is on file (name, email,
@@ -506,11 +524,14 @@ When an applicant has completed all pipeline stages:
 
 ### Edge Cases
 
-| Scenario                                  | Behavior                                              |
-| ----------------------------------------- | ----------------------------------------------------- |
-| Email already exists as a member          | Conversion blocked; shows existing member details     |
-| Auto-transfer enabled on pipeline         | Conversion happens automatically at final stage       |
-| Applicant converted without election vote | Allowed if pipeline doesn't include an election stage |
+| Scenario                                      | Behavior                                                                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Email already exists as a member              | Conversion blocked; shows existing member details                                                                  |
+| Auto-transfer enabled on pipeline             | Conversion happens automatically at final stage — **unless the ballot gate holds it**                              |
+| Applicant converted without election vote     | Allowed if pipeline doesn't include an election stage                                                              |
+| Election package reads **Added to Ballot**    | Conversion refused until the election closes and the result is recorded _(2026-09-14)_                             |
+| Election package reads **Not Elected**        | Conversion refused outright — reject or withdraw, or hold a new vote _(2026-09-14)_                                |
+| Ballot closed but the result was never synced | The applicant stays put. Record the result, or un-tick **Required** on the stage and **Skip**, which stays audited |
 
 ### After Conversion, the File Stays Confidential _(2026-08-07)_
 

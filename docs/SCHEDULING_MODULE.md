@@ -294,7 +294,7 @@ POST   /api/v1/scheduling/shifts                    # Create shift (scheduling.m
 GET    /api/v1/scheduling/shifts/{id}               # Get shift by ID
 PATCH  /api/v1/scheduling/shifts/{id}               # Update shift (scheduling.manage)
 DELETE /api/v1/scheduling/shifts/{id}               # Delete shift (scheduling.manage)
-GET    /api/v1/scheduling/shifts/open               # Get upcoming open shifts
+GET    /api/v1/scheduling/shifts/open               # Claimable shifts (member) / staffing gaps (scheduling.manage)
 GET    /api/v1/scheduling/shifts/needing-closeout   # Ended, never closed out, oldest first (scheduling.manage)
 GET    /api/v1/scheduling/calendar/week/{date}      # Week calendar view
 GET    /api/v1/scheduling/calendar/month/{y}/{m}    # Month calendar view
@@ -622,13 +622,45 @@ administrative is reached from it: a strip of "Officer tools" used to sit above
 the board, which meant an administrator opened the schedule to find the
 settings — see **Scheduling Administration** below.
 
-| Tab               | Access      | Description                                                                                                                                |
-| ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Schedule**      | All members | The shift board (see below) — month/week grid beside a day panel with the crew roster and one-tap claim. Admins see "Create Shift" button. |
-| **My Shifts**     | All members | Personal upcoming/past shifts. Confirm or decline assignments. Request swaps or time off.                                                  |
-| **Open Shifts**   | All members | Browse upcoming shifts grouped by date. Sign up for positions with inline position selector.                                               |
-| **Requests**      | All members | View swap and time-off requests. Admins can approve/deny with reviewer notes.                                                              |
-| **Shift Reports** | All members | End-of-shift reports the member filed or is named on.                                                                                      |
+| Tab               | Access      | Description                                                                                                                                                                          |
+| ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Schedule**      | All members | The shift board (see below) — month/week grid beside a day panel with the crew roster and one-tap claim. Admins see "Create Shift" button.                                           |
+| **My Shifts**     | All members | Personal upcoming/past shifts. Confirm or decline assignments. Request swaps or time off.                                                                                            |
+| **Open Shifts**   | All members | Shifts with a seat the member is cleared for, grouped by date, with an inline position selector. `scheduling.manage` sees the department-wide staffing-gap view instead — see below. |
+| **Requests**      | All members | View swap and time-off requests. Admins can approve/deny with reviewer notes.                                                                                                        |
+| **Shift Reports** | All members | End-of-shift reports the member filed or is named on.                                                                                                                                |
+
+#### Open Shifts is seat-level for a member _(2026-09-13)_
+
+Two checks used to answer different questions with nothing intersecting them.
+`filter_shifts_with_open_positions` asks whether the **shift** still has an
+unfilled required seat; the eligibility filter asks whether the **member** is
+cleared for any position on the shift. A shift with an empty driver's seat and a
+full firefighter seat satisfied both for a firefighter, and the per-position seat
+cap in `_validate_assignment_candidate` then refused the signup with "Position
+was filled after this request was submitted" — a message about a race, for a seat
+that had been taken for days.
+
+`GET /shifts/open` now answers differently depending on who is asking:
+
+| Caller              | Method                 | Means                                                             |
+| ------------------- | ---------------------- | ----------------------------------------------------------------- |
+| A member            | `get_claimable_shifts` | An unclaimed seat exists at a position this member is cleared for |
+| `scheduling.manage` | `get_open_shifts`      | The department-wide staffing-gap view, unchanged                  |
+
+`open_positions_by_shift` reports which seat names are actually unclaimed, and
+follows `_validate_assignment_candidate` rather than the staffing listing on the
+two points where they disagreed: **every** seat counts, not only required ones,
+and a seat is held by any assignment that is not declined or cancelled, so a
+pending signup holds one. The additive `open_positions` field on the shift
+response gives the signup picker the same answer, so it offers only seats the
+server will grant and can say "every seat you are cleared for on this shift has
+been filled" instead of "you are not eligible".
+
+**`filter_shifts_with_open_positions` is deliberately untouched.** The
+administration hub's short-staffed metric, the MCP tool and the staffing report
+all depend on its required-only meaning, and outreach sheets stay on it because
+their seats are roles with their own remaining counts.
 
 ### Scheduling Administration _(2026-09-05)_
 
@@ -714,8 +746,11 @@ screen writing them means whichever saved last silently reverts the other.
 **The hub metric and this screen answer the same question from two rules, and
 that is deliberate.** The `scheduling` ModuleSpec's Short-staffed metric goes
 through `SchedulingService.filter_shifts_with_open_positions` — the matcher
-already behind the open-shifts list and the staffing report, which pairs each
-required slot with a held position and falls back to a minimum of one. This
+behind the staffing report and behind what a `scheduling.manage` holder sees on
+the Open Shifts tab, which pairs each required slot with a held position and
+falls back to a minimum of one. (A member's own board goes through
+`get_claimable_shifts` instead; see
+[Open Shifts is seat-level for a member](#open-shifts-is-seat-level-for-a-member-2026-09-13).) This
 screen reads `shiftCapacity`, which returns null for a shift that names neither
 positions nor a `min_staffing`. So a department that has stated no crew size
 anywhere sees such a shift in the hub's count while nobody is on it and not in
@@ -797,7 +832,8 @@ and pending time-off.
 
 **Short-staffing is not a headcount.** It reads through
 `SchedulingService.filter_shifts_with_open_positions`, the same method behind
-the open-shifts list and the staffing report, which matches each _required_
+the staffing report and the `scheduling.manage` view of the open-shifts list,
+which matches each _required_
 slot against a held position and consumes it. A headcount would call a two-seat
 Officer/Driver shift carrying two firefighters covered — the seat that matters
 is the empty one. That method also drops slots marked `required: false`,
@@ -1082,7 +1118,7 @@ When creating or editing a shift, if a member is assigned the **Officer** positi
 The main Dashboard now displays shifts in two separate sections:
 
 - **My Upcoming Shifts** — Shifts you are assigned to, with date, time, position, and apparatus
-- **Open Shifts** — Available shifts you can sign up for, with a quick-signup button
+- **Open Shifts** — Shifts you can sign up for, with a quick-signup button. Served by `/shifts/open`, so it carries the same seat-level filter the Open Shifts tab does
 
 This replaces the previous single shift list that mixed assigned and open shifts together.
 

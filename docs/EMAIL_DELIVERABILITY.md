@@ -155,13 +155,39 @@ SMTP_FROM_NAME="Your Organization"
 > will be sent without them when Cloudflare is the active backend. A warning
 > is logged when this occurs.
 
+### Which configuration wins _(2026-09-15)_
+
+Both options above are **deployment-wide**. A department can also configure its
+own transport at Settings → Email, and the precedence between the two is not
+obvious enough to leave unstated:
+
+| Organization's own section | What sends                                                                    |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| Enabled                    | The organization's own transport. The deployment's `SMTP_*` are not consulted |
+| Disabled or absent         | The deployment's `SMTP_*`, or `CLOUDFLARE_*` when that is the active backend  |
+
+**An enabled section short-circuits the deployment's settings whether or not it
+can actually send**, which is why an enabled section that is missing what it
+needs is refused on the write since 2026-09-13. Before that, a half-filled
+section saved green and silently stopped a department that had been sending
+through the deployment's own SMTP server.
+
+**`CLOUDFLARE_EMAIL_ENABLED` is a default, not an override.** Until 2026-09-15 a
+deployment-wide Cloudflare account was used for every organization, including
+one running its own enabled SMTP — so mail went out through an unrelated account
+under the deployment's `SMTP_FROM_EMAIL`. An organization with its own enabled
+section is no longer a candidate for it.
+
 ### What the app handles automatically
 
 These headers are set by the application code and require no configuration:
 
 - **`Message-ID`** — Unique `<uuid@domain>` per email (RFC 5322)
 - **`List-Unsubscribe`** — Set on ballot notification emails with the
-  admin contact's mailto address (RFC 8058)
+  admin contact's mailto address (RFC 8058). Carried on the Cloudflare paths
+  too since 2026-09-15; before that both headers were silently dropped there,
+  because the SMTP path sets them on the MIME message and the Cloudflare API
+  takes structured fields instead
 - **`List-Unsubscribe-Post`** — One-click unsubscribe support (RFC 8058)
 - **`Reply-To`** — Set to the election admin's email on ballot notifications
 - **EHLO hostname** — Uses `SMTP_EHLO_HOSTNAME` or the `SMTP_FROM_EMAIL`

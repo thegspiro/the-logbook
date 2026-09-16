@@ -936,6 +936,33 @@ Navigate to **Inventory Admin** and check the **Maintenance Due** section for it
 
 ![Item inspections tab listing its service history](./images/05-52-item-maintenance.png)
 
+### Only an inspection moves the inspection clock _(2026-09-13)_
+
+An item on an inspection interval carries two dates: **last inspection** and
+**next inspection due**, the second calculated from the first. Marking a
+maintenance record complete used to write both — for any record, whatever its
+type.
+
+So a structural coat inspected in April and repaired in August had its annual
+NFPA 1851 inspection silently rescheduled from the following April to the
+following August. **The department read as compliant for four months longer than
+it was.** Nothing raised and nothing was logged; the only visible sign was the
+two dates on the item page disagreeing.
+
+Only a record whose type is an inspection — **routine**, **advanced** or
+**independent** — moves those dates now. A repair, a cleaning, a
+decontamination or a test records itself against the item's history and leaves
+the inspection schedule alone. The type is read after the record is saved, so
+completing a record and correcting its type in the same action is judged on what
+it ends up being.
+
+⚠️ **This does not go backward.** Gear whose inspection date already slid keeps
+the date it holds, because the application cannot tell a date that slid from one
+a quartermaster entered deliberately. **If your department tracks gear on an
+inspection interval and has been completing repairs against it, check the last
+inspection date on that gear against your paper records** before trusting the
+next-due figure.
+
 ---
 
 ## Low Stock Alerts

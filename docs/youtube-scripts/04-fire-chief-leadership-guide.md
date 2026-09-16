@@ -333,6 +333,23 @@ appears — ten advanced, two named and skipped with reasons.]**
 
 **[CALLOUT: "Pipeline → Convert to Member = seamless onboarding"]**
 
+**[SCREEN: An applicant whose election package reads Not Elected, with Convert refusing]**
+
+> "With one limit worth knowing, added in September 2026. If your pipeline ends
+> in a **membership vote**, Convert waits for the ballot. An applicant whose
+> package is still **on** a ballot can't be converted, and one the membership
+> voted **down** can't be converted at all — the button refuses and says why."
+
+> "That sounds obvious. It wasn't true before. The package status was there,
+> the Elections module was writing it, and nothing read it when you moved
+> somebody — so an applicant your department had voted down could be converted
+> on a click, right next to a panel saying they weren't elected. If your
+> pipeline also has auto-transfer on approval, that click made them a member."
+
+> "If you hold your vote at a meeting and record the outcome by hand, none of
+> this touches you. A stage with no election package — or one still Draft or
+> Ready — converts exactly as it always did."
+
 **[TRANSITION: Elections section]**
 
 ---

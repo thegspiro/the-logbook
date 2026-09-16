@@ -1,5 +1,53 @@
 # Screenshot currency
 
+## Disposition for September 12-15, 2026 - the screens stayed put, their contents did not
+
+Audit: [`CHANGE_AUDIT_2026-09-12_TO_09-15.md`](../CHANGE_AUDIT_2026-09-12_TO_09-15.md).
+
+**No screen was added or retired this window**, so nothing here is a capture of
+somewhere new. Every item is the same address showing something different, which
+is the disposition that goes stale quietly: an old frame of a screen that still
+exists does not announce itself the way a 404 does.
+
+**Six placeholders were written into the guides** by this pass and are queued
+below — four in
+[`20-september-2026-release-changes.md`](./20-september-2026-release-changes.md),
+one in [`03-scheduling.md`](./03-scheduling.md) and one in
+[`08-admin-reports.md`](./08-admin-reports.md). The library moves from 530/572
+to **530/578**; nothing was captured by this pass.
+
+| Image area                                    | Disposition | Guide                              | Why                                                                                                 |
+| --------------------------------------------- | ----------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Scheduling -> **Open Shifts**, member vs admin | **NEW**     | 20 (release), 03 (scheduling)      | The two views now differ. A single frame carrying both is the only way to show it                     |
+| Applicant drawer, **Not Elected** refusal      | **NEW**     | 20 (release)                       | The state a coordinator has to recognise, and it did not exist before September 13                    |
+| Stage picker with **Election Vote** saving     | **NEW**     | 20 (release)                       | Replaces any frame showing the old validation error, which could not be satisfied from the modal      |
+| Settings -> **Email**, SMTP preset list        | **REPLACE** | 20 (release), 08 (admin)           | Twelve providers are offered where the list previously showed Self-Hosted or Other                    |
+| Settings -> **Email**, inline refusal          | **NEW**     | queued, no placeholder written yet | The refusal for an enabled-but-empty Cloudflare or Other section is what an operator hits on upgrade  |
+| Shift signup **position picker**               | **REPLACE** | queued, no placeholder written yet | Offers only seats the server will grant                                                               |
+| Stage builder -> **Meeting** config            | **REPLACE** | queued, no placeholder written yet | Carries the Auto-Link Event Type warning beside the auto-advance checkbox                             |
+| Inventory item -> maintenance history          | **NO SHOT** | n/a                                | The rule changed, the screen did not                                                                  |
+
+### The Open Shifts pair needs two sessions, not two clips
+
+The member view and the `scheduling.manage` view of `/scheduling?tab=open-shifts`
+are the **same URL**. The difference is who is signed in, so this cannot be
+captured as two clips of one page the way a tab switch can — it needs two
+capture sessions against the seeded department, one as an ordinary member and
+one as an officer, and the pair composed afterwards. Caption which is which; a
+reader cannot tell from the frame.
+
+**Seed the member with a position that is genuinely narrower than the board.**
+A member cleared for every seeded position sees the same list the admin does,
+which photographs as "no difference" and argues the opposite of the caption.
+
+### Nothing here is a consequence of the dialog change
+
+A dialog that no longer closes on an outside click is **byte-identical in a
+still frame**. No capture in the library is invalidated by it, and no new one
+demonstrates it. It belongs in prose and in video, and the release lesson and
+the wiki handoff both say so where a reader would otherwise go looking for a
+picture.
+
 ## Disposition for September 12, 2026 - call tracking became a three-way choice
 
 **Re-shot, so this adds no queue.** `call_tracking.mode` has always had three

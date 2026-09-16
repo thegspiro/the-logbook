@@ -1,8 +1,9 @@
-# August 31 – September 12, 2026 workflow updates
+# August 31 – September 15, 2026 workflow updates
 
-This lesson is the operator-facing companion to two change audits:
-[August 31 – September 6](../CHANGE_AUDIT_2026-08-31_TO_09-06.md) and
-[September 6–12](../CHANGE_AUDIT_2026-09-06_TO_09-12.md). It explains what
+This lesson is the operator-facing companion to three change audits:
+[August 31 – September 6](../CHANGE_AUDIT_2026-08-31_TO_09-06.md),
+[September 6–12](../CHANGE_AUDIT_2026-09-06_TO_09-12.md) and
+[September 12–15](../CHANGE_AUDIT_2026-09-12_TO_09-15.md). It explains what
 members and administrators now do differently. Permission names are included
 because a control that is absent is usually a permission or module-state issue,
 not a rendering failure.
@@ -10,10 +11,12 @@ not a rendering failure.
 Its predecessor is
 [19 — August 12–31 release changes](./19-august-2026-release-changes.md).
 
-**It covers two windows.** The first runs from the top of this file; the second
-starts at [September 6–12, 2026 changes](#september-612-2026-changes). The
-warning immediately below applies to the **first** window only — **nothing in
-the second window changed address, and no bookmark breaks there.**
+**It covers three windows.** The first runs from the top of this file; the
+second starts at [September 6–12, 2026
+changes](#september-612-2026-changes) and the third at [September 12–15, 2026
+changes](#september-1215-2026-changes). The warning immediately below applies to
+the **first** window only — **nothing in the second or third window changed
+address, and no bookmark breaks there.**
 
 > **Two features changed address in this window, and fourteen addresses stop
 > working with no redirect.** Thirteen are retired paths and land on the
@@ -1218,9 +1221,260 @@ Then, in order:
    stages — the column order may settle differently from what you were used to,
    and that is the tie being broken deliberately rather than at random.
 
+---
+
+# September 12–15, 2026 changes
+
+**Nothing moved address, and nothing new was added to move to.** No screen was
+created, none retired, and every change below happens somewhere your members
+already go. There is one migration.
+
+This is a **correction window**. Twelve of its seventeen changes fix a rule that
+was written down somewhere and enforced nowhere, or enforced on one path out of
+two. Four of them change what somebody sees without anyone asking.
+
+## For members: what is new
+
+### The Open Shifts board got shorter, and that is the fix
+
+Members picking their position off the Open Shifts board were being refused with
+**"Position was filled after this request was submitted"** — a message about
+somebody beating them to it, for a seat that had been taken for days.
+
+Two questions were being asked and never compared. One was "does this shift
+still need somebody?" The other was "is this member cleared for anything on it?"
+A shift with an empty driver's seat and a full firefighter seat answered yes to
+both for a firefighter, who was then refused at signup, because the seat they
+could actually take was gone.
+
+**The board now lists a shift only when one of its unclaimed seats is a position
+that member is cleared for.** A member who used to see eight open shifts may now
+see three. Nothing was taken away — the five that disappeared are the five the
+system would have refused.
+
+Two things improve alongside it:
+
+- **The position picker offers only seats the server will grant.** It no longer
+  lists a position and then declines it.
+- **"Every seat you are cleared for on this shift has been filled"** replaces
+  "you are not eligible" where that is what happened. The old wording sent
+  members to a scheduling admin about qualifications that were fine.
+
+**Scheduling admins see no change.** Anyone holding `scheduling.manage` keeps
+the department-wide view, because that tab is also how an admin finds the
+department's staffing gaps.
+
+> **Screenshot needed:**
+> _[Scheduling → Open Shifts as an ordinary member, alongside the same board as
+> a scheduling admin, so the difference in what is listed is visible in one
+> frame. Caption which is which.]_
+
+### Clicking beside a dialog no longer throws the form away
+
+Every dialog in the application used to close when you clicked in the margin
+around it. Where the dialog held a form, that discarded the form — no draft, no
+"are you sure", no undo.
+
+The case this was reported for is adding a uniform to Inventory: a name, a
+category, a room, a storage area and then a set of sizes and garment style axes,
+all chosen before anything is saved. One click in the gutter threw the lot away
+and reopened the dialog blank.
+
+**Escape and the X in the dialog's header still close everything.** Nothing is
+harder to get out of; there is just no longer a way to lose a form by missing.
+
+Five things still close on an outside click, because none of them holds anything
+you could lose: the command palette, the two equipment-check jump sheets, the
+checklist picker, and the "before publishing" sheet. Menus and dropdowns are
+unaffected — closing when you click away is how a menu is supposed to behave.
+
+**If your department trains on video, that take no longer matches the
+application.** Nothing looks different in a still frame, so this will not show
+up in a screenshot; it shows up the first time somebody demonstrates closing a
+dialog.
+
+## For officers: what is new to work with
+
+### A membership vote is now binding on the buttons
+
+Four changes to the membership pipeline, and they share a theme: a stage that
+described a rule now enforces it.
+
+**An Election Vote stage waits for the ballot.** The applicant's election
+package has always recorded the vote — the Elections module writes _Added to
+Ballot_ when a package goes on a ballot, and _Elected_ or _Not Elected_ when the
+closed ballot is tallied. **Nothing read it when moving an applicant.** So an
+applicant the department had voted _down_ advanced on a click, next to a panel
+reading "This applicant was not elected by the membership vote"; on a pipeline
+with auto-transfer and the vote as its final stage, that click made them a
+member.
+
+**Both buttons are gated now.** **Advance** was gated on September 13. The
+**Convert** button — the one shown whenever an applicant is on the last stage,
+and the way a coordinator is told to finish a pipeline — went through a
+different code path and was gated on September 14.
+
+If your department holds its vote at a meeting and records the outcome by hand,
+**nothing changes**: a stage with no package, or one still _Draft_ or _Ready_,
+advances exactly as before.
+
+> **Screenshot needed:**
+> _[The applicant detail drawer for an applicant whose election package reads
+> Not Elected, with the refusal shown against the Convert button. This is the
+> state a coordinator needs to recognise.]_
+
+**A Meeting stage that names no event now advances on nothing.** The stage
+builder's **Auto-Link Event Type** is what tells a meeting stage which event
+counts. A stage that named none used to accept attendance at _any_ event in the
+department — and guest check-in is department-wide, and departments enable it on
+open houses and fundraisers, which is exactly where a prospective member turns up
+casually. A stage reading "Meeting with the Fire Chief" advanced an applicant who
+signed in at a pancake breakfast.
+
+**Meeting Type does not stand in for the event type.** That field names the
+stage's purpose for whoever reads it and is read by nothing. Check any meeting
+stage with auto-advance ticked and Auto-Link Event Type set to _None_ — it will
+stop advancing on its own, and the stage builder now refuses to save that
+combination. Cal.com stages are unaffected: they advance when Cal.com reports the
+meeting ended, not off an attendance record.
+
+**A form submission moves only the applicant it belongs to, and only off the
+stage they are on.** It used to find the stage by matching the _form_ and
+complete it wherever the applicant had actually got to — which pulled people
+**backward**, from the membership vote back to the welcome email. And the
+"Auto-advance when form is submitted" box decided nothing in either direction.
+It does now: un-tick it and the applicant stays put with their answers recorded
+for you to review. A stage where nobody touched the box keeps advancing exactly
+as it does today.
+
+**Election Vote and Manual Approval can be created from the stage picker.**
+Neither could be, unless you used a quick-add preset. Both demanded a list of
+roles that has no input anywhere in the modal, and Manual Approval — the modal's
+default type — failed in silence, because its error was never rendered.
+
+> **Screenshot needed:**
+> _[The stage type picker with Election Vote selected and saving successfully.
+> Replace any capture showing the old validation error.]_
+
+## For administrators: read this before you upgrade
+
+### An email configuration that cannot send is now refused when you save it
+
+Settings → Email would save an **enabled** section green that had no chance of
+delivering anything. Two shapes did it: **Cloudflare** with no account ID or API
+token, and **Other**, which stores nothing at all.
+
+**This is worse than it sounds, and it is the reason to read this section.** An
+enabled section short-circuits the deployment's own SMTP settings. So a
+half-filled section did not merely fail to send on its own — **it stopped
+whatever server-level mail configuration the installation had from being used.**
+A department that had been sending perfectly well, then half-filled an email
+section, stopped sending. Green toast, no error anywhere.
+
+**What to do if your mail stopped and you cannot explain it:** open Settings →
+Email and either complete the section or **turn it off**. A disabled section
+hands sending back to the deployment's own configuration.
+
+**Twelve SMTP presets were added.** Yahoo, iCloud, Zoho, Fastmail, AOL, GMX,
+SendGrid, Amazon SES, Mailgun, Postmark, Brevo and Mailjet each fill in the
+host, port and encryption the provider documents, along with what its Username
+and password fields expect. **Most of them need an app password** generated in
+the provider's own settings once two-factor sign-in is on — the commonest reason
+a correct host and port still fails to authenticate.
+
+This is a labelling fix, not a new capability: all twelve are ordinary SMTP,
+which the platform already sent perfectly well. What departments did not have
+was any way to know that. A chief running on Yahoo read "Self-Hosted SMTP — your
+own mail server", reasonably concluded it was not supported, and picked
+**Other**, which cannot send at all.
+
+> **Screenshot needed:**
+> _[Settings → Email with the SMTP preset list open, showing the twelve
+> providers. Replace any capture of the platform list taken before
+> September 13.]_
+
+**Two more email fixes.** Departments on Cloudflare can send ballot email for
+the first time — the ballot fan-out handed Cloudflare raw message data its API
+does not accept and fell back to an SMTP host those departments do not have. And
+a deployment-wide Cloudflare account no longer overrides a department that has
+configured its own transport.
+
+### Completing a repair no longer moves an inspection deadline
+
+⚠️ **This is the one item in this window that may have left bad data behind.**
+
+Marking any maintenance record complete used to write the item's **last
+inspection date** — a repair, a cleaning, a decontamination, anything — and
+recalculate the next inspection due date from it.
+
+A structural coat inspected in April and repaired in August had its annual
+NFPA 1851 inspection silently rescheduled from the following April to the
+following August. **The department read as compliant for four months longer than
+it actually was.** Nothing raised and nothing was logged; the only visible sign
+was two dates on the item page that did not agree.
+
+Only an inspection moves that clock now — routine, advanced or independent.
+
+**The fix does not go backward. Gear whose inspection date already slid keeps
+the date it holds.** If your department tracks gear on an inspection interval
+and has been completing repair or cleaning records against it, **check the last
+inspection date on that gear against your paper records** before trusting the
+next-due figure. There is no automatic repair for this, and there cannot be: the
+application cannot tell a date that slid from one a quartermaster entered
+deliberately.
+
+### Fourteen screens stopped refusing people who hold the manage permission
+
+A permission named `manage` does not automatically include `view` — the match is
+literal. So a screen gated on `X.view` that then checks for `X.manage` to show
+more refused anyone holding manage alone, before it ever got to the check.
+
+**One of these reaches a department that changed nothing.** President,
+secretary, vice president and membership coordinator all ship with
+`prospective_members.manage` and not `.view`. They could link an event to an
+applicant and then could not read the links back — and the drawer showed **"no
+linked events"** rather than an error, so the links they added appeared to
+vanish.
+
+The other thirteen need a hand-configured position to reach: the elections
+candidate list, the events attendee list, finance's expense reports, member dues
+and dues payments, and the scheduling calendar, summary, time-off and swap
+reads. The swap and time-off ones matter most in practice — a position holding
+`scheduling.manage` is exactly who reviews a swap or a time-off request, and it
+could reach neither the queue that finds one nor a request it had been sent a
+link to.
+
+**Nothing became visible to anyone who could not already reach it another way**,
+and every one of these still shows only your own department's records.
+
+## Upgrade notes for administrators (September 12–15)
+
+**One migration. Head is `6ab7d903fae5`.** Back up, confirm `alembic heads`
+returns exactly one, then `alembic upgrade head`.
+
+The migration constrains the first-run setup table to a single row and removes
+any duplicates already there. It only matters to an installation that has never
+finished setup; it reverses cleanly.
+
+Then, in order:
+
+1. **Check your meeting stages.** Any with auto-advance ticked and Auto-Link
+   Event Type set to _None_ stop advancing on their own. Set the event type and
+   they resume.
+2. **Check your email configuration** if your department's mail has been
+   unreliable — particularly if somebody once started filling in Cloudflare or
+   picked "Other".
+3. **Spot-check inspection dates** on gear that is on an inspection interval and
+   has had repairs or cleanings completed against it.
+4. **Tell your members the Open Shifts board will be shorter**, and why. This is
+   the change most likely to be reported as something being broken.
+5. **Expect nothing from the dialog change**, but mention it to whoever runs
+   training — every video showing a dialog closed by clicking beside it is now
+   wrong.
+
 ## Not yet available — do not teach these
 
-Unchanged from the previous two windows:
+Unchanged from the previous three windows:
 
 - The crew **Sweep** for equipment checks — built, visible only in the template
   builder's preview.

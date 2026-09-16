@@ -184,9 +184,13 @@ getting.
 
 ### Two prospective-member stages now hold applicants where they should (2026-09-13)
 
-Both changes are to the membership pipeline. Neither touches an existing
-record, and a coordinator's **Advance** button remains ungated in every case
-described below — these withhold _automatic_ movement, not the coordinator's.
+Both changes are to the membership pipeline and neither touches an existing
+record. **They are not gated the same way**, which matters if you are deciding
+what to check after upgrading: the Election Vote gate refuses a coordinator's
+**Advance** as well as an automatic one, because a vote the department has
+already held is a result rather than a judgement call. The Meeting gate
+withholds only the _automatic_ advance and leaves **Advance** to the
+coordinator.
 
 **An Election Vote stage now waits for the ballot.** A stage of that type
 refuses **Advance** while the applicant's election package reads _Added to
@@ -206,6 +210,14 @@ still _Draft_ or _Ready_, advances exactly as before. Only a package that
 actually reached a ballot is held. If a ballot closed but the result was never
 synced, the applicant stays put — un-tick **Required** on the stage and use
 **Skip**, which stays audited, or record the result.
+
+**The gate reached the Convert button on 2026-09-14.** It originally ran inside
+`complete_step` alone, and **Convert** — the button shown whenever an applicant
+is on the pipeline's last stage, and the documented way to finish one — calls
+the transfer path directly without going through it. So for one day an
+applicant the vote had rejected could still be converted to a full member by
+that button. Both paths carry the gate now, with the same wording and the same
+escape hatch.
 
 **A Meeting stage that names no event no longer auto-advances at all.** The
 stage builder's **Auto-Link Event Type** is what tells a meeting stage which
@@ -227,6 +239,133 @@ resume; the coordinator can advance by hand meanwhile. Stages that
 self-schedule through **Cal.com** are unaffected — they advance when Cal.com
 reports the meeting ended, not off an attendance record, so they need no
 linked event.
+
+### An email configuration that cannot send is now refused when you save it (2026-09-13, completed 2026-09-15)
+
+Settings → Email would save an **enabled** section green that had no chance of
+delivering a message. Two shapes did this: **Cloudflare** with no account ID or
+API token, and **Other**, which stores nothing at all. Both now name the missing
+field on the write, and the settings screen says so inline rather than leaving
+Save to explain it. A present-but-misshapen Cloudflare account ID is rejected
+too — it must be the 32-character hexadecimal value from your Cloudflare
+dashboard, not the account name.
+
+**Why this matters more than a validation message.** An enabled section short-
+circuits the deployment-wide `SMTP_*` settings: `_get_smtp_config` returns early
+once the organization's own section is enabled, so a hollow section did not just
+fail to send on its own, **it stopped whatever server-level SMTP the deployment
+had from being used.** A department that had been sending mail perfectly well
+through the deployment's SMTP server and then half-filled an email section
+stopped sending, with a green toast and no error anywhere.
+
+**What to do.** If your department's mail stopped and you cannot explain it,
+open Settings → Email. Either complete the section or **turn it off** — a
+disabled section hands sending back to the deployment's own SMTP configuration.
+
+**Three more things changed on the same screen, all additive.**
+
+- **Twelve SMTP quick-fill presets.** Yahoo, iCloud, Zoho, Fastmail, AOL, GMX,
+  SendGrid, Amazon SES, Mailgun, Postmark, Brevo and Mailjet each fill in the
+  host, port and encryption the provider documents, along with what its Username
+  and password fields expect — most of them require an app password generated in
+  the provider's own settings once two-factor sign-in is on, which is the
+  commonest reason a correct host and port still fails to authenticate. **The
+  stored shape is unchanged**: still a self-hosted SMTP configuration with the
+  same fields, so nothing about an existing one moves. This is a labelling fix.
+  A department running on Yahoo read "Self-Hosted SMTP — your own mail server",
+  reasonably concluded it was not supported, and picked **Other**, which cannot
+  send.
+- **Cloudflare departments can send ballot email.** The election ballot fan-out
+  is the one batch sender, and it handed the Cloudflare path raw MIME, which
+  that API does not accept — so it warned about falling back to SMTP and fell
+  back to a host those organizations do not have.
+- **A stored `email_service: null` no longer breaks sending.** The settings API
+  accepts an explicit null and stored it, after which every read inside the
+  sender raised — while the settings screen itself displayed normally, because
+  the read path already guarded.
+
+**Also fixed on 2026-09-15**, from a review of the above: an organization with
+its own enabled email section is no longer overridden by a deployment-wide
+Cloudflare account (that account is a default for organizations that have not
+chosen, not an override for ones that have), the Cloudflare paths now carry the
+`List-Unsubscribe` headers the SMTP path always did, and a partial save that
+omits the platform field no longer fails with "Email cannot be enabled without
+an email platform" while naming a perfectly good SMTP host.
+
+### A click outside a dialog no longer closes it (2026-09-13)
+
+Clicking in the margin around an open dialog used to close it. Where the dialog
+held a form, that discarded the form — with no draft, no confirmation and no
+undo. The case this was reported for is adding a uniform to inventory, where a
+name, category, room, storage area and a set of sizes and garment style axes are
+chosen before anything is saved; one click in the gutter threw all of it away
+and reopened the dialog blank.
+
+**Escape and the X in the dialog's header still close everything**, so nothing
+is harder to get out of — there is just no longer a way to lose a form by
+missing.
+
+**Five surfaces deliberately keep click-away**, because none of them holds
+anything you could lose: the command palette, the two equipment-check jump
+sheets, the checklist picker and the "before publishing" blocker sheet. Menus
+and dropdowns are unaffected — closing on an outside click is how a menu is
+supposed to behave.
+
+**Nothing to do.** This is here because it changes a habit rather than a
+setting, and because a department that trains new members on video will find
+that take no longer matches the application.
+
+### Completing a repair no longer moves an inspection deadline (2026-09-13)
+
+**This is the one item in this window that may have left bad data behind, so
+read the last paragraph.**
+
+Marking any maintenance record complete used to write the item's **last
+inspection date** — a repair, a cleaning, a decontamination, anything — and
+recalculate the next inspection due date from it. A structural coat inspected in
+April and repaired in August had its annual NFPA 1851 inspection silently
+rescheduled from the following April to the following August, and the department
+read as compliant for four months longer than it actually was. Nothing raised
+and nothing was logged; the only visible sign was two dates on the item page
+that did not agree.
+
+Only an **inspection** now moves that clock — routine, advanced or independent.
+The type is read off the record after the update applies, so a record that is
+completed and has its type corrected in the same action is judged on what it
+ends up being.
+
+⚠️ **The fix is forward-only. Items whose inspection date already slid keep the
+date they hold.** If your department tracks gear on an inspection interval and
+has been completing repair or cleaning records against it, **spot-check the last
+inspection date on that gear against your paper records** before trusting the
+next-due figure. There is no migration for this: the application cannot tell a
+date that slid from one a quartermaster entered deliberately.
+
+### The Open Shifts board no longer lists shifts you cannot take (2026-09-13)
+
+A member picking their position off the Open Shifts board could be refused with
+**"Position was filled after this request was submitted"** — a message about a
+race, for a seat that had been taken for days. Two checks were answering
+different questions: one asked whether the _shift_ still needed somebody, the
+other whether the _member_ was cleared for anything on it, and nothing
+intersected them. A shift with an empty driver's seat and a full firefighter
+seat was offered to a firefighter, whose signup was then refused.
+
+**A member's board now lists a shift only when one of its unclaimed seats is a
+position they are cleared for**, so the board will be shorter than it was — and
+what it drops is what the system would have refused anyway. Two related
+improvements come with it: the signup picker offers only seats the server will
+grant, and a shift where every seat you are cleared for is taken now says so,
+instead of "you are not eligible", which was sending members to a scheduling
+admin about qualifications that were fine.
+
+**A holder of `scheduling.manage` sees no change.** That tab is also how a
+scheduling admin finds the department's staffing gaps, so it keeps the
+department-wide view. The short-staffed metric on the administration hub, the
+MCP tool and outreach sheets are all unchanged for the same reason.
+
+**Nothing to do**, but expect the question: a member who used to see eight open
+shifts and now sees three has not lost access to anything.
 
 ### A skills test can no longer be filed with unmarked steps (2026-09-12)
 
