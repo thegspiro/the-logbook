@@ -16,10 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 08 (Membership pipeline), pass 7** — branch
-`claude/security-review-mp-08-<pending>`, PR number to follow in a
-same-day bookkeeping commit once opened (matching the pass-5/pass-6
-convention of filling it in after `create_pull_request` returns). Watchdog
+**Feature 08 (Membership pipeline), pass 7** — PR
+[#2605](https://github.com/thegspiro/the-logbook/pull/2605), branch
+`claude/security-review-mp-08-98930d`. Watchdog
 iteration: the `/loop 30m /security-review` session had stalled (no
 commits/PRs in 3.5+ hours, no open security-review PR) so this ran as a
 one-off pickup, Step 0–9 as normal. 0 fixes, 0 new findings — all 4
