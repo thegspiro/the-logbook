@@ -718,6 +718,12 @@ async def get_kanban_board(
 @router.get("/pipelines/{pipeline_id}/stats", response_model=PipelineStatsResponse)
 async def get_pipeline_stats(
     pipeline_id: UUID,
+    search: str | None = Query(
+        None, description="Count only prospects matching this name/email search"
+    ),
+    event_id: UUID | None = Query(
+        None, description="Count only prospects linked to this event"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("prospective_members.view", "prospective_members.manage")
@@ -730,13 +736,31 @@ async def get_pipeline_stats(
     Counts exclude the caller's own prospective-membership record so the
     totals reconcile with the list and board views.
 
+    ``search`` and ``event_id`` narrow the counted population the same way they
+    narrow ``GET /prospects``, so a filtered board's header describes the
+    applicants on screen rather than the whole pipeline. Both are optional and
+    omitting them returns the whole-pipeline counts, which is what every client
+    written before they existed sends.
+
+    The caller's status filter is deliberately not accepted here: it applies to
+    the open-pipeline view alone, and counting through it would zero the
+    Rejected / Withdrawn / Converted badges this same response feeds.
+
     **Requires permission: prospective_members.view or prospective_members.manage**
     """
+    if event_id is not None:
+        # A client-supplied FK, so confirm it is this organization's event
+        # before counting through it (CLAUDE.md #14c) -- the same check
+        # GET /prospects makes, for the same reason.
+        await _require_org_event(db, str(event_id), current_user.organization_id)
+
     service = MembershipPipelineService(db)
     stats = await service.get_pipeline_stats(
         str(pipeline_id),
         current_user.organization_id,
         exclude_prospect_ids=hidden_prospect_ids,
+        search=search,
+        event_id=str(event_id) if event_id else None,
     )
     if not stats:
         raise HTTPException(

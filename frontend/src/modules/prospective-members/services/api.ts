@@ -539,8 +539,25 @@ export const pipelineService = {
     return this.updatePipeline(duplicated.id, { is_template: true, is_active: false });
   },
 
-  async getPipelineStats(pipelineId: string): Promise<PipelineStats> {
-    const response = await api.get<BackendPipelineStatsResponse>(`/prospective-members/pipelines/${pipelineId}/stats`);
+  /**
+   * Pipeline counts for the stat header and the archive tab badges.
+   *
+   * `filters` narrows the counted population the same way it narrows
+   * `getApplicants`, so the header cannot describe a different set of
+   * applicants than the table beneath it. `status` is deliberately not passed
+   * on: it filters the open-pipeline view alone, and counting through it would
+   * zero the Rejected / Withdrawn / Converted badges this response feeds.
+   */
+  async getPipelineStats(
+    pipelineId: string,
+    filters?: Pick<ApplicantListFilters, 'search' | 'event_id'>
+  ): Promise<PipelineStats> {
+    const response = await api.get<BackendPipelineStatsResponse>(`/prospective-members/pipelines/${pipelineId}/stats`, {
+      params: {
+        search: filters?.search,
+        event_id: filters?.event_id,
+      },
+    });
     return mapPipelineStatsResponse(response.data);
   },
 

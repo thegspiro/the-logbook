@@ -112,7 +112,7 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
     resumeApplicant,
     withdrawApplicant,
     reactivateApplicant,
-    fetchApplicants,
+    refreshPipelineView,
     fetchApplicant,
     isAdvancing,
     isRegressing,
@@ -178,7 +178,7 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
     setIsSkipping(true);
     try {
       await applicantService.skipStep(applicant.id, actionNotes || undefined);
-      await Promise.all([fetchApplicants(), fetchApplicant(applicant.id)]);
+      await Promise.all([refreshPipelineView(), fetchApplicant(applicant.id)]);
       toast.success('Stage skipped');
       setShowSkipConfirm(false);
       setActionNotes('');
