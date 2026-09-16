@@ -16660,6 +16660,33 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
+### 2026-09-16 — Watchdog check-in: closed duplicate PR #2617
+
+Routine 30-minute watchdog check on the `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`). `list_pull_requests` (state=open)
+turned up exactly one open PR, #2617, titled identically to already-merged
+#2618 ("docs(security-review): record merge of PR #2616 (Feature 11)") — both
+carried a single-commit diff recording PR #2616's merge in this file, written
+independently by two different sessions racing on the same event. #2618 won:
+it merged into `main` as `207b055b1` at 2026-09-16T19:17:30Z, before #2617
+(opened 2026-09-16T18:49:30Z from branch `claude/security-review-inv-11-close`)
+had picked up any CI (`get_status` showed zero checks, still `pending`).
+`git diff origin/main origin/claude/security-review-inv-11-close` confirmed
+#2617 reintroduced no content beyond what #2618 already carries, just
+different phrasing of the same two facts (rotation row 11 ✅, next: Feature
+12/Facilities). Closed #2617 with an explanatory comment rather than merging
+it, per this rotation's "one PR at a time" rule — merging would have re-edited
+this same section for no new information and left a second, contradictory
+account of the same merge in the file's history.
+
+Confirmed otherwise healthy: no other open PRs, no stray
+`claude/security-review-*` branch for Feature 12 in flight yet, and only 28
+minutes had elapsed since `main` last moved (207b055b1) — under the ~20–30
+minute idle bar this log's prior watchdog merges have used, and well within
+the time a fresh feature's full-suite re-verification can take before its
+first commit. No action needed on the rotation itself. Next: Feature 12
+(Facilities).
+
 ### 2026-09-16 — Feature 11 (Inventory, pass 6)'s PR #2616 merged, watchdog recorded it
 
 PR #2616 (zero-delta re-verification pass 6 over the inventory/labels scope;
