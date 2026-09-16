@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 11 (Inventory), pass 6** — PR TBD, branch
+**Feature 11 (Inventory), pass 6** — PR [#2616](https://github.com/thegspiro/the-logbook/pull/2616), branch
 `claude/security-review-inv-11-pass6`. **Watchdog iteration:** the
 `/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) had
 produced no commit and had no open PR for 2h33m since PR #2611 (Feature 10)
