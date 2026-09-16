@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2611](https://github.com/thegspiro/the-logbook/pull/2611)
+(Feature 10, Documents & legal, pass 6) went fully green (every CI job
+including the `CI Success` gate, `Secret Scan`, and `Supply Chain` all
+`success`; `mergeable_state: clean`; no review threads — only the
+informational Codex usage-limit comment) and sat idle for roughly 30
+minutes past CI completing (and ~50 minutes past its last push) with no
+human merge. This watchdog session merged it directly (squash,
+`expectedHeadSha` pinned to `6671673`). Merge commit `005529b` confirmed
+on `main` via `git fetch`. Rotation row 10 → ✅. Next: Feature 11
+(Inventory).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 6, PR #2611, pending merge), preserved for history</summary>
+
 **Feature 10 (Documents & legal), pass 6** — PR
 [#2611](https://github.com/thegspiro/the-logbook/pull/2611), branch
 `claude/security-review-doc-10-pass6`. **Watchdog
@@ -40,6 +54,8 @@ half, DOC-30) re-confirmed unchanged by direct read of current code. **0
 fixed, 0 new findings, 0 application-code changes.** Full write-up:
 `DOC-10-documents-legal.md`'s **Pass 6** section. Rotation row 10 → ✅
 (pending this PR's merge). Next: Feature 11 (Inventory).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 6, PR #2608, merged directly by this watchdog — 1 fixed, 0 new findings; rotation row 09 marked ✅ as part of that merge), preserved for history</summary>
@@ -16578,7 +16594,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⏳     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -16610,6 +16626,19 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-16 — Feature 10 (Documents & legal, pass 6) — PR #2611 merged by watchdog
+
+Scheduled watchdog check-in on the `/loop 30m /security-review` rotation
+(separate from the loop session itself). `list_pull_requests` (state=open)
+showed PR #2611 (Feature 10, Documents & legal, pass 6) fully green: every
+`CI` job including the `CI Success` gate, plus `Secret Scan` and
+`Supply Chain`, all `success`; `mergeable_state: clean`; the only PR
+comment was the informational Codex usage-limit notice; no review threads.
+CI had finished ~30 minutes earlier and the last push was ~50 minutes
+earlier, with no human merge in that window. Merged directly (squash,
+`expectedHeadSha` pinned to `6671673`). Merge commit `005529b` confirmed on
+`main` via `git fetch`. Rotation row 10 → ✅. Next: Feature 11 (Inventory).
 
 ### 2026-09-16 — Feature 10 (Documents & legal, pass 6) — 0 fixed, 0 new findings — watchdog iteration
 
