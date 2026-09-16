@@ -1,6 +1,110 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), PR TBD (pass 6)
+
+---
+
+## Pass 6 (2026-09-16) — watchdog re-verification, 0 new findings, 0 fixes — zero diff since pass 5's merge
+
+**Watchdog pickup.** The `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) had produced no commit and had no open
+security-review PR for 2h33m since PR #2611 (Feature 10, Documents & legal,
+pass 6) merged at 2026-09-16T15:13:09Z — well past the loop's 30-minute
+cadence, and with no in-progress branch for Feature 11 either. This scheduled
+watchdog session picked up Feature 11 (Inventory) directly, per
+`PROGRESS.md`'s own "Next: Feature 11" note.
+
+**Backend:** `api/v1/endpoints/inventory.py`, `services/inventory_service.py`,
+`api/v1/endpoints/labels.py`, `services/label_service.py`,
+`services/label_printer_service.py`, `app/mcp/tools/inventory.py`, and the
+inventory slice of `app/mcp/tools/writes.py` — the same scope pass 5 declared.
+**Frontend:** `modules/inventory/*`.
+**Migrations:** none landed touching this module (or anywhere in the repo)
+since pass 5's merge.
+
+### Scope
+
+`git log 89754f4..origin/main` (`89754f4` is pass 5's own squash-merge
+commit, confirmed an ancestor of `origin/main`) shows **266 commits** landed
+on `main` since pass 5, none of which touch any file in this feature's
+declared scope — `git diff --stat 89754f4..origin/main` across all seven
+backend scope files plus `frontend/src/modules/inventory` returns **empty**.
+`backend/alembic/versions` also has zero diff in that range, and
+`validate_migrations.py --strict` reports the same 444 revisions / single
+head (`6ab7d903fae5`) as pass 5 — confirming independently that no migration
+landed repo-wide, not just within this module.
+
+This is a genuine zero-delta re-verification, not an assumption from diff
+silence alone: each of the four standing open items was re-read at its cited
+line number in the current tree (not merely grepped for absence-of-diff),
+per this rotation's own standing practice (see pass 5's identical framing for
+Documents & legal in PR #2611).
+
+### Re-verified still open, not re-flagged
+
+- **INV-8 / INV-9** — `check_member_allowance`
+  (`inventory.py:5920-5929`, route `GET
+/allowances/check/{user_id}/{category_id}`) and
+  `get_member_size_preferences` (`inventory.py:6887-6895`, route `GET
+/members/{user_id}/size-preferences`) both still gated on
+  `Depends(require_permission("inventory.view"))`, byte-identical to pass 5.
+  Still mirrored in `KNOWN_LIMITATIONS.md`; still an owner decision (no
+  established sibling precedent for a narrower self-or-`.manage` gate, per
+  pass 2's original reasoning).
+- **INV-16** — `update_reorder_request`
+  (`inventory_service.py:8202-8227`) re-read in full: still a plain
+  `get_reorder_request` fetch with no `.with_for_update()` and no `version`
+  increment, unlike the sibling `/transition`/`/correct-status`/`/receipts`
+  paths. Unchanged.
+- **INV-17** — `InventoryMaintenancePage.tsx`'s "Complete work" handler
+  (line 248) still calls `inventoryService.createMaintenanceRecord(payload)`
+  unconditionally, with no attempt to locate and close an existing open
+  record for the item first. Unchanged.
+- **INV-22** — `get_fulfillment_options` (`inventory_service.py:9038-9227`)
+  still materializes `compatible_items` (line 9111-9113) and, when
+  `include_incompatible` is set, the entire `everything` catalog scan (line
+  9180-9189) in Python before sorting and applying `listed[:limit]` at line
+  9213 — no SQL-level `LIMIT` on either query. `get_requestable_categories`
+  (`inventory_service.py:9229-9271`) still runs its category/item join with
+  no `LIMIT` at all. Both re-read in full; identical to pass 5's description.
+  The DOC-9-shape reasoning (a SQL-level cap would silently wrong-answer past
+  the cutoff, since eligibility and the auto-suggestion are computed over the
+  full narrowed set) still holds and was not re-litigated.
+
+### Verified good ✅ (pass 6)
+
+- **`labels.py`/`label_service.py`/`label_printer_service.py` and the
+  inventory-owned MCP surface** (`app/mcp/tools/inventory.py`,
+  `writes.py::create_reorder_request`) have zero diff since pass 3's and
+  pass 4's merges respectively (four and two passes running clean) —
+  `git diff --stat` confirms directly rather than trusting the running count.
+- **Route count unchanged.** Not re-run as a fresh AST walk this pass (no
+  diff in `inventory.py` to have changed it), but pass 5's own fresh count
+  (144 routes, 1 WebSocket) stands on the strength of zero diff since —
+  the same reasoning pass 5 applied to pass 4's MCP-tool count.
+
+### Completion gate
+
+| Check                                             | Result                                                      |
+| ------------------------------------------------- | ----------------------------------------------------------- |
+| `flake8` (scope files)                            | ✅ 0 violations                                             |
+| `black --check` (scope files)                     | ✅ clean, 7 files unchanged                                 |
+| `isort --check-only` (scope files)                | ✅ clean                                                    |
+| `python3 scripts/validate_migrations.py --strict` | ✅ single head (`6ab7d903fae5`), 444 revisions — unchanged  |
+| `pytest tests/ -k "inventory or label"`           | ✅ 1031 passed, 1 pre-existing skip (`pywebpush`), 0 failed |
+| `npm run typecheck` (`tsc-native.mjs --noEmit`)   | ✅ clean                                                    |
+| `npm run lint` (`eslint --max-warnings 10`)       | ✅ 0 errors                                                 |
+| `npx vitest run src/modules/inventory`            | ✅ 1232 passed (74 files)                                   |
+
+No code changes were made this pass — zero fixes needed, every standing flag
+re-verified unchanged against a zero-diff scope — so, per CLAUDE.md's "match
+the verification to the change" guidance, the full repo-wide backend/frontend
+suites were not re-run beyond the scoped selections above: nothing in this
+pass's own diff (none) could regress a file outside inventory/labels, and the
+migration/route counts were independently confirmed unchanged rather than
+merely assumed.
+
+Rotation row 11 → ✅ (pending PR merge). Next: Feature 12 (Facilities).
 
 ---
 

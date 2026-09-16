@@ -16,6 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 11 (Inventory), pass 6** — PR TBD, branch
+`claude/security-review-inv-11-pass6`. **Watchdog iteration:** the
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) had
+produced no commit and had no open PR for 2h33m since PR #2611 (Feature 10)
+merged at 2026-09-16T15:13:09Z, well past the 30-minute cadence, with no
+in-progress branch for Feature 11 either. Zero-delta re-verification: `git
+diff --stat 89754f4..origin/main` (`89754f4` = pass 5's merge commit) across
+every declared scope file returns empty despite 266 intervening commits, and
+the four standing flags (INV-8/9, INV-16, INV-17, INV-22) were each re-read
+directly at their current line numbers and confirmed unchanged — not just
+inferred from the diff. Full completion gate re-run (scoped to
+inventory/labels): flake8/black/isort clean, `validate_migrations.py
+--strict` unchanged at 444 revisions/single head, 1031 backend tests + 1232
+frontend tests passed, typecheck/lint clean. See
+[`INV-11-inventory.md`](./INV-11-inventory.md) pass 6 for detail. Rotation
+row 11 → ✅ (pending PR merge). Next: Feature 12 (Facilities).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 6, PR #2611, merged), preserved for history</summary>
+
 **None.** PR [#2611](https://github.com/thegspiro/the-logbook/pull/2611)
 (Feature 10, Documents & legal, pass 6) went fully green (every CI job
 including the `CI Success` gate, `Secret Scan`, and `Supply Chain` all
@@ -16595,7 +16615,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
@@ -16626,6 +16646,41 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-16 — Feature 11 (Inventory, pass 6) — 0 fixed, 0 new findings — watchdog iteration
+
+Scheduled watchdog check-in (a separate recurring task from the
+`/loop 30m /security-review` session itself, `session_011T1ZyyLrD5HagusgK9uDw2`).
+That loop session had produced no commit and had no open security-review PR
+for 2h33m since PR #2611 (Feature 10) merged at 15:13:09Z — well past its
+30-minute cadence. `git fetch origin main` clean; `list_pull_requests`
+(state=open) returned empty; `list_branches` showed no in-progress
+`security-review`/`inventory`/`inv` branch. `PROGRESS.md`'s own Open PR row
+already read "None" / "Next: Feature 11 (Inventory)", so this watchdog
+picked the feature up directly per Step 1.
+
+Baseline `89754f4` (squash-merge commit of PR #2561, pass 5's landing
+point; confirmed an ancestor of `origin/main`). **True zero-delta
+re-verification:** `git diff --stat 89754f4..origin/main` across every
+declared scope file (`inventory.py`, `inventory_service.py`, `labels.py`,
+`label_service.py`, `label_printer_service.py`, the inventory MCP tools,
+and the entire `modules/inventory/` frontend tree) returns empty, despite
+266 unrelated commits landing on `main` since pass 5. `backend/alembic/versions`
+also has zero diff in that range, and `validate_migrations.py --strict`
+independently confirms the same 444 revisions / single head as pass 5.
+
+All four standing flags (INV-8/9, INV-16, INV-17, INV-22) re-read directly
+at their current line numbers in the live tree — not inferred from diff
+silence — and confirmed byte-identical to pass 5's description. **0 fixed,
+0 new findings, 0 application-code changes.** Full write-up:
+`INV-11-inventory.md`'s **Pass 6** section. Completion gate (scoped to
+inventory/labels, per CLAUDE.md's "match the verification to the change"):
+flake8/black/isort clean on all seven backend scope files;
+`validate_migrations.py --strict` clean; `pytest tests/ -k "inventory or
+label"` 1031 passed, 1 pre-existing skip; `npm run typecheck` clean;
+`npm run lint` 0 errors; `npx vitest run src/modules/inventory` 1232 passed
+(74 files). Rotation row 11 → ✅ (pending PR merge). Next: Feature 12
+(Facilities).
 
 ### 2026-09-16 — Feature 10 (Documents & legal, pass 6) — PR #2611 merged by watchdog
 
