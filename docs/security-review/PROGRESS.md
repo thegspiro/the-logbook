@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 10 (Documents & legal), pass 6** — branch
-`claude/security-review-doc-10-pass6`, PR pending creation. **Watchdog
+**Feature 10 (Documents & legal), pass 6** — PR
+[#2611](https://github.com/thegspiro/the-logbook/pull/2611), branch
+`claude/security-review-doc-10-pass6`. **Watchdog
 iteration:** the `/loop 30m /security-review` session had produced no
 commit or PR in the ~2.5 hours since PR #2608/#2609 merged (2026-09-16
 11:17 UTC), well past its configured 30-minute interval, with
