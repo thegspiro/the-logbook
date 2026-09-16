@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2605](https://github.com/thegspiro/the-logbook/pull/2605)
+(Feature 08, Membership pipeline, pass 7 — a watchdog pickup after the
+`/loop 30m /security-review` session stalled for 3.5+ hours with no open
+PR) went fully green and was merged directly (`3e25180`, confirmed on
+`main` via `git fetch`) shortly after CI finished, before this session's
+own 30-minute watchdog-idle bar was reached — merged by the repo owner
+rather than by this watchdog. Rotation row 08 stays ✅.
+
+**One correction to that PR's own text, recorded here rather than by
+editing merged history:** its body says the 3 pre-existing
+`tests/test_driver_exception_service.py` failures (a hardcoded
+`TODAY = date(2026, 8, 16)` whose default `valid_until` rolled into the
+past on 2026-09-16) were "left unfixed, per this iteration's scope." They
+were not left unfixed — this session root-caused them (confirmed
+reproducible identically on `main`, unrelated to #2605's docs-only diff),
+opened standalone fix PR [#2606](https://github.com/thegspiro/the-logbook/pull/2606)
+(`TODAY = date(2026, 8, 16)` → `TODAY = date.today()`), and also ported
+the identical one-line change directly onto #2605's own branch (`1f25b46`)
+so that PR would go green without waiting on #2606 to merge — both
+verified with `pytest tests/test_driver_exception_service.py -q` (32
+passed) and `flake8`/`black`/`isort` clean. #2605 merged with that ported
+fix included, so `main`'s copy of the test file already reads
+`TODAY = date.today()`. #2606 was then closed unmerged as a no-op
+duplicate of a change `main` already carried — see its own closing
+comment. Next: Feature 09 (Medical screening, PHI).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 7, PR #2605, pending merge), preserved for history</summary>
+
 **Feature 08 (Membership pipeline), pass 7** — PR
 [#2605](https://github.com/thegspiro/the-logbook/pull/2605), branch
 `claude/security-review-mp-08-98930d`. Watchdog
@@ -31,6 +60,8 @@ section. One out-of-scope, pre-existing failure discovered incidentally
 (3 date-rollover test failures in `tests/test_driver_exception_service.py`,
 unrelated to this feature) is reported there and left unfixed, per this
 iteration's scope. Rotation row 08 → ✅ (pending this PR's merge).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users &amp; organizations, pass 6, PR #2602, merged clean — 0 fixed, 0 new findings, 1 regression test added; rotation row 07 marked ✅ as part of that PR), preserved for history</summary>
