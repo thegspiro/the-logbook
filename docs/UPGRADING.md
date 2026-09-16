@@ -143,6 +143,34 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Bulk Advance is held to the meeting-attendance gate (2026-09-15)
+
+A meeting stage set to auto-advance refuses an automated advance when no
+attendance is recorded. A coordinator's single **Advance** is deliberately
+exempt — they may have watched the applicant arrive and found no record of it.
+**Bulk Advance** inherited that exemption and should not have.
+
+**Why.** The exemption is written for one applicant at a time. The board lets
+cards be ticked across every column, so a bulk selection routinely spans stages
+and nobody formed a view about any single one of them. Every other stage gate —
+checklist, interview, references, documents, medical screening, the election
+vote — already refused per item on this path and named the refusal in the
+result. The meeting gate was the only one a bulk advance walked straight
+through, which made it the easiest way to move an applicant past an interview
+they had not attended, and the way that gave the coordinator no sign it had
+happened.
+
+**What you will see.** A bulk advance now reports anyone on a meeting stage
+with no recorded attendance among its skipped items, naming the stage:
+"Advanced 27, skipped 3: Dana Reed (No attendance has been recorded for 'Chief
+Interview' yet)…". The rest of the selection still advances — one refusal has
+never stopped the others. Advancing that applicant singly still works and is
+still ungated, which is the intended way to handle attendance nobody wrote
+down.
+
+Nothing else changes: the flag this uses is read only by the meeting gate, so
+every other stage type behaves on a bulk advance exactly as before.
+
 ### A membership form submission no longer moves the wrong applicant (2026-09-15)
 
 Three changes to how a submitted form affects a **Form Submission** pipeline

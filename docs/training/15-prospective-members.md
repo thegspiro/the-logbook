@@ -130,7 +130,12 @@ Each pipeline stage has a type that determines its behavior:
 > they need no linked event.
 >
 > If someone attended and it was not recorded, use **Advance** — a coordinator's
-> manual advance is not gated on the attendance record.
+> manual advance is not gated on the attendance record. **Bulk Advance is**,
+> though: the exemption exists for the coordinator who watched _that_ applicant
+> arrive, and ticking thirty cards is not that. A bulk advance refuses anyone on
+> a meeting stage with no recorded attendance and names them in the result, the
+> same way it already reports a refused checklist or interview stage. Advance
+> them singly if you know they were there.
 
 ### Stage Configuration Options
 

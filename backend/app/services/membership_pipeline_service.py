@@ -1641,11 +1641,14 @@ class MembershipPipelineService:
         request; gates that read action_result grade it merged over the
         stored progress row (see _effective_action_result).
 
-        ``automated`` marks a completion nobody clicked — an integration
-        webhook, a check-in hook, a screening result. The meeting gate below
-        applies only to those: a coordinator who watched somebody walk in is
-        better evidence of attendance than any record, and blocking them would
-        have made "Advance" unusable on the stage type it exists for.
+        ``automated`` marks a completion with no per-applicant judgement behind
+        it — an integration webhook, a check-in hook, a screening result, or a
+        bulk advance. The meeting gate below applies only to those: a
+        coordinator who watched *this* applicant walk in is better evidence of
+        attendance than any record, and blocking them would have made
+        "Advance" unusable on the stage type it exists for. Ticking thirty
+        cards is not that observation thirty times over, which is why the bulk
+        path sets this.
         """
         config = step.config or {}
         # Resolved, not raw: a legacy ``action`` + ``schedule_meeting`` stage is
@@ -2162,10 +2165,12 @@ class MembershipPipelineService:
     ) -> Optional[ProspectiveMember]:
         """Mark a step as completed for a prospect.
 
-        ``automated`` says nobody clicked this: it is set by the auto-advance
-        helper and the integration webhook path, and read by the meeting gate
-        in :meth:`_validate_step_completion`. It defaults to False so every
-        existing caller keeps the behaviour it has.
+        ``automated`` says no per-applicant human judgement stands behind this
+        completion: the auto-advance helper, the integration webhook path, and
+        a bulk advance, which is a click but not a click about *this*
+        applicant. It is read by the meeting gate in
+        :meth:`_validate_step_completion`, and defaults to False so a single
+        deliberate Advance keeps the exemption that gate grants it.
         """
         # Serialize progression for this prospect. Without a row lock, two
         # coordinators can both validate the same current stage and create two
@@ -2620,6 +2625,8 @@ class MembershipPipelineService:
         organization_id: str,
         advanced_by: str,
         notes: Optional[str] = None,
+        *,
+        unobserved: bool = False,
     ) -> Optional[ProspectiveMember]:
         """Complete the current step and advance a prospect.
 
@@ -2628,6 +2635,10 @@ class MembershipPipelineService:
         checklists, approvals, references, and medical screening) and left the
         departed step marked in progress.  Keep one progression path so the
         configured workflow and its audit record cannot diverge.
+
+        ``unobserved`` says no per-applicant judgement stands behind this
+        particular advance — it is set by the bulk path. See
+        :meth:`complete_step`'s ``automated``, which it feeds.
         """
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect or not prospect.pipeline:
@@ -2660,6 +2671,7 @@ class MembershipPipelineService:
             step_id=str(sorted_steps[current_idx].id),
             completed_by=advanced_by,
             notes=notes,
+            automated=unobserved,
             additional_activity=_ActivityEvent(
                 action="prospect_advanced",
                 details={
@@ -2806,7 +2818,18 @@ class MembershipPipelineService:
         notes: Optional[str] = None,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> List[Dict[str, Any]]:
-        """Advance several prospects, reporting each one's outcome."""
+        """Advance several prospects, reporting each one's outcome.
+
+        Marked ``unobserved``, which is what subjects a bulk selection to the
+        meeting-attendance gate that a single Advance is exempt from. The
+        exemption is justified per applicant — "a coordinator who watched
+        somebody walk in is better evidence of attendance than any record" —
+        and that justification does not survive a selection: the board lets
+        cards be ticked across every column, so a bulk set routinely spans
+        stages and nobody made a judgement about any one of them. Every other
+        gate already refuses per item here and is reported in the response;
+        the meeting gate was the only one a bulk advance walked through.
+        """
 
         async def _advance(prospect: ProspectiveMember) -> None:
             await self.advance_prospect(
@@ -2814,6 +2837,7 @@ class MembershipPipelineService:
                 organization_id=organization_id,
                 advanced_by=advanced_by,
                 notes=notes,
+                unobserved=True,
             )
 
         return await self._bulk_apply(
