@@ -16652,8 +16652,9 @@ scoped tests `test_documents_access.py`/`test_legal_documents.py`/
 pass 5; +2 from unrelated MCP-surface test additions elsewhere in the
 window); `flake8`/`black`/`isort` clean on `app/`, `tests/`, `alembic/`;
 `validate_migrations.py --strict` — 444 revisions, single head
-`6ab7d903fae5`; full backend suite — run in background, result to be
-confirmed by a follow-up push before merge; frontend typecheck/lint not
+`6ab7d903fae5`; full backend suite 12612 passed, 21 skipped (pre-existing:
+`pywebpush` not installed, Docker registry/daemon unavailable,
+API-contract server-mode opt-in), 0 failed; frontend typecheck/lint not
 run (no frontend file in this feature's domain changed, confirmed by
 `git diff`, not merely `git status`). `docs/security-review/DOC-10-documents-legal.md`
 → **Pass 6**. Rotation row 10 → ⏳ (pending this PR's merge). Next: Feature
