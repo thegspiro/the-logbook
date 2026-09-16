@@ -95,6 +95,13 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
         </div>
         <form onSubmit={(e) => void handleSubmit(e)} className="max-h-[70dvh] space-y-4 overflow-y-auto p-6">
           {!record && (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+              Not linked to a member or prospect — this dialog has no way to choose who the screening is for, so the
+              record it creates will not count toward any member&apos;s or prospect&apos;s compliance status, and
+              won&apos;t appear on their screening history.
+            </p>
+          )}
+          {!record && (
             <div>
               <label htmlFor="rec-requirement" className={labelClass}>
                 Linked Requirement (optional)

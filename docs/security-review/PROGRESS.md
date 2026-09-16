@@ -16,6 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2608](https://github.com/thegspiro/the-logbook/pull/2608)** (Feature
+09, Medical screening, pass 6 — another watchdog pickup: the
+`/loop 30m /security-review` session had again stalled, 3.5+ hours with no
+commit/PR, at the time this iteration's Step 0 was re-verified fresh —
+`git fetch origin main` clean, `list_pull_requests` state=open → `[]`,
+`PROGRESS.md`'s Open PR row read "None" / "Next: Feature 09"). Branch
+`claude/security-review-ms-09`. 1 finding (MS-13, MED, data
+integrity/availability — the "Add Record" dialog has no member/prospect
+selector at all, so every UI-created screening record is orphaned and can
+leave a compliant member still reading as blocked from duty) flagged with
+an interim honesty-notice fix applied (no behavior change); 5 prior open
+findings (MS-6, MS-7, MS-12, the missing exactly-one-of-subject
+validation, MS-9's unwired fields) re-verified still accurate, unchanged.
+Full backend suite (12612 passed) and full frontend suite (7591 passed)
+both clean; `flake8`/`black`/`isort`/`validate_migrations.py --strict` all
+clean. Subscribed to PR activity. Rotation row 09 → ✅ (pending this PR's
+merge). Next: Feature 10 (Documents & legal).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 7, PR #2605, merged directly by the repo owner — 0 fixed, 0 new findings; rotation row 08 marked ✅ as part of that merge), preserved for history</summary>
+
 **None.** PR [#2605](https://github.com/thegspiro/the-logbook/pull/2605)
 (Feature 08, Membership pipeline, pass 7 — a watchdog pickup after the
 `/loop 30m /security-review` session stalled for 3.5+ hours with no open
@@ -40,7 +61,9 @@ passed) and `flake8`/`black`/`isort` clean. #2605 merged with that ported
 fix included, so `main`'s copy of the test file already reads
 `TODAY = date.today()`. #2606 was then closed unmerged as a no-op
 duplicate of a change `main` already carried — see its own closing
-comment. Next: Feature 09 (Medical screening, PHI).
+comment.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 7, PR #2605, pending merge), preserved for history</summary>
@@ -16509,7 +16532,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -16542,6 +16565,62 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-16 — Feature 09 (Medical screening, PHI, pass 6) — 1 fixed (interim), 1 flagged (MED) — PR #2608 opened — watchdog iteration
+
+The `/loop 30m /security-review` session driving this rotation had stalled
+again (no commits/PRs in 3.5+ hours, no open security-review PR), so this
+ran as a one-off watchdog pickup, Step 0 re-verified fresh: `git fetch
+origin main` clean, `mcp__github__list_pull_requests` (state=open) → `[]`,
+and `PROGRESS.md`'s Open PR row read "None" with "Next: Feature 09
+(Medical screening, PHI)" — matching the prompt's own pre-check.
+
+All five declared backend files and the full frontend module read in
+full — byte-identical to pass 5 across the 82 commits that landed on
+`main` since PR #2557 merged. The full (not diff-scoped) frontend re-read
+is what surfaced this pass's finding: **MS-13** (MED, data
+integrity/availability, PHI-adjacent) — `ScreeningRecordForm.tsx`'s create
+dialog has no control for `user_id`/`prospect_id` at all, so every
+UI-created screening record is orphaned. It counts toward nobody's
+compliance, and `admin_hub_service.py` labels an unresolved lapse
+`severity="critical"`, "blocks duty assignment" — so a firefighter who
+completed a real physical exam, entered by an officer through the app's
+only "Add Record" path, can still be flagged non-compliant and blocked
+from duty with no indication anything went wrong. This gap has existed
+since before security-review pass 1 (filed under app-review,
+`docs/KNOWN_LIMITATIONS.md`, 2026-08-08) but carried no `MS-*` id and was
+never picked up by a prior pass's prior-art step. Wiring an actual
+member/prospect picker is a feature (new data source, plus a product
+decision on whether both/either/neither id may be set — the same open
+question as the separately-tracked exactly-one-of gap) and is **flagged**,
+not implemented. An interim honesty fix was applied: the create dialog now
+carries an amber "not linked to a member or prospect" notice, the same
+idiom `ScreeningRequirementForm.tsx` already uses for its own unwired
+fields, so the "Record created" toast can no longer imply the record is
+usable. Guarded by `ScreeningRecordForm.linkageNotice.test.tsx` (2 tests).
+Cross-referenced into the existing KNOWN_LIMITATIONS entry rather than
+filing a duplicate.
+
+Five prior open findings re-verified unchanged and not re-flagged: MS-6
+(unbounded lists, LOW), MS-7 (no reviewer distinct from subject, MED),
+MS-12 (PHI reads not audit-logged, LOW), `create_record`'s missing
+exactly-one-of-subject validation, and MS-9's unenforced
+`grace_period_days`/`applies_to_roles` notices. No baseline permission
+grant, tenant isolation, PHI encryption, `SET NULL` nullability, update-FK
+protection, audit logging on writes, MCP redaction discipline, and cache
+exclusion were all independently re-confirmed against current code, not
+copied forward.
+
+Completion gate: `flake8`/`black`/`isort` clean on the touched files (no
+other backend file changed), `validate_migrations.py --strict` clean (444
+revisions, single head, unchanged), full backend suite 12612 passed / 21
+skipped (pre-existing/environmental), full frontend suite 7591 passed (534
+files), `npm run typecheck`/`npm run lint` both clean.
+`docs/security-review/MS-09-medical-screening.md` → **Pass 6**. Rotation
+row 09 → ✅ (pending this PR's merge). PR
+[#2608](https://github.com/thegspiro/the-logbook/pull/2608), branch
+`claude/security-review-ms-09`, activity subscribed. Next: Feature 10
+(Documents & legal).
 
 ### 2026-09-16 — Feature 08 (Membership pipeline, pass 7) — 0 fixed, 0 new findings — watchdog iteration
 
