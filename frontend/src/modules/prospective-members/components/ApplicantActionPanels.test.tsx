@@ -227,7 +227,8 @@ describe('stage requirement hints', () => {
   it('states the attendance requirement for a meeting stage that names its event', () => {
     onStage('meeting', { meeting_type: 'business_meeting', linked_event_type: 'business_meeting' });
 
-    expect(screen.getByText(/must be checked in at this stage’s event before they can advance/)).toBeInTheDocument();
+    expect(screen.getByText(/must be checked in at this stage’s event/)).toBeInTheDocument();
+    expect(screen.getByText(/attendance must be finalized/)).toBeInTheDocument();
   });
 
   it('adds the auto-advance behaviour only when that box is ticked', () => {
@@ -237,7 +238,7 @@ describe('stage requirement hints', () => {
       auto_advance: true,
     });
 
-    expect(screen.getByText(/advances on its own/i)).toBeInTheDocument();
+    expect(screen.getByText(/advances on its own as soon as the event is finalized/i)).toBeInTheDocument();
   });
 
   it('says nothing for a meeting stage that names no event', () => {
@@ -251,6 +252,6 @@ describe('stage requirement hints', () => {
   it('treats a pinned event id alone as naming an event', () => {
     onStage('meeting', { meeting_type: 'chief_meeting', linked_event_id: 'evt-1' });
 
-    expect(screen.getByText(/must be checked in at this stage’s event before they can advance/)).toBeInTheDocument();
+    expect(screen.getByText(/must be checked in at this stage’s event/)).toBeInTheDocument();
   });
 });

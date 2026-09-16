@@ -19,6 +19,7 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
+from app.core.config import settings
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
     AttendeeVisibility,
@@ -141,6 +142,46 @@ def attendance_is_finalized(event: Event) -> bool:
         return True
     custom = getattr(event, "custom_fields", None) or {}
     return bool(custom.get("attendance_finalized"))
+
+
+def attendance_is_settled(event: Event, now: datetime) -> bool:
+    """Whether this event's attendance record can be relied on as final.
+
+    Finalizing is the department saying the roster is right: it locks the
+    attendance-affecting writes, derives the durations and lands the hours. A
+    bare check-in says nothing of the sort — a guest can be signed in at the
+    door and struck off ten minutes later, and until the organizer closes the
+    event out, who was actually there is still being decided.
+
+    The prospective-member meeting gate reads this rather than the check-in
+    alone, so an applicant advances off the record the department stood behind.
+
+    **The grace window is the load-bearing half.** Finalizing is not automatic:
+    it happens when somebody runs End Event, records an actual end time, or
+    calls the finalize endpoint, and the nightly post-event task only *prompts*
+    the organizer to do it. An event nobody ever closes out is therefore
+    routine, not exceptional — and gating solely on the flag would strand every
+    applicant who attended one, with no way forward but un-ticking Required and
+    skipping the stage. After ``PIPELINE_ATTENDANCE_SETTLE_DAYS`` past the
+    event's end, the record is taken as settled by default: nobody is coming
+    back to correct it.
+
+    ``actual_end_time`` wins over ``end_datetime`` so an event that ran long
+    starts its grace from when it really ended, matching what finalize itself
+    credits from.
+    """
+    if attendance_is_finalized(event):
+        return True
+
+    effective_end = event.actual_end_time or event.end_datetime
+    if effective_end is None:
+        return False
+    if effective_end.tzinfo is None:
+        effective_end = effective_end.replace(tzinfo=dt_timezone.utc)
+
+    return now >= effective_end + timedelta(
+        days=max(0, settings.PIPELINE_ATTENDANCE_SETTLE_DAYS)
+    )
 
 
 def attendance_locked_error(action: str) -> str:
@@ -2477,9 +2518,15 @@ class EventService:
         attended = list(attended_result.scalars().all())
 
         if not attended:
+            # No member checked in — the ordinary shape of an open house or a
+            # recruitment night, whose whole roster is guests. This return is
+            # why the applicant advance below cannot live at the tail of this
+            # method: the events most likely to carry prospective members are
+            # exactly the ones that never reach it.
             await self._record_attendance_finalized(
                 event, organization_id, finalized_by
             )
+            await self._advance_prospects_after_finalize(event)
             return 0, None
 
         # Get linked training session if this is a training event
@@ -2573,8 +2620,36 @@ class EventService:
         # releases the row lock. _record_attendance_finalized re-stamps (a
         # no-op), commits, and archives the validation prompt.
         await self._record_attendance_finalized(event, organization_id, finalized_by)
+        await self._advance_prospects_after_finalize(event)
 
         return updated_count, None
+
+    async def _advance_prospects_after_finalize(self, event: Event) -> None:
+        """Move applicants this event's now-settled attendance clears.
+
+        Called from both of ``finalize_event_attendance``'s exits rather than
+        once at its tail, because the early "no member checked in" return is
+        the ordinary path for the very events that carry applicants.
+
+        Runs after the close is durable and swallows its own failures. The
+        hours, the durations and the lock are what finalizing is for; an
+        applicant who does not advance is recoverable — the nightly
+        ``prospect_attendance_advance`` task re-attempts everyone still parked
+        on a stage this event would clear, so a failure here costs a day rather
+        than stranding somebody.
+        """
+        # Local import: guest_check_in_service imports this module.
+        from app.services.guest_check_in_service import GuestCheckInService
+
+        try:
+            await GuestCheckInService(self.db).advance_prospects_for_settled_event(
+                event
+            )
+        except Exception:
+            logger.exception(
+                "Could not advance prospective members for finalized event {}",
+                event.id,
+            )
 
     async def _revoke_event_attendance_credit(
         self, event_id: UUID, organization_id: UUID

@@ -218,6 +218,17 @@ SCHEDULE = {
         "recommended_time": "07:00",
         "cron": "0 7 * * *",
     },
+    "prospect_attendance_advance": {
+        "description": (
+            "Advance prospective members off a meeting stage once the event "
+            "they attended is far enough past its end to count as settled, "
+            "for the events nobody finalizes (the finalize flow advances them "
+            "immediately when somebody does)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "05:30",
+        "cron": "30 5 * * *",
+    },
     "event_reminders": {
         "description": "Send email and in-app reminders for upcoming events based on each event's reminder_schedule setting",
         "frequency": "every 30 minutes",
@@ -5835,6 +5846,111 @@ async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "officer_directory_sync", "organizations": synced}
 
 
+async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
+    """Advance applicants whose meeting attendance has settled without a finalize.
+
+    A prospective-member meeting stage advances on attendance the department
+    has settled, and finalizing is what settles it. Finalizing is also a human
+    act that routinely never happens: it runs from End Event, from recording an
+    actual end time, or from the Finalize Attendance endpoint, and the nightly
+    post_event_validation task only *prompts* the organizer to do one of those.
+    An event nobody closes out is ordinary, so without this pass an applicant
+    who attended it would sit on that stage forever, with no way past it but
+    un-ticking Required and skipping.
+
+    ``attendance_is_settled`` therefore also takes an event far enough past its
+    end as settled, and this is what re-asks the question once that window has
+    elapsed — the finalize hook only ever fires at the moment somebody
+    finalizes, so nothing else would notice the day an unfinalized event aged
+    into being good enough.
+
+    Driven from the applicants rather than from the events, deliberately. The
+    set of active applicants parked on a meeting stage is small and bounded,
+    while "events that ended more than N days ago" grows without limit and
+    needs a lookback window whose far edge silently drops anything older —
+    which is exactly the applicant this exists to rescue. It also re-attempts
+    anyone a failed finalize hook missed, at no extra cost.
+    """
+    from app.models.membership_pipeline import (
+        MembershipPipelineStep,
+        PipelineStepType,
+        ProspectiveMember,
+        ProspectStatus,
+    )
+    from app.services.membership_pipeline_service import (
+        MembershipPipelineService,
+        effective_step_type,
+    )
+
+    # isnot(False), not a bare truthy filter — a row whose flag was never
+    # populated (NULL) must still count as active, matching every other
+    # org-active filter in this file (CRON2-31-10).
+    org_result = await db.execute(
+        select(Organization.id).where(Organization.active.isnot(False))
+    )
+    org_ids = [str(row) for row in org_result.scalars().all()]
+
+    advanced = 0
+    considered = 0
+    for org_id in org_ids:
+        try:
+            # ACTION is in the filter because a pre-typed stage stores a
+            # meeting as action + schedule_meeting; effective_step_type below
+            # is what resolves those, and leaving them out would quietly
+            # exempt every legacy stage from this pass.
+            candidates = await db.execute(
+                select(ProspectiveMember.id, MembershipPipelineStep)
+                .join(
+                    MembershipPipelineStep,
+                    MembershipPipelineStep.id == ProspectiveMember.current_step_id,
+                )
+                .where(
+                    ProspectiveMember.organization_id == org_id,
+                    ProspectiveMember.status == ProspectStatus.ACTIVE,
+                    MembershipPipelineStep.step_type.in_(
+                        [PipelineStepType.MEETING, PipelineStepType.ACTION]
+                    ),
+                )
+            )
+
+            service = MembershipPipelineService(db)
+            for prospect_id, step in candidates.all():
+                if effective_step_type(step) != PipelineStepType.MEETING:
+                    continue
+                if not (step.config or {}).get("auto_advance"):
+                    continue
+                considered += 1
+                # No config_matches: there is no triggering event here, so the
+                # stage gate is the only thing that decides, reading the
+                # applicant's whole attendance and applying the settled rule.
+                if await service.try_auto_advance_current_step(
+                    prospect_id=str(prospect_id),
+                    organization_id=org_id,
+                    step_type=PipelineStepType.MEETING,
+                    trigger="attendance settled",
+                ):
+                    advanced += 1
+
+            # Commit per org so a later org's failure can't discard this one's
+            # work — and its rollback below can't poison the shared session for
+            # the orgs still to come (the CRON-1 class).
+            await db.commit()
+        except Exception as e:
+            logger.warning(
+                "Prospect attendance advance failed for org {}: {}", org_id, e
+            )
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+    return {
+        "task": "prospect_attendance_advance",
+        "considered": considered,
+        "advanced": advanced,
+    }
+
+
 async def run_admin_hours_auto_close(db: AsyncSession) -> Dict[str, Any]:
     """Auto-close admin-hours sessions that exceeded their category limit.
 
@@ -6011,6 +6127,7 @@ TASK_RUNNERS = {
     "swap_offer_expiry": run_swap_offer_expiry,
     "officer_directory_sync": run_officer_directory_sync,
     "event_request_reminders": run_event_request_reminders,
+    "prospect_attendance_advance": run_prospect_attendance_advance,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -6062,6 +6179,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "swap_offer_expiry": 86400,
     "officer_directory_sync": 86400,
     "event_request_reminders": 86400,
+    "prospect_attendance_advance": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,

@@ -139,11 +139,14 @@ class GuestCheckInService:
         await self.db.commit()
         await self.db.refresh(attendee)
 
-        # After the commit: advancing a stage commits, and the sign-in must be
-        # durable before anything downstream of it runs.
-        if prospect is not None:
-            await self.try_advance_attendance_pipeline(str(prospect.id), event)
-
+        # A sign-in no longer advances a pipeline stage. It used to, here, and
+        # the moment it fired was wrong: a guest can be signed in at the door
+        # and struck off ten minutes later, so an applicant advanced on the
+        # door record moved on a roster the department had not settled. The
+        # advance now runs when the event's attendance is finalized — see
+        # GuestCheckInService.advance_prospects_for_settled_event, which
+        # finalize calls, and run_prospect_attendance_advance for the events
+        # nobody closes out.
         return attendee, None, prospect_created
 
     async def _find_existing_attendee(
@@ -332,23 +335,60 @@ class GuestCheckInService:
         """
         return meeting_config_matches_event(config, event)
 
+    async def advance_prospects_for_settled_event(self, event: Event) -> int:
+        """Advance every applicant whose meeting stage this settled event clears.
+
+        The finalize flow's counterpart for guests. ``finalize_event_attendance``
+        walks ``EventRSVP`` — members, for the hours ledger — and never touches
+        ``EventExternalAttendee``, which is where an applicant's attendance
+        lives, so nothing here rides along with that loop.
+
+        Runs per event rather than per check-in because finalizing is the event
+        deciding its whole roster at once: everybody who was there becomes
+        advanceable at the same moment, and which of them is sitting on a
+        matching meeting stage is the gate's question, not this method's.
+
+        Best-effort against a commit that has already happened. A pipeline
+        failure must never roll back a finalize — the hours, the durations and
+        the lock are the point of that operation, and an applicant who does not
+        advance is recoverable by hand while a half-finalized event is not.
+
+        Returns how many applicants actually moved.
+        """
+        result = await self.db.execute(
+            select(EventExternalAttendee).where(
+                EventExternalAttendee.event_id == str(event.id),
+                EventExternalAttendee.organization_id == str(event.organization_id),
+                EventExternalAttendee.checked_in.is_(True),
+                EventExternalAttendee.prospect_id.isnot(None),
+            )
+        )
+        advanced = 0
+        for attendee in result.scalars().all():
+            if await self.try_advance_attendance_pipeline(
+                str(attendee.prospect_id), event
+            ):
+                advanced += 1
+        return advanced
+
     async def try_advance_attendance_pipeline(
         self, prospect_id: str, event: Event
     ) -> bool:
         """Advance a prospect whose current stage is the meeting they attended.
 
-        This operation is shared by kiosk and staff-recorded attendance. It is
-        deliberately called only after attendance commits: pipeline failures
-        must never roll back a valid check-in.
+        Called for a settled event — from the finalize flow by way of
+        :meth:`advance_prospects_for_settled_event`, and from the nightly
+        ``prospect_attendance_advance`` task for the events nobody finalizes.
+        It used to run at check-in, which advanced applicants off a door record
+        the department had not stood behind yet.
 
-        A meeting stage offers "auto-advance when attendance is recorded", and a
-        kiosk sign-in is that attendance record — but nothing joined the two, so
-        the box was inert and a coordinator still moved by hand every applicant
-        who had already shown up and signed in.
+        ``event`` is the one that just settled, and it narrows the stage config
+        this will act on. The gate behind it re-reads the applicant's whole
+        attendance and applies its own rules, so a stage waiting on a different
+        meeting is refused there rather than here.
 
-        As with opening the prospect itself, a failure here must not cost the
-        guest their attendance: the sign-in is the thing they came to do, and it
-        is already committed by this point.
+        Whatever went wrong, it must not cost the caller its own work: the
+        finalize is committed by this point and the hours are already landed.
         """
         try:
             return await MembershipPipelineService(
@@ -357,7 +397,9 @@ class GuestCheckInService:
                 prospect_id=str(prospect_id),
                 organization_id=str(event.organization_id),
                 step_type=PipelineStepType.MEETING,
-                trigger="event check-in",
+                # Reaches the applicant's activity log and the stage's
+                # action_result, so it has to name what actually moved them.
+                trigger="event attendance finalized",
                 action_result={
                     "event_id": str(event.id),
                     "event_title": event.title,

@@ -88,9 +88,9 @@ const getStageRequirementHint = (applicant: Applicant): string | null => {
       if (!namesAnEvent) return null;
       const autoAdvance = 'auto_advance' in config ? config.auto_advance : false;
       const requirement =
-        'The applicant must be checked in at this stage’s event before they can advance, and attendance recorded before their application was opened does not count. Record the attendance on the event if they attended and it was missed.';
+        'The applicant must be checked in at this stage’s event, and that event’s attendance must be finalized, before they can advance. A check-in recorded before their application was opened does not count.';
       return autoAdvance
-        ? `${requirement} The stage then advances on its own, from the moment that meeting’s check-in window opens.`
+        ? `${requirement} The stage then advances on its own as soon as the event is finalized.`
         : requirement;
     }
     default:

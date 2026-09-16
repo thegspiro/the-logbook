@@ -25,6 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import CheckInWindowType, Event, EventType
+from app.services.event_service import EventService
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.membership_pipeline_service import MembershipPipelineService
 
@@ -85,6 +86,15 @@ def _meeting_event(org_id: str, **overrides) -> Event:
     )
     defaults.update(overrides)
     return Event(**defaults)
+
+
+async def _finalize(db_session: AsyncSession, event: Event) -> None:
+    """Close the event out; attendance only counts once the roster is settled."""
+    await db_session.commit()
+    await EventService(db_session).finalize_event_attendance(
+        event_id=event.id,
+        organization_id=event.organization_id,
+    )
 
 
 async def _pipeline_on_a_meeting_stage(svc, org_id: str):
@@ -157,8 +167,10 @@ class TestBulkAdvanceIsHeldToTheGate:
             last_name="Marsh",
             email=prospect.email,
         )
-        # Put them back on the meeting stage: the check-in hook does not
-        # advance a stage without auto_advance, but the attendance is real.
+        # The stage has no auto_advance, so finalizing records the roster
+        # without moving anybody — which is what makes this a test of the bulk
+        # path rather than of the finalize hook.
+        await _finalize(db_session, event)
         await db_session.execute(
             text("UPDATE prospective_members SET current_step_id = :s WHERE id = :p"),
             {"s": gate.id, "p": prospect.id},
@@ -189,6 +201,7 @@ class TestBulkAdvanceIsHeldToTheGate:
             last_name="Marsh",
             email=attended.email,
         )
+        await _finalize(db_session, event)
         await db_session.execute(
             text("UPDATE prospective_members SET current_step_id = :s WHERE id = :p"),
             {"s": gate.id, "p": attended.id},

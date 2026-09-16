@@ -1909,8 +1909,9 @@ class MembershipPipelineService:
 
         * a check-in — an ``EventExternalAttendee`` row for this applicant with
           ``checked_in`` set, at an event this stage accepts whose **check-in
-          window has opened** and **had not already closed when the applicant's
-          record was created**;
+          window has opened**, which **had not already closed when the
+          applicant's record was created**, and whose **attendance is settled**
+          (:func:`~app.services.event_service.attendance_is_settled`);
         * a Cal.com ``MEETING_ENDED`` webhook, for a stage that schedules
           through Cal.com. That payload is built by the signature-verified
           receiver, never by a client, and Cal.com only sends it once the
@@ -1940,6 +1941,16 @@ class MembershipPipelineService:
         and the meeting that opened the record is the one attendance a
         department does mean to count.
 
+        Settled, not merely recorded, because a sign-in at the door is not the
+        final roster. Finalizing is the department saying who was actually
+        there: it locks the attendance writes, derives the durations and lands
+        the hours. Until then a guest can be signed in and struck off, and an
+        applicant advanced on the door record would have moved on a number the
+        department had not stood behind. Since finalizing is a human act that
+        routinely never happens, ``attendance_is_settled`` also takes an event
+        far enough past its end as settled by default — see its docstring for
+        why that half is load-bearing rather than a convenience.
+
         Deliberately *not* evidence: ``ProspectEventLink``. Entering a meeting
         stage auto-links the next matching *future* event
         (``_auto_link_event_for_step``), so treating the link as attendance
@@ -1956,7 +1967,7 @@ class MembershipPipelineService:
         """
         # Local import: event_service imports no pipeline code today, but this
         # module is imported by guest_check_in_service, which imports both.
-        from app.services.event_service import EventService
+        from app.services.event_service import EventService, attendance_is_settled
 
         config = step.config or {}
 
@@ -1985,15 +1996,27 @@ class MembershipPipelineService:
         if applied_at is not None and applied_at.tzinfo is None:
             applied_at = applied_at.replace(tzinfo=timezone.utc)
 
-        def _is_evidence(event: Event) -> bool:
+        def _is_this_applicant_s_attendance(event: Event) -> bool:
+            """Their check-in, at this stage's meeting, on this application."""
             check_in_start, check_in_end = EventService._get_check_in_window(event)
             if now < check_in_start:
                 return False
             return applied_at is None or check_in_end >= applied_at
 
+        # An event they attended whose record the department has not settled
+        # yet. Kept rather than discarded because it is a different refusal
+        # with a different remedy — the applicant did everything asked of
+        # them, and what is missing is the organizer closing the event out.
+        awaiting_finalization: Optional[Event] = None
+
         for event in result.scalars():
-            if meeting_config_matches_event(config, event) and _is_evidence(event):
+            if not meeting_config_matches_event(config, event):
+                continue
+            if not _is_this_applicant_s_attendance(event):
+                continue
+            if attendance_is_settled(event, now):
                 return
+            awaiting_finalization = awaiting_finalization or event
 
         # A stage naming no event can never satisfy the match above, so say
         # that rather than asking for attendance it would ignore anyway. The
@@ -2006,12 +2029,24 @@ class MembershipPipelineService:
                 "meant to be what advances it."
             )
 
+        if awaiting_finalization is not None:
+            raise ValueError(
+                f"This applicant is checked in at "
+                f"'{awaiting_finalization.title}', but that event's attendance "
+                "has not been finalized, so '"
+                f"{step.name}' is not ready yet. A sign-in at the door is not "
+                "the final roster — finalize the event (End Event, record its "
+                "actual end time, or Finalize Attendance) and they advance on "
+                "their own."
+            )
+
         raise ValueError(
             f"No attendance has been recorded for '{step.name}' since this "
             "application was opened. This stage names the event its applicants "
-            "must attend, so it advances once they are checked in there. Add "
-            "them to that event's attendees and check them in if they attended "
-            "and it was not recorded; otherwise un-tick Required on the stage "
+            "must attend, so it advances once they are checked in there and "
+            "that event's attendance is finalized. Check them in on the event "
+            "if they attended and it was missed — reopening the event first if "
+            "it is already finalized; otherwise un-tick Required on the stage "
             "to skip it, or clear its Auto-Link Event Type."
         )
 

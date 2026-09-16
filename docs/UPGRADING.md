@@ -143,6 +143,57 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A meeting stage advances on finalized attendance, not on the check-in (2026-09-16)
+
+Follows the entry below, which made a meeting stage that names an event an
+attendance requirement. This changes **when** that requirement is met.
+
+**A sign-in at the door is no longer enough.** The applicant must be checked in
+**and** that event's attendance must be **finalized** — the organizer running
+End Event, recording an actual end time, or pressing Finalize Attendance. Until
+then the stage holds them, by hand and automatically alike.
+
+**Why.** Checking a guest in records that they were at the door, which is not
+the department's word on who attended: a guest can be signed in and struck off
+ten minutes later, and until the event is closed out the roster is still being
+decided. Finalizing is the act that settles it, and it is already the act that
+derives the durations and lands the hours. The advance used to fire at the
+sign-in, so an applicant moved on a number nobody had stood behind yet.
+
+**What replaces the old trigger.** Finalizing an event now advances every
+checked-in applicant it clears, in one pass. That covers all three routes at
+once, since End Event and recording an actual end time both finalize.
+
+**An event nobody finalizes still settles on its own.** Finalizing is a human
+act that routinely never happens — the nightly post-event task only _prompts_
+the organizer — so attendance also counts as settled once
+`PIPELINE_ATTENDANCE_SETTLE_DAYS` (default **7**) have passed since the event
+ended. A nightly `prospect_attendance_advance` task re-asks the question, since
+nothing else would notice the day an unfinalized event aged into being good
+enough. Set the window in `.env`; `0` settles it at the event's end.
+
+**What you will see.** An applicant who signed in this evening no longer jumps
+to the next stage during the meeting. They advance when you close the event
+out, along with everyone else who was there — or, if nobody closes it out, a
+week later. Trying to advance one by hand in between names the event and says
+what is missing:
+
+> This applicant is checked in at 'Recruitment Night', but that event's
+> attendance has not been finalized, so 'Chief Interview' is not ready yet. A
+> sign-in at the door is not the final roster — finalize the event (End Event,
+> record its actual end time, or Finalize Attendance) and they advance on their
+> own.
+
+**The stage checkbox was relabelled** from "Auto-advance when attendance is
+recorded" to "Auto-advance when the event's attendance is finalized". The
+setting itself is unchanged — no stage needs editing.
+
+**One wrinkle worth knowing.** Once an event is finalized, adding a missed
+attendee is refused until somebody with `events.reopen_attendance` reopens it.
+So if you finalize and _then_ discover an applicant's attendance was never
+recorded, reopen the event, check them in, and finalize again — re-finalizing
+re-runs the advance and skips anyone already moved.
+
 ### A meeting stage that names its event now requires attendance (2026-09-16)
 
 This supersedes the 2026-09-15 entry below, which narrowed the same gate to
@@ -196,6 +247,10 @@ nobody configured that way behaves exactly as it does today. If you do have
 such a stage with applicants parked on it who attended without it being
 recorded, they will be refused until you record it — worth a look at who is
 sitting on that stage before you upgrade.
+
+**Amended on 2026-09-16** — see the entry above. Being checked in is necessary
+but no longer sufficient: the event's attendance must also be finalized, and
+the refusal's wording changed to say so.
 
 ### Bulk Advance is held to the meeting-attendance gate (2026-09-15)
 
