@@ -23,7 +23,7 @@ from app.services.driver_exception_service import (
 )
 from app.services.separation_of_duties import SeparationOfDutiesError
 
-TODAY = date(2026, 8, 16)
+TODAY = date.today()
 
 
 def _one(obj):
