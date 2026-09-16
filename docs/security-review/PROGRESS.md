@@ -16,6 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 08 (Membership pipeline), pass 7** — branch
+`claude/security-review-mp-08-<pending>`, PR number to follow in a
+same-day bookkeeping commit once opened (matching the pass-5/pass-6
+convention of filling it in after `create_pull_request` returns). Watchdog
+iteration: the `/loop 30m /security-review` session had stalled (no
+commits/PRs in 3.5+ hours, no open security-review PR) so this ran as a
+one-off pickup, Step 0–9 as normal. 0 fixes, 0 new findings — all 4
+standing FLAGGED items (MP-10, MP-19's `/widget-summary` half, MP-22,
+MP-26) re-verified unchanged against current code; the two commits landed
+in this feature's scope since pass 6 (`4b7bd1a` permission-gate widening,
+`70affbf` bulk-advance meeting-gate closure) were independently re-read
+and hold up. Full write-up in `MP-08-membership-pipeline.md`'s **Pass 7**
+section. One out-of-scope, pre-existing failure discovered incidentally
+(3 date-rollover test failures in `tests/test_driver_exception_service.py`,
+unrelated to this feature) is reported there and left unfixed, per this
+iteration's scope. Rotation row 08 → ✅ (pending this PR's merge).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users &amp; organizations, pass 6, PR #2602, merged clean — 0 fixed, 0 new findings, 1 regression test added; rotation row 07 marked ✅ as part of that PR), preserved for history</summary>
+
 **None.** PR [#2602](https://github.com/thegspiro/the-logbook/pull/2602)
 (Feature 07, Users & organizations, pass 6) was fully green (17/17 checks,
 `mergeable_state: clean`, no unresolved review threads — only the
@@ -16458,7 +16478,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
@@ -16492,6 +16512,66 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-16 — Feature 08 (Membership pipeline, pass 7) — 0 fixed, 0 new findings — watchdog iteration
+
+The `/loop 30m /security-review` session driving this rotation had stalled
+(no commits/PRs in 3.5+ hours, no open security-review PR at the time of
+this dispatch), so this ran as a one-off watchdog pickup under explicit
+standing authorization, following Step 0–9 exactly as a routine iteration
+would. Step 0: confirmed no security-review PR open (PROGRESS.md's Open PR
+row already read "None"). Step 1: first ⬜ row was 08 (Membership
+pipeline).
+
+Loaded prior art first: `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`
+(pass 6, no open cross-cutting item touches this feature besides the
+already-flagged outbound-URL TOCTOU, which this feature's services do not
+call into), `docs/module-audit/membership-pipeline.md` and
+`docs/app-review/membership-pipeline.md` (all findings in both already
+FIXED or mirrored to `KNOWN_LIMITATIONS.md`), and this feature's own
+`MP-08-membership-pipeline.md` (6 prior passes, last at `bcbeb9c`/PR #2555).
+
+`git log bcbeb9c..origin/main` found exactly two commits in this feature's
+scope since pass 6, both ordinary feature work never before run through
+this rotation: `4b7bd1a` (a repo-wide sweep admitting a `.manage` grant to
+reads that branch on it; one hit here, `GET /prospects/{id}/events`) and
+`70affbf` (closed a real gate bypass — `bulk_advance_prospects` had
+inherited the single-Advance meeting-attendance exemption, letting a bulk
+selection walk an applicant past an unattended interview stage). Both were
+read in full and independently re-verified rather than trusted from their
+commit messages. Re-enumerated all 52 routes by a fresh AST walk (unchanged
+count and gating from pass 6); re-walked uploads, LIKE-escaping, JSON-column
+mutation, SET NULL nullability, the purge/bulk by-id operations, and the
+multi-approval signer's own-role check against current code. No new finding.
+All 4 standing FLAGGED items (MP-10, MP-19's `/widget-summary` half, MP-22,
+MP-26) re-verified unchanged and already correctly mirrored in
+`KNOWN_LIMITATIONS.md` — no doc update needed there.
+
+Completion gate: `flake8`/`black`/`isort` on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` 444 revisions, single head;
+`check_route_permissions.py --strict` 228 routes, 0 errors; 8 cross-cutting
+guard test files (org-scoping ratchet, LIKE escaping, CSV sweep, capacity
+locking, endpoint-auth coverage, permission-gate branch sweep, election-vote
+gate, bulk-advance attendance gate) 88/88; scoped pytest
+(`-k "membership or prospect or pipeline or election"`) 1180 passed / 1
+skipped / 0 failed; full backend unit suite 10196 passed / 1 skipped
+(pre-existing) / **3 failed** — traced to
+`tests/test_driver_exception_service.py`, a hardcoded
+`valid_until=date(2026, 9, 15)` fixture that rolled into the past between
+pass 6 and this pass, reproducible with zero code changes and confined to a
+file wholly outside this feature's scope. Left unfixed per this iteration's
+scope and reported explicitly rather than silently skipped (see the
+findings doc's "Out-of-scope, discovered incidentally" section) — a
+follow-up should replace the hardcoded date with one computed relative to
+the test's own run time. `npm run typecheck`/`npm run lint` both run and
+clean (a frontend file inside this feature's own module,
+`modules/prospective-members/types/index.ts`, changed since pass 6, though
+outside the declared backend scope files, so the frontend gate was run
+rather than skipped).
+
+Full write-up: `MP-08-membership-pipeline.md`'s **Pass 7** section. Rotation
+row 08 → ✅ (pending this PR's merge). Next: Feature 09 (Medical screening,
+PHI).
 
 ### 2026-09-15 — Feature 07 (Users & organizations, pass 6)'s PR #2602 merged, watchdog recorded it
 

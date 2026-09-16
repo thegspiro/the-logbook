@@ -1,6 +1,193 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6)
+**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), pass 7 PR TBD
+
+---
+
+## Pass 7 (2026-09-16) — 0 fixed, 0 new flagged, all 4 standing FLAGGED items re-verified unchanged
+
+**Watchdog note.** This iteration ran as a one-off watchdog pass (the
+`/loop 30m /security-review` session that normally drives this rotation had
+stalled for over 3.5 hours with no open PR), not a routine lap. Followed the
+same Step 0–9 procedure as every other pass.
+
+**Scope confirmation.** Rotation table row 08 (`membership_pipeline.py`,
+`membership_pipeline_service.py`) plus this feature's own established
+additional scope: `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `api/prospect_privacy.py`,
+`utils/prospect_fields.py`.
+
+**Last reviewed at:** `bcbeb9c` (MP-30 fix, PR #2555, merged 2026-09-14).
+`git log bcbeb9c..origin/main -- <scope files>` found exactly two commits
+touching the declared scope, both ordinary feature work, both independently
+tested and merged before this pass, neither previously run through this
+rotation:
+
+| Commit    | What                                                                                                                                                                                                                                                                                                                  | Files                                               |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `4b7bd1a` | A repo-wide sweep (`test_permission_gate_branch_sweep.py`) admitting a `.manage` grant to reads that branch on it; the one hit in this feature's scope widened `GET /prospects/{id}/events` from `prospective_members.view` alone to `.view` **or** `.manage`                                                         | `membership_pipeline.py` (+4/-2)                    |
+| `70affbf` | Closed a gate bypass: `bulk_advance_prospects` inherited the single-Advance meeting-attendance exemption it should not have, so a bulk selection could walk an applicant past an unattended interview stage with no per-applicant judgement behind it. New `unobserved`/`automated` plumbing, 5 new integration tests | `services/membership_pipeline_service.py` (+40/-11) |
+
+Both were read in full rather than trusted from their commit messages (see
+below), since a fix that closes a gate on one path and a widened grant are
+exactly the two shapes this rotation exists to catch if done wrong.
+
+### Re-verification performed this pass
+
+Re-enumerated all 52 routes programmatically (AST walk of every
+`@router.(get|post|put|patch|delete)` decorator through to its `Depends`,
+not a diff against pass 6's count) — **unchanged from pass 6's 52**, every
+route still either `require_permission(...)`-gated or the one documented
+exception (`approve-step`, MP-11's fix intact, `Depends(get_current_user)`
+only with the minimal `StepApprovalResponse` it must return). Router-wide
+`block_self_prospect_access` (`membership_pipeline.py:95`) and the dedicated
+`block_self_interview_access` on `PUT`/`DELETE /interviews/{id}` both still
+present.
+
+**`4b7bd1a`'s widening, read directly:** `list_prospect_event_links` now
+requires `prospective_members.view` **or** `.manage`. This corrects an
+inconsistency rather than opening a new hole — the sibling write route
+(`POST /prospects/{id}/events`, `link_event_to_prospect`) was already gated
+on `.manage` alone, so a `.manage`-only holder (four seeded positions:
+president, secretary, vice president, membership coordinator — none of which
+is separately seeded `.view`) could create a link and not read it back. No
+other route in this feature's file was touched by that commit.
+`service.list_event_links` remains org-scoped through `get_prospect(...,
+organization_id)` before the `ProspectEventLink` query, unchanged.
+
+**`70affbf`'s gate closure, traced end to end:** `bulk_advance_prospects` →
+`_bulk_apply` → per-item `advance_prospect(..., unobserved=True)` →
+`complete_step(..., automated=unobserved)` → `_validate_step_completion`'s
+`elif step_type == MEETING and automated: await
+self._assert_meeting_attended(...)`. Confirmed the single-item `POST
+/prospects/{id}/advance` path still calls `advance_prospect` with
+`unobserved` defaulted to `False` (`automated=False`), so the deliberate,
+by-design single-coordinator exemption ("watched somebody walk in") is
+unaffected — only the bulk path newly participates in the gate.
+`_assert_meeting_attended` itself is unchanged since pass 6 and remains
+org-scoped (`Event.organization_id == prospect.organization_id` on the
+attendance join, re-read at
+`services/membership_pipeline_service.py:1927`).
+
+**Fresh checklist-driven re-read, not limited to the diff** (per this pass's
+own honesty requirement — a diff-only read would miss a defect sitting
+unchanged in code neither commit touched): re-walked upload/download
+(`add_prospect_document`/`download_prospect_document` —magic-byte check via
+`magic.from_buffer`, 50MB cap, UUID filename with a MIME-derived extension
+never the client's own, realpath-under-`PROSPECT_DOCUMENT_DIR` traversal
+guard on download, cleanup-on-failure), the three LIKE sites
+(`ProspectiveMember.first_name/last_name/email.ilike` at
+`membership_pipeline_service.py:1097-1101` and
+`TrainingProgram.name.ilike("%probationary%", ...)` at `:3523` — both use
+`like_pattern()`/a static literal with `escape=LIKE_ESCAPE_CHAR`), the two
+`= dict(...)` sites (`list_pipelines`' count-tuple dict at `:310`, not a JSON
+column; `update_election_package`'s `applied = dict(updates)` at `:5617`,
+a plain request-payload copy that reaches `package_config` only through a
+`copy.deepcopy(pkg.package_config or {})` merge before `apply_updates` —
+Pitfall #12 correctly applied), all `ondelete="SET NULL"` columns in
+`models/membership_pipeline.py` (every one paired with `nullable=True`),
+`purge_inactive_prospects` (requires `confirm: true`, resolves
+`pipeline_id` org-scoped via `get_pipeline` first, and the delete's
+`prospect_ids IN (...)` filter is additionally constrained by that same
+`pipeline_id` — so a foreign prospect id cannot match even without a direct
+`organization_id` predicate, since pipelines are exclusively owned by one
+org), and `record_step_approval`/`_authorized_multi_approval_result`
+(replaces any client-claimed approver identity with the authenticated
+signer, validates the signer is an active member of the caller's own org,
+and checks the role against the signer's **own** positions — not a
+client-supplied claim).
+
+No new finding surfaced from any of the above; each matches a pattern this
+file already established as correct in an earlier pass, re-derived rather
+than assumed.
+
+### Flagged items re-verified, unchanged (no new fix, no regression)
+
+- **MP-10** (unbounded `list_election_packages`/`create_election_package`,
+  no pagination or per-prospect cap) — `list_election_packages`
+  (`membership_pipeline_service.py:5661`) still has no `LIMIT`/`OFFSET`.
+  Unaffected by either of this pass's two commits. Still open;
+  `docs/KNOWN_LIMITATIONS.md`'s entry matches current code.
+- **MP-19's `/widget-summary` half** — `pipeline_widget_summary`
+  (`membership_pipeline.py:119`) still runs
+  `select(ProspectiveMember).where(organization_id == ...)` with no bound,
+  materializing every prospect row (full PII columns) just to count them,
+  gating the per-applicant `details` list on `prospective_members.manage`
+  via `user_has_permission` rather than the route's own permission
+  dependency. Unchanged. The sibling `/pipelines` fix (aggregate `count()`
+  query, no eager `prospects` load, confirmed at `:305-312`) remains intact.
+- **MP-22** (a document delete can lose the file if the commit fails after a
+  successful `os.remove`) — ordering unchanged
+  (`delete_prospect_document`/`os.remove` still precedes the DB
+  delete/commit); still a deliberate open tradeoff per
+  `KNOWN_LIMITATIONS.md`.
+- **MP-26** (the narrowed multi-`election_vote`-stage ambiguity) — still
+  open exactly as narrowed in pass 4 round 4; the MP-30 gate and its shared
+  `_election_block_reason` helper both operate on the prospect's latest
+  election package regardless of which stage governs `package_fields`, a
+  separate question this item's own narrowing already isolated.
+
+No new flags. All four re-derived from current code this pass, not copied
+from the prior write-up.
+
+### Verified good ✅ (pass 7)
+
+- **Route count and gating are unchanged from pass 6 (52/52)**, re-derived
+  by a fresh AST walk of the endpoint file rather than trusted from the
+  prior count.
+- **Both commits landed in this feature's scope since pass 6 hold up under
+  independent re-reading**: the permission widening closes an inconsistency
+  (a `.manage` holder who could write but not read their own link) without
+  opening a new one, and the bulk-advance gate closure removes a real,
+  previously-unflagged side door around the meeting-attendance gate without
+  weakening the single-item exemption it deliberately preserves.
+- **All patterns re-checked this pass (uploads, LIKE escaping, JSON-column
+  mutation, SET NULL nullability, the purge/bulk by-id operations, and the
+  approval signer's own-role check) still match the correct shape this file
+  already established** — named per class above, not asserted in the
+  abstract.
+
+### Out-of-scope, discovered incidentally — not fixed here
+
+Running the full backend suite (beyond this feature's own scoped tests, as
+an extra check given the size of the service file) surfaced **3 pre-existing
+failures in `tests/test_driver_exception_service.py`**
+(`TestReviewException::test_approves_a_pending_request`,
+`::test_a_concurrent_reviewer_cannot_also_win`,
+`::test_the_decision_update_is_conditional_on_still_pending`), reproducible
+in isolation with zero code changes applied. Root cause: the fixture hardcodes
+`valid_until=date(2026, 9, 15)` and the service correctly refuses to approve
+an exception whose end date is already in the past — the fixture's date
+rolled into the past between pass 6 (2026-09-14) and this pass (2026-09-16).
+This is a time-bomb test bug, not a security defect, and it sits in
+`app/services/driver_exception_service.py` / its own test file — no file
+either declared or actually touched by this feature. Left unfixed here per
+this iteration's scope (fixing an unrelated module's test fixture inside a
+membership-pipeline security-review PR would blur the PR's own review
+surface); reported here and in the Step 9 summary so it is not silently
+dropped. **Escalated, not ignored** — a follow-up (any rotation iteration
+touching that file, or a standalone fix) should replace the hardcoded date
+with one computed relative to the test's own run time.
+
+### Completion gate (pass 7)
+
+| Check                                                                                                                                                                                               | Result                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `python3 -m flake8 app/ tests/ alembic/`                                                                                                                                                            | pass, 0 violations                                                                                                                                                                                                           |
+| `python3 -m black --check app/ tests/ alembic/`                                                                                                                                                     | pass, 1598 files unchanged                                                                                                                                                                                                   |
+| `python3 -m isort --check-only app/ tests/ alembic/`                                                                                                                                                | pass, 0 violations                                                                                                                                                                                                           |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                   | pass — 444 revisions, single head `6ab7d903fae5` (no schema change this pass)                                                                                                                                                |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                   | pass — 228 routes checked, 0 errors, 0 warnings                                                                                                                                                                              |
+| cross-cutting guard tests (org-scoping ratchet, LIKE escaping, CSV sweep, capacity locking, endpoint-auth coverage, permission-gate branch sweep, election-vote gate, bulk-advance attendance gate) | 88 passed                                                                                                                                                                                                                    |
+| scoped pytest (`-k "membership or prospect or pipeline or election"`)                                                                                                                               | 1180 passed / 1 skipped (`py_vapid`) / 0 failed                                                                                                                                                                              |
+| full backend suite (`pytest tests/ -m "not integration and not slow and not docker"`)                                                                                                               | 10196 passed / 1 skipped (pre-existing `py_vapid`) / **3 failed — pre-existing, unrelated, out-of-scope** (`test_driver_exception_service.py`, see above) / 2433 deselected                                                  |
+| `cd frontend && npm run typecheck`                                                                                                                                                                  | pass, 0 errors (aliased 7.0.2 compiler) — run because a frontend file inside this feature's module (`modules/prospective-members/types/index.ts`) changed since pass 6, though outside the four declared backend scope files |
+| `cd frontend && npm run lint`                                                                                                                                                                       | pass, 0 errors, 0 warnings                                                                                                                                                                                                   |
+
+No source files in this feature's scope changed this pass — every check
+above is a re-verification, not a fix. The only defect found (the
+driver-exception date fixture) is outside this feature's file set and is
+reported rather than fixed, per this iteration's scope.
 
 ---
 
