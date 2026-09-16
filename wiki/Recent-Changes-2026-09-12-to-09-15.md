@@ -37,8 +37,9 @@ send is refused when you save it**.
 
 - **Check your email configuration if mail has been unreliable.** Settings →
   Email would save an **enabled** section green that had no chance of sending:
-  **Cloudflare** with no account ID or token, or **Other**, which stores nothing
-  at all. Both are refused on save now. **The reason this matters more than a
+  **Cloudflare** with no account ID or token, or the platform left at **Not
+  configured** — the button labelled **Other** until this change — which stores
+  nothing at all. Both are refused on save now. **The reason this matters more than a
   validation message:** an enabled section short-circuits the deployment's own
   SMTP settings, so a half-filled section did not merely fail on its own — it
   stopped whatever server-level mail configuration the installation had from

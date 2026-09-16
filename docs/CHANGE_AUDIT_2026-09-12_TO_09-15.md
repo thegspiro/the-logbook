@@ -249,26 +249,40 @@ Full per-image queue in
 [`training/SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md);
 coverage counts are regenerated into
 [`training/SCREENSHOT_STATUS.md`](./training/SCREENSHOT_STATUS.md) by
-`scripts/screenshots/status_report.py` (**530 captured, 48 remaining** after
-this pass queued six).
+`scripts/screenshots/status_report.py` (**533 captured, 45 remaining** — this
+pass queued six placeholders and three of them have since been shot).
 
 **This window adds a small queue, and none of it is urgent** — no screen moved
 and no control was added to a page that had none. What changed is what a
 screen _contains_ under the same address.
 
-| Image area                               | Disposition   | Why                                                                                                                       |
-| ---------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Scheduling → **Open Shifts** board       | **REPLACE**   | The member's board is now filtered to claimable seats; an old capture over-states what is offered                         |
-| Shift signup picker → position dropdown  | **REPLACE**   | Offers only seats the server will grant, and says "every seat you are cleared for is filled" instead of "not eligible"    |
-| Settings → **Email**, provider list      | **REPLACE**   | Twelve SMTP quick-fill presets are now offered where the screen previously showed Self-Hosted or Other                    |
-| Settings → **Email**, inline validation  | **NEW**       | The refusal for an enabled-but-empty Cloudflare or Other section is new, and is what an operator will hit after upgrading |
-| Stage builder → **Meeting** config       | **REPLACE**   | Carries the Auto-Link Event Type warning beside the auto-advance checkbox                                                 |
-| Stage builder → **Election Vote** config | **NEW**       | The type is creatable from the picker for the first time                                                                  |
-| Inventory item → maintenance history     | **NO CHANGE** | The rule changed, the screen did not                                                                                      |
+| Image area                               | Disposition    | Why                                                                                                                                                                                                    |
+| ---------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Scheduling → **Open Shifts** board       | **REPLACE**    | The member's board is now filtered to claimable seats; an old capture over-states what is offered                                                                                                      |
+| Shift signup picker → position dropdown  | **REPLACE**    | Offers only seats the server will grant, and says "every seat you are cleared for is filled" instead of "not eligible"                                                                                 |
+| Settings → **Email**, provider list      | **REPLACE** ✅ | Twelve SMTP quick-fill presets, and two platform buttons renamed — **Self-Hosted SMTP** → **SMTP (any provider)**, **Other** → **Not configured**. Shot 09-16 as `20-11`; one image serves both guides |
+| Settings → **Email**, inline validation  | **NEW**        | The refusal for an enabled-but-empty Cloudflare or Other section is new, and is what an operator will hit after upgrading                                                                              |
+| Stage builder → **Meeting** config       | **REPLACE**    | Carries the Auto-Link Event Type warning beside the auto-advance checkbox                                                                                                                              |
+| Stage builder → **Election Vote** config | **NEW** ✅     | The type is creatable from the picker for the first time. Shot 09-16 as `20-12`                                                                                                                        |
+| Inventory item → maintenance history     | **NO CHANGE**  | The rule changed, the screen did not                                                                                                                                                                   |
 
 **Do not re-shoot for the dialog change.** A dialog that no longer closes on an
 outside click looks identical in a still frame. It is a video and prose matter,
 not a screenshot one.
+
+**Two rows are shot (✅), and two of the remaining ones cannot be shot from the
+seeded department as it stands.** The Open Shifts pair needs two signed-in
+sessions and a member whose positions are genuinely narrower than the board; the
+Not Elected refusal needs a seeder that carries an applicant through a _failing_
+vote, which `seed_demo_data.py` never does — `MEMBERSHIP_VOTE_TALLY` is a pass.
+Both are recorded in
+[`training/SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md).
+
+**The preset list itself is unphotographable**, which the first draft of this
+disposition did not know. "Fill in settings for a known provider" is a native
+`<select>`; the browser draws its open list outside the page. The shot that
+exists shows a preset **applied** instead — the credential line and the filled
+host, port and encryption — which is the part prose cannot carry anyway.
 
 ### YouTube script beats
 
@@ -279,7 +293,7 @@ this change list. Full disposition in
 - **03 — IT Manager / System Admin.** The email beats are the material here:
   an enabled section that cannot send is now refused at save time, the SMTP
   preset list makes Yahoo, Fastmail, Zoho, SES, SendGrid and seven more
-  reachable without reasoning about "Self-Hosted", and a Cloudflare department
+  reachable without reasoning about "Self-Hosted" (a button now named **SMTP (any provider)**), and a Cloudflare department
   can send ballot mail for the first time. Say plainly that a half-filled
   section used to shadow deployment-wide SMTP.
 - **04 — Fire Chief / Leadership.** Four pipeline changes land on this script
@@ -328,5 +342,5 @@ All six were run clean against `4c291192d` while writing this audit: migration
 head `6ab7d903fae5`, single head, no branch points, 444 revisions; 228 routes
 checked with 0 errors and 0 warnings (17 redirects skipped); 1,489 documented
 route handlers with 0 errors and 0 warnings; 358 Markdown files with 0 broken
-links; 530 screenshots captured with 48 remaining; `DATABASE_SCHEMA.md`
+links; 533 screenshots captured with 45 remaining; `DATABASE_SCHEMA.md`
 regenerated to 265 tables and 4,484 columns with no diff.

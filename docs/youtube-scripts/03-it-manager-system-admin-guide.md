@@ -607,21 +607,31 @@ member preview.]**
 > to **Administration > Organization Settings**, click the **Email** tab, and
 > select your platform."
 
-**[SCREEN: Show email settings with platform buttons — Gmail, Microsoft 365, Self-Hosted SMTP, Cloudflare, Other]**
+**[SCREEN: Show email settings with platform buttons — Gmail, Microsoft 365, SMTP (any provider), Cloudflare, Not configured]**
 
-> "You can choose Gmail, Microsoft 365, Self-Hosted SMTP, or Cloudflare Email
-> Service. For SMTP-based platforms, enter your server, port, and credentials.
-> For Cloudflare, enter your Account ID and API Token — Cloudflare handles
-> all the DNS authentication automatically."
+> "You can choose Gmail, Microsoft 365, SMTP for any provider, or Cloudflare
+> Email Service. For the SMTP-based platforms, enter your server, port, and
+> credentials. For Cloudflare, enter your Account ID and API Token — Cloudflare
+> handles all the DNS authentication automatically."
 
-**[SCREEN: Open the Self-Hosted SMTP preset list — Yahoo, iCloud, Zoho, Fastmail, AOL, GMX, SendGrid, Amazon SES, Mailgun, Postmark, Brevo, Mailjet]**
+> "Two of those buttons were renamed in September 2026, and if you're following
+> an older recording you'll notice: **Self-Hosted SMTP** is now **SMTP (any
+> provider)**, and **Other** is now **Not configured**. Only the names changed —
+> what's underneath each one is the same."
+
+**[SCREEN: Choose SMTP (any provider), then pick Fastmail from "Fill in settings for a known provider" — the Host, Port and Encryption fill themselves in]**
 
 > "If your department runs on something that isn't Gmail or Microsoft — Yahoo,
-> Fastmail, Zoho, or a sending service like SendGrid or SES — **that's
-> Self-Hosted SMTP**, and there's a preset for it. Twelve of them, each filling
-> in the host, port and encryption that provider documents. Don't be put off by
-> the name: 'Self-Hosted' means you're giving it an SMTP server, not that you
-> have to run one."
+> Fastmail, Zoho, or a sending service like SendGrid or SES — **that's SMTP
+> (any provider)**, and there's a preset for it. Twelve of them, each filling in
+> the host, port and encryption that provider documents. That button used to say
+> 'Self-Hosted SMTP', which is exactly why departments thought they weren't
+> supported: you're giving it an SMTP server, not running one."
+
+> "The provider chooser is a one-shot thing — it snaps back to 'Choose a
+> provider' the moment it's filled the three fields. That's why the line naming
+> your provider and its credential rule sits underneath it. Nothing stores which
+> preset you picked, and nothing needs to."
 
 > "Most of them want an **app password**, not your account password — generated
 > in the provider's own security settings once you've got two-factor sign-in
@@ -630,8 +640,10 @@ member preview.]**
 
 **[CALLOUT: "'Other' stores nothing and cannot send — it is not a fallback"]**
 
-> "One trap to call out, because it has bitten departments. **'Other' is not a
-> catch-all.** It stores nothing and it cannot send. And here's the part that
+> "One trap to call out, because it has bitten departments. The button now
+> called **'Not configured'** — it said **'Other'** until September 2026 — is
+> not a catch-all. It stores nothing and it cannot send, which is precisely
+> what the new name is trying to tell you. And here's the part that
 > makes it worse than it sounds: **an enabled email section short-circuits your
 > deployment's own SMTP settings.** So a department that was sending perfectly
 > well through the server-level configuration, then came in here and

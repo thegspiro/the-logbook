@@ -272,7 +272,8 @@ linked event.
 
 Settings → Email would save an **enabled** section green that had no chance of
 delivering a message. Two shapes did this: **Cloudflare** with no account ID or
-API token, and **Other**, which stores nothing at all. Both now name the missing
+API token, and the platform left at **Other**, which stores nothing at all.
+(That button is now labelled **Not configured**.) Both now name the missing
 field on the write, and the settings screen says so inline rather than leaving
 Save to explain it. A present-but-misshapen Cloudflare account ID is rejected
 too — it must be the 32-character hexadecimal value from your Cloudflare
@@ -290,8 +291,16 @@ stopped sending, with a green toast and no error anywhere.
 open Settings → Email. Either complete the section or **turn it off** — a
 disabled section hands sending back to the deployment's own SMTP configuration.
 
-**Three more things changed on the same screen, all additive.**
+**Four more things changed on the same screen.** Three are additive; the first
+changes what two buttons are called.
 
+- **Two platform buttons were renamed.** **Self-Hosted SMTP** is now **SMTP
+  (any provider)**, and **Other** is now **Not configured**. Nothing beneath
+  either button changed and no stored value moved — but every screenshot,
+  recording and SOP that names the old labels is now wrong about them, and an
+  operator following one will look for a button that is not there. The rename is
+  part of the fix above rather than a separate tidy-up: both old names pointed
+  departments at the one option that cannot send.
 - **Twelve SMTP quick-fill presets.** Yahoo, iCloud, Zoho, Fastmail, AOL, GMX,
   SendGrid, Amazon SES, Mailgun, Postmark, Brevo and Mailjet each fill in the
   host, port and encryption the provider documents, along with what its Username
@@ -301,8 +310,8 @@ disabled section hands sending back to the deployment's own SMTP configuration.
   stored shape is unchanged**: still a self-hosted SMTP configuration with the
   same fields, so nothing about an existing one moves. This is a labelling fix.
   A department running on Yahoo read "Self-Hosted SMTP — your own mail server",
-  reasonably concluded it was not supported, and picked **Other**, which cannot
-  send.
+  reasonably concluded it was not supported, and picked "Other", which cannot
+  send. Both of those names are what the rename above replaced.
 - **Cloudflare departments can send ballot email.** The election ballot fan-out
   is the one batch sender, and it handed the Cloudflare path raw MIME, which
   that API does not accept — so it warned about falling back to SMTP and fell

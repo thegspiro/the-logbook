@@ -4448,6 +4448,99 @@ export const SHOTS = [
   },
   // ── 20 September release: reachable from the seeded department ──────
   {
+    id: "20-11-settings-email-smtp-preset",
+    doc: "20-september-2026-release-changes.md",
+    line: 1401,
+    anchor: "what a picture adds is the effect",
+    alt: "Settings → Email with SMTP (any provider) selected and the Fastmail preset applied — the credential line naming the provider, and the host, port and encryption it filled in",
+    route: "/settings?tab=email",
+    expect: "SMTP Server",
+    // Clipped to the card. A fullPage shot of this route is two thirds
+    // navigation and footer, and the subject is one panel.
+    selector: 'div.card:has(h3:text-is("Email Configuration"))',
+    prepare: async (page) => {
+      // The demo org has no email configured, so the page opens on "Not
+      // configured" with nothing below it. Both steps are local state until
+      // Save, which is never pressed -- nothing is written.
+      await page
+        .getByRole("button", { name: /SMTP \(any provider\)/i })
+        .click();
+      await page.waitForSelector("#smtp-quick-fill");
+      // Fastmail rather than the first option: its credential hint names an
+      // app password AND a specific settings path, which is the sentence the
+      // shot exists to show. It is also SSL/465, so the encryption field
+      // visibly differs from the STARTTLS default -- a preset that changed
+      // nothing visible would picture the opposite of its caption.
+      await page.selectOption("#smtp-quick-fill", "fastmail");
+      await page.waitForFunction(
+        () =>
+          document.querySelector('input[placeholder="mail.yourdomain.com"]')
+            ?.value === "smtp.fastmail.com",
+      );
+      // The select is a one-shot action bound to value="" and snaps back to
+      // "Choose a provider…". Blur so it does not keep a focus ring, which
+      // reads as "type here" on a control the reader has already used.
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+    },
+  },
+  {
+    id: "20-12-stage-picker-election-vote",
+    doc: "20-september-2026-release-changes.md",
+    line: 1355,
+    anchor: "this type could not be saved from this dialog at all",
+    alt: "The Add Pipeline Stage dialog with Election / Vote selected, its voting configuration revealed below the type grid, and Add Stage enabled with no validation error",
+    route: "/prospective-members/settings",
+    // Election-vote's own config heading, chosen over the dialog title: it
+    // exists only once that type is selected, and it sits low in the panel --
+    // so it catches a shot that landed on the dialog with the default type
+    // still chosen AND one framed too short to reach the configuration the
+    // caption describes.
+    expect: "Election Package Contents",
+    // The dialog's content is 2,215px tall and `modal-panel-scroll` caps the
+    // panel at 90vh, so at the desktop height the footer -- the enabled Add
+    // Stage button, which is the whole point -- sits below the panel's own
+    // scroll. A viewport tall enough to hold it is what puts the selected type
+    // and the button it no longer refuses in one frame.
+    viewport: { width: 1280, height: 2400 },
+    selector: '[aria-labelledby="stage-config-modal-title"] > div',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Volunteer Membership Pipeline/i })
+        .first()
+        .click();
+      await page
+        .getByRole("button", { name: /^Add Stage$/ })
+        .first()
+        .click();
+      const modal = page.locator(
+        '[aria-labelledby="stage-config-modal-title"]',
+      );
+      await modal.getByRole("button", { name: /Election \/ Vote/ }).click();
+      // Named, because the dialog opens on Manual Approval and an unnamed
+      // stage photographs as a form nobody has filled in. Nothing is saved:
+      // Add Stage is never pressed, so the demo pipeline keeps its six stages.
+      await modal
+        .locator('input[placeholder*="Application Review"]')
+        .first()
+        .fill("Membership Vote");
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+      // The subject is an absence -- no validation error, and a button that
+      // accepts. Assert both, because an absence cannot be seen to fail.
+      const save = modal.getByRole("button", { name: /^Add Stage$/ });
+      if (await save.isDisabled()) {
+        throw new Error(
+          "Add Stage is disabled; the shot would teach the opposite",
+        );
+      }
+    },
+  },
+  {
     id: "20-04-org-profile-navigation-layout",
     doc: "20-september-2026-release-changes.md",
     line: 940,
