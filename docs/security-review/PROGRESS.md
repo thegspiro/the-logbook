@@ -16,6 +16,34 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 10 (Documents & legal), pass 6** — PR
+[#2611](https://github.com/thegspiro/the-logbook/pull/2611), branch
+`claude/security-review-doc-10-pass6`. **Watchdog
+iteration:** the `/loop 30m /security-review` session had produced no
+commit or PR in the ~2.5 hours since PR #2608/#2609 merged (2026-09-16
+11:17 UTC), well past its configured 30-minute interval, with
+`PROGRESS.md`'s Open PR row already reading "None" / "Next: Feature 10" and
+no `claude/security-review-*` branch in flight. `git fetch origin main`
+clean; `list_pull_requests` (state=open) → only #2610, an unrelated draft
+docs/screenshots PR; `list_branches` showed no
+`security-review`/`feature10`/`documents`/`legal`/`doc` branch anywhere.
+Working tree (`claude/friendly-babbage-5els6t`) was clean, so this
+iteration cut a fresh branch from `origin/main` rather than reusing it.
+
+Baseline `093c8db91` (merge commit of PR #2559, pass 5's landing point).
+**Zero-delta re-verification:** `git diff` across the full declared scope —
+every backend file, every shared collaborator, and the entire frontend
+surface (`DocumentsPage.tsx`, `modules/documents/`,
+`LegalDocumentsPage.tsx`) — returns no lines, despite 82 unrelated commits
+landing on `main` since pass 5. Both open findings (DOC-9's still-open
+half, DOC-30) re-confirmed unchanged by direct read of current code. **0
+fixed, 0 new findings, 0 application-code changes.** Full write-up:
+`DOC-10-documents-legal.md`'s **Pass 6** section. Rotation row 10 → ✅
+(pending this PR's merge). Next: Feature 11 (Inventory).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 6, PR #2608, merged directly by this watchdog — 1 fixed, 0 new findings; rotation row 09 marked ✅ as part of that merge), preserved for history</summary>
+
 **None.** PR [#2608](https://github.com/thegspiro/the-logbook/pull/2608)
 (Feature 09, Medical screening, pass 6) went fully green (17/17 checks,
 `mergeable_state: clean`, no review threads — only the informational Codex
@@ -16550,7 +16578,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⏳     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -16582,6 +16610,55 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-16 — Feature 10 (Documents & legal, pass 6) — 0 fixed, 0 new findings — watchdog iteration
+
+The `/loop 30m /security-review` session driving this rotation had produced
+no commit or PR in the ~2.5 hours since PR #2608/#2609 (Feature 09) merged
+at 11:17 UTC, well past its configured 30-minute interval, so this ran as a
+one-off watchdog pickup. Step 0 re-verified fresh: `git fetch origin main`
+clean; `PROGRESS.md`'s Open PR row read "None" / "Next: Feature 10
+(Documents & legal)"; `list_pull_requests` (state=open) → only #2610, an
+unrelated draft docs/screenshots PR; `list_branches` showed no
+`security-review`/`feature10`/`documents`/`legal`/`doc` branch in flight.
+Working tree (`claude/friendly-babbage-5els6t`) was clean, so a fresh branch
+was cut from `origin/main`.
+
+Baseline `093c8db91` (merge commit of PR #2559, pass 5's landing point).
+**True zero-delta re-verification:** `git diff 093c8db91..origin/main`
+across the full declared scope — all three endpoint files, all four backing
+services, both models, both schema files, the public legal endpoint, the
+MCP tools module, every shared collaborator pass 5 named, and the entire
+frontend surface (`DocumentsPage.tsx` and its test, `modules/documents/`,
+`LegalDocumentsPage.tsx` and its test) — returns zero lines, and no
+migration in the window touches this feature's tables (content-grepped).
+82 unrelated commits landed on `main` since pass 5; none touch this
+feature's domain. Both open findings re-confirmed unchanged by direct read
+of current code, not by trusting the diff alone: DOC-9's still-open half
+(`documents_service.py:407-430`, `accessible_folder_ids`'s unbounded
+organization-wide folder scan) and DOC-30
+(`app/mcp/tools/documents.py:64-89`, `_open_folder_ids`, the identical
+shape on the MCP surface). Both remain flagged, not fixed, per pass 5's
+reasoning.
+
+**0 fixed, 0 new findings, 0 application-code changes.** Completion gate:
+scoped tests `test_documents_access.py`/`test_legal_documents.py`/
+`test_print_documents.py`/`test_public_legal.py`/
+`test_facility_folder_access.py`/`test_facilities_folders.py`/
+`test_property_return_service.py`/`test_document_service.py` — 282 passed
+(unchanged from pass 5); MCP-scoped tests
+(`test_mcp_tools.py`/`test_mcp_redaction.py`/`test_mcp_keys.py`/
+`test_mcp_key_endpoints.py`/`test_mcp_transport.py`) — 276 passed (274 at
+pass 5; +2 from unrelated MCP-surface test additions elsewhere in the
+window); `flake8`/`black`/`isort` clean on `app/`, `tests/`, `alembic/`;
+`validate_migrations.py --strict` — 444 revisions, single head
+`6ab7d903fae5`; full backend suite 12612 passed, 21 skipped (pre-existing:
+`pywebpush` not installed, Docker registry/daemon unavailable,
+API-contract server-mode opt-in), 0 failed; frontend typecheck/lint not
+run (no frontend file in this feature's domain changed, confirmed by
+`git diff`, not merely `git status`). `docs/security-review/DOC-10-documents-legal.md`
+→ **Pass 6**. Rotation row 10 → ⏳ (pending this PR's merge). Next: Feature
+11 (Inventory).
 
 ### 2026-09-16 — Feature 09 (Medical screening, PHI, pass 6) — 1 fixed (interim), 1 flagged (MED) — PR #2608 opened — watchdog iteration
 

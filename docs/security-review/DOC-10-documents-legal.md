@@ -1,6 +1,77 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6)
+
+---
+
+## Pass 6 (2026-09-16)
+
+**Watchdog iteration.** `/loop 30m /security-review` had produced no commit or
+PR in the ~2.5 hours since PR #2608/#2609 (Feature 09, Medical screening)
+merged at 2026-09-16 11:17 UTC, despite `PROGRESS.md`'s Open PR row already
+reading "None" / "Next: Feature 10 (Documents & legal)" — well past the
+30-minute interval the loop is configured for, and with no
+`claude/security-review-*` branch in flight (`git branch -r` checked fresh).
+`git fetch origin main` clean; `list_pull_requests` (state=open) returned only
+#2610, an unrelated draft docs/screenshots PR. Working tree
+(`claude/friendly-babbage-5els6t`) was clean, so this iteration cut a fresh
+branch from `origin/main` rather than reusing it, per Pitfall #24 and this
+rotation's own per-iteration-branch convention.
+
+**Delta since pass 5.** Baseline `093c8db91` (merge commit of PR #2559, pass
+5's landing point). `git diff 093c8db91..origin/main` across the full
+declared scope — the three endpoint files, all four backing services
+(`documents_service.py`, `legal_service.py`, `print_document_service.py`,
+`document_service.py`), `models/document.py`, `models/legal.py`,
+`schemas/documents.py`, `schemas/legal.py`, `app/api/public/legal.py`,
+`app/mcp/tools/documents.py`, every shared collaborator pass 5 named
+(`core/permissions.py`, `utils/model_updates.py`, `utils/org_scoping.py`,
+`utils/sql_search.py`, `core/audit.py`, `core/utils.py`, `mcp/registry.py`,
+`mcp/redaction.py`, `utils/printer_transport.py`,
+`services/label_printer_service.py`), and the entire frontend surface
+(`frontend/src/pages/DocumentsPage.tsx` and its test,
+`frontend/src/modules/documents/`, `frontend/src/modules/governance/pages/LegalDocumentsPage.tsx`
+and its test) — returns **zero lines**, and no migration landed in the window
+touching `document_folders`, `legal_documents`, or `legal_document_revisions`
+(content-grepped, not filename-matched). 82 unrelated commits landed on `main`
+in this window; none touch this feature's domain. Every file is therefore
+byte-identical to pass 5's fully-read state, not merely undiffed by
+inspection — a stronger check than a fresh read, since it is exhaustive over
+every line rather than sampled.
+
+**Both open findings re-confirmed unchanged, by direct read of current
+code, not by trusting the diff alone:**
+
+- **DOC-9's still-open half** — `documents_service.py`'s
+  `accessible_folder_ids` (`documents_service.py:407-430`) still selects every
+  `DocumentFolder` row in the organization with no `LIMIT` before walking each
+  one's ancestry in Python. Unchanged.
+- **DOC-30** — `app/mcp/tools/documents.py`'s `_open_folder_ids`
+  (`documents.py:64-89`) still does the identical unbounded
+  `select(DocumentFolder).where(organization_id == ...)` scan with no limit on
+  every `list_documents`/`get_document`/`get_document_description` call.
+  Unchanged. Both remain flagged, not fixed, per pass 5's reasoning (shared by
+  `accessible_folder_ids` across every folder/document listing path in the
+  service — bounding one surface without the other would leave the REST API's
+  identical gap open while claiming the class resolved).
+
+**0 fixed, 0 new findings, 0 application-code changes.**
+
+## Completion gate
+
+| Check                                                                                                                                                                                                                                                                     | Result                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code changes this pass                                                                                                                                                                                                                                                    | none — zero-delta re-verification against pass 5's landing commit                                                                                 |
+| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_facility_folder_access.py tests/test_facilities_folders.py tests/test_property_return_service.py tests/test_document_service.py` | 282 passed (unchanged from pass 5)                                                                                                                |
+| `pytest tests/test_mcp_tools.py tests/test_mcp_redaction.py tests/test_mcp_keys.py tests/test_mcp_key_endpoints.py tests/test_mcp_transport.py`                                                                                                                           | 276 passed (274 at pass 5; +2 from unrelated MCP-surface test additions elsewhere in the window)                                                  |
+| `flake8` / `black --check` / `isort --check-only` (`app/`, `tests/`, `alembic/`)                                                                                                                                                                                          | clean                                                                                                                                             |
+| `validate_migrations.py --strict`                                                                                                                                                                                                                                         | 444 revisions, single head `6ab7d903fae5`                                                                                                         |
+| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                      | 12612 passed, 21 skipped (pre-existing: `pywebpush` not installed, Docker registry/daemon unavailable, API-contract server-mode opt-in), 0 failed |
+| `tsc --noEmit` / `eslint .` (frontend)                                                                                                                                                                                                                                    | not run — no frontend file in this feature's domain changed since pass 5 (confirmed by `git diff`, not merely `git status`)                       |
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 
