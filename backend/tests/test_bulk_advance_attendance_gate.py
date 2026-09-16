@@ -1,18 +1,20 @@
-"""A bulk advance is held to the meeting-attendance gate; a single one is not.
+"""A meeting stage that names its event is an attendance requirement.
 
-``_assert_meeting_attended`` runs only when ``complete_step`` is told the
-completion has no per-applicant judgement behind it. That exemption is written
-for one applicant at a time — "a coordinator who watched somebody walk in is
-better evidence of attendance than any record" — and the bulk path inherited it
-wholesale. The board lets cards be ticked across every column, so a bulk
-selection routinely spans stages and nobody formed a view about any single one
-of them.
+The gate began by reading the *caller*: it ran only when ``complete_step`` was
+told the completion had no per-applicant judgement behind it, on the reasoning
+that a coordinator who watched somebody walk in is better evidence than any
+record. A bulk advance was then exempt too, which made it the easiest way past
+an unattended meeting and gave the coordinator no sign it had happened.
 
-Every other gate already refused per item on this path and reported it in the
-response. The meeting gate was the only one a bulk advance walked straight
-through, which made bulk the easiest way to move an applicant past an interview
-they had not attended — and the way that gave the coordinator no sign it had
-happened.
+Narrowing that to the bulk path alone left the gate arguing with itself: the
+same coordinator, applicant and stage were refused in one click and allowed one
+card at a time, on a stage whose own text said "attend a business meeting"
+either way. What is graded is now decided by the stage. A stage that names its
+event is enforced on every path, a hand advance included; one that names none
+can never be graded and still takes the coordinator's word.
+
+Every other gate already refused per item on the bulk path and reported it in
+the response, and that per-item contract is unchanged here.
 """
 
 import uuid
@@ -23,6 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import CheckInWindowType, Event, EventType
+from app.services.event_service import EventService
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.membership_pipeline_service import MembershipPipelineService
 
@@ -83,6 +86,15 @@ def _meeting_event(org_id: str, **overrides) -> Event:
     )
     defaults.update(overrides)
     return Event(**defaults)
+
+
+async def _finalize(db_session: AsyncSession, event: Event) -> None:
+    """Close the event out; attendance only counts once the roster is settled."""
+    await db_session.commit()
+    await EventService(db_session).finalize_event_attendance(
+        event_id=event.id,
+        organization_id=event.organization_id,
+    )
 
 
 async def _pipeline_on_a_meeting_stage(svc, org_id: str):
@@ -155,8 +167,10 @@ class TestBulkAdvanceIsHeldToTheGate:
             last_name="Marsh",
             email=prospect.email,
         )
-        # Put them back on the meeting stage: the check-in hook does not
-        # advance a stage without auto_advance, but the attendance is real.
+        # The stage has no auto_advance, so finalizing records the roster
+        # without moving anybody — which is what makes this a test of the bulk
+        # path rather than of the finalize hook.
+        await _finalize(db_session, event)
         await db_session.execute(
             text("UPDATE prospective_members SET current_step_id = :s WHERE id = :p"),
             {"s": gate.id, "p": prospect.id},
@@ -187,6 +201,7 @@ class TestBulkAdvanceIsHeldToTheGate:
             last_name="Marsh",
             email=attended.email,
         )
+        await _finalize(db_session, event)
         await db_session.execute(
             text("UPDATE prospective_members SET current_step_id = :s WHERE id = :p"),
             {"s": gate.id, "p": attended.id},
@@ -204,14 +219,51 @@ class TestBulkAdvanceIsHeldToTheGate:
         assert await _current_step_id(svc, absent.id, org) == str(gate.id)
 
 
-class TestASingleAdvanceKeepsItsExemption:
-    async def test_a_coordinator_still_advances_one_by_hand(
+class TestASingleAdvanceIsHeldToItToo:
+    """What the caller is stopped mattering; what the stage names decides.
+
+    Holding bulk and not the single advance left the gate arguing with itself:
+    the same coordinator, the same applicant and the same stage were refused in
+    one click and allowed in another, so the way past an unattended meeting was
+    simply to advance the cards one at a time.
+    """
+
+    async def test_a_stage_that_names_its_event_refuses_a_hand_advance(
         self, db_session: AsyncSession, org, admin
     ):
-        """The exemption exists for the coordinator who watched them arrive
-        and found no record of it. Narrowing bulk must not take that away."""
         svc = MembershipPipelineService(db_session)
         pipeline, gate = await _pipeline_on_a_meeting_stage(svc, org)
+        prospect = await _prospect(svc, org, pipeline.id, "Reed")
+
+        with pytest.raises(ValueError, match="No attendance has been recorded"):
+            await svc.advance_prospect(prospect.id, org, admin)
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_a_stage_that_names_no_event_still_advances_by_hand(
+        self, db_session: AsyncSession, org, admin
+    ):
+        """ "Meet with the Chief" is an arrangement, not a record. Nothing can
+        ever grade it, so the coordinator's word remains the evidence."""
+        svc = MembershipPipelineService(db_session)
+        pipeline = await svc.create_pipeline(organization_id=org, name="Recruit")
+        gate = await svc.add_step(
+            pipeline.id,
+            org,
+            {
+                "name": "Chief Meeting",
+                "step_type": "meeting",
+                "sort_order": 0,
+                # The stage builder's own default: a meeting type and nothing
+                # that names an event.
+                "config": {"meeting_type": "chief_meeting"},
+            },
+        )
+        await svc.add_step(
+            pipeline.id,
+            org,
+            {"name": "After", "step_type": "checkbox", "sort_order": 1},
+        )
         prospect = await _prospect(svc, org, pipeline.id, "Reed")
 
         await svc.advance_prospect(prospect.id, org, admin)

@@ -106,7 +106,10 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
           ))}
         </select>
         <p className="text-theme-text-muted mt-1 text-xs">
-          When this stage activates, the next upcoming event of this type will be auto-linked.
+          When this stage activates, the next upcoming event of this type will be auto-linked. Naming an event also
+          makes attendance required: applicants cannot be advanced off this stage, by hand or otherwise, until they are
+          checked in at one. Leave this as &quot;None&quot; for a meeting nothing records, such as a one-on-one with the
+          chief.
         </p>
         {errors.linked_event_type && (
           <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.linked_event_type}</p>
@@ -220,10 +223,13 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
           onChange={(e) => setConfig({ ...meetingConfig, auto_advance: e.target.checked })}
           className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
         />
-        Auto-advance when attendance is recorded
+        Auto-advance when the event's attendance is finalized
       </label>
       <p className="text-theme-text-muted ml-6 text-xs">
-        Automatically complete this step and advance the prospect when their attendance is recorded at the linked event.
+        Automatically complete this step and advance the applicant once the linked event&apos;s attendance is finalized
+        &mdash; when the organizer runs End Event, records its actual end time, or finalizes attendance. A sign-in at
+        the door is not enough on its own, because a roster can still change until the event is closed out. An event
+        nobody finalizes settles on its own a few days after it ends.
       </p>
       {meetingConfig.auto_advance &&
         schedulingProvider !== 'calcom' &&

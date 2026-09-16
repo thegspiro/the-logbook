@@ -18,6 +18,11 @@ Covered here:
   pinned event id goes stale the moment that occurrence passes)
 - Required document uploads advance only after every configured type is attached
   to the current stage
+- A meeting stage that names its event is an attendance requirement on every
+  path, the hand advance included; one that names none still takes the
+  coordinator's word
+- Attendance predating the application is not evidence, while the sign-in that
+  opened the record still is
 """
 
 import uuid
@@ -29,6 +34,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.events import check_in_external_attendee
+from app.core.config import settings
 from app.models.event import (
     CheckInWindowType,
     Event,
@@ -41,9 +47,11 @@ from app.models.medical_screening import (
     ScreeningType,
 )
 from app.models.membership_pipeline import PipelineStepType
+from app.services.event_service import EventService
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.medical_screening_service import MedicalScreeningService
 from app.services.membership_pipeline_service import MembershipPipelineService
+from app.services.scheduled_tasks import run_prospect_attendance_advance
 
 pytestmark = [pytest.mark.integration]
 
@@ -571,6 +579,20 @@ def _make_event(org_id: str, **overrides) -> Event:
     return Event(**defaults)
 
 
+async def _finalize(db_session: AsyncSession, event: Event) -> None:
+    """Close the event out, the way End Event and the endpoint both do.
+
+    The real service call, not a hand-stamped flag: finalizing is what now
+    advances applicants, so a test that stamped the column would assert the
+    gate and skip the thing that fires it.
+    """
+    await db_session.commit()
+    await EventService(db_session).finalize_event_attendance(
+        event_id=event.id,
+        organization_id=event.organization_id,
+    )
+
+
 class TestMeetingStageMatching:
     """The pure question of which event a meeting stage is waiting on."""
 
@@ -638,7 +660,16 @@ class TestMeetingStageMatching:
         )
 
 
-class TestMeetingAutoAdvanceOnCheckIn:
+class TestMeetingAutoAdvanceOnFinalize:
+    """Finalizing the event is what advances them, not the sign-in.
+
+    It used to be the sign-in. That moment is wrong: a guest can be signed in
+    at the door and struck off ten minutes later, so an applicant advanced
+    there moved on a roster the department had not settled. Finalizing is the
+    department's word on who was actually in the room, and it is the same act
+    that derives the durations and lands the hours.
+    """
+
     async def _check_in(self, db_session, event, org_id, email):
         return await GuestCheckInService(db_session).check_in_guest(
             event=event,
@@ -648,7 +679,7 @@ class TestMeetingAutoAdvanceOnCheckIn:
             email=email,
         )
 
-    async def test_attendance_advances_the_meeting_stage(
+    async def test_the_sign_in_records_attendance_and_finalizing_advances(
         self, db_session: AsyncSession, org
     ):
         svc, prospect, gate = await _pipeline_parked_on(
@@ -671,9 +702,60 @@ class TestMeetingAutoAdvanceOnCheckIn:
 
         assert error is None
         assert attendee is not None
+        assert attendee.checked_in is True
+        # The attendance is real and recorded; the roster is not settled yet.
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+        await _finalize(db_session, event)
+
         assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
 
-    async def test_attendance_at_an_unrelated_event_does_not_advance(
+    async def test_finalizing_advances_every_checked_in_applicant_at_once(
+        self, db_session: AsyncSession, org
+    ):
+        """Finalizing decides the whole roster, so it moves everyone it clears.
+
+        The check-in hook it replaced fired per person; this one has to sweep
+        the event, or the second applicant through the door is left behind.
+        """
+        svc, first, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={
+                "meeting_type": "business_meeting",
+                "linked_event_type": "business_meeting",
+                "auto_advance": True,
+            },
+        )
+        second = await svc.create_prospect(
+            organization_id=org,
+            data={
+                "first_name": "Wes",
+                "last_name": "Marsh",
+                "email": f"wes-{_uid()[:8]}@example.com",
+                "pipeline_id": first.pipeline_id,
+            },
+        )
+        event = _make_event(org)
+        db_session.add(event)
+        await db_session.flush()
+
+        await self._check_in(db_session, event, org, first.email)
+        await GuestCheckInService(db_session).check_in_guest(
+            event=event,
+            organization_id=org,
+            first_name="Wes",
+            last_name="Marsh",
+            email=second.email,
+        )
+
+        await _finalize(db_session, event)
+
+        assert await _current_step_id(svc, first.id, org) != str(gate.id)
+        assert await _current_step_id(svc, second.id, org) != str(gate.id)
+
+    async def test_finalizing_an_unrelated_event_advances_nobody(
         self, db_session: AsyncSession, org
     ):
         svc, prospect, gate = await _pipeline_parked_on(
@@ -689,13 +771,13 @@ class TestMeetingAutoAdvanceOnCheckIn:
         training = _make_event(org, event_type=EventType.TRAINING, title="Ladders")
         db_session.add(training)
         await db_session.flush()
+        await self._check_in(db_session, training, org, prospect.email)
 
-        _, error, _ = await self._check_in(db_session, training, org, prospect.email)
+        await _finalize(db_session, training)
 
-        assert error is None
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
 
-    async def test_without_the_opt_in_attendance_only_records_attendance(
+    async def test_without_the_opt_in_even_finalizing_only_records_attendance(
         self, db_session: AsyncSession, org
     ):
         svc, prospect, gate = await _pipeline_parked_on(
@@ -714,6 +796,7 @@ class TestMeetingAutoAdvanceOnCheckIn:
         attendee, error, _ = await self._check_in(
             db_session, event, org, prospect.email
         )
+        await _finalize(db_session, event)
 
         assert error is None
         assert attendee is not None
@@ -721,8 +804,13 @@ class TestMeetingAutoAdvanceOnCheckIn:
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
 
 
-class TestMeetingAutoAdvanceOnStaffCheckIn:
-    """Staff-entered external attendance uses the same pipeline hook."""
+class TestMeetingAutoAdvanceOnStaffAttendance:
+    """Staff-entered external attendance reaches the same finalize hook.
+
+    Staff enter an attendee and check them in by hand, which is a record of
+    the door, not the department's final roster — so like the kiosk it now
+    advances nobody until the event is finalized.
+    """
 
     async def _staff_check_in(
         self,
@@ -751,7 +839,9 @@ class TestMeetingAutoAdvanceOnStaffCheckIn:
         await db_session.refresh(attendee)
         return attendee
 
-    async def test_linked_prospect_advances(self, db_session: AsyncSession, org):
+    async def test_linked_prospect_advances_once_the_event_is_finalized(
+        self, db_session: AsyncSession, org
+    ):
         svc, prospect, gate = await _pipeline_parked_on(
             db_session,
             org,
@@ -761,12 +851,15 @@ class TestMeetingAutoAdvanceOnStaffCheckIn:
                 "auto_advance": True,
             },
         )
+        event = _make_event(org)
 
-        attendee = await self._staff_check_in(
-            db_session, org, _make_event(org), prospect.id
-        )
+        attendee = await self._staff_check_in(db_session, org, event, prospect.id)
 
         assert attendee.checked_in is True
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+        await _finalize(db_session, event)
+
         assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
 
     async def test_unrelated_event_only_records_attendance(
@@ -784,6 +877,7 @@ class TestMeetingAutoAdvanceOnStaffCheckIn:
         event = _make_event(org, event_type=EventType.TRAINING)
 
         attendee = await self._staff_check_in(db_session, org, event, prospect.id)
+        await _finalize(db_session, event)
 
         assert attendee.checked_in is True
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
@@ -805,10 +899,10 @@ class TestMeetingAutoAdvanceOnStaffCheckIn:
             step_type="meeting",
             config={"linked_event_type": "business_meeting", "auto_advance": False},
         )
+        event = _make_event(org)
 
-        attendee = await self._staff_check_in(
-            db_session, org, _make_event(org), prospect.id
-        )
+        attendee = await self._staff_check_in(db_session, org, event, prospect.id)
+        await _finalize(db_session, event)
 
         assert attendee.checked_in is True
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
@@ -936,6 +1030,7 @@ class TestMeetingStageWithNoLinkedEvent:
         await db_session.flush()
 
         _, error, _ = await self._check_in(db_session, meeting, org, prospect.email)
+        await _finalize(db_session, meeting)
 
         assert error is None
         assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
@@ -1061,23 +1156,32 @@ class TestMeetingStageNeedsRealAttendance:
         assert advanced is False
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
 
-    async def test_a_coordinator_can_still_advance_by_hand(
+    async def test_a_hand_advance_is_refused_when_the_stage_names_its_event(
         self, db_session: AsyncSession, org
     ):
-        """The gate is for automated advances only. A coordinator who watched
-        the applicant walk in is better evidence than any record, and gating
-        the Advance button would make it useless on the stage type it exists
-        for."""
+        """This stage names the event, so it is an attendance requirement and
+        the hand advance is held to it too.
+
+        The gate used to read the caller rather than the stage, which made a
+        bulk advance refuse what the same coordinator could do one card at a
+        time — on a stage whose text said "attend a business meeting" either
+        way. The remedy is to record the attendance, not to route around it,
+        so the refusal names it.
+        """
         svc, prospect, gate = await self._meeting_stage(db_session, org)
 
-        await svc.advance_prospect(
-            prospect_id=str(prospect.id),
-            organization_id=org,
-            advanced_by=None,
-            notes="Attended; sign-in sheet was not entered",
-        )
+        with pytest.raises(
+            ValueError, match="No attendance has been recorded"
+        ) as refusal:
+            await svc.advance_prospect(
+                prospect_id=str(prospect.id),
+                organization_id=org,
+                advanced_by=None,
+                notes="Attended; sign-in sheet was not entered",
+            )
 
-        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+        assert "Check them in on the event" in str(refusal.value)
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
 
     async def test_an_early_arrival_inside_the_check_in_window_advances(
         self, db_session: AsyncSession, org
@@ -1105,6 +1209,8 @@ class TestMeetingStageNeedsRealAttendance:
             last_name="Reed",
             email=prospect.email,
         )
+        # The early sign-in counts as attendance; finalizing is what acts on it.
+        await _finalize(db_session, starting_soon)
 
         assert error is None
         assert attendee.checked_in is True
@@ -1141,6 +1247,368 @@ class TestMeetingStageNeedsRealAttendance:
         ).try_advance_attendance_pipeline(str(prospect.id), next_week)
 
         assert advanced is False
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
+class TestAttendanceMustPostdateTheApplication:
+    """A prospect's attendance history is unbounded in time; the stage is not.
+
+    The gate asked only "is there a matching check-in for this applicant",
+    never "since when", so every check-in the person had ever made graded the
+    same. That is worst in the flow the module is built around: the kiosk opens
+    a prospect record from a guest sign-in at a business meeting, so an
+    applicant recruited that way carries a matching business-meeting attendance
+    from the moment they exist — and a later "attend a business meeting" stage
+    was satisfied by the sign-in that created them, without their ever
+    attending a second one.
+
+    Measured against the event's check-in window closing rather than the
+    check-in instant: the kiosk writes the prospect and the attendance within
+    milliseconds, in an order nothing should depend on.
+    """
+
+    @staticmethod
+    async def _meeting_stage(db_session: AsyncSession, org: str):
+        return await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={
+                "meeting_type": "business_meeting",
+                "linked_event_type": "business_meeting",
+            },
+        )
+
+    @staticmethod
+    def _attended(org: str, event: Event, prospect) -> EventExternalAttendee:
+        return EventExternalAttendee(
+            id=_uid(),
+            organization_id=org,
+            event_id=str(event.id),
+            name="Dana Reed",
+            email=prospect.email,
+            prospect_id=prospect.id,
+            checked_in=True,
+            checked_in_at=event.start_datetime,
+        )
+
+    async def test_a_check_in_from_before_the_application_is_not_evidence(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+        now = datetime.now(timezone.utc)
+        last_year = _make_event(
+            org,
+            start_datetime=now - timedelta(days=400),
+            end_datetime=now - timedelta(days=400) + timedelta(hours=2),
+        )
+        db_session.add_all([last_year, self._attended(org, last_year, prospect)])
+        await db_session.commit()
+
+        with pytest.raises(
+            ValueError, match="since this application was opened"
+        ) as refusal:
+            await svc.advance_prospect(
+                prospect_id=str(prospect.id),
+                organization_id=org,
+                advanced_by=None,
+            )
+
+        assert "since this application was opened" in str(refusal.value)
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_the_meeting_that_opened_the_record_still_counts(
+        self, db_session: AsyncSession, org
+    ):
+        """The one piece of history a department does mean to count. Its
+        check-in window is still open when the record is written, so measuring
+        against the window's close keeps it in while the stale one stays out.
+        """
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+        in_progress = _make_event(org)
+        db_session.add_all([in_progress, self._attended(org, in_progress, prospect)])
+        # Settled, because the gate now wants the department's final roster
+        # rather than the door record. The stage has no auto_advance, so this
+        # advances nobody by itself — it only makes the attendance count.
+        await _finalize(db_session, in_progress)
+
+        await svc.advance_prospect(
+            prospect_id=str(prospect.id),
+            organization_id=org,
+            advanced_by=None,
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_a_bulk_advance_is_held_to_the_same_cut_off(
+        self, db_session: AsyncSession, org
+    ):
+        """The two paths must not disagree about what counts as attendance."""
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+        now = datetime.now(timezone.utc)
+        last_year = _make_event(
+            org,
+            start_datetime=now - timedelta(days=400),
+            end_datetime=now - timedelta(days=400) + timedelta(hours=2),
+        )
+        db_session.add_all([last_year, self._attended(org, last_year, prospect)])
+        await db_session.commit()
+
+        results = await svc.bulk_advance_prospects([str(prospect.id)], org, None)
+
+        assert results[0]["succeeded"] is False
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
+class TestNamingAnEventMakesAttendanceRequired:
+    """Which stages the gate applies to is decided by the stage, not the caller.
+
+    A meeting stage covers two unlike things. "Meet with the Chief" is an
+    arrangement between two people that nothing will ever record, so the
+    coordinator's word is the only evidence there can be. "Attend a business
+    meeting" names an event the department runs and check-in produces a record
+    of who was there. Reading the caller instead meant the same coordinator,
+    applicant and stage were refused in a bulk advance and allowed one card at
+    a time.
+    """
+
+    async def test_a_stage_naming_no_event_is_not_an_attendance_requirement(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            # The stage builder's default shape.
+            config={"meeting_type": "chief_meeting", "meeting_description": ""},
+        )
+
+        await svc.advance_prospect(
+            prospect_id=str(prospect.id),
+            organization_id=org,
+            advanced_by=None,
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_a_pinned_event_id_alone_is_enough_to_require_attendance(
+        self, db_session: AsyncSession, org
+    ):
+        """A stage built before Auto-Link Event Type existed names its event
+        through the pinned id, and is as much a requirement as a typed one."""
+        now = datetime.now(timezone.utc)
+        pinned = _make_event(org)
+        db_session.add(pinned)
+        await db_session.flush()
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={"meeting_type": "business_meeting", "linked_event_id": pinned.id},
+        )
+
+        with pytest.raises(ValueError, match="No attendance has been recorded"):
+            await svc.advance_prospect(
+                prospect_id=str(prospect.id),
+                organization_id=org,
+                advanced_by=None,
+            )
+
+        db_session.add(
+            EventExternalAttendee(
+                id=_uid(),
+                organization_id=org,
+                event_id=str(pinned.id),
+                name="Dana Reed",
+                email=prospect.email,
+                prospect_id=prospect.id,
+                checked_in=True,
+                checked_in_at=now,
+            )
+        )
+        await _finalize(db_session, pinned)
+
+        await svc.advance_prospect(
+            prospect_id=str(prospect.id),
+            organization_id=org,
+            advanced_by=None,
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_the_refusal_names_recording_the_attendance_first(
+        self, db_session: AsyncSession, org
+    ):
+        """Gating the hand advance closes the coordinator's escape hatch, so
+        the refusal has to hand back the remedies that replace it."""
+        svc, prospect, _gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={"linked_event_type": "business_meeting"},
+        )
+
+        with pytest.raises(
+            ValueError, match="No attendance has been recorded"
+        ) as refusal:
+            await svc.advance_prospect(
+                prospect_id=str(prospect.id),
+                organization_id=org,
+                advanced_by=None,
+            )
+
+        message = str(refusal.value)
+        assert "Check them in on the event" in message
+        assert "un-tick Required" in message
+        assert "Auto-Link Event Type" in message
+
+
+class TestAttendanceSettlesWithoutAFinalize:
+    """The grace window, which is what keeps this from stranding people.
+
+    Finalizing is a human act that routinely never happens: it runs from End
+    Event, from recording an actual end time, or from the endpoint, and the
+    nightly post_event_validation task only *prompts* the organizer. Gating
+    solely on the flag would mean an applicant who attended an event nobody
+    closed out waits forever, with no way past a Required stage at all.
+    """
+
+    @staticmethod
+    async def _parked_with_attendance(db_session: AsyncSession, org: str, event: Event):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={"linked_event_type": "business_meeting", "auto_advance": True},
+        )
+        db_session.add_all(
+            [
+                event,
+                EventExternalAttendee(
+                    id=_uid(),
+                    organization_id=org,
+                    event_id=str(event.id),
+                    name="Dana Reed",
+                    email=prospect.email,
+                    prospect_id=prospect.id,
+                    checked_in=True,
+                    checked_in_at=event.start_datetime,
+                ),
+            ]
+        )
+        # Backdate the application to before the event. Real applicants apply
+        # and then attend; a record created after the meeting ended is what the
+        # postdates rule above exists to reject, and would mask what this class
+        # is testing.
+        await db_session.execute(
+            text("UPDATE prospective_members SET created_at = :t WHERE id = :p"),
+            {
+                "t": (event.start_datetime - timedelta(days=30)).replace(tzinfo=None),
+                "p": prospect.id,
+            },
+        )
+        await db_session.commit()
+        return svc, prospect, gate
+
+    async def test_an_unfinalized_event_still_holds_them_the_day_after(
+        self, db_session: AsyncSession, org
+    ):
+        now = datetime.now(timezone.utc)
+        yesterday = _make_event(
+            org,
+            start_datetime=now - timedelta(days=1, hours=2),
+            end_datetime=now - timedelta(days=1),
+        )
+        svc, prospect, gate = await self._parked_with_attendance(
+            db_session, org, yesterday
+        )
+
+        with pytest.raises(ValueError, match="has not been finalized"):
+            await svc.advance_prospect(str(prospect.id), org, advanced_by=None)
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_the_refusal_names_the_event_and_asks_for_a_finalize(
+        self, db_session: AsyncSession, org
+    ):
+        """A different refusal from "nobody attended", because the applicant
+        did everything asked and the organizer did not."""
+        now = datetime.now(timezone.utc)
+        yesterday = _make_event(
+            org,
+            title="Recruitment Night",
+            start_datetime=now - timedelta(days=1, hours=2),
+            end_datetime=now - timedelta(days=1),
+        )
+        svc, prospect, _gate = await self._parked_with_attendance(
+            db_session, org, yesterday
+        )
+
+        with pytest.raises(ValueError, match="has not been finalized") as refusal:
+            await svc.advance_prospect(str(prospect.id), org, advanced_by=None)
+
+        message = str(refusal.value)
+        assert "Recruitment Night" in message
+        assert "End Event" in message
+
+    async def test_past_the_settle_window_the_attendance_counts_anyway(
+        self, db_session: AsyncSession, org
+    ):
+        now = datetime.now(timezone.utc)
+        long_over = _make_event(
+            org,
+            start_datetime=now
+            - timedelta(days=settings.PIPELINE_ATTENDANCE_SETTLE_DAYS + 2, hours=2),
+            end_datetime=now
+            - timedelta(days=settings.PIPELINE_ATTENDANCE_SETTLE_DAYS + 2),
+        )
+        svc, prospect, gate = await self._parked_with_attendance(
+            db_session, org, long_over
+        )
+
+        await svc.advance_prospect(str(prospect.id), org, advanced_by=None)
+
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_the_nightly_task_advances_them_without_a_finalize(
+        self, db_session: AsyncSession, org
+    ):
+        """Nothing else would notice the day an unfinalized event aged into
+        being good enough — the finalize hook only fires when somebody
+        finalizes."""
+        now = datetime.now(timezone.utc)
+        long_over = _make_event(
+            org,
+            start_datetime=now
+            - timedelta(days=settings.PIPELINE_ATTENDANCE_SETTLE_DAYS + 2, hours=2),
+            end_datetime=now
+            - timedelta(days=settings.PIPELINE_ATTENDANCE_SETTLE_DAYS + 2),
+        )
+        svc, prospect, gate = await self._parked_with_attendance(
+            db_session, org, long_over
+        )
+
+        result = await run_prospect_attendance_advance(db_session)
+
+        assert result["advanced"] >= 1
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_the_nightly_task_leaves_an_unsettled_event_alone(
+        self, db_session: AsyncSession, org
+    ):
+        now = datetime.now(timezone.utc)
+        yesterday = _make_event(
+            org,
+            start_datetime=now - timedelta(days=1, hours=2),
+            end_datetime=now - timedelta(days=1),
+        )
+        svc, prospect, gate = await self._parked_with_attendance(
+            db_session, org, yesterday
+        )
+
+        result = await run_prospect_attendance_advance(db_session)
+
+        assert result["advanced"] == 0
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
 
 
@@ -1241,6 +1709,7 @@ class TestLegacyActionStagesKeepTheirBehaviour:
             last_name="Reed",
             email=prospect.email,
         )
+        await _finalize(db_session, event)
 
         assert error is None
         assert await _current_step_id(svc, prospect.id, org) != str(gate.id)

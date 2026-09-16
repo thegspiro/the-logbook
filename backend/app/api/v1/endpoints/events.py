@@ -3285,10 +3285,10 @@ async def check_in_external_attendee(
                 exc,
             )
 
-        # The shared attendance hook applies its own type/category rules.
-        await GuestCheckInService(db).try_advance_attendance_pipeline(
-            str(attendee.prospect_id), event
-        )
+        # No pipeline advance here. Checking a guest in records that they were
+        # at the door, which is not the same as the department's final word on
+        # who attended — the advance runs when this event's attendance is
+        # finalized, for every checked-in applicant at once.
     return ExternalAttendeeCheckInResponse(status="checked_in", attendee_id=attendee.id)
 
 

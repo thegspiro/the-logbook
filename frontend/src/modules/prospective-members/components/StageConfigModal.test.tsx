@@ -1054,7 +1054,7 @@ describe('StageConfigModal', () => {
 
     await user.click(screen.getByText('Meeting'));
     await user.type(screen.getByLabelText(/stage name/i), 'Meeting with the Fire Chief');
-    await user.click(screen.getByLabelText(/auto-advance when attendance is recorded/i));
+    await user.click(screen.getByLabelText(/auto-advance when the event.s attendance is finalized/i));
     await user.click(screen.getByText('Add Stage'));
 
     expect(screen.getByText(/Choose an Auto-Link Event Type, or turn off auto-advance/)).toBeInTheDocument();
@@ -1067,7 +1067,7 @@ describe('StageConfigModal', () => {
 
     await user.click(screen.getByText('Meeting'));
     await user.type(screen.getByLabelText(/stage name/i), 'Meeting with the Fire Chief');
-    await user.click(screen.getByLabelText(/auto-advance when attendance is recorded/i));
+    await user.click(screen.getByLabelText(/auto-advance when the event.s attendance is finalized/i));
     await user.selectOptions(screen.getByLabelText(/auto-link event type/i), 'business_meeting');
     await user.click(screen.getByText('Add Stage'));
 

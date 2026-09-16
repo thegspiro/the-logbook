@@ -214,6 +214,32 @@ def meeting_config_matches_event(config: Dict[str, Any], event: Event) -> bool:
     return False
 
 
+def meeting_stage_names_an_event(config: Dict[str, Any]) -> bool:
+    """Whether a meeting stage identifies the event its applicants must attend.
+
+    This is what separates the two kinds of stage the one ``meeting`` type has
+    always covered. "Meet with the Chief" is an arrangement between two people:
+    nothing records it, and the coordinator's word is the only evidence there
+    will ever be. "Attend a business meeting" names an event the department
+    runs, check-in produces a record of who was in the room, and the department
+    that configured it meant it as a condition of proceeding.
+
+    Only the second can be graded, so only the second is enforced — on every
+    path, a hand advance and a drag across the board included. Before, the gate
+    read the *caller* rather than the stage, so it applied to a bulk advance and
+    not to the same coordinator advancing the same applicant one card at a
+    time; the stage read "Attend a business meeting" either way.
+
+    A refusal here is never a dead end. The remedies, in the order a
+    coordinator should reach for them: record the attendance that happened (add
+    the applicant to the event's attendees and check them in, which makes the
+    record true rather than working around it); un-tick Required on the stage
+    and Skip it; or clear the stage's Auto-Link Event Type, which is the
+    department deciding this stage is an arrangement after all.
+    """
+    return bool(config.get("linked_event_type") or config.get("linked_event_id"))
+
+
 def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
     """Raise unless the prospect's status permits pipeline movement.
 
@@ -1680,12 +1706,13 @@ class MembershipPipelineService:
 
         ``automated`` marks a completion with no per-applicant judgement behind
         it — an integration webhook, a check-in hook, a screening result, or a
-        bulk advance. The meeting gate below applies only to those: a
-        coordinator who watched *this* applicant walk in is better evidence of
-        attendance than any record, and blocking them would have made
-        "Advance" unusable on the stage type it exists for. Ticking thirty
-        cards is not that observation thirty times over, which is why the bulk
-        path sets this.
+        bulk advance. Ticking thirty cards is not a judgement about any one of
+        them, which is why the bulk path sets this.
+
+        For a meeting stage it decides only *how much* the stage has to name
+        before the attendance gate applies, because a stage that names the
+        event its applicants must attend is now gated on every path — see
+        :func:`meeting_stage_names_an_event`.
         """
         config = step.config or {}
         # Resolved, not raw: a legacy ``action`` + ``schedule_meeting`` stage is
@@ -1831,8 +1858,12 @@ class MembershipPipelineService:
         elif step_type == PipelineStepType.ELECTION_VOTE:
             await self._assert_election_decided(prospect)
 
-        elif step_type == PipelineStepType.MEETING and automated:
-            await self._assert_meeting_attended(prospect, step, action_result)
+        elif step_type == PipelineStepType.MEETING:
+            # A stage that names its event is an attendance requirement, so it
+            # is graded whoever is advancing; one that names none can only be
+            # graded on a path where nobody formed a view about this applicant.
+            if automated or meeting_stage_names_an_event(config):
+                await self._assert_meeting_attended(prospect, step, action_result)
 
     # The two election-package states that are provably not a pass. "draft"
     # and "ready" are deliberately absent, and their absence is the whole
@@ -1903,7 +1934,7 @@ class MembershipPipelineService:
         step: MembershipPipelineStep,
         action_result: Optional[Dict[str, Any]],
     ) -> None:
-        """Refuse an automated advance off a meeting nobody attended.
+        """Refuse an advance off a meeting this applicant did not attend.
 
         A meeting stage had no gate at all, so anything reaching complete_step
         completed it: a stage whose box reads "auto-advance when attendance is
@@ -1915,7 +1946,9 @@ class MembershipPipelineService:
 
         * a check-in — an ``EventExternalAttendee`` row for this applicant with
           ``checked_in`` set, at an event this stage accepts whose **check-in
-          window has opened**;
+          window has opened**, which **had not already closed when the
+          applicant's record was created**, and whose **attendance is settled**
+          (:func:`~app.services.event_service.attendance_is_settled`);
         * a Cal.com ``MEETING_ENDED`` webhook, for a stage that schedules
           through Cal.com. That payload is built by the signature-verified
           receiver, never by a client, and Cal.com only sends it once the
@@ -1932,6 +1965,29 @@ class MembershipPipelineService:
         nobody checks in twice, no later event ever retried the gate — real
         attendance, stage stuck.
 
+        The second half of the window test is what keeps the applicant's own
+        history out of it. Attendance is per-prospect and unbounded in time, so
+        a check-in from before the application existed graded exactly like one
+        from last week: an applicant the kiosk opened at a business meeting
+        carries a matching business-meeting attendance from the moment their
+        record exists, which satisfied a later "attend a business meeting"
+        stage without their ever attending a second one. Measured against the
+        window's *close* rather than the check-in instant, deliberately — the
+        kiosk writes the prospect and the attendance within milliseconds of
+        each other, in an order neither this nor any caller should depend on,
+        and the meeting that opened the record is the one attendance a
+        department does mean to count.
+
+        Settled, not merely recorded, because a sign-in at the door is not the
+        final roster. Finalizing is the department saying who was actually
+        there: it locks the attendance writes, derives the durations and lands
+        the hours. Until then a guest can be signed in and struck off, and an
+        applicant advanced on the door record would have moved on a number the
+        department had not stood behind. Since finalizing is a human act that
+        routinely never happens, ``attendance_is_settled`` also takes an event
+        far enough past its end as settled by default — see its docstring for
+        why that half is load-bearing rather than a convenience.
+
         Deliberately *not* evidence: ``ProspectEventLink``. Entering a meeting
         stage auto-links the next matching *future* event
         (``_auto_link_event_for_step``), so treating the link as attendance
@@ -1940,11 +1996,15 @@ class MembershipPipelineService:
         A stage that names no event at all matches nothing — see
         :func:`meeting_config_matches_event` — so it is refused here with its
         own message. That is a stage-configuration problem, not a missing
-        attendance record, and the two have different remedies.
+        attendance record, and the two have different remedies. Such a stage
+        only reaches here on an automated path
+        (:func:`meeting_stage_names_an_event` is what gates the rest), so the
+        message it gets names the hand advance that is still open to the
+        coordinator rather than only the configuration change.
         """
         # Local import: event_service imports no pipeline code today, but this
         # module is imported by guest_check_in_service, which imports both.
-        from app.services.event_service import EventService
+        from app.services.event_service import EventService, attendance_is_settled
 
         config = step.config or {}
 
@@ -1966,31 +2026,65 @@ class MembershipPipelineService:
             )
         )
 
-        def _check_in_has_opened(event: Event) -> bool:
-            check_in_start, _ = EventService._get_check_in_window(event)
-            return now >= check_in_start
+        # A prospect loaded through get_prospect always carries one; an
+        # unflushed object would not, and an absent timestamp is not grounds to
+        # discard attendance the applicant really has.
+        applied_at = prospect.created_at
+        if applied_at is not None and applied_at.tzinfo is None:
+            applied_at = applied_at.replace(tzinfo=timezone.utc)
+
+        def _is_this_applicant_s_attendance(event: Event) -> bool:
+            """Their check-in, at this stage's meeting, on this application."""
+            check_in_start, check_in_end = EventService._get_check_in_window(event)
+            if now < check_in_start:
+                return False
+            return applied_at is None or check_in_end >= applied_at
+
+        # An event they attended whose record the department has not settled
+        # yet. Kept rather than discarded because it is a different refusal
+        # with a different remedy — the applicant did everything asked of
+        # them, and what is missing is the organizer closing the event out.
+        awaiting_finalization: Optional[Event] = None
 
         for event in result.scalars():
-            if meeting_config_matches_event(config, event) and _check_in_has_opened(
-                event
-            ):
+            if not meeting_config_matches_event(config, event):
+                continue
+            if not _is_this_applicant_s_attendance(event):
+                continue
+            if attendance_is_settled(event, now):
                 return
+            awaiting_finalization = awaiting_finalization or event
 
         # A stage naming no event can never satisfy the match above, so say
         # that rather than asking for attendance it would ignore anyway. The
         # remedy is a change to the stage, not to the applicant's record.
-        if not config.get("linked_event_type") and not config.get("linked_event_id"):
+        if not meeting_stage_names_an_event(config):
             raise ValueError(
                 f"'{step.name}' has no linked event, so no attendance can "
-                "advance it automatically. Set an Auto-Link Event Type on the "
-                "stage, or advance the applicant by hand."
+                "advance it automatically. Advance the applicant by hand, or "
+                "set an Auto-Link Event Type on the stage if attendance is "
+                "meant to be what advances it."
+            )
+
+        if awaiting_finalization is not None:
+            raise ValueError(
+                f"This applicant is checked in at "
+                f"'{awaiting_finalization.title}', but that event's attendance "
+                "has not been finalized, so '"
+                f"{step.name}' is not ready yet. A sign-in at the door is not "
+                "the final roster — finalize the event (End Event, record its "
+                "actual end time, or Finalize Attendance) and they advance on "
+                "their own."
             )
 
         raise ValueError(
-            f"No attendance has been recorded for '{step.name}' yet. "
-            "This stage advances once the applicant is checked in at the "
-            "meeting, and not before that meeting's check-in window opens. "
-            "Advance them by hand if they attended and it was not recorded."
+            f"No attendance has been recorded for '{step.name}' since this "
+            "application was opened. This stage names the event its applicants "
+            "must attend, so it advances once they are checked in there and "
+            "that event's attendance is finalized. Check them in on the event "
+            "if they attended and it was missed — reopening the event first if "
+            "it is already finalized; otherwise un-tick Required on the stage "
+            "to skip it, or clear its Auto-Link Event Type."
         )
 
     async def _authorized_multi_approval_result(
@@ -2626,12 +2720,12 @@ class MembershipPipelineService:
             step = prospect.current_step
             if not step:
                 continue
-            step_type_value = (
-                step.step_type.value
-                if hasattr(step.step_type, "value")
-                else step.step_type
-            )
-            if step_type_value != step_type:
+            # Resolved rather than raw, matching every other dispatch on stage
+            # type here: a legacy ``action`` + ``schedule_meeting`` row is a
+            # meeting stage, and comparing step_type alone left one unreachable
+            # from the webhook that is supposed to advance it.
+            resolved = effective_step_type(step)
+            if getattr(resolved, "value", resolved) != step_type:
                 continue
             if (step.config or {}).get(provider_key) != provider_value:
                 continue

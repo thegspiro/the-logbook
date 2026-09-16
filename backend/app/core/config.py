@@ -207,6 +207,16 @@ class Settings(BaseSettings):
     # see app/services/retention_service.py.
     RETENTION_BLOCKED_ATTEMPTS_DAYS: int = 365
 
+    # A prospective-member meeting stage advances on attendance the department
+    # has settled, not on a bare check-in — see _assert_meeting_attended. An
+    # event nobody finalizes would strand its applicants forever, so attendance
+    # also counts as settled once this many days have passed since the event
+    # ended. It is the outer bound on how long an applicant waits for an
+    # organizer who never closed the event out, so lowering it trusts the
+    # check-in sooner and raising it gives the organizer longer to correct the
+    # record. 0 keeps the grace but makes it immediate at the event's end.
+    PIPELINE_ATTENDANCE_SETTLE_DAYS: int = 7
+
     # Account lockout after repeated failed sign-ins (brute-force protection).
     # Tunable so small, trusted deployments can run a gentler policy. (These
     # names were already documented in .env.example.full but not wired up; the
