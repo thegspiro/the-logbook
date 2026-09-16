@@ -840,6 +840,18 @@ section" is a product call, not a documentation fix.
 
 ## Medical Screening — The Add Record Form Attaches to Nobody (2026-08-08)
 
+**Re-verified still open by security review (MS-13,
+`docs/security-review/MS-09-medical-screening.md`, pass 6, 2026-09-16).** Not
+fixed there either — wiring a picker is a real feature (a new data source for
+members and prospects, plus a decision on whether both, either, or neither may
+be set, which is the same open question as the sibling gap below this one).
+That pass added the one honest, low-risk mitigation available without one: the
+create dialog now carries an amber notice stating the record cannot be
+attached to anyone, matching the "not enforced yet" idiom
+`ScreeningRequirementForm` already used for its own unwired fields — so the
+"Record created" success toast can no longer imply otherwise. Guarded by
+`ScreeningRecordForm.linkageNotice.test.tsx`.
+
 **A screening record created through the UI is attached to no member and no
 prospect.** `ScreeningRecordForm` builds its create payload from nine fields —
 requirement, type, status, three dates, provider, result, notes — and sets

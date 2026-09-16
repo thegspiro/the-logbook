@@ -1,6 +1,224 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), (this PR) (pass 5)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), (this PR) (pass 6)
+
+---
+
+## Pass 6 (2026-09-16)
+
+**Watchdog pickup.** This iteration ran directly (not through the
+`/loop 30m /security-review` session, which had gone 3.5+ hours with no
+commit to `main` and no open security-review PR). Step 0 was re-verified
+fresh: `git fetch origin main` clean, `mcp__github__list_pull_requests`
+(state=open) returned `[]`, and `PROGRESS.md`'s Open PR row read "None" with
+"Next: Feature 09 (Medical screening, PHI)" — matching the prompt's own
+pre-check. No PR to tend; proceeded to this feature.
+
+**Backend:** `endpoints/medical_screening.py` (431 L, 14 routes),
+`services/medical_screening_service.py` (606 L), `models/medical_screening.py`
+(216 L), `schemas/medical_screening.py` (256 L), `mcp/tools/medical.py`
+(191 L, 2 tools) — read in full, byte-for-byte identical to pass 5's
+documented content.
+**Frontend:** full `modules/medical-screening/` directory re-read in full
+(not assumed unchanged from a diff, given this pass's finding below was
+missed by every prior diff-scoped read).
+**Migrations:** unchanged since pass 5; `validate_migrations.py --strict`
+re-run clean (444 revisions, single head).
+
+### Scope
+
+`git log --oneline b7fa066..origin/main` (pass 5's merge commit) shows 82
+commits on `main` since pass 5. `git diff b7fa066..origin/main --stat` against
+all five declared backend files and the full `modules/medical-screening/`
+frontend directory returns **nothing** — byte-identical. A broader search of
+the full diff for `medical_screening`/`ScreeningRecord`/`ScreeningRequirement`
+turns up exactly two hits, both outside this feature: a docstring/comment edit
+in `membership_pipeline_service.py` (the bulk-advance `unobserved` flag,
+"Hold a bulk advance to the meeting-attendance gate", `70affbf`) that
+mentions "a screening result" only in prose explaining an unrelated gate, and
+a `DEFAULT_STAGE_CONFIGS` comment in `prospective-members/types/index.ts`
+unrelated to medical screening. Neither touches
+`try_advance_pipeline_stage`/`try_auto_advance_current_step`, the feature's
+one integration point (confirmed directly: no diff hunk in either commit
+mentions either function name). Dependency files re-checked for drift since
+pass 5: `app/utils/org_scoping.py`, `app/utils/model_updates.py`,
+`app/core/permissions.py`, `frontend/src/utils/apiCache.ts`,
+`app/mcp/redaction.py` — no diff against any of them.
+
+Rather than treat the empty diff as license to skip re-reading (this
+rotation's established discipline — see pass 3–5's own notes), all five
+backend files and the entire frontend module were read in full this pass.
+The frontend re-read is what surfaced MS-13 below: every prior pass since
+pass 1 scoped its frontend read to the routes/store/API-shape level, or to
+the specific component a fix touched (pass 4: `MedicalScreeningPage.tsx`'s
+new tabs; this pass 5: nothing, diff was accessibility-only) — no pass had
+read `ScreeningRecordForm.tsx`'s actual field list against what
+`ScreeningRecordCreate` accepts since pass 3, and pass 3's own frontend read
+predates `docs/KNOWN_LIMITATIONS.md`'s 2026-08-08 "Add Record Form Attaches
+to Nobody" entry only in the sense that neither cross-referenced the other —
+the KNOWN_LIMITATIONS entry existed the whole time, filed under app-review,
+and no security-review pass's "prior art" step (CHECKLIST.md Step 2) had
+pulled it in because it carries no `MS-*` id and wasn't in
+`docs/app-review/medical-screening.md`, the doc pass 1 explicitly consulted.
+
+### Re-verified good ✅ (unchanged from pass 5, re-confirmed against current code)
+
+- No baseline grant for either permission — `app/core/permissions.py:269,274`
+  still the only references.
+- Tenant isolation intact throughout: every by-id getter filters
+  `organization_id`; `create_record`'s three client-supplied FKs still route
+  through `assert_in_org(..., allow_none=True)`.
+- PHI encryption at rest intact — `provider_name`/`result_summary`/`notes`
+  (`EncryptedText`), `result_data` (`EncryptedJSON`).
+- `SET NULL` FKs (`requirement_id`, `reviewed_by`) both `nullable=True`.
+- Update schemas still omit every tenancy/subject FK field.
+- `apply_updates` (MS-5) and the audit-id fields on `*_created` events (MS-8)
+  both still present and unchanged.
+- No CSV/spreadsheet export; no raw exception reaches the client (both
+  `create_record`/`update_record`/`update_requirement` still wrap in
+  `except ValueError as exc: raise HTTPException(400, safe_error_detail(exc))`).
+- No unbounded in-memory cache/tracker; no JSON-column shallow-copy mutation
+  risk (re-traced both `create_*`/`update_*` write paths on
+  `applies_to_roles`/`result_data` directly, same conclusion as every prior
+  pass).
+- Audit logging present on all six writes, absent on the five PHI-bearing
+  reads (MS-12, still flagged, unchanged — see below).
+- `mcp/tools/medical.py`'s explicit-projection discipline (MS-11's subject)
+  still holds: neither tool's return dict includes `notes`/`result_summary`/
+  `provider_name`/`result_data` or the record's raw `status`; the corrected
+  module docstring from MS-11 is unchanged.
+- Cache exclusion (`/medical-screening/`, `/admin-hub/`) and the route/module
+  gate (`requiredPermission="medical_screening.view"` +
+  `requiredModule="medical_screening"` on the one frontend route,
+  `require_permission(...)` independently on all 14 backend routes) both
+  re-confirmed against the current files.
+
+### New this pass
+
+### MS-13 — MED (data integrity / availability, PHI-adjacent) — The "Add Record" dialog has no control for `user_id` or `prospect_id`, so every UI-created screening record is orphaned — 🚩 FLAGGED (interim honesty notice ✅ FIXED)
+
+**What:** `ScreeningRecordForm.tsx`'s create-mode payload
+(`handleSubmit`, the `else` branch) builds a `ScreeningRecordCreate` from nine
+fields — `screening_type`, `status`, `requirement_id`, three dates,
+`provider_name`, `result_summary`, `notes` — and never sets `user_id` or
+`prospect_id`. Neither field has a form control anywhere in the component:
+there is no member dropdown, no prospect field, nothing. `MedicalScreeningPage.tsx`
+is the form's only caller (`grep -rln "ScreeningRecordForm"
+frontend/src --include="*.tsx"` returns exactly those two files) and no other
+entry point pre-fills either id — `grep -rln "createRecord\b" frontend/src`
+turns up only this module's own store/page and an unrelated
+`trainingServices.ts` hit. Every record the "Add Record" button creates
+therefore has both fields `undefined`, forever.
+**Where:** `frontend/src/modules/medical-screening/components/ScreeningRecordForm.tsx`
+(no `user_id`/`prospect_id` state or control at all, prior to this pass's fix
+below); `pages/MedicalScreeningPage.tsx` (the only caller, passes the payload
+straight through with no enrichment).
+**Failure scenario:** an officer holding `medical_screening.manage` clicks
+"Add Record" on the Records tab, fills in a real physical exam's date,
+provider and result, and clicks Create. The write succeeds — the row exists,
+is audit-logged, encrypted at rest like any other — but `user_id` and
+`prospect_id` are both `NULL`. `get_compliance_status`/`get_my_compliance_summary`
+key every match on `screening_type` **and** `r.user_id == user_id` /
+`r.prospect_id == prospect_id` (`medical_screening_service.py:341-344,
+list_records`'s own `user_id`/`prospect_id` filters): a record with neither
+set can never be `matching_records` for anyone, so the member it was actually
+about keeps reading as non-compliant. `admin_hub_service.py` labels an
+unresolved medical-screening lapse `severity="critical"`, "blocks duty
+assignment" — so a firefighter who completed a real, documented physical
+exam can still be flagged and blocked, with the officer who entered it having
+no indication anything went wrong (`record.user_name ?? record.prospect_name
+?? 'Unknown'` on the Records tab is the only visible symptom, and it reads as
+a display quirk, not a compliance-breaking one).
+**Impact:** not an access-control or cross-tenant gap — `.manage` is not
+baseline-granted, the write is org-scoped and audit-logged the same as every
+other write on this feature — a correctness/availability defect on the
+primary write path of a fitness-for-duty compliance system. Rated MED rather
+than HIGH because nothing crashes, no data is exposed, and the record is
+still there (recoverable by an admin re-entering it with an id, or, per the
+existing KNOWN_LIMITATIONS entry, by posting directly to the API) — but it is
+not an edge case: it is the default and only outcome of the UI's one write
+path for records, which is why `docs/training/13-medical-screening.md`'s own
+walkthrough already documents a "member dropdown" that does not exist.
+**Why not previously found by security review:** filed under app-review
+(`docs/KNOWN_LIMITATIONS.md`, dated 2026-08-08, predating security-review
+pass 1) with no `MS-*` id, so `docs/app-review/medical-screening.md` — the
+doc pass 1's Step 2 explicitly consulted — never carried it, and no pass
+since read `ScreeningRecordForm.tsx`'s field list against the schema closely
+enough to independently rediscover it (pass 3's "full module" read predates
+detailed per-field scrutiny; pass 4 touched the file for MS-10's edit-path
+fix without auditing the create branch's field set; pass 5's frontend diff
+was accessibility-only, so the file wasn't re-read at all).
+**Fix (interim, applied this pass):** wiring an actual member/prospect
+picker is a real feature addition — it needs a new data source (this
+module's store has no members/prospects list today; reusing
+`MemberPickerModal` would pull in an inventory-scoped endpoint and response
+shape (`MemberInventorySummary`) built for a different permission and data
+model, and covers members only, not prospects), and a decision on whether
+both, either, or neither id may be set — which is the same open question as
+the separately-tracked "`create_record` doesn't enforce exactly-one-of
+`user_id`/`prospect_id`" gap below. That is a product decision, not a
+same-day fix, and is **flagged**, not implemented, consistent with how this
+feature's MS-7 and MS-9 handled equivalently-shaped gaps. What was fixed:
+the create dialog now shows an amber notice — the same "not enforced yet"
+idiom `ScreeningRequirementForm.tsx` already uses for its own unwired fields
+— stating plainly that the record cannot be attached to anyone from this
+form, so a "Record created" success toast can no longer imply the record is
+usable. Documentation/UI-honesty only; no payload, schema, or backend
+behavior changed. Guarded by
+`ScreeningRecordForm.linkageNotice.test.tsx` (2 tests: the notice renders in
+create mode, and is absent in edit mode, since `ScreeningRecordUpdate` never
+accepts either field so editing can't touch this).
+**Mirrored to `docs/KNOWN_LIMITATIONS.md`** — its existing 2026-08-08 entry
+("Medical Screening — The Add Record Form Attaches to Nobody") is
+re-verified still accurate and now cross-referenced to this finding and its
+interim fix, rather than filing a duplicate entry.
+
+### Re-verified open, not re-flagged (unchanged from pass 3/4/5)
+
+- **MS-6 — LOW (scale).** `list_requirements`/`list_records` still run bare
+  `.all()`. Unchanged; already in `KNOWN_LIMITATIONS.md`.
+- **MS-7 — MED.** `create_record`/`update_record` still place no constraint
+  between `current_user` and `data.user_id`; `get_compliance_status` still
+  never reads `reviewed_by`. Unchanged; still needs a product decision;
+  already in `KNOWN_LIMITATIONS.md`.
+- **MS-12 — LOW (audit completeness).** The five PHI-bearing `GET` routes
+  still call no `log_audit_event`. Unchanged; already in
+  `KNOWN_LIMITATIONS.md`.
+- **`create_record` still doesn't enforce exactly-one-of `user_id`/
+  `prospect_id`.** Unchanged — and, per MS-13 above, moot for every
+  UI-originated record today since neither is ever set at all.
+- **`get_compliance_status` still doesn't 404 an unknown subject.**
+  Re-confirmed not an enumeration channel.
+- **`grace_period_days`/`applies_to_roles` (MS-9) and `frequency_months`
+  still unenforced.** The "Not enforced" notices are unchanged and still
+  present.
+
+## Schema & migration notes
+
+No migration this pass; no model/schema change. `validate_migrations.py
+--strict` re-run clean: 444 revisions, single head, unchanged count from
+pass 5.
+
+## Guard tests added
+
+- `frontend/src/modules/medical-screening/components/
+ScreeningRecordForm.linkageNotice.test.tsx` (new, MS-13, 2 tests) — the
+  create dialog shows the orphaned-record notice; the edit dialog does not.
+
+## Completion gate
+
+| Check                                                                          | Result                                                                                                                           |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                  | 0 violations (no backend file changed this pass; run as sanity check)                                                            |
+| `black --check app/ tests/ alembic/`                                           | clean, 1598 files unchanged                                                                                                      |
+| `isort --check-only app/ tests/ alembic/`                                      | clean                                                                                                                            |
+| `python3 scripts/validate_migrations.py --strict`                              | pass — 444 revisions, single head (no migration this pass)                                                                       |
+| `pytest tests/ -q -k "medical_screening or medical-screening or grace_period"` | **50 passed, 1 skipped** (pre-existing — optional `py_vapid` dep), 0 failed                                                      |
+| `pytest tests/ -q` (full backend suite)                                        | **12612 passed, 21 skipped** (pre-existing/environmental: Docker unavailable, optional dep, opt-in API-contract suite), 0 failed |
+| `npm run typecheck` (whole repo, via `tsc-native.mjs`)                         | 0 errors                                                                                                                         |
+| `npm run lint` (whole repo, `eslint --max-warnings 10`)                        | exit 0                                                                                                                           |
+| `npx vitest run src/modules/medical-screening/`                                | **31 passed** (5 test files, including the 2 new MS-13 guard tests)                                                              |
+| `npx vitest run` (whole repo)                                                  | **7591 passed** (534 test files), 0 failed                                                                                       |
 
 ---
 
