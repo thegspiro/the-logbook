@@ -94,6 +94,7 @@ export const ProspectiveMembersPage: React.FC = () => {
     fetchPipelines,
     fetchPipeline,
     fetchPipelineStats,
+    refreshPipelineView,
     fetchApplicants,
     fetchApplicant,
     fetchInactiveApplicants,
@@ -308,8 +309,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       const result = await applicantService.bulkAdvance(ids);
       reportBulkResult(result, 'Advanced');
       if (result.succeeded_count > 0) {
-        void fetchApplicants();
-        if (currentPipeline) void fetchPipelineStats(currentPipeline.id);
+        void refreshPipelineView();
       }
       setSelectedApplicants(new Set());
     } catch (err: unknown) {
@@ -329,7 +329,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       reportBulkResult(result, 'Reactivated');
       if (result.succeeded_count > 0) {
         void fetchInactiveApplicants();
-        void fetchApplicants();
+        void refreshPipelineView();
       }
       setSelectedInactive(new Set());
     } catch (err: unknown) {
@@ -346,8 +346,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       const result = await applicantService.bulkSetStatus(ids, 'rejected', bulkRejectReason.trim() || undefined);
       reportBulkResult(result, 'Rejected');
       if (result.succeeded_count > 0) {
-        void fetchApplicants();
-        if (currentPipeline) void fetchPipelineStats(currentPipeline.id);
+        void refreshPipelineView();
       }
       setSelectedApplicants(new Set());
       setShowBulkRejectConfirm(false);
@@ -422,8 +421,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         phone: '',
         target_membership_type: 'regular',
       });
-      void fetchApplicants();
-      void fetchPipelineStats(currentPipeline.id);
+      void refreshPipelineView();
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to create applicant');
       toast.error(msg);
@@ -724,7 +722,10 @@ export const ProspectiveMembersPage: React.FC = () => {
             {/* Refresh */}
             <button
               onClick={() => {
-                void fetchApplicants();
+                // The whole screen, not just the rows: a coordinator pressing
+                // Refresh is most often doing it because the header and the
+                // table disagree.
+                void refreshPipelineView();
               }}
               disabled={isLoading}
               className="text-theme-text-muted hover:text-theme-text-primary min-h-11 min-w-11 p-2 transition-colors disabled:opacity-50"

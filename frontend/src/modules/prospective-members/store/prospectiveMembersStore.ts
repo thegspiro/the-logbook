@@ -140,6 +140,7 @@ interface ProspectiveMembersState {
   fetchPipelines: () => Promise<void>;
   fetchPipeline: (id: string) => Promise<void>;
   fetchPipelineStats: (id: string) => Promise<void>;
+  refreshPipelineView: () => Promise<void>;
   setCurrentPipeline: (pipeline: Pipeline | null) => void;
   duplicatePipeline: (id: string, name: string) => Promise<Pipeline>;
   setDefaultPipeline: (id: string) => Promise<void>;
@@ -204,6 +205,38 @@ const defaultFilters: ApplicantListFilters = {};
  */
 const isPastLastPage = (requested: number, response: PaginatedApplicantList): boolean =>
   response.items.length === 0 && response.total > 0 && requested > response.total_pages;
+
+/**
+ * Sequence numbers that let a fetch tell whether it is still the current one.
+ *
+ * Every list here fires overlapping requests as a matter of course: on mount
+ * the pipeline, the status filter and the event filter are each set by their
+ * own effect, and each `setFilters` starts a fetch; selecting another pipeline
+ * starts one more while the previous is still in flight. Without a token the
+ * last response to *arrive* wins regardless of which request it answers, so a
+ * slow reply describing the pipeline the coordinator just left could overwrite
+ * — or blank — the one they are actually looking at, and the stat header would
+ * then disagree with the table for as long as the page stayed open.
+ *
+ * A stale response is dropped whole: it does not write rows, does not clear
+ * `isLoading` (the newer request in flight still owns that), and does not
+ * report its error, which would otherwise surface against a list it is no
+ * longer describing.
+ */
+type FetchKey = 'applicants' | 'inactive' | 'withdrawn' | 'rejected' | 'converted' | 'stats';
+const requestTokens: Record<FetchKey, number> = {
+  applicants: 0,
+  inactive: 0,
+  withdrawn: 0,
+  rejected: 0,
+  converted: 0,
+  stats: 0,
+};
+const beginFetch = (key: FetchKey): number => {
+  requestTokens[key] += 1;
+  return requestTokens[key];
+};
+const isCurrentFetch = (key: FetchKey, token: number): boolean => requestTokens[key] === token;
 
 /**
  * Refresh whichever archive list is on screen after a status change.
@@ -317,16 +350,45 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
   },
 
   fetchPipelineStats: async (id: string) => {
+    const { search, event_id } = get().filters;
+    const token = beginFetch('stats');
     set({ isLoadingStats: true });
     try {
-      const stats = await pipelineService.getPipelineStats(id);
+      const stats = await pipelineService.getPipelineStats(id, { search, event_id });
+      if (!isCurrentFetch('stats', token)) return;
       set({ pipelineStats: stats, isLoadingStats: false });
     } catch (error) {
+      if (!isCurrentFetch('stats', token)) return;
       set({
         error: handleStoreError(error, 'Failed to fetch pipeline stats'),
         isLoadingStats: false,
       });
     }
+  },
+
+  /**
+   * Refresh both halves of the pipeline screen after a mutation.
+   *
+   * The stat header and the applicant list are two separate queries, so a
+   * mutation that refreshes only the list leaves the header describing the
+   * pipeline as it was beforehand. That is how converting the last two active
+   * applicants left "Total Active: 2" standing over an empty table with
+   * "Converted: 0" beside it: the list was correct and the header was a
+   * snapshot of the previous minute, which reads as lost applicants rather
+   * than as a stale count.
+   *
+   * Every mutation refreshes through this rather than calling
+   * `fetchApplicants` alone, so a new one cannot reintroduce the split by
+   * forgetting the second call -- which is exactly how the conversion path
+   * came to be the only one missing it.
+   */
+  refreshPipelineView: async () => {
+    const { currentPipeline, filters } = get();
+    // The list's own filter first: the point of refreshing both together is
+    // that they describe one population, so the counts follow whatever the
+    // table is scoped to rather than whatever is selected in the header.
+    const pipelineId = filters.pipeline_id ?? currentPipeline?.id;
+    await Promise.all([get().fetchApplicants(), pipelineId ? get().fetchPipelineStats(pipelineId) : Promise.resolve()]);
   },
 
   setCurrentPipeline: (pipeline) => {
@@ -399,6 +461,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     // empty board over a perfectly good one.
     const isPipelineChange = requestedPipelineId !== state.applicantsPipelineId;
 
+    const token = beginFetch('applicants');
     set({
       isLoading: true,
       error: null,
@@ -416,6 +479,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         openOnly: true,
       });
 
+      if (!isCurrentFetch('applicants', token)) return;
+
       if (isPastLastPage(pageToFetch, response)) {
         await get().fetchApplicants(response.total_pages);
         return;
@@ -430,6 +495,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         isLoading: false,
       });
     } catch (error) {
+      if (!isCurrentFetch('applicants', token)) return;
       set({
         error: handleStoreError(error, 'Failed to fetch applicants'),
         isLoading: false,
@@ -462,8 +528,9 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isAdvancing: true, error: null });
     try {
       const advanced = await applicantService.advanceStage(id, notes ? { notes } : undefined);
-      // Refresh applicant list
-      await get().fetchApplicants();
+      // Advancing moves a stage count, and can move a status when the new
+      // stage closes the application, so the header is refreshed with the list.
+      await get().refreshPipelineView();
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);
@@ -514,7 +581,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isRegressing: true, error: null });
     try {
       await applicantService.regressStage(id, notes ? { notes } : undefined);
-      await get().fetchApplicants();
+      await get().refreshPipelineView();
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);
@@ -533,7 +600,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isAssigningStage: true, error: null });
     try {
       await applicantService.assignStage(id, stageId, notes);
-      await get().fetchApplicants();
+      await get().refreshPipelineView();
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);
@@ -571,12 +638,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isRejecting: true, error: null });
     try {
       await applicantService.rejectApplicant(id, reason);
-      await get().fetchApplicants();
+      await get().refreshPipelineView();
       await get().fetchRejectedApplicants();
-      const state = get();
-      if (state.currentPipeline) {
-        await get().fetchPipelineStats(state.currentPipeline.id);
-      }
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);
@@ -595,7 +658,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isHolding: true, error: null });
     try {
       await applicantService.putOnHold(id, reason);
-      await get().fetchApplicants();
+      await get().refreshPipelineView();
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);
@@ -633,12 +696,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isWithdrawing: true, error: null });
     try {
       await applicantService.withdrawApplicant(id, reason ? { reason } : undefined);
-      await get().fetchApplicants();
+      await get().refreshPipelineView();
       await get().fetchWithdrawnApplicants();
-      const state = get();
-      if (state.currentPipeline) {
-        await get().fetchPipelineStats(state.currentPipeline.id);
-      }
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);
@@ -658,12 +717,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isReactivating: true, error: null });
     try {
       await applicantService.reactivateApplicant(id, notes ? { notes } : undefined);
-      await get().fetchApplicants();
+      await get().refreshPipelineView();
       await refreshActiveArchiveList(get);
-      const state = get();
-      if (state.currentPipeline) {
-        await get().fetchPipelineStats(state.currentPipeline.id);
-      }
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);
@@ -682,6 +737,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     const state = get();
     const pageToFetch = page ?? state.inactiveCurrentPage;
 
+    const token = beginFetch('inactive');
     set({ isLoadingInactive: true, error: null });
     try {
       const response = await applicantService.getInactiveApplicants({
@@ -690,6 +746,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         page: pageToFetch,
         pageSize: state.pageSize,
       });
+
+      if (!isCurrentFetch('inactive', token)) return;
 
       if (isPastLastPage(pageToFetch, response)) {
         await get().fetchInactiveApplicants(response.total_pages);
@@ -704,6 +762,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         isLoadingInactive: false,
       });
     } catch (error) {
+      if (!isCurrentFetch('inactive', token)) return;
       set({
         error: handleStoreError(error, 'Failed to fetch inactive applicants'),
         isLoadingInactive: false,
@@ -715,6 +774,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     const state = get();
     const pageToFetch = page ?? state.withdrawnCurrentPage;
 
+    const token = beginFetch('withdrawn');
     set({ isLoadingWithdrawn: true, error: null });
     try {
       const response = await applicantService.getWithdrawnApplicants({
@@ -723,6 +783,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         page: pageToFetch,
         pageSize: state.pageSize,
       });
+
+      if (!isCurrentFetch('withdrawn', token)) return;
 
       if (isPastLastPage(pageToFetch, response)) {
         await get().fetchWithdrawnApplicants(response.total_pages);
@@ -737,6 +799,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         isLoadingWithdrawn: false,
       });
     } catch (error) {
+      if (!isCurrentFetch('withdrawn', token)) return;
       set({
         error: handleStoreError(error, 'Failed to fetch withdrawn applicants'),
         isLoadingWithdrawn: false,
@@ -748,6 +811,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     const state = get();
     const pageToFetch = page ?? state.rejectedCurrentPage;
 
+    const token = beginFetch('rejected');
     set({ isLoadingRejected: true, error: null });
     try {
       const response = await applicantService.getRejectedApplicants({
@@ -756,6 +820,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         page: pageToFetch,
         pageSize: state.pageSize,
       });
+
+      if (!isCurrentFetch('rejected', token)) return;
 
       if (isPastLastPage(pageToFetch, response)) {
         await get().fetchRejectedApplicants(response.total_pages);
@@ -770,6 +836,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         isLoadingRejected: false,
       });
     } catch (error) {
+      if (!isCurrentFetch('rejected', token)) return;
       set({
         error: handleStoreError(error, 'Failed to fetch rejected applicants'),
         isLoadingRejected: false,
@@ -781,6 +848,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     const state = get();
     const pageToFetch = page ?? state.convertedCurrentPage;
 
+    const token = beginFetch('converted');
     set({ isLoadingConverted: true, error: null });
     try {
       const response = await applicantService.getConvertedApplicants({
@@ -789,6 +857,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         page: pageToFetch,
         pageSize: state.pageSize,
       });
+
+      if (!isCurrentFetch('converted', token)) return;
 
       if (isPastLastPage(pageToFetch, response)) {
         await get().fetchConvertedApplicants(response.total_pages);
@@ -803,6 +873,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         isLoadingConverted: false,
       });
     } catch (error) {
+      if (!isCurrentFetch('converted', token)) return;
       set({
         error: handleStoreError(error, 'Failed to fetch converted applicants'),
         isLoadingConverted: false,
@@ -957,8 +1028,21 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
 
   // Filter & view actions
   setFilters: (filters: ApplicantListFilters) => {
-    set({ filters: { ...get().filters, ...filters }, currentPage: 1 });
+    const previous = get().filters;
+    const next = { ...previous, ...filters };
+    set({ filters: next, currentPage: 1 });
     void get().fetchApplicants(1);
+
+    // The header and the tab badges count through `search` and `event_id`, so
+    // either moving means the counts now describe a different population than
+    // the list and have to be recounted. No other filter key enters the count
+    // -- `status` narrows the open-pipeline view alone, and counting through
+    // it would zero the archive badges the same response feeds -- so nothing
+    // else here earns a round trip.
+    const pipelineId = next.pipeline_id;
+    if (pipelineId && (next.search !== previous.search || next.event_id !== previous.event_id)) {
+      void get().fetchPipelineStats(pipelineId);
+    }
   },
 
   clearFilters: () => {

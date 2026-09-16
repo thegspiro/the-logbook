@@ -1103,6 +1103,58 @@ class MembershipPipelineService:
             )
         return and_(*clauses)
 
+    @staticmethod
+    def _prospect_scope_clauses(
+        organization_id: str,
+        pipeline_id: Optional[str] = None,
+        status: Optional[str] = None,
+        search: Optional[str] = None,
+        event_id: Optional[str] = None,
+        open_only: bool = False,
+    ) -> List[ColumnElement[bool]]:
+        """The WHERE clauses selecting a population of prospects.
+
+        Shared by :meth:`list_prospects` and :meth:`get_pipeline_stats` so the
+        stat header and the list it sits above cannot describe two different
+        populations (CLAUDE.md #29). Before this existed the header counted the
+        whole pipeline while the table counted the filtered set, so a search or
+        a "came from" filter that matched nothing still rendered "Total Active:
+        2" over an empty table, with no way to tell a filtered-out applicant
+        from a missing one.
+
+        Callers must have already confirmed ``event_id`` belongs to
+        *organization_id*; the org clause below stops a foreign id returning
+        rows, but it would read as "no applicants" rather than as the
+        wrong-org id it is.
+        """
+        clauses: List[ColumnElement[bool]] = [
+            ProspectiveMember.organization_id == organization_id
+        ]
+        if pipeline_id:
+            clauses.append(ProspectiveMember.pipeline_id == pipeline_id)
+        if status:
+            clauses.append(ProspectiveMember.status == status)
+        if open_only:
+            clauses.append(
+                ProspectiveMember.status.notin_(sorted(CLOSED_PROSPECT_STATUSES))
+            )
+        if event_id:
+            clauses.append(
+                or_(
+                    ProspectiveMember.metadata_["source_event_id"].as_string()
+                    == str(event_id),
+                    select(ProspectEventLink.id)
+                    .where(
+                        ProspectEventLink.prospect_id == ProspectiveMember.id,
+                        ProspectEventLink.event_id == str(event_id),
+                    )
+                    .exists(),
+                )
+            )
+        if search:
+            clauses.append(MembershipPipelineService._prospect_search_filter(search))
+        return clauses
+
     async def list_prospects(
         self,
         organization_id: str,
@@ -1132,38 +1184,23 @@ class MembershipPipelineService:
         """
         query = (
             select(ProspectiveMember)
-            .where(ProspectiveMember.organization_id == organization_id)
+            .where(
+                *self._prospect_scope_clauses(
+                    organization_id=organization_id,
+                    pipeline_id=pipeline_id,
+                    status=status,
+                    search=search,
+                    event_id=event_id,
+                    open_only=open_only,
+                )
+            )
             .options(
                 selectinload(ProspectiveMember.current_step),
                 selectinload(ProspectiveMember.pipeline),
                 selectinload(ProspectiveMember.step_progress),
             )
         )
-
-        if pipeline_id:
-            query = query.where(ProspectiveMember.pipeline_id == pipeline_id)
-        if status:
-            query = query.where(ProspectiveMember.status == status)
-        if open_only:
-            query = query.where(
-                ProspectiveMember.status.notin_(sorted(CLOSED_PROSPECT_STATUSES))
-            )
-        if event_id:
-            query = query.where(
-                or_(
-                    ProspectiveMember.metadata_["source_event_id"].as_string()
-                    == str(event_id),
-                    select(ProspectEventLink.id)
-                    .where(
-                        ProspectEventLink.prospect_id == ProspectiveMember.id,
-                        ProspectEventLink.event_id == str(event_id),
-                    )
-                    .exists(),
-                )
-            )
         query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
-        if search:
-            query = query.where(self._prospect_search_filter(search))
 
         # Count query
         count_query = select(func.count()).select_from(query.subquery())
@@ -4957,8 +4994,25 @@ class MembershipPipelineService:
         pipeline_id: str,
         organization_id: str,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
+        search: Optional[str] = None,
+        event_id: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Get statistics for a pipeline"""
+        """Get statistics for a pipeline.
+
+        ``search`` and ``event_id`` narrow the counted population exactly as
+        they narrow :meth:`list_prospects`, so the stat header and the tab
+        badges describe the same applicants the list below them is showing.
+        Both default to off, which reproduces the whole-pipeline counts this
+        returned before they existed.
+
+        Deliberately *not* filtered by status: the caller's status filter
+        applies to the open-pipeline view only, and folding it in here would
+        zero the Rejected / Withdrawn / Converted badges the same response
+        feeds.
+
+        Callers must have already confirmed ``event_id`` belongs to
+        *organization_id* — see :meth:`_prospect_scope_clauses`.
+        """
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return None
@@ -4967,8 +5021,12 @@ class MembershipPipelineService:
         # step: a 12-stage pipeline previously cost ~20 round trips to render
         # a single stat header.
         base_scope = and_(
-            ProspectiveMember.organization_id == organization_id,
-            ProspectiveMember.pipeline_id == pipeline_id,
+            *self._prospect_scope_clauses(
+                organization_id=organization_id,
+                pipeline_id=pipeline_id,
+                search=search,
+                event_id=event_id,
+            )
         )
 
         status_query = self._apply_prospect_exclusions(

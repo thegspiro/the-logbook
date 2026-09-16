@@ -44,7 +44,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
   const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose });
 
   const tz = useTimezone();
-  const { fetchApplicants } = useProspectiveMembersStore();
+  const { refreshPipelineView } = useProspectiveMembersStore();
 
   // Wizard state
   const [step, setStep] = useState<1 | 2>(1);
@@ -117,7 +117,11 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
         emergency_contacts: emergencyContacts.length > 0 ? emergencyContacts : undefined,
       });
       setConversionResult(result);
-      await fetchApplicants();
+      // Both halves: a conversion empties the applicant out of the open list
+      // and moves two header counts (active down, converted up). Refreshing
+      // the list alone left the stat cards claiming the applicant was still
+      // active, over a table that no longer showed them.
+      await refreshPipelineView();
       toast.success(`${applicant.first_name} ${applicant.last_name} converted to ${membershipType} member`);
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'Failed to convert applicant');
