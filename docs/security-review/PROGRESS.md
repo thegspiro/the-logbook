@@ -16,6 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2616](https://github.com/thegspiro/the-logbook/pull/2616)
+(Feature 11, Inventory, pass 6) went fully green (17/17 checks including the
+`CI Success` gate; `mergeable_state: clean`; no unresolved review threads —
+only the informational Codex usage-limit comment and this watchdog's own
+explanation of a stale-superseded-run false failure on an earlier commit) and
+sat idle for roughly 20 minutes past CI completing with no human merge. This
+scheduled watchdog check merged it directly (squash, `expectedHeadSha` pinned
+to `9c76f94`). Merge commit `635d8aa` confirmed on `main` via `git fetch`.
+Rotation row 11 stays ✅. Next: Feature 12 (Facilities).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 6, PR #2616, pending merge), preserved for history</summary>
+
 **Feature 11 (Inventory), pass 6** — PR [#2616](https://github.com/thegspiro/the-logbook/pull/2616), branch
 `claude/security-review-inv-11-pass6`. **Watchdog iteration:** the
 `/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) had
@@ -16646,6 +16659,21 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-16 — Feature 11 (Inventory, pass 6)'s PR #2616 merged, watchdog recorded it
+
+PR #2616 (zero-delta re-verification pass 6 over the inventory/labels scope;
+0 fixed, 0 new findings, 0 application-code changes — documentation only)
+went fully green (17/17 checks including `CI Success`), `mergeable_state:
+clean`, with no unresolved review threads (only the informational Codex
+usage-limit comment and this same watchdog's own explanation of a
+stale-superseded-run false failure on an earlier commit, `8426527`, that CI
+correctly superseded). Sat idle for roughly 20 minutes past CI completing
+with nothing further pending, so this scheduled 30-minute watchdog check
+merged it directly (squash, `expectedHeadSha` pinned to `9c76f94`), matching
+the bar prior watchdog merges in this log have used (Features 04, 05, 06,
+14, 15, 23, 25, 31, 33, 34). Merge commit `635d8aa` confirmed on `main` via
+`git fetch`. Rotation row 11 stays ✅. Next: Feature 12 (Facilities).
 
 ### 2026-09-16 — Feature 11 (Inventory, pass 6) — 0 fixed, 0 new findings — watchdog iteration
 
