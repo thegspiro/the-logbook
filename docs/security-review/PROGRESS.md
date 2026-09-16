@@ -16,6 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2602](https://github.com/thegspiro/the-logbook/pull/2602)
+(Feature 07, Users & organizations, pass 6) was fully green (17/17 checks,
+`mergeable_state: clean`, no unresolved review threads — only the
+informational Codex usage-limit comment) and idle for over 30 minutes since
+its last push, so a 30-minute watchdog check merged it directly (squash,
+`expectedHeadSha` pinned), matching the bar prior watchdog merges in this
+log have used (Features 04, 05, 06, 07, 14, 15, 23, 25, 31, 33, 34). Merge
+commit `d157b76e0` confirmed on `main` via `git fetch`. Rotation row 07
+stays ✅. Next: Feature 08 (Membership pipeline).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 6, PR #2602, merged clean — 0 fixed, 0 new findings, 1 regression test added; rotation row 07 marked ✅ as part of that PR), preserved for history</summary>
+
 **Feature 07 (Users & organizations), pass 6** — PR
 [#2602](https://github.com/thegspiro/the-logbook/pull/2602), branch
 `claude/security-review-usr-pass6-9d2e47`. Step 0
@@ -92,6 +105,8 @@ merged" edit to this Open PR section from the other side. Resolved by
 merging `origin/main` into this branch (merge commit, no rebase/force-push)
 and keeping both notes, this pass's own note first, per this file's
 established nested-`<details>` convention.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 6, PR #2600, merged directly by the repo owner — 0 fixed, 0 new findings, 1 guard test added; rotation row 06 marked ✅ as part of that merge), preserved for history</summary>
@@ -16477,6 +16492,20 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-15 — Feature 07 (Users & organizations, pass 6)'s PR #2602 merged, watchdog recorded it
+
+PR #2602 (Feature 07, Users & organizations, pass 6 — near-zero-delta
+re-verification plus a first review of the feature's own MCP surface; 0
+new findings, 1 regression test added) went fully green (17/17 checks
+including `CI Success`), `mergeable_state: clean`, with no unresolved
+review threads (only the informational Codex usage-limit comment). Sat
+idle for over 30 minutes since its last push with nothing further pending,
+so a 30-minute watchdog check merged it directly (squash, `expectedHeadSha`
+pinned) rather than leaving it idle, matching the bar prior watchdog
+merges in this log have used (Features 04, 05, 06, 07, 14, 15, 23, 25, 31,
+33, 34). Merge commit `d157b76e0` confirmed on `main` via `git fetch`.
+Rotation row 07 stays ✅. Next: Feature 08 (Membership pipeline).
 
 ### 2026-09-15 — Feature 07 (Users & organizations, pass 6) — 0 fixed, 0 new findings, 1 regression test added — PR #2602 opened
 
