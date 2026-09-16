@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2608](https://github.com/thegspiro/the-logbook/pull/2608)
+(Feature 09, Medical screening, pass 6) went fully green (17/17 checks,
+`mergeable_state: clean`, no review threads — only the informational Codex
+usage-limit comment and this session's own note re-confirming the
+`Docker Image Build & Container Tests` re-run as a transient Docker Hub
+auth failure unrelated to the diff) and sat idle for over an hour past
+its last push with no human merge, past the 30-minute watchdog bar prior
+iterations in this log have used. This watchdog session merged it
+directly (squash, `expectedHeadSha` pinned to `e988a4a`). Merge commit
+`f0b3e38` confirmed on `main` via `git fetch`. Rotation row 09 stays ✅.
+Next: Feature 10 (Documents & legal).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 6, PR #2608, pending merge), preserved for history</summary>
+
 **PR [#2608](https://github.com/thegspiro/the-logbook/pull/2608)** (Feature
 09, Medical screening, pass 6 — another watchdog pickup: the
 `/loop 30m /security-review` session had again stalled, 3.5+ hours with no
@@ -33,6 +48,8 @@ Full backend suite (12612 passed) and full frontend suite (7591 passed)
 both clean; `flake8`/`black`/`isort`/`validate_migrations.py --strict` all
 clean. Subscribed to PR activity. Rotation row 09 → ✅ (pending this PR's
 merge). Next: Feature 10 (Documents & legal).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 7, PR #2605, merged directly by the repo owner — 0 fixed, 0 new findings; rotation row 08 marked ✅ as part of that merge), preserved for history</summary>
