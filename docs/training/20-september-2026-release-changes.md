@@ -1352,9 +1352,7 @@ Neither could be, unless you used a quick-add preset. Both demanded a list of
 roles that has no input anywhere in the modal, and Manual Approval — the modal's
 default type — failed in silence, because its error was never rendered.
 
-> **Screenshot needed:**
-> _[The stage type picker with Election Vote selected and saving successfully.
-> Replace any capture showing the old validation error.]_
+![The Add Pipeline Stage dialog with Election / Vote selected, its voting configuration revealed below the type grid, and Add Stage enabled with no validation error](./images/20-12-stage-picker-election-vote.png)
 
 ## For administrators: read this before you upgrade
 
@@ -1362,7 +1360,8 @@ default type — failed in silence, because its error was never rendered.
 
 Settings → Email would save an **enabled** section green that had no chance of
 delivering anything. Two shapes did it: **Cloudflare** with no account ID or API
-token, and **Other**, which stores nothing at all.
+token, and the platform left at **Not configured** — the button labelled
+**Other** until this change — which stores nothing at all.
 
 **This is worse than it sounds, and it is the reason to read this section.** An
 enabled section short-circuits the deployment's own SMTP settings. So a
@@ -1384,14 +1383,18 @@ a correct host and port still fails to authenticate.
 
 This is a labelling fix, not a new capability: all twelve are ordinary SMTP,
 which the platform already sent perfectly well. What departments did not have
-was any way to know that. A chief running on Yahoo read "Self-Hosted SMTP — your
-own mail server", reasonably concluded it was not supported, and picked
-**Other**, which cannot send at all.
+was any way to know that.
 
-> **Screenshot needed:**
-> _[Settings → Email with the SMTP preset list open, showing the twelve
-> providers. Replace any capture of the platform list taken before
-> September 13.]_
+**Two of the platform buttons were renamed for the same reason.**
+**Self-Hosted SMTP** is now **SMTP (any provider)**, and **Other** is now **Not
+configured**. A chief running on Yahoo read "Self-Hosted SMTP — your own mail
+server", reasonably concluded the platform did not support them, and picked
+"Other" — which sounds like a catch-all and is in fact the one option that
+cannot send. The panels beneath each button are unchanged; only the names moved,
+so an older capture or recording is wrong about the labels and right about
+everything else.
+
+![Settings → Email with SMTP (any provider) selected and the Fastmail preset applied — the credential line naming the provider, and the host, port and encryption it filled in](./images/20-11-settings-email-smtp-preset.png)
 
 **Two more email fixes.** Departments on Cloudflare can send ballot email for
 the first time — the ballot fan-out handed Cloudflare raw message data its API
@@ -1462,8 +1465,9 @@ Then, in order:
    Event Type set to _None_ stop advancing on their own. Set the event type and
    they resume.
 2. **Check your email configuration** if your department's mail has been
-   unreliable — particularly if somebody once started filling in Cloudflare or
-   picked "Other".
+   unreliable — particularly if somebody once started filling in Cloudflare, or
+   left the platform on **Not configured** (then labelled "Other") with email
+   switched on.
 3. **Spot-check inspection dates** on gear that is on an inspection interval and
    has had repairs or cleanings completed against it.
 4. **Tell your members the Open Shifts board will be shorter**, and why. This is

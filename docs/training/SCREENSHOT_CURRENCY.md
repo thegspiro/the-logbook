@@ -9,23 +9,73 @@ somewhere new. Every item is the same address showing something different, which
 is the disposition that goes stale quietly: an old frame of a screen that still
 exists does not announce itself the way a 404 does.
 
-**Six placeholders were written into the guides** by this pass and are queued
-below — four in
+**Six placeholders were written into the guides** by this pass — four in
 [`20-september-2026-release-changes.md`](./20-september-2026-release-changes.md),
 one in [`03-scheduling.md`](./03-scheduling.md) and one in
-[`08-admin-reports.md`](./08-admin-reports.md). The library moves from 530/572
-to **530/578**; nothing was captured by this pass.
+[`08-admin-reports.md`](./08-admin-reports.md).
 
-| Image area                                    | Disposition | Guide                              | Why                                                                                                 |
-| --------------------------------------------- | ----------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Scheduling -> **Open Shifts**, member vs admin | **NEW**     | 20 (release), 03 (scheduling)      | The two views now differ. A single frame carrying both is the only way to show it                     |
-| Applicant drawer, **Not Elected** refusal      | **NEW**     | 20 (release)                       | The state a coordinator has to recognise, and it did not exist before September 13                    |
-| Stage picker with **Election Vote** saving     | **NEW**     | 20 (release)                       | Replaces any frame showing the old validation error, which could not be satisfied from the modal      |
-| Settings -> **Email**, SMTP preset list        | **REPLACE** | 20 (release), 08 (admin)           | Twelve providers are offered where the list previously showed Self-Hosted or Other                    |
-| Settings -> **Email**, inline refusal          | **NEW**     | queued, no placeholder written yet | The refusal for an enabled-but-empty Cloudflare or Other section is what an operator hits on upgrade  |
-| Shift signup **position picker**               | **REPLACE** | queued, no placeholder written yet | Offers only seats the server will grant                                                               |
-| Stage builder -> **Meeting** config            | **REPLACE** | queued, no placeholder written yet | Carries the Auto-Link Event Type warning beside the auto-advance checkbox                             |
-| Inventory item -> maintenance history          | **NO SHOT** | n/a                                | The rule changed, the screen did not                                                                  |
+**Three of the six are now shot** (2026-09-16), by two images: the library moves
+from 530/572 to **533/578**. The other three are blocked or need a second
+account — see the notes under the table.
+
+| Image area                                     | Disposition | Guide                              | State                                                                                                  |
+| ---------------------------------------------- | ----------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Settings -> **Email**, SMTP preset applied      | **REPLACE** | 20 (release), 08 (admin)           | **Shot** 09-16 as `20-11-settings-email-smtp-preset`. One image, placed in both guides                   |
+| Stage picker with **Election / Vote** selected  | **NEW**     | 20 (release)                       | **Shot** 09-16 as `20-12-stage-picker-election-vote`                                                    |
+| Scheduling -> **Open Shifts**, member vs admin  | **NEW**     | 20 (release), 03 (scheduling)      | **Queued** — needs a second signed-in session and a narrower member; see below                          |
+| Applicant drawer, **Not Elected** refusal       | **NEW**     | 20 (release)                       | **Blocked** on the seeder — it only ever produces an *Elected* package; see below                       |
+| Settings -> **Email**, inline refusal           | **NEW**     | no placeholder written yet         | The refusal for an enabled-but-empty Cloudflare section, or for **Not configured** with email enabled   |
+| Shift signup **position picker**                | **REPLACE** | no placeholder written yet         | Offers only seats the server will grant                                                                 |
+| Stage builder -> **Meeting** config             | **REPLACE** | no placeholder written yet         | Carries the Auto-Link Event Type warning beside the auto-advance checkbox                                |
+| Inventory item -> maintenance history           | **NO SHOT** | n/a                                | The rule changed, the screen did not                                                                     |
+
+### What the two shot images actually show, and why not what was asked for
+
+**The preset list cannot be photographed, and the original placeholder asked for
+it.** "Fill in settings for a known provider" is a native `<select>`: the browser
+draws its open list as OS chrome, outside the page, so it never appears in a
+screenshot at any viewport. The placeholder was rewritten to the subject a
+picture can carry — a preset already **applied**, with the credential line naming
+the provider and the host, port and encryption it filled in. The twelve names are
+prose; the effect is the picture. **Fastmail** is the preset used because its
+hint names both an app password and the specific settings path, and because it is
+SSL/465 — a preset that left the STARTTLS default in place would picture nothing
+happening.
+
+**The stage shot is the dialog, not a save.** The original placeholder said
+"saving successfully", which is unphotographable twice over: the dialog closes on
+success, and pressing Add Stage would write a seventh stage into the demo
+pipeline. What proves the type is creatable is the dialog itself — **Election /
+Vote** selected, its configuration revealed, and **Add Stage** enabled with no
+validation error. The absence is the subject, so `expect` asserts **Election
+Package Contents**: that heading exists only once the type is selected and sits
+low in the panel, so it catches both a shot that landed on the default type and
+one framed too short to reach the configuration.
+
+**Neither capture writes anything.** Both are local component state until a Save
+that is never pressed; the demo pipeline still has six stages and the
+organization still stores no `email_service`, verified after the run.
+
+**The stage dialog needs a 2,400px viewport.** Its content is 2,215px tall and
+`modal-panel-scroll` caps the panel at 90vh, so at the desktop height the footer
+— the enabled Add Stage button, which is the whole point — falls below the
+panel's own scroll. The manifest entry carries an explicit `viewport` for that
+reason; do not "tidy" it back to the default.
+
+### The Not Elected refusal is blocked on the seeder
+
+`seed_demo_data.py` only ever produces an **Elected** package:
+`MEMBERSHIP_VOTE_TALLY` is `(18, 2)`, a pass, and `seed_membership_vote_outcome`
+walks the product's own lifecycle to get there. There is no seeded applicant the
+membership voted **down**, so the refusal this shot is about has nothing to
+photograph.
+
+It is currently stuck one step earlier as well — the seeder reports
+`membership vote outcome: election closed but package is 'draft' — its ballot
+item never carried the package id`, and a closed election accepts no repair over
+the API. Photographing the refusal therefore needs a **seeder change**: a second
+prospect carried through a failing vote. That is its own change set, not a
+capture run.
 
 ### The Open Shifts pair needs two sessions, not two clips
 
