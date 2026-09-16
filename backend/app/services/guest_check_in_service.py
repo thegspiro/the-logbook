@@ -320,9 +320,11 @@ class GuestCheckInService:
         of it as a convenience. Grading the pinned id first would strand every
         recurring stage the moment that occurrence passed — an applicant at
         March's business meeting would not satisfy a stage pinned to January's.
-        So the type the coordinator actually chose wins, the pinned id is the
-        fallback for a stage built without one, and a stage naming no event at
-        all takes any recorded attendance.
+        So the type the coordinator actually chose wins, and the pinned id is
+        the fallback for a stage built without one. A stage naming **neither**
+        matches nothing — guest check-in is org-wide and the events departments
+        enable it on are the public ones, so taking any recorded attendance
+        advanced "Meeting with the Fire Chief" on a pancake breakfast.
 
         The rule itself now lives beside the stage gate that has to apply the
         same test to a *stored* attendance record, so offering an advance here

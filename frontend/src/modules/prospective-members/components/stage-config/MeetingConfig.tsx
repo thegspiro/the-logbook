@@ -106,7 +106,10 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
           ))}
         </select>
         <p className="text-theme-text-muted mt-1 text-xs">
-          When this stage activates, the next upcoming event of this type will be auto-linked.
+          When this stage activates, the next upcoming event of this type will be auto-linked. Naming an event also
+          makes attendance required: applicants cannot be advanced off this stage, by hand or otherwise, until they are
+          checked in at one. Leave this as &quot;None&quot; for a meeting nothing records, such as a one-on-one with the
+          chief.
         </p>
         {errors.linked_event_type && (
           <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.linked_event_type}</p>

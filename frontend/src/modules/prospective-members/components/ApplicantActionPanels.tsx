@@ -77,13 +77,21 @@ const getStageRequirementHint = (applicant: Applicant): string | null => {
       // is what reports whether their own vote is pending, passed or failed.
       return 'Once the applicant is on a ballot, they cannot advance until the election closes and the result is recorded.';
     case StageType.MEETING: {
-      // Only when auto-advance is on: that is the setting whose gate the
-      // coordinator can be surprised by, because it will not fire until the
-      // applicant is checked in and that meeting's check-in window has opened.
+      // A stage that names its event is an attendance requirement the server
+      // enforces on every path, Advance included — so the hint has to state it
+      // before the click, not leave the refusal to explain it afterwards. A
+      // stage naming none can never be graded and keeps taking the
+      // coordinator's word, so it says nothing.
+      const namesAnEvent =
+        ('linked_event_type' in config && Boolean(config.linked_event_type)) ||
+        ('linked_event_id' in config && Boolean(config.linked_event_id));
+      if (!namesAnEvent) return null;
       const autoAdvance = 'auto_advance' in config ? config.auto_advance : false;
+      const requirement =
+        'The applicant must be checked in at this stage’s event before they can advance, and attendance recorded before their application was opened does not count. Record the attendance on the event if they attended and it was missed.';
       return autoAdvance
-        ? "Advances on its own once the applicant is checked in at the meeting, from the moment that meeting's check-in window opens. Advance by hand if they attended and it was not recorded."
-        : null;
+        ? `${requirement} The stage then advances on its own, from the moment that meeting’s check-in window opens.`
+        : requirement;
     }
     default:
       return null;

@@ -18,6 +18,11 @@ Covered here:
   pinned event id goes stale the moment that occurrence passes)
 - Required document uploads advance only after every configured type is attached
   to the current stage
+- A meeting stage that names its event is an attendance requirement on every
+  path, the hand advance included; one that names none still takes the
+  coordinator's word
+- Attendance predating the application is not evidence, while the sign-in that
+  opened the record still is
 """
 
 import uuid
@@ -1061,23 +1066,32 @@ class TestMeetingStageNeedsRealAttendance:
         assert advanced is False
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
 
-    async def test_a_coordinator_can_still_advance_by_hand(
+    async def test_a_hand_advance_is_refused_when_the_stage_names_its_event(
         self, db_session: AsyncSession, org
     ):
-        """The gate is for automated advances only. A coordinator who watched
-        the applicant walk in is better evidence than any record, and gating
-        the Advance button would make it useless on the stage type it exists
-        for."""
+        """This stage names the event, so it is an attendance requirement and
+        the hand advance is held to it too.
+
+        The gate used to read the caller rather than the stage, which made a
+        bulk advance refuse what the same coordinator could do one card at a
+        time — on a stage whose text said "attend a business meeting" either
+        way. The remedy is to record the attendance, not to route around it,
+        so the refusal names it.
+        """
         svc, prospect, gate = await self._meeting_stage(db_session, org)
 
-        await svc.advance_prospect(
-            prospect_id=str(prospect.id),
-            organization_id=org,
-            advanced_by=None,
-            notes="Attended; sign-in sheet was not entered",
-        )
+        with pytest.raises(
+            ValueError, match="No attendance has been recorded"
+        ) as refusal:
+            await svc.advance_prospect(
+                prospect_id=str(prospect.id),
+                organization_id=org,
+                advanced_by=None,
+                notes="Attended; sign-in sheet was not entered",
+            )
 
-        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+        assert "check them in" in str(refusal.value)
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
 
     async def test_an_early_arrival_inside_the_check_in_window_advances(
         self, db_session: AsyncSession, org
@@ -1142,6 +1156,216 @@ class TestMeetingStageNeedsRealAttendance:
 
         assert advanced is False
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
+class TestAttendanceMustPostdateTheApplication:
+    """A prospect's attendance history is unbounded in time; the stage is not.
+
+    The gate asked only "is there a matching check-in for this applicant",
+    never "since when", so every check-in the person had ever made graded the
+    same. That is worst in the flow the module is built around: the kiosk opens
+    a prospect record from a guest sign-in at a business meeting, so an
+    applicant recruited that way carries a matching business-meeting attendance
+    from the moment they exist — and a later "attend a business meeting" stage
+    was satisfied by the sign-in that created them, without their ever
+    attending a second one.
+
+    Measured against the event's check-in window closing rather than the
+    check-in instant: the kiosk writes the prospect and the attendance within
+    milliseconds, in an order nothing should depend on.
+    """
+
+    @staticmethod
+    async def _meeting_stage(db_session: AsyncSession, org: str):
+        return await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={
+                "meeting_type": "business_meeting",
+                "linked_event_type": "business_meeting",
+            },
+        )
+
+    @staticmethod
+    def _attended(org: str, event: Event, prospect) -> EventExternalAttendee:
+        return EventExternalAttendee(
+            id=_uid(),
+            organization_id=org,
+            event_id=str(event.id),
+            name="Dana Reed",
+            email=prospect.email,
+            prospect_id=prospect.id,
+            checked_in=True,
+            checked_in_at=event.start_datetime,
+        )
+
+    async def test_a_check_in_from_before_the_application_is_not_evidence(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+        now = datetime.now(timezone.utc)
+        last_year = _make_event(
+            org,
+            start_datetime=now - timedelta(days=400),
+            end_datetime=now - timedelta(days=400) + timedelta(hours=2),
+        )
+        db_session.add_all([last_year, self._attended(org, last_year, prospect)])
+        await db_session.commit()
+
+        with pytest.raises(
+            ValueError, match="since this application was opened"
+        ) as refusal:
+            await svc.advance_prospect(
+                prospect_id=str(prospect.id),
+                organization_id=org,
+                advanced_by=None,
+            )
+
+        assert "since this application was opened" in str(refusal.value)
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_the_meeting_that_opened_the_record_still_counts(
+        self, db_session: AsyncSession, org
+    ):
+        """The one piece of history a department does mean to count. Its
+        check-in window is still open when the record is written, so measuring
+        against the window's close keeps it in while the stale one stays out.
+        """
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+        in_progress = _make_event(org)
+        db_session.add_all([in_progress, self._attended(org, in_progress, prospect)])
+        await db_session.commit()
+
+        await svc.advance_prospect(
+            prospect_id=str(prospect.id),
+            organization_id=org,
+            advanced_by=None,
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_a_bulk_advance_is_held_to_the_same_cut_off(
+        self, db_session: AsyncSession, org
+    ):
+        """The two paths must not disagree about what counts as attendance."""
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+        now = datetime.now(timezone.utc)
+        last_year = _make_event(
+            org,
+            start_datetime=now - timedelta(days=400),
+            end_datetime=now - timedelta(days=400) + timedelta(hours=2),
+        )
+        db_session.add_all([last_year, self._attended(org, last_year, prospect)])
+        await db_session.commit()
+
+        results = await svc.bulk_advance_prospects([str(prospect.id)], org, None)
+
+        assert results[0]["succeeded"] is False
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
+class TestNamingAnEventMakesAttendanceRequired:
+    """Which stages the gate applies to is decided by the stage, not the caller.
+
+    A meeting stage covers two unlike things. "Meet with the Chief" is an
+    arrangement between two people that nothing will ever record, so the
+    coordinator's word is the only evidence there can be. "Attend a business
+    meeting" names an event the department runs and check-in produces a record
+    of who was there. Reading the caller instead meant the same coordinator,
+    applicant and stage were refused in a bulk advance and allowed one card at
+    a time.
+    """
+
+    async def test_a_stage_naming_no_event_is_not_an_attendance_requirement(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            # The stage builder's default shape.
+            config={"meeting_type": "chief_meeting", "meeting_description": ""},
+        )
+
+        await svc.advance_prospect(
+            prospect_id=str(prospect.id),
+            organization_id=org,
+            advanced_by=None,
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_a_pinned_event_id_alone_is_enough_to_require_attendance(
+        self, db_session: AsyncSession, org
+    ):
+        """A stage built before Auto-Link Event Type existed names its event
+        through the pinned id, and is as much a requirement as a typed one."""
+        now = datetime.now(timezone.utc)
+        pinned = _make_event(org)
+        db_session.add(pinned)
+        await db_session.flush()
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={"meeting_type": "business_meeting", "linked_event_id": pinned.id},
+        )
+
+        with pytest.raises(ValueError, match="No attendance has been recorded"):
+            await svc.advance_prospect(
+                prospect_id=str(prospect.id),
+                organization_id=org,
+                advanced_by=None,
+            )
+
+        db_session.add(
+            EventExternalAttendee(
+                id=_uid(),
+                organization_id=org,
+                event_id=str(pinned.id),
+                name="Dana Reed",
+                email=prospect.email,
+                prospect_id=prospect.id,
+                checked_in=True,
+                checked_in_at=now,
+            )
+        )
+        await db_session.commit()
+
+        await svc.advance_prospect(
+            prospect_id=str(prospect.id),
+            organization_id=org,
+            advanced_by=None,
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_the_refusal_names_recording_the_attendance_first(
+        self, db_session: AsyncSession, org
+    ):
+        """Gating the hand advance closes the coordinator's escape hatch, so
+        the refusal has to hand back the remedies that replace it."""
+        svc, prospect, _gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={"linked_event_type": "business_meeting"},
+        )
+
+        with pytest.raises(
+            ValueError, match="No attendance has been recorded"
+        ) as refusal:
+            await svc.advance_prospect(
+                prospect_id=str(prospect.id),
+                organization_id=org,
+                advanced_by=None,
+            )
+
+        message = str(refusal.value)
+        assert "check them in" in message
+        assert "un-tick Required" in message
+        assert "Auto-Link Event Type" in message
 
 
 class TestLegacyActionStagesKeepTheirBehaviour:

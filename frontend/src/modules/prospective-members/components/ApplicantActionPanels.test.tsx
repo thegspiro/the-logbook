@@ -220,4 +220,37 @@ describe('stage requirement hints', () => {
 
     expect(screen.getByText(/cannot advance until the election closes/)).toBeInTheDocument();
   });
+
+  // A meeting stage that names its event is an attendance requirement the
+  // server enforces on Advance too, so the hint has to state it before the
+  // click rather than leave the refusal to explain it afterwards.
+  it('states the attendance requirement for a meeting stage that names its event', () => {
+    onStage('meeting', { meeting_type: 'business_meeting', linked_event_type: 'business_meeting' });
+
+    expect(screen.getByText(/must be checked in at this stage’s event before they can advance/)).toBeInTheDocument();
+  });
+
+  it('adds the auto-advance behaviour only when that box is ticked', () => {
+    onStage('meeting', {
+      meeting_type: 'business_meeting',
+      linked_event_type: 'business_meeting',
+      auto_advance: true,
+    });
+
+    expect(screen.getByText(/advances on its own/i)).toBeInTheDocument();
+  });
+
+  it('says nothing for a meeting stage that names no event', () => {
+    // The stage builder's default shape: an arrangement nothing records, so
+    // the coordinator's word is still the only evidence there can be.
+    onStage('meeting', { meeting_type: 'chief_meeting', meeting_description: '' });
+
+    expect(screen.queryByText(/checked in/)).toBeNull();
+  });
+
+  it('treats a pinned event id alone as naming an event', () => {
+    onStage('meeting', { meeting_type: 'chief_meeting', linked_event_id: 'evt-1' });
+
+    expect(screen.getByText(/must be checked in at this stage’s event before they can advance/)).toBeInTheDocument();
+  });
 });
