@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2616](https://github.com/thegspiro/the-logbook/pull/2616)
+(Feature 11, Inventory, pass 6) went fully green (all 17 checks including
+`CI Success` `success`; `mergeable_state: clean`) and merged (squash,
+commit `635d8aa`, confirmed on `main` via `git fetch`). One CI wrinkle along
+the way: the `check_run.completed` failure GitHub first reported was a
+stale-superseded-run false failure on this PR's first commit (`8426527`) —
+that run's jobs were cancelled outright when the follow-up
+"record PR number" push (`9c76f94`) superseded it mid-run, so its
+`CI Success` gate correctly reported failure for jobs that never ran to
+completion. Documented in a PR comment rather than treated as a real
+failure; the current head's own fresh run went green ~24 minutes later with
+no fix needed. Rotation row 11 → ✅. Next: Feature 12 (Facilities).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 6, PR #2616, pending merge), preserved for history</summary>
+
 **Feature 11 (Inventory), pass 6** — PR [#2616](https://github.com/thegspiro/the-logbook/pull/2616), branch
 `claude/security-review-inv-11-pass6`. **Watchdog iteration:** the
 `/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) had
@@ -32,6 +48,8 @@ inventory/labels): flake8/black/isort clean, `validate_migrations.py
 frontend tests passed, typecheck/lint clean. See
 [`INV-11-inventory.md`](./INV-11-inventory.md) pass 6 for detail. Rotation
 row 11 → ✅ (pending PR merge). Next: Feature 12 (Facilities).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 6, PR #2611, merged), preserved for history</summary>
@@ -16646,6 +16664,26 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-16 — Feature 11 (Inventory, pass 6) — PR #2616 merged
+
+Follow-up watchdog check-in on the PR opened by the prior iteration below.
+PR #2616 went fully green (all 17 checks including the `CI Success` gate
+`success`; `mergeable_state: clean`) and merged (squash, commit `635d8aa`,
+confirmed on `main` via `git fetch`). Rotation row 11 → ✅. Next: Feature 12
+(Facilities).
+
+One CI wrinkle handled along the way, worth recording since it will recur:
+a `check_run.completed` webhook reported `CI Success` as `failure` on this
+PR's _first_ commit (`8426527`). Reading that job's own log showed every
+dependent job (`backend-lint`, `backend-test`, `frontend-checks`, etc.)
+listed as `cancelled`, not `failure` — the follow-up "record PR number"
+push (`9c76f94`) had superseded the run mid-flight, GitHub Actions cancelled
+its jobs, and the gate correctly reported failure for a run whose jobs
+never finished. Documented in a PR comment (not a fix, since there was
+nothing broken) rather than spending the one permitted CI-flake re-run on
+it. The actual head's own fresh run went green in full about 24 minutes
+later with zero pushes needed.
 
 ### 2026-09-16 — Feature 11 (Inventory, pass 6) — 0 fixed, 0 new findings — watchdog iteration
 
