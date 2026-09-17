@@ -16,17 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2630](https://github.com/thegspiro/the-logbook/pull/2630)
-(Feature 16, Events & requests, pass 6 — near-zero-delta re-verification, 0
-fixed, 0 new findings; standing flags EV-23, EV-26 both re-confirmed
-unchanged) went fully green (17/17 checks including `CI Success`;
-`mergeable_state: clean`; no unresolved review threads — only the
-informational Codex usage-limit comment and this watchdog's own explanation
-of a stale-superseded-run false failure on an earlier commit, `50a3d97`,
-superseded by the actual head `84522c9` when a follow-up commit landed
-moments later). This scheduled watchdog check merged it directly (squash,
-`expectedHeadSha` pinned to `84522c9`). Merge commit `f39a6c4` confirmed on
-`main`. Rotation row 16 stays ✅. Next: Feature 17 (Training core).
+**None.** PR [#2631](https://github.com/thegspiro/the-logbook/pull/2631)
+(`claude/security-review-events-requests-pass6`) was a duplicate of #2630: it
+branched from `main` at `7244946` — right after PR #2629 merged — moments
+before PR #2630 (the real Feature 16 pass 6 review) landed at `f39a6c4`. Both
+reviewed the same delta (`49a7253ce`) against the same pass 5 baseline and
+reached the same result. #2630's write-up is already merged and #2632 had
+already recorded that merge and cleared this row to "None," so this watchdog
+check closed #2631 with an explanatory comment rather than merging a
+duplicate Pass 6 section into `EV-16-events-requests.md` — same precedent as
+closing duplicate PR #2617 (recorded in PR #2619). Rotation row 16 stays ✅.
+Checked for an in-progress Feature 17 (Training core) branch or PR before
+standing down: `git branch -r` showed only stale `-close` remnants and one
+unrelated branch, `list_pull_requests` (state=open) returned `[]`. Not yet
+over an hour past the 30-minute cadence since #2630 merged, so this watchdog
+did not pick up Feature 17 itself this cycle — doing so pre-emptively is what
+produced the #2630/#2631 duplicate in the first place. Next check will start
+Feature 17 directly if the loop session still hasn't by then.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 6, PR #2630, pending merge), preserved for history</summary>
@@ -24513,3 +24519,38 @@ usage-limit comment and this watchdog's own explanation above) — squash-
 merged directly (`expectedHeadSha` pinned to `84522c9`). Merge commit
 `f39a6c4` confirmed on `main`. Rotation row 16 stays ✅. Next: Feature 17
 (Training core) — not yet started as of this check.
+
+### 2026-09-17 — Duplicate PR #2631 closed (Feature 16, Events & requests, pass 6)
+
+Routine 30-minute check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). Found two open PRs instead of the usual
+one: PR #2631 (`claude/security-review-events-requests-pass6`) and PR #2632
+(`claude/security-review-record-ev16-merge`).
+
+Investigation (`git log`, `git rev-list`, both PRs' `get_files`) showed #2631
+was cut from `main` at `7244946` (right after PR #2629's merge), independently
+re-doing the Feature 16 pass 6 review that PR #2630 had already completed and
+merged moments later at `f39a6c4` — the same reviewed commit (`49a7253ce`),
+the same seven-dimension analysis, the same result (0 fixed, 0 new findings,
+EV-23/EV-26 re-verified unregressed). #2632 was the legitimate, up-to-date
+follow-up: based on `f39a6c4` (current `main` at the time), it only recorded
+#2630's merge and cleared the Open PR row. #2632's CI was fully green
+(17/17 checks) and `mergeable_state: clean`, so this watchdog merged it
+directly (squash, `expectedHeadSha` pinned to `f56d9662e`; merge commit
+`985ad3752` confirmed on `main`).
+
+Closed #2631 with a comment explaining the duplication rather than merging it
+— doing so would have appended a second, redundant "Pass 6" section to
+`EV-16-events-requests.md` and reset the Open PR / rotation-16 state that
+#2632 had just correctly settled. Same precedent as the earlier duplicate
+PR #2617 (closed and recorded via PR #2619).
+
+Before standing down, re-confirmed no in-progress Feature 17 (Training core)
+work exists yet: `git fetch origin --prune` clean, `git branch -r` showed
+only stale `-close` remnants from prior passes plus one unrelated branch, and
+`list_pull_requests` (state=open) returned `[]`. Elected not to pick up
+Feature 17 directly this cycle — PR #2630 merged well within the last 30-minute
+window, so the loop session has not yet had a full cadence to start it on its
+own, and pre-emptively starting it is the same race that produced the
+#2630/#2631 duplicate. Next check will start Feature 17 directly if the loop
+session still hasn't picked it up by then.
