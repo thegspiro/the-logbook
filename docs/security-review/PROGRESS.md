@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2628](https://github.com/thegspiro/the-logbook/pull/2628)** — branch
+`claude/security-review-feature15-pass6`, Feature 15 (Scheduling), pass 6.
+Opened and subscribed. **Watchdog iteration:** the
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) had
+produced no commit and had no open security-review PR for roughly 1h30m past
+its 30-minute cadence, with `PROGRESS.md`'s Open PR row already reading
+"None." / "Next: Feature 15 (Scheduling)" and no
+`claude/security-review-feature15-pass6*` branch in flight (only a stale
+pass-5 `-close` branch). This watchdog picked up Feature 15 directly,
+mirroring the Feature 08–14 precedents below.
+
+**Zero-delta re-verification:** `git diff --stat 6982a99e5..origin/main`
+(`6982a99e5` = pass 5's merge commit, PR #2570) across all thirteen
+declared/adjacent backend files returns empty despite 169 intervening
+commits; no new migration touches a scheduling table; all three standing
+flags (SCH-9, SCH-10, SCH-13) re-read directly at their current line numbers
+and confirmed unchanged. Two frontend files did change
+(`CallTypesCard.tsx`, `ShiftSettingsPanel.tsx` — a call-tracking-mode toggle
+became a three-option radio group surfacing the pre-existing, already-
+validated `off` mode); both read in full and found to introduce no new
+surface — same endpoint, same permission gate, no new client-writable field.
+**0 fixed, 0 flagged, 0 new findings.** Full completion gate: flake8/black/
+isort clean on all thirteen backend files, `validate_migrations.py --strict`
+unchanged at 444 revisions/single head, 1301 scheduling-scoped backend tests
+passed (1 pre-existing skip, identical count to pass 5), frontend typecheck/
+lint clean, 56 scoped frontend tests passed. Full write-up:
+[`SCH-15-scheduling.md`](./SCH-15-scheduling.md)'s **Pass 6** section.
+Rotation row 15 → ✅ (pending PR merge). Next: Feature 16 (Events &
+requests).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 6, PR #2625, merged), preserved for history</summary>
+
 **None.** PR [#2625](https://github.com/thegspiro/the-logbook/pull/2625)
 (Feature 14, Equipment check & shifts, pass 6 — true zero-delta
 re-verification, 0 fixed, 0 new findings; standing fixes EC-16, EC-6, EC-13,
@@ -16759,7 +16792,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -16786,6 +16819,20 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-17 — Feature 15 (Scheduling, pass 6) — 0 fixed, 0 flagged, 0 new findings — PR #2628 opened
+
+Watchdog pickup (see this file's Open PR section for the full Step 0 /
+delta-check / completion-gate detail) after the `/loop 30m /security-review`
+session went ~1h30m past its cadence with no commit and no open PR. Zero-delta
+across all thirteen declared backend files since pass 5's merge (`6982a99e5`,
+PR #2570); two frontend files changed (a call-tracking-mode toggle becoming a
+three-option radio group) reviewed and found to introduce no new surface.
+Standing flags SCH-9, SCH-10, SCH-13 all re-confirmed unchanged. Full
+completion gate green (backend linters, migration chain, 1301 scoped backend
+tests, frontend typecheck/lint, 56 scoped frontend tests). Full write-up:
+`SCH-15-scheduling.md`'s **Pass 6** section. Rotation row 15 → ✅ (pending PR
+merge). Next: Feature 16 (Events & requests).
 
 ### 2026-09-17 — Feature 14 (Equipment check & shifts, pass 6)'s PR #2625 merged, watchdog recorded it
 

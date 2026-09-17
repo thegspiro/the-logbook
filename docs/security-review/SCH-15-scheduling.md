@@ -1829,3 +1829,104 @@ not this one.
 | `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type"` | ✅ 1301 passed, 1 skipped (pre-existing optional-dep skip)                                        |
 | `pytest tests/` (full backend suite)                                                                          | ✅ 12577 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep/API-contract-opt-in skips) |
 | `npm run typecheck` / `npx eslint .`                                                                          | ➖ not run — no frontend file touched this pass                                                   |
+
+## Pass 6 (2026-09-17) — 0 fixed, 0 flagged, 0 new findings; all standing flags re-confirmed
+
+**Watchdog iteration.** The `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) had produced no commit and had no open
+security-review PR for roughly 1h30m past its 30-minute cadence at the time
+this iteration's Step 0 was checked — `git fetch origin --prune` clean,
+`list_pull_requests` (state=open) → `[]`, and `PROGRESS.md`'s Open PR row
+already read "None." with the Feature 14 (Equipment check & shifts) pass 6
+closure note beneath it, naming "Next: Feature 15 (Scheduling)" explicitly. No
+`claude/security-review-feature15-*` branch was in flight (only a stale
+`-close` branch from pass 5's own closure). This watchdog picked up Feature
+15 directly, mirroring the Feature 08–14 pass-6/7 precedents recorded
+elsewhere in `PROGRESS.md`.
+
+**Baseline:** `6982a99e5`, the merge commit of PR #2570 (pass 5's landing
+point, confirmed from `PROGRESS.md`'s own log entry for that merge rather
+than assumed).
+
+### Delta check
+
+`git diff --stat 6982a99e5..origin/main` across all thirteen declared/adjacent
+backend files (`scheduling.py`, `scheduling_module_config.py`,
+`calcom_sync.py`, `scheduling_service.py`,
+`scheduling_module_config_service.py`, `standing_shift_service.py`,
+`call_tracking_service.py`, `shift_eligibility_service.py`,
+`shift_completion_service.py`, `calcom_service.py`,
+`app/mcp/tools/scheduling.py`, `schemas/scheduling.py`,
+`models/call_tracking.py`) returns **empty for every one of them** despite 169
+intervening commits — confirmed by `git diff --stat`, not inferred from an
+unchanged file listing. No new migration touches a scheduling table (`git log
+6982a99e5..origin/main -- backend/alembic/versions/` returns no commits at
+all in this range; chain re-validated at a single head, 444 revisions,
+unchanged from pass 5). flake8/black/isort re-run clean on all thirteen files.
+
+**Frontend churn: two files, both reviewed, both safe.**
+`git diff --stat 6982a99e5..origin/main -- frontend/src/modules/scheduling/
+frontend/src/pages/scheduling/` shows real changes in exactly
+`CallTypesCard.tsx` and `ShiftSettingsPanel.tsx` (plus their own test files,
+already updated by the same commits). Both diffs read in full:
+
+- `CallTypesCard.tsx` — copy-only change to the "these take effect when…"
+  notice, now naming which of the three call-tracking modes is active rather
+  than just "off". No new prop, no new API call, no `dangerouslySetInnerHTML`.
+- `ShiftSettingsPanel.tsx` — replaces the two-state "record a call count"
+  toggle with a three-option `radiogroup` (`detailed` / `count_only` / `off`),
+  surfacing the `off` mode the backend has accepted since call tracking
+  shipped (`CallTrackingSettings.mode` validates against
+  `CallTrackingMode.ALL`, read directly at `schemas/scheduling.py:327-339` —
+  `off` is already a member, not a new value this UI change invents). The
+  write still routes through `saveFeature` →
+  `schedulingService.updateFeatureSettings` → the same pre-existing
+  `scheduling_module_config` PUT route (`scheduling.manage`-gated, unchanged),
+  confirmed by reading `saveFeature`'s body directly rather than assuming from
+  the diff. No new endpoint, no new client-writable field, no
+  `window.confirm`/`alert`/`prompt`, no banned locale method, no `date-fns`
+  import, no re-enabled click-outside-scrim.
+
+### Standing flags re-confirmed (re-read directly, not inferred from the empty diff)
+
+- **SCH-9 (fixed)** — `_all_users_in_org` (`scheduling_service.py:1879`) is
+  still called from both call-write paths (`:3096`, `:3166`); unchanged since
+  pass 1.
+- **SCH-10 (flagged, cross-cutting, unchanged)** — `calcom_service.py`
+  (`app/services/integration_services/calcom_service.py`) is byte-identical to
+  pass 5; `assert_outbound_url_safe` still guards the one outbound call at
+  `:123`. `docs/KNOWN_LIMITATIONS.md`'s entry remains accurate. Not
+  re-fixed here for the same reason every prior pass gave: closing it is a
+  cross-cutting transport change, not a scheduling-scoped one.
+- **SCH-13 (fixed, all four rounds)** — `_reject_deleting_a_used_call_type`
+  (`scheduling.py:3703`, called from `:3894`) and the
+  organization-then-report/call lock ordering in `finalize_shift` (`:7803`)
+  and `save_closeout_calls` (`:8359`) are unchanged since pass 5.
+  `tests/test_call_type_deletion_race.py` re-ran clean as part of the scoped
+  suite below.
+
+### No new findings
+
+Worked against all seven `CHECKLIST.md` dimensions for the delta: zero backend
+line changed, so authentication, authorization, tenant isolation, injection,
+data exposure, abuse resistance and schema/migration integrity are all
+unchanged from pass 5's own analysis. The two frontend files reviewed above
+introduce no new surface in any dimension.
+
+### Guard tests
+
+None added — no backend line changed, and the frontend change is a pure
+UI/copy change surfacing an already-validated, already-gated backend value.
+
+## Completion gate (pass 6)
+
+| Check                                                                                                         | Result                                                                                 |
+| ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `flake8` (thirteen feature files)                                                                             | ✅ 0 violations                                                                        |
+| `black --check` (thirteen feature files)                                                                      | ✅ 13 files unchanged                                                                  |
+| `isort --check-only` (thirteen feature files)                                                                 | ✅ clean (installed, not skipped)                                                      |
+| `python3 scripts/validate_migrations.py --strict`                                                             | ✅ single head, 444 revisions (unchanged from pass 5)                                  |
+| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type"` | ✅ 1301 passed, 1 skipped (pre-existing optional-dep skip) — identical count to pass 5 |
+| `npm run typecheck`                                                                                           | ✅ clean                                                                               |
+| `npm run lint`                                                                                                | ✅ clean                                                                               |
+| `npx vitest run CallTypesCard.test.tsx ShiftSettingsPanel.test.tsx`                                           | ✅ 56 passed                                                                           |
