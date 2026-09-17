@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2625](https://github.com/thegspiro/the-logbook/pull/2625)
+(Feature 14, Equipment check & shifts, pass 6 — true zero-delta
+re-verification, 0 fixed, 0 new findings; standing fixes EC-16, EC-6, EC-13,
+LIKE escaping and CSV export re-confirmed unchanged at their current line
+numbers) went fully green (17/17 checks including the `CI Success` gate;
+`mergeable_state: clean`; no unresolved review threads — only the
+informational Codex usage-limit comment and this watchdog's own explanation
+of a stale-superseded-run false failure on the PR's first commit, which a
+follow-up push superseded before CI finished) and sat idle with nothing
+further pending, so this scheduled 30-minute watchdog check merged it
+directly (squash, `expectedHeadSha` pinned to `3ce7f0940`). Merge commit
+`1527d5057` confirmed on `main` via `git fetch`. Rotation row 14 → ✅.
+Next: Feature 15 (Scheduling), pass 6.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 6, PR #2625, pending merge), preserved for history</summary>
+
 **PR [#2625](https://github.com/thegspiro/the-logbook/pull/2625)** — branch
 `claude/security-review-feature14-pass6`, Feature 14 (Equipment check &
 shifts), pass 6. **Watchdog iteration:** `docs/security-review/PROGRESS.md`'s
@@ -41,6 +58,8 @@ NFC) to ✅, which had merged as PR #2623 without the table being updated.
 Full write-up: [`EC-14-equipment-check-shifts.md`](./EC-14-equipment-check-shifts.md)'s
 **Pass 6** section. Subscribed to PR activity. Next: tend #2625 to green and
 merged, then Feature 15 (Scheduling).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 6, PR #2623, before it merged), preserved for history</summary>
@@ -16741,7 +16760,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⏳     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
@@ -24341,3 +24360,29 @@ further pending, so this watchdog check merged it directly (squash,
 `expectedHeadSha` pinned to `645548b1`). Merge commit `7ecac1cec` confirmed
 on `main` via `git fetch`. Rotation row 13 stays ✅. Next: Feature 14
 (Equipment check & shifts), pass 6 — not yet started as of this check.
+
+### 2026-09-17 — Feature 14 (Equipment check & shifts, pass 6)'s PR #2625 merged, watchdog recorded it
+
+Routine 30-minute check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). That loop session had produced no
+commit and had no open security-review PR for well over an hour past its
+30-minute cadence — `PROGRESS.md`'s Open PR row already carried PR #2625
+(Feature 14, opened by a prior watchdog iteration) with nothing further
+pending on it, so this check went straight to tending that PR per the "one
+PR at a time" rule rather than starting new work.
+
+`pull_request_read` (`get`) showed `mergeable_state: clean`; `get_check_runs`
+showed all 17/17 checks green (`CI Success` included); `get_reviews`
+returned `[]` — no pending review, no unresolved thread beyond the
+informational Codex usage-limit comment and this watchdog's own
+stale-superseded-run explanation on the PR's first commit (documented in a
+prior comment on the PR itself, same pattern as the Feature 12/13 entries
+above). Nothing further was pending, so this watchdog check merged it
+directly (squash, `expectedHeadSha` pinned to `3ce7f0940`). Merge commit
+`1527d5057` confirmed on `main` via `git fetch`.
+
+Updated `docs/security-review/PROGRESS.md`: Open PR row set to "None" with
+the merge summary, the prior in-flight note moved into a "Superseded"
+details block for history, and rotation row 14 corrected to ✅ (this table
+had been showing ⏳ despite the PR going green). Next: Feature 15
+(Scheduling), pass 6 — not yet started as of this check.
