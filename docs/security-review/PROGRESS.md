@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2628](https://github.com/thegspiro/the-logbook/pull/2628)
+(Feature 15, Scheduling, pass 6 — zero-delta re-verification, 0 fixed, 0 new
+findings; standing flags SCH-9, SCH-10, SCH-13 all re-confirmed unchanged)
+went fully green (17/17 checks including the `CI Success` gate;
+`mergeable_state: clean`; no unresolved review threads — only the
+informational Codex usage-limit comment and this watchdog's own explanation
+of a stale-superseded-run false failure on the PR's first commit) and sat
+with nothing further pending, so this watchdog check merged it directly
+(squash, `expectedHeadSha` pinned to `30c77cdcf`). Merge commit `15f5f9781`
+confirmed on `main` via `git fetch`. Rotation row 15 stays ✅. Next: Feature
+16 (Events & requests).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 6, PR #2628, before it merged), preserved for history</summary>
+
 **PR [#2628](https://github.com/thegspiro/the-logbook/pull/2628)** — branch
 `claude/security-review-feature15-pass6`, Feature 15 (Scheduling), pass 6.
 Opened and subscribed. **Watchdog iteration:** the
@@ -16819,6 +16834,16 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-17 — Feature 15 (Scheduling, pass 6)'s PR #2628 merged, watchdog recorded it
+
+PR #2628 went fully green (17/17 checks including the `CI Success` gate;
+`mergeable_state: clean`) shortly after this watchdog's explanatory comment
+about the stale-superseded-run false failure on the PR's first commit, with
+no unresolved review threads. Sat with nothing further pending, so this
+30-minute watchdog check merged it directly (squash, `expectedHeadSha`
+pinned to `30c77cdcf`). Merge commit `15f5f9781` confirmed on `main` via
+`git fetch`. Rotation row 15 stays ✅. Next: Feature 16 (Events & requests).
 
 ### 2026-09-17 — Feature 15 (Scheduling, pass 6) — 0 fixed, 0 flagged, 0 new findings — PR #2628 opened
 
