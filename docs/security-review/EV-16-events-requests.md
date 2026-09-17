@@ -13,6 +13,136 @@ read, extracted from `event_requests.py`)
 
 ---
 
+## Pass 6 (2026-09-17) — 0 fixed, 0 new findings, real (non-zero) delta reviewed, EV-23/EV-26 re-verified unregressed — watchdog iteration
+
+**Watchdog iteration.** The `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) had produced no commit and had no open
+security-review PR for roughly 1h past its 30-minute cadence, with
+`PROGRESS.md`'s Open PR row already reading "None." / "Next: Feature 16
+(Events & requests)" and no `claude/security-review-feature16*` branch in
+flight (`git fetch origin --prune` clean; `git branch -r` showed only stale
+`-close` remnants from long-merged passes and one unrelated pre-rotation
+`security-review/equipment-check-shifts-2026-09-09` branch).
+`list_pull_requests` (state=open) returned `[]`. This watchdog picked up
+Feature 16 directly, mirroring the Feature 12–15 precedents above.
+
+**Scoped since pass 5's merge:** `5836dd9d4` (PR #2573, squash). Not a
+zero-delta pass — `git diff --stat` across all eleven declared/adjacent files
+shows real churn in two: `api/v1/endpoints/events.py` (+8/-4, one function
+body) and `services/event_service.py` (+75, new). `event_requests.py`,
+`event_request_service.py`, `models/event.py`, `models/event_request.py`,
+`utils/event_attachments.py`, `mcp/tools/events.py`, `mcp/tools/writes.py`,
+`schemas/event.py`, `schemas/event_request.py`, and `frontend/src/modules/events`
+are all byte-identical to pass 5 (confirmed per-file, not inferred). No new
+migration touches an events table (`git log` over `backend/alembic/versions/`
+in range is empty), matching `validate_migrations.py --strict`'s unchanged
+444-revision/single-head count.
+
+**The delta is one commit, `49a7253ce` ("advance a meeting stage on finalized
+attendance"), and it is primarily Membership-Pipeline/Scheduled-Tasks owned**
+(`guest_check_in_service.py`, `membership_pipeline_service.py`,
+`scheduled_tasks.py`'s new `run_prospect_attendance_advance` task,
+`.env.example.full`'s new `PIPELINE_ATTENDANCE_SETTLE_DAYS` setting) — it
+touches this feature's own two declared backend files only incidentally, by
+way of the finalize/check-in hooks events.py and event_service.py already
+own. Read in full anyway, matching pass 5's stance on the Forms-owned code
+touching this feature's functions ("this feature's own write paths,
+regardless of age/ownership"):
+
+- **`events.py`'s `check_in_external_attendee`** — the only change is a
+  deletion: the inline `try_advance_attendance_pipeline` call after a
+  staff-entered check-in is gone, replaced by a comment. This _removes_
+  surface (one fewer place a pipeline side-effect fires off an unauthenticated-
+  adjacent-but-permission-gated write) rather than adding any; the route's own
+  auth/permission/org-scoping (`Event.organization_id ==
+current_user.organization_id` resolving the event, `events.py:3230-3237`,
+  re-read at its current lines) is unchanged. No new route, no changed
+  decorator — confirmed by an empty `git diff` on every `^[+-]@router` line in
+  the file.
+- **`event_service.py`'s new `attendance_is_settled` and
+  `_advance_prospects_after_finalize`** — pure business logic (a datetime
+  comparison against a config int, and a best-effort call into
+  `GuestCheckInService`) called from both exits of `finalize_event_attendance`.
+  No new SQL, no new client input, no new route. `_advance_prospects_after_finalize`
+  wraps its call in `try/except Exception: logger.exception(...)` — a pipeline
+  failure cannot roll back or fail the finalize, matching the same
+  best-effort-after-commit discipline this feature already uses for
+  `link_prospect_to_event` a few hundred lines away.
+- **`GuestCheckInService.advance_prospects_for_settled_event`** (not this
+  feature's file, read because `event_service.py` now calls it) — its
+  `EventExternalAttendee` query filters both `event_id == str(event.id)`
+  **and** `organization_id == str(event.organization_id)` explicitly
+  (14a/14c: the org filter is not implied by the event_id filter alone), and
+  the per-attendee `try_advance_attendance_pipeline` call passes
+  `organization_id=str(event.organization_id)` — the event's own org, never a
+  client-supplied value. No cross-tenant surface introduced.
+- **`run_prospect_attendance_advance`** (not this feature's file, read for the
+  same reason) — iterates all active orgs, then queries
+  `ProspectiveMember`/`MembershipPipelineStep` scoped to
+  `ProspectiveMember.organization_id == org_id` per iteration, commits per-org
+  (the CRON-1 discipline — one org's failure can't roll back or poison the
+  session for the next), and is driven from the bounded "active applicants on
+  a meeting stage" set rather than an unbounded event lookback. No abuse-
+  resistance gap for this feature's own concern (event data is only read
+  through the already-org-scoped `event` object passed in from
+  `finalize_event_attendance`).
+- **`.env.example.full`'s new `PIPELINE_ATTENDANCE_SETTLE_DAYS`** — a plain
+  int with a documented default (7), not a secret, not events-owned config.
+
+**Route count:** `grep -c '^@router\.' events.py` now reads 56 (pass 5's
+header cited 55 — a stale figure, not a regression: `git diff` shows no
+`@router` line added or removed in this range, so the two counts describe the
+same route set and this pass records the correct current count rather than
+carrying the old one forward). `event_requests.py` unchanged at 23.
+
+### Re-verified from pass 5, not re-derived
+
+- **EV-23 still open, unregressed.** `rsvp_to_series` still passes
+  `override=True` unconditionally, re-read at its current line
+  (`event_service.py:1870`, comment intact). Left **FLAGGED** — the product
+  decision on what "the" phase-gate warning means for a series is still
+  outstanding.
+- **EV-26 still open, unregressed.** `LocationService.check_overlapping_events`
+  (`location_service.py:286`) re-read in full: still a plain `SELECT` with no
+  `.with_for_update()`. Left **FLAGGED**, same cross-cutting reasoning as pass
+  5 — the fix needs a single pass across all five call sites (Events,
+  Training, Scheduling) plus a deadlock-ordering survey, out of scope for a
+  single-feature review. Still mirrored in `docs/KNOWN_LIMITATIONS.md`.
+- **RSVP capacity locking (Pitfall #27), both halves** — re-read at current
+  line numbers in `create_or_update_rsvp` and `promote_from_waitlist`,
+  unchanged.
+- **`ondelete="SET NULL"` nullability** — `models/event.py`/`event_request.py`
+  byte-identical to pass 5; re-confirmed via that identity rather than a fresh
+  grep.
+- **No new CSV export, no `.like()`/`.ilike()` without escaping, no new
+  unauthenticated route** — re-confirmed by grep across the full diff.
+
+## Findings (pass 6)
+
+None. The one real code change touching this feature's declared scope
+(`49a7253ce`) was reviewed against all seven checklist dimensions above and
+introduces no new finding: it removes a hook rather than adding one in
+`events.py`, and its new `event_service.py` logic is a same-org, best-effort,
+exception-swallowing call into already-org-scoped code. Both standing flags
+(EV-23, EV-26) re-verified unregressed.
+
+## Completion gate (pass 6)
+
+| Check                                                                                         | Result                                                                                                                    |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                 | ✅ 0 violations                                                                                                           |
+| `black --check app/ tests/ alembic/`                                                          | ✅ 1599 files unchanged                                                                                                   |
+| `isort --check-only app/ tests/ alembic/`                                                     | ✅ clean                                                                                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                             | ✅ single head, 444 revisions (unchanged from pass 5)                                                                     |
+| `pytest tests/ -k "event"`                                                                    | ✅ 937 passed, 1 skipped (pre-existing, pywebpush) — up from 924 at pass 5, matching the 9 new tests `49a7253ce` added    |
+| `pytest tests/test_pipeline_stage_auto_advance.py tests/test_bulk_advance_attendance_gate.py` | ✅ 62 passed — the two gate suites the reviewed commit itself touches                                                     |
+| `tsc --noEmit` / `eslint .`                                                                   | not run — no frontend file touched by this pass's own changes (`frontend/src/modules/events` is byte-identical to pass 5) |
+
+No file was modified in this pass — the reviewed delta was already correct,
+so there was nothing to fix.
+
+---
+
 ## Pass 5 (2026-09-15) — 0 fixed, 1 new finding flagged (EV-26, P2/P3, cross-cutting), EV-23 re-flagged, full re-verification against pass 4
 
 **Scoped since pass 4's merge:** `32763ddbe` (PR #2451). Real churn in five
