@@ -16,6 +16,47 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2631](https://github.com/thegspiro/the-logbook/pull/2631)** — branch
+`claude/security-review-events-requests-pass6`, Feature 16 (Events &
+requests), pass 6. Opened and subscribed. **Watchdog iteration:** the
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) had
+produced no commit and had no open security-review PR for roughly 1h past its
+30-minute cadence, with `PROGRESS.md`'s Open PR row already reading "None." /
+"Next: Feature 16 (Events & requests)" and no
+`claude/security-review-feature16*` branch in flight (`git fetch origin
+--prune` clean; `git branch -r` showed only stale `-close` remnants and one
+unrelated pre-rotation branch). `list_pull_requests` (state=open) returned
+`[]` — confirmed independently before proceeding. This watchdog picked up
+Feature 16 directly, mirroring the Feature 12–15 precedents below.
+
+**Not zero-delta:** real churn since pass 5's merge (`5836dd9d4`, PR #2573)
+in `events.py` (+8/-4) and `event_service.py` (+75, new), caused by
+`49a7253ce` ("advance a meeting stage on finalized attendance") — primarily
+Membership-Pipeline/Scheduled-Tasks owned but touching this feature's
+finalize/check-in hooks incidentally. Every other declared/adjacent file
+(`event_requests.py`, `event_request_service.py`, both models, both schemas,
+both MCP tool files, `frontend/src/modules/events`) is byte-identical to pass 5. Reviewed the touching delta in full against all seven checklist
+dimensions: `events.py`'s only change removes a pipeline-advance hook (less
+surface, not more); the new `event_service.py` logic is same-org,
+best-effort, and calls into already-org-scoped code
+(`GuestCheckInService.advance_prospects_for_settled_event` filters both
+`event_id` and `organization_id` explicitly). **0 fixed, 0 new findings.**
+Both standing flags re-verified unregressed at their current line numbers:
+EV-23 (series RSVP phase-gate override, product decision pending) and EV-26
+(room double-booking, no row lock, cross-cutting — mirrored in
+`docs/KNOWN_LIMITATIONS.md`). Full write-up:
+[`EV-16-events-requests.md`](./EV-16-events-requests.md)'s **Pass 6** section.
+Completion gate: flake8/black/isort clean on app/tests/alembic,
+`validate_migrations.py --strict` unchanged at 444 revisions/single head, 937
+passed/1 skipped on `pytest -k "event"` (up from 924 at pass 5, matching the 9
+new tests the reviewed commit added), 62 passed on the two gate suites that
+commit touches; no frontend file changed so typecheck/lint were not run.
+Rotation row 16 → ⏳ (pending PR merge). Next once this merges: Feature 17
+(Training core).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2628's merge, Feature 15 pass 6 closure, confirming the rotation clear for Feature 16), preserved for history</summary>
+
 **None.** PR [#2628](https://github.com/thegspiro/the-logbook/pull/2628)
 (Feature 15, Scheduling, pass 6 — zero-delta re-verification, 0 fixed, 0 new
 findings; standing flags SCH-9, SCH-10, SCH-13 all re-confirmed unchanged)
@@ -24448,3 +24489,52 @@ further pending, so this watchdog check merged it directly (squash,
 `expectedHeadSha` pinned to `645548b1`). Merge commit `7ecac1cec` confirmed
 on `main` via `git fetch`. Rotation row 13 stays ✅. Next: Feature 14
 (Equipment check & shifts), pass 6 — not yet started as of this check.
+
+### 2026-09-17 — Feature 16 (Events & requests, pass 6) — 0 fixed, 0 new findings, real delta reviewed — watchdog iteration, PR #2631 opened
+
+Watchdog check-in on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). That loop session had produced no
+commit and had no open security-review PR for roughly 1h past its 30-minute
+cadence, with `PROGRESS.md`'s own Open PR row already reading "None." /
+"Next: Feature 16 (Events & requests)" and no in-progress
+`claude/security-review-feature16*` branch. `git fetch origin --prune`
+clean, `git branch -r` showed only stale `-close` remnants from long-merged
+passes and one unrelated pre-rotation branch, `list_pull_requests`
+(state=open) returned `[]` — confirmed independently before proceeding, per
+Step 0. This watchdog picked the feature up directly per Step 1, mirroring
+the Feature 12–15 pass-6 precedents above.
+
+Loaded prior art first (`CHECKLIST.md`; `SEC-00-cross-cutting-baseline.md`'s
+pass 6, 2026-09-15 — all 13 standing sweep classes clean; `EV-16-events-
+requests.md`'s pass 5 findings — EV-23 open, EV-26 flagged). Baseline
+`5836dd9d4` (pass 5's merge, PR #2573). Unlike the last several passes in
+this rotation, this was **not** a zero-delta re-verification: `git diff
+--stat` across all eleven declared/adjacent files showed real churn in two
+(`events.py` +8/-4, `event_service.py` +75 new), caused by commit
+`49a7253ce` ("advance a meeting stage on finalized attendance") — primarily
+a Membership-Pipeline/Scheduled-Tasks feature, touching this feature's
+finalize/check-in hooks incidentally. Read the full commit (including the
+Membership-Pipeline- and Scheduled-Tasks-owned files it also touches,
+`guest_check_in_service.py`, `membership_pipeline_service.py`,
+`scheduled_tasks.py`'s new `run_prospect_attendance_advance` task) against
+all seven checklist dimensions: `events.py`'s only change removes a
+pipeline-advance hook rather than adding surface; `event_service.py`'s new
+`attendance_is_settled`/`_advance_prospects_after_finalize` are same-org,
+best-effort (exceptions swallowed and logged, never rolling back the
+finalize), and call into code that filters both `event_id` and
+`organization_id` explicitly. No new route (confirmed via an empty `git
+diff` on every `@router` line), no new finding. Both standing flags
+re-verified unregressed at their current line numbers: EV-23
+(`event_service.py:1870`) and EV-26 (`location_service.py:286`, still no
+`.with_for_update()`).
+
+**0 fixed, 0 new findings.** Full write-up: `EV-16-events-requests.md`'s
+**Pass 6** section. Completion gate: flake8/black/isort clean over `app/
+tests/ alembic/`; `validate_migrations.py --strict` clean, unchanged at 444
+revisions/single head; `pytest tests/ -k "event"` 937 passed, 1 skipped
+(up from 924 at pass 5, matching the 9 new tests the reviewed commit
+added); the two gate suites that commit touches (62 tests) also passed; no
+frontend file changed since pass 5 so typecheck/lint were not run. Opened
+PR #2631 (`claude/security-review-events-requests-pass6`) and subscribed.
+Rotation row 16 → ⏳ (pending PR merge). Next once this merges: Feature 17
+(Training core), pass 6.
