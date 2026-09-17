@@ -12,7 +12,12 @@ async function readDistFile(file) {
 
 async function assertDistAsset(relativePath, label) {
   assert(!relativePath.startsWith('/') && !relativePath.includes('..'), `${label} must be a local asset`);
-  await access(path.join(dist, relativePath));
+  // A manifest `src` is a URL, and the icon srcs carry a `?v=` cache-busting
+  // revision (PWA_ASSET_REVISION in vite.config.ts). Only the path part names
+  // a file in dist/ — the query is what makes the browser treat it as a URL it
+  // has not cached, and it must not be looked for on disk.
+  const [file] = relativePath.split(/[?#]/);
+  await access(path.join(dist, file));
 }
 
 const [indexHtml, manifestSource, serviceWorker] = await Promise.all([

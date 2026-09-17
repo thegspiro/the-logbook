@@ -1,8 +1,9 @@
 /**
- * Generates iOS launch images and the social-preview image from the full-size
- * logo. The 1024x1024 source lives outside public/ so Vite does not copy its
- * ~1.7MB into every build — nothing serves it, and the derived assets
- * (logo-128, logo-256, og-image, splashes) are what the app actually loads.
+ * Generates the maskable app icon, the iOS launch images and the social-preview
+ * image from the full-size logo. The 1024x1024 source lives outside public/ so
+ * Vite does not copy its ~1.7MB into every build — nothing serves it, and the
+ * derived assets (logo-128, logo-256, og-image, the maskable icon, splashes)
+ * are what the app actually loads.
  *
  * iOS does not derive a launch screen from the web app manifest — an installed
  * PWA shows a blank white screen on every cold start unless a matching
@@ -24,6 +25,17 @@ const SOURCE = path.resolve(__dirname, '../assets/logo-source.png');
 
 /** Matches manifest background_color, so the splash blends into first paint. */
 const BACKGROUND = { r: 15, g: 23, b: 42, alpha: 1 }; // #0f172a
+
+/**
+ * Diameter of a maskable icon's guaranteed-visible circle, as a fraction of the
+ * icon's width. A launcher may crop a maskable icon to a circle, a squircle or
+ * a rounded square of its choosing, and only that circle survives all of them;
+ * the inscribed square is what a rectangular mark can occupy without losing a
+ * corner on any of them. Kept in step with MASKABLE_SAFE_FRACTION in
+ * backend/app/utils/app_icons.py, which renders the same geometry from a
+ * department's own logo.
+ */
+const MASKABLE_SAFE_FRACTION = 0.8 / Math.SQRT2;
 
 /**
  * CSS width/height and device pixel ratio per device family. Devices that share
@@ -64,6 +76,27 @@ async function makeSplash({ w, h, dpr }) {
   return { name, w, h, dpr, pxW, pxH };
 }
 
+/**
+ * The stock maskable icon. Served when no department logo is configured, so it
+ * has to be composed the same way the backend composes a branded one: inside
+ * the safe zone, on an opaque plate, because a launcher that masks a
+ * transparent icon fills the rest with a colour of its own choosing.
+ */
+async function makeMaskableIcon() {
+  const canvas = 512;
+  const logoSize = Math.round(canvas * MASKABLE_SAFE_FRACTION);
+  const logo = await sharp(SOURCE)
+    .resize(logoSize, logoSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .toBuffer();
+
+  await sharp({
+    create: { width: canvas, height: canvas, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } },
+  })
+    .composite([{ input: logo, gravity: 'centre' }])
+    .png({ compressionLevel: 9 })
+    .toFile(path.join(PUBLIC, 'pwa-maskable-512x512.png'));
+}
+
 async function makeSocialImage() {
   // 1200x630 is the Open Graph standard; the 1024x1024 source is ~1.7MB, far
   // too heavy for a link unfurl that chat clients fetch eagerly.
@@ -80,6 +113,7 @@ const made = [];
 for (const target of SPLASH_TARGETS) {
   made.push(await makeSplash(target));
 }
+await makeMaskableIcon();
 await makeSocialImage();
 
 // Emit the <link> tags so index.html can be kept in sync by hand without
@@ -88,6 +122,10 @@ await makeSocialImage();
 // alone exceeds the 120-column width set in frontend/.prettierrc.json, so a
 // single-line tag pasted in is reformatted the next time anyone runs Prettier
 // over the file, and the paste shows up as a diff nobody made.
+// Must match PWA_ASSET_REVISION in vite.config.ts and the `?v=` already in
+// index.html — see the comment above those links for why the query is there.
+const PWA_ASSET_REVISION = '2';
+
 console.log('\n--- apple-touch-startup-image links ---');
 for (const m of made) {
   console.log(
@@ -95,9 +133,9 @@ for (const m of made) {
       '    <link',
       '      rel="apple-touch-startup-image"',
       `      media="(device-width: ${m.w}px) and (device-height: ${m.h}px) and (-webkit-device-pixel-ratio: ${m.dpr}) and (orientation: portrait)"`,
-      `      href="/${m.name}"`,
+      `      href="/${m.name}?v=${PWA_ASSET_REVISION}"`,
       '    />',
     ].join('\n')
   );
 }
-console.log(`\ngenerated ${made.length} splash images + og-image.png`);
+console.log(`\ngenerated ${made.length} splash images + pwa-maskable-512x512.png + og-image.png`);
