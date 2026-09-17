@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 15 (Scheduling), pass 6** — branch
-`claude/security-review-feature15-pass6`. **Watchdog iteration:** the
+**PR [#2628](https://github.com/thegspiro/the-logbook/pull/2628)** — branch
+`claude/security-review-feature15-pass6`, Feature 15 (Scheduling), pass 6.
+Opened and subscribed. **Watchdog iteration:** the
 `/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) had
 produced no commit and had no open security-review PR for roughly 1h30m past
 its 30-minute cadence, with `PROGRESS.md`'s Open PR row already reading
@@ -16819,7 +16820,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-17 — Feature 15 (Scheduling, pass 6) — 0 fixed, 0 flagged, 0 new findings
+### 2026-09-17 — Feature 15 (Scheduling, pass 6) — 0 fixed, 0 flagged, 0 new findings — PR #2628 opened
 
 Watchdog pickup (see this file's Open PR section for the full Step 0 /
 delta-check / completion-gate detail) after the `/loop 30m /security-review`
