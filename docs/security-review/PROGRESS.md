@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2625](https://github.com/thegspiro/the-logbook/pull/2625)
+(Feature 14, Equipment check & shifts, pass 6 — true zero-delta
+re-verification, 0 fixed, 0 new findings; standing fixes EC-16, EC-6, EC-13,
+LIKE escaping and `SafeCsvWriter` usage all re-confirmed unchanged at their
+current line numbers) went fully green on its current head (`3ce7f0940` —
+all of `CI`, `Secret Scan` and `Supply Chain` completed `success`; the one
+`CI Success` failure reported earlier was against the superseded first
+commit `4bd76129b`, whose own `CI` run concluded `cancelled`, not a real
+failure, per this watchdog's explanatory PR comment) and was merged by the
+repo owner. Merge commit `1527d5057` confirmed on `main` via `git fetch`.
+Rotation row 14 → ✅. Next: Feature 15 (Scheduling).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 6, PR #2625, before it merged), preserved for history</summary>
+
 **PR [#2625](https://github.com/thegspiro/the-logbook/pull/2625)** — branch
 `claude/security-review-feature14-pass6`, Feature 14 (Equipment check &
 shifts), pass 6. **Watchdog iteration:** `docs/security-review/PROGRESS.md`'s
@@ -41,6 +56,8 @@ NFC) to ✅, which had merged as PR #2623 without the table being updated.
 Full write-up: [`EC-14-equipment-check-shifts.md`](./EC-14-equipment-check-shifts.md)'s
 **Pass 6** section. Subscribed to PR activity. Next: tend #2625 to green and
 merged, then Feature 15 (Scheduling).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 6, PR #2623, before it merged), preserved for history</summary>
@@ -16741,7 +16758,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⏳     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
@@ -16769,6 +16786,24 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-17 — Feature 14 (Equipment check & shifts, pass 6)'s PR #2625 merged, watchdog recorded it
+
+Routine watchdog check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). PR #2625's `check_run.completed` event
+initially reported the `CI Success` gate as `failure` against the PR's first
+commit (`4bd76129b`); investigation showed the underlying `CI` workflow
+run's actual conclusion was `cancelled`, not `failure` — the run had been
+superseded by a follow-up commit (`3ce7f0940`, recording the PR number in
+this file's Open PR row) pushed moments later, the same stale-superseded-run
+pattern documented several times earlier in this log. Posted one comment on
+the PR explaining this rather than spending a re-run.
+
+The current head (`3ce7f0940`)'s own fresh runs then all completed
+`success` (`CI`, `Secret Scan`, `Supply Chain`), and the PR was merged by the
+repo owner shortly after. Merge commit `1527d5057` confirmed on `main` via
+`git fetch`. Rotation row 14 → ✅. Next: Feature 15 (Scheduling) — not yet
+started as of this check.
 
 ### 2026-09-17 — Feature 14 (Equipment check & shifts, pass 6) — zero-delta re-verification, PR #2625 opened
 
