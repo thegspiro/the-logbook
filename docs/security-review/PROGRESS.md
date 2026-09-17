@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #TBD** — branch `claude/security-review-tr-17-pass6`, Feature 17
+**PR [#2635](https://github.com/thegspiro/the-logbook/pull/2635)** — branch `claude/security-review-tr-17-pass6`, Feature 17
 (Training core), pass 6. **Watchdog iteration:** the `/loop 30m
 /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) had produced
 no commit and had no open security-review PR for roughly 1h30m past its
@@ -16885,7 +16885,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-17 — Feature 17 (Training core, pass 6) — 0 fixed, 0 flagged, 0 new findings — PR #TBD opened
+### 2026-09-17 — Feature 17 (Training core, pass 6) — 0 fixed, 0 flagged, 0 new findings — PR #2635 opened
 
 Watchdog pickup (see this file's Open PR section for the full Step 0 /
 zero-delta detail). The `/loop 30m /security-review` session had gone quiet

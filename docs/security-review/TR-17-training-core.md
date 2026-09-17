@@ -1714,6 +1714,8 @@ No files changed by this pass other than this findings doc and
 
 ## Pass 6 (2026-09-17) — 0 fixed, 0 new findings, true zero-delta re-verification against pass 5
 
+**Prefix:** `TR6` · **PR:** [#2635](https://github.com/thegspiro/the-logbook/pull/2635)
+
 **Scoped since pass 5's merge:** `6b9bcb5` (PR #2575). Diffed all nine
 declared files — three endpoints (`training.py`, `training_programs.py`,
 `training_sessions.py`), three services (`training_service.py`,
