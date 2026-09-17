@@ -16,6 +16,34 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2635](https://github.com/thegspiro/the-logbook/pull/2635)** — branch `claude/security-review-tr-17-pass6`, Feature 17
+(Training core), pass 6. **Watchdog iteration:** the `/loop 30m
+/security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) had produced
+no commit and had no open security-review PR for roughly 1h30m past its
+30-minute cadence (last activity `a46bc55` at 14:13 UTC, this check at
+15:44 UTC), with `PROGRESS.md`'s Open PR row already reading "None." /
+"Next: Feature 17 (Training core)" and no `claude/security-review-tr-17*` or
+`claude/security-review-feature17*` branch in flight. This watchdog picked up
+Feature 17 directly, mirroring the Feature 12–16 precedents below.
+
+**True zero-delta re-verification:** `git diff --stat 6b9bcb5..origin/main`
+(`6b9bcb5` = pass 5's merge commit, PR #2575) across all nine declared/
+adjacent backend files returns completely empty — unlike pass 5, which had
+one out-of-scope diff in a shared file, this pass's nine files are
+byte-for-byte unchanged since pass 5. No new migration touches a training-core
+table; the call-site sweep for `TrainingService(`/`TrainingProgramService(`/
+`TrainingSessionService(` found the same set as pass 5, no new caller. **0
+fixed, 0 flagged, 0 new findings.** Full completion gate: flake8/black/isort
+clean across the whole backend tree, `validate_migrations.py --strict`
+unchanged at 444 revisions/single head, 1139 training/compliance-scoped
+backend tests passed plus the full 12632-test backend suite green, frontend
+typecheck/lint clean (no frontend file touched this pass). Full write-up:
+[`TR-17-training-core.md`](./TR-17-training-core.md)'s **Pass 6** section.
+Rotation row 17 → ✅ (pending PR merge). Next: Feature 18 (Training extended).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 6, PR #2630/#2631, merged), preserved for history</summary>
+
 **None.** Two independent watchdog iterations picked up Feature 16 (Events &
 requests) pass 6 within seconds of each other and opened separate PRs against
 the same base commit: [#2630](https://github.com/thegspiro/the-logbook/pull/2630)
@@ -25,9 +53,6 @@ same two standing flags re-confirmed, no new findings). #2631 was closed as a
 duplicate in favor of the already-merged #2630 rather than reconciling two
 docs-only diffs of the same findings section. Rotation row 16 stays ✅. Next:
 Feature 17 (Training core).
-
-<details>
-<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 6, PR #2630, merged), preserved for history</summary>
 
 PR [#2630](https://github.com/thegspiro/the-logbook/pull/2630)
 (Feature 16, Events & requests, pass 6 — near-zero-delta re-verification, 0
@@ -16834,7 +16859,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
@@ -16859,6 +16884,24 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-17 — Feature 17 (Training core, pass 6) — 0 fixed, 0 flagged, 0 new findings — PR #2635 opened
+
+Watchdog pickup (see this file's Open PR section for the full Step 0 /
+zero-delta detail). The `/loop 30m /security-review` session had gone quiet
+past its cadence with no open security-review PR and no in-flight
+`claude/security-review-tr-17*`/`claude/security-review-feature17*` branch,
+so this scheduled check ran the iteration itself: `git diff --stat` across
+all nine of the feature's declared/adjacent files against `6b9bcb5` (pass
+5's merge, PR #2575) came back completely empty — a true zero-delta pass,
+stronger than pass 5's near-zero-delta (which had one out-of-scope diff).
+Every standing fix and flag re-confirmed unchanged by construction (the
+files that carry them never changed). Full completion gate run: flake8/
+black/isort clean across the whole backend tree, `validate_migrations.py
+--strict` clean at 444 revisions/single head, 1139 training/
+compliance-scoped tests plus the full 12632-test backend suite passed,
+frontend typecheck/lint clean. Rotation row 17 → ✅ (pending PR merge).
+Next: Feature 18 (Training extended).
 
 ### 2026-09-17 — Feature 15 (Scheduling, pass 6)'s PR #2628 merged, watchdog recorded it
 
