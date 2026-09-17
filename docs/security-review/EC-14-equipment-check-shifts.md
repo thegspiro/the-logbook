@@ -2,8 +2,8 @@
 
 **Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15
-(pass 5) · **PR:** [#1842](https://github.com/thegspiro/the-logbook/pull/1842)
-(pass 1)
+(pass 5), 2026-09-17 (pass 6) · **PR:**
+[#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1)
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (50 routes),
 `api/v1/endpoints/shift_completion.py` (21 routes),
@@ -11,6 +11,103 @@
 `services/shift_completion_service.py` (1,930 L)
 **Frontend:** in-app (no dedicated module directory)
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 6 (2026-09-17) — true zero-delta re-verification: 0 changed bytes in any declared or adjacent file, 0 fixed, 0 new findings
+
+**Watchdog iteration.** `docs/security-review/PROGRESS.md`'s Open PR section
+read "None." with the Feature 13 (Apparatus & NFC) closure note (PR #2623,
+merge commit `7ecac1cec`) beneath it and named "Next: Feature 14 (Equipment
+check & shifts), pass 6" explicitly. `list_pull_requests` (state=open)
+returned `[]` and `git branch -r` had no `claude/security-review-feature14-*`
+branch in flight. No prior-pass row in `PROGRESS.md`'s rotation table needed
+correcting for this feature (row 13, Apparatus, was stale at ⬜ despite its
+PR having merged — fixed to ✅ as part of this pass's docs update, since it
+belongs to the same table this pass otherwise leaves untouched).
+
+**Diff since pass 5's merge (`dbf489af6`, PR #2568).** 182 commits landed on
+`main` in the intervening window. `git diff --stat dbf489af6..origin/main`
+across every file pass 5 declared in scope (`equipment_check.py`,
+`shift_completion.py`, `equipment_check_service.py`,
+`shift_completion_service.py`, `equipment_check_pdf.py`, `models/apparatus.py`)
+**and** the shared dependency files this rotation's protocol calls out
+(`app/utils/org_scoping.py`, `app/core/permissions.py`, `app/core/audit.py`,
+`app/utils/model_updates.py`, `app/utils/sql_search.py`,
+`app/core/dependencies.py`, `app/utils/csv_export.py`,
+`frontend/src/utils/apiCache.ts`) returned **no output for every path** —
+not a small diff, an empty one. Confirmed stronger than a diff (a rename or a
+whitespace-only reformat can produce an empty unified diff on some tooling but
+not on `git diff`, so this is belt-and-suspenders rather than redundant):
+SHA-256 of each of the six primary backend files at `dbf489af6` vs.
+`origin/main` — all six **IDENTICAL**.
+
+**Adjacent surfaces (pass 2/4/5's own established scope) re-checked, not
+skipped because the primary files didn't move.** `scheduling_service.py`:
+empty diff. `scheduled_tasks.py`: **+118 lines**, one new function,
+`run_prospect_attendance_advance` — read the diff hunks directly rather than
+trusting the line count: the addition is entirely new (a new `SCHEDULE` entry,
+the new async function itself, and its `TASK_RUNNERS`/
+`TASK_INTERVALS_SECONDS` registrations) and does not touch
+`run_end_of_shift_checklist_reminders` or `run_post_shift_validation` — the
+two functions this feature's own lens covers in that file (grepped both names
+against the diff: zero hits). Out of scope, the same disposition pass 4 gave
+the unrelated `CRON3-31-1` hunk in the same file. The twelve frontend files
+pass 3/4 enumerated by their real paths (`ShiftDetailPanel.tsx`,
+`ShiftCheckInPage.tsx`, `EquipmentCheckForm.tsx`,
+`EquipmentCheckReportsPage.tsx`, `EquipmentCheckTemplateBuilder.tsx`(+`.test.tsx`),
+`EquipmentKitsPage.tsx`, `EquipmentRequestsPage.tsx`, `MyEquipmentPage.tsx`,
+`ApparatusDetailPage.tsx`, `FleetBoardPage.tsx`, `MyChecklistsPage.tsx`,
+`CheckLogPage.tsx`, `ApparatusInventoryPage.tsx`, `EquipmentChecksTab.tsx`)
+plus `apiCache.ts` — all empty diffs, re-checked at their current paths (not
+assumed from pass 3/4's own path-correction) via `find frontend/src -iname
+"*Equipment*"` / `"*Shift*"` before diffing, to avoid repeating the exact
+wrong-path mistake Codex caught in pass 4.
+
+**Standing fixes re-read at their current (unchanged) line numbers, not just
+inferred from the empty diff.** Per this rotation's own instruction that a
+zero-delta pass still re-reads rather than rubber-stamps: EC-16's SAVEPOINT
+duplicate-report guard (`shift_completion_service.py:491-531`, `async with
+self.db.begin_nested()` / `except IntegrityError` / the `.with_for_update()`
+post-failure existence check) read in full — unchanged, byte-for-byte, from
+pass 5's fix. EC-6's in-org `trainee_id` validation on the `shift_id`-absent
+branch of `create_report` (lines 370-386) — still present. EC-13's
+submitter-quantity-inflation guard in `update_deployed_lot`
+(`equipment_check_service.py:3479-3486`, `if not allow_metadata_change and
+quantity > target.quantity: raise ...`) — still present. The module's one
+`.ilike()` call (`equipment_check_service.py:5069`) and `export_csv`'s
+`SafeCsvWriter` import (`equipment_check.py:1432-1437`) — both confirmed
+present by direct grep, not carried forward from prior-pass line citations.
+`backend/tests/test_shift_report_duplicate_race.py` (EC-16's regression test)
+still exists and is included in this pass's own test run below.
+
+**Every other prior-pass fix and open item** (EC-1, EC-2/EC2-3/EC2-4, EC-4,
+EC-9, EC-10, EC-11, EC-12, EC-14, EC-15, the `get_item_deployments`
+permission-gate discrepancy, the SMS-allowlist check) needs no re-statement
+here: the files carrying every one of them are confirmed byte-identical to
+pass 5's own already-reviewed baseline, so their disposition is unchanged by
+construction, not by assumption.
+
+**No new finding.** Nothing in the 182-commit window touches this feature's
+principal or declared-adjacent code.
+
+## Completion gate (pass 6)
+
+| Check                                                             | Result                                                                |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                     | ✅ 0 violations                                                       |
+| `black --check app/ tests/ alembic/`                              | ✅ 1599 files unchanged                                               |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.1, CI's pin) | ✅ clean                                                              |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ 444 revisions, single head `6ab7d903fae5` (no migration this pass) |
+| `pytest tests/ -q -k "equipment or shift"`                        | ✅ 1133 passed, 1 skipped (pre-existing, `pywebpush` not installed)   |
+| `cd frontend && npm run typecheck`                                | ✅ 0 errors (aliased 7.0.2 compiler)                                  |
+| `cd frontend && npm run lint`                                     | ✅ 0 errors, 0 warnings                                               |
+
+Full backend/frontend whole-suite runs not repeated this pass — no source
+file in this feature's scope changed (confirmed by SHA-256, not just an empty
+`git diff`), so the targeted `-k "equipment or shift"` run is the suite that
+could actually observe a regression, per CLAUDE.md's "match the verification
+to the change."
 
 ---
 

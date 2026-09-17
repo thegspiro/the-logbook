@@ -16,19 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2623](https://github.com/thegspiro/the-logbook/pull/2623)
-(Feature 13, Apparatus & NFC, pass 6 — true zero-delta re-verification, 0
-fixed, 0 new findings; both standing fixes AP-17/AP-18 re-confirmed
-unchanged at their current line numbers) went fully green (17/17 checks
-including the `CI Success` gate; `mergeable_state: clean`; no unresolved
-review threads — only the informational Codex usage-limit comment and this
-watchdog's own explanation of a stale-superseded-run false failure on the
-PR's first commit, which a follow-up push recording the PR number in this
-file's Open PR row superseded before CI finished) and sat idle with nothing
-further pending, so this scheduled 30-minute watchdog check merged it
-directly (squash, `expectedHeadSha` pinned to `645548b1`). Merge commit
-`7ecac1cec` confirmed on `main` via `git fetch`. Rotation row 13 stays ✅.
-Next: Feature 14 (Equipment check & shifts), pass 6.
+**PR [#2625](https://github.com/thegspiro/the-logbook/pull/2625)** — branch
+`claude/security-review-feature14-pass6`, Feature 14 (Equipment check &
+shifts), pass 6. **Watchdog iteration:** `docs/security-review/PROGRESS.md`'s
+Open PR row read "None." with the Feature 13 (Apparatus & NFC) pass 6 closure
+note (PR #2623, merge commit `7ecac1cec`) beneath it and named "Next: Feature
+14 (Equipment check & shifts), pass 6" explicitly; `list_pull_requests`
+(state=open) returned `[]` and `git branch -r` had no
+`claude/security-review-feature14-*` branch in flight. True zero-delta
+re-verification: `git diff --stat dbf489af6..origin/main` (`dbf489af6` =
+pass 5's merge commit, PR #2568) across every declared scope file, every
+shared dependency file, and every adjacent file prior passes established
+(`scheduling_service.py`, the twelve frontend module files, `apiCache.ts`)
+returned no output for any path — confirmed further via SHA-256 comparison
+of the six primary backend files, all identical. `scheduled_tasks.py` gained
+one unrelated new function, confirmed not touching either of this feature's
+two watched task runners. Standing fixes (EC-16, EC-6, EC-13, LIKE escaping,
+CSV export) re-read directly at their current line numbers. Full completion
+gate: flake8/black/isort clean, `validate_migrations.py --strict` unchanged
+at 444 revisions/single head, 1133 equipment/shift-scoped backend tests
+passed (1 pre-existing skip), frontend typecheck/lint both clean. **0 fixed,
+0 flagged, 0 new findings.** Also corrected rotation row 13 (Apparatus &
+NFC) to ✅, which had merged as PR #2623 without the table being updated.
+Full write-up: [`EC-14-equipment-check-shifts.md`](./EC-14-equipment-check-shifts.md)'s
+**Pass 6** section. Subscribed to PR activity. Next: tend #2625 to green and
+merged, then Feature 15 (Scheduling).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 6, PR #2623, before it merged), preserved for history</summary>
@@ -16728,8 +16740,8 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⏳     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
@@ -16757,6 +16769,55 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-17 — Feature 14 (Equipment check & shifts, pass 6) — zero-delta re-verification, PR #2625 opened
+
+Watchdog iteration. `docs/security-review/PROGRESS.md`'s Open PR section read
+"None." with the Feature 13 (Apparatus & NFC) pass 6 closure note (PR #2623,
+merge commit `7ecac1cec`) beneath it and named "Next: Feature 14 (Equipment
+check & shifts), pass 6" explicitly. `list_pull_requests` (state=open)
+returned `[]`; `git branch -r` had no `claude/security-review-feature14-*`
+branch in flight. Also caught and fixed: rotation row 13 (Apparatus & NFC)
+had merged as PR #2623 but the rotation table still showed `⬜` — corrected
+to `✅` as part of this pass's own docs update, since leaving it stale would
+have had the next watchdog re-pick an already-done feature.
+
+**Diff-since-last-pass method.** `dbf489af6` (PR #2568) is Feature 14 pass
+5's merge commit. `git diff --stat dbf489af6..origin/main` across all six
+declared scope files (`equipment_check.py`, `shift_completion.py`,
+`equipment_check_service.py`, `shift_completion_service.py`,
+`equipment_check_pdf.py`, `models/apparatus.py`) plus the shared dependency
+files this rotation's protocol calls out (`org_scoping.py`,
+`core/permissions.py`, `core/audit.py`, `model_updates.py`, `sql_search.py`,
+`core/dependencies.py`, `csv_export.py`, `apiCache.ts`) returned no output
+for any path across 182 intervening commits. Verified stronger than an
+empty diff: SHA-256 of each of the six primary backend files at `dbf489af6`
+vs. `origin/main` — all six identical. Adjacent files prior passes
+established (`scheduling_service.py`, the twelve frontend module files at
+their real paths, re-found via `find` rather than assumed) were also
+byte-identical; `scheduled_tasks.py` gained one new, unrelated function
+(`run_prospect_attendance_advance`) confirmed not to touch either of this
+feature's two watched task runners. Standing fixes (EC-16's SAVEPOINT
+duplicate-report guard, EC-6, EC-13, LIKE escaping, `SafeCsvWriter` usage)
+were re-read directly at their current line numbers rather than inferred
+from the empty diff, per this rotation's own instruction that a zero-delta
+pass still re-reads rather than rubber-stamps.
+
+**Completion gate:** `flake8`/`black`/`isort` clean (isort 9.0.1, CI's pin);
+`validate_migrations.py --strict` unchanged at 444 revisions, single head
+`6ab7d903fae5`; `pytest tests/ -q -k "equipment or shift"` — 1133 passed, 1
+pre-existing skip; `npm run typecheck` and `npm run lint` both clean. Full
+backend/frontend whole-suite runs not repeated — no source file in this
+feature's scope changed, so the targeted run is the one that could actually
+observe a regression, per CLAUDE.md's "match the verification to the
+change."
+
+**0 fixed, 0 flagged, 0 new findings.** Full write-up:
+[`EC-14-equipment-check-shifts.md`](./EC-14-equipment-check-shifts.md)'s
+**Pass 6** section. Rotation row 14 → ⏳ (pending PR merge); row 13
+corrected to ✅. PR [#2625](https://github.com/thegspiro/the-logbook/pull/2625)
+opened and subscribed. Next: tend #2625 to green and merged, then Feature 15
+(Scheduling).
 
 ### 2026-09-16 — Watchdog check-in: closed duplicate PR #2617
 
