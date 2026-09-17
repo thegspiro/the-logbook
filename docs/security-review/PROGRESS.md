@@ -16,10 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Pending.** Feature 16 (Events & requests), pass 6 — near-zero-delta
-re-verification, 0 fixed, 0 new findings; branch
-`claude/security-review-ev-16-pass6`, PR not yet opened as of this commit.
-Will be recorded here with its number once opened.
+PR [#2630](https://github.com/thegspiro/the-logbook/pull/2630) (Feature 16,
+Events & requests, pass 6 — near-zero-delta re-verification, 0 fixed, 0 new
+findings; standing flags EV-23, EV-26 both re-confirmed unchanged),
+branch `claude/security-review-ev-16-pass6`. Awaiting CI.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 6, PR #2628, before it merged), preserved for history</summary>
