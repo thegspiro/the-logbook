@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 13 (Apparatus & NFC), pass 6** — PR
+[#2623](https://github.com/thegspiro/the-logbook/pull/2623), branch
+`claude/security-review-feature13-pass6`. **Watchdog iteration:** the
+`/loop 30m /security-review` session had produced no commit and had no open
+security-review PR for well over an hour past its 30-minute cadence, with
+`PROGRESS.md`'s Open PR row already reading "None" / "Next: Feature 13
+(Apparatus & NFC), pass 6" and no `claude/security-review-*` branch in flight
+for apparatus (confirmed via `git fetch origin --prune` + `git branch -r`,
+and `list_pull_requests` state=open → `[]`). This watchdog picked up
+Feature 13 directly per Step 1, mirroring the Feature 12/Facilities,
+Feature 11/Inventory, and Feature 10/Documents & legal pass-6 precedents
+below. **True zero-delta re-verification:** `git diff --stat
+229c7bd06..origin/main` (`229c7bd06` = pass 12's merge commit, PR #2565)
+across every declared scope file and every shared dependency the standing
+AP-17/AP-18 fixes rest on returns empty despite 201 intervening commits, and
+both standing fixes were each re-read directly at their current line numbers
+and confirmed unchanged — not just inferred from the diff. Full completion
+gate: flake8/black/isort clean (whole tree), `validate_migrations.py
+--strict` unchanged at 444 revisions/single head, 292 apparatus-scoped
+backend tests passed (1 pre-existing skip) plus the full backend unit suite
+(10199 passed, 1 skipped, 0 failed), frontend typecheck/lint both clean. **0
+fixed, 0 new findings.** Full write-up:
+[`AP-13-apparatus-nfc.md`](./AP-13-apparatus-nfc.md)'s **Pass 13** section.
+Rotation row 13 → ✅ (pending PR merge). Next: Feature 14 (Equipment check &
+shifts), pass 6.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 6, PR #2621, merged), preserved for history</summary>
+
 **None.** PR [#2621](https://github.com/thegspiro/the-logbook/pull/2621)
 (Feature 12, Facilities, pass 6 — zero-delta re-verification, 0 fixed, 0 new
 findings; all four standing flags FAC-13/FAC-30/FAC-41/FAC-44 re-confirmed
@@ -28,6 +57,8 @@ further pending, so this scheduled 30-minute watchdog check merged it
 directly (squash, `expectedHeadSha` pinned to `51e706a3`). Merge commit
 `9cc5c8d7f` confirmed on `main` via `git fetch`. Rotation row 12 stays ✅.
 Next: Feature 13 (Apparatus & NFC), pass 6.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 6, PR #2621, pending merge), preserved for history</summary>
