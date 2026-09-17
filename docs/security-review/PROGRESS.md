@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 12 (Facilities), pass 6** — branch
+`claude/security-review-facilities-12`, PR pending creation. **Watchdog
+iteration:** the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) had produced no commit and had no open
+security-review PR for well over an hour past its 30-minute cadence, with
+`PROGRESS.md`'s Open PR row already reading "None" / "Next: Feature 12
+(Facilities)" and no `claude/security-review-*` branch in flight for
+Facilities (confirmed via `git fetch origin --prune` + `git branch -r`, and
+`list_pull_requests` state=open → `[]`). This watchdog picked up Feature 12
+directly per Step 1, mirroring the Feature 11/Inventory pass 6 and Feature
+10/Documents & legal pass 6 precedents recorded below. Zero-delta
+re-verification: `git diff --stat 771908943..origin/main` (`771908943` =
+pass 5's merge commit) across every declared scope file (backend + frontend)
+and every shared dependency the four standing flags rest on
+(`documents_service.py`, `core/permissions.py`, `utils/org_scoping.py`,
+`core/audit.py`, `utils/model_updates.py`, `utils/sql_search.py`) returns
+empty despite 224 intervening commits, and all four standing flags (FAC-13,
+FAC-30, FAC-41, FAC-44) were each re-read directly at their current line
+numbers and confirmed unchanged — not just inferred from the diff. Full
+completion gate: flake8/black/isort clean (whole tree), `validate_migrations.py
+--strict` unchanged at 444 revisions/single head, 186 facilities-scoped
+backend tests passed (1 pre-existing skip) plus the full backend unit suite
+(10199 passed, 1 skipped, 0 failed), frontend typecheck/lint both clean. **0
+fixed, 0 new findings.** Full write-up:
+[`FAC-12-facilities.md`](./FAC-12-facilities.md)'s **Pass 6** section.
+Rotation row 12 → ✅ (pending PR merge). Next: Feature 13 (Apparatus & NFC),
+pass 6.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 6, PR #2616, merged), preserved for history</summary>
+
 **None.** PR [#2616](https://github.com/thegspiro/the-logbook/pull/2616)
 (Feature 11, Inventory, pass 6) went fully green (17/17 checks including the
 `CI Success` gate; `mergeable_state: clean`; no unresolved review threads —
@@ -16629,7 +16660,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
@@ -24015,3 +24046,54 @@ Confirms the rotation is otherwise healthy: no other open PRs, no stray
 Feature 16 branch yet, no merge conflicts, no CI failures to chase.
 Rotation row 15 stays ✅. Next: Feature 16 (Events & requests) — not yet
 started as of this check.
+
+### 2026-09-17 — Feature 12 (Facilities, pass 6) — 0 fixed, 0 new findings — watchdog iteration
+
+Scheduled watchdog check-in (a separate recurring task from the
+`/loop 30m /security-review` session itself, `session_011T1ZyyLrD5HagusgK9uDw2`).
+That loop session had produced no commit and had no open security-review PR
+for well over an hour, past its 30-minute cadence, with `PROGRESS.md`'s own
+Open PR row already reading "None" / "Next: Feature 12 (Facilities)" and no
+in-progress `claude/security-review-*` branch for Facilities. `git fetch
+origin --prune` clean, `git branch -r` showed no facilities branch,
+`list_pull_requests` (state=open) returned empty — confirmed independently
+before proceeding, per Step 0. This watchdog picked the feature up directly
+per Step 1, mirroring the Feature 11/Inventory pass 6 and Feature
+10/Documents & legal pass 6 precedents above.
+
+Loaded prior art first (`CHECKLIST.md`, `SEC-00`'s pass 6 — all 13 standing
+sweep classes clean, nothing facility-specific — and `FAC-12-facilities.md`'s
+pass 1-5 history, all 58 prior findings, plus the stale `docs/module-audit/`
+and `docs/app-review/` facilities write-ups, both fully superseded by this
+file's own passes with nothing new to carry forward). Baseline `771908943`
+(squash-merge commit of PR #2563, pass 5's landing point; confirmed an
+ancestor of `origin/main`). **True zero-delta re-verification:** `git diff
+--stat 771908943..origin/main` across every declared scope file
+(`facilities.py`, `facilities_service.py`, `models/facilities.py`,
+`schemas/facilities.py`, `mcp/tools/facilities.py`, and the entire
+`frontend/src/modules/facilities/` tree) returns empty, despite 224
+unrelated commits landing on `main` since pass 5. Every shared dependency
+the standing flags rest on (`documents_service.py`'s folder-ACL machinery,
+`core/permissions.py`, `utils/org_scoping.py`, `core/audit.py`,
+`utils/model_updates.py`, `utils/sql_search.py`) is independently zero-diff
+too — checked per file, not just inferred from the feature's own files being
+untouched. `backend/alembic/versions` has zero diff on anything
+facility-related in that range, and `validate_migrations.py --strict`
+independently confirms the same 444 revisions/single head as pass 5.
+
+All four standing flags (FAC-13, FAC-30, FAC-41, FAC-44) re-read directly at
+their current line numbers in the live tree — not inferred from diff silence
+— and confirmed unchanged from pass 5's description. Mechanically
+re-verified all 98 routes still carry a `require_permission`/
+`require_all_permissions` dependency (0 bare, 0 missing), and that the
+permission strings still match FAC-5's sensitive/baseline split with no new
+mismatch. **0 fixed, 0 new findings, 0 application-code changes.** Full
+write-up: `FAC-12-facilities.md`'s **Pass 6** section. Completion gate
+(whole backend tree, per CLAUDE.md's linter guidance, plus the module's own
+tests): `python3 -m flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` clean, 444
+revisions/single head; `pytest tests/ -k "facilit"` 186 passed, 1
+pre-existing skip; full backend unit suite 10199 passed, 1 skipped, 0
+failed; `npm run typecheck` clean; `npm run lint` 0 errors/0 warnings.
+Rotation row 12 → ✅ (pending PR merge). Next: Feature 13 (Apparatus & NFC),
+pass 6.
