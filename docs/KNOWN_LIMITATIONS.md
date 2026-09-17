@@ -438,6 +438,37 @@ named ("N modules you did not enable are hidden") with a control to reveal
 them, so a department that cannot find Inventory learns it is off rather than
 concluding the permission does not exist.
 
+## Installed App Icons — Three Things the Platforms Decide for Us (2026-09-17)
+
+The department's logo is rendered into the installable app's icons and iOS
+launch images on request (`app/utils/app_icons.py`, served by
+`app/api/public/branding.py`). Three limits on that are not ours to fix.
+
+**An installed app keeps the icon it was installed with.** Android and iOS both
+read the icon once, at install, and neither revisits it. A member who installed
+before the department uploaded its logo — or before it changed one — keeps the
+old picture until they remove the app from their home screen and add it again.
+There is no API that asks a phone to refresh it, so the only available answer is
+the one `docs/UPGRADING.md` gives: tell people to reinstall.
+
+**A logo stored as an external URL is not rendered.** `organizations.logo`
+accepts either an uploaded image (a `data:` URI, which is what both the settings
+screen and onboarding write) or a link to an image elsewhere. Only the first is
+rendered. Fetching the second would mean an unauthenticated request causing the
+server to fetch a URL out of the database — the SSRF shape, reachable by anyone
+who can install the app — and the value it would buy is a case no writer in the
+product actually produces. Such an installation falls back to the shipped icons,
+silently, which is the same thing it saw before this existed.
+
+**The maskable icon is smaller than it looks like it should be.** Android crops
+a maskable icon to a circle, a squircle or a rounded square of the launcher's
+choosing, and only a circle of 80% diameter is guaranteed to survive all of
+them. A rectangular crest is therefore fitted to the square inscribed in that
+circle — about 57% of the icon's width — so a department comparing its icon
+against the plain one will find the masked version noticeably smaller. Fitting
+it larger means some launchers cut the corners off the crest, which is worse and
+is not visible to whoever chooses the setting.
+
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
 A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported
