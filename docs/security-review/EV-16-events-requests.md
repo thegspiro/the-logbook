@@ -13,6 +13,163 @@ read, extracted from `event_requests.py`)
 
 ---
 
+## Pass 6 (2026-09-17) — 0 fixed, 0 new findings, EV-23 and EV-26 re-confirmed unchanged, near-zero-delta re-verification against pass 5
+
+**Scoped since pass 5's merge:** `abf8304de` (PR #2573/#2574). Diffed the full
+declared surface — `events.py`, `event_requests.py`, `event_service.py`,
+`event_request_service.py`, `models/event.py`, `models/event_request.py`,
+`schemas/event.py`, `schemas/event_request.py`, `utils/event_attachments.py`,
+`mcp/tools/events.py`, `mcp/tools/writes.py`, `services/location_service.py` —
+plus one repo-wide `--stat` and one content grep (not filename) across every
+new migration since the last pass, per the SCH-15/EC-14 lesson prior passes
+in this file established.
+
+**Ten of the twelve declared files are byte-identical to pass 5** (`git diff
+--stat` returns nothing for `event_requests.py`, `event_request_service.py`,
+both models, both schemas, `event_attachments.py`, both MCP tool files, and
+`location_service.py`). Zero new migrations touch any table this feature owns
+— in fact zero new migration files exist at all since pass 5's merge
+(`git diff --name-only` against `alembic/versions/` is empty), so the
+migration-content-grep step this pass ran had nothing to check.
+
+**The only two changed files, `events.py` (+8/-4 by `--stat`, net 4 lines
+excluding a comment) and `event_service.py` (+75/-0), are not this feature's
+own change.** Both are entirely `49a7253ce` ("feat(prospective-members):
+advance a meeting stage on finalized attendance") plus its immediate follow-up
+`f999c0be0` — Membership Pipeline's own rotation feature (08, already ✅ this
+pass), which moved a prospective-member meeting-stage advance off the
+check-in moment and onto the event's own finalize/settle moment. Read in full
+rather than skipped because it lands inside two files this feature owns:
+
+- **`events.py`'s change is a comment-only removal.**
+  `check_in_external_attendee` (around line 3288) no longer calls
+  `GuestCheckInService.try_advance_attendance_pipeline` directly at check-in
+  time — the call site is gone, replaced by a comment explaining the advance
+  now runs at finalize. `GuestCheckInService` stays imported and used
+  elsewhere in the file (`link_prospect_to_event`, confirmed by grep), so no
+  F401. No route added or removed, no permission gate touched.
+- **`event_service.py` gains `attendance_is_settled()` (a pure predicate: the
+  event's attendance is finalized, or its effective end time is more than
+  `PIPELINE_ATTENDANCE_SETTLE_DAYS` — default 7 — in the past) and
+  `_advance_prospects_after_finalize()`, called from both of
+  `finalize_event_attendance`'s exits.** Checked against this feature's own
+  conventions: the naive-vs-aware datetime handling
+  (`effective_end.replace(tzinfo=dt_timezone.utc)` when naive) matches the
+  same `_as_utc` pattern this file already uses elsewhere (pass 5's own
+  write-up on `_as_utc`/`_as_aware`), and the new `from app.core.config import
+settings` import is used exactly once, so no F401/F811. The advance itself
+  delegates to `GuestCheckInService(self.db)
+.advance_prospects_for_settled_event(event)` inside a bare
+  `try/except Exception: logger.exception(...)` — correct per the method's own
+  docstring ("a pipeline failure must never roll back a finalize"), and
+  matches this feature's existing discipline of never letting a best-effort
+  side-effect turn a successful write into a 500 (the same shape
+  `check_in_external_attendee`'s prospect-link try/except already used before
+  this diff).
+- **Read the callee anyway, since it queries `EventExternalAttendee` by
+  `event_id` and this feature owns that table's parent.**
+  `GuestCheckInService.advance_prospects_for_settled_event`
+  (`guest_check_in_service.py:338`) filters
+  `EventExternalAttendee.event_id == str(event.id)` **and**
+  `EventExternalAttendee.organization_id == str(event.organization_id)` —
+  correctly org-scoped, and `event` itself is always the row
+  `finalize_event_attendance` already fetched org-scoped, so no
+  client-supplied id reaches this query unfiltered. `try_advance_attendance_pipeline`
+  passes `organization_id=str(event.organization_id)` on to
+  `MembershipPipelineService.try_auto_advance_current_step` — same value,
+  not attacker-influenceable. No IDOR, no cross-tenant read.
+- **Two other files outside the declared list also changed and reference
+  `Event`** (per the standing "grep beyond the declared list" discipline):
+  `api/v1/endpoints/membership_pipeline.py` (`Event.id == event_id` paired
+  with `Event.organization_id == organization_id` in the same `.where()`,
+  line 867-869) and `services/membership_pipeline_service.py`
+  (`_fetch_meeting_details`, `Event.organization_id == str(organization_id)`
+  combined with `Event.id == str(event_id)` when an id is supplied, line
+  3732+). Both are read-only, both org-scope every by-id lookup correctly,
+  both are Membership Pipeline's own code and rotation entry, not this
+  feature's — verified good, not a finding here, recorded so the "read
+  everything that touches this feature's models" claim stays true rather than
+  approximately true. `services/scheduled_tasks.py`'s new
+  `run_prospect_attendance_advance` task (also MP-owned, not enumerated in
+  this feature's declared surface) loops `organization_id`-scoped per org and
+  never reads `Event` directly — no finding.
+- **`forms_service.py` also changed (+178/-30) but not near the event-request
+  intake path this feature shares with Forms.** Grepped the diff for
+  `_process_event_request`/`event_request`/`EventRequest` — zero hits; the
+  whole diff is Membership Pipeline's own form-submission-to-stage matching
+  logic (comment-only change to a pre-existing query, per the diff read).
+  Confirmed this feature's one shared entry point into Forms
+  (`FormsService._process_event_request`) is untouched.
+
+**Frontend:** one events-owned file changed,
+`components/event-detail/EventProspectsCard.tsx` — a 3-line, purely cosmetic
+diff (`card` → `card p-6`, `mb-3` → `mb-4`, `font-bold` → `font-medium`, no
+logic, no new prop, no new API call). Confirmed by reading the full diff, not
+inferred from the line count.
+
+### Standing findings re-verified against current code, not re-derived
+
+- **EV-26 still open, unregressed.** `LocationService.check_overlapping_events`
+  (`location_service.py:286`) re-read in full: still a plain `select(Event)`
+  with no `.with_for_update()` anywhere in the method. All three call sites
+  unchanged: `event_service.py:234` (`create_event`), `event_service.py:782`
+  (`update_event`), `event_requests.py:1129` (`schedule_request`'s
+  create-calendar-event branch) — confirmed at their current line numbers by
+  grep, not assumed from pass 5's citations. Left **FLAGGED**, same
+  cross-cutting reasoning as pass 5 (the shared helper's other two callers,
+  `training_session_service.py` and `course_cohort_service.py`, belong to
+  different rotation features and a single-feature fix would change the
+  helper's locking contract out from under them).
+- **EV-23 still open, unregressed.** `rsvp_to_series`
+  (`event_service.py:1808`) still passes `override=True` unconditionally at
+  its one call into `create_or_update_rsvp` (line 1870, offset +62 from the
+  function start — the function itself grew/shifted since pass 5 only because
+  of unrelated code earlier in the file, not because this block changed), with
+  the same "member confirmed... for the series" comment that names a
+  confirmation the series UI still never collects. Left **FLAGGED**, same
+  product-decision reasoning as passes 3-5.
+- **Route inventory re-run from scratch (regex/AST extraction, not diff):**
+  56/56 routes in `events.py`, 23/23 in `event_requests.py` — identical counts
+  to pass 4/5. Every route's `Depends(...)` argument list extracted
+  programmatically; the same five public/low-auth routes as every prior pass
+  (`events.py`'s `GET /public-calendar` with no dependency;
+  `event_requests.py`'s `POST /public` behind `_rate_limit_public_request` →
+  `require_captcha` in that order, `GET /status/{token}`,
+  `POST /status/{token}/cancel`, `GET /types/labels`). No new unauthenticated
+  route.
+- **`ondelete="SET NULL"` nullability, RSVP capacity locking (Pitfall #27,
+  both halves), no `.like()`/`.ilike()` anywhere in this feature's files, no
+  CSV export** — all re-confirmed by re-reading the current code, not
+  re-cited from pass 5's text, since `models/event.py`, `models/event_request.py`
+  and `event_service.py`'s RSVP/waitlist block are all byte-identical or
+  untouched by this pass's one diff.
+
+## Findings (pass 6)
+
+None. Every change since pass 5's merge either belongs to another rotation
+feature's own diff (Membership Pipeline, already ✅ this pass) touching this
+feature's files incidentally and correctly (org-scoped, no new route, no new
+unauthenticated surface), or is a 3-line cosmetic frontend tweak. Both standing
+flags (EV-23, EV-26) re-confirmed unchanged at their current line numbers.
+
+## Completion gate (pass 6)
+
+| Check                                             | Result                                                 |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                        |
+| `black --check app/ tests/ alembic/`              | ✅ 1599 files unchanged                                |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                               |
+| `python3 scripts/validate_migrations.py --strict` | ✅ single head, 444 revisions (same as pass 5, no new) |
+| `pytest tests/ -k "event"`                        | ✅ 937 passed, 1 skipped (pre-existing, pywebpush)     |
+| `npm run typecheck`                               | ✅ 0 errors                                            |
+| `npm run lint`                                    | ✅ 0 errors/warnings                                   |
+
+No file this feature owns needed a fix, so nothing was committed to
+production code this pass; the only change in this PR is this findings-file
+update and `PROGRESS.md`'s bookkeeping.
+
+---
+
 ## Pass 5 (2026-09-15) — 0 fixed, 1 new finding flagged (EV-26, P2/P3, cross-cutting), EV-23 re-flagged, full re-verification against pass 4
 
 **Scoped since pass 4's merge:** `32763ddbe` (PR #2451). Real churn in five

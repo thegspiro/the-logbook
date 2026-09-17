@@ -16,17 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2628](https://github.com/thegspiro/the-logbook/pull/2628)
-(Feature 15, Scheduling, pass 6 — zero-delta re-verification, 0 fixed, 0 new
-findings; standing flags SCH-9, SCH-10, SCH-13 all re-confirmed unchanged)
-went fully green (17/17 checks including the `CI Success` gate;
-`mergeable_state: clean`; no unresolved review threads — only the
-informational Codex usage-limit comment and this watchdog's own explanation
-of a stale-superseded-run false failure on the PR's first commit) and sat
-with nothing further pending, so this watchdog check merged it directly
-(squash, `expectedHeadSha` pinned to `30c77cdcf`). Merge commit `15f5f9781`
-confirmed on `main` via `git fetch`. Rotation row 15 stays ✅. Next: Feature
-16 (Events & requests).
+**Pending.** Feature 16 (Events & requests), pass 6 — near-zero-delta
+re-verification, 0 fixed, 0 new findings; branch
+`claude/security-review-ev-16-pass6`, PR not yet opened as of this commit.
+Will be recorded here with its number once opened.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 6, PR #2628, before it merged), preserved for history</summary>
@@ -16808,7 +16801,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
@@ -24448,3 +24441,38 @@ further pending, so this watchdog check merged it directly (squash,
 `expectedHeadSha` pinned to `645548b1`). Merge commit `7ecac1cec` confirmed
 on `main` via `git fetch`. Rotation row 13 stays ✅. Next: Feature 14
 (Equipment check & shifts), pass 6 — not yet started as of this check.
+
+### 2026-09-17 — Feature 16 (Events & requests, pass 6): near-zero-delta re-verification, 0 fixed, 0 new findings
+
+Picked up by a watchdog check after the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) stalled past its 30-minute cadence with
+no open PR and no in-progress branch for this feature; `git fetch origin`
+clean, rotation row 16 confirmed the first ⬜, `list_pull_requests`
+(state=open) confirmed empty before proceeding.
+
+Diffed the full declared surface plus the standing "grep beyond the declared
+list" checks against pass 5's merge (`abf8304de`, PR #2573/#2574). Ten of the
+twelve declared backend files are byte-identical to pass 5
+(`event_requests.py`, `event_request_service.py`, both models, both schemas,
+`event_attachments.py`, both MCP tool files, `location_service.py`); zero new
+migration files exist since pass 5 at all. The only two changed files
+(`events.py`, `event_service.py`) carry Membership Pipeline's own rotation
+feature diff (`49a7253ce`/`f999c0be0`, "advance a meeting stage on finalized
+attendance") landing inside two files this feature owns — read in full rather
+than skipped, confirmed correctly org-scoped throughout
+(`EventExternalAttendee.organization_id == str(event.organization_id)`,
+`event` always the caller's own already-org-scoped fetch), no new route, no
+F401/F811, no new unauthenticated surface. One frontend file changed
+(`EventProspectsCard.tsx`), a 3-line cosmetic-only diff. Both standing flags —
+EV-23 (series RSVP phase-gate override) and EV-26 (room double-booking check
+has no row lock) — re-read at their current line numbers and re-confirmed
+unchanged; left FLAGGED for the same reasons as prior passes. Route
+enumeration re-run from scratch: 56/56 in `events.py`, 23/23 in
+`event_requests.py`, identical gates to pass 4/5, no new unauthenticated
+route. Full write-up: `EV-16-events-requests.md`'s **Pass 6** section.
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` clean, 444
+revisions/single head (unchanged from pass 5); `pytest tests/ -k "event"` 937
+passed, 1 pre-existing skip; `npm run typecheck` clean; `npm run lint` 0
+errors/0 warnings. Rotation row 16 → ✅ (pending PR merge). Next: Feature 17
+(Training core).
