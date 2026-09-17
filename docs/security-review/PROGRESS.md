@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 13 (Apparatus & NFC), pass 6** — PR
+[#2623](https://github.com/thegspiro/the-logbook/pull/2623), branch
+`claude/security-review-feature13-pass6`. **Watchdog iteration:** the
+`/loop 30m /security-review` session had produced no commit and had no open
+security-review PR for well over an hour past its 30-minute cadence, with
+`PROGRESS.md`'s Open PR row already reading "None" / "Next: Feature 13
+(Apparatus & NFC), pass 6" and no `claude/security-review-*` branch in flight
+for apparatus (confirmed via `git fetch origin --prune` + `git branch -r`,
+and `list_pull_requests` state=open → `[]`). This watchdog picked up
+Feature 13 directly per Step 1, mirroring the Feature 12/Facilities,
+Feature 11/Inventory, and Feature 10/Documents & legal pass-6 precedents
+below. **True zero-delta re-verification:** `git diff --stat
+229c7bd06..origin/main` (`229c7bd06` = pass 12's merge commit, PR #2565)
+across every declared scope file and every shared dependency the standing
+AP-17/AP-18 fixes rest on returns empty despite 201 intervening commits, and
+both standing fixes were each re-read directly at their current line numbers
+and confirmed unchanged — not just inferred from the diff. Full completion
+gate: flake8/black/isort clean (whole tree), `validate_migrations.py
+--strict` unchanged at 444 revisions/single head, 292 apparatus-scoped
+backend tests passed (1 pre-existing skip) plus the full backend unit suite
+(10199 passed, 1 skipped, 0 failed), frontend typecheck/lint both clean. **0
+fixed, 0 new findings.** Full write-up:
+[`AP-13-apparatus-nfc.md`](./AP-13-apparatus-nfc.md)'s **Pass 13** section.
+Rotation row 13 → ✅ (pending PR merge). Next: Feature 14 (Equipment check &
+shifts), pass 6.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 6, PR #2621, merged), preserved for history</summary>
+
 **None.** PR [#2621](https://github.com/thegspiro/the-logbook/pull/2621)
 (Feature 12, Facilities, pass 6 — zero-delta re-verification, 0 fixed, 0 new
 findings; all four standing flags FAC-13/FAC-30/FAC-41/FAC-44 re-confirmed
@@ -28,6 +57,8 @@ further pending, so this scheduled 30-minute watchdog check merged it
 directly (squash, `expectedHeadSha` pinned to `51e706a3`). Merge commit
 `9cc5c8d7f` confirmed on `main` via `git fetch`. Rotation row 12 stays ✅.
 Next: Feature 13 (Apparatus & NFC), pass 6.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 6, PR #2621, pending merge), preserved for history</summary>
@@ -24143,3 +24174,59 @@ further pending, so this watchdog check merged it directly (squash,
 `expectedHeadSha` pinned to `51e706a3`). Merge commit `9cc5c8d7f` confirmed
 on `main` via `git fetch`. Rotation row 12 stays ✅. Next: Feature 13
 (Apparatus & NFC), pass 6 — not yet started as of this check.
+
+### 2026-09-17 — Feature 13 (Apparatus & NFC, pass 6) — 0 fixed, 0 new findings — watchdog iteration
+
+Watchdog check-in on the `/loop 30m /security-review` session. That loop
+session had produced no commit and had no open security-review PR for well
+over an hour past its 30-minute cadence, with `PROGRESS.md`'s own Open PR row
+already reading "None" / "Next: Feature 13 (Apparatus & NFC), pass 6" and no
+in-progress `claude/security-review-*` branch for apparatus. `git fetch
+origin --prune` clean, `git branch -r` showed no apparatus/feature13 branch,
+`list_pull_requests` (state=open) returned empty — confirmed independently
+before proceeding, per Step 0. This watchdog picked the feature up directly
+per Step 1, mirroring the Feature 11/Inventory pass 6, Feature 10/Documents &
+legal pass 6, and Feature 12/Facilities pass 6 precedents above.
+
+Loaded prior art first (`CHECKLIST.md`; `SEC-00-cross-cutting-baseline.md`'s
+pass 6, 2026-09-15 — all 13 standing sweep classes clean, nothing
+apparatus-specific; `AP-13-apparatus-nfc.md`'s pass 1–12 history, every AP-1
+through AP-18 finding, all `✅ FIXED`). No `docs/module-audit/*apparatus*` or
+`docs/app-review/*apparatus*` file exists in the tree (checked via glob) —
+this feature's prior art is entirely its own pass history plus SEC-00.
+Baseline `229c7bd06` (pass 12's merge, PR #2565; confirmed via `git log
+--grep "#2565"` and `git show --stat -s`, and confirmed an ancestor of
+`origin/main`). **True zero-delta re-verification:** `git diff --stat
+229c7bd06..origin/main` across every declared scope file (`apparatus.py`,
+`nfc_tags.py`, `apparatus_service.py`, `nfc_tag_service.py`,
+`evoc_level_service.py`, `driver_exception_service.py`,
+`mcp/tools/apparatus.py`, `models/apparatus.py`, `models/nfc_tag.py`,
+`schemas/apparatus.py`, `schemas/nfc_tag.py`, and the entire
+`frontend/src/modules/apparatus/` tree) returns empty, despite 201 unrelated
+commits landing on `main` since pass 12. Every shared dependency the standing
+AP-17/AP-18 fixes rest on (`utils/org_scoping.py`, `core/permissions.py`,
+`core/audit.py`, `utils/model_updates.py`, `utils/sql_search.py`,
+`core/dependencies.py`) is independently zero-diff too, checked per file, not
+just inferred from the feature's own files being untouched.
+`validate_migrations.py --strict` independently confirms the same 444
+revisions/single head `6ab7d903fae5` as SEC-00 pass 6 two days prior.
+
+Both standing fixes (AP-17's `create_equipment` apparatus-id validation,
+AP-18's `current_location_id` validation on `create_apparatus`/
+`update_apparatus`) were re-read directly at their current line numbers in
+the live tree — not inferred from diff silence — and confirmed unchanged,
+comments and all. Mechanically re-verified route counts (88 on
+`apparatus.py`, 5 on `nfc_tags.py`, both byte-identical to pass 11/12), zero
+`BaseHTTPMiddleware` usage, and every `.ilike()` call in
+`apparatus_service.py` still paired with `escape=LIKE_ESCAPE_CHAR` against a
+`like_pattern(...)`-built pattern. No AP-N finding carries an OPEN or FLAGGED
+disposition anywhere in the document (grepped). **0 fixed, 0 new findings, 0
+application-code changes.** Full write-up: `AP-13-apparatus-nfc.md`'s **Pass
+13** section. Completion gate: `flake8`/`black --check`/`isort
+--check-only` clean over `app/ tests/ alembic/` (isort 9.0.1, matching CI's
+pinned version); `validate_migrations.py --strict` clean, 444
+revisions/single head; `pytest tests/ -k "apparatus"` 292 passed, 1
+pre-existing skip; full backend unit suite 10199 passed, 1 skipped, 0
+failed; `npm run typecheck` clean; `npm run lint` 0 errors/0 warnings.
+Rotation row 13 stays ✅ (pending PR merge). Next: Feature 14 (Equipment
+check & shifts), pass 6.

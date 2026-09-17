@@ -1,6 +1,6 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), (pass 13 — rotation pass 6, this PR)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (88 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py`,
@@ -8,6 +8,130 @@
 `mcp/tools/apparatus.py`
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 13 (2026-09-17, rotation pass 6) — zero-delta re-verification, 0 fixed, 0 new findings
+
+**Watchdog iteration.** The `/loop 30m /security-review` session had produced
+no commit and had no open security-review PR for well over an hour past its
+30-minute cadence, with `PROGRESS.md`'s Open PR row already reading "None" /
+"Next: Feature 13 (Apparatus & NFC), pass 6" and no `claude/security-review-*`
+branch in flight for apparatus (confirmed via `git fetch origin --prune` +
+`git branch -r`, and `list_pull_requests` state=open → `[]`). This watchdog
+picked up Feature 13 directly per Step 1, mirroring the Facilities pass 6 /
+Inventory pass 6 / Documents pass 6 precedents recorded in `PROGRESS.md`.
+
+**Scope for this pass.** Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`
+(pass 6, 2026-09-15 — all 13 established cross-cutting sweep classes clean,
+0 new findings, re-verified against 80 commits) and this file's full pass
+1–12 history rather than re-deriving any of it. No `docs/module-audit/*apparatus*`
+or `docs/app-review/*apparatus*` file exists in the tree (checked via glob) — this
+feature's only prior-art source is its own pass history plus SEC-00.
+
+**Delta check.** Pass 12 merged as `229c7bd06` (PR #2565, verified via
+`git log --grep "#2565"` and `git show --stat -s 229c7bd06`). `git diff --stat
+229c7bd06..origin/main` across every declared scope file — `apparatus.py`,
+`nfc_tags.py`, `apparatus_service.py`, `nfc_tag_service.py`,
+`evoc_level_service.py`, `driver_exception_service.py`, `mcp/tools/apparatus.py`,
+`models/apparatus.py`, `models/nfc_tag.py`, `schemas/apparatus.py`,
+`schemas/nfc_tag.py`, `frontend/src/modules/apparatus` — plus every shared
+dependency the standing AP-17/AP-18 fixes rest on (`org_scoping.py`,
+`core/permissions.py`, `core/audit.py`, `utils/model_updates.py`,
+`utils/sql_search.py`, `core/dependencies.py`) came back **completely
+empty**, despite 201 intervening commits (`git rev-list --count
+229c7bd06..origin/main`). Per Step 3, this is a fast zero-delta
+re-verification pass: every standing item was re-read directly at its current
+line number in the live tree, not inferred from diff silence.
+
+**Standing fixes re-confirmed live, not just from diff silence:**
+
+- **AP-17** (`create_equipment`'s `apparatus_id` FK validation) —
+  `apparatus_service.py:1680-1684`, `assert_in_org(self.db, Apparatus, ...)`
+  call present, comment intact (`# AP-17 (XC-1): apparatus_id is
+client-supplied and the FK carries ondelete="CASCADE"...`).
+- **AP-18** (`current_location_id` FK validation) —
+  `apparatus_service.py:419-425` (`create_apparatus`) and `:625-631`
+  (`update_apparatus`), both `assert_in_org(self.db, Location,
+apparatus_data.current_location_id, ..., allow_none=True, label="location")`
+  calls present, both `# AP-18 (XC-1)` comments intact.
+- **Route/permission enumeration re-run fresh** (not diffed): `grep -c
+"^@router\." apparatus.py` → 88, `nfc_tags.py` → 5 — both byte-identical to
+  pass 11's and pass 12's counts.
+- **`BaseHTTPMiddleware`** — 0 usages in any of this feature's four backend
+  files (grep, this pass).
+- **LIKE escaping** — every `.ilike()` call in `apparatus_service.py` (the
+  `make`/`unit_number`/`name`/`vin` search filters) still passes
+  `escape=LIKE_ESCAPE_CHAR` against a `like_pattern(...)`-built pattern
+  (`apparatus_service.py:541-554`, read directly this pass).
+- **`mcp/tools/apparatus.py`** — `git log -1` on the file shows its last
+  change (`6e96e975f`) predates pass 12's merge; unchanged since pass 12
+  read it fresh end to end and found it read-only, org-scoped, PII-redacted.
+
+**No apparatus-scoped item is open or flagged.** Every AP-1 through AP-18
+finding in this document's pass 1–12 history carries an `✅ FIXED`
+disposition (confirmed by grep across the whole file for `OPEN`/`FLAGGED`
+dispositions — zero matches). The one nearby item mentioning this feature —
+`docs/KNOWN_LIMITATIONS.md`'s `CheckTemplateCompartment.children` /
+`remote_side` entry — is itself marked **fixed** there (feature 13's own
+AP-13 fix), not an open item. The only genuinely open cross-cutting item
+touching this feature's transport (the outbound-URL DNS-rebinding TOCTOU) is
+tracked and re-confirmed under SEC-00, not AP-13 — this feature makes no
+outbound integration calls of its own (grep for `assert_outbound_url_safe`/
+`create_integration_client` across the four backend scope files: 0 hits).
+
+### Verified good ✅ (this pass)
+
+- **Zero drift across 201 commits.** `git diff --stat` on every declared
+  scope file and every shared dependency the standing fixes rest on returns
+  empty — the same clean-gap shape passes 6 and 12 (and SEC-00 pass 6, same
+  day) already established for other features/the whole app.
+- **AP-17 and AP-18 fixes verified present at their current line numbers**,
+  not merely assumed from a silent diff (see above).
+- **Migration count unchanged** — 444 revisions, single head
+  `6ab7d903fae5`, matching both pass 12's own gate and SEC-00 pass 6's
+  independently-run count from two days prior.
+- **isort verified actually run** (not silently skipped) — `pip show isort`
+  confirms 9.0.1 installed, matching the version CI's Backend Lint job pins
+  (`.github/workflows/ci.yml:121`).
+
+## Findings
+
+**0 new findings this pass.** Every prior AP-1–AP-18 finding remains
+`✅ FIXED` and was re-confirmed live at its current line number, not merely
+inferred from an empty diff.
+
+## Schema & migration notes
+
+No migration written this pass. Chain re-validated: 444 revisions
+(unchanged from pass 12), single head `6ab7d903fae5`, no duplicate ids.
+
+## Guard tests added
+
+None. This pass added no new fix, so there is no new class to guard against
+reintroduction; the pass-12 regression tests
+(`TestCreateEquipmentFKValidation::test_foreign_apparatus_rejected`,
+`TestCreateApparatusCurrentLocationFKValidation::test_foreign_current_location_rejected`,
+`TestUpdateApparatusFKValidation::test_foreign_current_location_rejected`)
+remain in `tests/test_apparatus_service.py` and passed in this pass's own
+gate run.
+
+## Completion gate (pass 13)
+
+| Check                                                                                      | Result                                                                       |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                              | ✅ clean                                                                     |
+| `black --check app/ tests/ alembic/`                                                       | ✅ 1599 files unchanged                                                      |
+| `isort --check-only app/ tests/ alembic/`                                                  | ✅ clean (isort 9.0.1, matching CI's pinned version)                         |
+| `python3 scripts/validate_migrations.py --strict`                                          | ✅ 444 revisions, single head `6ab7d903fae5`                                 |
+| `pytest tests/ -q -k "apparatus"`                                                          | ✅ 292 passed, 1 skipped (pre-existing optional-dependency skip)             |
+| backend full unit suite (`pytest tests/ -m "not integration and not slow and not docker"`) | ✅ 10199 passed, 1 skipped (pre-existing optional-dependency skip), 0 failed |
+| `cd frontend && npm run typecheck`                                                         | ✅ 0 errors (aliased 7.0.2 compiler)                                         |
+| `cd frontend && npm run lint`                                                              | ✅ 0 errors, 0 warnings                                                      |
+
+No source files changed this pass — every check above is a re-verification,
+not a fix, so there is nothing for a behavior-neutrality diff against
+unmodified `HEAD` to compare.
 
 ---
 
