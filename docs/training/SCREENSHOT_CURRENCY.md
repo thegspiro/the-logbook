@@ -1,5 +1,135 @@
 # Screenshot currency
 
+## Restarted 2026-09-17 (watchdog restart) — recaptured 3 stale shots, 1 shot newly uncapturable
+
+Watchdog restart: last commit on this branch was 2026-09-15 14:40 UTC
+(`a1896bfbe`), roughly 34 hours idle with no indication of why the previous
+runner stopped. Branch was 48 commits ahead of `origin/main` and 176 behind.
+
+**Rebase.** `git rebase origin/main` (fe69a54e6 → d167303ee, 176 commits).
+One real conflict, on a binary this time rather than the usual insertion-point
+text: `docs/training/images/03-74-settings-call-count-toggle.png`. This
+branch's own `9157c1216` (2026-09-10) had recaptured it for the settings-page
+heading/44px sweep while it still pictured the two-state toggle; `main`
+independently re-shot it on 2026-09-12 (`df047330e`) for the toggle's redesign
+into the three-option **How calls are recorded** radio group. Resolved by
+keeping `main`'s side — confirmed correct against the merged tree's own guide
+caption, which already reads "the 'How calls are recorded' choices," not
+toggle language, and against `df047330e`'s commit message stating the old
+control no longer exists. Every other conflict was the routine kind this log
+already has a standing convention for: `SCREENSHOT_STATUS.md` (regenerated via
+`status_report.py` after each of 8 occurrences, per the file's own "this file
+is regenerated wholesale" note) and `SCREENSHOT_CURRENCY.md` itself, 5
+insertion-point conflicts at the top of this reverse-chronological file, each
+resolved by keeping both dated sections in the order they already appear
+below. One of this branch's own commits (`7bd4e7de5`, a prior rebase-conflict
+resolution) came out empty against the new base and was dropped automatically
+by `git rebase` — its content was already fully present upstream, nothing
+lost.
+
+**Checks.** `status_report.py`: 583/586, unchanged in count from before the
+UI-drift recaptures below (the 583 already included the 3 new placeholders
+`08-admin-reports.md` and `20-september-2026-release-changes.md` had gained
+from `main` in the rebased range). `audit_images.py --baseline
+scripts/screenshots/audit_baseline.txt`: no new findings across all 582
+images — only the pre-known dark-page scrollbar-gutter edge finding, already
+in the baseline. `check_docs_links.py`: 360 files, 0 broken links.
+
+**UI-drift review of the 176-commit range.** Read the range's frontend/src
+diff (net changes only, `git diff --stat`, 21 files touched) rather than each
+individual commit, since intermediate commits' diffs are superseded by later
+ones in the same range. Two confirmed stale shots, both from copy that changed
+under an already-captured screen:
+
+- `03-103-call-types-editor.png` and its duplicate `20-07-call-types-editor.png`
+  (guides 03 and 20, same image) pictured the Call types card's "not in
+  effect" banner in its pre-`46bb5d399` wording ("Record a call count at
+  close-out is on. It is currently off..."), a straight two-state-toggle
+  sentence the same `46bb5d399` (2026-09-12, newly pulled into this branch
+  today — confirmed not an ancestor of the branch's pre-rebase tip) rewrote to
+  name the **How calls are recorded** control by its current heading and
+  differentiate the `off` and `detailed` reasons. Recaptured; the banner now
+  reads correctly.
+- `08-22-screening-record-form.png` (guide 08) pictured the Add Screening
+  Record dialog with no linkage warning. `f0b3e38a2` (2026-09-16, MS-13,
+  medical-screening security-review pass 6) added an amber notice above the
+  first field on the create dialog — "Not linked to a member or prospect...
+  the record it creates will not count toward any member's or prospect's
+  compliance status" — because the dialog has no member/prospect picker at
+  all. The committed image predated the notice by one day. Recaptured.
+
+Also recaptured, cosmetic: `04-48-event-linked-prospects.png`'s "Prospective
+Members" card heading was `font-bold` in the committed image; `74aed7461`
+matched it to `font-medium` like its "Event Details" and "Attendance"
+neighbours. Barely visible at this size, included in the same stack-up pass
+rather than left as a second one-line diff to explain later.
+
+Everything else the range touched and this pass read in full — the
+`ApplicantActionPanels.tsx` Meeting-stage requirement-hint rewording
+(`f999c0be0`, `49a7253ce`, moving the trigger from check-in to finalized
+attendance), the `MeetingConfig.tsx` and `FormSubmissionConfig.tsx` checkbox
+label/default changes, `smtpProviders.ts` dropping the Proton Mail Bridge
+preset, `PhoneMonth.tsx`'s past-day cue, and the `ConversionModal.tsx` /
+`ProspectiveMembersPage.tsx` stats-refresh plumbing — has no manifest entry
+that pictures the changed area, checked by name against `manifest.mjs` rather
+than assumed absent.
+
+**New finding, not fixed this pass — escalated per CLAUDE.md's Hard Stop:**
+`20-07-applicant-place-on-stage.png` can no longer be captured. Its `prepare`
+opens Marcus Webb's applicant card expecting `canPlaceOnStage`
+(`!current_stage_id`) — the manifest's own comment says the demo database
+needs exactly one applicant left unassigned, since every other seeded
+applicant is placed on one. Discovered by accident: a `--only 20-07` prefix
+match also caught this unrelated id, and it timed out waiting for
+`select#place-on-stage` both in that run and in an isolated re-run. The
+freshly-recaptured `04-48-event-linked-prospects.png` above shows why —
+Marcus Webb, the guest `seed_recruitment_event_with_prospects` checks into the
+Fall Recruitment Open House, now lands on **Application Received** rather
+than unassigned. Something in the prospective-members pipeline-assignment
+behaviour changed inside this rebase's range (`3638277e5` "let a coordinator
+place an applicant on a stage", `a05a62360`, `afc71250b`, and others touching
+the same area, none read in enough depth this pass to name the exact commit)
+so that a guest check-in that creates a prospect now auto-places them, where
+the seeder's own comment says it should not. Not investigated further this
+pass: naming the exact commit and deciding whether the fix belongs in
+`seed_demo_data.py` (seed a second, never-placed applicant) or is a real
+product regression in guest-check-in-to-prospect assignment is backend
+investigation beyond a screenshot-currency pass, and guessing at either
+risks the same kind of wrong fix this log has warned against elsewhere.
+`docs/training/images/20-07-applicant-place-on-stage.png` itself was not
+touched — the existing committed image is untouched and still whatever a
+prior pass captured — but the pipeline can no longer regenerate it if it ever
+needs to.
+
+**Also noticed, not a screenshot, flagged for whoever next edits guide 15:**
+`15-prospective-members.md`'s "What counts as attendance on a Meeting stage"
+callout (around line 108) still describes the pre-`49a7253ce` rule — advance
+on check-in, "from the moment that meeting's check-in window opens." The
+commit moved the trigger to the event's attendance being *finalized*
+(End Event, an actual end time, or the nightly settle-window
+task), so the callout's mechanism is now wrong, though its bottom-line
+guidance (naming the stage's Auto-Link Event Type) still holds. Prose, not a
+capture — out of this pass's scope, left for the guide's own maintenance.
+
+**Full stack was brought up for this pass**, not deferred: no demo org
+existed (`SELECT COUNT(*) FROM organizations` = 0) and `frontend/node_modules`
+was absent, so `npm install` (from the repo root; `package-lock.json`'s
+resulting diff was pure npm-metadata churn — `peer`/`libc` annotation
+reshuffling on `esbuild`'s optional platform binaries, no version change —
+and was reverted with `git checkout`, never committed) ran before
+`scripts/screenshots/dev_env.sh`. `bootstrap_demo.py` hit the same stuck-session
+failure the 2026-09-07 restart entry (below) documents — a password rejected
+for missing a special character had already staged an organization, and
+`get_or_create_session` refuses a new `/onboarding/start` once any
+organization exists, successful or not. Same fix: dropped and recreated
+`intranet_db`, let the backend's fast-path init rebuild the schema, re-ran
+bootstrap clean. `seed_demo_data.py` completed with one blocked item —
+`minutes approve` refused on the separation-of-duties guard (a member
+approving their own meeting minutes), the seeder attempting a state the
+business rule correctly refuses, not a break. The `administrative`
+membership-tier and count-only-closeout 400s prior passes logged here did not
+recur this run; not confirmed fixed, just not observed.
+
 ## Disposition for September 12-15, 2026 - the screens stayed put, their contents did not
 
 Audit: [`CHANGE_AUDIT_2026-09-12_TO_09-15.md`](../CHANGE_AUDIT_2026-09-12_TO_09-15.md).
