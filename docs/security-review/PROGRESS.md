@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2623](https://github.com/thegspiro/the-logbook/pull/2623)
+(Feature 13, Apparatus & NFC, pass 6 — true zero-delta re-verification, 0
+fixed, 0 new findings; both standing fixes AP-17/AP-18 re-confirmed
+unchanged at their current line numbers) went fully green (17/17 checks
+including the `CI Success` gate; `mergeable_state: clean`; no unresolved
+review threads — only the informational Codex usage-limit comment and this
+watchdog's own explanation of a stale-superseded-run false failure on the
+PR's first commit, which a follow-up push recording the PR number in this
+file's Open PR row superseded before CI finished) and sat idle with nothing
+further pending, so this scheduled 30-minute watchdog check merged it
+directly (squash, `expectedHeadSha` pinned to `645548b1`). Merge commit
+`7ecac1cec` confirmed on `main` via `git fetch`. Rotation row 13 stays ✅.
+Next: Feature 14 (Equipment check & shifts), pass 6.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 6, PR #2623, before it merged), preserved for history</summary>
+
 **Feature 13 (Apparatus & NFC), pass 6** — PR
 [#2623](https://github.com/thegspiro/the-logbook/pull/2623), branch
 `claude/security-review-feature13-pass6`. **Watchdog iteration:** the
@@ -41,6 +58,8 @@ fixed, 0 new findings.** Full write-up:
 [`AP-13-apparatus-nfc.md`](./AP-13-apparatus-nfc.md)'s **Pass 13** section.
 Rotation row 13 → ✅ (pending PR merge). Next: Feature 14 (Equipment check &
 shifts), pass 6.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 6, PR #2621, merged), preserved for history</summary>
@@ -24230,3 +24249,34 @@ pre-existing skip; full backend unit suite 10199 passed, 1 skipped, 0
 failed; `npm run typecheck` clean; `npm run lint` 0 errors/0 warnings.
 Rotation row 13 stays ✅ (pending PR merge). Next: Feature 14 (Equipment
 check & shifts), pass 6.
+
+### 2026-09-17 — Feature 13 (Apparatus & NFC, pass 6)'s PR #2623 merged, watchdog recorded it
+
+Routine 30-minute check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). That loop session had produced no
+commit and had no open security-review PR for well over an hour past its
+30-minute cadence, with `PROGRESS.md`'s Open PR row already reading "None" /
+"Next: Feature 13 (Apparatus & NFC), pass 6" and no in-progress
+`claude/security-review-*` branch for apparatus. `git fetch origin --prune`
+clean, `git branch -r` showed no apparatus/feature13 branch,
+`list_pull_requests` (state=open) returned empty — confirmed independently
+before proceeding. This watchdog picked the feature up directly per Step 1,
+mirroring the Feature 12/Facilities, Feature 11/Inventory, and Feature
+10/Documents & legal pass-6 precedents above, and opened PR #2623.
+
+One CI check (`CI Success`) reported `failure` against the PR's first commit
+(`e5ac5719`) shortly after opening; investigation showed the underlying
+workflow run's actual conclusion was against a commit already superseded by
+a follow-up commit (`645548b1`, recording this PR's number in the Open PR
+row above) pushed moments later — the same stale-superseded-run pattern
+documented several times earlier in this log. Posted one comment on the PR
+explaining this rather than spending a re-run.
+
+The current head (`645548b1`)'s own fresh run then went fully green (17/17
+checks including `CI Success`), `mergeable_state: clean`, with no
+unresolved review threads (only the informational Codex usage-limit comment
+and this watchdog's own stale-run explanation), and sat idle with nothing
+further pending, so this watchdog check merged it directly (squash,
+`expectedHeadSha` pinned to `645548b1`). Merge commit `7ecac1cec` confirmed
+on `main` via `git fetch`. Rotation row 13 stays ✅. Next: Feature 14
+(Equipment check & shifts), pass 6 — not yet started as of this check.
