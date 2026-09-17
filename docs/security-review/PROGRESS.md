@@ -16,7 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2630](https://github.com/thegspiro/the-logbook/pull/2630)
+**None.** Two independent watchdog iterations picked up Feature 16 (Events &
+requests) pass 6 within seconds of each other and opened separate PRs against
+the same base commit: [#2630](https://github.com/thegspiro/the-logbook/pull/2630)
+(merged, `f39a6c4` — see below) and
+[#2631](https://github.com/thegspiro/the-logbook/pull/2631) (same feature,
+same two standing flags re-confirmed, no new findings). #2631 was closed as a
+duplicate in favor of the already-merged #2630 rather than reconciling two
+docs-only diffs of the same findings section. Rotation row 16 stays ✅. Next:
+Feature 17 (Training core).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 6, PR #2630, merged), preserved for history</summary>
+
+PR [#2630](https://github.com/thegspiro/the-logbook/pull/2630)
 (Feature 16, Events & requests, pass 6 — near-zero-delta re-verification, 0
 fixed, 0 new findings; standing flags EV-23, EV-26 both re-confirmed
 unchanged) went fully green (17/17 checks including `CI Success`;
@@ -27,6 +40,8 @@ superseded by the actual head `84522c9` when a follow-up commit landed
 moments later). This scheduled watchdog check merged it directly (squash,
 `expectedHeadSha` pinned to `84522c9`). Merge commit `f39a6c4` confirmed on
 `main`. Rotation row 16 stays ✅. Next: Feature 17 (Training core).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 6, PR #2630, pending merge), preserved for history</summary>
@@ -24513,3 +24528,17 @@ usage-limit comment and this watchdog's own explanation above) — squash-
 merged directly (`expectedHeadSha` pinned to `84522c9`). Merge commit
 `f39a6c4` confirmed on `main`. Rotation row 16 stays ✅. Next: Feature 17
 (Training core) — not yet started as of this check.
+
+### 2026-09-17 — watchdog closed duplicate PR #2631 (Feature 16, Events & requests)
+
+Immediately after recording PR #2630's merge above, `list_pull_requests`
+(state=open) turned up a second open PR, #2631 — a different session
+(`session_01YV2sCBdvZYnsgyGkaQVMXy`) had independently picked up the same
+stalled Feature 16 slot and opened its own pass-6 PR eleven seconds after
+#2630, against the same base commit (`7244946`). Both reached the same
+outcome: no new findings, the same two standing flags (EV-23, EV-26)
+re-confirmed unregressed. Since #2630 was already green and merged by the
+time this was noticed, #2631 was closed as a duplicate (one explanatory
+comment on the PR, no force-push, no reopening) rather than reconciling two
+docs-only diffs of the same findings section. Rotation row 16 stays ✅. Next:
+Feature 17 (Training core) — not yet started as of this check.
