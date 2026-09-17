@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 12 (Facilities), pass 6** — branch
-`claude/security-review-facilities-12`, PR pending creation. **Watchdog
+**Feature 12 (Facilities), pass 6** — PR
+[#2621](https://github.com/thegspiro/the-logbook/pull/2621), branch
+`claude/security-review-facilities-12`. **Watchdog
 iteration:** the `/loop 30m /security-review` session
 (`session_011T1ZyyLrD5HagusgK9uDw2`) had produced no commit and had no open
 security-review PR for well over an hour past its 30-minute cadence, with
