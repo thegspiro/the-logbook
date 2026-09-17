@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2621](https://github.com/thegspiro/the-logbook/pull/2621)
+(Feature 12, Facilities, pass 6 — zero-delta re-verification, 0 fixed, 0 new
+findings; all four standing flags FAC-13/FAC-30/FAC-41/FAC-44 re-confirmed
+unchanged) went fully green (17/17 checks including the `CI Success` gate;
+`mergeable_state: clean`; no unresolved review threads — only the
+informational Codex usage-limit comment and this watchdog's own explanation
+of a stale-superseded-run false failure on the PR's first commit, which a
+follow-up push superseded before CI finished) and sat idle with nothing
+further pending, so this scheduled 30-minute watchdog check merged it
+directly (squash, `expectedHeadSha` pinned to `51e706a3`). Merge commit
+`9cc5c8d7f` confirmed on `main` via `git fetch`. Rotation row 12 stays ✅.
+Next: Feature 13 (Apparatus & NFC), pass 6.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 6, PR #2621, pending merge), preserved for history</summary>
+
 **Feature 12 (Facilities), pass 6** — PR
 [#2621](https://github.com/thegspiro/the-logbook/pull/2621), branch
 `claude/security-review-facilities-12`. **Watchdog
@@ -24098,3 +24114,32 @@ pre-existing skip; full backend unit suite 10199 passed, 1 skipped, 0
 failed; `npm run typecheck` clean; `npm run lint` 0 errors/0 warnings.
 Rotation row 12 → ✅ (pending PR merge). Next: Feature 13 (Apparatus & NFC),
 pass 6.
+
+### 2026-09-17 — Feature 12 (Facilities, pass 6)'s PR #2621 merged, watchdog recorded it
+
+Routine 30-minute check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). The loop session had produced no
+commit and had no open security-review PR for well over an hour past its
+30-minute cadence — longer than any previously-recorded gap in this log —
+with `PROGRESS.md`'s Open PR row already reading "None" / "Next: Feature 12
+(Facilities)" and no in-progress branch. This watchdog picked up Feature 12
+directly per Step 1 (see the superseded note above for the zero-delta
+re-verification detail) and opened PR #2621.
+
+One CI check (`CI Success`) reported `failure` against the PR's first
+commit (`981b995d`) minutes after opening; investigation showed the
+underlying workflow run's actual conclusion was `cancelled`, not failed —
+superseded by a follow-up commit (`51e706a3`) pushed moments later, with the
+gate check surfacing a cancelled prerequisite as `failure`. Posted one
+comment on the PR explaining this rather than spending a re-run, consistent
+with the stale-superseded-run pattern already documented several times in
+this log (e.g. the Feature 11/Inventory pass 6 entry above).
+
+The current head (`51e706a3`)'s own fresh run then went fully green (17/17
+checks including `CI Success`), `mergeable_state: clean`, with no
+unresolved review threads (only the informational Codex usage-limit comment
+and this watchdog's own stale-run explanation), and sat idle with nothing
+further pending, so this watchdog check merged it directly (squash,
+`expectedHeadSha` pinned to `51e706a3`). Merge commit `9cc5c8d7f` confirmed
+on `main` via `git fetch`. Rotation row 12 stays ✅. Next: Feature 13
+(Apparatus & NFC), pass 6 — not yet started as of this check.
