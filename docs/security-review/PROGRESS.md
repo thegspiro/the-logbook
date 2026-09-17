@@ -16,10 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2630](https://github.com/thegspiro/the-logbook/pull/2630)
+(Feature 16, Events & requests, pass 6 — near-zero-delta re-verification, 0
+fixed, 0 new findings; standing flags EV-23, EV-26 both re-confirmed
+unchanged) went fully green (17/17 checks including `CI Success`;
+`mergeable_state: clean`; no unresolved review threads — only the
+informational Codex usage-limit comment and this watchdog's own explanation
+of a stale-superseded-run false failure on an earlier commit, `50a3d97`,
+superseded by the actual head `84522c9` when a follow-up commit landed
+moments later). This scheduled watchdog check merged it directly (squash,
+`expectedHeadSha` pinned to `84522c9`). Merge commit `f39a6c4` confirmed on
+`main`. Rotation row 16 stays ✅. Next: Feature 17 (Training core).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 6, PR #2630, pending merge), preserved for history</summary>
+
 PR [#2630](https://github.com/thegspiro/the-logbook/pull/2630) (Feature 16,
 Events & requests, pass 6 — near-zero-delta re-verification, 0 fixed, 0 new
 findings; standing flags EV-23, EV-26 both re-confirmed unchanged),
 branch `claude/security-review-ev-16-pass6`. Awaiting CI.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 6, PR #2628, before it merged), preserved for history</summary>
@@ -24476,3 +24493,23 @@ revisions/single head (unchanged from pass 5); `pytest tests/ -k "event"` 937
 passed, 1 pre-existing skip; `npm run typecheck` clean; `npm run lint` 0
 errors/0 warnings. Rotation row 16 → ✅ (pending PR merge). Next: Feature 17
 (Training core).
+
+### 2026-09-17 — watchdog merged PR #2630 (Feature 16, Events & requests, pass 6)
+
+Routine watchdog check on the `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`). Its own picked-up PR, #2630, hit a
+`CI Success` failure moments after opening — traced to the run
+(`35223475652`) on the PR's first commit (`50a3d97`) being cancelled outright
+when a follow-up commit (`84522c9`, recording the PR number in this file)
+landed on the same branch seconds later and triggered a fresh run
+(`35223504888`) on the new head. Posted one comment on the PR identifying
+this as a stale-superseded-run false failure rather than a real one, per the
+same pattern documented in earlier passes of this log, and watched the
+current run instead of re-running the cancelled one.
+
+That run finished 17/17 green (`CI Success` included), `mergeable_state:
+clean`, no unresolved review threads (only the informational Codex
+usage-limit comment and this watchdog's own explanation above) — squash-
+merged directly (`expectedHeadSha` pinned to `84522c9`). Merge commit
+`f39a6c4` confirmed on `main`. Rotation row 16 stays ✅. Next: Feature 17
+(Training core) — not yet started as of this check.
