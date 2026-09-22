@@ -9,6 +9,13 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    # PyMySQL 1.2.1 replaced converters.escape_bytes_prefixed with a string
+    # sentinel, and aiomysql 0.3.2 (its latest release) still calls it for every
+    # bytes parameter, so any BLOB write raises TypeError. Lift this once an
+    # aiomysql release supports PyMySQL >= 1.2.1 — see docs/KNOWN_LIMITATIONS.md.
+    ignore:
+      - dependency-name: "pymysql"
+        versions: [">=1.2.1"]
     groups:
       python-minor-patch:
         update-types: ["minor", "patch"]
