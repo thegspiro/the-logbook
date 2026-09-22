@@ -69,6 +69,7 @@ from app.schemas.auth import (
 from app.schemas.organization import AppearanceSettings, AuthSettings
 from app.services import mfa_service
 from app.services.auth_service import RESET_TOKEN_EXPIRY_MINUTES, AuthService
+from app.services.branding_service import get_primary_branding
 from app.services.security_monitoring import security_monitor
 from app.utils.security_notifications import notify_security_event
 
@@ -246,25 +247,26 @@ async def get_login_branding(
     """
     default_layout = AppearanceSettings().navigation_layout
     try:
-        result = await db.execute(
-            select(Organization.name, Organization.logo, Organization.settings)
-            .where(Organization.active.is_(True))
-            .order_by(Organization.created_at.asc())
-            .limit(1)
-        )
-        row = result.first()
+        # Which organization an unauthenticated request belongs to is a rule,
+        # not a lookup, and the installable app's icons resolve it too — see
+        # branding_service.get_primary_branding.
+        branding = await get_primary_branding(db)
 
-        if not row:
+        if branding is None:
             return {"name": None, "logo": None, "navigation_layout": default_layout}
 
         # settings is free-form JSON, so an absent or malformed appearance
         # block degrades to the default rather than failing the login page.
-        appearance = (row.settings or {}).get("appearance")
+        appearance = (branding.settings or {}).get("appearance")
         layout = (appearance or {}).get("navigation_layout")
         if layout not in ("top", "left"):
             layout = default_layout
 
-        return {"name": row.name, "logo": row.logo, "navigation_layout": layout}
+        return {
+            "name": branding.name,
+            "logo": branding.logo,
+            "navigation_layout": layout,
+        }
     except Exception:
         # Pre-onboarding or DB not ready — return empty branding gracefully
         return {"name": None, "logo": None, "navigation_layout": default_layout}

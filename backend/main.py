@@ -24,6 +24,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.public import responses as public_responses
+from app.api.public.branding import router as public_branding_router
 from app.api.public.calendar import router as public_calendar_router
 from app.api.public.display import router as public_display_router
 from app.api.public.finance_approvals import router as finance_approvals_router
@@ -2265,6 +2266,18 @@ app.include_router(
     finance_approvals_router,
     prefix="/api",
     responses={**public_responses.TOKEN_ADDRESSED, **public_responses.BAD_REQUEST},
+)
+
+# Branded installable-app assets — the department's logo rendered into the
+# manifest icons and the iOS home-screen icon and launch images
+# (/api/public/v1/branding). Unauthenticated because a browser fetches these
+# while deciding whether the site is installable, with no session and no
+# credentials; a department with no logo answers 404 and the reverse proxy
+# serves the shipped icon instead.
+app.include_router(
+    public_branding_router,
+    prefix="/api",
+    responses={**public_responses.RATE_LIMITED, **public_responses.NOT_FOUND},
 )
 
 # Public legal text (privacy policy / terms) for the anonymous /privacy and
