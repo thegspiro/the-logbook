@@ -143,6 +143,38 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### The installed app now carries the department's own logo (2026-09-17)
+
+A member who installs The Logbook from their browser — "Add to Home Screen" on
+a phone, the install button in Chrome or Edge on a desktop — used to get the
+stock Logbook mark as the icon. It is now the department's own logo, the same
+one uploaded under Settings → Organization → Profile, rendered by the server
+into each size a browser asks for. The iOS home-screen icon and the launch
+screen an installed app shows while it starts are branded the same way.
+
+**Nothing to do, and nothing to configure**, as long as the department has a
+logo uploaded. A department that has not uploaded one keeps the shipped icon,
+and so does an installation whose logo is stored as a link to an image
+elsewhere rather than as an uploaded file — the server renders only uploaded
+images, because fetching a URL out of the database on an unauthenticated
+request is a door worth leaving shut.
+
+**Members who already installed the app keep the old icon.** An icon is chosen
+once, when the app is installed, and neither Android nor iOS revisits it.
+Anyone who wants the new one removes the app from their home screen and adds it
+again. New installs get it immediately, as does anyone who installs after a
+logo is changed.
+
+**Only if you run your own reverse proxy in front of the stack.** The icons are
+served at the URLs they always had — `/pwa-192x192.png`, `/apple-touch-icon.png`,
+`/apple-splash-*.png` and the new `/pwa-maskable-512x512.png` — and the
+frontend container's own nginx asks the backend for them before falling back to
+the file it ships. A proxy that passes these paths through to the frontend
+container, which is what the bundled configurations do, needs no change. A
+proxy that serves the frontend's built files directly off disk will keep
+serving the stock icons, because the branded ones do not exist on disk: point
+those paths at the frontend container instead.
+
 ### A meeting stage advances on finalized attendance, not on the check-in (2026-09-16)
 
 Follows the entry below, which made a meeting stage that names an event an

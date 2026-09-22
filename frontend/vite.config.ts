@@ -90,6 +90,75 @@ function inlinePushWorkerPlugin(): Plugin {
   };
 }
 
+/**
+ * Bumped whenever the bytes behind the PWA icon and launch-image URLs change
+ * meaning. Those URLs are stable by design — the department's own logo is
+ * rendered onto them at request time (see the `branded_app_asset` map in
+ * frontend/nginx.conf) — but nginx has been serving every `*.png` with
+ * `Cache-Control: immutable` for a year, so a browser that fetched the stock
+ * icon before this existed would keep showing it at install time, and an
+ * installed app never looks at its icon again. The query string makes them
+ * URLs no cache has seen.
+ *
+ * index.html carries the same revision by hand on its apple-touch-icon and
+ * launch-image links; src/pwaBrandingIntegrity.test.ts holds the two together.
+ */
+const PWA_ASSET_REVISION = '2';
+
+/**
+ * Serve the department-branded PWA assets during `npm run dev`.
+ *
+ * In a deployment nginx does this: it asks the backend for the department's
+ * logo rendered into the requested geometry, and serves the file shipped in
+ * public/ when there is no logo to render. The dev server has no nginx in
+ * front of it, so without this the branding can only be seen by building a
+ * container — and the mapping between these URLs and the backend's is exactly
+ * the part that breaks silently.
+ */
+function brandedPwaAssetsPlugin(): Plugin {
+  // Must stay in step with the `branded_app_asset` map in frontend/nginx.conf.
+  const ICONS: Record<string, string> = {
+    '/pwa-192x192.png': 'icon/192',
+    '/pwa-512x512.png': 'icon/512',
+    '/pwa-maskable-512x512.png': 'icon/maskable-512',
+    '/apple-touch-icon.png': 'icon/apple-touch',
+  };
+  const SPLASH = /^\/apple-splash-(\d+)-(\d+)\.png$/;
+
+  return {
+    name: 'branded-pwa-assets',
+    // `configureServer` only — `vite preview` deliberately keeps serving the
+    // shipped assets, so the PWA e2e run needs no backend attached.
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = (req.url ?? '').split('?')[0] ?? '';
+        const splash = SPLASH.exec(pathname);
+        const asset = splash ? `splash/${splash[1] ?? ''}-${splash[2] ?? ''}` : ICONS[pathname];
+        if (!asset) {
+          next();
+          return;
+        }
+
+        const backend = process.env.VITE_BACKEND_URL || 'http://localhost:3001';
+        void fetch(`${backend}/api/public/v1/branding/${asset}.png`)
+          .then(async (response) => {
+            // 404 is the ordinary answer for a department with no logo, and
+            // means "serve what shipped" — which is what next() does.
+            if (!response.ok) {
+              next();
+              return;
+            }
+            res.setHeader('Content-Type', 'image/png');
+            res.setHeader('Cache-Control', 'no-store');
+            res.end(Buffer.from(await response.arrayBuffer()));
+          })
+          .catch(() => next());
+      });
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   define: {
@@ -99,6 +168,7 @@ export default defineConfig({
   plugins: [
     react(),
     versionJsonPlugin(),
+    brandedPwaAssetsPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
       // Registration lives in src/utils/serviceWorkerUpdate.ts instead of the
@@ -193,22 +263,31 @@ export default defineConfig({
         theme_color: '#991b1b',
         background_color: '#0f172a',
         display: 'standalone',
+        // Each src is served by the backend with the department's own logo
+        // rendered into it, falling back to the file of the same name in
+        // public/ when no logo is configured — see frontend/nginx.conf.
         icons: [
           {
-            src: 'pwa-192x192.png',
+            src: `pwa-192x192.png?v=${PWA_ASSET_REVISION}`,
             sizes: '192x192',
             type: 'image/png',
           },
           {
-            src: 'pwa-512x512.png',
+            src: `pwa-512x512.png?v=${PWA_ASSET_REVISION}`,
             sizes: '512x512',
             type: 'image/png',
           },
+          // A separate URL rather than the `any maskable` the same file used
+          // to carry: Android crops a maskable icon to a circle of the
+          // launcher's choosing, so this one is rendered smaller, inside the
+          // guaranteed-visible safe zone, and on an opaque plate. Declaring
+          // one file as both meant the icon was either cropped when masked or
+          // needlessly small when not.
           {
-            src: 'pwa-512x512.png',
+            src: `pwa-maskable-512x512.png?v=${PWA_ASSET_REVISION}`,
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable',
+            purpose: 'maskable',
           },
         ],
         // Shown in Android's richer install dialog instead of the minimal

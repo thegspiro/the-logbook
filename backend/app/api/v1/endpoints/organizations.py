@@ -48,6 +48,7 @@ from app.schemas.organization import (
     SetupChecklistResponse,
     decrypt_settings_secrets,
 )
+from app.services.branding_service import reset_branding_cache
 from app.services.org_template_service import OrgTemplateService
 from app.services.organization_service import OrganizationService
 from app.utils.email_providers import (
@@ -1471,6 +1472,14 @@ async def update_organization_profile(
 
     await db.commit()
     await db.refresh(org)
+
+    if "logo" in update_data:
+        # The installed app's icons are rendered from this column and cached
+        # for a minute, so a chief who uploads a crest and immediately
+        # reinstalls the app would otherwise be served the old one. This clears
+        # only THIS worker's cache — the others fall out on the same short TTL,
+        # which is why the TTL is short rather than this being the mechanism.
+        reset_branding_cache()
 
     # Also update localStorage branding for the caller
     await log_audit_event(
