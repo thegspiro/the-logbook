@@ -11342,6 +11342,7 @@ class Seeder:
         self._seed_open_election(elections)
         self._seed_restricted_election(elections)
         self._seed_membership_vote_election(elections)
+        self._seed_declined_vote_election(elections)
         self._seed_runoff_chain(elections)
         self._seed_saved_ballot_template()
         self._seed_post_nomination_election(elections)
@@ -11686,6 +11687,62 @@ class Seeder:
             )
         except ApiError as exc:
             self.blocked.append(f"membership vote election: {exc}")
+
+    DECLINED_ELECTION_TITLE = "Membership Vote — September Business Meeting"
+
+    def _seed_declined_vote_election(self, elections: list[dict]) -> None:
+        """A second membership ballot, for the vote that does not carry.
+
+        `not_elected` is written in one place — `_sync_package_statuses`, when
+        an election closes and a `membership_approval` item carrying a
+        package id tallies more Deny than Approve — so the only way to produce
+        it is to hold a losing vote. Nothing seeded held one, which left the
+        drawer's red "not elected by the membership vote" panel, the Convert
+        gate that reads the same status, and guide 15's account of both
+        describing a state no demo department could reach.
+
+        Its own election rather than a second item on the August ballot: that
+        one is closed by the time this runs, and a closed election accepts no
+        ballot edits. A second meeting is also the truer picture — a
+        department that declines an applicant did not decide it in the same
+        breath as the one it admitted.
+
+        Draft on purpose, for the reason `_seed_membership_vote_election`
+        gives: the item has to be in place before voting starts, and the
+        assign endpoint is what puts it there.
+        """
+        if any(pick(e, "title") == self.DECLINED_ELECTION_TITLE for e in elections):
+            return
+        try:
+            self.api.post(
+                "/elections",
+                {
+                    "title": self.DECLINED_ELECTION_TITLE,
+                    "description": (
+                        "Membership approval carried to the floor at the "
+                        "September business meeting."
+                    ),
+                    "election_type": "general",
+                    # No hand-built item. The August ballot carries one and
+                    # `seed_membership_vote_outcome` has to drop it again
+                    # before assigning, because an item built by hand holds no
+                    # `prospect_package_id` and closing an election around it
+                    # syncs nothing. Starting empty skips that dance entirely;
+                    # `open_election` accepts an election whose only item
+                    # arrives from the assign endpoint.
+                    "ballot_items": [],
+                    "start_date": iso(NOW + timedelta(days=2)),
+                    "end_date": iso(NOW + timedelta(days=9)),
+                    "anonymous_voting": True,
+                    "allow_write_ins": False,
+                    "results_visible_immediately": False,
+                    "voting_method": "simple_majority",
+                    "victory_condition": "majority",
+                    "quorum_type": "none",
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"declined vote election: {exc}")
 
     RESTRICTED_ELECTION_TITLE = "Operations Committee Seat — Restricted Ballot"
 
@@ -12408,12 +12465,22 @@ class Seeder:
             ),
             "prospects",
         )
+        # Stage name -> position, for the scenario overrides below.
+        position_by_name = {
+            pick(step, "name"): slot for slot, step in enumerate(steps)
+        }
+
         for index, prospect in enumerate(prospects):
             prospect_id = pick(prospect, "id")
             if not prospect_id:
                 continue
             # One applicant per stage, wrapping — a spread the board can show.
-            target = index % len(order)
+            # A scenario applicant overrides it: their stage is what makes
+            # their scenario visible, and the wrap would move them off it.
+            # An override naming a stage this pipeline does not have falls
+            # back to the spread rather than silently pinning to stage zero.
+            scenario = self.SCENARIO_STAGES.get(pick(prospect, "email"))
+            target = position_by_name.get(scenario, index % len(order))
             try:
                 current = order.index(pick(prospect, "current_step_id"))
             except ValueError:
@@ -12488,7 +12555,31 @@ class Seeder:
         ("Casey", "Lindgren", "Referred by a current member"),
         ("Morgan", "Tran", "Wants EMS experience before paramedic school"),
         ("Riley", "Bishop", "Lives two blocks from Station 2"),
+        # The applicant the membership declined. A losing vote is a state the
+        # drawer, the Convert gate and guide 15 all describe and no seeded
+        # department could produce, because the one seeded ballot passes.
+        ("Devon", "Marsh", "Neighbour of a current member"),
     ]
+
+    # Applicants whose stage a scenario decides, rather than the one-per-stage
+    # spread below.
+    #
+    # An election package is attached to an APPLICANT, and the drawer renders
+    # its panel only while that applicant is on an `election_vote` stage
+    # (`ApplicantDetailDrawer.tsx`: `isOnElectionStage`). The spread moves
+    # applicants back as well as forward on every run, so without this it
+    # eventually drags a voted-on applicant off the vote stage and the panel
+    # the vote exists to fill stops rendering. That is not hypothetical: the
+    # elected package ended up on an applicant sitting at Interview, which
+    # made guide 01's Elected badge unreproducible without anyone noticing,
+    # because a missing panel looks like a panel that has nothing to say.
+    #
+    # Keyed by email: it is what identifies an applicant across runs, and the
+    # spread walks the API's list order rather than `PROSPECTS`.
+    SCENARIO_STAGES = {
+        "sam.okafor@example.org": "Membership Vote",
+        "devon.marsh@example.org": "Membership Vote",
+    }
 
     def seed_prospective_members(self) -> dict[str, list[dict]]:
         pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
@@ -12806,71 +12897,123 @@ class Seeder:
                     raise
                 self.blocked.append(f"election package: {exc}")
 
-    # Approve / Deny, under the 22-member eligible count so the paper batch
+    # Approve / Deny, under the 22-member eligible count so each paper batch
     # passes the plausibility check without an audited override.
     MEMBERSHIP_VOTE_TALLY = (18, 2)
+    # The vote that does not carry. Deny has to WIN, not merely show up:
+    # `_sync_package_statuses` writes `elected` only on `approve > deny`, so a
+    # tie reads as not elected too — this is comfortably past that line rather
+    # than resting on it.
+    DECLINED_VOTE_TALLY = (6, 14)
+
+    # Each outcome names its applicant instead of taking whichever package the
+    # API lists first. With one package on file `next(...)` happened to be
+    # right; with two it picked between them by list order, and picking the
+    # wrong one left the run reporting "election closed but package is 'draft'"
+    # about an applicant whose vote was never the one being held.
+    MEMBERSHIP_VOTE_APPLICANT = "sam.okafor@example.org"
+    DECLINED_VOTE_APPLICANT = "devon.marsh@example.org"
 
     def seed_membership_vote_outcome(self) -> None:
-        """Carry the August membership vote through to an Elected package.
+        """Carry the August membership vote through to an Elected package."""
+        self._carry_membership_vote(
+            label="membership vote outcome",
+            election_title=self.MEMBERSHIP_ELECTION_TITLE,
+            applicant_email=self.MEMBERSHIP_VOTE_APPLICANT,
+            tally=self.MEMBERSHIP_VOTE_TALLY,
+            expected="elected",
+            hand_item_id="item-membership-okafor",
+        )
 
-        Guide 01 pictures the applicant drawer's ELECTION PACKAGE badge
-        reading Elected, and `elected` is written in exactly one place —
+    def seed_declined_vote_outcome(self) -> None:
+        """Carry the September membership vote through to a Not Elected package.
+
+        The same lifecycle with the tally reversed. Kept as its own election
+        and its own applicant so neither outcome can overwrite the other:
+        `_sync_package_statuses` sets the status of every package whose ballot
+        item is on the election being closed, so two applicants sharing a
+        ballot would share whatever that ballot decided.
+        """
+        self._carry_membership_vote(
+            label="declined vote outcome",
+            election_title=self.DECLINED_ELECTION_TITLE,
+            applicant_email=self.DECLINED_VOTE_APPLICANT,
+            tally=self.DECLINED_VOTE_TALLY,
+            expected="not_elected",
+            hand_item_id=None,
+        )
+
+    def _carry_membership_vote(
+        self,
+        *,
+        label: str,
+        election_title: str,
+        applicant_email: str,
+        tally: tuple[int, int],
+        expected: str,
+        hand_item_id: str | None,
+    ) -> None:
+        """Walk one membership ballot from draft package to synced outcome.
+
+        `elected` and `not_elected` are written in exactly one place —
         `_sync_package_statuses`, when an election whose ballot item carries
         the package's id closes. No package edit gets there; the vote has to
         actually happen. So this walks the product's own lifecycle:
 
         1. mark the package `ready` (the assign endpoint refuses anything
            else), with a `recommended_ballot_item` that keeps the title and
-           statement `_seed_membership_vote_election` used — and opens the
-           vote to all membership types, because the assign default of
-           regular/life matches nobody in a roster of active/administrative
-           members and an item with zero eligible voters rejects any tally;
-        2. replace the hand-built ballot item with the assign endpoint's —
-           the hand item carried no `prospect_package_id`, so closing an
-           election around it would have synced nothing;
+           statement the election seeder used — and opens the vote to all
+           membership types, because the assign default of regular/life
+           matches nobody in a roster of active/administrative members and an
+           item with zero eligible voters rejects any tally;
+        2. drop the hand-built item where the election carries one, then let
+           the assign endpoint add its own — a hand item holds no
+           `prospect_package_id`, so closing an election around it syncs
+           nothing;
         3. open the election, record the floor vote as a paper batch, have
            two officers attest it, and close.
 
-        Each stage checks where a previous run stopped, so a re-run against
-        a database whose election is already closed does nothing.
+        Each stage checks where a previous run stopped, so a re-run against a
+        database whose election is already closed does nothing.
         """
         elections = items(self.api.get("/elections?limit=100"), "elections")
         election_id = next(
             (
                 pick(e, "id")
                 for e in elections
-                if pick(e, "title") == self.MEMBERSHIP_ELECTION_TITLE
+                if pick(e, "title") == election_title
             ),
             None,
         )
         if not election_id:
-            self.blocked.append(
-                "membership vote outcome: election not found "
-                f"({self.MEMBERSHIP_ELECTION_TITLE!r})"
-            )
+            self.blocked.append(f"{label}: election not found ({election_title!r})")
             return
 
         packages = items(
             self.api.get("/prospective-members/election-packages"), "packages"
         )
-        package = next((p for p in packages if pick(p, "status") != "withdrawn"), None)
+        package = self._package_for(packages, applicant_email)
         if not package:
-            self.blocked.append("membership vote outcome: no election package")
+            self.blocked.append(
+                f"{label}: no election package for {applicant_email}. The "
+                "package is created only for an applicant whose current stage "
+                "is the election vote — check SCENARIO_STAGES put them there."
+            )
             return
         prospect_id = pick(package, "prospect_id", "prospectId")
         pkg_status = pick(package, "status")
-        if pkg_status == "elected":
+        if pkg_status == expected:
             return
 
         election = self.api.get(f"/elections/{election_id}")
         election_status = str(pick(election, "status") or "").lower()
         if election_status == "closed":
-            # The only way here is an election closed around the unlinked
-            # hand item, and a closed election accepts no repair over the
-            # API. Say so rather than half-working.
+            # The only way here is an election closed around an item that
+            # never carried the package id, and a closed election accepts no
+            # repair over the API. Say so rather than half-working.
             self.blocked.append(
-                "membership vote outcome: election closed but package is "
-                f"'{pkg_status}' — its ballot item never carried the package id"
+                f"{label}: election closed but package is '{pkg_status}' — "
+                "its ballot item never carried the package id"
             )
             return
 
@@ -12896,16 +13039,17 @@ class Seeder:
         try:
             if election_status == "draft":
                 if pkg_status == "ready":
-                    # Drop the unlinked hand item first, so the ballot does
-                    # not put the same applicant to the floor twice.
-                    remaining = [
-                        item
-                        for item in (pick(election, "ballot_items") or [])
-                        if item.get("id") != "item-membership-okafor"
-                    ]
-                    self.api.patch(
-                        f"/elections/{election_id}", {"ballot_items": remaining}
-                    )
+                    if hand_item_id:
+                        # Drop the unlinked hand item first, so the ballot
+                        # does not put the same applicant to the floor twice.
+                        remaining = [
+                            item
+                            for item in (pick(election, "ballot_items") or [])
+                            if item.get("id") != hand_item_id
+                        ]
+                        self.api.patch(
+                            f"/elections/{election_id}", {"ballot_items": remaining}
+                        )
                     self.api.post(
                         f"/prospective-members/prospects/{prospect_id}"
                         "/election-package/assign",
@@ -12924,8 +13068,7 @@ class Seeder:
             )
             if not item:
                 self.blocked.append(
-                    "membership vote outcome: no membership_approval item "
-                    "on the opened election"
+                    f"{label}: no membership_approval item on the opened election"
                 )
                 return
             # The votes-to-item join `_sync_package_statuses` uses: the
@@ -12959,7 +13102,7 @@ class Seeder:
                 "batches",
             )
             if not batches:
-                approve, deny = self.MEMBERSHIP_VOTE_TALLY
+                approve, deny = tally
                 self.api.post(
                     f"/elections/{election_id}/manual-ballots",
                     {
@@ -12972,7 +13115,7 @@ class Seeder:
                         ],
                         "ballots_cast": approve + deny,
                         "notes": (
-                            "In-room paper tally, August business meeting. "
+                            "In-room paper tally, business meeting. "
                             "Counted by the Secretary, witnessed by the Chief."
                         ),
                     },
@@ -12989,17 +13132,47 @@ class Seeder:
                 self._attest_ballot_batch(election_id, batch_id)
             self.api.post(f"/elections/{election_id}/close")
         except ApiError as exc:
-            self.blocked.append(f"membership vote outcome: {exc}")
+            self.blocked.append(f"{label}: {exc}")
             return
 
         final = self.api.get(
             f"/prospective-members/prospects/{prospect_id}/election-package"
         )
-        if pick(final, "status") != "elected":
+        if pick(final, "status") != expected:
             self.blocked.append(
-                "membership vote outcome: election closed but package reads "
-                f"'{pick(final, 'status')}' — vote-to-package sync did not run"
+                f"{label}: election closed but package reads "
+                f"'{pick(final, 'status')}' rather than '{expected}' — "
+                "vote-to-package sync did not run"
             )
+
+    def _package_for(
+        self, packages: list[dict], applicant_email: str
+    ) -> dict | None:
+        """The election package belonging to one named applicant.
+
+        The package list carries an applicant snapshot rather than a joinable
+        email column on every serializer version, so this falls back to
+        reading the prospect. Withdrawn packages are skipped: a withdrawn one
+        is a superseded snapshot, not this applicant's live ballot entry.
+        """
+        for package in packages:
+            if pick(package, "status") == "withdrawn":
+                continue
+            snapshot = pick(package, "applicant_snapshot", "applicantSnapshot") or {}
+            if str(snapshot.get("email") or "").lower() == applicant_email:
+                return package
+            prospect_id = pick(package, "prospect_id", "prospectId")
+            if not prospect_id:
+                continue
+            try:
+                prospect = self.api.get(
+                    f"/prospective-members/prospects/{prospect_id}"
+                )
+            except ApiError:
+                continue
+            if str(pick(prospect, "email") or "").lower() == applicant_email:
+                return package
+        return None
 
     def seed_bulk_prospects(self, pipeline_id: str | None, target: int) -> int:
         """Pad the pipeline out past the board's card ceiling. Opt-in only.
@@ -14704,6 +14877,7 @@ class Seeder:
         # After prospective members: the vote consumes the election package
         # that step creates.
         self.step("membership vote outcome", self.seed_membership_vote_outcome)
+        self.step("declined vote outcome", self.seed_declined_vote_outcome)
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("compliance profiles", self.seed_compliance_profiles)
