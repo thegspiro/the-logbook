@@ -102,7 +102,7 @@ websockets==17.1
 # ============================================
 email-validator==2.3.0
 python-dateutil==2.9.0.post0
-tzdata>=2026.3  # Timezone data for zoneinfo (Python 3.9+ built-in)
+tzdata>=2026.4  # Timezone data for zoneinfo (Python 3.9+ built-in)
 
 # ============================================
 # Payments
