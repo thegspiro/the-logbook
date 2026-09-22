@@ -27,6 +27,13 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    # jsdom 30.1 changed Blob's own symbols, and vitest (4.1 and 5.0 alike)
+    # finds jsdom's private Blob impl by taking the first one, so its
+    # URL.createObjectURL shim throws on every jsdom Blob. Lift this once a
+    # vitest release handles jsdom >= 30.1 — see docs/KNOWN_LIMITATIONS.md.
+    ignore:
+      - dependency-name: "jsdom"
+        versions: [">=30.1.0"]
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
