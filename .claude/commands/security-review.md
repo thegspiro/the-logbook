@@ -12,7 +12,19 @@ is still open, so the rotation cannot outrun its own review queue.
 
 ## Step 0 — Is there an open security-review PR?
 
-Read `docs/security-review/PROGRESS.md` → **Open PR** row.
+**Ask GitHub, not the tracker.** List open PRs whose head branch starts with
+`claude/security-review-`; that set is the answer. `PROGRESS.md`'s **Open PR**
+row is narrative written for a human reader and is routinely a step behind,
+because the iteration that updates it commits that update to its own feature
+branch — so `main` does not carry it until that PR merges. Read the row for
+context, never as the state.
+
+This is what makes the ride-along in Step 8 safe. Trusting the row instead is
+what used to force a docs-only PR to be opened and merged immediately, just to
+make the rotation's state visible on `main`.
+
+More than one open → the rotation forked. Tend the oldest and close the rest as
+duplicates with a comment saying which PR supersedes them.
 
 - **A PR is open and not yet merged** → this iteration is a _tend_ iteration:
   1. Fetch its state, CI result on the **current head SHA**, and unresolved
@@ -28,15 +40,31 @@ Read `docs/security-review/PROGRESS.md` → **Open PR** row.
      anything architectural, then leave it to the owner.
   5. Update the **Open PR** row with what changed, and end the turn. Do **not**
      start the next feature.
-- **The PR merged since the last iteration** → record it in the log, clear the
-  **Open PR** row, mark the feature ✅, and continue to Step 1.
+- **The PR merged since the last iteration** → edit the log, clear the **Open
+  PR** row and mark the feature ✅ in your working tree, then continue to Step 1
+  **without committing**. Those edits ride along in the next feature's commit
+  at Step 8. Never give the record its own branch, its own commit or its own
+  PR.
 - **No PR open** → continue to Step 1.
+
+**A docs-only PR is not a recordable event.** If the PR that merged touched
+only `PROGRESS.md` or a findings file, there is nothing to record: clear the
+row and move on. Recording a recording is what produced the #2630 → #2632 →
+#2634 chain, where each bookkeeping PR became the event the next iteration felt
+obliged to record. That chain ended in a `PROGRESS.md` merge conflict rather
+than at a stopping rule, because two bookkeeping PRs write the same file at the
+same offset — the collision CLAUDE.md's changelog freeze exists to avoid.
 
 ## Step 1 — Pick the feature
 
 Take the first feature marked ⬜ in `docs/security-review/PROGRESS.md`, or the
 one named in `$ARGUMENTS`. Mark it 🔄. If every feature is ✅, say the rotation
 is complete, reset all rows to ⬜ for a fresh pass, and stop.
+
+A rotation that completes with a Step 0 record still uncommitted leaves it in
+the working tree — it rides along in the first feature PR of the next pass,
+together with the reset. Do not open a PR to carry it alone; an unrecorded
+merge costs nothing, because Step 0 reads the truth from GitHub anyway.
 
 ## Step 2 — Load prior art before reading any code
 
@@ -120,10 +148,17 @@ git commit -m "security(<feature>): <n> fixes, <m> flagged"
 git push -u origin claude/security-review-<feature>
 ```
 
+`checkout -b` carries the uncommitted working-tree edits from Step 0 onto the
+new branch and `add -A` commits them alongside this feature's own changes, which
+is exactly the intent — **this** is where the previous PR's merge gets recorded.
+Do not stash, discard or separately commit them, and say so in the PR body so a
+reviewer knows why the diff touches a feature the PR title does not name.
+
 Retry a failed push up to 4 times with backoff (2s, 4s, 8s, 16s). Open a PR
 whose body lists every finding with severity and disposition, then subscribe to
 its activity so CI and review events wake the loop. Record the PR number and
-branch in the **Open PR** row of `PROGRESS.md`.
+branch in the **Open PR** row of `PROGRESS.md`, and push that as a second commit
+on this same branch — never as a PR of its own.
 
 ## Step 9 — Report
 
@@ -134,6 +169,13 @@ severity, gate status, PR link, next feature. Then end the turn.
 
 - One feature per run, or one tend pass. Finish it completely.
 - Never start a new feature while a security-review PR is open.
+- **Never open a PR that changes only `PROGRESS.md`.** Tracker updates ride
+  along with the review that caused them. This binds every iteration, including
+  a watchdog session picking the rotation up from outside the loop — PRs #2632,
+  #2633 and #2634 were all watchdog-authored, so the rule lives here rather than
+  in the loop's own steps. A watchdog that finds nothing worth reviewing ends
+  its turn with no PR at all; leaving the tracker a step behind is the intended
+  state, not a problem to fix, because Step 0 reads GitHub.
 - Prefer flagging over guessing. A wrong "fix" in a payments or permissions path
   is worse than an accurate finding.
 - Findings must be verifiable: cite `file.py:line` and a reproducible scenario.
