@@ -1711,3 +1711,67 @@ rotation specifically checks (`#2`, `#9`, `#14`, `#15`, `#27`, `#29`,
 
 No files changed by this pass other than this findings doc and
 `docs/security-review/PROGRESS.md`.
+
+## Pass 6 (2026-09-17) — 0 fixed, 0 new findings, true zero-delta re-verification against pass 5
+
+**Prefix:** `TR6` · **PR:** [#2635](https://github.com/thegspiro/the-logbook/pull/2635)
+
+**Scoped since pass 5's merge:** `6b9bcb5` (PR #2575). Diffed all nine
+declared files — three endpoints (`training.py`, `training_programs.py`,
+`training_sessions.py`), three services (`training_service.py`,
+`training_program_service.py`, `training_session_service.py`),
+`training_compliance.py`, `schemas/training.py` (pass 5's scope addition),
+and `app/mcp/tools/training.py` — via `git diff --stat 6b9bcb5..origin/main`.
+**All nine are byte-for-byte unchanged** — the diff is empty, unlike pass 5
+where one file (`schemas/training.py`) carried an out-of-scope credential-
+redaction change. Zero net code delta since pass 4.
+
+No new migration exists at all since pass 5's merge (`git log --oneline
+6b9bcb5..origin/main -- backend/alembic/versions/` returns nothing), so the
+content-grep for the six training-core table names had nothing to check.
+
+**Call-site sweep unchanged:** `grep -rl "TrainingService(\|
+TrainingProgramService(\|TrainingSessionService("` across `backend/app`
+returns the same set as pass 5 — the three in-scope endpoint files, `app/mcp/
+tools/training.py` (already swept), and the same six other-feature files
+(`external_training_service.py`, `training_submission_service.py`,
+`course_cohort_service.py`, `scheduled_tasks.py`,
+`shift_completion_service.py`, `skills_testing_service.py`), plus
+`training_submissions.py` (an endpoint file, not previously named
+individually but present since before pass 4 and unchanged since pass 5 —
+its one call, `TrainingProgramService(db)` at line 329, is Feature
+18/19 territory, not this feature's). No new call site.
+
+### Re-verification of all standing fixes and flags
+
+Not re-derived from prior prose — confirmed by the empty file diff above:
+since none of the nine declared files changed a single byte since pass 5,
+every fix and flag pass 5 verified at its cited line number (TR-11, TR-12,
+TR-13, TR2-1/TR2-3, TR3-1, TR4-1, TR2-2, TR2-4, TR3-2, TR4-2, TR4-3, TR4-4,
+the bulk/historical-import enum-validation gap, and `enroll_member`'s
+duplicate-active-enrollment race) is unchanged today. All eight
+`docs/KNOWN_LIMITATIONS.md` mirrors still describe the current code
+accurately; no edits needed.
+
+### Verdict
+
+No new findings. True zero-delta re-verification: this feature's declared
+surface had no code change of any kind since pass 5, no new migration
+touches its tables, and no new call site was added. Every prior fix and
+flag was re-confirmed unchanged at its existing citation.
+
+## Completion gate (pass 6)
+
+| Check                                             | Result                                               |
+| ------------------------------------------------- | ---------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations (no files touched this pass)         |
+| `black --check app/ tests/ alembic/`              | ✅ 1599 files unchanged                              |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict` | ✅ 444 revisions, single head `6ab7d903fae5`         |
+| `pytest tests/ -q -k "training or compliance"`    | ✅ 1139 passed, 1 skipped (pre-existing)             |
+| `pytest tests/ -q` (full backend suite)           | ✅ 12632 passed, 21 skipped (pre-existing), 0 failed |
+| `cd frontend && npm run typecheck`                | ✅ clean — no errors                                 |
+| `cd frontend && npm run lint`                     | ✅ clean — 0 warnings                                |
+
+No files changed by this pass other than this findings doc and
+`docs/security-review/PROGRESS.md`.
