@@ -351,6 +351,46 @@ class FormsService:
         return False
 
     @staticmethod
+    def _is_field_visible(field: Any, data: Dict[str, Any]) -> bool:
+        """Whether a field's conditional-visibility rule shows it for ``data``.
+
+        A hidden field is never shown to the submitter, so enforcing its
+        ``required`` flag would reject a form nobody can complete ("previous
+        EMT experience" required of an applicant who chose an administrative
+        membership). This must stay identical to ``isFieldVisible`` in
+        ``frontend/src/pages/PublicFormPage.tsx`` and
+        ``frontend/src/components/forms/FormRenderer.tsx``: if the two disagree
+        the browser accepts a form the server rejects, or the reverse. An
+        unrecognised operator counts as visible so a bad rule fails closed —
+        the field stays required rather than silently becoming optional.
+        """
+        condition_field_id = getattr(field, "condition_field_id", None)
+        operator = getattr(field, "condition_operator", None)
+        if not condition_field_id or not operator:
+            return True
+
+        raw = data.get(str(condition_field_id))
+        if raw is None:
+            parent_value = ""
+        elif isinstance(raw, (list, tuple)):
+            parent_value = ",".join(str(v) for v in raw).strip()
+        else:
+            parent_value = str(raw).strip()
+        expected = getattr(field, "condition_value", None) or ""
+
+        if operator == "equals":
+            return parent_value == expected
+        if operator == "not_equals":
+            return parent_value != expected
+        if operator == "contains":
+            return expected.lower() in parent_value.lower()
+        if operator == "not_empty":
+            return len(parent_value) > 0
+        if operator == "is_empty":
+            return len(parent_value) == 0
+        return True
+
+    @staticmethod
     def _sanitize_submitter_info(
         name: Optional[str], email: Optional[str]
     ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
@@ -950,9 +990,13 @@ class FormsService:
             # Validate required fields (FORM-6: presence AND a non-empty value —
             # a key holding "" / whitespace / [] does not satisfy "required").
             for field in form.fields:
-                if field.required and (
-                    str(field.id) not in data
-                    or self._is_empty_value(data[str(field.id)])
+                if (
+                    field.required
+                    and self._is_field_visible(field, data)
+                    and (
+                        str(field.id) not in data
+                        or self._is_empty_value(data[str(field.id)])
+                    )
                 ):
                     return None, f"Required field '{field.label}' is missing"
 
@@ -1139,9 +1183,13 @@ class FormsService:
                 # value -- a key holding "" / whitespace / [] does not
                 # satisfy "required").
                 for field in form.fields:
-                    if field.required and (
-                        str(field.id) not in data
-                        or self._is_empty_value(data[str(field.id)])
+                    if (
+                        field.required
+                        and self._is_field_visible(field, data)
+                        and (
+                            str(field.id) not in data
+                            or self._is_empty_value(data[str(field.id)])
+                        )
                     ):
                         return None, None, f"Required field '{field.label}' is missing"
 

@@ -64,6 +64,155 @@ class TestIsEmptyValue:
         assert FormsService._is_empty_value(["a"]) is False
 
 
+def _conditional_field(operator, value=None, parent="membership-type"):
+    return SimpleNamespace(
+        id="experience",
+        label="Previous EMT experience",
+        required=True,
+        condition_field_id=parent,
+        condition_operator=operator,
+        condition_value=value,
+    )
+
+
+class TestIsFieldVisible:
+    """Server-side mirror of the renderers' ``isFieldVisible``."""
+
+    def test_unconditional_field_is_visible(self):
+        field = SimpleNamespace(id="f", condition_field_id=None)
+        assert FormsService._is_field_visible(field, {}) is True
+
+    def test_field_without_condition_attributes_is_visible(self):
+        assert FormsService._is_field_visible(SimpleNamespace(id="f"), {}) is True
+
+    def test_operator_without_parent_is_visible(self):
+        field = _conditional_field("equals", "EMT", parent=None)
+        assert FormsService._is_field_visible(field, {}) is True
+
+    def test_equals(self):
+        field = _conditional_field("equals", "EMT")
+        assert FormsService._is_field_visible(field, {"membership-type": "EMT"})
+        assert not FormsService._is_field_visible(
+            field, {"membership-type": "Administrative"}
+        )
+        assert not FormsService._is_field_visible(field, {})
+
+    def test_equals_trims_the_parent_value(self):
+        field = _conditional_field("equals", "EMT")
+        assert FormsService._is_field_visible(field, {"membership-type": "  EMT "})
+
+    def test_not_equals(self):
+        field = _conditional_field("not_equals", "Administrative")
+        assert FormsService._is_field_visible(field, {"membership-type": "EMT"})
+        assert not FormsService._is_field_visible(
+            field, {"membership-type": "Administrative"}
+        )
+
+    def test_contains_is_case_insensitive(self):
+        field = _conditional_field("contains", "emt")
+        assert FormsService._is_field_visible(field, {"membership-type": "EMT,Fire"})
+        assert not FormsService._is_field_visible(field, {"membership-type": "Fire"})
+
+    def test_contains_matches_a_list_value(self):
+        field = _conditional_field("contains", "EMT")
+        assert FormsService._is_field_visible(
+            field, {"membership-type": ["Fire", "EMT"]}
+        )
+
+    def test_not_empty_and_is_empty(self):
+        shown_when_answered = _conditional_field("not_empty")
+        shown_when_blank = _conditional_field("is_empty")
+        assert FormsService._is_field_visible(
+            shown_when_answered, {"membership-type": "EMT"}
+        )
+        assert not FormsService._is_field_visible(
+            shown_when_answered, {"membership-type": "  "}
+        )
+        assert FormsService._is_field_visible(shown_when_blank, {})
+        assert not FormsService._is_field_visible(
+            shown_when_blank, {"membership-type": "EMT"}
+        )
+
+    def test_unknown_operator_keeps_the_field_visible(self):
+        field = _conditional_field("greater_than", "3")
+        assert FormsService._is_field_visible(field, {}) is True
+
+
+def _membership_form():
+    membership_type = SimpleNamespace(
+        id="membership-type",
+        label="Membership Type",
+        required=True,
+        condition_field_id=None,
+        condition_operator=None,
+        condition_value=None,
+    )
+    return SimpleNamespace(
+        id="form-id",
+        status=FormStatus.PUBLISHED,
+        fields=[membership_type, _conditional_field("equals", "EMT")],
+        require_authentication=False,
+        allow_multiple_submissions=True,
+    )
+
+
+class TestConditionalRequiredOnSubmit:
+    """A required field hidden by its condition must not block submission,
+    and one shown by its condition must still be enforced."""
+
+    async def test_public_hidden_required_field_is_not_enforced(self):
+        service = FormsService(AsyncMock())
+        service.get_form_by_slug = AsyncMock(return_value=_membership_form())
+        service._sanitize_submission_data = MagicMock(
+            return_value=({}, "stop-after-required-check")
+        )
+
+        _, error = await service.submit_public_form(
+            "abc123abc123", {"membership-type": "Administrative"}
+        )
+
+        assert error == "stop-after-required-check"
+
+    async def test_public_visible_required_field_is_enforced(self):
+        db = AsyncMock()
+        service = FormsService(db)
+        service.get_form_by_slug = AsyncMock(return_value=_membership_form())
+
+        result, error = await service.submit_public_form(
+            "abc123abc123", {"membership-type": "EMT", "experience": ""}
+        )
+
+        assert result is None
+        assert error == "Required field 'Previous EMT experience' is missing"
+        db.add.assert_not_called()
+
+    async def test_authenticated_hidden_required_field_is_not_enforced(self):
+        service = FormsService(AsyncMock())
+        service.get_form_by_id = AsyncMock(return_value=_membership_form())
+        service._sanitize_submission_data = MagicMock(
+            return_value=({}, "stop-after-required-check")
+        )
+
+        _, error = await service.submit_form(
+            uuid.uuid4(), uuid.uuid4(), {"membership-type": "Administrative"}
+        )
+
+        assert error == "stop-after-required-check"
+
+    async def test_authenticated_visible_required_field_is_enforced(self):
+        db = AsyncMock()
+        service = FormsService(db)
+        service.get_form_by_id = AsyncMock(return_value=_membership_form())
+
+        result, error = await service.submit_form(
+            uuid.uuid4(), uuid.uuid4(), {"membership-type": "EMT"}
+        )
+
+        assert result is None
+        assert error == "Required field 'Previous EMT experience' is missing"
+        db.add.assert_not_called()
+
+
 @pytest.mark.asyncio
 async def test_get_forms_filters_direct_and_related_integrations():
     """The module filter must include both current and legacy form storage."""
