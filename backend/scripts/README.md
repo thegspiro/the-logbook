@@ -267,6 +267,89 @@ a partial fix is still a fix, and the leftover is reported.
 - Database must be running
 - SQLAlchemy models must be importable
 
+### `clear_hidden_form_answers.py`
+
+Removes stale answers to conditional form questions from stored submissions.
+**Deletes applicant data** — dry run by default, and `--apply` requires a
+backup file.
+
+**Purpose**: before submissions were cleaned at the write, someone who answered
+a conditional question ("Previous EMT experience", shown only when Membership
+Type is EMT) and then changed the controlling answer still sent the hidden
+answer, and it was stored. Submissions saved since then never hold one; this
+clears the older ones.
+
+**An answer is removed only when both hold:**
+
+| Check                                                                                     | Why                                                                             |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| the question's rule, applied to the submission's own answers, says it was hidden          | the same check submission uses now (`FormsService._is_field_visible`)           |
+| neither the question nor its controlling question was edited after the submission came in | no history of rule changes is kept, so a newer rule may not be the one they saw |
+
+Anything that fails the second check — or whose controlling question was
+deleted, or that has no edit time — is **skipped and listed** for a person to
+review. `updated_at` moves on any edit to a field, so relabelling a question is
+enough to skip it; this errs toward keeping data.
+
+**Usage:**
+
+```bash
+# Dry run — writes nothing:
+docker exec -it intranet-backend python scripts/clear_hidden_form_answers.py
+
+# One organization or one form:
+docker exec -it intranet-backend python scripts/clear_hidden_form_answers.py \
+    --org "Falls Church" --form "Membership Interest"
+
+# Apply (the backup file is required and must not already exist):
+docker exec -it intranet-backend python scripts/clear_hidden_form_answers.py \
+    --apply --backup-file /tmp/hidden-answers-backup.json
+
+# Undo:
+docker exec -it intranet-backend python scripts/clear_hidden_form_answers.py \
+    --restore /tmp/hidden-answers-backup.json
+```
+
+**Example Output:**
+
+```
+CLEAR STALE ANSWERS TO HIDDEN FORM QUESTIONS  (DRY RUN — no changes written)
+
+Falls Church / Membership Interest
+  submission=5d0c…  submitted_at=2026-03-14 18:02:11
+  REMOVE  'Previous EMT experience'
+
+Falls Church / Membership Interest
+  submission=91af…  submitted_at=2025-11-02 09:40:57
+  SKIP    'Previous EMT experience' — question edited after this submission
+
+1 answer(s) to remove, 1 left for a person to review.
+```
+
+**Safety:** the backup is written before anything in the database changes,
+is never overwritten, and is created readable by its owner only — it holds
+applicants' answers, so delete it once you no longer need the undo. Fields
+are reached only through an org-scoped form, and `--restore` matches each
+submission by id and organization. Every change is audited; the audit entry
+names the removed questions but not the answers. The report prints question
+labels only, never answer values. `--restore` will not overwrite an answer
+that has been re-added since.
+
+The script does not touch records other features already built from these
+submissions — for example a prospective member created from an interest form
+keeps whatever mapped fields it copied at the time.
+
+**Exit Codes:**
+
+- `0`: Nothing left for a person to review
+- `1`: Answers were skipped and need review, or a restore was incomplete
+- `2`: Connection error or exception
+
+**Requirements:**
+
+- Database must be running
+- SQLAlchemy models must be importable
+
 ---
 
 ## Security Review Tooling
