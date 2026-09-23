@@ -74,7 +74,7 @@ pywebpush==2.5.0
 # ============================================
 # File Storage
 # ============================================
-boto3==1.43.97  # AWS S3
+boto3==1.43.98  # AWS S3
 azure-storage-blob==12.30.2
 google-cloud-storage==3.14.1
 python-magic==0.4.27
@@ -145,7 +145,7 @@ pytest-cov==7.1.0
 pytest-randomly==5.0.0
 pytest-timeout==2.4.0
 hypothesis==6.168.0  # schemathesis 4.x requires >=6.130.12
-schemathesis==4.27.3
+schemathesis==4.27.5
 # Pinned because these two move together. 4.24.3 called
 # CanonicalSchema.is_satisfiable(), which jsonschema-rs 0.50 removed, and an
 # unbounded transitive upgrade made every generated API contract case fail
