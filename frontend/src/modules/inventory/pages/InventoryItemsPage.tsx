@@ -74,6 +74,8 @@ import {
 } from '../types';
 import { onHandQuantity } from '../utils/onHand';
 import { asArray } from '../../../utils/asArray';
+import { buildLabelFilterPath, MAX_LABEL_BATCH } from '../utils/labelPrintQuery';
+import type { LabelFilterParams } from '../utils/labelPrintQuery';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { Breadcrumbs } from '../../../components/ux';
 
@@ -1011,6 +1013,11 @@ const InventoryItemsPage: React.FC = () => {
   const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set());
   const [skip, setSkip] = useState(0);
   const [selIds, setSelIds] = useState<Set<string>>(new Set());
+  // Set by "Select all N matching": the filters that produced the selection and
+  // the ids they returned. Kept so Print Labels can address the batch by
+  // filter instead of by a URL carrying hundreds of ids.
+  const [allMatching, setAllMatching] = useState<{ filters: LabelFilterParams; ids: string[] } | null>(null);
+  const [selectingAll, setSelectingAll] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
@@ -1381,8 +1388,48 @@ const InventoryItemsPage: React.FC = () => {
       return new Set([...prev, ...unavailableItems.map((i) => i.id)]);
     });
 
+  /* ---- select every matching item, not just the loaded pages ---- */
+  const selectAllMatching = async () => {
+    // `loadedParams`, for the reason Export gives: live filter state can be
+    // ahead of the rows on screen, and the count offered is the loaded one.
+    if (!loadedParams) return;
+    const { group_by: _groupBy, ...filters } = loadedParams;
+    setSelectingAll(true);
+    try {
+      const res = await inventoryService.getItems({ ...filters, skip: 0, limit: MAX_LABEL_BATCH });
+      const matchedTotal = res.total ?? 0;
+      // The offer is only made at or under the cap, but the set can grow
+      // between the count and this request. Selecting a silent first 500 of
+      // a larger set would let a bulk action miss items the member believes
+      // it covers.
+      if (matchedTotal > MAX_LABEL_BATCH) {
+        toast.error(
+          `${formatNumber(matchedTotal)} items now match — narrow the filters to ${formatNumber(MAX_LABEL_BATCH)} or fewer to select them all`
+        );
+        return;
+      }
+      const ids = asArray(res.items).map((i) => i.id);
+      setSelIds(new Set(ids));
+      setAllMatching({ filters, ids });
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to select matching items'));
+    } finally {
+      setSelectingAll(false);
+    }
+  };
+
+  // True only while the selection is exactly what "Select all" produced; a
+  // single untick afterwards makes it a hand-picked set again.
+  const selectionIsAllMatching =
+    allMatching !== null && allMatching.ids.length === selIds.size && allMatching.ids.every((id) => selIds.has(id));
+
   /* ---- bulk ops ---- */
-  const printLabels = () => void navigate(`/inventory/print-labels?ids=${Array.from(selIds).join(',')}`);
+  const printLabels = () =>
+    void navigate(
+      selectionIsAllMatching && allMatching
+        ? buildLabelFilterPath(allMatching.filters)
+        : `/inventory/print-labels?ids=${Array.from(selIds).join(',')}`
+    );
 
   /**
    * Run one request per selected item and report the split honestly.
@@ -1902,7 +1949,25 @@ const InventoryItemsPage: React.FC = () => {
       {/* Bulk bar */}
       {selIds.size > 0 && (
         <div className="card-secondary mb-4 flex flex-wrap items-center gap-3 p-3">
-          <span className="text-theme-text-primary text-sm font-medium">{selIds.size} selected</span>
+          <span className="text-theme-text-primary text-sm font-medium">
+            {selectionIsAllMatching ? `All ${formatNumber(selIds.size)} matching selected` : `${selIds.size} selected`}
+          </span>
+          {!selectionIsAllMatching &&
+            total > selIds.size &&
+            (total <= MAX_LABEL_BATCH ? (
+              <button
+                onClick={() => void selectAllMatching()}
+                disabled={selectingAll || !loadedParams}
+                className="text-sm font-medium text-blue-700 hover:underline disabled:opacity-60 dark:text-blue-300"
+              >
+                {selectingAll ? 'Selecting…' : `Select all ${formatNumber(total)} matching`}
+              </button>
+            ) : (
+              <span className="text-theme-text-muted text-xs">
+                {formatNumber(total)} match — narrow the filters to {formatNumber(MAX_LABEL_BATCH)} or fewer to select
+                them all
+              </span>
+            ))}
           <button onClick={printLabels} className="btn-secondary btn-sm inline-flex items-center gap-1.5">
             <Printer className="h-3.5 w-3.5" /> Print Labels
           </button>

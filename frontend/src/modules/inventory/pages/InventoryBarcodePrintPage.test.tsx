@@ -9,6 +9,10 @@ const mockGenerateLabels = vi.fn();
 const mockGetLabelPreset = vi.fn();
 const mockSetLabelPreset = vi.fn();
 const mockPrefersPdf = vi.fn(() => false);
+const mockGetItems = vi.fn();
+const mockGetCategories = vi.fn();
+const mockGetStorageAreas = vi.fn();
+const mockGetLocations = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -16,6 +20,12 @@ vi.mock('../../../services/api', () => ({
     generateBarcodeLabels: (...a: unknown[]) => mockGenerateLabels(...a) as unknown,
     getLabelPreset: (...a: unknown[]) => mockGetLabelPreset(...a) as unknown,
     setLabelPreset: (...a: unknown[]) => mockSetLabelPreset(...a) as unknown,
+    getItems: (...a: unknown[]) => mockGetItems(...a) as unknown,
+    getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
+    getStorageAreas: (...a: unknown[]) => mockGetStorageAreas(...a) as unknown,
+  },
+  locationsService: {
+    getLocations: (...a: unknown[]) => mockGetLocations(...a) as unknown,
   },
 }));
 
@@ -59,6 +69,11 @@ describe('InventoryBarcodePrintPage', () => {
     mockGetLabelPreset.mockResolvedValue({ preset: null });
     mockSetLabelPreset.mockResolvedValue({ preset: null });
     mockPrefersPdf.mockReturnValue(false);
+    for (const m of [mockGetItems, mockGetCategories, mockGetStorageAreas, mockGetLocations]) m.mockReset();
+    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1, skip: 0, limit: 500 });
+    mockGetCategories.mockResolvedValue([{ id: 'cat-1', name: 'Radios' }]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([{ id: 'loc-1', name: 'Station 1' }]);
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:test');
     globalThis.URL.revokeObjectURL = vi.fn();
     // The PDF download clicks a temporary <a download> — stub it so jsdom
@@ -66,10 +81,82 @@ describe('InventoryBarcodePrintPage', () => {
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   });
 
-  it('errors when no item ids are provided', async () => {
+  it('offers a filter picker instead of an error when nothing is selected', async () => {
+    mockGetItems.mockResolvedValue({ items: [], total: 12, skip: 0, limit: 1 });
     renderPage('');
-    expect(await screen.findByText(/No items specified/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Back to Inventory/ })).toBeInTheDocument();
+
+    expect(await screen.findByRole('heading', { name: 'Print barcode labels' })).toBeInTheDocument();
+    expect(await screen.findByText('12 items match.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prepare 12 labels' })).toBeEnabled();
+    expect(mockGetItem).not.toHaveBeenCalled();
+  });
+
+  it('loads the batch the picker chose, by filter, in one request', async () => {
+    const user = userEvent.setup();
+    mockGetItems.mockImplementation((params: { limit?: number }) =>
+      Promise.resolve(
+        params.limit === 1
+          ? { items: [], total: 2, skip: 0, limit: 1 }
+          : {
+              items: [makeItem({ id: 'it-1' }), makeItem({ id: 'it-2', name: 'Spare Radio' })],
+              total: 2,
+              skip: 0,
+              limit: 500,
+            }
+      )
+    );
+    renderPage('');
+    await screen.findByRole('option', { name: 'Radios' });
+
+    await user.selectOptions(screen.getByLabelText('Category'), 'cat-1');
+    await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith({ category_id: 'cat-1', skip: 0, limit: 1 }));
+    await user.click(await screen.findByRole('button', { name: 'Prepare 2 labels' }));
+
+    expect((await screen.findAllByText('Spare Radio')).length).toBeGreaterThan(0);
+    expect(mockGetItems).toHaveBeenLastCalledWith({ category_id: 'cat-1', skip: 0, limit: 500 });
+    expect(mockGetItem).not.toHaveBeenCalled();
+  });
+
+  it('blocks the picker when more items match than one batch holds', async () => {
+    mockGetItems.mockResolvedValue({ items: [], total: 501, skip: 0, limit: 1 });
+    renderPage('');
+
+    expect(await screen.findByText(/501 items match. One batch holds at most 500/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prepare labels' })).toBeDisabled();
+  });
+
+  it('prints every item matching the filters in the URL', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 'it-9', name: 'Hose Adapter' })],
+      total: 1,
+      skip: 0,
+      limit: 500,
+    });
+    renderPage('?all=1&location_id=loc-1&sort_by=name&sort_order=asc');
+
+    expect((await screen.findAllByText('Hose Adapter')).length).toBeGreaterThan(0);
+    expect(mockGetItems).toHaveBeenCalledWith({
+      location_id: 'loc-1',
+      sort_by: 'name',
+      sort_order: 'asc',
+      skip: 0,
+      limit: 500,
+    });
+  });
+
+  it('refuses a filter batch larger than the label API limit', async () => {
+    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 750, skip: 0, limit: 500 });
+    renderPage('?all=1');
+
+    expect(await screen.findByText(/750 items match. A maximum of 500 inventory items/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Choose different items/ })).toBeInTheDocument();
+  });
+
+  it('says so when no items match the filters', async () => {
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 500 });
+    renderPage('?all=1&category_id=cat-1');
+
+    expect(await screen.findByText('No active items match these filters.')).toBeInTheDocument();
   });
 
   it('fetches and renders labels for the provided ids', async () => {

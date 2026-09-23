@@ -11,8 +11,8 @@
  * - Better SVG render timing with MutationObserver fallback
  */
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useSearchParams, Link } from 'react-router';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router';
 import JsBarcode from 'jsbarcode';
 import {
   ArrowLeft,
@@ -28,10 +28,13 @@ import {
 import { inventoryService } from '../../../services/api';
 import type { InventoryItem } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { getTodayLocalDate } from '../../../utils/dateFormatting';
+import { formatNumber, getTodayLocalDate } from '../../../utils/dateFormatting';
+import { asArray } from '../../../utils/asArray';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { prefersPdfOverBrowserPrint } from '../../../utils/printEnvironment';
 import toast from 'react-hot-toast';
+import { LabelScopePicker } from '../components/LabelScopePicker';
+import { buildLabelFilterPath, MAX_LABEL_BATCH, parseLabelPrintQuery } from '../utils/labelPrintQuery';
 
 // ── Label size presets ──────────────────────────────────────────
 
@@ -473,6 +476,7 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, o
 const InventoryBarcodePrintPage: React.FC = () => {
   const tz = useTimezone();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -515,23 +519,57 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const isThermal = preset.columns === 1;
   // The label API accepts at most 500 records per PDF. Keep the copies control
   // inside that batch limit while retaining the existing per-item cap of 50.
-  const maxCopies = Math.max(1, Math.min(50, Math.floor(500 / Math.max(items.length, 1))));
+  const maxCopies = Math.max(1, Math.min(50, Math.floor(MAX_LABEL_BATCH / Math.max(items.length, 1))));
+
+  const printRequest = useMemo(() => parseLabelPrintQuery(searchParams), [searchParams]);
 
   const fetchItems = useCallback(async () => {
-    const idsParam = searchParams.get('ids');
-    if (!idsParam) {
-      setError('No items specified. Go back to inventory and select items to print.');
+    if (printRequest.kind === 'none') {
+      // Nothing addressed: the picker renders instead of the labels.
       setLoading(false);
       return;
     }
 
-    const ids = idsParam.split(',').filter(Boolean);
+    if (printRequest.kind === 'filter') {
+      try {
+        setLoading(true);
+        setError(null);
+        // One request for the whole batch. The list endpoint caps `limit` at
+        // the same 500 the label PDF accepts, so `total` says whether the
+        // batch fits before anything is rendered.
+        const res = await inventoryService.getItems({
+          ...printRequest.filters,
+          skip: 0,
+          limit: MAX_LABEL_BATCH,
+        });
+        const total = res.total ?? 0;
+        if (total > MAX_LABEL_BATCH) {
+          setError(
+            `${formatNumber(total)} items match. A maximum of ${formatNumber(MAX_LABEL_BATCH)} inventory items can be printed in one batch — narrow the filters and try again.`
+          );
+          return;
+        }
+        const matched = asArray(res.items);
+        if (matched.length === 0) {
+          setError('No active items match these filters.');
+          return;
+        }
+        setItems(matched);
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Failed to load inventory items'));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    const { ids } = printRequest;
     if (ids.length === 0) {
       setError('No valid item IDs provided.');
       setLoading(false);
       return;
     }
-    if (ids.length > 500) {
+    if (ids.length > MAX_LABEL_BATCH) {
       setError('A maximum of 500 inventory items can be printed in one batch. Select fewer items and try again.');
       setLoading(false);
       return;
@@ -547,7 +585,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [searchParams]);
+  }, [printRequest]);
 
   useEffect(() => {
     void fetchItems();
@@ -864,6 +902,10 @@ const InventoryBarcodePrintPage: React.FC = () => {
     );
   }
 
+  if (printRequest.kind === 'none') {
+    return <LabelScopePicker onChoose={(filters) => void navigate(buildLabelFilterPath(filters))} />;
+  }
+
   if (error) {
     return (
       <div className="mx-auto mt-12 max-w-md p-6">
@@ -878,6 +920,15 @@ const InventoryBarcodePrintPage: React.FC = () => {
           <ArrowLeft className="h-4 w-4" />
           Back to Inventory
         </Link>
+        {printRequest.kind === 'filter' && (
+          <Link
+            to="/inventory/print-labels"
+            className="text-theme-text-muted hover:text-theme-text-secondary mt-2 flex items-center gap-1 text-sm"
+          >
+            <Settings2 className="h-4 w-4" />
+            Choose different items
+          </Link>
+        )}
       </div>
     );
   }
