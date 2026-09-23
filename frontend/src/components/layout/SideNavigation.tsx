@@ -30,6 +30,7 @@ import {
   FormInput,
   Mail,
   Megaphone,
+  Lightbulb,
   Plug,
   MapPin,
   Network,
@@ -408,6 +409,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
       ? [{ label: 'Notifications', path: '/notifications?tab=inbox', icon: Bell } as NavItem]
       : []),
     { label: 'Messages', path: '/messages', icon: Megaphone },
+    { label: 'Suggestions', path: '/suggestions', icon: Lightbulb },
 
     // ── Personal settings (always visible) ──
     { label: 'My Account', path: '/account', icon: UserCog },
@@ -588,6 +590,12 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 path: '/communications/messages',
                 icon: Megaphone,
                 permission: 'notifications.manage',
+              },
+              {
+                label: 'Suggestion Boxes',
+                path: '/communications/suggestion-boxes',
+                icon: Lightbulb,
+                permission: 'suggestions.manage',
               },
               {
                 label: 'Photo Use Consent',

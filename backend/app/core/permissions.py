@@ -47,6 +47,7 @@ class PermissionCategory(str, Enum):
     ANALYTICS = "analytics"
     INTEGRATIONS = "integrations"
     NOTIFICATIONS = "notifications"
+    SUGGESTIONS = "suggestions"
     REPORTS = "reports"
     PROSPECTIVE_MEMBERS = "prospective_members"
     ADMIN_HOURS = "admin_hours"
@@ -578,6 +579,16 @@ NOTIFICATIONS_MANAGE = Permission(
     PermissionCategory.NOTIFICATIONS,
 )
 
+# Suggestion boxes. Configuring a box (its reviewers, anonymity rule and
+# follow-up setting) is deliberately separate from reading it: only a box's
+# own reviewers read its submissions, so this grant alone discloses nothing a
+# complaint box receives.
+SUGGESTIONS_MANAGE = Permission(
+    "suggestions.manage",
+    "Create and configure suggestion boxes and their reviewers",
+    PermissionCategory.SUGGESTIONS,
+)
+
 # Reports
 REPORTS_VIEW = Permission(
     "reports.view", "View and generate reports", PermissionCategory.REPORTS
@@ -772,6 +783,8 @@ ALL_PERMISSIONS: list[Permission] = [
     # Notifications
     NOTIFICATIONS_VIEW,
     NOTIFICATIONS_MANAGE,
+    # Suggestion boxes
+    SUGGESTIONS_MANAGE,
     # Reports
     REPORTS_VIEW,
     REPORTS_MANAGE,
@@ -1358,6 +1371,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             FACILITIES_VIEW_SENSITIVE.name,
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_MANAGE.name,
+            SUGGESTIONS_MANAGE.name,
             ADMIN_ACCESS.name,
         ],
     },
@@ -1421,6 +1435,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             FACILITIES_VIEW_SENSITIVE.name,
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_MANAGE.name,
+            SUGGESTIONS_MANAGE.name,
         ],
     },
     "assistant_chief": {
@@ -1476,6 +1491,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             # sensitive-facility offices — see the note on fire_chief.
             FACILITIES_VIEW_SENSITIVE.name,
             NOTIFICATIONS_MANAGE.name,
+            SUGGESTIONS_MANAGE.name,
         ],
     },
     "captain": {
@@ -1842,6 +1858,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_VIEW.name,
             NOTIFICATIONS_MANAGE.name,
+            SUGGESTIONS_MANAGE.name,
             REPORTS_VIEW.name,
             REPORTS_MANAGE.name,
             ADMIN_ACCESS.name,
@@ -2120,6 +2137,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             DOCUMENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             NOTIFICATIONS_MANAGE.name,
+            SUGGESTIONS_MANAGE.name,
             USERS_VIEW_CONSENTS.name,
         ],
     },

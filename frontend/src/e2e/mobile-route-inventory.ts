@@ -171,6 +171,20 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
       'admin roster behind notifications.manage; its table reflows to cards via rwd-table and every control comes from the shared 44px form utilities, so /messages remains the module representative',
   },
   {
+    path: '/communications/suggestion-boxes',
+    source: 'src/modules/communications/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'admin list behind suggestions.manage; single-column cards and a Modal form built from the shared 44px form utilities, so /messages remains the module representative',
+  },
+  {
+    path: '/suggestions',
+    source: 'src/modules/communications/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'member page of stacked cards under a tab-scroll strip, every control from the shared 44px form utilities; /messages remains the module representative',
+  },
+  {
     path: '/messages',
     source: 'src/modules/communications/routes.tsx',
     coverage: 'ratchet',

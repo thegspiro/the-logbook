@@ -21,6 +21,7 @@ export const ADMIN_NAVIGATION_PERMISSIONS = [
   'settings.manage',
   'forms.manage',
   'notifications.manage',
+  'suggestions.manage',
   'reports.view',
   'analytics.view',
   'audit.view',

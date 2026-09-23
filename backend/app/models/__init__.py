@@ -323,6 +323,16 @@ from app.models.storefront import (
     StoreWindowProduct,
     StoreWindowStatus,
 )
+from app.models.suggestion import (
+    Suggestion,
+    SuggestionAnonymityMode,
+    SuggestionAttachment,
+    SuggestionAuthorRole,
+    SuggestionBox,
+    SuggestionBoxReviewer,
+    SuggestionDisposition,
+    SuggestionMessage,
+)
 from app.models.testing_checklist import (
     TestingAccessExpectation,
     TestingChecklistEntry,
@@ -733,6 +743,15 @@ __all__ = [
     "LegalDocumentRevision",
     "LegalDocumentType",
     "LegalRevisionStatus",
+    # Suggestion box models
+    "Suggestion",
+    "SuggestionAnonymityMode",
+    "SuggestionAttachment",
+    "SuggestionAuthorRole",
+    "SuggestionBox",
+    "SuggestionBoxReviewer",
+    "SuggestionDisposition",
+    "SuggestionMessage",
     # Testing checklist models
     "TestingAccessExpectation",
     "TestingCheckStatus",

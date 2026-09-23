@@ -47,6 +47,7 @@ const UNCACHEABLE_PREFIXES = [
   '/apparatus/evoc-check/', // GET /evoc-check/{apparatus_id}/{user_id}: a named member's driving eligibility
   '/inventory/reorder-requests', // requester_name on the list and the detail (PII)
   '/operational-ranks/validate', // resolves member_name for each rank being validated (PII)
+  '/suggestions', // suggestion boxes: complaints, anonymous submissions and follow-up threads — never cached, and a cached thread would hide a reply
   '/testing-checklist', // shared testing run: another tester's mark can land at any moment, and a stale one reads as a lost result
   '/training/waivers', // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions

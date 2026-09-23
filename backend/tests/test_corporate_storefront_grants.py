@@ -40,6 +40,8 @@ _RENAMED_SINCE: dict[str, str] = {
 #: stored row through ``20260906_2141_ee7390dcdf47``.
 _ADDED_SINCE: dict[str, set[str]] = {
     "treasurer": {"finance.approve", "finance.configure_approvals"},
+    # 394600cbfae2, with its own backfill.
+    "communications_officer": {"suggestions.manage"},
 }
 
 

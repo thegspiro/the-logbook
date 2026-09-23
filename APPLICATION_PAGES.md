@@ -1218,6 +1218,16 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/communications/messages`          | Message Administration    | `notifications.manage`                                                               |
 | `/communications/email-templates`   | Email Template Management | `settings.manage`                                                                    |
 | `/communications/photo-use-consent` | Photo Use Consent         | any of `users.view_consents`, `notifications.manage`, `members.manage`, `users.edit` |
+| `/communications/suggestion-boxes`  | Suggestion Box Management | `suggestions.manage` _(2026-09-23)_                                                  |
+| `/suggestions`                      | Suggestions               | Authenticated _(2026-09-23)_                                                         |
+
+> **Suggestions** _(2026-09-23)_ is where every member submits to the
+> department's suggestion boxes — named or anonymously, as each box allows —
+> follows their own named submissions, and follows up on an anonymous one with
+> its private key. Its Review tab appears only for a box's reviewers, which is
+> decided per box on the backend rather than by a permission. **Suggestion Box
+> Management** configures boxes and their reviewers; `suggestions.manage` does
+> not by itself read any box's submissions.
 
 > **Photo Use Consent** _(2026-08-25)_ lists every member's answer to the
 > photo-use privacy choice they set in User Settings, so the PIO can check the

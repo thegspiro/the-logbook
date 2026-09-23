@@ -66,6 +66,8 @@ _LATER_REVOCATIONS = (
         "apparatus.view",
     ),
 )
+# Later grant backfills, each exposing ``_SLUGS`` and ``_PERMISSION``.
+_LATER_GRANTS = (_VERSIONS / "20260923_2219_394600cbfae2_grant_suggestions_manage.py",)
 
 
 def _load_module(path: Path, name: str):
@@ -103,6 +105,12 @@ def _pristine_registry_set(slug: str) -> set[str]:
         revocation = _load_module(path, f"_later_revocation_{index}")
         if slug in revocation._SLUGS:
             permissions.add(permission)
+    # The mirror case: a grant added later in the chain, with its own
+    # backfill, is not on the row this backfill meets.
+    for index, path in enumerate(_LATER_GRANTS):
+        grant = _load_module(path, f"_later_grant_{index}")
+        if slug in grant._SLUGS:
+            permissions.discard(grant._PERMISSION)
     return {_RENAMED_SINCE.get(p, p) for p in permissions}
 
 
