@@ -23,7 +23,7 @@ account — see the notes under the table.
 | Settings -> **Email**, SMTP preset applied      | **REPLACE** | 20 (release), 08 (admin)           | **Shot** 09-16 as `20-11-settings-email-smtp-preset`. One image, placed in both guides                   |
 | Stage picker with **Election / Vote** selected  | **NEW**     | 20 (release)                       | **Shot** 09-16 as `20-12-stage-picker-election-vote`                                                    |
 | Scheduling -> **Open Shifts**, member vs admin  | **NEW**     | 20 (release), 03 (scheduling)      | **Queued** — needs a second signed-in session and a narrower member; see below                          |
-| Applicant drawer, **Not Elected** refusal       | **NEW**     | 20 (release)                       | **Blocked** on the seeder — it only ever produces an *Elected* package; see below                       |
+| Applicant drawer, **not elected** state         | **NEW**     | 20 (release)                       | **Unblocked** 09-22 — the seeder now carries an applicant through a losing vote; ready to shoot          |
 | Settings -> **Email**, inline refusal           | **NEW**     | no placeholder written yet         | The refusal for an enabled-but-empty Cloudflare section, or for **Not configured** with email enabled   |
 | Shift signup **position picker**                | **REPLACE** | no placeholder written yet         | Offers only seats the server will grant                                                                 |
 | Stage builder -> **Meeting** config             | **REPLACE** | no placeholder written yet         | Carries the Auto-Link Event Type warning beside the auto-advance checkbox                                |
@@ -62,20 +62,35 @@ organization still stores no `email_service`, verified after the run.
 panel's own scroll. The manifest entry carries an explicit `viewport` for that
 reason; do not "tidy" it back to the default.
 
-### The Not Elected refusal is blocked on the seeder
+### The not-elected state is seeded now _(2026-09-22)_
 
-`seed_demo_data.py` only ever produces an **Elected** package:
-`MEMBERSHIP_VOTE_TALLY` is `(18, 2)`, a pass, and `seed_membership_vote_outcome`
-walks the product's own lifecycle to get there. There is no seeded applicant the
-membership voted **down**, so the refusal this shot is about has nothing to
-photograph.
+`seed_demo_data.py` used to produce only an **Elected** package —
+`MEMBERSHIP_VOTE_TALLY` is `(18, 2)`, a pass — so the state this shot is about
+had nothing to photograph. **Devon Marsh** is now carried through a 6/14 vote at
+a September business meeting, in its own election, and the seeder verifies the
+package reads `not_elected` before it finishes.
 
-It is currently stuck one step earlier as well — the seeder reports
-`membership vote outcome: election closed but package is 'draft' — its ballot
-item never carried the package id`, and a closed election accepts no repair over
-the API. Photographing the refusal therefore needs a **seeder change**: a second
-prospect carried through a failing vote. That is its own change set, not a
-capture run.
+A rebuild from an empty database leaves all three states on the **Membership
+Vote** stage at once, which is what makes them photographable:
+
+| Applicant    | Package       |
+| ------------ | ------------- |
+| Sam Okafor   | `elected`     |
+| Devon Marsh  | `not_elected` |
+| Morgan Tran  | `draft`       |
+
+**Shoot Advance, not Convert.** The ELECTION PACKAGE panel renders only while
+the applicant is on the vote stage (`isOnElectionStage`), and **Convert** appears
+only on the pipeline's *final* stage — Onboarding, one further along. The two
+controls cannot share a frame with the panel. Both are gated by the same
+`_election_block_reason`, so Advance shows the same refusal; the placeholder in
+guide 20 was corrected to say so.
+
+**The stage pinning is load-bearing, not tidiness.** A package belongs to an
+applicant, and `_spread_prospects_across_stages` moves applicants back as well
+as forward — which had already dragged the *elected* package onto an applicant
+at Background & Medical, quietly making guide 01's Elected badge unreproducible.
+`SCENARIO_STAGES` pins both. Do not remove it to "simplify the spread".
 
 ### The Open Shifts pair needs two sessions, not two clips
 

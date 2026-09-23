@@ -1320,8 +1320,12 @@ advances exactly as before.
 
 > **Screenshot needed:**
 > _[The applicant detail drawer for an applicant whose election package reads
-> Not Elected, with the refusal shown against the Convert button. This is the
-> state a coordinator needs to recognise.]_
+> **not elected** — the red status pill and the "This applicant was not elected
+> by the membership vote" banner, with the Membership Vote stage above them.
+> This is the state a coordinator needs to recognise. **The action row shows
+> Advance, not Convert**: the ELECTION PACKAGE panel renders only while the
+> applicant is on the vote stage, and Convert appears only on the pipeline's
+> final stage, so the two cannot share a frame. Both carry the same gate.]_
 
 **A Meeting stage that names no event now advances on nothing.** The stage
 builder's **Auto-Link Event Type** is what tells a meeting stage which event
