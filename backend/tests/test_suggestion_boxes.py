@@ -27,6 +27,7 @@ from app.services import suggestion_service
 from app.services.suggestion_service import (
     SuggestionService,
     anonymous_timestamp,
+    forward_notice,
     hash_follow_up_key,
     reviewer_notice,
     submitter_notice,
@@ -745,6 +746,157 @@ class TestOverHttp:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
+class TestForwarding:
+    """A forward makes its recipients reviewers of one suggestion — never of
+    the box, and never able to pass it on."""
+
+    async def _forwarded(self, db_session, dept, **kwargs):
+        box = await _box(db_session, dept, follow_up_enabled=True)
+        target, _ = await _submit(db_session, box, dept["member"])
+        other, _ = await _submit(db_session, box, dept["member"])
+        service = SuggestionService(db_session)
+        reviewed = await service.get_for_review(
+            dept["org"], dept["training_officer"], target.id
+        )
+        added = await service.add_forwards(
+            reviewed,
+            dept["training_officer"],
+            kwargs.get("position_ids", []),
+            kwargs.get("member_ids", [dept["direct_reviewer"]]),
+        )
+        return service, target, other, added
+
+    async def test_recipient_reviews_that_suggestion_only(self, db_session, dept):
+        service, target, other, added = await self._forwarded(db_session, dept)
+        assert added == ([], [dept["direct_reviewer"]])
+        reader = dept["direct_reviewer"]
+
+        forwarded = await service.get_for_review(dept["org"], reader, target.id)
+        assert forwarded is not None
+        assert await service.get_for_review(dept["org"], reader, other.id) is None
+        items, total = await service.list_for_review(dept["org"], reader)
+        assert total == 1
+        assert items[0]["id"] == target.id
+        assert items[0]["via_forward"] is True
+
+        # Full reviewer of that item: disposition and reply both work.
+        await service.update_disposition(forwarded, reader, {"disposition": "accepted"})
+        await service.add_reviewer_message(forwarded, reader, "Looking into it")
+        view = await service.reviewer_view(
+            await service.get_for_review(dept["org"], reader, target.id), reader
+        )
+        assert view["disposition"] == "accepted"
+        assert view["can_forward"] is False
+        assert view["via_forward"] is True
+        assert [f["target_id"] for f in view["forwards"]] == [reader]
+
+        summary = await service.review_summary(dept["org"], reader)
+        assert summary["is_reviewer"] is True
+        assert summary["boxes"] == []
+
+    async def test_forward_to_a_position(self, db_session, dept):
+        pos = await _position(db_session, dept["org"], "Apparatus Officer")
+        await _assign(db_session, dept["member"], pos)
+        await db_session.flush()
+        service, target, _, added = await self._forwarded(
+            db_session, dept, position_ids=[pos], member_ids=[]
+        )
+        assert added == ([pos], [])
+        assert await service.get_for_review(dept["org"], dept["member"], target.id)
+        recipients = await service.suggestion_recipient_ids(target)
+        assert dept["member"] in recipients
+        assert dept["training_officer"] in recipients
+
+    async def test_forwarding_twice_adds_nothing(self, db_session, dept):
+        service, target, _, _ = await self._forwarded(db_session, dept)
+        again = await service.add_forwards(
+            target, dept["training_officer"], [], [dept["direct_reviewer"]]
+        )
+        assert again == ([], [])
+
+    async def test_withdrawing_removes_access(self, db_session, dept):
+        service, target, _, _ = await self._forwarded(db_session, dept)
+        forward_id = (await service.list_forwards(target))[0]["id"]
+        removed = await service.remove_forward(target, forward_id)
+        assert removed == {"position_id": None, "user_id": dept["direct_reviewer"]}
+        assert (
+            await service.get_for_review(
+                dept["org"], dept["direct_reviewer"], target.id
+            )
+            is None
+        )
+        assert await service.remove_forward(target, forward_id) is None
+
+    async def test_foreign_targets_are_rejected(self, db_session, dept):
+        box = await _box(db_session, dept)
+        target, _ = await _submit(db_session, box, dept["member"])
+        other_org = await _org(db_session)
+        outsider = await _user(db_session, other_org, "Olga")
+        await db_session.flush()
+        with pytest.raises(ValueError, match="Invalid member"):
+            await SuggestionService(db_session).add_forwards(
+                target, dept["training_officer"], [], [outsider]
+            )
+
+    async def test_nothing_chosen_is_rejected(self, db_session, dept):
+        box = await _box(db_session, dept)
+        target, _ = await _submit(db_session, box, dept["member"])
+        with pytest.raises(ValueError, match="at least one"):
+            await SuggestionService(db_session).add_forwards(
+                target, dept["training_officer"], [], []
+            )
+
+    async def test_over_http(self, db_session, dept, sent):
+        box = await _box(db_session, dept)
+        target, _ = await _submit(db_session, box, dept["member"])
+        async with await _client(db_session, dept["training_officer"]) as client:
+            options = await client.get("/suggestions/review/forward-options")
+            resp = await client.post(
+                f"/suggestions/review/{target.id}/forwards",
+                json={"memberIds": [dept["direct_reviewer"]]},
+            )
+        assert options.status_code == 200
+        assert resp.status_code == 200, resp.text
+        forwards = resp.json()["forwards"]
+        assert [f["targetId"] for f in forwards] == [dept["direct_reviewer"]]
+        ((_, recipients, notice),) = sent
+        assert recipients == [dept["direct_reviewer"]]
+        assert "More night drills" not in notice["body_html"]
+        audits = await db_session.scalar(
+            select(func.count(AuditLog.id)).where(
+                AuditLog.event_type == "suggestion_forwarded",
+                AuditLog.user_id == dept["training_officer"],
+            )
+        )
+        assert audits == 1
+
+        # The recipient reviews the item but cannot forward it on, and is not
+        # offered the picker.
+        async with await _client(db_session, dept["direct_reviewer"]) as client:
+            reread = await client.get(f"/suggestions/review/{target.id}")
+            onward = await client.post(
+                f"/suggestions/review/{target.id}/forwards",
+                json={"memberIds": [dept["member"]]},
+            )
+            withdraw = await client.delete(
+                f"/suggestions/review/{target.id}/forwards/{forwards[0]['id']}"
+            )
+            picker = await client.get("/suggestions/review/forward-options")
+        assert reread.status_code == 200
+        assert reread.json()["canForward"] is False
+        assert onward.status_code == 403
+        assert withdraw.status_code == 403
+        assert picker.status_code == 403
+
+        async with await _client(db_session, dept["training_officer"]) as client:
+            resp = await client.delete(
+                f"/suggestions/review/{target.id}/forwards/{forwards[0]['id']}"
+            )
+        assert resp.status_code == 200
+        assert resp.json()["forwards"] == []
+
+
 @pytest.mark.unit
 class TestNotices:
     def test_reviewer_notice_escapes_and_carries_no_content(self):
@@ -757,6 +909,11 @@ class TestNotices:
         notice = reviewer_notice("Ideas\r\nBcc: x@example.com", "abc", reply=False)
         assert "\n" not in notice["subject"]
         assert "\r" not in notice["subject"]
+
+    def test_forward_notice_carries_no_content(self):
+        notice = forward_notice("Complaints", "abc")
+        assert "forwarded" in notice["subject"]
+        assert "tab=review&amp;id=abc" in notice["body_html"]
 
     def test_submitter_notice_names_the_status(self):
         notice = submitter_notice("Ideas", "abc", disposition="under_review")

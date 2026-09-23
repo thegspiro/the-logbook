@@ -119,6 +119,18 @@ export const suggestionsService = {
     const response = await api.post<ReviewSuggestionDetail>(`/suggestions/review/${id}/messages`, { body });
     return response.data;
   },
+  async getForwardOptions(): Promise<ReviewerOptions> {
+    const response = await api.get<ReviewerOptions>('/suggestions/review/forward-options');
+    return { positions: asArray(response.data.positions), members: asArray(response.data.members) };
+  },
+  async forward(id: string, data: { positionIds: string[]; memberIds: string[] }): Promise<ReviewSuggestionDetail> {
+    const response = await api.post<ReviewSuggestionDetail>(`/suggestions/review/${id}/forwards`, data);
+    return response.data;
+  },
+  async withdrawForward(id: string, forwardId: string): Promise<ReviewSuggestionDetail> {
+    const response = await api.delete<ReviewSuggestionDetail>(`/suggestions/review/${id}/forwards/${forwardId}`);
+    return response.data;
+  },
   async getReviewAttachment(id: string, attachmentId: string): Promise<Blob> {
     const response = await api.get<Blob>(`/suggestions/review/${id}/attachments/${attachmentId}`, {
       responseType: 'blob',

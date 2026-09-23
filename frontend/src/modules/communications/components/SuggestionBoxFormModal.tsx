@@ -12,7 +12,8 @@ import { SUGGESTION_ANONYMITY_LABELS, SuggestionAnonymityMode } from '../../../c
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
 import { suggestionsService } from '../services/suggestionsService';
-import type { ReviewerOptions, ReviewerRef, SuggestionBoxAdmin } from '../types/suggestions';
+import type { ReviewerOptions, SuggestionBoxAdmin } from '../types/suggestions';
+import ReviewerChecklist from './ReviewerChecklist';
 
 interface SuggestionBoxFormModalProps {
   box: SuggestionBoxAdmin | null;
@@ -22,46 +23,6 @@ interface SuggestionBoxFormModalProps {
 }
 
 const ANONYMITY_MODES = Object.values(SuggestionAnonymityMode);
-
-interface ReviewerChecklistProps {
-  legend: string;
-  items: ReviewerRef[];
-  selected: string[];
-  onToggle: (id: string) => void;
-  filter?: string;
-}
-
-const ReviewerChecklist: React.FC<ReviewerChecklistProps> = ({ legend, items, selected, onToggle, filter = '' }) => {
-  const needle = filter.trim().toLowerCase();
-  const visible = needle ? items.filter((item) => item.name.toLowerCase().includes(needle)) : items;
-  return (
-    <fieldset>
-      <legend className="form-label">{legend}</legend>
-      <div className="border-theme-surface-border max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
-        {visible.length === 0 ? (
-          <p className="text-theme-text-muted text-sm">None found.</p>
-        ) : (
-          visible.map((item) => (
-            <label
-              key={item.id}
-              className="text-theme-text-primary flex items-center gap-2 text-sm max-md:min-h-[44px]"
-            >
-              <input
-                type="checkbox"
-                className="form-checkbox"
-                checked={selected.includes(item.id)}
-                onChange={() => onToggle(item.id)}
-              />
-              {item.name}
-            </label>
-          ))
-        )}
-      </div>
-    </fieldset>
-  );
-};
-
-const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
 const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, options, onClose, onSaved }) => {
   const [name, setName] = useState(box?.name ?? '');
@@ -201,7 +162,7 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
             legend="Reviewer positions"
             items={options.positions}
             selected={positionIds}
-            onToggle={(id) => setPositionIds((current) => toggle(current, id))}
+            onChange={setPositionIds}
           />
           <div>
             <label htmlFor="box-member-filter" className="form-label">
@@ -218,7 +179,7 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
               legend="Reviewer members"
               items={memberItems}
               selected={memberIds}
-              onToggle={(id) => setMemberIds((current) => toggle(current, id))}
+              onChange={setMemberIds}
               filter={memberFilter}
             />
           </div>

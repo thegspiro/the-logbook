@@ -107,6 +107,17 @@ export interface ReviewSuggestionSummary {
   attachmentCount: number;
   createdAt: string;
   timestampPrecision: TimestampPrecision;
+  /** Reached by a forward rather than as a reviewer of the box. */
+  viaForward?: boolean;
+}
+
+export interface SuggestionForward {
+  id: string;
+  kind: 'position' | 'member';
+  targetId?: string | null;
+  name: string;
+  forwardedByName?: string | null;
+  createdAt?: string | null;
 }
 
 export interface ReviewSuggestionDetail {
@@ -127,6 +138,10 @@ export interface ReviewSuggestionDetail {
   messages: ThreadMessage[];
   createdAt: string;
   timestampPrecision: TimestampPrecision;
+  /** Only the box's own reviewers forward or withdraw. */
+  canForward: boolean;
+  viaForward: boolean;
+  forwards: SuggestionForward[];
 }
 
 export interface ReviewSummary {

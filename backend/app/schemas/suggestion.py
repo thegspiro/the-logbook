@@ -243,6 +243,9 @@ class ReviewSuggestionSummary(UTCResponseBase):
     attachment_count: int = 0
     created_at: datetime
     timestamp_precision: Literal["exact", "day"] = "exact"
+    # True when the member reaches this item by a forward, not as a reviewer
+    # of its box.
+    via_forward: bool = False
 
 
 class ReviewSuggestionList(UTCResponseBase):
@@ -250,6 +253,29 @@ class ReviewSuggestionList(UTCResponseBase):
 
     items: List[ReviewSuggestionSummary]
     total: int
+
+
+class ForwardResponse(UTCResponseBase):
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    kind: Literal["position", "member"]
+    target_id: Optional[str] = None
+    name: str
+    forwarded_by_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class ForwardCreate(BaseModel):
+    model_config = _REQUEST_CONFIG
+
+    position_ids: List[str] = Field(default_factory=list, max_length=50)
+    member_ids: List[str] = Field(default_factory=list, max_length=200)
+
+    @field_validator("position_ids", "member_ids")
+    @classmethod
+    def _dedupe(cls, value: List[str]) -> List[str]:
+        return list(dict.fromkeys(v.strip() for v in value if v and v.strip()))
 
 
 class ReviewSuggestionDetail(UTCResponseBase):
@@ -274,6 +300,11 @@ class ReviewSuggestionDetail(UTCResponseBase):
     messages: List[ThreadMessageResponse]
     created_at: datetime
     timestamp_precision: Literal["exact", "day"] = "exact"
+    # Only the box's own reviewers forward or withdraw; someone reaching the
+    # item by a forward cannot pass it on.
+    can_forward: bool = False
+    via_forward: bool = False
+    forwards: List[ForwardResponse] = Field(default_factory=list)
 
 
 class ReviewSummary(UTCResponseBase):

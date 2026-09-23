@@ -3,8 +3,10 @@ Suggestion box service.
 
 Boxes are configured by holders of ``suggestions.manage``; members submit to
 them, named or anonymously as each box allows; each box's reviewers — and only
-they — read what it receives and set its disposition. A box with follow-up
-enabled adds a two-way thread between the reviewers and the submitter.
+they — read what it receives and set its disposition. A reviewer may forward a
+single suggestion to another member or position, who then reviews that
+suggestion alone and cannot pass it on. A box with follow-up enabled adds a
+two-way thread between the reviewers and the submitter.
 
 Anonymity invariants — every one is load-bearing, and the tests in
 ``tests/test_suggestion_boxes.py`` pin them:
@@ -47,6 +49,7 @@ from app.models.suggestion import (
     SuggestionBox,
     SuggestionBoxReviewer,
     SuggestionDisposition,
+    SuggestionForward,
     SuggestionMessage,
 )
 from app.models.user import Organization, Position, User, user_positions
@@ -587,10 +590,38 @@ class SuggestionService:
     # The reviewers' side
     # ------------------------------------------------------------------
 
-    async def reviewer_box_ids(self, organization_id: str, user_id: str) -> Set[str]:
-        held_positions = select(user_positions.c.position_id).where(
+    @staticmethod
+    def _held_positions(user_id: str):
+        return select(user_positions.c.position_id).where(
             user_positions.c.user_id == str(user_id)
         )
+
+    def _forwarded_to(self, organization_id: str, user_id: str):
+        """Suggestion ids forwarded to the member, directly or by position."""
+        return select(SuggestionForward.suggestion_id).where(
+            SuggestionForward.organization_id == str(organization_id),
+            or_(
+                SuggestionForward.user_id == str(user_id),
+                SuggestionForward.position_id.in_(self._held_positions(user_id)),
+            ),
+        )
+
+    async def _review_access(
+        self, organization_id: str, user_id: str
+    ) -> Tuple[Set[str], Any]:
+        """The boxes the member reviews, and the SQL condition selecting every
+        suggestion they may review: those boxes plus anything forwarded."""
+        box_ids = await self.reviewer_box_ids(organization_id, user_id)
+        forwarded = self._forwarded_to(organization_id, user_id)
+        condition = (
+            or_(Suggestion.box_id.in_(box_ids), Suggestion.id.in_(forwarded))
+            if box_ids
+            else Suggestion.id.in_(forwarded)
+        )
+        return box_ids, condition
+
+    async def reviewer_box_ids(self, organization_id: str, user_id: str) -> Set[str]:
+        held_positions = self._held_positions(user_id)
         result = await self.db.execute(
             select(SuggestionBoxReviewer.box_id).where(
                 SuggestionBoxReviewer.organization_id == str(organization_id),
@@ -605,8 +636,11 @@ class SuggestionService:
     async def review_summary(
         self, organization_id: str, user_id: str
     ) -> Dict[str, Any]:
-        box_ids = await self.reviewer_box_ids(organization_id, user_id)
-        if not box_ids:
+        box_ids, condition = await self._review_access(organization_id, user_id)
+        has_forwards = (
+            await self.db.execute(self._forwarded_to(organization_id, user_id).limit(1))
+        ).first() is not None
+        if not box_ids and not has_forwards:
             return {"is_reviewer": False, "open_count": 0, "boxes": []}
         boxes = await self.db.execute(
             select(SuggestionBox)
@@ -619,7 +653,7 @@ class SuggestionService:
         open_count = await self.db.scalar(
             select(func.count(Suggestion.id)).where(
                 Suggestion.organization_id == str(organization_id),
-                Suggestion.box_id.in_(box_ids),
+                condition,
                 Suggestion.disposition.in_(OPEN_DISPOSITIONS),
             )
         )
@@ -639,16 +673,10 @@ class SuggestionService:
         skip: int = 0,
         limit: int = 50,
     ) -> Tuple[List[Dict[str, Any]], int]:
-        box_ids = await self.reviewer_box_ids(organization_id, user_id)
+        box_ids, condition = await self._review_access(organization_id, user_id)
+        filters = [Suggestion.organization_id == str(organization_id), condition]
         if box_id:
-            box_ids = box_ids & {str(box_id)}
-        if not box_ids:
-            return [], 0
-
-        filters = [
-            Suggestion.organization_id == str(organization_id),
-            Suggestion.box_id.in_(box_ids),
-        ]
+            filters.append(Suggestion.box_id == str(box_id))
         if disposition == "open":
             filters.append(Suggestion.disposition.in_(OPEN_DISPOSITIONS))
         elif disposition:
@@ -696,6 +724,7 @@ class SuggestionService:
                 "attachment_count": int(atts or 0),
                 "created_at": s.created_at,
                 "timestamp_precision": "day" if s.is_anonymous else "exact",
+                "via_forward": s.box_id not in box_ids,
             }
             for s, box_name, msgs, atts in rows
         ]
@@ -704,17 +733,20 @@ class SuggestionService:
     async def get_for_review(
         self, organization_id: str, user_id: str, suggestion_id: str
     ) -> Optional[Suggestion]:
-        box_ids = await self.reviewer_box_ids(organization_id, user_id)
-        if not box_ids:
-            return None
+        _, condition = await self._review_access(organization_id, user_id)
         result = await self.db.execute(
             self._with_children(select(Suggestion)).where(
                 Suggestion.id == str(suggestion_id),
                 Suggestion.organization_id == str(organization_id),
-                Suggestion.box_id.in_(box_ids),
+                condition,
             )
         )
         return result.scalar_one_or_none()
+
+    async def is_box_reviewer(
+        self, organization_id: str, user_id: str, box_id: str
+    ) -> bool:
+        return str(box_id) in await self.reviewer_box_ids(organization_id, user_id)
 
     @staticmethod
     def can_follow_up(suggestion: Suggestion) -> bool:
@@ -729,6 +761,9 @@ class SuggestionService:
     ) -> Dict[str, Any]:
         people = await self._users_by_id(
             [suggestion.submitted_by, suggestion.disposition_updated_by]
+        )
+        can_forward = await self.is_box_reviewer(
+            suggestion.organization_id, viewer_id, suggestion.box_id
         )
         return {
             "id": suggestion.id,
@@ -754,7 +789,121 @@ class SuggestionService:
             "messages": await self._thread(suggestion, viewer_id),
             "created_at": suggestion.created_at,
             "timestamp_precision": "day" if suggestion.is_anonymous else "exact",
+            "can_forward": can_forward,
+            "via_forward": not can_forward,
+            "forwards": await self.list_forwards(suggestion),
         }
+
+    # ------------------------------------------------------------------
+    # Forwarding
+    # ------------------------------------------------------------------
+
+    async def list_forwards(self, suggestion: Suggestion) -> List[Dict[str, Any]]:
+        result = await self.db.execute(
+            select(SuggestionForward)
+            .where(
+                SuggestionForward.organization_id == suggestion.organization_id,
+                SuggestionForward.suggestion_id == suggestion.id,
+            )
+            .order_by(SuggestionForward.created_at, SuggestionForward.id)
+        )
+        forwards = list(result.scalars().all())
+        position_ids = {f.position_id for f in forwards if f.position_id}
+        position_names: Dict[str, str] = {}
+        if position_ids:
+            rows = await self.db.execute(
+                select(Position.id, Position.name).where(Position.id.in_(position_ids))
+            )
+            position_names = {r.id: r.name for r in rows.all()}
+        people = await self._users_by_id(
+            [f.user_id for f in forwards] + [f.forwarded_by for f in forwards]
+        )
+        return [
+            {
+                "id": f.id,
+                "kind": "position" if f.position_id else "member",
+                "target_id": f.position_id or f.user_id,
+                "name": (
+                    position_names.get(f.position_id, "")
+                    if f.position_id
+                    else _display_name(people.get(f.user_id or "")) or ""
+                ),
+                "forwarded_by_name": _display_name(people.get(f.forwarded_by or "")),
+                "created_at": f.created_at,
+            }
+            for f in forwards
+        ]
+
+    async def add_forwards(
+        self,
+        suggestion: Suggestion,
+        actor_id: str,
+        position_ids: Sequence[str],
+        member_ids: Sequence[str],
+    ) -> Tuple[List[str], List[str]]:
+        """Forward to positions and members not already forwarded to.
+
+        Returns the (position_ids, member_ids) actually added, so the caller
+        notifies only the people who just gained access.
+        """
+        org_id = suggestion.organization_id
+        await assert_all_in_org(
+            self.db, Position, position_ids, org_id, label="position"
+        )
+        await assert_all_in_org(self.db, User, member_ids, org_id, label="member")
+        if not position_ids and not member_ids:
+            raise ValueError("Choose at least one member or position to forward to.")
+        existing = await self.db.execute(
+            select(SuggestionForward.position_id, SuggestionForward.user_id).where(
+                SuggestionForward.organization_id == org_id,
+                SuggestionForward.suggestion_id == suggestion.id,
+            )
+        )
+        rows = existing.all()
+        have_positions = {r.position_id for r in rows if r.position_id}
+        have_members = {r.user_id for r in rows if r.user_id}
+        new_positions = [
+            p for p in dict.fromkeys(position_ids) if p not in have_positions
+        ]
+        new_members = [m for m in dict.fromkeys(member_ids) if m not in have_members]
+        for position_id in new_positions:
+            self.db.add(
+                SuggestionForward(
+                    organization_id=org_id,
+                    suggestion_id=suggestion.id,
+                    position_id=position_id,
+                    forwarded_by=str(actor_id),
+                )
+            )
+        for member_id in new_members:
+            self.db.add(
+                SuggestionForward(
+                    organization_id=org_id,
+                    suggestion_id=suggestion.id,
+                    user_id=member_id,
+                    forwarded_by=str(actor_id),
+                )
+            )
+        await self.db.commit()
+        return new_positions, new_members
+
+    async def remove_forward(
+        self, suggestion: Suggestion, forward_id: str
+    ) -> Optional[Dict[str, Optional[str]]]:
+        result = await self.db.execute(
+            select(SuggestionForward).where(
+                SuggestionForward.id == str(forward_id),
+                SuggestionForward.organization_id == suggestion.organization_id,
+                SuggestionForward.suggestion_id == suggestion.id,
+            )
+        )
+        forward = result.scalar_one_or_none()
+        if forward is None:
+            return None
+        removed = {"position_id": forward.position_id, "user_id": forward.user_id}
+        await self.db.delete(forward)
+        await self.db.commit()
+        return removed
 
     async def update_disposition(
         self,
@@ -799,16 +948,53 @@ class SuggestionService:
             SuggestionBoxReviewer.box_id == str(box_id),
         )
         rows = (await self.db.execute(reviewers)).scalars().all()
-        direct = {r.user_id for r in rows if r.user_id}
-        position_ids = {r.position_id for r in rows if r.position_id}
+        return await self.active_member_ids(
+            organization_id,
+            {r.user_id for r in rows if r.user_id},
+            {r.position_id for r in rows if r.position_id},
+        )
+
+    async def suggestion_recipient_ids(self, suggestion: Suggestion) -> List[str]:
+        """Everyone who reviews this suggestion: the box's reviewers plus
+        whoever it was forwarded to."""
+        org_id = suggestion.organization_id
+        forwards = (
+            (
+                await self.db.execute(
+                    select(SuggestionForward).where(
+                        SuggestionForward.organization_id == org_id,
+                        SuggestionForward.suggestion_id == suggestion.id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        forwarded = await self.active_member_ids(
+            org_id,
+            {f.user_id for f in forwards if f.user_id},
+            {f.position_id for f in forwards if f.position_id},
+        )
+        box = await self.reviewer_recipient_ids(org_id, suggestion.box_id)
+        return sorted(set(box) | set(forwarded))
+
+    async def active_member_ids(
+        self,
+        organization_id: str,
+        direct: Iterable[str],
+        position_ids: Iterable[str],
+    ) -> List[str]:
+        """Active members in the org named directly or holding a position."""
+        member_set = {str(d) for d in direct if d}
+        position_set = {str(p) for p in position_ids if p}
         conditions = []
-        if direct:
-            conditions.append(User.id.in_(direct))
-        if position_ids:
+        if member_set:
+            conditions.append(User.id.in_(member_set))
+        if position_set:
             conditions.append(
                 User.id.in_(
                     select(user_positions.c.user_id).where(
-                        user_positions.c.position_id.in_(position_ids)
+                        user_positions.c.position_id.in_(position_set)
                     )
                 )
             )
@@ -965,6 +1151,19 @@ def reviewer_notice(
     url = html.escape(_link(f"/suggestions?tab=review&id={suggestion_id}"))
     body = (
         f"<p>{lead}</p>"
+        f'<p><a href="{url}">Open it in the Logbook</a> to read it.</p>'
+    )
+    return {"subject": subject, "heading": subject, "body_html": body}
+
+
+def forward_notice(box_name: str, suggestion_id: str) -> Dict[str, str]:
+    """Like ``reviewer_notice``: no submission content, only a link."""
+    box = html.escape(box_name)
+    subject = f"A submission in the {_subject_safe(box_name)} box was forwarded to you"
+    url = html.escape(_link(f"/suggestions?tab=review&id={suggestion_id}"))
+    body = (
+        f"<p>A reviewer of the <strong>{box}</strong> box forwarded a submission "
+        "to you for review.</p>"
         f'<p><a href="{url}">Open it in the Logbook</a> to read it.</p>'
     )
     return {"subject": subject, "heading": subject, "body_html": body}

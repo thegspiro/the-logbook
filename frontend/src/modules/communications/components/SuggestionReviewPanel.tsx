@@ -1,17 +1,19 @@
 /**
- * The reviewers' queue. Only boxes the member reviews are returned by the
- * backend — this screen does not filter anything itself.
+ * The reviewers' queue: suggestions in boxes the member reviews, plus any
+ * single suggestion forwarded to them. The backend decides both — this
+ * screen does not filter anything itself.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { ChevronRight, Inbox, Loader2, MessageSquare, Paperclip } from 'lucide-react';
+import { ChevronRight, Forward, Inbox, Loader2, MessageSquare, Paperclip, X } from 'lucide-react';
 import { EmptyState } from '../../../components/ux';
 import {
   SUGGESTION_DISPOSITION_COLORS,
   SUGGESTION_DISPOSITION_LABELS,
   SuggestionDisposition,
 } from '../../../constants/enums';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -25,6 +27,7 @@ import type {
 } from '../types/suggestions';
 import { formatSuggestionTime } from '../utils/suggestionTime';
 import SuggestionAttachments from './SuggestionAttachments';
+import SuggestionForwardModal from './SuggestionForwardModal';
 import SuggestionThread from './SuggestionThread';
 
 const PAGE_SIZE = 25;
@@ -46,6 +49,8 @@ const ReviewDetail: React.FC<ReviewDetailProps> = ({ detail, onChange }) => {
   const [disposition, setDisposition] = useState<SuggestionDisposition>(detail.disposition);
   const [note, setNote] = useState(detail.internalNote ?? '');
   const [isSaving, setIsSaving] = useState(false);
+  const [isForwarding, setIsForwarding] = useState(false);
+  const { confirm } = useConfirm();
 
   useEffect(() => {
     setDisposition(detail.disposition);
@@ -68,6 +73,22 @@ const ReviewDetail: React.FC<ReviewDetailProps> = ({ detail, onChange }) => {
       toast.error(getErrorMessage(err, 'Unable to save.'));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const withdraw = async (forwardId: string, name: string) => {
+    const ok = await confirm({
+      title: 'Withdraw forward?',
+      message: `${name} will no longer be able to open this suggestion.`,
+      confirmLabel: 'Withdraw',
+      cancelLabel: 'Keep it',
+    });
+    if (!ok) return;
+    try {
+      onChange(await suggestionsService.withdrawForward(detail.id, forwardId));
+      toast.success('Forward withdrawn');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Unable to withdraw the forward.'));
     }
   };
 
@@ -142,6 +163,54 @@ const ReviewDetail: React.FC<ReviewDetailProps> = ({ detail, onChange }) => {
         </button>
       </section>
 
+      <section className="border-theme-surface-border space-y-2 border-t pt-4" aria-label="Forwarded to">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-theme-text-secondary text-sm font-medium">Forwarded to</h3>
+          {detail.canForward && (
+            <button
+              type="button"
+              className="btn-secondary inline-flex items-center gap-1 px-3 py-1.5 text-sm"
+              onClick={() => setIsForwarding(true)}
+            >
+              <Forward className="h-4 w-4" aria-hidden="true" />
+              Forward
+            </button>
+          )}
+        </div>
+        {detail.viaForward && (
+          <p className="text-theme-text-muted text-xs">
+            This suggestion was forwarded to you. You can review it, but only the box&apos;s reviewers can forward it.
+          </p>
+        )}
+        {detail.forwards.length === 0 ? (
+          <p className="text-theme-text-muted text-sm">Not forwarded.</p>
+        ) : (
+          <ul className="space-y-1">
+            {detail.forwards.map((forward) => (
+              <li key={forward.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-theme-text-primary">
+                  {forward.name}
+                  <span className="text-theme-text-muted text-xs">
+                    {forward.kind === 'position' ? ' (position)' : ''}
+                    {forward.forwardedByName ? ` · by ${forward.forwardedByName}` : ''}
+                  </span>
+                </span>
+                {detail.canForward && (
+                  <button
+                    type="button"
+                    className="btn-icon text-theme-text-muted"
+                    aria-label={`Withdraw forward to ${forward.name}`}
+                    onClick={() => void withdraw(forward.id, forward.name)}
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {detail.followUpEnabled ? (
         <div className="border-theme-surface-border border-t pt-4">
           <SuggestionThread
@@ -158,6 +227,16 @@ const ReviewDetail: React.FC<ReviewDetailProps> = ({ detail, onChange }) => {
         </div>
       ) : (
         <p className="text-theme-text-muted text-sm">This box is one-way: submitters do not see replies or status.</p>
+      )}
+      {isForwarding && (
+        <SuggestionForwardModal
+          detail={detail}
+          onClose={() => setIsForwarding(false)}
+          onForwarded={(updated) => {
+            setIsForwarding(false);
+            onChange(updated);
+          }}
+        />
       )}
     </article>
   );
@@ -309,6 +388,11 @@ const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, se
                       </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
+                      {item.viaForward && (
+                        <span className="badge bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                          Forwarded to you
+                        </span>
+                      )}
                       <span className={`badge ${SUGGESTION_DISPOSITION_COLORS[item.disposition] ?? ''}`}>
                         {SUGGESTION_DISPOSITION_LABELS[item.disposition] ?? item.disposition}
                       </span>

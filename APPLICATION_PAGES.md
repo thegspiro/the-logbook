@@ -1224,8 +1224,9 @@ lot's number or expiration date require `inventory.check_manage` or
 > **Suggestions** _(2026-09-23)_ is where every member submits to the
 > department's suggestion boxes — named or anonymously, as each box allows —
 > follows their own named submissions, and follows up on an anonymous one with
-> its private key. Its Review tab appears only for a box's reviewers, which is
-> decided per box on the backend rather than by a permission. **Suggestion Box
+> its private key. Its Review tab appears only for a box's reviewers — and for
+> anyone a single suggestion was forwarded to, who reviews that suggestion alone
+> — which is decided on the backend rather than by a permission. **Suggestion Box
 > Management** configures boxes and their reviewers; `suggestions.manage` does
 > not by itself read any box's submissions.
 

@@ -331,6 +331,7 @@ from app.models.suggestion import (
     SuggestionBox,
     SuggestionBoxReviewer,
     SuggestionDisposition,
+    SuggestionForward,
     SuggestionMessage,
 )
 from app.models.testing_checklist import (
@@ -751,6 +752,7 @@ __all__ = [
     "SuggestionBox",
     "SuggestionBoxReviewer",
     "SuggestionDisposition",
+    "SuggestionForward",
     "SuggestionMessage",
     # Testing checklist models
     "TestingAccessExpectation",

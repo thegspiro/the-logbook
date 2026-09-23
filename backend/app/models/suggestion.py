@@ -107,7 +107,8 @@ class SuggestionBox(Base):
 class SuggestionBoxReviewer(Base):
     """One reviewer grant on a box: either a position or a single member.
 
-    Reviewers are the only people who can read a box's submissions. Holding
+    Reviewers are the only people who can read a box's submissions (a
+    ``SuggestionForward`` extends one suggestion, never the box). Holding
     ``suggestions.manage`` configures boxes but does not confer read access,
     so a complaint about an officer is not visible to that officer merely
     because they administer the boxes.
@@ -277,6 +278,53 @@ class SuggestionMessage(Base):
         UniqueConstraint("suggestion_id", "sequence", name="uq_suggestion_msg_seq"),
         Index(
             "idx_suggestion_messages_org_suggestion",
+            "organization_id",
+            "suggestion_id",
+        ),
+    )
+
+
+class SuggestionForward(Base):
+    """One suggestion forwarded to a member or a position.
+
+    A forward makes its recipients reviewers of that single suggestion — they
+    can read it, set its disposition and reply — without opening the rest of
+    the box to them. Only the box's own reviewers can forward or withdraw
+    one; a recipient cannot pass it on, so access never spreads further
+    without a box reviewer's decision.
+    """
+
+    __tablename__ = "suggestion_forwards"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    suggestion_id = Column(
+        String(36),
+        ForeignKey("suggestions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    position_id = Column(
+        String(36), ForeignKey("positions.id", ondelete="CASCADE"), nullable=True
+    )
+    user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    forwarded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint(
+            "suggestion_id", "position_id", name="uq_suggestion_forward_pos"
+        ),
+        UniqueConstraint("suggestion_id", "user_id", name="uq_suggestion_forward_user"),
+        Index(
+            "idx_suggestion_forwards_org_suggestion",
             "organization_id",
             "suggestion_id",
         ),

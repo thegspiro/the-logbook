@@ -6,8 +6,10 @@ Four audiences, grouped by path so the access rule for each is in one place:
 * ``/boxes`` — any signed-in member: list open boxes and submit to one.
 * ``/mine`` and ``/follow-up`` — the submitter: named submitters by their own
   session, anonymous ones by the follow-up key alone.
-* ``/review`` — a box's reviewers. Authorization is per box, resolved from
-  ``suggestion_box_reviewers``, not from a permission.
+* ``/review`` — a box's reviewers, plus anyone a single suggestion was
+  forwarded to (for that suggestion only). Authorization is resolved from
+  ``suggestion_box_reviewers`` and ``suggestion_forwards``, not from a
+  permission; only a box's own reviewers forward or withdraw.
 * ``/admin`` — ``suggestions.manage``: configure boxes and reviewers. That
   grant never reads submissions (see ``app/models/suggestion.py``).
 
@@ -44,6 +46,7 @@ from app.schemas.suggestion import (
     DispositionUpdate,
     FollowUpKeyRequest,
     FollowUpMessageCreate,
+    ForwardCreate,
     MessageCreate,
     MySuggestionSummary,
     ReviewerOptions,
@@ -60,6 +63,7 @@ from app.services.suggestion_service import (
     MAX_SCREENSHOT_BYTES,
     MAX_SCREENSHOTS,
     SuggestionService,
+    forward_notice,
     process_screenshot,
     reviewer_notice,
     send_suggestion_notice,
@@ -327,9 +331,7 @@ async def _notify_reviewers_of_reply(
     background_tasks: BackgroundTasks,
     suggestion: Suggestion,
 ) -> None:
-    recipients = await service.reviewer_recipient_ids(
-        suggestion.organization_id, suggestion.box_id
-    )
+    recipients = await service.suggestion_recipient_ids(suggestion)
     background_tasks.add_task(
         send_suggestion_notice,
         suggestion.organization_id,
@@ -385,6 +387,22 @@ async def _for_review(
         ),
         _NOT_FOUND,
     )
+
+
+@router.get("/review/forward-options", response_model=ReviewerOptions)
+async def forward_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Positions and members a box reviewer can forward to."""
+    service = SuggestionService(db)
+    if not await service.reviewer_box_ids(
+        current_user.organization_id, str(current_user.id)
+    ):
+        raise HTTPException(
+            status_code=403, detail="Only a box's reviewers can forward suggestions."
+        )
+    return await service.reviewer_options(current_user.organization_id)
 
 
 @router.get("/review/{suggestion_id}", response_model=ReviewSuggestionDetail)
@@ -466,6 +484,99 @@ async def reply_as_reviewer(
             [refreshed.submitted_by],
             submitter_notice(refreshed.box.name, refreshed.id, disposition=None),
         )
+    return await service.reviewer_view(refreshed, str(current_user.id))
+
+
+async def _for_forwarding(
+    service: SuggestionService, current_user: User, suggestion_id: str
+) -> Suggestion:
+    suggestion = await _for_review(service, current_user, suggestion_id)
+    if not await service.is_box_reviewer(
+        current_user.organization_id, str(current_user.id), suggestion.box_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the box's reviewers can forward or withdraw a forward.",
+        )
+    return suggestion
+
+
+@router.post(
+    "/review/{suggestion_id}/forwards",
+    response_model=ReviewSuggestionDetail,
+)
+async def forward_suggestion(
+    suggestion_id: str,
+    data: ForwardCreate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Make members or positions reviewers of this one suggestion."""
+    service = SuggestionService(db)
+    suggestion = await _for_forwarding(service, current_user, suggestion_id)
+    async with handle_service_errors("Failed to forward submission"):
+        new_positions, new_members = await service.add_forwards(
+            suggestion, str(current_user.id), data.position_ids, data.member_ids
+        )
+    if new_positions or new_members:
+        await log_audit_event(
+            db=db,
+            event_type="suggestion_forwarded",
+            event_category="suggestions",
+            severity="info",
+            event_data={
+                "suggestion_id": suggestion.id,
+                "box_id": suggestion.box_id,
+                "position_ids": new_positions,
+                "member_ids": new_members,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        recipients = await service.active_member_ids(
+            suggestion.organization_id, new_members, new_positions
+        )
+        background_tasks.add_task(
+            send_suggestion_notice,
+            suggestion.organization_id,
+            [r for r in recipients if r != str(current_user.id)],
+            forward_notice(suggestion.box.name, suggestion.id),
+        )
+    refreshed = await _for_review(service, current_user, suggestion_id)
+    return await service.reviewer_view(refreshed, str(current_user.id))
+
+
+@router.delete(
+    "/review/{suggestion_id}/forwards/{forward_id}",
+    response_model=ReviewSuggestionDetail,
+)
+async def withdraw_forward(
+    suggestion_id: str,
+    forward_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = SuggestionService(db)
+    suggestion = await _for_forwarding(service, current_user, suggestion_id)
+    removed = ensure_found(
+        await service.remove_forward(suggestion, forward_id), "Forward"
+    )
+    await log_audit_event(
+        db=db,
+        event_type="suggestion_forward_withdrawn",
+        event_category="suggestions",
+        severity="info",
+        event_data={
+            "suggestion_id": suggestion.id,
+            "box_id": suggestion.box_id,
+            "position_id": removed["position_id"],
+            "member_id": removed["user_id"],
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    refreshed = await _for_review(service, current_user, suggestion_id)
     return await service.reviewer_view(refreshed, str(current_user.id))
 
 
