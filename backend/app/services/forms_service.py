@@ -215,6 +215,14 @@ class FormsService:
 
             field = field_map[field_id]
 
+            # An answer to a question the submitter could not see is stale: it
+            # was typed before they changed the answer that shows it (EMT
+            # experience left over after switching to Administrative), so it is
+            # not stored. Visibility is judged against the raw submitted
+            # values, the same inputs the renderer used to hide the field.
+            if not FormsService._is_field_visible(field, data):
+                continue
+
             # Coerce to string for sanitization
             if value is None:
                 sanitized[field_id] = ""

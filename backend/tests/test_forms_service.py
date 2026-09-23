@@ -64,11 +64,28 @@ class TestIsEmptyValue:
         assert FormsService._is_empty_value(["a"]) is False
 
 
+def _text_field(**overrides):
+    attrs = {
+        "field_type": FieldType.TEXT,
+        "required": True,
+        "min_length": None,
+        "max_length": None,
+        "min_value": None,
+        "max_value": None,
+        "validation_pattern": None,
+        "options": None,
+        "condition_field_id": None,
+        "condition_operator": None,
+        "condition_value": None,
+    }
+    attrs.update(overrides)
+    return SimpleNamespace(**attrs)
+
+
 def _conditional_field(operator, value=None, parent="membership-type"):
-    return SimpleNamespace(
+    return _text_field(
         id="experience",
         label="Previous EMT experience",
-        required=True,
         condition_field_id=parent,
         condition_operator=operator,
         condition_value=value,
@@ -139,14 +156,7 @@ class TestIsFieldVisible:
 
 
 def _membership_form():
-    membership_type = SimpleNamespace(
-        id="membership-type",
-        label="Membership Type",
-        required=True,
-        condition_field_id=None,
-        condition_operator=None,
-        condition_value=None,
-    )
+    membership_type = _text_field(id="membership-type", label="Membership Type")
     return SimpleNamespace(
         id="form-id",
         status=FormStatus.PUBLISHED,
@@ -154,6 +164,41 @@ def _membership_form():
         require_authentication=False,
         allow_multiple_submissions=True,
     )
+
+
+class TestHiddenAnswersDiscarded:
+    """An answer to a question hidden by its condition is not stored."""
+
+    def test_stale_answer_to_hidden_question_is_dropped(self):
+        form = _membership_form()
+        sanitized, error = FormsService._sanitize_submission_data(
+            {"membership-type": "Administrative", "experience": "5 years"},
+            form.fields,
+        )
+
+        assert error is None
+        assert sanitized == {"membership-type": "Administrative"}
+
+    def test_answer_to_visible_question_is_kept(self):
+        form = _membership_form()
+        sanitized, error = FormsService._sanitize_submission_data(
+            {"membership-type": "EMT", "experience": "5 years"},
+            form.fields,
+        )
+
+        assert error is None
+        assert sanitized == {"membership-type": "EMT", "experience": "5 years"}
+
+    def test_invalid_stale_answer_does_not_reject_the_form(self):
+        form = _membership_form()
+        form.fields[1].validation_pattern = r"^\d+$"
+        sanitized, error = FormsService._sanitize_submission_data(
+            {"membership-type": "Administrative", "experience": "lots"},
+            form.fields,
+        )
+
+        assert error is None
+        assert "experience" not in sanitized
 
 
 class TestConditionalRequiredOnSubmit:
