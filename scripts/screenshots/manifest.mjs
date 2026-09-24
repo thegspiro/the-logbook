@@ -14140,6 +14140,62 @@ export const SHOTS = [
     allowEmptyState: true,
   },
   {
+    // A SIMULATED result, and captioned as one in the guide. A real success
+    // needs a Microsoft 365 tenant with SMTP AUTH on a licensed mailbox, which
+    // the demo does not have; the owner chose a mock with a caption over
+    // leaving the placeholder open (2026-09-24). Only the test request is
+    // answered, with the exact text the backend's SMTP test returns on
+    // success, so the toast is the one a working tenant would show. Save is
+    // never pressed: the form, the platform and the demo address all stay in
+    // the browser.
+    id: "20-18-email-test-connection",
+    doc: "20-september-2026-release-changes.md",
+    line: 200,
+    anchor:
+      "Settings → Email with the Test Connection button and a successful test result",
+    alt: "Settings → Email with Microsoft 365 selected: the App registration (OAuth) and App Password choice with App Password chosen, the notice that Microsoft disables it by default at the end of December 2026, and a Test Connection toast reading SMTP connection successful — a simulated result, since the demo has no Microsoft 365 tenant",
+    route: "/settings?tab=email",
+    viewport: { width: 1440, height: 1300 },
+    expect: "SMTP connection successful",
+    prepare: async (page) => {
+      await page.route(
+        "**/api/v1/organization/settings/email/test",
+        async (route) => {
+          if (route.request().method() !== "POST") return route.fallback();
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              success: true,
+              message: "SMTP connection successful",
+              details: {},
+            }),
+          });
+        },
+      );
+      await page
+        .getByRole("button", { name: /Microsoft 365/ })
+        .first()
+        .click();
+      await page
+        .getByRole("button", { name: /^App Password/ })
+        .first()
+        .click();
+      await page
+        .getByPlaceholder("notifications@yourdomain.com")
+        .fill("notifications@oakvillefd.example.org");
+      await page.locator("#email-app-password").fill("demo-app-password");
+      await page.getByRole("button", { name: /^Test Connection$/ }).click();
+      await page
+        .getByText("SMTP connection successful")
+        .first()
+        .waitFor({ timeout: 10_000 });
+    },
+    cleanup: async (page) => {
+      await page.unroute("**/api/v1/organization/settings/email/test");
+    },
+  },
+  {
     id: "20-16-scheduling-admin-hub",
     doc: "20-september-2026-release-changes.md",
     line: 92,

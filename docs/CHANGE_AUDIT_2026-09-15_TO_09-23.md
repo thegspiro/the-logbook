@@ -306,7 +306,7 @@ Full per-image queue in
 [`training/SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md);
 counts regenerated into
 [`training/SCREENSHOT_STATUS.md`](./training/SCREENSHOT_STATUS.md)
-(**599 captured, 1 remaining** after the whole backlog was worked on 2026-09-24 — see that file's "Remaining placeholders" section; the one left needs a real Microsoft 365 tenant. At the close of this window's own pass it stood at 545 captured, 45 remaining — this pass queued eleven, and all eleven were captured on 2026-09-24. The thirteen stale REPLACE images were re-shot the same day, and the carried Meeting stage editor was added as `15-15`. The installed-app icon is an illustration: the icons are the server's real output, and the home screens around them are drawn, because no device or emulator was available).
+(**600 captured, 0 remaining** after the whole backlog was worked on 2026-09-24 — see that file's "Remaining placeholders" section; the Microsoft 365 Test Connection result is simulated and captioned as such. At the close of this window's own pass it stood at 545 captured, 45 remaining — this pass queued eleven, and all eleven were captured on 2026-09-24. The thirteen stale REPLACE images were re-shot the same day, and the carried Meeting stage editor was added as `15-15`. The installed-app icon is an illustration: the icons are the server's real output, and the home screens around them are drawn, because no device or emulator was available).
 
 | Image area                                                    | Disposition | Guide |
 | ------------------------------------------------------------- | ----------- | ----- |

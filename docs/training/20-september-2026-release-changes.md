@@ -197,11 +197,13 @@ sender and the connection test resolve from.
 password, and use the new **Test Connection** button, which signs in to the
 provider without saving.
 
-> **Screenshot needed:**
-> _[Settings → Email with the Test Connection button and a successful test
-> result. Capture the Microsoft 365 platform selected so the App registration
-> (OAuth) / App Password choice and its dated retirement notice are both in
-> frame.]_
+![Settings → Email with Microsoft 365 selected: the App registration (OAuth) and App Password choice with App Password chosen, the notice that Microsoft disables it by default at the end of December 2026, and a Test Connection toast reading SMTP connection successful — a simulated result, since the demo has no Microsoft 365 tenant](./images/20-18-email-test-connection.png)
+
+_The success message in this picture is simulated. The demo department has
+no Microsoft 365 tenant, so the test request was answered with the message
+a real App Password test returns when it succeeds, **SMTP connection
+successful**. Everything else is the real screen, and nothing on it was
+saved._
 
 **The Gmail and Microsoft OAuth Client ID / Client Secret fields are gone**, and
 the upgrade deletes what was stored in them. They never did anything — no

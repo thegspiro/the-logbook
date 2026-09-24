@@ -1,10 +1,10 @@
 # Screenshot currency
 
-## Remaining placeholders, filled 2026-09-24 — 44 down to 1
+## Remaining placeholders, filled 2026-09-24 — 44 down to 0
 
 Every open placeholder in the guides was worked in one pass, and all but one
 are shot. Duplicate requests (the same screen asked for in a module guide and a
-release lesson) share one image. The tracker moves from 546/590 to **599/600**.
+release lesson) share one image. The tracker moves from 546/590 to **600/600**.
 Adding the rewritten Compliance Matrix section in guide 02 is what raised the
 total.
 
@@ -38,10 +38,14 @@ is a native select, and an open native dropdown is drawn outside the page, so
 `08-85` shows it closed on the current run. The Quick Add sheet hides the bar
 that opens it, hence the `10-24` / `10-23` pair.
 
-**The one left: Settings → Email, Test Connection succeeding with Microsoft
-365** (guide 20). A successful result needs a real Microsoft 365 tenant. A
-mocked success would picture a result the demo never produced, which is the
-kind of shot this file has refused before. It stays queued.
+**Settings → Email, Test Connection with Microsoft 365, is simulated.**
+It was left queued at first, because a real success needs a Microsoft 365
+tenant. The owner then chose a mocked success with a caption saying so over
+an open placeholder. `20-18-email-test-connection` answers only the test
+request, with the exact message the backend's SMTP test returns on success
+(`SMTP connection successful`). Everything else is the real screen, and nothing
+is saved. Guide 20 captions it as simulated, and so does the alt text. That
+leaves the tracker at **600/600**.
 
 **Seed fixtures added.** The nine `seed_demo_data.py` steps that produced the
 data above run at the end of a normal seed and are idempotent: profile
