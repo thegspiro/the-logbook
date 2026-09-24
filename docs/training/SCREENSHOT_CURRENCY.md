@@ -14,16 +14,17 @@ exists does not announce itself the way a 404 does.
 one in [`03-scheduling.md`](./03-scheduling.md) and one in
 [`08-admin-reports.md`](./08-admin-reports.md).
 
-**Three of the six are now shot** (2026-09-16), by two images: the library moves
-from 530/572 to **533/578**. The other three are blocked or need a second
-account — see the notes under the table.
+**Four of the six are now shot** — three on 2026-09-16 and the not-elected
+drawer on 2026-09-24, by three images; the library stands at **534/578**. Of
+the two left, one needs a second signed-in account and one has no placeholder
+written yet — see the notes under the table.
 
 | Image area                                     | Disposition | Guide                              | State                                                                                                  |
 | ---------------------------------------------- | ----------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Settings -> **Email**, SMTP preset applied      | **REPLACE** | 20 (release), 08 (admin)           | **Shot** 09-16 as `20-11-settings-email-smtp-preset`. One image, placed in both guides                   |
 | Stage picker with **Election / Vote** selected  | **NEW**     | 20 (release)                       | **Shot** 09-16 as `20-12-stage-picker-election-vote`                                                    |
 | Scheduling -> **Open Shifts**, member vs admin  | **NEW**     | 20 (release), 03 (scheduling)      | **Queued** — needs a second signed-in session and a narrower member; see below                          |
-| Applicant drawer, **not elected** state         | **NEW**     | 20 (release)                       | **Unblocked** 09-22 — the seeder now carries an applicant through a losing vote; ready to shoot          |
+| Applicant drawer, **not elected** state         | **NEW**     | 20 (release)                       | **Shot** 09-24 as `20-13-applicant-drawer-not-elected`                                                  |
 | Settings -> **Email**, inline refusal           | **NEW**     | no placeholder written yet         | The refusal for an enabled-but-empty Cloudflare section, or for **Not configured** with email enabled   |
 | Shift signup **position picker**                | **REPLACE** | no placeholder written yet         | Offers only seats the server will grant                                                                 |
 | Stage builder -> **Meeting** config             | **REPLACE** | no placeholder written yet         | Carries the Auto-Link Event Type warning beside the auto-advance checkbox                                |
@@ -91,6 +92,18 @@ applicant, and `_spread_prospects_across_stages` moves applicants back as well
 as forward — which had already dragged the *elected* package onto an applicant
 at Background & Medical, quietly making guide 01's Elected badge unreproducible.
 `SCENARIO_STAGES` pins both. Do not remove it to "simplify the spread".
+
+**What the drawer does not show, and should.** The panel's banner is the whole
+of the outcome in this frame: the ballot that decided it is named by the
+backend — `election_title`, `election_status` and `election_end_date` all come
+back on `GET /prospective-members/prospects/{id}/election-package` — and
+`ElectionPackageSection` is written to render it as a link beneath the banner.
+It never appears, for any package in any outcome state, because
+`mapElectionPackageResponse` in the module's `services/api.ts` copies
+`election_id` and drops the other three, so the component's
+`election_id && election_title` guard is never satisfied. The shot is accurate
+to what ships; **fixing the mapper changes this frame and the shot would need
+re-taking.** Recorded rather than fixed here to keep this pass to its capture.
 
 ### The Open Shifts pair needs two sessions, not two clips
 
