@@ -28,20 +28,36 @@ device capture; its row says why:
 | 10 | Medical Screening **Add Record** with the amber notice        | **NEW**     | 13 (medical screening)                  | **Shot** 09-24 as `13-07-add-record-linkage-notice`. Dialog opened, never saved |
 | 11 | Applicant drawer on an event-naming **Meeting** stage          | **NEW**     | 20                                      | **Shot** 09-24 as `20-14-applicant-meeting-stage-hint`, on the seeded Associate Member Pipeline |
 
-**Existing images this window makes stale — REPLACE, no placeholder written.**
-None of these is wrong about anything a reader would act on; each is missing one
-new element. Schedule them after the NEW items.
+**Existing images this window made stale — REPLACE, no placeholder written.**
+None of these was wrong about anything a reader would act on; each was missing
+one new element. **All re-shot 2026-09-24**, after the NEW items:
 
-| Image                                                                  | Guide | Why                                                                                                                  | Priority      |
-| ---------------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------- | ------------- |
-| `00-15-sidebar-member.png`                                             | 00    | No **Suggestions** item under Messages                                                                               | **Structural** — it is the image that teaches the sidebar |
-| `00-16-sidebar-admin.png`                                              | 00    | Administration → Forms & Comms has no **Suggestion Boxes** link                                                      | Structural    |
-| `05-47-items-filter-bar.png`                                           | 05    | The filter bar gained the label-status dropdown (**Any Label Status / Needs a Label / Label Printed**)                | Structural — its subject is the filter bar |
-| `05-01-inventory-items.png`, `05-02-items-pinned.png`, `05-03-items-grouped.png` | 05 | Same filter bar, incidentally                                                                                         | Cosmetic      |
-| `05-06-item-detail.png`, `05-56-item-barcode-value.png`, `05-61-item-barcode-fields.png`, `05-67-empty-asset-tag.png` | 05 | **Basic Info** gained a **Label Printed** line (date, or **Needs a label**) beneath Asset Tag              | Cosmetic      |
-| `10-16-mobile-item-detail.png`                                         | 10    | Same new Basic Info line                                                                                            | Cosmetic      |
-| `15-14-applicant-drawer-overview.png`, `15-05-applicant-actions.png`    | 15    | **Check, do not assume.** If the pictured applicant is on a meeting stage that names an event, the drawer now shows the requirement hint | Check         |
-| Stage builder → **Meeting** config (queued 09-15, no image yet)         | 15    | The checkbox is now **"Auto-advance when the event's attendance is finalized"**, and the Auto-Link Event Type help text says naming an event makes attendance required. Shoot the **current** labels when this is taken | Carried       |
+| Image                                                                  | Guide | Why                                                                                                                  | Done |
+| ---------------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------- | ---- |
+| `00-15-sidebar-member.png`                                             | 00    | No **Suggestions** item under Messages                                                                               | **Re-shot** — Suggestions under Messages |
+| `00-16-sidebar-admin.png`                                              | 00    | Administration → Forms & Comms has no **Suggestion Boxes** link                                                      | **Re-shot**, and the shot fixed: see below |
+| `05-47-items-filter-bar.png`                                           | 05    | The filter bar gained the label-status dropdown (**Any Label Status / Needs a Label / Label Printed**)                | **Re-shot** |
+| `05-01-inventory-items.png`, `05-02-items-pinned.png`, `05-03-items-grouped.png` | 05 | Same filter bar, incidentally                                                                                         | **Re-shot** |
+| `05-06-item-detail.png`, `05-56-item-barcode-value.png`, `05-61-item-barcode-fields.png`, `05-67-empty-asset-tag.png` | 05 | **Basic Info** gained a **Label Printed** line (date, or **Needs a label**) beneath Asset Tag              | **Re-shot** — each reads **Needs a label** |
+| `10-16-mobile-item-detail.png`                                         | 10    | Same new Basic Info line                                                                                            | **Re-shot** |
+| `15-14-applicant-drawer-overview.png`, `15-05-applicant-actions.png`    | 15    | **Check, do not assume.** If the pictured applicant is on a meeting stage that names an event, the drawer now shows the requirement hint | **Re-shot.** Tyrell James (Application Received) and Rosa Delgado (Background & Medical): neither stage names an event, so no hint is correct. `20-14` pictures the hint |
+| Stage builder → **Meeting** config (queued 09-15, no image yet)         | 15    | The checkbox is now **"Auto-advance when the event's attendance is finalized"**, and the Auto-Link Event Type help text says naming an event makes attendance required | **Shot** as `15-15-meeting-stage-config`, placed under guide 15's stage-settings table; opened unsaved on the seeded Associate Member Pipeline |
+
+**`00-16` had been failing silently.** Its prepare step set the sidebar's
+`scrollTop` inside a swallowed `.catch`. After the sidebar's scrolling element
+changed, that did nothing, so a fresh capture showed the top of the admin list
+with the Members group open and nothing from this window. It now expands
+**Forms & Comms**, centres **Suggestion Boxes**, and asserts that link is in
+frame.
+
+**Take prospective-member shots without the filler.** The first attempt at
+`15-14` and `15-05` ran with the 236 `--bulk-prospects` applicants still in the
+demo database. `15-14` opened "Applicant 0237" under a "Showing 200 of 247"
+banner. `15-05` found nobody at Background & Medical on page one and timed
+out. Today's `15-11` re-shoot after the bulk-bar fix had the same problem. The
+filler was removed by email prefix, as `scripts/screenshots/README.md` says to
+once `15-02` and `15-09` are taken. All three were then re-shot against the
+twelve named applicants.
 
 **No shot needed** for: the pipeline stat-card fix (a wrong number corrected,
 not a new layout — `15-12-pipeline-stats.png` stays), hidden form answers (the
@@ -154,7 +170,7 @@ account — see the notes under the table.
 | Applicant drawer, **not elected** state         | **NEW**     | 20 (release)                       | **Unblocked** 09-22 — the seeder now carries an applicant through a losing vote; ready to shoot          |
 | Settings -> **Email**, inline refusal           | **NEW**     | no placeholder written yet         | The refusal for an enabled-but-empty Cloudflare section, or for **Not configured** with email enabled   |
 | Shift signup **position picker**                | **REPLACE** | no placeholder written yet         | Offers only seats the server will grant                                                                 |
-| Stage builder -> **Meeting** config             | **REPLACE** | no placeholder written yet         | Carries the Auto-Link Event Type warning beside the auto-advance checkbox                                |
+| Stage builder -> **Meeting** config             | **REPLACE** | 15                                 | **Shot** 09-24 as `15-15-meeting-stage-config`                                                          |
 | Inventory item -> maintenance history           | **NO SHOT** | n/a                                | The rule changed, the screen did not                                                                     |
 
 ### What the two shot images actually show, and why not what was asked for

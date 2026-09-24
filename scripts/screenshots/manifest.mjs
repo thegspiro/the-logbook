@@ -4404,22 +4404,27 @@ export const SHOTS = [
     // scrolling element, so an element screenshot renders it whole and would
     // be the same picture as the member-section shot above. Scrolling it and
     // taking the viewport is what actually shows the admin half.
+    // Forms & Comms rather than Members: the Suggestion Boxes link under it is
+    // what this image was last re-shot for (2026-09-24). Scrolling the link
+    // itself into view replaces setting the nav's scrollTop, which silently
+    // did nothing once the scrolling element changed, leaving the top of the
+    // sidebar in frame.
     prepare: async (page) => {
       await page
-        .getByRole("button", { name: /^Members$/ })
+        .getByRole("button", { name: /^Forms & Comms$/ })
         .last()
-        .click({ timeout: 10_000 })
-        .catch(() => {});
-      await page.waitForTimeout(300);
-      await page
+        .click({ timeout: 10_000 });
+      const link = page
         .locator("nav")
-        .first()
-        .evaluate((el) => {
-          el.scrollTop = el.scrollHeight;
-        })
-        .catch(() => {});
+        .getByText("Suggestion Boxes", { exact: true })
+        .first();
+      await link.waitFor({ timeout: 10_000 });
+      // Centred, so the whole Forms & Comms group sits mid-sidebar rather than
+      // its last link resting against the footer.
+      await link.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(400);
     },
+    expect: { selector: 'nav :text-is("Suggestion Boxes")' },
     fullPage: false,
   },
   {
@@ -4684,6 +4689,37 @@ export const SHOTS = [
         const el = document.activeElement;
         if (el instanceof HTMLElement) el.blur();
       });
+    },
+  },
+  {
+    id: "15-15-meeting-stage-config",
+    doc: "15-prospective-members.md",
+    line: 197,
+    anchor: "the Meeting stage editor with an Auto-Link Event Type set",
+    alt: "Editing the Attend a Business Meeting stage: Auto-Link Event Type set to Next Business Meeting, its help text saying that naming an event makes attendance required, the next upcoming meeting it will link, and the checkbox reading Auto-advance when the event's attendance is finalized, with its explanation that a sign-in at the door is not enough on its own",
+    route: "/prospective-members/settings",
+    // The checkbox label changed on 2026-09-16; asserting its new wording is
+    // what tells a stale frontend from a current one.
+    expect: "Auto-advance when the event's attendance is finalized",
+    viewport: { width: 1280, height: 2000 },
+    selector: '[aria-labelledby="stage-config-modal-title"] > div',
+    // The seeded Associate Member Pipeline carries the only Meeting stage that
+    // names its event. The dialog is opened and closed unsaved.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Associate Member Pipeline/i })
+        .first()
+        .click();
+      const row = page
+        .locator("div")
+        .filter({ hasText: "Attend a Business Meeting" })
+        .filter({ has: page.locator('button[title="Edit stage"]') })
+        .last();
+      await row.locator('button[title="Edit stage"]').first().click();
+      await page
+        .locator('[aria-labelledby="stage-config-modal-title"]')
+        .getByText("Auto-advance when the event's attendance is finalized")
+        .waitFor({ timeout: 10_000 });
     },
   },
   {

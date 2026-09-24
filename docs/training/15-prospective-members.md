@@ -194,6 +194,8 @@ Each stage can be configured with:
 | **Scheduling** (meeting stage)             | _Manual_ or _Cal.com self-scheduling_ — shown only when Cal.com is connected      |
 | **Collection Method** (document stage)     | _Upload_ or _Documenso e-signature_ — shown only when Documenso is connected      |
 
+![Editing the Attend a Business Meeting stage: Auto-Link Event Type set to Next Business Meeting, its help text saying that naming an event makes attendance required, the next upcoming meeting it will link, and the checkbox reading Auto-advance when the event's attendance is finalized, with its explanation that a sign-in at the door is not enough on its own](./images/15-15-meeting-stage-config.png)
+
 **Required stages cannot be skipped.** The **Skip** action on an applicant is
 refused on a stage marked Required, and the button is disabled with an
 explanation. To bypass one, un-tick **Required** on the stage first — that is a

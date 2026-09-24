@@ -836,8 +836,6 @@ FROZEN = {
     "manifest.mjs:03-49-report-card-names:af27e4619669",  # :4014 framing
     "manifest.mjs:00-19-change-password:33a5b3b98233",  # :4087 action
     "manifest.mjs:00-15-sidebar-member:48dc35beca5f",  # :4148 action
-    "manifest.mjs:00-16-sidebar-admin:00d4a3e50d9a",  # :4172 action
-    "manifest.mjs:00-16-sidebar-admin:311c65b0f5be",  # :4180 framing
     "manifest.mjs:05-58-return-items-modal:c256153f3960",  # :4289 action
     "manifest.mjs:15-14-applicant-drawer-overview:e6fe70147a39",  # :4309 framing
     "manifest.mjs:01-27-stage-type-picker:cb127cccb47d",  # :4996 framing

@@ -306,7 +306,7 @@ Full per-image queue in
 [`training/SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md);
 counts regenerated into
 [`training/SCREENSHOT_STATUS.md`](./training/SCREENSHOT_STATUS.md)
-(**544 captured, 45 remaining** — this pass queued eleven, and all eleven were captured on 2026-09-24. The installed-app icon is an illustration: the icons are the server's real output, and the home screens around them are drawn, because no device or emulator was available).
+(**545 captured, 45 remaining** — this pass queued eleven, and all eleven were captured on 2026-09-24. The thirteen stale REPLACE images were re-shot the same day, and the carried Meeting stage editor was added as `15-15`. The installed-app icon is an illustration: the icons are the server's real output, and the home screens around them are drawn, because no device or emulator was available).
 
 | Image area                                                    | Disposition | Guide |
 | ------------------------------------------------------------- | ----------- | ----- |
@@ -374,6 +374,6 @@ Run against `da7d28479` plus this pass's documentation while writing this
 audit: migration head `5a70c5dcd138`, single head; 230 routes with 0 errors and
 0 warnings (17 redirects skipped); 1,498 documented route handlers with 0 errors
 and 0 warnings; 362 Markdown files with 0 broken links, anchors included; 533
-screenshots captured with 56 remaining after this pass's eleven placeholders (544 and 45 once all eleven were captured on 2026-09-24);
+screenshots captured with 56 remaining after this pass's eleven placeholders (545 and 45 once all eleven were captured and the carried Meeting stage editor added on 2026-09-24);
 `DATABASE_SCHEMA.md` regenerated with no diff; the 141 documentation-tooling
 tests under `scripts/` pass.
