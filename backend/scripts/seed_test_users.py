@@ -67,8 +67,8 @@ TEST_USERS = [
     ("rjackson",    "Rachel",    "Jackson",    "emt",             "Headquarters", "active",        "active",       ["emt", "member", "facilities_manager"]),
     ("dthomas",     "Daniel",    "Thomas",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "meeting_hall_coordinator"]),
     ("elewis",      "Emily",     "Lewis",      "emt",             "Headquarters", "active",        "active",       ["emt", "member", "assistant_secretary"]),
+    ("mrobinson",   "Matthew",   "Robinson",   "emt",             "Headquarters", "active",        "active",       ["emt", "member", "compliance_officer"]),
     # --- EMTs (rank and file, active) ---
-    ("mrobinson",   "Matthew",   "Robinson",   "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
     ("aclark",      "Ashley",    "Clark",      "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
     ("jwalker",     "Joshua",    "Walker",     "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
     ("shernandez",  "Stephanie", "Hernandez",  "emt",             "Headquarters", "active",        "active",       ["emt", "member", "it_manager"]),
@@ -219,6 +219,7 @@ async def get_or_create_positions(session: AsyncSession, org_id: str) -> dict[st
         # Appointed officer positions
         ("Training Officer", "training_officer", 58),
         ("Safety Officer", "safety_officer", 57),
+        ("Compliance Officer", "compliance_officer", 56),
         ("Quartermaster", "quartermaster", 52),
         ("Communications Officer / PIO", "communications_officer", 48),
         ("Apparatus Officer", "apparatus_officer", 47),
