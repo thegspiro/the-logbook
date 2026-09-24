@@ -37,6 +37,8 @@ Offices (`<office>` above):
 | `assistant_secretary` | Assistant Secretary | Administrative |
 | `treasurer`           | Treasurer           | Administrative |
 | `quartermaster`       | Quartermaster       | Administrative |
+| `compliance_officer`  | Compliance Officer  | Administrative |
+| `ems_supply_officer`  | EMS Supply Officer  | Operational    |
 
 Example signature block:
 
