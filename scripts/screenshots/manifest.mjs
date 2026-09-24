@@ -12759,7 +12759,7 @@ export const SHOTS = [
     line: 1798,
     anchor:
       "An event detail page as a member with attendee visibility switched on",
-    alt: "An event as an ordinary member with attendee visibility on: her RSVP reads Waitlisted, You're #1 of 1 on the waitlist, and Who's going lists the three members by name only",
+    alt: "An event as an ordinary member with attendee visibility on: her RSVP reads Waitlisted, You're #1 of 1 on the waitlist, Who's going lists the three members by name only, and Event Information shows capacity 3 / 3 with Event Full",
     route: "/events",
     auth: "member",
     expect: "on the waitlist",

@@ -1795,7 +1795,7 @@ check-in times stay in the organizer view and are never included.
 department until an administrator opts in. Inheriting is a real third state, not
 a missing value — no existing event was changed by the upgrade.
 
-![An event as an ordinary member with attendee visibility on: her RSVP reads Waitlisted, You're #1 of 1 on the waitlist, and Who's going lists the three members by name only](./images/04-50-event-attendees-member.png)
+![An event as an ordinary member with attendee visibility on: her RSVP reads Waitlisted, You're #1 of 1 on the waitlist, Who's going lists the three members by name only, and Event Information shows capacity 3 / 3 with Event Full](./images/04-50-event-attendees-member.png)
 
 ### Responding to an event that does not require a response
 

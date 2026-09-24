@@ -512,7 +512,7 @@ over your whole time with the department — was not reported anywhere.
 - **Inline RSVP from the dashboard**, matching the sign-up open shifts already
   offered there.
 
-![An event as an ordinary member with attendee visibility on: her RSVP reads Waitlisted, You're #1 of 1 on the waitlist, and Who's going lists the three members by name only](./images/04-50-event-attendees-member.png)
+![An event as an ordinary member with attendee visibility on: her RSVP reads Waitlisted, You're #1 of 1 on the waitlist, Who's going lists the three members by name only, and Event Information shows capacity 3 / 3 with Event Full](./images/04-50-event-attendees-member.png)
 
 > **⚠️ For administrators: guests occupy seats now.** `allow_guests` had been on
 > the model since the beginning and was read nowhere, so guests were accepted
