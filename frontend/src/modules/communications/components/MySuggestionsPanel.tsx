@@ -108,7 +108,7 @@ const MySuggestionsPanel: React.FC<MySuggestionsPanelProps> = ({ selectedId, onS
               type="button"
               onClick={() => onSelect(item.id)}
               aria-current={item.id === selectedId ? 'true' : undefined}
-              className={`card flex w-full items-start justify-between gap-3 p-3 text-left max-md:min-h-[44px] ${
+              className={`card flex w-full items-start justify-between gap-3 p-4 text-left max-md:min-h-[44px] ${
                 item.id === selectedId ? 'border-l-theme-info border-l-4' : ''
               }`}
             >
