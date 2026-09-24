@@ -99,6 +99,10 @@ sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}|" .
 LXC_IP=$(hostname -I | awk '{print $1}')
 sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=http://${LXC_IP}:3000|" .env
 
+# Links in outgoing email are built from FRONTEND_URL; use the address members
+# will open (your HTTPS hostname once a reverse proxy is in front)
+sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=http://${LXC_IP}:3000|" .env
+
 # Start the application (production — see the note below)
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 

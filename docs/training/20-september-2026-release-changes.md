@@ -1655,6 +1655,28 @@ questions that were hidden when the form was submitted, and skips anything whose
 question has been edited since. See the [upgrade note](../UPGRADING.md) for the
 commands.
 
+### Check that emailed links point at your site, not localhost
+
+Every link the system emails — password resets, ballots, approvals, reminders,
+applicant status — is built from the server's `FRONTEND_URL` setting. It ships
+as `http://localhost:3000`, and neither installer sets it, so an installation
+that never changed it has been mailing links that open for nobody.
+
+As of September 24, a production backend logs this at startup, and the
+preflight check lists it under "Advisory":
+
+```
+WARNING: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...
+```
+
+It does not stop the service from starting.
+
+**What to do:** set `FRONTEND_URL` in `.env` to the address members use (for
+example `https://logbook.yourdept.org`), confirm it reaches the container with
+`docker compose config | grep FRONTEND_URL`, and restart. Links already sent
+keep the old address — members request a fresh password reset, and the
+secretary re-sends any open ballots.
+
 ## Upgrade notes for administrators (September 15–23)
 
 **Four migrations. Head is `5a70c5dcd138`.** Back up, confirm `alembic heads`

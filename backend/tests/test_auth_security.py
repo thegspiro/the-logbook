@@ -335,7 +335,7 @@ class TestJWTTokens:
 
         bad_token = pyjwt.encode(
             {"sub": "user-123", "exp": datetime.now(timezone.utc) + timedelta(hours=1)},
-            "wrong-secret",
+            "wrong-secret-" + "x" * 32,
             algorithm=settings.ALGORITHM,
         )
         with pytest.raises(InvalidSignatureError):
