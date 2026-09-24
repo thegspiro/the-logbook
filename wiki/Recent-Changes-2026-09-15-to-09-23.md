@@ -144,6 +144,20 @@ migration and no setting.
 - `docs/training/SCREENSHOT_CURRENCY.md` records each shot, the data behind it,
   and the two frames that were requested but cannot exist.
 
+**If you make the training videos:** a new 45-second short, **8AU "Who's
+Going — and Where You Stand on the Waitlist"**, is in
+`docs/youtube-scripts/08-quick-tips-and-shorts.md` (#2667). It shows:
+
+- the names-only list of who's going;
+- a member's place on the waitlist;
+- the Event Information card's capacity, as fixed above;
+- the officer setting that controls the list: **Manage Events → Settings →
+  Attendance**, set to **Only event managers** out of the box.
+
+**Film it as a member, with attendee visibility switched on**, because an
+officer always sees the full roster. The demo department's **"Station Open
+House — Setup Crew"** event is already full, with `nbelhaj` on the waitlist.
+
 ## Upgrade notes
 
 **Four migrations. Head is `5a70c5dcd138`.** Back up, confirm `alembic heads`
