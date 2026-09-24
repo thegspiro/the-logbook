@@ -653,6 +653,91 @@ describe('InventoryBarcodePrintPage', () => {
     });
   });
 
+  describe('saved print setups', () => {
+    beforeEach(() => {
+      mockGetLabelPreset.mockReset();
+      mockGetLabelPreset.mockResolvedValue({ preset: null });
+    });
+
+    it('saves the current settings under a name and applies them later', async () => {
+      const user = userEvent.setup();
+      const { unmount } = renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      await user.click(screen.getByRole('button', { name: /Rollo \/ Thermal 2/ }));
+      await user.click(screen.getByRole('button', { name: /QR code/ }));
+      fireEvent.change(screen.getByLabelText(/Copies per item/), { target: { value: '2' } });
+      await user.click(screen.getByRole('button', { name: 'Save setup…' }));
+      await user.type(screen.getByLabelText(/Setup name/), 'Station Rollo');
+      await user.click(screen.getByRole('button', { name: 'Save setup' }));
+
+      expect(JSON.parse(localStorage.getItem('inventory:labelSetups') ?? '[]')).toEqual([
+        expect.objectContaining({ name: 'Station Rollo', preset: 'rollo_2x1', symbology: 'qr', copies: 2 }),
+      ]);
+      unmount();
+
+      // A fresh visit on the default size, then the setup is chosen.
+      localStorage.setItem('inventory:labelPreset', 'dymo_30252');
+      localStorage.setItem('inventory:labelSymbology', 'code128');
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+      await user.selectOptions(screen.getByLabelText('Saved setup'), 'Station Rollo');
+
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+      const call = mockGenerateLabels.mock.calls[0];
+      expect(call?.[0]).toEqual(['it-1', 'it-1']);
+      expect(call?.[1]).toBe('rollo_2x1');
+      expect(call?.[6]).toEqual({ symbology: 'qr' });
+    });
+
+    it('selects the saved network printer when the station still has it', async () => {
+      mockListPrinters.mockResolvedValue([
+        {
+          id: 'pr-1',
+          name: 'Front Desk',
+          language: 'zpl',
+          label_format: 'rollo_2x1',
+          is_default: true,
+          is_active: true,
+        },
+        {
+          id: 'pr-2',
+          name: 'Supply Room',
+          language: 'zpl',
+          label_format: 'rollo_2x1',
+          is_default: false,
+          is_active: true,
+        },
+      ]);
+      localStorage.setItem(
+        'inventory:labelSetups',
+        JSON.stringify([{ name: 'Supply', preset: 'rollo_2x1', copies: 1, printerId: 'pr-2' }])
+      );
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findByRole('option', { name: 'Supply Room' });
+
+      await user.selectOptions(screen.getByLabelText('Saved setup'), 'Supply');
+
+      expect(screen.getByLabelText('Label printer')).toHaveValue('pr-2');
+    });
+
+    it('deletes a setup', async () => {
+      localStorage.setItem('inventory:labelSetups', JSON.stringify([{ name: 'Old', preset: 'letter', copies: 1 }]));
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+
+      await user.selectOptions(screen.getByLabelText('Saved setup'), 'Old');
+      await user.click(screen.getByRole('button', { name: 'Delete setup' }));
+
+      expect(screen.queryByLabelText('Saved setup')).not.toBeInTheDocument();
+      expect(JSON.parse(localStorage.getItem('inventory:labelSetups') ?? '[]')).toEqual([]);
+    });
+  });
+
   describe('confirming the labels printed', () => {
     const downloadPdf = async (user: ReturnType<typeof userEvent.setup>) => {
       await screen.findAllByText('Thermal Camera');

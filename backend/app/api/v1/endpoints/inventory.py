@@ -1808,7 +1808,17 @@ async def get_item(
         # The detail page's Assignment card prints who holds the item; without
         # a name it showed the raw user id.
         payload.assigned_to_name = item.assigned_to_user.full_name
-    return _redact_holder(payload, current_user, _is_quartermaster(current_user))
+    is_quartermaster = _is_quartermaster(current_user)
+    if is_quartermaster and item.label_printed_by:
+        # Org-scoped like every by-id read, though the id came from our row.
+        printer = await db.scalar(
+            select(User).where(
+                User.id == str(item.label_printed_by),
+                User.organization_id == str(current_user.organization_id),
+            )
+        )
+        payload.label_printed_by_name = printer.full_name if printer else None
+    return _redact_holder(payload, current_user, is_quartermaster)
 
 
 @router.get("/items/{item_id}/history")

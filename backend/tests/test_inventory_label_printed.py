@@ -200,3 +200,55 @@ class TestLabelValueChangeClearsTheMark:
         ).scalar_one()
         assert refreshed
         assert await _stored(db_session, item.id) == (None, None)
+
+
+@pytest.mark.integration
+class TestWhoPrintedIt:
+    """The detail endpoint names who confirmed the label, to quartermasters."""
+
+    def _caller(self, org_id: str, permissions):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            id=str(uuid.uuid4()),
+            organization_id=org_id,
+            positions=[SimpleNamespace(permissions=list(permissions))],
+            rank=None,
+        )
+
+    async def _printed_item(self, db):
+        org = await _make_org(db, f"labels-{uuid.uuid4().hex[:6]}")
+        user = await _make_user(db, org)
+        item = await _make_item(db, org, barcode=f"INV-{uuid.uuid4().hex[:6]}")
+        await InventoryService(db).mark_labels_printed(
+            item_ids=[uuid.UUID(item.id)],
+            organization_id=uuid.UUID(org),
+            user_id=uuid.UUID(user),
+        )
+        return org, item
+
+    async def test_a_quartermaster_sees_the_name(self, db_session):
+        from app.api.v1.endpoints.inventory import get_item
+
+        org, item = await self._printed_item(db_session)
+
+        payload = await get_item(
+            uuid.UUID(item.id),
+            db=db_session,
+            current_user=self._caller(org, ["inventory.manage"]),
+        )
+
+        assert payload.label_printed_by_name == "Quarter Master"
+
+    async def test_a_member_does_not(self, db_session):
+        from app.api.v1.endpoints.inventory import get_item
+
+        org, item = await self._printed_item(db_session)
+
+        payload = await get_item(
+            uuid.UUID(item.id),
+            db=db_session,
+            current_user=self._caller(org, ["inventory.view"]),
+        )
+
+        assert payload.label_printed_by_name is None

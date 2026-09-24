@@ -914,6 +914,8 @@ export interface InventoryItem {
    *  including after the value its label encodes changed. */
   label_printed_at?: string | null;
   label_printed_by?: string | null;
+  /** Who confirmed the label, by name; the detail endpoint sends it to managers only. */
+  label_printed_by_name?: string | null;
   active: boolean;
   created_at: string;
   updated_at: string;

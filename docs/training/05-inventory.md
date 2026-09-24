@@ -779,6 +779,8 @@ Generate barcode labels for inventory items to attach to equipment.
 
 Labels include the barcode (Code 128 with the required quiet-zone margins, or a QR), the item name, and the asset tag or serial number. A QR has no built-in human-readable line, so the value is printed underneath it.
 
+> **Saved setups for a print station.** Above the printer controls, **Save setup…** stores the current label size, barcode style, what prints on the label, copies per item and network printer under a name — e.g. _Rollo 2×1, QR_. Pick it from **Saved setup** to apply all of it at once. Setups are kept in this browser, because they describe the printer and stock at one station that several people share; up to 20, and saving under an existing name replaces it.
+
 > **When an edit makes a label out of date.** Editing an item that has a confirmed label shows a banner on the item page with a **Print label** button. If the edit changed the code the label encodes, the old label no longer scans to the item and should be replaced — the item also goes back on the _needs a label_ list. If it changed only printed text (name, asset tag or serial number), the old label still scans but reads wrong.
 
 > **Reusing a partly used Avery sheet.** With **Letter Paper (Grid)** selected, a **Start at label** box (1–30) appears above the printer controls. Set it to the first label still on the sheet — counting left to right along each row — and the positions before it are left blank in the preview, the browser print and the PDF, so the sheet can go back in the printer instead of the bin. It applies to the sheet in the printer now: it goes back to 1 when you move to the next part of a large run. Roll printers have no positions, so the box is not shown for them.
@@ -863,7 +865,9 @@ question. It is never asked after **Download Test Label**.
 **Where it shows.**
 
 - The item's **Basic Info** card has a **Label Printed** line: the date the
-  label was confirmed, or **Needs a label**.
+  label was confirmed and, for members who manage inventory, who confirmed it
+  ("_20 Sep 2026 by Jane Smith_") — or **Needs a label**. It shows the latest
+  confirmation; reprinting replaces it.
 - The items list has a label-status filter: **Any Label Status**, **Needs a
   Label**, **Label Printed**. The same filter carries into **Export**.
 - The print page's picker has **Only items that still need a label**.

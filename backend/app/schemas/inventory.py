@@ -713,6 +713,9 @@ class InventoryItemResponse(InventoryItemBase):
     # means it needs one — including after its barcode value changed.
     label_printed_at: Optional[datetime] = None
     label_printed_by: Optional[UUID] = None
+    # Who confirmed that label, by name. Set only by the detail endpoint and
+    # only for callers who manage inventory, like assigned_to_name.
+    label_printed_by_name: Optional[str] = None
 
     # Ready units across the item's in-date stock lots, and whether it is
     # stocked that way at all. Lots and `quantity` are separate ledgers, so a

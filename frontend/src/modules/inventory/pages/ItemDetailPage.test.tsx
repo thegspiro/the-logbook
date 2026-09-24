@@ -111,6 +111,17 @@ describe('ItemDetailPage', () => {
     expect(await screen.findByText('Needs a label')).toBeInTheDocument();
   });
 
+  it('names who confirmed the label when the API says', async () => {
+    mockGetItem.mockResolvedValue(
+      makeItem({ label_printed_at: '2026-09-20T15:00:00Z', label_printed_by_name: 'Quarter Master' })
+    );
+    renderPage();
+
+    expect(
+      await screen.findByText(`${formatDate('2026-09-20T15:00:00Z', 'UTC')} by Quarter Master`)
+    ).toBeInTheDocument();
+  });
+
   it('shows the date the label was confirmed printed', async () => {
     mockGetItem.mockResolvedValue(makeItem({ label_printed_at: '2026-09-20T15:00:00Z' }));
     renderPage();
