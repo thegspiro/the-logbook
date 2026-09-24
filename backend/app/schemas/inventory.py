@@ -21,6 +21,7 @@ from pydantic import (
 
 from app.schemas.base import UTCResponseBase
 from app.utils.garment_styles import FIT_VALUES, first_conflicting_axis
+from app.utils.label_renderer import SHEET_LABELS_PER_PAGE, SYMBOLOGY_CODE128
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -1571,6 +1572,19 @@ class LabelGenerateRequest(BaseModel):
         description="Optional extra fields to print on labels: "
         "'location', 'category', 'condition'. Space permitting.",
     )
+    symbology: str = Field(
+        SYMBOLOGY_CODE128,
+        max_length=20,
+        description="Barcode symbology: 'code128' (default) or 'qr'",
+    )
+    start_position: int = Field(
+        1,
+        ge=1,
+        le=SHEET_LABELS_PER_PAGE,
+        description="Sheet formats only: the 1-based position on the first "
+        "sheet to start at, so a partly used sheet can be reused. Rolls "
+        "ignore it.",
+    )
 
 
 class LabelMarkPrintedRequest(BaseModel):
@@ -2590,6 +2604,7 @@ class LabelPresetUpdate(BaseModel):
     preset: str = Field(min_length=1, max_length=50)
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
+    symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
 
 
 # ============================================

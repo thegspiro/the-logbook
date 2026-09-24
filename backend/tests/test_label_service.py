@@ -7,11 +7,14 @@ generate dispatch, and PDF rendering. The DB session is mocked and the
 renderer runs for real (reportlab), so the suite needs no MySQL.
 """
 
+import re
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from reportlab.lib.units import inch
+from reportlab.pdfgen.canvas import Canvas
 
 from app.services import label_service as ls
 from app.services.label_service import LabelService
@@ -382,3 +385,56 @@ class TestRenderer:
     def test_unknown_format_raises(self):
         with pytest.raises(ValueError, match="Unknown label format"):
             render_labels([LabelSpec(name="x", barcode_value="y")], "bogus")
+
+
+def _page_count(pdf: bytes) -> int:
+    return len(re.findall(rb"/Type /Page\b(?!s)", pdf))
+
+
+class TestSheetStartPosition:
+    """A partly used Avery sheet is fed back in, starting at a later label."""
+
+    specs = [
+        LabelSpec(name=f"Item {i}", barcode_value=f"INV-{i:04d}") for i in range(30)
+    ]
+
+    def test_full_sheet_from_the_top_fits_one_page(self):
+        assert _page_count(render_labels(self.specs, "letter").getvalue()) == 1
+
+    def test_starting_later_spills_onto_a_second_sheet(self):
+        pdf = render_labels(self.specs, "letter", start_position=2).getvalue()
+        assert _page_count(pdf) == 2
+
+    def test_first_label_lands_on_the_chosen_position(self):
+        def first_name_origin(start_position: int) -> tuple:
+            drawn = []
+            original = Canvas.drawString
+
+            def record(canvas_obj, x, y, text, *args, **kwargs):
+                drawn.append((text, x, y))
+                return original(canvas_obj, x, y, text, *args, **kwargs)
+
+            with patch.object(Canvas, "drawString", record):
+                render_labels(self.specs[:1], "letter", start_position=start_position)
+            return next((x, y) for text, x, y in drawn if text == "Item 0")
+
+        top_left = first_name_origin(1)
+        # Position 5 is row 2, column 2 of a 3-column sheet.
+        x, y = first_name_origin(5)
+        assert x == pytest.approx(top_left[0] + 2.625 * inch)
+        assert y == pytest.approx(top_left[1] - 1.0 * inch)
+
+    @pytest.mark.parametrize("start_position", [0, 31])
+    def test_rejects_a_position_off_the_sheet(self, start_position):
+        with pytest.raises(ValueError, match="start_position"):
+            render_labels(self.specs[:1], "letter", start_position=start_position)
+
+    def test_rolls_ignore_it(self):
+        pdf = render_labels(self.specs[:2], "rollo_2x1", start_position=12).getvalue()
+        assert _page_count(pdf) == 2
+
+    def test_qr_sheet_honours_it_too(self):
+        pdf = render_labels(
+            self.specs, "letter", symbology="qr", start_position=30
+        ).getvalue()
+        assert _page_count(pdf) == 2

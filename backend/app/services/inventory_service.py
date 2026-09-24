@@ -98,6 +98,7 @@ from app.utils.garment_styles import (
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import (
+    SYMBOLOGY_CODE128,
     LabelSpec,
     printable_label_value,
     render_labels,
@@ -5787,6 +5788,8 @@ class InventoryService:
         custom_height: Optional[float] = None,
         auto_rotate: Optional[bool] = None,
         extra_lines: Optional[List[str]] = None,
+        symbology: str = SYMBOLOGY_CODE128,
+        start_position: int = 1,
     ) -> Tuple[BytesIO, int]:
         """Generate a PDF of barcode labels for the given inventory items.
 
@@ -5797,7 +5800,13 @@ class InventoryService:
             item_ids, organization_id, extra_lines
         )
         pdf = render_labels(
-            specs, label_format, custom_width, custom_height, auto_rotate
+            specs,
+            label_format,
+            custom_width,
+            custom_height,
+            auto_rotate,
+            symbology=symbology,
+            start_position=start_position,
         )
         return pdf, auto_populated
 

@@ -3494,7 +3494,7 @@ async def generate_barcode_labels(
     """
     Generate a PDF of barcode labels for the specified inventory items.
 
-    Returns a PDF file with printable Code128 barcode labels.
+    Returns a PDF file with printable Code128 or QR labels.
 
     Manage-gated, not view-gated: the caller names arbitrary item ids and gets
     back a document describing them, so on `inventory.view` — which every
@@ -3517,6 +3517,8 @@ async def generate_barcode_labels(
             custom_height=request.custom_height,
             auto_rotate=request.auto_rotate,
             extra_lines=request.extra_lines,
+            symbology=request.symbology,
+            start_position=request.start_position,
         )
     except ValueError as e:
         raise HTTPException(
@@ -7117,6 +7119,7 @@ async def set_label_preset(
             preset=data.preset,
             custom_width=data.custom_width,
             custom_height=data.custom_height,
+            symbology=data.symbology,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

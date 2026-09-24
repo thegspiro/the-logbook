@@ -14,8 +14,11 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router';
 import JsBarcode from 'jsbarcode';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   ArrowLeft,
+  Barcode,
+  QrCode,
   Printer,
   Loader2,
   AlertCircle,
@@ -37,7 +40,7 @@ import { prefersPdfOverBrowserPrint } from '../../../utils/printEnvironment';
 import toast from 'react-hot-toast';
 import { LabelScopePicker } from '../components/LabelScopePicker';
 import { LabelScanConfirm } from '../components/LabelScanConfirm';
-import { PrinterLanguage, labelPrinterService } from '../../../services/labelService';
+import { PrinterLanguage, Symbology, labelPrinterService } from '../../../services/labelService';
 import type { LabelPrinterConfig, PrintLabelsResult } from '../../../services/labelService';
 import {
   buildLabelFilterPath,
@@ -225,6 +228,26 @@ const CUSTOM_DIMS_STORAGE_KEY = 'inventory:labelCustomDims';
 // The network printer last used from this page, on this browser. Per-viewer: a
 // quartermaster at the station and one at the warehouse want different rolls.
 const PRINTER_STORAGE_KEY = 'inventory:labelPrinterId';
+// The barcode style is also saved on the member's position with the label
+// size; this local copy covers a member with no position to save it on.
+const SYMBOLOGY_STORAGE_KEY = 'inventory:labelSymbology';
+
+// Avery 5160, the one sheet layout: 3 columns by 10 rows.
+const SHEET_LABELS_PER_PAGE = 30;
+
+function isSymbology(value: unknown): value is Symbology {
+  return value === Symbology.CODE128 || value === Symbology.QR;
+}
+
+function loadStoredSymbology(): Symbology {
+  try {
+    const stored = localStorage.getItem(SYMBOLOGY_STORAGE_KEY);
+    if (isSymbology(stored)) return stored;
+  } catch {
+    // Unavailable storage falls back to the symbology every label had before.
+  }
+  return Symbology.CODE128;
+}
 
 function loadStoredPrinterId(): string | null {
   try {
@@ -266,8 +289,16 @@ function isKnownPreset(id: string): boolean {
 }
 
 /** A stable key for a preset choice, used to detect real changes worth saving. */
-function presetKey(preset: string, width: string, height: string): string {
-  return preset === CUSTOM_PRESET_ID ? `custom:${width}x${height}` : preset;
+function presetKey(preset: string, width: string, height: string, symbology: Symbology): string {
+  return `${preset === CUSTOM_PRESET_ID ? `custom:${width}x${height}` : preset}:${symbology}`;
+}
+
+/** QR side length in inches: square, so bounded by both label dimensions,
+ *  leaving room for the name above and the value below. */
+function qrSizeInches(preset: LabelPreset): number {
+  const width = parseFloat(preset.width);
+  const height = parseFloat(preset.height);
+  return Math.min(height * 0.5, width * 0.8, 1.5);
 }
 
 /** Synthesize a preset for an arbitrary width × height (inches) sticker so the
@@ -322,6 +353,7 @@ function getBarcodeValue(item: InventoryItem): string | null {
 interface BarcodeLabelProps {
   item: InventoryItem;
   preset: LabelPreset;
+  symbology: Symbology;
   extraLines?: string[];
   onRendered?: () => void;
 }
@@ -343,12 +375,14 @@ function buildExtraText(item: InventoryItem, extraLines?: string[]): string | nu
   return parts.length > 0 ? parts.join(' | ') : null;
 }
 
-const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, onRendered }) => {
+const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, symbology, extraLines, onRendered }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const barcodeValue = getBarcodeValue(item);
+  const isQr = symbology === Symbology.QR;
 
   useEffect(() => {
-    if (!svgRef.current || !barcodeValue) {
+    // QRCodeSVG draws during render, so a QR label is complete by now.
+    if (isQr || !svgRef.current || !barcodeValue) {
       onRendered?.();
       return;
     }
@@ -373,7 +407,7 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, o
       // Invalid barcode value — SVG stays empty
     }
     onRendered?.();
-  }, [barcodeValue, preset.barcodeWidth, preset.barcodeHeight, preset.barcodeFontSize, onRendered]);
+  }, [isQr, barcodeValue, preset.barcodeWidth, preset.barcodeHeight, preset.barcodeFontSize, onRendered]);
 
   if (!barcodeValue) {
     return (
@@ -442,17 +476,36 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, o
       >
         {item.name}
       </div>
-      <svg
-        ref={svgRef}
-        style={{
-          maxWidth: '100%',
-          flexShrink: 0,
-          display: 'block',
-          colorAdjust: 'exact',
-          WebkitPrintColorAdjust: 'exact',
-          printColorAdjust: 'exact',
-        }}
-      />
+      {isQr ? (
+        <>
+          <QRCodeSVG
+            value={barcodeValue}
+            level="M"
+            marginSize={2}
+            style={{
+              width: `${qrSizeInches(preset)}in`,
+              height: `${qrSizeInches(preset)}in`,
+              flexShrink: 0,
+              display: 'block',
+            }}
+          />
+          <div style={{ fontSize: preset.subtitleFontSize, fontFamily: 'monospace', color: '#000', lineHeight: 1.1 }}>
+            {barcodeValue}
+          </div>
+        </>
+      ) : (
+        <svg
+          ref={svgRef}
+          style={{
+            maxWidth: '100%',
+            flexShrink: 0,
+            display: 'block',
+            colorAdjust: 'exact',
+            WebkitPrintColorAdjust: 'exact',
+            printColorAdjust: 'exact',
+          }}
+        />
+      )}
       {subtitle && (
         <div
           style={{
@@ -504,6 +557,10 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [presetId, setPresetId] = useState(loadStoredPresetId);
+  const [symbology, setSymbology] = useState<Symbology>(loadStoredSymbology);
+  // Where the first label lands on an Avery sheet, so a sheet with some
+  // labels already peeled off goes back in the printer instead of the bin.
+  const [startPosition, setStartPosition] = useState(1);
   const [copies, setCopies] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
   const [barcodesReady, setBarcodesReady] = useState(false);
@@ -526,8 +583,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const totalLabelsRef = useRef(0);
   // Mirror the current selection so the once-on-mount sync can read it without
   // becoming a dependency. null lastSavedKey = position preset not loaded yet.
-  const presetStateRef = useRef({ presetId, customWidth, customHeight });
-  presetStateRef.current = { presetId, customWidth, customHeight };
+  const presetStateRef = useRef({ presetId, customWidth, customHeight, symbology });
+  presetStateRef.current = { presetId, customWidth, customHeight, symbology };
   const lastSavedKeyRef = useRef<string | null>(null);
 
   const firstPreset = LABEL_PRESETS[0];
@@ -567,6 +624,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
     setPart(Math.max(0, next));
     setLabelConfirm('idle');
     setPrintResult(null);
+    // A position describes the sheet in the printer for this run, not the next.
+    setStartPosition(1);
   };
 
   const printRequest = useMemo(() => parseLabelPrintQuery(searchParams), [searchParams]);
@@ -670,6 +729,14 @@ const InventoryBarcodePrintPage: React.FC = () => {
     }
   }, [customWidth, customHeight]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(SYMBOLOGY_STORAGE_KEY, symbology);
+    } catch {
+      // Best-effort.
+    }
+  }, [symbology]);
+
   // On mount, load the label preset saved for the member's position (server)
   // and apply it over the local default. The position's printer choice follows
   // whoever fills the role, on any computer. Falls back silently to the local
@@ -682,6 +749,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
         if (cancelled) return;
         if (pref?.preset && isKnownPreset(pref.preset)) {
           setPresetId(pref.preset);
+          const sym = isSymbology(pref.symbology) ? pref.symbology : presetStateRef.current.symbology;
+          setSymbology(sym);
           let w = presetStateRef.current.customWidth;
           let h = presetStateRef.current.customHeight;
           if (pref.preset === CUSTOM_PRESET_ID) {
@@ -694,14 +763,14 @@ const InventoryBarcodePrintPage: React.FC = () => {
               setCustomHeight(h);
             }
           }
-          lastSavedKeyRef.current = presetKey(pref.preset, w, h);
+          lastSavedKeyRef.current = presetKey(pref.preset, w, h, sym);
         } else {
           const s = presetStateRef.current;
-          lastSavedKeyRef.current = presetKey(s.presetId, s.customWidth, s.customHeight);
+          lastSavedKeyRef.current = presetKey(s.presetId, s.customWidth, s.customHeight, s.symbology);
         }
       } catch {
         const s = presetStateRef.current;
-        lastSavedKeyRef.current = presetKey(s.presetId, s.customWidth, s.customHeight);
+        lastSavedKeyRef.current = presetKey(s.presetId, s.customWidth, s.customHeight, s.symbology);
       }
     })();
     return () => {
@@ -714,13 +783,14 @@ const InventoryBarcodePrintPage: React.FC = () => {
   useEffect(() => {
     if (lastSavedKeyRef.current === null) return; // position preset not loaded yet
     if (isCustom && !customValid) return; // don't save invalid custom dimensions
-    const key = presetKey(presetId, customWidth, customHeight);
+    const key = presetKey(presetId, customWidth, customHeight, symbology);
     if (key === lastSavedKeyRef.current) return;
     const timer = setTimeout(() => {
       lastSavedKeyRef.current = key;
       void inventoryService
         .setLabelPreset({
           preset: presetId,
+          symbology,
           ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
         })
         .catch(() => {
@@ -728,7 +798,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
         });
     }, 500);
     return () => clearTimeout(timer);
-  }, [presetId, customWidth, customHeight, isCustom, customValid, customW, customH]);
+  }, [presetId, customWidth, customHeight, symbology, isCustom, customValid, customW, customH]);
 
   // Track barcode rendering — compute expected total synchronously during
   // render so it's set before child useEffects fire onRendered callbacks.
@@ -740,7 +810,13 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const prevItemsRef = useRef(items);
   const prevCopiesRef = useRef(copies);
   const prevPresetRef = useRef(presetId);
-  if (prevItemsRef.current !== items || prevCopiesRef.current !== copies || prevPresetRef.current !== presetId) {
+  const prevSymbologyRef = useRef(symbology);
+  if (
+    prevItemsRef.current !== items ||
+    prevCopiesRef.current !== copies ||
+    prevPresetRef.current !== presetId ||
+    prevSymbologyRef.current !== symbology
+  ) {
     // Capture before updating refs so the comparison works correctly.
     const presetChanged = prevPresetRef.current !== presetId;
     renderedCountRef.current = 0;
@@ -748,6 +824,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
     prevItemsRef.current = items;
     prevCopiesRef.current = copies;
     prevPresetRef.current = presetId;
+    prevSymbologyRef.current = symbology;
     // Reset rotation override when switching presets so each preset
     // uses its own default until the user explicitly overrides it.
     if (presetChanged) {
@@ -825,6 +902,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
               }),
           copies,
+          symbology,
           ...(extraLines.length > 0 ? { extra_lines: extraLines } : {}),
         }
       );
@@ -1004,7 +1082,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
         isCustom ? customW : undefined,
         isCustom ? customH : undefined,
         effectiveAutoRotate,
-        extraLines
+        extraLines,
+        { symbology, ...(isThermal ? {} : { startPosition }) }
       );
       if (autoPopulated > 0) {
         toast.success(`${autoPopulated} item${autoPopulated !== 1 ? 's' : ''} had barcode values auto-generated`);
@@ -1036,7 +1115,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
         isCustom ? customW : undefined,
         isCustom ? customH : undefined,
         effectiveAutoRotate,
-        extraLines
+        extraLines,
+        { symbology }
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1052,6 +1132,9 @@ const InventoryBarcodePrintPage: React.FC = () => {
     }
   };
 
+  // Blank cells ahead of the first label, so the preview and a browser print
+  // lay the sheet out exactly as the PDF does. Rolls have no positions.
+  const skippedPositions = isThermal ? 0 : startPosition - 1;
   const labelItems: InventoryItem[] = [];
   for (let c = 0; c < copies; c++) {
     for (const item of items) {
@@ -1193,6 +1276,10 @@ const InventoryBarcodePrintPage: React.FC = () => {
               border: 1px dashed #ccc;
               background: white;
             }
+            .barcode-label-skipped {
+              border: 1px dashed #ddd;
+              background: repeating-linear-gradient(45deg, #f5f5f5 0 6px, #fff 6px 12px);
+            }
           }
         `}
       </style>
@@ -1276,6 +1363,53 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 >
                   Next part
                 </button>
+              </div>
+            </div>
+          )}
+
+          {!isThermal && (
+            <div className="card-secondary mb-4 flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+              <div className="flex-1">
+                <label htmlFor="sheet-start-position" className="form-label">
+                  Start at label
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="sheet-start-position"
+                    type="number"
+                    min={1}
+                    max={SHEET_LABELS_PER_PAGE}
+                    value={startPosition}
+                    onChange={(e) =>
+                      setStartPosition(Math.max(1, Math.min(SHEET_LABELS_PER_PAGE, parseInt(e.target.value) || 1)))
+                    }
+                    aria-describedby="sheet-start-position-help"
+                    className="form-input w-24"
+                  />
+                  <span className="text-theme-text-secondary text-sm">of {SHEET_LABELS_PER_PAGE}</span>
+                </div>
+                <p id="sheet-start-position-help" className="text-theme-text-muted mt-1 text-xs">
+                  {startPosition > 1
+                    ? `Labels 1–${startPosition - 1} are left blank, so a partly used sheet can go back in the printer.`
+                    : 'Reusing a sheet with some labels already peeled off? Start at the first label still on it, counting across each row.'}
+                </p>
+              </div>
+              <div
+                className="grid shrink-0 grid-cols-3 gap-0.5 self-center rounded border border-slate-300 bg-white p-1"
+                aria-hidden="true"
+              >
+                {Array.from({ length: SHEET_LABELS_PER_PAGE }, (_, index) => (
+                  <span
+                    key={index}
+                    className={`h-1.5 w-4 rounded-[1px] ${
+                      index < startPosition - 1
+                        ? 'bg-slate-300'
+                        : index === startPosition - 1
+                          ? 'bg-emerald-700'
+                          : 'border border-slate-300'
+                    }`}
+                  />
+                ))}
               </div>
             </div>
           )}
@@ -1538,6 +1672,50 @@ const InventoryBarcodePrintPage: React.FC = () => {
               </div>
 
               <div>
+                <p className="text-theme-text-muted mb-2 block text-xs font-medium tracking-wider uppercase">
+                  Barcode Style
+                </p>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Barcode style">
+                  {[
+                    {
+                      id: Symbology.CODE128,
+                      icon: Barcode,
+                      name: 'Code 128',
+                      hint: 'The usual barcode; scans with any handheld scanner',
+                    },
+                    {
+                      id: Symbology.QR,
+                      icon: QrCode,
+                      name: 'QR code',
+                      hint: 'Fits a small square tag, survives scuffs, scans with a phone',
+                    },
+                  ].map((option) => {
+                    const Icon = option.icon;
+                    const active = symbology === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setSymbology(option.id)}
+                        className={`flex flex-1 items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors sm:flex-none ${
+                          active
+                            ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500'
+                            : 'border-theme-surface-border hover:bg-theme-surface-secondary'
+                        }`}
+                      >
+                        <Icon className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                          <span className="text-theme-text-primary block text-sm font-medium">{option.name}</span>
+                          <span className="text-theme-text-muted block text-xs">{option.hint}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
                 <label
                   htmlFor="label-copies"
                   className="text-theme-text-muted mb-1 block text-xs font-medium tracking-wider uppercase"
@@ -1724,11 +1902,21 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 justifyContent: isThermal ? undefined : 'center',
               }}
             >
+              {Array.from({ length: skippedPositions }, (_, index) => (
+                <div
+                  key={`skipped-${index}`}
+                  className="barcode-label-skipped"
+                  data-testid="skipped-label-position"
+                  aria-hidden="true"
+                  style={{ width: preset.width, height: preset.height, boxSizing: 'border-box' }}
+                />
+              ))}
               {labelItems.map((item, index) => (
                 <BarcodeLabel
                   key={`${item.id}-${index}`}
                   item={item}
                   preset={preset}
+                  symbology={symbology}
                   extraLines={extraLines}
                   onRendered={handleLabelRendered}
                 />
