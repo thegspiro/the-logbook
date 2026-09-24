@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   DEMO_CREDENTIALS,
+  DEMO_FORWARDEE_CREDENTIALS,
   DEMO_MEMBER_CREDENTIALS,
   DEMO_SECRETARY_CREDENTIALS,
   SHOTS,
@@ -490,6 +491,10 @@ function makeSessions(browser, baseOptions) {
         // *absence* of a control is the subject: an admin capture of the same
         // screen shows it working and teaches the opposite.
         await login(page, DEMO_SECRETARY_CREDENTIALS);
+      } else if (auth === "forwardee") {
+        // Reaches one suggestion through a forward and reviews no box, so the
+        // Review tab shows what a forward recipient sees and nothing more.
+        await login(page, DEMO_FORWARDEE_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }

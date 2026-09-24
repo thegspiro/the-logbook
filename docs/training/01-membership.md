@@ -1708,11 +1708,7 @@ Everyone still gets the status counters, the contact column their department has
 chosen to publish, search, filtering and pagination. For them the page is titled
 **Member Directory**.
 
-> **Screenshot needed:**
-> _[`/members` as a member without `members.manage`: titled "Member Directory",
-> with no usernames, no hire-date column, no Actions column and no bulk
-> selection. Pair it with the existing coordinator capture — the difference
-> between the two is the lesson.]_
+![The Member Directory as an ordinary member: name, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes](./images/01-40-member-directory-member.png)
 
 **Search no longer matches a username** for members who cannot see one. It is
 not displayed anywhere on their page, so a row returned for "ladams" had no
@@ -1741,9 +1737,7 @@ address and personal email were hidden from other members unconditionally.
 Each member can now choose **per field**: email, personal email, phone, mobile
 and address.
 
-> **Screenshot needed:**
-> _[The profile-visibility controls on a member's own profile: the five field
-> toggles with a mix of on and off states.]_
+![My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email, phone and mobile the note that the department's own setting has them off for everyone](./images/01-41-profile-visibility.png)
 
 A member who has never chosen keeps exactly the behaviour they had — the
 defaults reproduce the previous rules, so the upgrade changes nothing until

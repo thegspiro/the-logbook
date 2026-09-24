@@ -103,6 +103,9 @@ const UNCACHEABLE_PREFIXES = [
   '/inventory/items/colors', // free-text colour, unconstrained past a 50-char cap (normalize_color
   // only collapses whitespace) -- whatever an inventory manager or a CSV import
   // puts in the colour column, this dropdown-options endpoint echoes back
+  '/inventory/nfc', // NFC tag switch and tag records (also covers /inventory/nfc-tags/): the switch
+  // must read fresh the moment an administrator flips it, not 90s later, and a
+  // tag record names the member who linked it
   '/inventory/charges', // per-member cost-recovery / financial liability (PII)
   '/inventory/allowances/check/', // GET /allowances/check/{user_id}/{category_id}: a named member's entitlement
   '/inventory/clearances', // departure clearances: who is leaving, departure type, notes, value still owed (PII)
@@ -147,6 +150,8 @@ const UNCACHEABLE_SUBSTRINGS = [
   '/issuances', // who currently holds a pool item (member names) — the same
   // disclosure '/inventory/checkout/' and '/inventory/users/' are already
   // excluded for, reached through the item instead of through the member.
+  '/nfc-tags', // GET /inventory/items/{id}/nfc-tags — reached through the item, like
+  // '/issuances'; the '/inventory/nfc' prefix above cannot see it
   '/exposures', // NFPA exposure records: user_id, exposure type, incident
   // number, decon status and free-text description — a member's contamination
   // history, which is health data however it is filed.

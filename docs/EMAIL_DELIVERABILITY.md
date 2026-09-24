@@ -16,6 +16,7 @@ and other major providers.
 | Valid EHLO hostname       | Recommended     | Required        | `SMTP_EHLO_HOSTNAME`        |
 | `Message-ID` header       | Required        | Required        | Automatic (app code)        |
 | `List-Unsubscribe` header | Required (bulk) | Required (bulk) | Automatic for ballot emails |
+| Working links in emails   | Required        | Required        | `FRONTEND_URL`              |
 
 ## 1. SPF Record
 
@@ -154,6 +155,22 @@ SMTP_FROM_NAME="Your Organization"
 > Emails that would normally include attachments (e.g., compliance reports)
 > will be sent without them when Cloudflare is the active backend. A warning
 > is logged when this occurs.
+
+### Links inside emails _(2026-09-24)_
+
+Delivery settings get the message into the inbox; `FRONTEND_URL` decides
+whether its links work. Every link the app emails — password resets, ballots,
+approvals, reminders, applicant status — is built from it, never from the
+request:
+
+```bash
+FRONTEND_URL=https://logbook.yourdomain.com   # the address members actually use
+```
+
+Left at the default (`http://localhost:3000`), mail is delivered normally and
+every link in it points at `localhost`. In production the backend logs a
+`WARNING: FRONTEND_URL ...` line at startup when this is the case, and
+`python -m app.preflight` lists it as advisory.
 
 ### Which configuration wins _(2026-09-15)_
 

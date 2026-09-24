@@ -916,9 +916,7 @@ folders instead of sharing one. That is serialized now.
 module's lookup configuration — the values you would previously have been
 editing through one-off dialogs scattered across the facility screens.
 
-> **[SCREENSHOT NEEDED — `/facilities/settings`.** _Demo data:_ at least two
-> lookup categories populated, so the screen is not empty. Capture at laptop
-> width; there is a separate phone layout worth a second shot.**]**
+![Facility Settings at laptop width: the Facility Types lookup list with order, name, state, owner and usage columns, and the further lookup categories below it](./images/06-28-facility-settings.png)
 
 ### File edits could be silently swallowed
 

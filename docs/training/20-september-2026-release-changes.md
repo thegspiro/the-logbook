@@ -61,12 +61,7 @@ My Checklists**; officers get **Fleet Readiness** beside it. That row is new,
 and it is a genuine improvement — before this, a member's only route to the
 checks they owed was a tab buried inside Shift Scheduling.
 
-> **Screenshot needed:**
-> _[The Operations section of the sidebar showing the new My Checklists and
-> Fleet Readiness rows, with the Equipment Checks tab visibly absent from the
-> Scheduling page behind it. Capture as a member account for My Checklists and
-> as an officer for Fleet Readiness — they are different rows with different
-> icons.]_
+![The sidebar as an officer, clipped to the navigation: Operations expanded to My Issued Gear, Inventory, Medical Supplies, My Checklists, Fleet Readiness, Apparatus Inventory, Apparatus and Facilities, and below it the Administration section with Scheduling Admin and Inventory Admin](./images/00-26-sidebar-officer-operations.png)
 
 > **Tell your crews about the notifications.** End-of-shift reminder
 > notifications **already sitting in members' bells** carry the old address and
@@ -94,11 +89,7 @@ scheduling entry at all. That strip is gone.
 `/scheduling/admin/settings?tab=…` **does** still work — it forwards to the
 section your parameter names, and to General if it names nothing recognisable.
 
-> **Screenshot needed:**
-> _[The `/scheduling/admin` hub: the card grid on the shared administration
-> frame, with the five headline metrics across the top (To close out,
-> Short-staffed, Hours this month, Shifts ahead, Requests waiting) and the
-> Needs attention queue below them.]_
+![The Scheduling Administration hub: the headline metrics To close out, Short-staffed, Hours this month and Needs attention, the Needs attention queue, and the card grid grouped Before the shift, On the shift, After the shift, People & eligibility, Reporting and Department settings](./images/20-16-scheduling-admin-hub.png)
 
 **Each settings section is its own route now**, so it can be linked to,
 bookmarked, refreshed into and reached with the back button. This is
@@ -206,11 +197,13 @@ sender and the connection test resolve from.
 password, and use the new **Test Connection** button, which signs in to the
 provider without saving.
 
-> **Screenshot needed:**
-> _[Settings → Email with the Test Connection button and a successful test
-> result. Capture the Microsoft 365 platform selected so the App registration
-> (OAuth) / App Password choice and its dated retirement notice are both in
-> frame.]_
+![Settings → Email with Microsoft 365 selected: the App registration (OAuth) and App Password choice with App Password chosen, the notice that Microsoft disables it by default at the end of December 2026, and a Test Connection toast reading SMTP connection successful — a simulated result, since the demo has no Microsoft 365 tenant](./images/20-18-email-test-connection.png)
+
+_The success message in this picture is simulated. The demo department has
+no Microsoft 365 tenant, so the test request was answered with the message
+a real App Password test returns when it succeeds, **SMTP connection
+successful**. Everything else is the real screen, and nothing on it was
+saved._
 
 **The Gmail and Microsoft OAuth Client ID / Client Secret fields are gone**, and
 the upgrade deletes what was stored in them. They never did anything — no
@@ -305,10 +298,7 @@ The assignment goes through the drawer's own call, so it surfaces the same EVOC
 and overtime advisories and opens the same driver-exception dialog — a refusal
 with no route forward is where a safety control turns into a workaround.
 
-> **Screenshot needed:**
-> _[The staffing-gaps view at `/scheduling/admin/planning`: several short shifts
-> over a date range with the assignment control on each row, and the section
-> tabs for Templates and Patterns visible beside it.]_
+![Shift Planning on its Staffing gaps tab: a date range, the count of short shifts and open seats, and each short shift with its empty seats and an assign control, beside the Templates and Patterns tabs](./images/20-17-staffing-gaps.png)
 
 **Templates and patterns are sections of this screen**, not screens beside it —
 the reason to open a template is a shift that keeps coming up short, and that
@@ -336,10 +326,7 @@ rather than "Alarm / Good Intent", had no way to say so.
 **Administration → Scheduling Admin → General → Call types** renames, reorders,
 adds, retires and deletes them.
 
-> **Screenshot needed:**
-> _[The Call types editor in Scheduling Admin → General: the department's list
-> with rename and reorder controls, one type shown as retired, and the delete
-> control visibly unavailable on a type that has calls behind it.]_
+![The Call types editor: each type with rename field and up and down controls, Service Call switched off as retired, and the delete control greyed out on every type with calls on record while Other, with none, can be deleted](./images/03-101-call-types-editor.png)
 
 **Retire, don't delete, anything with history behind it.** The stored value on
 every call ever filed is the type's permanent slug, so deleting a type in use
@@ -377,10 +364,7 @@ ordered worst-first, and stepped through one at a time, with the numbers behind
 each status on the row: _"6 of 24 hours"_, _"Lapsed 41 days ago"_, _"Expires in
 26 days"_.
 
-> **Screenshot needed:**
-> _[The redesigned Compliance Matrix triage rail: members grouped by standing
-> with the worst first, one member's detail open showing the per-requirement
-> figures, and the status chip from a dashboard deep link visible above it.]_
+![The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 1 of 1 shifts](./images/02-66-compliance-matrix.png)
 
 > **⚠️ Your compliance percentages may move, in the favourable direction.** Two
 > grading defects were fixed:
@@ -417,11 +401,9 @@ know what the department calls a thing had nowhere to start.
   matched through the same alias table the impact planner uses — so "Large" on
   their record selects the row you stored as "L".
 
-> **Screenshot needed:**
-> _[The rebuilt gear request form at the product-selection step, showing the
-> category filters and one row per product with an on-hand count, then a second
-> capture of the size step with the member's recorded size preselected and an
-> out-of-stock size visibly selectable and labelled.]_
+![Request Equipment at the product step: category filters across the top and one row per product with its on-hand count and number of sizes, or None on hand — you can still ask](./images/05-86-gear-request-products.png)
+
+![The size step for Structural Coat: L preselected from the member's size on file, and XXL labelled none on hand but still selectable](./images/05-87-gear-request-size.png)
 
 **A member can now ask for gear that is out of stock, or not carried at all.**
 The form was pinned to items marked available, so the one need a quartermaster
@@ -446,10 +428,9 @@ at 32rem above phone width. It is now a **centred dialog**: 56rem on a laptop, a
 The wider desktop box gives the crew board and the close-out checklist's
 per-member hours inputs room they did not have at 512px.
 
-> **Screenshot needed:**
-> _[The Shift Details modal at laptop width with the crew board visible, and a
-> second capture at 390px phone width. It was a right-edge drawer before, so
-> every existing capture of this surface shows a layout that no longer exists.]_
+![The Shift Details modal at laptop width, centred over the schedule, with the shift's time and apparatus at the top and the crew board of seats below](./images/03-102-shift-details-modal.png)
+
+![The same Shift Details modal at 390px phone width, filling the screen with the crew board stacked beneath the shift's details](./images/03-103-shift-details-modal-phone.png)
 
 Escape inside the driver-blocked dialog no longer closes the shift behind it.
 Shift Details hand-rolled Escape on a listener that could not see the dialog
@@ -474,10 +455,9 @@ Before this, every one of them was reached the same way: tap More, wait for the
 drawer, find the module, find the page, find its button. **Four taps and two
 page loads before the first field.**
 
-> **Screenshot needed:**
-> _[The phone bottom bar at 390px with the Add button in the centre, and the
-> Quick Add sheet open showing the entry rows. Capture as a member — the
-> officer rows are gated and should not appear.]_
+![The phone bottom bar at 390px as an ordinary member: Home and Events on the left, the round Add button in the centre, and Schedule and More on the right](./images/10-24-bottom-bar-add.png)
+
+![At 390px as an ordinary member: the Quick Add sheet opened from the centre Add button of the bottom bar, listing the entry rows a member can use and none of the officer-only rows](./images/10-23-quick-add-sheet.png)
 
 **Quick Add adds no forms of its own.** Each row goes to the screen that already
 owns that entry, so there is no second path for the same data to drift down and
@@ -499,10 +479,7 @@ Until now a member could see the hours on each past shift but had no total for
 a month or a year, so _"how many hours do I have this year?"_ was a question
 only an officer with the department-wide report could answer.
 
-> **Screenshot needed:**
-> _[The Hours view in My Shifts: the three cards reading this month, this year
-> and all time, above the month-by-month table with the "vs. busiest month"
-> bar column.]_
+![My Shifts on its Hours view: cards for this month, this year and all time, above the month-by-month table with its vs. busiest month bar column](./images/03-104-my-shifts-hours.png)
 
 Three things worth knowing about the numbers:
 
@@ -535,11 +512,7 @@ over your whole time with the department — was not reported anywhere.
 - **Inline RSVP from the dashboard**, matching the sign-up open shifts already
   offered there.
 
-> **Screenshot needed:**
-> _[An event detail page as a member with attendee visibility switched on:
-> the going list showing names and status only, and the waitlist position
-> line. Capture the member view, not the organizer view — the point is what a
-> member can now see.]_
+![An event as an ordinary member with attendee visibility on: her RSVP reads Waitlisted, You're #1 of 1 on the waitlist, Who's going lists the three members by name only, and Event Information shows capacity 3 / 3 with Event Full](./images/04-50-event-attendees-member.png)
 
 > **⚠️ For administrators: guests occupy seats now.** `allow_guests` had been on
 > the model since the beginning and was read nowhere, so guests were accepted
@@ -699,12 +672,7 @@ in that window returned data older than the edit.
   socials spread across the next six months were enough to hide every drill in
   the coming month — on a card whose own subtitle promises drills.
 
-> **Screenshot needed:**
-> _[The dashboard timeline card titled "Next 30 Days" with its All Shifts
-> control, and the hours card below it showing Administrative hours as a figure
-> rather than "Unavailable". The duplicate "N hrs in Month" chip that used to
-> sit in the header is gone, so an old capture of this area is wrong in three
-> places at once.]_
+![The personal dashboard: the timeline card titled Next 30 Days with its All Shifts control in the main column, and in the side column the My Hours card showing Administrative hours as a figure, with no hours chip in the page header](./images/08-87-dashboard-next-30-days.png)
 
 ### A crew seat read as "EMS" on the schedule and "EMT" everywhere else
 
@@ -817,11 +785,9 @@ Claude Desktop can ask questions of a department's Logbook.
 **It is off on every installation until an administrator connects it, and it
 answers nothing until an IT administrator issues a service key.**
 
-> **Screenshot needed:**
-> _[Integrations → Claude (MCP): the connect form with the access mode and the
-> three data switches (finance, medical, schedule) visibly **off** — that is the
-> shipped default and the point of the shot — and a second capture of the
-> Service key panel in its shown-once state, with the key itself redacted.]_
+![Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening and full duty schedule switches all off, as shipped](./images/16-08-mcp-connect-form.png)
+
+![The Claude (MCP) service key panel in its shown-once state: Copy this key now, it is shown once and cannot be recovered, above a demo key value standing in for the real one](./images/16-09-mcp-service-key.png)
 
 What it can reach: 51 read tools over the roster, events, shifts, training and
 certifications, inventory, apparatus, facilities, meetings and published
@@ -1267,10 +1233,9 @@ Two things improve alongside it:
 the department-wide view, because that tab is also how an admin finds the
 department's staffing gaps.
 
-> **Screenshot needed:**
-> _[Scheduling → Open Shifts as an ordinary member, alongside the same board as
-> a scheduling admin, so the difference in what is listed is visible in one
-> frame. Caption which is which.]_
+![Open Shifts as an ordinary member (a firefighter): only the shifts with a seat her rank can fill](./images/03-100-open-shifts-member.png)
+
+![The same Open Shifts tab as the scheduling administrator: every short-staffed shift in the department, including the officer and driver seats the firefighter's list leaves out](./images/03-105-open-shifts-admin.png)
 
 ### Clicking beside a dialog no longer throws the form away
 
@@ -1654,6 +1619,28 @@ Optional, and safe to skip. A dry-run-by-default script clears answers to
 questions that were hidden when the form was submitted, and skips anything whose
 question has been edited since. See the [upgrade note](../UPGRADING.md) for the
 commands.
+
+### Check that emailed links point at your site, not localhost
+
+Every link the system emails — password resets, ballots, approvals, reminders,
+applicant status — is built from the server's `FRONTEND_URL` setting. It ships
+as `http://localhost:3000`, and neither installer sets it, so an installation
+that never changed it has been mailing links that open for nobody.
+
+As of September 24, a production backend logs this at startup, and the
+preflight check lists it under "Advisory":
+
+```
+WARNING: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...
+```
+
+It does not stop the service from starting.
+
+**What to do:** set `FRONTEND_URL` in `.env` to the address members use (for
+example `https://logbook.yourdept.org`), confirm it reaches the container with
+`docker compose config | grep FRONTEND_URL`, and restart. Links already sent
+keep the old address — members request a fresh password reset, and the
+secretary re-sends any open ballots.
 
 ## Upgrade notes for administrators (September 15–23)
 

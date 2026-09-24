@@ -2,10 +2,13 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   buildAdminHoursClockInUrl,
   buildEventCheckInUrl,
+  buildInventoryTagUrl,
   buildShiftCheckInUrl,
   describeNfcError,
+  generateInventoryTagCode,
   getNfcUnavailableReason,
   isNfcSupported,
+  parseInventoryTagCode,
   parseNfcTagPath,
   readNdefMessageText,
   readNdefRecordText,
@@ -270,5 +273,46 @@ describe('describeNfcError', () => {
   it('falls back for unrecognized errors', () => {
     expect(describeNfcError(new Error('boom'), 'fallback')).toBe('fallback');
     expect(describeNfcError('a string', 'fallback')).toBe('fallback');
+  });
+});
+
+describe('equipment tags (inventory)', () => {
+  it('builds a tag URL that parses back to the tag page', () => {
+    const url = buildInventoryTagUrl('INVTABC123', ORIGIN);
+    expect(url).toBe(`${ORIGIN}/inventory/tag/INVTABC123`);
+    expect(parseNfcTagPath(url, ORIGIN)).toEqual({
+      target: NfcTagTarget.INVENTORY_ITEM,
+      path: '/inventory/tag/INVTABC123',
+    });
+  });
+
+  it('extracts the code from one of our equipment tags', () => {
+    expect(parseInventoryTagCode(`${ORIGIN}/inventory/tag/INVTABC123`, ORIGIN)).toBe('INVTABC123');
+  });
+
+  it('ignores a tag pointing somewhere else in the app', () => {
+    expect(parseInventoryTagCode(`${ORIGIN}/events/abc/check-in`, ORIGIN)).toBeNull();
+  });
+
+  it('ignores a tag carrying no text', () => {
+    expect(parseInventoryTagCode(null, ORIGIN)).toBeNull();
+  });
+
+  it('refuses the same path on another origin', () => {
+    // A tag anyone can write must not steer a lookup to a code of its choosing
+    // by way of a look-alike host.
+    expect(parseInventoryTagCode('https://evil.example.com/inventory/tag/INVTABC123', ORIGIN)).toBeNull();
+  });
+
+  it('refuses a code with characters outside the id shape', () => {
+    expect(parseInventoryTagCode(`${ORIGIN}/inventory/tag/abc%3Cscript%3E`, ORIGIN)).toBeNull();
+  });
+
+  it('mints 128-bit hex codes that fit the id shape and differ each time', () => {
+    const a = generateInventoryTagCode();
+    const b = generateInventoryTagCode();
+    expect(a).toMatch(/^INVT[0-9A-F]{32}$/);
+    expect(a).not.toBe(b);
+    expect(parseInventoryTagCode(buildInventoryTagUrl(a, ORIGIN), ORIGIN)).toBe(a);
   });
 });

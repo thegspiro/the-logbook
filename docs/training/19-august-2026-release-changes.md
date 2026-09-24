@@ -1717,14 +1717,9 @@ of an area without asking three people first. Editing needs
 `orgchart.manage` or `settings.manage`; without either, the page simply opens
 read-only and shows no edit controls.
 
-> **[SCREENSHOT NEEDED — the org chart, outline view.** _Demo data:_ a chart
-> four levels deep — Chief, two Deputy Chiefs sharing one seat, three Captains
-> under one of them, and one seat with a non-member holder. Expand the branch
-> that contains the shared seat so both names are visible.**]**
+![The org chart as an outline: Fire Chief, the Deputy Chief seat shared by Marcus Bell and Priya Raman with its three captains beneath and a lieutenant under Station 1, the Station 3 captain held by a non-member, and Administration & Records](./images/08-81-org-chart-outline.png)
 
-> **[SCREENSHOT NEEDED — the org chart, diagram view.** _Demo data:_ the same
-> chart. The two views are not interchangeable and one capture cannot stand in
-> for the other.**]**
+![The same chart as a diagram: four levels from the Fire Chief down to the Station 1 lieutenant, with the shared Deputy Chief seat and the mutual-aid captain](./images/08-82-org-chart-diagram.png)
 
 ### A seat can hold more than one person
 
@@ -1756,10 +1751,7 @@ The link is an *assist*, not the box's identity — most departments' org charts
 and permission structures do not match, and the chart has to be able to say
 what is actually true rather than what the permissions imply.
 
-> **[SCREENSHOT NEEDED — the org chart node modal.** _Demo data:_ a seat with
-> two member holders and one non-member holder, its responsibility text filled
-> in, and the position link visible. This is the screen that answers both
-> questions reviewers ask.**]**
+![Editing the Administration & Records seat: its responsibility text, the link to the Secretary position that brings Owen Kittredge, Esme Caldwell added as a member holder and Margaret Hale as a non-member holder](./images/08-83-org-chart-node.png)
 
 ### It starts empty, and that is on purpose
 
@@ -1963,10 +1955,7 @@ switched-off module behaves.
 checking an installation, not a decision a department needs to make while
 making every other one.
 
-> **[SCREENSHOT NEEDED — Settings → Modules with Testing Checklist off.**
-> _Demo data:_ the module list on a fresh install. This is the answer to "where
-> did /testing go", and it is the single most useful new capture in this
-> window.**]**
+![Settings → Modules with the Testing Checklist module switched off, as it ships](./images/08-84-modules-testing-off.png)
 
 ### Testing now works in runs
 
@@ -1997,9 +1986,7 @@ testing. When you mark it:
 That distinction is why this is more than a list of tickboxes: it separates
 "this screen is broken" from "this screen is visible to the wrong people".
 
-> **[SCREENSHOT NEEDED — Testing Home with a named run and the run picker
-> open.** _Demo data:_ a current run, one archived predecessor, a mix of pass /
-> fail / blocked marks, and at least one gate mismatch flagged.**]**
+![Testing Home on the September release check: the run picker reading September release check (current), with the archived August release check behind it, and the tally of passed, failed and blocked marks with one gate mismatch flagged](./images/08-85-testing-home-runs.png)
 
 ### Getting it out of the app
 
@@ -2009,9 +1996,7 @@ That distinction is why this is more than a list of tickboxes: it separates
   their notes, gate mismatches, and coverage by area. Save it as a PDF.
 - **Markdown**, unchanged.
 
-> **[SCREENSHOT NEEDED — the printable testing report.** _Demo data:_ the same
-> run, with at least one failure carrying a note and one gate mismatch, so both
-> sections of the report have content.**]**
+![The printable testing report for the September release check: the failure on Documents with its note, and the gate mismatch where a firefighter opened the finance dashboard](./images/08-86-testing-report.png)
 
 ### Marking with the keyboard
 
@@ -2060,8 +2045,7 @@ position that is meant to carry it if that was your intent.
 lookup configuration the module uses — the values you would otherwise have been
 editing in one-off dialogs.
 
-> **[SCREENSHOT NEEDED — `/facilities/settings`.** _Demo data:_ at least two
-> lookup categories populated, so the screen is not empty.**]**
+![Facility Settings at laptop width: the Facility Types lookup list with order, name, state, owner and usage columns, and the further lookup categories below it](./images/06-28-facility-settings.png)
 
 ### Two officers, one new facility
 
@@ -2203,9 +2187,7 @@ back to the inbox is the URL's own parent.
 It needs **no permission beyond signing in**, and that is safe rather than
 loose: the server only serves a message the caller was actually targeted with.
 
-> **[SCREENSHOT NEEDED — `/messages/:id`.** _Demo data:_ a department message
-> with a body long enough to show the page is not a modal, its sender and sent
-> date visible, and the breadcrumb back to the inbox in frame.**]**
+![A department message on its own page: the breadcrumb back to Messages, the title, sender and sent date, and a body several paragraphs long](./images/19-42-message-detail.png)
 
 ### Two message fixes worth knowing
 
@@ -2223,11 +2205,7 @@ Open to any of `users.view_consents` (new this window, granted to the Historian
 and PIO), `notifications.manage`, `members.manage` or `users.edit`. It is
 excluded from the browser's response cache, like other member-identifying data.
 
-> **[SCREENSHOT NEEDED — `/communications/photo-use-consent`.** _Demo data:_ at
-> least one consented member, one who has refused and one with nothing
-> recorded, so all three states are visible. Capture with an account holding
-> `users.view_consents` and caption that — the page has four accepted
-> permissions and the reader will ask which one they need.**]**
+![Photo Use Consent, captured as the administrator (who holds users.view_consents): one member agreed, one declined and twenty not answered, with the roster showing each member's standing](./images/19-43-photo-use-consent.png)
 
 ## Meetings and minutes
 

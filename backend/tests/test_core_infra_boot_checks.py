@@ -6,6 +6,8 @@ CAPTCHA), or boot silently with a control weaker than intended (a dedicated
 audit-log signing key, a sane TRUSTED_PROXY_IPS range).
 """
 
+import pytest
+
 from app.core.config import Settings
 
 
@@ -143,3 +145,59 @@ class TestTrustedProxyRangeSanity:
     def test_an_exact_ipv6_address_reports_no_warning(self):
         warnings = _prod(TRUSTED_PROXY_IPS="2001:db8::1").validate_security_config()
         assert not any("TRUSTED_PROXY_IPS" in w for w in warnings)
+
+
+class TestFrontendUrlMustNotBeLoopback:
+    """Every emailed link is built from FRONTEND_URL, never from the request, so
+    the shipped localhost default mails recipients links that cannot open."""
+
+    @staticmethod
+    def _frontend_warnings(settings: Settings) -> list[str]:
+        return [w for w in settings.validate_security_config() if "FRONTEND_URL" in w]
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://localhost:3000",
+            "https://LOCALHOST",
+            "http://app.localhost:8080",
+            "http://127.0.0.1:3000",
+            "http://127.1.2.3",
+            "http://[::1]:3000",
+            "http://0.0.0.0:3000",
+            "",
+            "not-a-url",
+        ],
+    )
+    def test_loopback_or_hostless_url_warns_in_production(self, url):
+        warnings = self._frontend_warnings(_prod(FRONTEND_URL=url))
+        assert len(warnings) == 1
+        assert warnings[0].startswith("WARNING:")
+
+    def test_the_shipped_default_warns_in_production(self):
+        warnings = self._frontend_warnings(_prod())
+        assert len(warnings) == 1
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://logbook.yourdept.org",
+            "https://logbook.yourdept.org/",
+            "http://192.168.1.50:7880",
+            "https://localhost.example.com",
+        ],
+    )
+    def test_a_reachable_url_reports_no_warning(self, url):
+        assert self._frontend_warnings(_prod(FRONTEND_URL=url)) == []
+
+    def test_is_never_critical_so_it_cannot_block_boot(self):
+        warnings = self._frontend_warnings(_prod(FRONTEND_URL="http://localhost"))
+        assert not any("CRITICAL" in w for w in warnings)
+
+    def test_staging_does_not_warn(self):
+        settings = _prod(ENVIRONMENT="staging", FRONTEND_URL="http://localhost")
+        assert self._frontend_warnings(settings) == []
+
+    def test_development_does_not_warn(self):
+        settings = Settings(ENVIRONMENT="development", FRONTEND_URL="http://localhost")
+        assert self._frontend_warnings(settings) == []

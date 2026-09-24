@@ -1113,6 +1113,25 @@ class OrganizationUpdate(BaseModel):
     active: Optional[bool] = None
 
 
+class InventorySettingsUpdate(BaseModel):
+    """Inventory module settings.
+
+    Only the NFC switch is typed. The section also holds values with no editing
+    screen (``write_off_acknowledgement_threshold``), so extra keys are kept
+    rather than dropped, exactly as they were before this schema existed.
+    """
+
+    nfc_tracking_enabled: Optional[bool] = Field(
+        None,
+        description=(
+            "Allow NFC tags to be linked to items and tapped to find them. "
+            "Absent reads as off; read by app/utils/inventory_nfc.py."
+        ),
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+
 class OrganizationSettingsUpdate(BaseModel):
     """Schema for updating organization settings"""
 
@@ -1130,6 +1149,7 @@ class OrganizationSettingsUpdate(BaseModel):
     department_email: Optional[DepartmentEmailSettings] = None
     setup: Optional[SetupProgressSettings] = None
     appearance: Optional[AppearanceSettings] = None
+    inventory: Optional[InventorySettingsUpdate] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra="allow")

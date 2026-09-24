@@ -1,5 +1,57 @@
 # Screenshot currency
 
+## Remaining placeholders, filled 2026-09-24 — 44 down to 0
+
+Every open placeholder in the guides was worked in one pass, and all but one
+are shot. Duplicate requests (the same screen asked for in a module guide and a
+release lesson) share one image. The tracker moves from 546/590 to **600/600**.
+Adding the rewritten Compliance Matrix section in guide 02 is what raised the
+total.
+
+| Image(s) | Guides | Notes |
+| --- | --- | --- |
+| `00-26-sidebar-officer-operations` | 00, 20 | Clipped to the navigation at 1700px so Operations and Administration share a frame |
+| `01-40-member-directory-member` | 01 | As `nbelhaj`; no usernames, hire date, actions or selection |
+| `01-41-profile-visibility` | 01 | Seeded mix. The department's contact-visibility setting also shows "off for everyone" on three rows, which the caption says |
+| `02-66-compliance-matrix` (re-shot) | 02 ×2, 20 | Triage rail via the dashboard deep link. Guide 02's older "grid view" section is rewritten to match |
+| `02-106-course-library-member` | 02 | As a member |
+| `03-100` / `03-105` Open Shifts | 03, 20 | Member and admin pair, one per signed-in session |
+| `03-101-call-types-editor` | 03, 20 | Seeded: Service Call retired. Delete is unavailable on every type with calls; Other has none |
+| `03-102` / `03-103` Shift Details | 03, 20 | Laptop and 390px. On a phone the modal opens from the day panel, after tapping a day |
+| `03-104-my-shifts-hours` | 03, 20 | Seeded: ten closed-out shifts for the administrator, March–August |
+| `04-50-event-attendees-member` | 04, 20 | Seeded: a three-place event, `attendee_visibility: members`, three going and `nbelhaj` waitlisted by the service |
+| `05-86` / `05-87` gear request | 05, 20 | Seeded: Structural Coat XXL at 0. L is preselected from her size on file |
+| `06-28-facility-settings` | 06, 19 | Laptop width only; the phone layout was optional |
+| `08-81`–`08-83` org chart | 08, 19 | Seeded: seven seats, four levels, a shared Deputy Chief seat, a mutual-aid captain with no account. The node modal is the seat editor, opened unsaved |
+| `08-84-modules-testing-off` | 08, 19 | **Taken from the demo, not a bootstrap.** Testing is off in the demo department, as on a fresh install; the earlier note assumed the demo turns it on |
+| `08-85` / `08-86` testing | 08, 19 | Seeded: two runs (August archived, September current), a failure with a note, a blocked mark, and a member's pass on `/finance` against a denied expectation. The shots turn the module on in `prepare` and off in `cleanup`; the seeder does the same |
+| `08-87-dashboard-next-30-days` | 08, 20 | The personal panel, since the two cards sit in different columns at desktop width |
+| `10-24` / `10-23` Quick Add | 10, 20 | **A pair, not one frame.** The bottom bar hides while any sheet is open, so the Add button and the sheet never share a frame |
+| `16-08` / `16-09` Claude (MCP) | 16, 20 | Connect form opened unsaved. Key panel: connected for the shot and disconnected in `cleanup`, which also revokes any key; the issued key is a route mock showing `lbmcp_DEMO-KEY-not-a-real-credential` |
+| `19-42-message-detail` | 19 | Seeded: a four-paragraph department message |
+| `19-43-photo-use-consent` | 19 | Seeded: one agreed, one declined, twenty not answered. Captured as the administrator |
+| `20-16-scheduling-admin-hub` | 20 | The hub shows **four** headline metrics, not the five the request listed |
+| `20-17-staffing-gaps` | 20 | — |
+
+**Two frames the requests described cannot exist.** Testing Home's run picker
+is a native select, and an open native dropdown is drawn outside the page, so
+`08-85` shows it closed on the current run. The Quick Add sheet hides the bar
+that opens it, hence the `10-24` / `10-23` pair.
+
+**Settings → Email, Test Connection with Microsoft 365, is simulated.**
+It was left queued at first, because a real success needs a Microsoft 365
+tenant. The owner then chose a mocked success with a caption saying so over
+an open placeholder. `20-18-email-test-connection` answers only the test
+request, with the exact message the backend's SMTP test returns on success
+(`SMTP connection successful`). Everything else is the real screen, and nothing
+is saved. Guide 20 captions it as simulated, and so does the alt text. That
+leaves the tracker at **600/600**.
+
+**Seed fixtures added.** The nine `seed_demo_data.py` steps that produced the
+data above run at the end of a normal seed and are idempotent: profile
+visibility mix, retired call type, long department message, hours history, org
+chart, testing runs, photo consent, waitlisted event and out-of-stock size.
+
 ## Disposition for September 15-23, 2026 - two new screens, and a new line on three old ones
 
 Audit: [`CHANGE_AUDIT_2026-09-15_TO_09-23.md`](../CHANGE_AUDIT_2026-09-15_TO_09-23.md).
@@ -167,7 +219,7 @@ written yet — see the notes under the table.
 | ---------------------------------------------- | ----------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Settings -> **Email**, SMTP preset applied      | **REPLACE** | 20 (release), 08 (admin)           | **Shot** 09-16 as `20-11-settings-email-smtp-preset`. One image, placed in both guides                   |
 | Stage picker with **Election / Vote** selected  | **NEW**     | 20 (release)                       | **Shot** 09-16 as `20-12-stage-picker-election-vote`                                                    |
-| Scheduling -> **Open Shifts**, member vs admin  | **NEW**     | 20 (release), 03 (scheduling)      | **Queued** — needs a second signed-in session and a narrower member; see below                          |
+| Scheduling -> **Open Shifts**, member vs admin  | **NEW**     | 20 (release), 03 (scheduling)      | **Shot** 09-24 as the pair `03-100-open-shifts-member` / `03-105-open-shifts-admin`; the demo member already sees 27 of the admin's 34   |
 | Applicant drawer, **not elected** state         | **NEW**     | 20 (release)                       | **Shot** 09-24 as `20-13-applicant-drawer-not-elected`                                                  |
 | Settings -> **Email**, inline refusal           | **NEW**     | no placeholder written yet         | The refusal for an enabled-but-empty Cloudflare section, or for **Not configured** with email enabled   |
 | Shift signup **position picker**                | **REPLACE** | no placeholder written yet         | Offers only seats the server will grant                                                                 |
@@ -840,6 +892,10 @@ recipient list — and nowhere on a member screen.**
 | Live equipment **check screen** as "new" | The lap is still built and unwired, unchanged by this window. The template builder rebuild is the *authoring* side; the check screen still renders the flat compartment list |
 
 ### One capture that cannot be taken honestly, and what to do instead
+
+> **Superseded 2026-09-24.** The demo department has Testing Checklist **off**, so
+> `08-84-modules-testing-off` was shot from it directly. The advice below
+> assumed otherwise.
 
 The **Modules screen with Testing Checklist off** is the exception worth
 planning around: it is only true on a **fresh install or an install that has

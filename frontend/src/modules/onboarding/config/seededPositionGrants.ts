@@ -178,6 +178,20 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
     view: ['members', 'events', 'documents', 'storefront', 'notifications', 'positions'],
     manage: ['events', 'notifications'],
   },
+  compliance_officer: {
+    view: [
+      'members',
+      'events',
+      'documents',
+      'forms',
+      'training',
+      'storefront',
+      'reports',
+      'notifications',
+      'positions',
+    ],
+    manage: ['documents', 'training', 'reports'],
+  },
   deputy_chief: {
     view: [
       'members',

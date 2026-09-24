@@ -618,6 +618,28 @@ Until then `detect_anomalies`' failed-auth branch stays dead; the per-IP
 limiter and `suspicious_ip` are the controls actually covering that case.
 Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 
+**Narrowed 2026-09-24 (PR #2665) — the 429 half is now recorded.** The
+rate-limit refusal is raised from the same dependency and was invisible for
+exactly the same reason, but it is _attributable_: by the time
+`check_rate_limit` refuses, `authenticate_api_key` has already resolved the
+key, so `organization_id` and `config_id` are in hand and none of the
+nullability work above applies. `_log_refusal` writes the row and commits it
+— flushing alone would lose it to the rollback the raise causes, which is
+this finding's own mechanism — and is best-effort throughout: a logging
+failure is warned and rolled back rather than replacing the 429 the caller
+was owed.
+
+This was not bookkeeping. The admin dashboard's "Rate Limits Hit" tile, and
+the alert condition `rate_limit_hits_24h > 50` beside it, read a count of 429
+rows that nothing had ever written, so adding the field without this would
+have shipped a tile structurally pinned to zero — the same defect the rest of
+that change set exists to remove. `tests/test_public_portal_usage_stats.py`
+covers both halves: that the row is written, and that it survives a rollback
+standing in for the request teardown. Removing the `_log_refusal` call fails
+both.
+
+The 401 half is unchanged and still correctly flagged.
+
 #### PUB-9 — LOW — `response_model_exclude_unset` was missing, so the PUB-6 defaults round-tripped as explicit `null`s — ✅ FIXED
 
 **What:** PUB-6 gave every field on `PublicOrganizationInfo` /

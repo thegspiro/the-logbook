@@ -48,13 +48,14 @@ _ALLOWED_UNSEEDED = {
     "chief": "reachable via a custom position named 'Chief' (role_service.slugify)",
 }
 
-#: The two cert-alert lists are fallbacks behind ``cert_alert_config``, which a
-#: department fills in with its own slugs. Naming a position a department may
-#: reasonably have invented is the point, so they are exempt from the rule —
-#: but named here, so the exemption is a decision rather than an oversight.
+#: The training cert-alert list is a fallback behind ``cert_alert_config``,
+#: which a department fills in with its own slugs. Naming a position a
+#: department may reasonably have invented is the point, so it is exempt from
+#: the rule — but named here, so the exemption is a decision rather than an
+#: oversight. The compliance list left this exemption on 2026-09-24, when
+#: ``compliance_officer`` became a seeded position, and is held to the rule.
 _CONFIG_FALLBACK_LISTS = {
     "DEFAULT_TRAINING_OFFICER_ROLES": DEFAULT_TRAINING_OFFICER_ROLES,
-    "DEFAULT_COMPLIANCE_OFFICER_ROLES": DEFAULT_COMPLIANCE_OFFICER_ROLES,
 }
 
 ROLE_GROUPS = {
@@ -62,6 +63,7 @@ ROLE_GROUPS = {
     "ADMIN_NOTIFY_ROLE_SLUGS": ADMIN_NOTIFY_ROLE_SLUGS,
     "TRAINING_OFFICER_ROLE_SLUGS": TRAINING_OFFICER_ROLE_SLUGS,
     "CHIEF_POSITION_SLUGS": CHIEF_POSITION_SLUGS,
+    "DEFAULT_COMPLIANCE_OFFICER_ROLES": DEFAULT_COMPLIANCE_OFFICER_ROLES,
 }
 
 
@@ -158,8 +160,8 @@ class TestTheResolver:
 class TestTheConfigFallbackExemptions:
     """Recorded, not silently tolerated.
 
-    These two name unseeded slugs on purpose. The test exists so that the
-    exemption is visible and so that adding a third list does not inherit it by
+    This names an unseeded slug on purpose. The test exists so that the
+    exemption is visible and so that adding another list does not inherit it by
     accident.
     """
 
@@ -167,12 +169,12 @@ class TestTheConfigFallbackExemptions:
     def test_the_exempt_lists_are_the_ones_named(self, name):
         assert name in _CONFIG_FALLBACK_LISTS
 
-    def test_compliance_officer_resolves_to_nothing_on_a_stock_install(self):
-        """Documented so the next reader does not mistake it for working.
+    def test_compliance_officer_resolves_to_the_seeded_position(self):
+        """The certification-expiry compliance CC reaches a real position.
 
-        ``compliance_officer`` is not a seeded position and has no office, so
-        on a department that has not written its own ``cert_alert_config`` the
-        compliance CC on the urgent 7-day certification tier is empty.
+        Until 2026-09-24 ``compliance_officer`` was not seeded, so on a
+        department that had not written its own ``cert_alert_config`` the
+        compliance CC on the urgent 7-day tier went to nobody.
         """
         assert DEFAULT_COMPLIANCE_OFFICER_ROLES == ["compliance_officer"]
-        assert "compliance_officer" not in DEFAULT_POSITIONS
+        assert "compliance_officer" in DEFAULT_POSITIONS

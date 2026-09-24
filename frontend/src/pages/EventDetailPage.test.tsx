@@ -1373,4 +1373,64 @@ describe('EventDetailPage', () => {
       expect(screen.queryByText('Organized by')).not.toBeInTheDocument();
     });
   });
+
+  describe('Event Information card', () => {
+    // A member: no stats, so nothing else on the page draws capacity.
+    beforeEach(() => {
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+    });
+
+    it('is not drawn when the event has nothing for it to say', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        requires_rsvp: false,
+        rsvp_deadline: undefined,
+        max_attendees: undefined,
+        allow_guests: false,
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { level: 1 });
+      expect(screen.queryByRole('heading', { name: 'Event Information' })).not.toBeInTheDocument();
+    });
+
+    // The RSVP path waitlists past the cap whether or not a response is
+    // required, so the capacity that explains a waitlist has to show too.
+    it('shows capacity on a capped event that does not require an RSVP', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        requires_rsvp: false,
+        rsvp_deadline: undefined,
+        max_attendees: 3,
+        occupied_seats: 3,
+        allow_guests: false,
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('heading', { name: 'Event Information' })).toBeInTheDocument();
+      expect(screen.getByText('Capacity')).toBeInTheDocument();
+      expect(screen.getByText('3 / 3 spots filled')).toBeInTheDocument();
+      expect(screen.getByText('Event Full')).toBeInTheDocument();
+      expect(screen.queryByText('RSVP Required')).not.toBeInTheDocument();
+    });
+
+    it('leaves capacity to the Statistics card when that card shows it', async () => {
+      mockCheckPermission.mockReturnValue(true);
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue(mockRSVPs);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { name: 'Statistics' });
+      expect(screen.getAllByText('Capacity')).toHaveLength(1);
+      expect(screen.getByRole('heading', { name: 'Event Information' })).toBeInTheDocument();
+      expect(screen.getByText('RSVP Required')).toBeInTheDocument();
+    });
+  });
 });

@@ -32,8 +32,8 @@ No intros, no outros — straight to the point.
 
 > "Click RSVP. Choose Yes, No, or Maybe."
 
-**[SCREEN: Show the confirmation — your RSVP is recorded, your name appears in
-the "Attending" list]**
+**[SCREEN: Show the confirmation — Your RSVP reads Going. (On a full event it
+reads Waitlisted, with your place in line.)]**
 
 > "Done. Your officers can see you're coming. No group texts, no phone calls."
 
@@ -1659,3 +1659,52 @@ moves to the next column.]**
 
 **Production:** two sessions — the kiosk and the coordinator's board — so the
 card visibly does not move at sign-in and does move at End Event.
+
+---
+
+## SHORT 8AU: Who's Going — and Where You Stand on the Waitlist
+
+**Length:** 45 seconds
+**Extracted From:** Script 6, RSVPing to an Event
+**Added:** 2026-09-24
+
+**[0:00 — SCREEN: A member opens an event. Below the details, **Who's going
+(3)** lists three names.]**
+
+> "Wondering who else is going? If your department has switched it on, the
+> event page lists everyone who said yes. Names only — never phone numbers,
+> notes or anything else."
+
+**[0:12 — SCREEN: The same member RSVPs Yes. **Your RSVP** reads
+**Waitlisted** — "You're #1 of 1 on the waitlist."]**
+
+> "Event already full? Your Yes puts you on the waitlist, and the page tells you
+> your place in line."
+
+**[0:22 — SCREEN: Pan to the **Event Information** card — **Capacity 3 / 3**,
+"3 / 3 spots filled", **Event Full**.]**
+
+> "The Event Information card shows how full it is. If someone drops out, the
+> first person waiting moves to Going automatically, and gets told."
+
+**[0:34 — SCREEN: As an officer, **Manage Events → Settings → Attendance**:
+**Who can see who's going** — **Only event managers** or **Everyone in the
+department**.]**
+
+> "Officers: it's off until you turn it on. Set it for the whole department
+> here, or per event on the event form."
+
+**[0:42 — CALLOUT: "Names only. Off by default."]**
+
+**Production:**
+
+- **Film the member beats as a member, not an officer.** An officer always sees
+  the full roster, which is the opposite of the point.
+- **The going list needs attendee visibility switched on.** Turn it on for the
+  department, or set **Everyone in the department** on the one event. It ships
+  as **Only event managers**.
+- **The screenshot demo department already has the event this needs:**
+  **"Station Open House — Setup Crew"**, three places, three members going, and
+  `nbelhaj` waitlisted.
+- **Record the settings beat without saving,** or put the setting back
+  afterwards.

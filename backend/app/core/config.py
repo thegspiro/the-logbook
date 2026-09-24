@@ -5,12 +5,34 @@ Uses pydantic-settings for environment variable management
 with type validation and defaults.
 """
 
+import ipaddress
 from functools import lru_cache
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from loguru import logger
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _is_loopback_url(url: str) -> bool:
+    """Whether *url*'s host can only be reached from this machine.
+
+    A URL with no parseable host counts as loopback too: an emailed link built
+    from it is just as unreachable for the recipient.
+    """
+    try:
+        host = (urlsplit((url or "").strip()).hostname or "").lower()
+    except ValueError:
+        return True
+    if not host:
+        return True
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return addr.is_loopback or addr.is_unspecified
 
 
 class Settings(BaseSettings):
@@ -468,6 +490,21 @@ class Settings(BaseSettings):
 
         # --- Additional production/staging checks ---
         if self.ENVIRONMENT in ("production", "staging"):
+            # Advisory, not CRITICAL: a wrong FRONTEND_URL breaks emailed links
+            # but weakens no control, and blocking would stop existing installs
+            # that shipped with the default from booting after an upgrade.
+            # Production only: staging is often reached on an internal or
+            # loopback address on purpose, where this would be noise.
+            if self.ENVIRONMENT == "production" and _is_loopback_url(self.FRONTEND_URL):
+                warnings.append(
+                    f"WARNING: FRONTEND_URL is {self.FRONTEND_URL!r}, which "
+                    "points at this machine. Every link in an outgoing email "
+                    "(password resets, ballots, approvals, reminders) is built "
+                    "from it, so recipients will get links that do not open. "
+                    "Set FRONTEND_URL to the site's public URL, e.g. "
+                    "https://logbook.yourdept.org."
+                )
+
             if not self.RATE_LIMIT_ENABLED:
                 # The switch exists for fuzzing and load tests, where the
                 # limiter masks the behaviour under test. Turning it off on a

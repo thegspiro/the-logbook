@@ -172,8 +172,9 @@ this narration walks. The demo seeder produces both.]**
 
 **[SCREEN: Click into an event detail page (EventDetailPage)]**
 
-> "Open an event and you'll see the full description, location, and who's
-> attending. To RSVP, click the RSVP button."
+> "Open an event and you'll see the full description, the date and location,
+> and — if your department shares it — who's going. To RSVP, click the RSVP
+> button."
 
 **[SCREEN: Show the RSVP options — Yes, No, Maybe]**
 
@@ -183,6 +184,14 @@ this narration walks. The demo seeder produces both.]**
 **[SCREEN: Click "Yes" and show the confirmation]**
 
 > "That's it. Your officers can now see you're coming. Done in five seconds."
+
+**[SCREEN: A full event — the Event Information card reading "3 / 3 spots
+filled" with the Event Full badge, and Your RSVP reading Waitlisted, "You're #1
+of 1 on the waitlist"]**
+
+> "If an event has a limit and it's already full, a Yes puts you on the waitlist
+> instead. The Event Information card shows how full it is, your RSVP shows your
+> place in line, and if a spot opens you're moved to Going automatically."
 
 **[CALLOUT: "RSVP in 5 seconds — no more group text chains"]**
 

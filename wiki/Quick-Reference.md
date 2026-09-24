@@ -471,6 +471,7 @@ ENCRYPTION_SALT=            # openssl rand -hex 16
 DB_PASSWORD=                # Strong password
 REDIS_PASSWORD=             # Strong password
 ALLOWED_ORIGINS=            # http://your-domain.com
+FRONTEND_URL=               # https://your-domain.com (links in emails)
 ```
 
 ### Common
