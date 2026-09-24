@@ -12906,7 +12906,9 @@ class Seeder:
                 if not self._advance_recording_interview(prospect_id, "spread"):
                     break
 
-    def _advance_recording_interview(self, prospect_id: str, label: str) -> bool:
+    def _advance_recording_interview(
+        self, prospect_id: str, label: str, report: bool = True
+    ) -> bool:
         """Advance one stage, recording an interview where the stage demands one.
 
         Advancing out of an `interview_requirement` stage legitimately refuses
@@ -12919,13 +12921,23 @@ class Seeder:
         actually runs — crashed the whole prospective-members step the first
         time a new applicant had to clear the Interview stage, and the
         applicants after that one were never created at all.
+
+        ``report=False`` is for bulk filler, where another gate stopping one
+        applicant (documents, the ballot) is expected and a "blocked" line per
+        applicant would bury the ones that mean something. It stays quiet only
+        for a 409 refusal; any other error is raised.
         """
         try:
             self.api.post(f"/prospective-members/prospects/{prospect_id}/advance")
             return True
         except ApiError as exc:
             if "interview" not in str(exc).lower():
-                self.blocked.append(f"{label} applicant: {exc}")
+                # Quiet is for a gate saying no (409), never for a failure:
+                # anything else still surfaces.
+                if not report and exc.code != 409:
+                    raise
+                if report:
+                    self.blocked.append(f"{label} applicant: {exc}")
                 return False
             try:
                 self.api.post(
@@ -12942,7 +12954,8 @@ class Seeder:
                 self.api.post(f"/prospective-members/prospects/{prospect_id}/advance")
                 return True
             except ApiError as inner:
-                self.blocked.append(f"{label} applicant: {inner}")
+                if report:
+                    self.blocked.append(f"{label} applicant: {inner}")
                 return False
 
     PROSPECTS = [
@@ -13760,15 +13773,18 @@ class Seeder:
 
             created_ids.append(pick(prospect, "id"))
 
-            # Every fourth one moves down the board. Advancing past the final
-            # stage is refused with a 409, so the count is bounded by the
-            # pipeline length rather than relying on the API to absorb it.
+            # Every fourth one moves down the board. Through the shared helper,
+            # not a bare advance: the Interview stage refuses until an interview
+            # exists, and a bare advance 409'd the whole step on the first
+            # filler to reach it -- nine applicants into 236. A later gate
+            # (documents, the ballot) just parks that applicant where it is.
             if index % 4:
                 continue
             for _ in range(1 + (index // 4) % (len(self.PIPELINE_STAGES) - 1)):
-                self.api.post(
-                    f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
-                )
+                if not self._advance_recording_interview(
+                    pick(prospect, "id"), "bulk", report=False
+                ):
+                    break
 
         # Park the two most recently created at the *final* stage.
         #
@@ -13781,15 +13797,12 @@ class Seeder:
             if not prospect_id:
                 continue
             for _ in range(len(self.PIPELINE_STAGES)):
-                try:
-                    self.api.post(
-                        f"/prospective-members/prospects/{prospect_id}/advance"
-                    )
-                except ApiError as exc:
-                    # 409 is the pipeline saying "already at the end", which is
-                    # exactly where this is trying to get to.
-                    if exc.code != 409:
-                        raise
+                # False at the end of the pipeline, which is where this is
+                # trying to get to -- or at a gate short of it, which still
+                # leaves a bulk advance from page one partly refused.
+                if not self._advance_recording_interview(
+                    prospect_id, "bulk", report=False
+                ):
                     break
         return created
 

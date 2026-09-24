@@ -96,15 +96,30 @@ Committee Approval — with one applicant, **Priya Deshmukh**, parked on the
 meeting stage. A separate pipeline rather than a seventh stage on the default,
 so the kanban shots built on "seven applicants across six stages" stay true.
 
-**It does leave one cosmetic drift, and it is worth knowing why.** The board
-shows its pipeline dropdown **only when a department has more than one
-pipeline**, so full-page captures of the active board taken before this now
-lack a small dropdown at the left of the controls bar. Nothing they say is
-wrong. Re-shoot when convenient: `01-10-prospective-pipeline`,
-`15-01-pipeline-board`, `15-02-board-truncated`, `15-04-kanban-board`,
-`15-11-table-bulk-actions`, `15-12-pipeline-stats`, and `15-10-pipeline-settings`,
-which now lists two pipelines. Drawer-, dialog- and panel-clipped shots are
-unaffected.
+**It left one cosmetic drift, now re-shot** _(2026-09-24)_. The board shows its
+pipeline dropdown **only when a department has more than one pipeline**, so the
+full-page board captures taken before this lacked it, and the pipeline settings
+shot listed one pipeline. All seven were re-shot from the same seeded
+department: `01-10-prospective-pipeline`, `15-01-pipeline-board`,
+`15-02-board-truncated`, `15-04-kanban-board`, `15-10-pipeline-settings`,
+`15-11-table-bulk-actions` and `15-12-pipeline-stats`. Drawer-, dialog- and
+panel-clipped shots were unaffected and were not touched.
+
+**`15-02` needs `--bulk-prospects`, and that flag was broken.** The filler
+advanced every fourth applicant with a bare advance, and the Interview stage
+refuses one until an interview exists, so the step 409'd nine applicants into
+236 and the board never passed its 200-card ceiling. It now goes through the
+same interview-recording helper as the create path and the spread. Run it
+**last** and on its own: 236 filler applicants bury the named ones every other
+prospective-member shot is built around, so the six other board shots above
+were taken first.
+
+**`15-11` shows two bulk bars, and that is the application, not the capture.**
+Selecting rows in the table view renders both the page's bar (Print Badges /
+Advance All / Reject All) and the table's own (Advance / Hold / Reject), each
+reading "3 selected". The previous capture shows the same two bars, so it
+predates this pass; it is recorded here rather than fixed, since it is a UI
+change outside a documentation PR.
 
 **Remaining seed gap.** **Every seeded inventory
 item reads "Needs a label"**, which is correct for item 6 but means the
