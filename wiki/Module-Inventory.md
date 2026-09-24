@@ -345,6 +345,10 @@ POST   /api/v1/inventory/batch-return                    # Batch return
 
 ### NFC Tags _(2026-09-24)_
 
+**Setting it up:** see [Inventory NFC Tags](Inventory-NFC-Tags) for which tags to
+buy, which phones can do what, linking, put-away and troubleshooting. This
+section is the technical reference.
+
 Off until an administrator turns it on at **Inventory → Administration → NFC
 Tags** (`/inventory/admin/nfc`, which needs `settings.manage` or
 `organization.update_settings`). The switch is stored as
