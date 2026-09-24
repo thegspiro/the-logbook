@@ -29,7 +29,8 @@ interface StatusData {
   status: string;
   current_stage_name?: string | undefined;
   pipeline_name?: string | undefined;
-  total_stages: number;
+  /** Null when the department hides stages the applicant has not reached. */
+  total_stages: number | null;
   stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
   applied_at?: string | undefined;
   current_stage_action?: CurrentStageAction | undefined;
@@ -137,7 +138,9 @@ export const ApplicationStatusPage: React.FC = () => {
             <div className="text-right">
               <p className="text-theme-text-muted text-xs tracking-wider uppercase">Progress</p>
               <p className="text-theme-text-primary mt-1 text-lg font-bold">
-                {completedCount} / {data.total_stages}
+                {data.total_stages === null
+                  ? `${completedCount} completed`
+                  : `${completedCount} / ${data.total_stages}`}
               </p>
             </div>
           </div>

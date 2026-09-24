@@ -34,6 +34,7 @@ def _prospect(token="tok_original", created_at=None, public_enabled=True):
         pipeline=SimpleNamespace(
             name="Recruit",
             public_status_enabled=public_enabled,
+            public_show_future_stages=True,
             steps=[step],
         ),
         current_step=step,
@@ -123,7 +124,10 @@ def _prospect_with_step(step):
         status_token="tok_original",
         status_token_created_at=now,
         pipeline=SimpleNamespace(
-            name="Recruit", public_status_enabled=True, steps=[step]
+            name="Recruit",
+            public_status_enabled=True,
+            public_show_future_stages=True,
+            steps=[step],
         ),
         current_step=step,
         step_progress=[],
@@ -213,3 +217,64 @@ async def test_plain_meeting_stage_has_no_action():
     result = await svc.get_prospect_by_token("tok_original")
 
     assert result["current_stage_action"] is None
+
+
+def _prospect_with_future_stages(show_future):
+    """Three public stages: one done, one current, one not reached yet."""
+    now = datetime.now(timezone.utc)
+    steps = [
+        SimpleNamespace(id=f"s{i}", public_visible=True, name=name, sort_order=i)
+        for i, name in enumerate(["Interest Form", "Interview", "Vote"])
+    ]
+    statuses = ["completed", "in_progress", "pending"]
+    return SimpleNamespace(
+        id="p1",
+        first_name="Jane",
+        last_name="Doe",
+        status=SimpleNamespace(value="active"),
+        created_at=now - timedelta(days=2),
+        status_token="tok_original",
+        status_token_created_at=now,
+        pipeline=SimpleNamespace(
+            name="Recruit",
+            public_status_enabled=True,
+            public_show_future_stages=show_future,
+            steps=steps,
+        ),
+        current_step=steps[1],
+        step_progress=[
+            SimpleNamespace(
+                step_id=step.id,
+                step=step,
+                status=SimpleNamespace(value=status),
+                completed_at=now if status == "completed" else None,
+                created_at=now,
+            )
+            for step, status in zip(steps, statuses)
+        ],
+    )
+
+
+async def test_future_stages_shown_by_default():
+    svc = _svc_for(_prospect_with_future_stages(show_future=True))
+
+    result = await svc.get_prospect_by_token("tok_original")
+
+    assert [s["stage_name"] for s in result["stage_timeline"]] == [
+        "Interest Form",
+        "Interview",
+        "Vote",
+    ]
+    assert result["total_stages"] == 3
+
+
+async def test_hiding_future_stages_lists_only_completed_ones():
+    svc = _svc_for(_prospect_with_future_stages(show_future=False))
+
+    result = await svc.get_prospect_by_token("tok_original")
+
+    assert [s["stage_name"] for s in result["stage_timeline"]] == ["Interest Form"]
+    # The total alone would reveal how many stages are left.
+    assert result["total_stages"] is None
+    # Where the applicant is now is still theirs to see.
+    assert result["current_stage_name"] == "Interview"

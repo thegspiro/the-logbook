@@ -166,6 +166,13 @@ class PipelineBase(BaseModel):
         default=False,
         description="Allow prospects to check their status via a public link",
     )
+    public_show_future_stages: bool = Field(
+        default=True,
+        description=(
+            "Show stages the prospect has not reached yet on the public status "
+            "page. When false, only completed stages are listed."
+        ),
+    )
 
 
 class PipelineCreate(PipelineBase):
@@ -186,6 +193,7 @@ class PipelineUpdate(BaseModel):
     auto_transfer_on_approval: Optional[bool] = None
     inactivity_config: Optional[Dict[str, Any]] = None
     public_status_enabled: Optional[bool] = None
+    public_show_future_stages: Optional[bool] = None
 
 
 class PipelineResponse(PipelineBase):

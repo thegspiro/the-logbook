@@ -296,6 +296,24 @@ export const PipelineSettingsPage: React.FC = () => {
     }
   };
 
+  const handleToggleShowFutureStages = async () => {
+    if (!currentPipeline) return;
+    try {
+      const updated = await pipelineService.updatePipeline(currentPipeline.id, {
+        public_show_future_stages: !currentPipeline.public_show_future_stages,
+      });
+      setCurrentPipeline(updated);
+      toast.success(
+        updated.public_show_future_stages
+          ? 'Applicants will see upcoming stages'
+          : 'Applicants will see completed stages only'
+      );
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Failed to toggle setting');
+      toast.error(msg);
+    }
+  };
+
   const handlePipelineUpdated = (pipeline: Pipeline) => {
     setCurrentPipeline(pipeline);
   };
@@ -950,6 +968,24 @@ export const PipelineSettingsPage: React.FC = () => {
                     className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                   />
                   Allow prospects to check their application status via a public link
+                </label>
+                <label className="text-theme-text-secondary mt-3 ml-6 flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={currentPipeline.public_show_future_stages}
+                    disabled={!currentPipeline.public_status_enabled}
+                    onChange={() => {
+                      void handleToggleShowFutureStages();
+                    }}
+                    className="form-checkbox mt-0.5"
+                  />
+                  <span>
+                    Show upcoming stages
+                    <span className="text-theme-text-muted block text-xs">
+                      When off, prospects see only the public-visible stages they have completed, and not how many
+                      stages remain.
+                    </span>
+                  </span>
                 </label>
               </div>
 

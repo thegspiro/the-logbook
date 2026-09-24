@@ -6104,6 +6104,8 @@ class MembershipPipelineService:
         Returns None if the pipeline has public_status_enabled=False,
         if the token has expired, or if no match is found.
         Only steps with public_visible=True are included in the timeline.
+        When the pipeline's ``public_show_future_stages`` is off, the timeline
+        is further limited to completed stages and ``total_stages`` is None.
 
         Successful lookups refresh the token's inactivity timestamp. The
         bearer token itself is never reflected into the response.
@@ -6160,6 +6162,8 @@ class MembershipPipelineService:
                 if step.public_visible:
                     public_step_ids.add(str(step.id))
 
+        show_future = prospect.pipeline.public_show_future_stages is not False
+
         # Build stage timeline — only include public-visible steps
         completed_stages = []
         if prospect.step_progress:
@@ -6176,21 +6180,30 @@ class MembershipPipelineService:
             ):
                 if str(sp.step_id) not in public_step_ids:
                     continue
+                # Progress rows exist for every stage from the moment the
+                # prospect is created, so without this filter the pending
+                # rows are exactly the stages still ahead of the applicant.
+                stage_status = (
+                    sp.status.value if hasattr(sp.status, "value") else sp.status
+                )
+                if (
+                    not show_future
+                    and stage_status != StepProgressStatus.COMPLETED.value
+                ):
+                    continue
                 completed_stages.append(
                     {
                         "stage_name": sp.step.name if sp.step else "Unknown",
-                        "status": (
-                            sp.status.value
-                            if hasattr(sp.status, "value")
-                            else sp.status
-                        ),
+                        "status": stage_status,
                         "completed_at": (
                             sp.completed_at.isoformat() if sp.completed_at else None
                         ),
                     }
                 )
 
-        total_public_stages = len(public_step_ids)
+        # The count alone tells an applicant how many stages remain, which is
+        # the thing a department hiding future stages has chosen not to say.
+        total_public_stages = len(public_step_ids) if show_future else None
 
         # Current stage name — only show if it's public_visible
         current_stage_name = None
