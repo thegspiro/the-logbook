@@ -350,9 +350,10 @@ Determinations were made by **reading the script files**. Full disposition in
   requirement.
 - **08 — Shorts.** Three new: 8AR (suggestion box), 8AS (label a storeroom),
   8AT (applicants move at finalize).
-- **Suggestion boxes get no role-script chapter**; that is a scope decision for
-  the series owner, recorded in `SCRIPT_CURRENCY.md` with 07 as the natural
-  home.
+- **07 — Secretary** gained **Chapter 7: Suggestion Boxes** (17:35 – 20:35),
+  added 2026-09-24 at the owner's request: who can set boxes up (not the
+  Secretary by default), the three anonymity modes, the member's view and
+  follow-up key, and reviewing and forwarding.
 
 ## Verification
 

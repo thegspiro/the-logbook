@@ -39,14 +39,16 @@ Applicants move when you close the event out.
 
 ### Considered and left alone
 
-- **Suggestion boxes have no chapter in any role script, and none was
-  invented.** Script 06 is a dashboard-and-mobile script by design (see the
-  09-12 → 09-15 entry below), and a whole new member-facing feature is a scope
-  decision, not a currency fix. Short **8AR** covers it; the full walkthrough is
-  in [`training/07-documents-forms.md`](../training/07-documents-forms.md#suggestion-boxes-2026-09-23).
-  If a chapter is added, script **07 — Secretary** is the natural home for
-  setting boxes up, and the caution belongs in it: **`suggestions.manage` sets
-  boxes up and reads nothing.**
+- **Suggestion boxes got a chapter in script 07** _(added 2026-09-24 at the
+  owner's request)_ — **Chapter 7: Suggestion Boxes (17:35 – 20:35)**, with the
+  weekly-workflow chapter renumbered to 8 and shifted to 20:35 – 23:05, and the
+  clip guide updated. It says plainly that the **Secretary position is not
+  seeded with `suggestions.manage`** — the chief grants it or sets boxes up and
+  names the secretary a reviewer — and that the permission **sets boxes up and
+  reads nothing**. **Production:** the seeded department has no boxes, so two
+  must be created and submitted to from a second account before recording, and
+  every follow-up key on screen must be a demo key. Script 06 still carries no
+  suggestion-box chapter by design; short **8AR** is the member-facing piece.
 - **04 — guest check-in → pipeline beat** ("Your open-house sign-in sheet
   becomes your recruiting list, automatically") — **still true.** The guest
   still becomes a prospect; what changed is when a _later meeting stage_

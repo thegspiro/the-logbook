@@ -30,7 +30,8 @@ is the person who keeps the department running behind the scenes.]**
 
 > "We'll cover: meeting minutes, event management and attendance, member roster
 > management, document administration, forms and data collection, elections
-> support, administrative hours tracking, and your daily workflow."
+> support, suggestion boxes, administrative hours tracking, and your daily
+> workflow."
 
 > **Treasurers — production note, not a spoken beat:** dues live in the Finance
 > module, which this guide doesn't cover, and the Dues page is read-only in the
@@ -594,13 +595,124 @@ reads as a promise about the other. The Footers tab is at
 
 **[SCREEN: Show the public portal configuration briefly]**
 
+**[TRANSITION: Suggestion boxes]**
+
+---
+
+## CHAPTER 7: Suggestion Boxes (17:35 – 20:35) — ADDED 2026-09-24
+
+> **Producer note:** everything in this chapter shipped on 2026-09-23. The
+> seeded demo department has **no suggestion boxes**, so before recording,
+> create two — "Training ideas" (Submitter chooses, follow-up on) and
+> "Station concerns" (Always anonymous, follow-up on) — name a reviewer
+> position on each, and make one anonymous and one named submission from a
+> second member account. **Every follow-up key on screen must be a demo key.**
+> A real key is the submitter's only credential, and this video is public.
+
+### WHO SETS THEM UP (17:35 – 18:15)
+
+**[SCREEN: Sidebar → Administration → Forms & Comms, with **Suggestion Boxes**
+between Messages and Photo Use Consent.]**
+
+> "Suggestion boxes are new. A department can run as many as it likes — one for
+> training ideas, one for station concerns, a complaints box — and each one has
+> its own reviewers and its own rules about anonymity."
+
+> "First, who can set them up. That's a permission called
+> **suggestions.manage**, and out of the box it's on the Fire Chief, Deputy
+> Chief, Assistant Chief, President and Communications Officer. **Not the
+> Secretary.** If your chief wants you to run them, they'll need to add it to
+> your position — or set the boxes up themselves and name you as a reviewer."
+
+**[CALLOUT: "Setting up a box ≠ reading it"]**
+
+> "And here's the part that matters most. That permission lets you **create**
+> boxes and choose who reviews them. It does **not** let you read anything
+> anybody submitted. Only the reviewers named on a box can. That's deliberate —
+> it's how a department runs a complaints box that the people most likely to be
+> complained about can't open."
+
+### CREATING A BOX (18:15 – 19:00)
+
+**[SCREEN: Suggestion Boxes → **New box**. Fill in the dialog: Name "Training
+ideas", Description, Anonymity **Submitter chooses**, tick **Allow follow-up**,
+tick one reviewer position, then **Save box**.]**
+
+> "Press New box. Give it a name, and a description members will actually read
+> — say what the box is for and who reads it."
+
+> "**Anonymity** has three settings. **Submitter chooses** — the member decides
+> each time. **Always anonymous** — nobody's name is ever recorded, which is what
+> you want for a concerns box. **Always named** — every submission carries the
+> member's name."
+
+> "**Allow follow-up** turns on a reply thread, and lets the member see what
+> happened to their idea. Leave it off and the box is one-way — you read, you
+> don't answer."
+
+> "Then the reviewers — positions, members, or both. Pick a position where you
+> can: when somebody new takes that seat, they review the box and the person who
+> left stops, with nobody editing anything."
+
+**[CALLOUT: "Boxes are never deleted — untick Accepting submissions to close one"]**
+
+### WHAT A MEMBER SEES (19:00 – 19:40)
+
+**[SCREEN: Switch to the member account. Sidebar → **Suggestions**, the
+**Submit** tab. Choose "Training ideas", type a title and details, attach a
+screenshot, tick **Submit anonymously** — the screenshot warning appears.
+Press Submit. The **Save your follow-up key** panel appears (demo key).]**
+
+> "Members find it in their sidebar, just after Messages. Pick a box, write it
+> up, attach up to five screenshots."
+
+> "When they tick anonymous, it really is anonymous. No name is stored — not
+> hidden, not stored. The time is kept to the day only, and screenshots lose
+> their hidden location and device data. What it can't do is blur the picture
+> itself — if their name is on the screen they captured, it's in the
+> screenshot, and the form tells them so."
+
+> "In a follow-up box, an anonymous member gets a **follow-up key**, once.
+> That's how they come back and read your replies without ever being
+> identified. If they lose it, nobody — not you, not the chief — can look it up."
+
+**[CALLOUT: "Tell members: copy the key before you close that screen"]**
+
+### REVIEWING (19:40 – 20:35)
+
+**[SCREEN: Back as the reviewer. Suggestions → **Review** tab with its open
+count. Open the anonymous submission: set Disposition to **Under review**, type
+an internal note, send a reply in the Follow-up thread — the author shows as
+"Anonymous submitter".]**
+
+> "As a reviewer you get a **Review** tab, with a count of what's open. Open a
+> submission and set its disposition — New, Under review, Accepted,
+> Implemented, Declined or Duplicate. Keep an internal note; the submitter never
+> sees it. And if the box allows follow-up, answer in the thread."
+
+> "You'll get an email when something new arrives — but the email only carries
+> a link, never the content. Nothing sensitive sits in anybody's inbox."
+
+**[SCREEN: Press **Forward**, choose the Training Officer position, confirm.
+The **Forwarded to** list shows it, with a **Withdraw** control.]**
+
+> "Sometimes the right person to answer isn't a reviewer. **Forward** sends
+> that one suggestion to a member or a position. They can read it, set its
+> status and reply — but they see nothing else in the box, and they can't pass
+> it on. An anonymous submitter stays anonymous. And you can withdraw it later."
+
+> "One honest caveat to pass on if anyone asks. Anonymous means nobody using
+> The Logbook can find out who sent it. Somebody with access to the **server
+> itself** — its raw logs — could in principle line up times. If that matters
+> for what someone wants to raise, they should use another route."
+
 **[TRANSITION: Workflow summary]**
 
 ---
 
-## CHAPTER 7: The Secretary's Weekly Workflow (17:35 – 19:35)
+## CHAPTER 8: The Secretary's Weekly Workflow (20:35 – 22:35)
 
-### BEFORE A MEETING (17:35 – 18:05)
+### BEFORE A MEETING (20:35 – 21:05)
 
 **[CALLOUT: Pre-meeting checklist]**
 
@@ -609,7 +721,7 @@ reads as a promise about the other. The Footers tab is at
 > the business meeting is created and RSVPs are tracked. Prepare any reports
 > or documents needed."
 
-### DURING A MEETING (18:05 – 18:35)
+### DURING A MEETING (21:05 – 21:35)
 
 > "**During the meeting:** Record minutes in real time using The Logbook on a
 > laptop or tablet. Use the structured sections — roll call, reports, old
@@ -618,20 +730,21 @@ reads as a promise about the other. The Footers tab is at
 
 **[SCREEN: Show the minutes editor in use during a simulated meeting flow]**
 
-### AFTER A MEETING (18:35 – 19:05)
+### AFTER A MEETING (21:35 – 22:05)
 
 > "**After the meeting:** Review and edit the minutes for clarity. Finalize
 > attendance. Publish the minutes for the membership. Verify action items are
 > assigned with due dates."
 
-### WEEKLY TASKS (19:05 – 19:35)
+### WEEKLY TASKS (22:05 – 22:35)
 
 **[CALLOUT: Weekly task list]**
 
 > "**Weekly:** Update the member roster with any changes — new members,
 > departures, position changes. Verify upcoming events are created and accurate.
-> Check for pending event requests or form submissions. Respond to any member
-> inquiries about records."
+> Check for pending event requests or form submissions. If you review a
+> suggestion box, clear its **Review** tab. Respond to any member inquiries
+> about records."
 
 > "**Monthly:** Generate attendance reports for officers. Ensure all meeting
 > minutes are published. Review document repository for outdated files."
@@ -639,7 +752,7 @@ reads as a promise about the other. The Footers tab is at
 > "**Annually:** Support the election process. Update SOPs and policies in the
 > document repository. Generate year-end attendance and participation reports."
 
-### WRAP-UP (19:35 – 20:05)
+### WRAP-UP (22:35 – 23:05)
 
 > "The Secretary role is all about record-keeping and organizational memory.
 > The Logbook replaces the paper filing system, the attendance clipboard, and
@@ -665,7 +778,8 @@ reads as a promise about the other. The Footers tab is at
 | Document Organization        | 12:00–13:00 | "Organizing Your Department's Documents"      |
 | Custom Forms Builder         | 13:30–14:00 | "Building Custom Forms for Your Department"   |
 | Email Footers, Once          | 16:05–17:00 | "Change Your Email Footer Once, Not 35 Times" |
-| Secretary's Meeting Workflow | 17:35–19:05 | "The Secretary's Meeting Workflow"            |
+| Suggestion Boxes             | 17:35–20:35 | "Running Suggestion Boxes — Anonymous or Not" |
+| Secretary's Meeting Workflow | 20:35–22:05 | "The Secretary's Meeting Workflow"            |
 
 ## AUGUST 14 RELEASE INSERTS — EVENT DELIVERY AND ACTION CLEANUP
 
