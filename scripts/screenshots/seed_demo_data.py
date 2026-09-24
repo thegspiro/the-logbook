@@ -5560,7 +5560,9 @@ class Seeder:
         revision, so it is safe to repeat and safe to run after the last edit.
         """
         published: list[str] = []
-        for template in items(self.api.get("/equipment-checks/templates"), "templates"):
+        for template in items(
+            self.api.get("/equipment-checks/templates"), "templates"
+        ):
             if pick(template, "is_active", "isActive"):
                 continue
             template_id = pick(template, "id")
@@ -5576,7 +5578,9 @@ class Seeder:
                 # the API says so. That is a template problem, not a publish
                 # problem, so name it and carry on rather than aborting every
                 # later template.
-                self.blocked.append(f"publish template {pick(template, 'name')}: {exc}")
+                self.blocked.append(
+                    f"publish template {pick(template, 'name')}: {exc}"
+                )
                 continue
             published.append(str(pick(template, "name") or template_id))
         return published
@@ -12859,7 +12863,9 @@ class Seeder:
             "prospects",
         )
         # Stage name -> position, for the scenario overrides below.
-        position_by_name = {pick(step, "name"): slot for slot, step in enumerate(steps)}
+        position_by_name = {
+            pick(step, "name"): slot for slot, step in enumerate(steps)
+        }
 
         for index, prospect in enumerate(prospects):
             prospect_id = pick(prospect, "id")
@@ -13902,7 +13908,11 @@ class Seeder:
         """
         elections = items(self.api.get("/elections?limit=100"), "elections")
         election_id = next(
-            (pick(e, "id") for e in elections if pick(e, "title") == election_title),
+            (
+                pick(e, "id")
+                for e in elections
+                if pick(e, "title") == election_title
+            ),
             None,
         )
         if not election_id:
@@ -14065,7 +14075,9 @@ class Seeder:
                 "vote-to-package sync did not run"
             )
 
-    def _package_for(self, packages: list[dict], applicant_email: str) -> dict | None:
+    def _package_for(
+        self, packages: list[dict], applicant_email: str
+    ) -> dict | None:
         """The election package belonging to one named applicant.
 
         The package list carries an applicant snapshot rather than a joinable
@@ -14083,7 +14095,9 @@ class Seeder:
             if not prospect_id:
                 continue
             try:
-                prospect = self.api.get(f"/prospective-members/prospects/{prospect_id}")
+                prospect = self.api.get(
+                    f"/prospective-members/prospects/{prospect_id}"
+                )
             except ApiError:
                 continue
             if str(pick(prospect, "email") or "").lower() == applicant_email:
@@ -15324,7 +15338,9 @@ class Seeder:
         # requirement, so leaving them pending would show the progress section
         # with every bar at zero under hours the page also reports as logged.
         wanted = {description for _, _, description in self.MEMBER_HOURS}
-        for entry in items(self.api.get("/admin-hours/entries?limit=300"), "entries"):
+        for entry in items(
+            self.api.get("/admin-hours/entries?limit=300"), "entries"
+        ):
             if str(pick(entry, "description") or "") not in wanted:
                 continue
             if str(pick(entry, "status")) != "pending":
@@ -15361,7 +15377,9 @@ class Seeder:
                 )
                 if pick(pr, "is_active", "isActive")
                 and membership
-                in (pick(pr, "membership_types", "membershipTypes") or [membership])
+                in (
+                    pick(pr, "membership_types", "membershipTypes") or [membership]
+                )
             ),
             None,
         )
@@ -15412,7 +15430,9 @@ class Seeder:
         template = next(
             (
                 t
-                for t in items(self.api.get("/equipment-checks/templates"), "templates")
+                for t in items(
+                    self.api.get("/equipment-checks/templates"), "templates"
+                )
                 if pick(t, "name") == self.SEALED_TEMPLATE_NAME
             ),
             None,
@@ -15447,7 +15467,9 @@ class Seeder:
         # /last-seals answers, and a completed check that recorded no seals
         # (one filed before the compartments were marked) would satisfy a
         # check-count guard while leaving the panel with nothing to compare.
-        apparatus_id = pick(template, "apparatus_id") or pick(template, "apparatusId")
+        apparatus_id = pick(template, "apparatus_id") or pick(
+            template, "apparatusId"
+        )
         last = self.api.get(
             f"/equipment-checks/templates/{template_id}/last-seals"
             + (f"?apparatus_id={apparatus_id}" if apparatus_id else "")
