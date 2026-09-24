@@ -33,6 +33,7 @@ import {
 import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { PrinterLanguage, labelPrinterService, labelService, Symbology } from '../../services/labelService';
+import { SheetStartPicker } from './SheetStartPicker';
 import type { LabelPrinterConfig, PrintLabelsResult } from '../../services/labelService';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { getTodayLocalDate } from '../../utils/dateFormatting';
@@ -164,6 +165,8 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
   const [sendingToPrinter, setSendingToPrinter] = useState(false);
   const [printResult, setPrintResult] = useState<PrintLabelsResult | null>(null);
   const [symbology, setSymbology] = useState<Symbology>(Symbology.CODE128);
+  // Where the first label lands on an Avery sheet; see SheetStartPicker.
+  const [startPosition, setStartPosition] = useState(1);
 
   const lastSavedKeyRef = useRef<string | null>(null);
 
@@ -393,6 +396,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
         ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
         auto_rotate: effectiveAutoRotate,
         symbology,
+        ...(isThermal ? {} : { start_position: startPosition }),
       });
       if (autoPopulated > 0) {
         toast.success(`${autoPopulated} record${autoPopulated !== 1 ? 's' : ''} had a barcode generated`);
@@ -602,6 +606,8 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
               </button>
             </div>
           </div>
+
+          {!isThermal && <SheetStartPicker value={startPosition} onChange={setStartPosition} />}
 
           {printResult ? (
             <div
@@ -839,6 +845,16 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                   : { display: 'grid', gridTemplateColumns: `repeat(${preset.columns}, 1fr)`, gap: '2px' }
               }
             >
+              {/* Blank cells ahead of the first label, so the preview and a
+                  browser print lay the sheet out as the PDF does. */}
+              {Array.from({ length: isThermal ? 0 : startPosition - 1 }, (_, i) => (
+                <div
+                  key={`skipped-${i}`}
+                  data-testid="skipped-label-position"
+                  aria-hidden="true"
+                  style={{ width: preset.width, height: preset.height }}
+                />
+              ))}
               {labelItems.map((item, i) => (
                 <BarcodeLabel key={`${item.id}-${i}`} item={item} preset={preset} symbology={symbology} />
               ))}

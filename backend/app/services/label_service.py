@@ -429,6 +429,7 @@ class LabelService:
         extra_lines: Optional[List[str]] = None,
         exclude_ids: Optional[Set[str]] = None,
         symbology: str = SYMBOLOGY_CODE128,
+        start_position: int = 1,
     ) -> Tuple[BytesIO, int, int]:
         entry = MODULE_LABELS.get(module)
         if entry is None:
@@ -442,7 +443,13 @@ class LabelService:
             raise ValueError("No records found for label generation")
 
         pdf = render_labels(
-            specs, label_format, custom_width, custom_height, auto_rotate, symbology
+            specs,
+            label_format,
+            custom_width,
+            custom_height,
+            auto_rotate,
+            symbology,
+            start_position=start_position,
         )
         return pdf, auto_populated, len(specs)
 

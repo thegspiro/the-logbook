@@ -62,6 +62,7 @@ import {
 } from '../utils/labelSetups';
 import type { LabelSetup } from '../utils/labelSetups';
 import { PromptDialog } from '../../../components/ux';
+import { SheetStartPicker } from '../../../components/labels/SheetStartPicker';
 import {
   buildLabelFilterPath,
   MAX_LABEL_BATCH,
@@ -263,9 +264,6 @@ function loadStoredLabelLines(): string[] {
   }
   return [];
 }
-
-// Avery 5160, the one sheet layout: 3 columns by 10 rows.
-const SHEET_LABELS_PER_PAGE = 30;
 
 function isSymbology(value: unknown): value is Symbology {
   return value === Symbology.CODE128 || value === Symbology.QR;
@@ -1532,52 +1530,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
             </div>
           )}
 
-          {!isThermal && (
-            <div className="card-secondary mb-4 flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
-              <div className="flex-1">
-                <label htmlFor="sheet-start-position" className="form-label">
-                  Start at label
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="sheet-start-position"
-                    type="number"
-                    min={1}
-                    max={SHEET_LABELS_PER_PAGE}
-                    value={startPosition}
-                    onChange={(e) =>
-                      setStartPosition(Math.max(1, Math.min(SHEET_LABELS_PER_PAGE, parseInt(e.target.value) || 1)))
-                    }
-                    aria-describedby="sheet-start-position-help"
-                    className="form-input w-24"
-                  />
-                  <span className="text-theme-text-secondary text-sm">of {SHEET_LABELS_PER_PAGE}</span>
-                </div>
-                <p id="sheet-start-position-help" className="text-theme-text-muted mt-1 text-xs">
-                  {startPosition > 1
-                    ? `Labels 1–${startPosition - 1} are left blank, so a partly used sheet can go back in the printer.`
-                    : 'Reusing a sheet with some labels already peeled off? Start at the first label still on it, counting across each row.'}
-                </p>
-              </div>
-              <div
-                className="grid shrink-0 grid-cols-3 gap-0.5 self-center rounded border border-slate-300 bg-white p-1"
-                aria-hidden="true"
-              >
-                {Array.from({ length: SHEET_LABELS_PER_PAGE }, (_, index) => (
-                  <span
-                    key={index}
-                    className={`h-1.5 w-4 rounded-[1px] ${
-                      index < startPosition - 1
-                        ? 'bg-slate-300'
-                        : index === startPosition - 1
-                          ? 'bg-emerald-700'
-                          : 'border border-slate-300'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          {!isThermal && <SheetStartPicker value={startPosition} onChange={setStartPosition} />}
 
           {printers.length > 0 && (
             <div className="card-secondary mb-4 flex flex-col gap-3 p-3 sm:flex-row sm:items-end">

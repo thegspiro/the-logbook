@@ -362,6 +362,20 @@ class TestGenerate:
         _, _, count = await svc.generate(uuid4(), "partial", ["1", "2", "3"], "letter")
         assert count == 2
 
+    async def test_passes_the_sheet_start_position_to_the_renderer(self, monkeypatch):
+        async def fake_builder(db, org_id, ids, extra_lines):
+            return [LabelSpec(name="Engine 5", barcode_value="E5")], 0
+
+        monkeypatch.setitem(ls.MODULE_LABELS, "fake", ("apparatus.view", fake_builder))
+        rendered = MagicMock(return_value="pdf")
+        monkeypatch.setattr(ls, "render_labels", rendered)
+
+        await LabelService(MagicMock()).generate(
+            uuid4(), "fake", ["1"], "letter", start_position=12
+        )
+
+        assert rendered.call_args.kwargs["start_position"] == 12
+
     async def test_empty_result_raises(self, monkeypatch):
         async def empty_builder(db, org_id, ids, extra_lines):
             return [], 0

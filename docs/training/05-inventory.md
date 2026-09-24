@@ -783,7 +783,7 @@ Labels include the barcode (Code 128 with the required quiet-zone margins, or a 
 
 > **When an edit makes a label out of date.** Editing an item that has a confirmed label shows a banner on the item page with a **Print label** button. If the edit changed the code the label encodes, the old label no longer scans to the item and should be replaced — the item also goes back on the _needs a label_ list. If it changed only printed text (name, asset tag or serial number), the old label still scans but reads wrong.
 
-> **Reusing a partly used Avery sheet.** With **Letter Paper (Grid)** selected, a **Start at label** box (1–30) appears above the printer controls. Set it to the first label still on the sheet — counting left to right along each row — and the positions before it are left blank in the preview, the browser print and the PDF, so the sheet can go back in the printer instead of the bin. It applies to the sheet in the printer now: it goes back to 1 when you move to the next part of a large run. Roll printers have no positions, so the box is not shown for them.
+> **Reusing a partly used Avery sheet.** With **Letter Paper (Grid)** selected, a **Start at label** box (1–30) appears above the printer controls. Set it to the first label still on the sheet — counting left to right along each row — and the positions before it are left blank in the preview, the browser print and the PDF, so the sheet can go back in the printer instead of the bin. It applies to the sheet in the printer now: it goes back to 1 when you move to the next part of a large run. Roll printers have no positions, so the box is not shown for them. The same box is on the label pages for apparatus, facilities, members and storage areas.
 
 ![Label print settings with the size presets and content options](./images/05-51-label-print-settings.png)
 
@@ -871,6 +871,10 @@ question. It is never asked after **Download Test Label**.
 - The items list has a label-status filter: **Any Label Status**, **Needs a
   Label**, **Label Printed**. The same filter carries into **Export**.
 - The print page's picker has **Only items that still need a label**.
+- Above the items list, a line counts them — "_14 items need a label._" — with
+  **Show them** (applies the filter) and **Print their labels** (opens the print
+  page on that filter). **Not now** hides it until the page is reloaded; it is
+  gone on its own once every item is labelled.
 
 **The mark clears itself when the label goes out of date.** A label encodes one
 value — the item's **barcode**, or its **asset tag** if it has no barcode, or
