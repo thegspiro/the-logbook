@@ -119,6 +119,11 @@ class MembershipPipeline(Base):
     auto_transfer_on_approval = Column(Boolean, default=False)
     inactivity_config = Column(JSON, default=dict)
     public_status_enabled = Column(Boolean, default=False)
+    # Off: the public status page lists only completed stages, and withholds
+    # the stage total — a count alone tells the applicant how much is left.
+    public_show_future_stages = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     report_stage_groups = Column(JSON, default=list)
 
     created_by = Column(String(36), ForeignKey("users.id"), index=True)
@@ -276,6 +281,19 @@ class ProspectiveMember(Base):
     desired_membership_type = Column(
         String(50), nullable=True, default=None
     )  # e.g., "probationary", "administrative"
+    # The role the applicant is being brought in to hold, decided during the
+    # pipeline and applied by the transfer. SET NULL rather than CASCADE: a
+    # deleted role must not take the application with it, and the coordinator
+    # is better served by an empty picker than a missing applicant.
+    #
+    # The target is `positions`, not `roles`: 20260805_0008 renamed the table,
+    # and `Role` survives only as a Python alias of `Position` (models/user.py).
+    # The column keeps the `role` wording because that is the vocabulary the
+    # API boundary already uses -- TransferProspectRequest.role_ids, which this
+    # feeds -- and renaming it here would split one concept across two names.
+    target_role_id = Column(
+        String(36), ForeignKey("positions.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Pipeline tracking
     current_step_id = Column(
@@ -311,6 +329,18 @@ class ProspectiveMember(Base):
     )
     transferred_at = Column(DateTime(timezone=True))
 
+    # Lifecycle stamps. `status` says where an application stands now; these
+    # say when it got there and what was given as the reason, which is what
+    # the drawer and the applicant table report. Every transition runs through
+    # MembershipPipelineService._apply_status_change, which is what writes
+    # them -- the reason itself is also logged as activity, and that log is
+    # where the migration backfilled these columns from.
+    deactivated_at = Column(DateTime(timezone=True))
+    deactivated_reason = Column(Text)
+    reactivated_at = Column(DateTime(timezone=True))
+    withdrawn_at = Column(DateTime(timezone=True))
+    withdrawal_reason = Column(Text)
+
     notes = Column(Text)
 
     # MySQL has no partial unique indexes.  NULL values do not conflict in a
@@ -334,6 +364,11 @@ class ProspectiveMember(Base):
         "MembershipPipelineStep", foreign_keys=[current_step_id]
     )
     referrer = relationship("User", foreign_keys=[referred_by])
+    # Read-only here: the name is serialised from this rather than stored, so
+    # a renamed role cannot leave a stale copy on every applicant who wanted it.
+    # Named "Position" because that is the mapped class; `Role` is an alias and
+    # the registry cannot resolve a relationship by it.
+    target_role = relationship("Position", foreign_keys=[target_role_id])
     transferred_user = relationship("User", foreign_keys=[transferred_user_id])
     step_progress = relationship(
         "ProspectStepProgress",

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**271 tables · 4540 columns · 876 foreign keys**
+**271 tables · 4547 columns · 877 foreign keys**
 
 ---
 
@@ -407,14 +407,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`membership_pipeline_steps`](#membership_pipeline_steps) | `MembershipPipelineStep` | 17 | A single step within a membership pipeline. |
-| [`membership_pipelines`](#membership_pipelines) | `MembershipPipeline` | 14 | Pipeline definition for prospective member onboarding. |
+| [`membership_pipelines`](#membership_pipelines) | `MembershipPipeline` | 15 | Pipeline definition for prospective member onboarding. |
 | [`prospect_activity_log`](#prospect_activity_log) | `ProspectActivityLog` | 6 | Audit trail for prospect-related actions. |
 | [`prospect_documents`](#prospect_documents) | `ProspectDocument` | 10 | Document uploaded for a prospective member. |
 | [`prospect_election_packages`](#prospect_election_packages) | `ProspectElectionPackage` | 11 | Election package for a prospective member. |
 | [`prospect_event_links`](#prospect_event_links) | `ProspectEventLink` | 6 | Links a prospective member to an upcoming event. |
 | [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 12 | Interview record for a prospective member. |
 | [`prospect_step_progress`](#prospect_step_progress) | `ProspectStepProgress` | 10 | Tracks a prospect's progress on each pipeline step. |
-| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 29 | Prospective member record, kept separate from the users table. |
+| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 35 | Prospective member record, kept separate from the users table. |
 
 ### Nfc_Tag
 
@@ -5971,6 +5971,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `auto_transfer_on_approval` | BOOL | yes |  | `False` |  |
 | `inactivity_config` | JSON | yes |  | `dict()` |  |
 | `public_status_enabled` | BOOL | yes |  | `False` |  |
+| `public_show_future_stages` | BOOL | no |  | `1` |  |
 | `report_stage_groups` | JSON | yes |  | `list()` |  |
 | `created_by` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -6148,6 +6149,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `referral_source` | VARCHAR(255) | yes |  |  |  |
 | `referred_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `desired_membership_type` | VARCHAR(50) | yes |  |  |  |
+| `target_role_id` | VARCHAR(36) | yes | FK |  | → `positions.id` ON DELETE SET NULL |
 | `current_step_id` | VARCHAR(36) | yes | FK |  | → `membership_pipeline_steps.id` ON DELETE SET NULL |
 | `status` | ENUM(`active`, `on_hold`, `approved`, `rejected`, `withdrawn`, `inactive`, `transferred`) | no | IDX | `active` |  |
 | `metadata` | JSON | yes |  | `dict()` |  |
@@ -6156,6 +6158,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status_token_created_at` | DATETIME | yes |  |  |  |
 | `transferred_user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `transferred_at` | DATETIME | yes |  |  |  |
+| `deactivated_at` | DATETIME | yes |  |  |  |
+| `deactivated_reason` | TEXT | yes |  |  |  |
+| `reactivated_at` | DATETIME | yes |  |  |  |
+| `withdrawn_at` | DATETIME | yes |  |  |  |
+| `withdrawal_reason` | TEXT | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `active_email` | VARCHAR(255) | yes |  | server default |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -10309,6 +10316,17 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_records` | `external_provider_id` | SET NULL | yes |
 | `xapi_statements` | `source_provider_id` | SET NULL | yes |
 
+### → `positions` (6 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `issuance_allowances` | `role_id` | CASCADE | yes |
+| `org_chart_nodes` | `position_id` | SET NULL | yes |
+| `prospective_members` | `target_role_id` | SET NULL | yes |
+| `suggestion_box_reviewers` | `position_id` | CASCADE | yes |
+| `suggestion_forwards` | `position_id` | CASCADE | yes |
+| `user_positions` | `position_id` | CASCADE | no |
+
 ### → `program_phases` (6 references)
 
 | From table | Column | On delete | Nullable |
@@ -10349,16 +10367,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_interviews` | `step_id` | SET NULL | yes |
 | `prospect_step_progress` | `step_id` | CASCADE | no |
 | `prospective_members` | `current_step_id` | SET NULL | yes |
-
-### → `positions` (5 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `issuance_allowances` | `role_id` | CASCADE | yes |
-| `org_chart_nodes` | `position_id` | SET NULL | yes |
-| `suggestion_box_reviewers` | `position_id` | CASCADE | yes |
-| `suggestion_forwards` | `position_id` | CASCADE | yes |
-| `user_positions` | `position_id` | CASCADE | no |
 
 ### → `training_sessions` (5 references)
 

@@ -42,7 +42,7 @@ from app.models.membership_pipeline import (
     ProspectStepProgress,
     StepProgressStatus,
 )
-from app.models.user import Organization, User, UserStatus, generate_uuid
+from app.models.user import Organization, Role, User, UserStatus, generate_uuid
 from app.utils.membership import ADMINISTRATIVE_RANK_MESSAGE, is_administrative
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
@@ -1224,6 +1224,10 @@ class MembershipPipelineService:
                 selectinload(ProspectiveMember.current_step),
                 selectinload(ProspectiveMember.pipeline),
                 selectinload(ProspectiveMember.step_progress),
+                # _prospect_list_item reads the target role's name, and both
+                # the list and the kanban board go through it -- a lazy load
+                # out of the async response path raises MissingGreenlet.
+                selectinload(ProspectiveMember.target_role),
             )
         )
         query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
@@ -1333,6 +1337,7 @@ class MembershipPipelineService:
                 # Interview is the third stage of the default pipeline, so this
                 # blocked advancing anyone past it, including in bulk.
                 selectinload(ProspectiveMember.interviews),
+                selectinload(ProspectiveMember.target_role),
             )
             # Refresh identity-map instances: the prospect's pipeline/steps
             # may already be cached in this session from an earlier call, and
@@ -1352,6 +1357,13 @@ class MembershipPipelineService:
             # of those paths returns through). Non-mapped attribute; never persisted.
             prospect.pipeline_name = (
                 prospect.pipeline.name if prospect.pipeline else None
+            )
+            # Same shape, same reason: ProspectResponse declares a flat
+            # target_role_name that no column backs. Resolved from the
+            # relationship rather than stored, so renaming a position does not
+            # leave a stale copy on every application that wanted it.
+            prospect.target_role_name = (
+                prospect.target_role.name if prospect.target_role else None
             )
         return prospect
 
@@ -1455,6 +1467,19 @@ class MembershipPipelineService:
             label="referring member",
         )
 
+        # The target role is copied onto the User at transfer (_do_transfer's
+        # role_ids), so an unvalidated id does not merely dangle on the
+        # application -- it grants a position from another organization to a
+        # brand-new member. XC-1 / CLAUDE.md pitfall #14c.
+        await assert_in_org(
+            self.db,
+            Role,
+            data.get("target_role_id"),
+            organization_id,
+            allow_none=True,
+            label="target role",
+        )
+
         # Use org default pipeline if none specified
         if not pipeline_id:
             default_pipeline = await self._get_default_pipeline(organization_id)
@@ -1486,6 +1511,7 @@ class MembershipPipelineService:
             referral_source=data.get("referral_source"),
             referred_by=data.get("referred_by"),
             desired_membership_type=data.get("desired_membership_type"),
+            target_role_id=data.get("target_role_id"),
             current_step_id=first_step_id,
             status=ProspectStatus.ACTIVE,
             metadata_=data.get("metadata_", {}),
@@ -1556,6 +1582,15 @@ class MembershipPipelineService:
             "transferred_user",
             "documents",
             "election_packages",
+            # Written only by _stamp_lifecycle, on the status-change path.
+            # ProspectUpdate does not declare them either, so this is the
+            # second of two locks rather than the only one.
+            "deactivated_at",
+            "deactivated_reason",
+            "reactivated_at",
+            "withdrawn_at",
+            "withdrawal_reason",
+            "target_role",
         }
     )
 
@@ -1595,8 +1630,9 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
-        # referred_by is the one client-supplied foreign key this update
-        # accepts; every other FK is in _PROSPECT_PROTECTED_FIELDS.
+        # referred_by and target_role_id are the client-supplied foreign keys
+        # this update accepts; every other FK is in
+        # _PROSPECT_PROTECTED_FIELDS.
         if "referred_by" in data:
             await assert_in_org(
                 self.db,
@@ -1605,6 +1641,15 @@ class MembershipPipelineService:
                 organization_id,
                 allow_none=True,
                 label="referring member",
+            )
+        if "target_role_id" in data:
+            await assert_in_org(
+                self.db,
+                Role,
+                data.get("target_role_id"),
+                organization_id,
+                allow_none=True,
+                label="target role",
             )
 
         # TRANSFERRED is derived, not chosen (see _apply_status_change) — the
@@ -2489,10 +2534,11 @@ class MembershipPipelineService:
         # on. A skip is a coordinator bypass, not an approval — it must never
         # convert the prospect to a member, even if a stage flagged
         # is_final_step ended up mid-pipeline through reordering.
+        sent_email_step_id: Optional[str] = None
         if not will_auto_transfer:
             # Advance to next step. The transfer, when there is one, already
             # ran above and moved the prospect out of the pipeline.
-            await self._advance_current_step(prospect, step_id)
+            sent_email_step_id = await self._advance_current_step(prospect, step_id)
 
         # Some explicit operations have a domain-level audit event in addition
         # to the step-level event above.  Stage both before committing so the
@@ -2506,7 +2552,53 @@ class MembershipPipelineService:
             )
 
         await self.db.commit()
+
+        # An automated-email stage has nothing left for anyone to do once its
+        # email has gone out, so it completes itself rather than sitting "in
+        # progress" until a coordinator clicks past it. This runs after the
+        # commit above so the stage being left is durable whatever happens
+        # here, and it goes back through complete_step so the completion gets
+        # the same gates, activity entry and optional notice as a manual one —
+        # and chains, when the next stage is another automated email.
+        if sent_email_step_id:
+            return await self._complete_sent_email_step(
+                prospect_id, organization_id, sent_email_step_id
+            )
         return await self.get_prospect(prospect_id, organization_id)
+
+    async def _complete_sent_email_step(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        step_id: str,
+    ) -> Optional[ProspectiveMember]:
+        """Complete an automated-email stage whose email was just sent.
+
+        ``completed_by`` is None: the system sent the email, and the
+        coordinator whose action reached this stage did not complete it.
+        A refusal from the stage gate leaves the stage in progress for a
+        coordinator, exactly as it stood before this existed.
+        """
+        try:
+            return await self.complete_step(
+                prospect_id=prospect_id,
+                organization_id=organization_id,
+                step_id=step_id,
+                completed_by=None,
+                notes="Completed automatically when the stage email was sent",
+                action_result={
+                    "auto_advanced": True,
+                    "trigger": "stage_email_sent",
+                    "email_sent": True,
+                },
+                automated=True,
+            )
+        except ValueError as e:
+            logger.warning(
+                f"Stage email sent to prospect {prospect_id} but step "
+                f"{step_id} was left open: {e}"
+            )
+            return await self.get_prospect(prospect_id, organization_id)
 
     async def skip_current_step(
         self,
@@ -3024,6 +3116,41 @@ class MembershipPipelineService:
         except ValueError:
             raise ValueError(f"Invalid status: {status}")
 
+    @staticmethod
+    def _stamp_lifecycle(
+        prospect: ProspectiveMember,
+        previous: str,
+        target: ProspectStatus,
+        reason: Optional[str],
+    ) -> None:
+        """Record when an application left the active board, and why.
+
+        These are historical stamps rather than flags mirroring ``status``, and
+        the drawer is what settles that: its Details block renders
+        "Deactivated:" and "Last reactivated:" whatever the application's
+        status is now, and its inactive banner expects to show a *prior*
+        reactivation on a record that has gone inactive again. So nothing here
+        clears a stamp — a later transition overwrites its own, and leaves the
+        others as the history they are. `20260924_1540_77d4aa7798dd` backfilled
+        existing rows from the activity log on exactly this rule.
+
+        Called from ``_apply_status_change``, which is the single choke point
+        for every transition, single and bulk alike, so there is no path that
+        changes a status without passing through here.
+        """
+        now = datetime.now(timezone.utc)
+        if target == ProspectStatus.WITHDRAWN:
+            prospect.withdrawn_at = now
+            prospect.withdrawal_reason = reason
+        elif target == ProspectStatus.INACTIVE:
+            prospect.deactivated_at = now
+            prospect.deactivated_reason = reason
+        elif (
+            target == ProspectStatus.ACTIVE
+            and previous == ProspectStatus.INACTIVE.value
+        ):
+            prospect.reactivated_at = now
+
     async def _apply_status_change(
         self,
         prospect: ProspectiveMember,
@@ -3067,6 +3194,7 @@ class MembershipPipelineService:
         if previous == target.value:
             raise ValueError(f"Prospect is already {target.value}")
         prospect.status = target
+        self._stamp_lifecycle(prospect, previous, target, reason)
         await self._log_activity(
             prospect_id=str(prospect.id),
             action="prospect_status_changed",
@@ -3213,10 +3341,17 @@ class MembershipPipelineService:
 
     async def _advance_current_step(
         self, prospect: ProspectiveMember, completed_step_id: str
-    ):
-        """After completing a step, move current_step_id to the next step"""
+    ) -> Optional[str]:
+        """After completing a step, move current_step_id to the next step.
+
+        Returns the id of the stage moved onto when it is an automated-email
+        stage whose email was sent, so the caller can complete it once its own
+        transaction is committed. Returns None otherwise — including when the
+        send failed, which leaves the stage open so a coordinator sees that
+        the applicant never received it.
+        """
         if not prospect.pipeline:
-            return
+            return None
 
         sorted_steps = sorted(prospect.pipeline.steps, key=lambda s: s.sort_order)
         current_idx = next(
@@ -3251,7 +3386,14 @@ class MembershipPipelineService:
             # (or a legacy action step with action_type=send_email)
             if self._is_email_step(next_step):
                 await self.db.flush()
-                await self._send_stage_email(prospect, next_step)
+                sent = await self._send_stage_email(prospect, next_step)
+                # A stage flagged final is where the department approves the
+                # applicant (and, with auto_transfer_on_approval, converts
+                # them). Sending an email is not that approval, so a final
+                # email stage stays for a coordinator to complete.
+                if sent and not next_step.is_final_step:
+                    return str(next_step.id)
+        return None
 
     # =========================================================================
     # Transfer to Membership
@@ -3516,7 +3658,25 @@ class MembershipPipelineService:
         )
         self.db.add(new_user)
 
-        # Assign initial roles/positions if provided
+        # Assign initial roles/positions. An explicit `role_ids` from the
+        # caller wins; otherwise the application's own target role is used.
+        #
+        # The fallback is the point of the column. Before it, the target role
+        # was displayed on the applicant and on the conversion summary and then
+        # dropped on the way through: ConversionModal sent an id nothing had
+        # ever populated, so `role_ids` was always empty and every converted
+        # member came out with the default `member` position alone -- silently,
+        # since the fallback below still grants that one. It also reaches the
+        # automatic path at _complete_step's _do_transfer call, which passes no
+        # roles at all and so could never have honoured the applicant's role.
+        #
+        # Already validated in-org: create_prospect and update_prospect assert
+        # target_role_id belongs to the organization before storing it, and the
+        # query below re-filters on organization_id regardless.
+        if not role_ids and prospect.target_role_id:
+            role_ids = [str(prospect.target_role_id)]
+
+        assigned: List[Any] = []
         if role_ids:
             from app.models.user import Role
 
@@ -3527,13 +3687,27 @@ class MembershipPipelineService:
             )
             roles = list(role_result.scalars().all())
             if roles:
-                new_user.roles = roles
+                # Refresh before assigning, exactly as the member-role branch
+                # below does. The query above autoflushes, so new_user is
+                # persistent by now and assigning to the collection has to
+                # load the existing one to diff it -- a lazy load, and so a
+                # MissingGreenlet under async.
+                await self.db.refresh(new_user, ["positions"])
+                new_user.positions = roles
+                assigned = roles
 
         # Ensure default "member" role is always assigned
         from app.core.constants import ROLE_MEMBER
         from app.models.user import Role
 
-        assigned_slugs = {r.slug for r in (new_user.roles or [])}
+        # Read from the list just assigned rather than back off the
+        # relationship. The query above autoflushes, so by this point new_user
+        # is persistent and `new_user.roles` is a lazy load -- which raises
+        # MissingGreenlet under async. That was latent while role_ids was
+        # always empty (the branch above never ran, so new_user was still
+        # pending here); the target-role fallback makes the branch the normal
+        # case, which is what surfaced it.
+        assigned_slugs = {r.slug for r in assigned}
         if ROLE_MEMBER not in assigned_slugs:
             member_result = await self.db.execute(
                 select(Role).where(
@@ -4278,6 +4452,10 @@ class MembershipPipelineService:
                 selectinload(ProspectiveMember.current_step),
                 selectinload(ProspectiveMember.pipeline),
                 selectinload(ProspectiveMember.step_progress),
+                # _prospect_list_item reads the target role's name, and both
+                # the list and the kanban board go through it -- a lazy load
+                # out of the async response path raises MissingGreenlet.
+                selectinload(ProspectiveMember.target_role),
             )
             .order_by(ProspectiveMember.created_at)
             .limit(self.MAX_KANBAN_CARDS)
@@ -6043,6 +6221,9 @@ class MembershipPipelineService:
         Returns None if the pipeline has public_status_enabled=False,
         if the token has expired, or if no match is found.
         Only steps with public_visible=True are included in the timeline.
+        When the pipeline's ``public_show_future_stages`` is off, the timeline
+        is limited to completed stages, and the current stage, its action and
+        ``total_stages`` are all None.
 
         Successful lookups refresh the token's inactivity timestamp. The
         bearer token itself is never reflected into the response.
@@ -6099,6 +6280,8 @@ class MembershipPipelineService:
                 if step.public_visible:
                     public_step_ids.add(str(step.id))
 
+        show_future = prospect.pipeline.public_show_future_stages is not False
+
         # Build stage timeline — only include public-visible steps
         completed_stages = []
         if prospect.step_progress:
@@ -6115,26 +6298,41 @@ class MembershipPipelineService:
             ):
                 if str(sp.step_id) not in public_step_ids:
                     continue
+                # Progress rows exist for every stage from the moment the
+                # prospect is created, so without this filter the pending
+                # rows are exactly the stages still ahead of the applicant.
+                stage_status = (
+                    sp.status.value if hasattr(sp.status, "value") else sp.status
+                )
+                if (
+                    not show_future
+                    and stage_status != StepProgressStatus.COMPLETED.value
+                ):
+                    continue
                 completed_stages.append(
                     {
                         "stage_name": sp.step.name if sp.step else "Unknown",
-                        "status": (
-                            sp.status.value
-                            if hasattr(sp.status, "value")
-                            else sp.status
-                        ),
+                        "status": stage_status,
                         "completed_at": (
                             sp.completed_at.isoformat() if sp.completed_at else None
                         ),
                     }
                 )
 
-        total_public_stages = len(public_step_ids)
+        # The count alone tells an applicant how many stages remain, which is
+        # the thing a department hiding future stages has chosen not to say.
+        total_public_stages = len(public_step_ids) if show_future else None
 
-        # Current stage name — only show if it's public_visible
+        # Current stage name — only show if it's public_visible, and only when
+        # the department shows stages beyond the completed ones. Its action
+        # card goes with it: the card is labelled by the stage it belongs to.
         current_stage_name = None
         current_stage_action = None
-        if prospect.current_step and str(prospect.current_step.id) in public_step_ids:
+        if (
+            show_future
+            and prospect.current_step
+            and str(prospect.current_step.id) in public_step_ids
+        ):
             current_stage_name = prospect.current_step.name
             current_stage_action = self._build_current_stage_action(
                 prospect.current_step

@@ -18,6 +18,7 @@ describe('SuggestionsPage', () => {
   beforeEach(() => {
     mockSummary.mockReset();
     mockListBoxes.mockReset();
+    vi.mocked(Element.prototype.scrollIntoView).mockReset();
     mockListBoxes.mockResolvedValue([]);
     window.history.pushState({}, '', '/suggestions');
   });
@@ -29,6 +30,20 @@ describe('SuggestionsPage', () => {
     expect(await screen.findByRole('tab', { name: 'Submit' })).toBeInTheDocument();
     await screen.findByText('No suggestion boxes yet');
     expect(screen.queryByRole('tab', { name: /Review/ })).not.toBeInTheDocument();
+  });
+
+  it('brings the active tab into view once the Review tab appears', async () => {
+    window.history.pushState({}, '', '/suggestions?tab=review');
+    mockSummary.mockResolvedValue({ isReviewer: true, openCount: 0, boxes: [] });
+    const scrolled: Element[] = [];
+    vi.mocked(Element.prototype.scrollIntoView).mockImplementation(function (this: Element) {
+      scrolled.push(this);
+    });
+    renderWithRouter(<SuggestionsPage />);
+
+    const reviewTab = await screen.findByRole('tab', { name: /Review/ });
+    expect(reviewTab).toHaveAttribute('aria-selected', 'true');
+    expect(scrolled).toContain(reviewTab);
   });
 
   it('shows a reviewer the Review tab with the open count', async () => {

@@ -4777,9 +4777,9 @@ export const SHOTS = [
     },
   },
   {
-    id: "20-13-suggestions-sidebar-submit",
+    id: "20-15-suggestions-sidebar-submit",
     doc: "20-september-2026-release-changes.md",
-    line: 1535,
+    line: 1528,
     anchor: "capture as an ordinary member so the",
     alt: "An ordinary member's view: the Suggestions item in the sidebar just below Messages, and the Suggestions page open on its Submit tab with the Training ideas box chosen and its description showing — no Review tab",
     route: "/suggestions",
@@ -4821,7 +4821,7 @@ export const SHOTS = [
   {
     id: "20-14-applicant-meeting-stage-hint",
     doc: "20-september-2026-release-changes.md",
-    line: 1591,
+    line: 1584,
     anchor:
       "the applicant detail drawer for an applicant on a **meeting** stage whose",
     alt: "The applicant drawer for an applicant on the Attend a Business Meeting stage, whose Auto-Link Event Type is set: the hint above the action row says they must be checked in at the stage's event and that event's attendance must be finalized before they can advance",
@@ -4847,6 +4847,56 @@ export const SHOTS = [
       await page.getByText("Priya Deshmukh").first().click();
       await page.locator('[aria-label="Applicant details"]').waitFor();
     },
+  },
+  {
+    id: "20-13-applicant-drawer-not-elected",
+    doc: "20-september-2026-release-changes.md",
+    line: 1324,
+    anchor:
+      "the applicant detail drawer for an applicant whose election package reads",
+    alt: "An applicant's drawer after a losing vote — the Membership Vote stage, the red not elected package status, the banner and a link to the closed ballot, and an action row that offers Advance",
+    route: "/prospective-members",
+    // The banner's own sentence. "Election Package" is the section heading and
+    // renders for every applicant on this stage whatever the ballot decided,
+    // so it would be satisfied by the elected and draft packages too -- the
+    // three sit on the same stage by design, and the board offers all three.
+    expect: "This applicant was not elected by the membership vote",
+    prepare: async (page) => {
+      // Devon Marsh is the seeded losing vote (6/14). The status is written
+      // only by `_sync_package_statuses` when an election closes, so no other
+      // seeded applicant can stand in for this one.
+      const card = page.locator("[role='button'][aria-label^='Devon Marsh']");
+      await card.first().waitFor({ timeout: 30_000 });
+      await card.first().click();
+      await page
+        .getByText("This applicant was not elected by the membership vote")
+        .waitFor({ timeout: 30_000 });
+      // Advance, not Convert: the panel renders only on the vote stage and
+      // Convert only on the pipeline's last one, so a frame holding both is
+      // not reachable. The caption says Advance, so assert Advance.
+      await page
+        .getByRole("button", { name: /^Advance$/ })
+        .first()
+        .waitFor({ timeout: 30_000 });
+      // The ballot that decided it, named beneath the banner. This is the one
+      // part of the panel a mapper regression removes silently -- the guard is
+      // `election_id && election_title`, so dropping the title renders nothing
+      // rather than failing. Asserted on the state rather than the seeded
+      // title so a renamed election does not fail the capture.
+      await page
+        .getByRole("button", { name: /Closed$/ })
+        .first()
+        .waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+    },
+    // The drawer rather than the screen: it is taller than the viewport, and
+    // the subject runs from the stage panel down to the action row.
+    selector: "div.drawer-panel",
+    // "No documents yet" -- Devon Marsh is seeded as a vote outcome and carries
+    // no uploads. The phrase sits below the drawer's own scroll, so it is in
+    // the DOM the check reads and not in the frame; the subject, the package
+    // status and the action row, is fully rendered.
+    allowEmptyState: true,
   },
   {
     id: "20-04-org-profile-navigation-layout",

@@ -34,6 +34,8 @@ import { StepProgressStatus } from '../types';
 import { isSafeUrl, getInitials } from '../utils';
 import { STAGE_TYPE_ICONS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
+import { blankToNull } from '../../../utils/formValues';
+import TargetRolePicker from './TargetRolePicker';
 import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useDialog } from '../../../hooks/useDialog';
@@ -147,6 +149,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     address_city: '',
     address_state: '',
     address_zip: '',
+    target_role_id: '',
   });
 
   const isOnElectionStage =
@@ -169,6 +172,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       address_city: applicant.address?.city || '',
       address_state: applicant.address?.state || '',
       address_zip: applicant.address?.zip_code || '',
+      target_role_id: applicant.target_role_id || '',
     });
     setIsEditingContact(true);
   };
@@ -189,6 +193,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
           state: editFields.address_state || undefined,
           zip_code: editFields.address_zip || undefined,
         },
+        // Update path: blankToNull, not `|| undefined`. Clearing the picker
+        // has to reach the backend as an explicit null, or the old role
+        // survives behind a success toast (CLAUDE.md pitfall #1).
+        target_role_id: blankToNull(editFields.target_role_id),
       });
       toast.success('Contact info updated');
       setIsEditingContact(false);
@@ -454,6 +462,12 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         className="form-input-sm"
                       />
                     </div>
+                    <TargetRolePicker
+                      id="drawer-target-role"
+                      value={editFields.target_role_id}
+                      onChange={(target_role_id) => setEditFields((f) => ({ ...f, target_role_id }))}
+                      hint="Applied to the member record when this applicant is converted."
+                    />
                   </div>
                 ) : (
                   <div className="space-y-2">

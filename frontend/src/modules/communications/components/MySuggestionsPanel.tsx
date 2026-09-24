@@ -11,6 +11,7 @@ import { SUGGESTION_DISPOSITION_COLORS, SUGGESTION_DISPOSITION_LABELS } from '..
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { useScrollDetailIntoView } from '../hooks/useScrollDetailIntoView';
 import { suggestionsService } from '../services/suggestionsService';
 import type { MySuggestionSummary, SubmitterSuggestionDetail } from '../types/suggestions';
 import SubmitterSuggestionView from './SubmitterSuggestionView';
@@ -28,6 +29,7 @@ const MySuggestionsPanel: React.FC<MySuggestionsPanelProps> = ({ selectedId, onS
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<SubmitterSuggestionDetail | null>(null);
+  const detailRef = useScrollDetailIntoView<HTMLDivElement>(detail?.id);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,7 +138,7 @@ const MySuggestionsPanel: React.FC<MySuggestionsPanelProps> = ({ selectedId, onS
           </li>
         ))}
       </ul>
-      <div>
+      <div ref={detailRef} className="scroll-mt-20">
         {detail ? (
           <SubmitterSuggestionView detail={detail} loadAttachment={loadAttachment} onReply={reply} />
         ) : (

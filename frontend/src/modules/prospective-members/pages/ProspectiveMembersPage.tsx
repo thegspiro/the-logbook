@@ -39,6 +39,7 @@ import { PipelineKanban } from '../components/PipelineKanban';
 import { PipelineTable } from '../components/PipelineTable';
 import { ApplicantDetailDrawer } from '../components/ApplicantDetailDrawer';
 import { ConversionModal } from '../components/ConversionModal';
+import TargetRolePicker from '../components/TargetRolePicker';
 import { applicantService, eventLinkService } from '../services/api';
 import type { ApplicantListItem, Applicant, ApplicantStatus, BulkActionResult, ProspectSourceEvent } from '../types';
 import { isValidEmail, getInitials } from '../utils';
@@ -176,6 +177,7 @@ export const ProspectiveMembersPage: React.FC = () => {
     email: '',
     phone: '',
     target_membership_type: 'regular' as 'regular' | 'administrative',
+    target_role_id: '',
   });
   const [isCreating, setIsCreating] = useState(false);
 
@@ -430,6 +432,9 @@ export const ProspectiveMembersPage: React.FC = () => {
       await applicantService.createApplicant({
         pipeline_id: currentPipeline.id,
         ...newApplicant,
+        // Create payload: an unchosen role is omitted, not sent as ''
+        // (CLAUDE.md pitfall #1 — `??` would let the empty string through).
+        target_role_id: newApplicant.target_role_id || undefined,
       });
       toast.success('Applicant added to pipeline');
       setShowAddModal(false);
@@ -439,6 +444,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         email: '',
         phone: '',
         target_membership_type: 'regular',
+        target_role_id: '',
       });
       void refreshPipelineView();
     } catch (err: unknown) {
@@ -1749,6 +1755,12 @@ export const ProspectiveMembersPage: React.FC = () => {
                     <option value="administrative">Administrative</option>
                   </select>
                 </div>
+                <TargetRolePicker
+                  id="new-applicant-target-role"
+                  value={newApplicant.target_role_id}
+                  onChange={(target_role_id) => setNewApplicant({ ...newApplicant, target_role_id })}
+                  hint="Applied to the member record when this applicant is converted."
+                />
               </div>
               <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
                 <button

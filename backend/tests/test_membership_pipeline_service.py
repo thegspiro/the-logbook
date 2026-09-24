@@ -28,17 +28,41 @@ def _get_prospect_db(prospect):
 
 
 class TestGetProspectPipelineName:
+    """`get_prospect` populates the flat names the response declares.
+
+    Both are read off eager-loaded relationships rather than stored, so the
+    fakes below carry `pipeline` and `target_role` the way a real row does —
+    an absent attribute here would be a fake that has drifted from the object
+    it stands in for, not a reason to soften the read.
+    """
+
     async def test_populates_pipeline_name(self):
-        prospect = SimpleNamespace(pipeline=SimpleNamespace(name="Recruit Class 2026"))
+        prospect = SimpleNamespace(
+            pipeline=SimpleNamespace(name="Recruit Class 2026"), target_role=None
+        )
         db = _get_prospect_db(prospect)
         out = await MembershipPipelineService(db).get_prospect("p1", "org1")
         assert out.pipeline_name == "Recruit Class 2026"
 
     async def test_no_pipeline_yields_none_name(self):
-        prospect = SimpleNamespace(pipeline=None)
+        prospect = SimpleNamespace(pipeline=None, target_role=None)
         db = _get_prospect_db(prospect)
         out = await MembershipPipelineService(db).get_prospect("p1", "org1")
         assert out.pipeline_name is None
+
+    async def test_populates_target_role_name(self):
+        prospect = SimpleNamespace(
+            pipeline=None, target_role=SimpleNamespace(name="Safety Officer")
+        )
+        db = _get_prospect_db(prospect)
+        out = await MembershipPipelineService(db).get_prospect("p1", "org1")
+        assert out.target_role_name == "Safety Officer"
+
+    async def test_no_target_role_yields_none_name(self):
+        prospect = SimpleNamespace(pipeline=None, target_role=None)
+        db = _get_prospect_db(prospect)
+        out = await MembershipPipelineService(db).get_prospect("p1", "org1")
+        assert out.target_role_name is None
 
     async def test_missing_prospect_returns_none(self):
         db = _get_prospect_db(None)
@@ -488,7 +512,9 @@ class TestCompleteStepActionResult:
                 svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
             ),
             patch.object(svc, "_log_activity", new_callable=AsyncMock),
-            patch.object(svc, "_advance_current_step", new_callable=AsyncMock),
+            patch.object(
+                svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
+            ),
             patch.object(svc, "_do_transfer", new_callable=AsyncMock),
         ]
         return svc, patches
@@ -602,7 +628,7 @@ class TestSkipNeverTransfers:
         with patch.object(
             svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
         ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
-            svc, "_advance_current_step", new_callable=AsyncMock
+            svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
         ) as mock_advance, patch.object(
             svc, "_do_transfer", new_callable=AsyncMock
         ) as mock_transfer:
@@ -625,7 +651,7 @@ class TestSkipNeverTransfers:
         with patch.object(
             svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
         ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
-            svc, "_advance_current_step", new_callable=AsyncMock
+            svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
         ) as mock_advance, patch.object(
             svc, "_do_transfer", new_callable=AsyncMock
         ) as mock_transfer:
@@ -736,7 +762,7 @@ class TestStatusStopsProgression:
         with patch.object(
             svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
         ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
-            svc, "_advance_current_step", new_callable=AsyncMock
+            svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
         ) as mock_advance, patch.object(
             svc, "_do_transfer", new_callable=AsyncMock
         ) as mock_transfer:
@@ -764,7 +790,7 @@ class TestStatusStopsProgression:
         with patch.object(
             svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
         ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
-            svc, "_advance_current_step", new_callable=AsyncMock
+            svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
         ) as mock_advance, patch.object(
             svc, "_do_transfer", new_callable=AsyncMock
         ):
@@ -881,7 +907,7 @@ class TestElectionVoteGate:
         with patch.object(
             svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
         ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
-            svc, "_advance_current_step", new_callable=AsyncMock
+            svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
         ) as mock_advance, patch.object(
             svc, "_do_transfer", new_callable=AsyncMock
         ) as mock_transfer:

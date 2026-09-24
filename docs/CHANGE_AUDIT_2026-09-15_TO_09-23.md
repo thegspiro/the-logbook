@@ -330,7 +330,7 @@ counts regenerated into
 **Suggestion boxes are seeded** _(2026-09-24)_: three boxes and four
 submissions covering every state the guides describe, reviewed by the
 Secretary position (`okittredge`, the manifest's `auth: "secretary"` account).
-All five suggestion-box shots are captured (`07-14` – `07-17`, `20-13`); none
+All five suggestion-box shots are captured (`07-14` – `07-17`, `20-15`); none
 of them writes anything, and the follow-up-key receipt shows a route-mocked
 `DEMO-KEY-…` rather than a real credential. **The
 home-screen icon cannot be produced by the capture harness** — it needs a real

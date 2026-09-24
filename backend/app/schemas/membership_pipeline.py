@@ -166,6 +166,13 @@ class PipelineBase(BaseModel):
         default=False,
         description="Allow prospects to check their status via a public link",
     )
+    public_show_future_stages: bool = Field(
+        default=True,
+        description=(
+            "Show stages the prospect has not reached yet on the public status "
+            "page. When false, only completed stages are listed."
+        ),
+    )
 
 
 class PipelineCreate(PipelineBase):
@@ -186,6 +193,7 @@ class PipelineUpdate(BaseModel):
     auto_transfer_on_approval: Optional[bool] = None
     inactivity_config: Optional[Dict[str, Any]] = None
     public_status_enabled: Optional[bool] = None
+    public_show_future_stages: Optional[bool] = None
 
 
 class PipelineResponse(PipelineBase):
@@ -294,6 +302,13 @@ class ProspectBase(BaseModel):
         max_length=50,
         description="Desired membership type: probationary or administrative",
     )
+    target_role_id: Optional[UUID] = Field(
+        None,
+        description=(
+            "Position the applicant is being brought in to hold. Applied to "
+            "the new member by the transfer when no role_ids are given."
+        ),
+    )
     notes: Optional[str] = None
 
 
@@ -328,6 +343,13 @@ class ProspectUpdate(BaseModel):
         None,
         max_length=50,
         description="Desired membership type: probationary or administrative",
+    )
+    target_role_id: Optional[UUID] = Field(
+        None,
+        description=(
+            "Position the applicant is being brought in to hold. Applied to "
+            "the new member by the transfer when no role_ids are given."
+        ),
     )
     notes: Optional[str] = None
     status: Optional[str] = Field(
@@ -371,6 +393,13 @@ class ProspectResponse(ProspectBase):
     form_submission_id: Optional[UUID] = None
     transferred_user_id: Optional[UUID] = None
     transferred_at: Optional[datetime] = None
+    target_role_id: Optional[UUID] = None
+    target_role_name: Optional[str] = None
+    deactivated_at: Optional[datetime] = None
+    deactivated_reason: Optional[str] = None
+    reactivated_at: Optional[datetime] = None
+    withdrawn_at: Optional[datetime] = None
+    withdrawal_reason: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -406,6 +435,10 @@ class ProspectListResponse(UTCResponseBase):
     days_since_activity: int = 0
     inactivity_alert_level: str = "normal"
     inactivity_timeout_days: Optional[int] = None
+    target_role_name: Optional[str] = None
+    deactivated_at: Optional[datetime] = None
+    withdrawn_at: Optional[datetime] = None
+    withdrawal_reason: Optional[str] = None
 
     model_config = _response_config
 

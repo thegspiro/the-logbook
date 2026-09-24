@@ -146,6 +146,13 @@ services:
       # CORS - Update with your Unraid IP
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://192.168.1.10:7880,http://unraid.local:7880}
 
+      # Public site URL that emailed links (applicant status tracker, ballots,
+      # password resets, approvals) are built from. Must be passed through:
+      # this environment block is a whitelist, so without this line a value
+      # set in .env never reached the container and every link pointed at the
+      # app's localhost default.
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+
       # Host-header allowlist (rejects spoofed Host with 400). Leave empty to
       # derive it from ALLOWED_ORIGINS' hostnames + localhost; set explicitly if
       # you reach the app on a different hostname.

@@ -199,6 +199,7 @@ function mapPipelineResponse(data: BackendPipelineResponse): Pipeline {
     is_default: data.is_default ?? false,
     inactivity_config: inactivityConfig,
     public_status_enabled: data.public_status_enabled ?? false,
+    public_show_future_stages: data.public_show_future_stages ?? true,
     report_stage_groups: data.report_stage_groups ?? undefined,
     stages: (data.steps || []).map(mapStepToStage),
     applicant_count: data.prospect_count ?? 0,
@@ -362,6 +363,16 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
     form_submission_id: data.form_submission_id || undefined,
     status: extractStatus(data.status) as Applicant['status'],
     notes: data.notes || undefined,
+    // The target role the transfer applies, and the lifecycle stamps the
+    // drawer's banners and Details block read. Every one of these had a
+    // reader and no producer until the columns landed.
+    target_role_id: data.target_role_id || undefined,
+    target_role_name: data.target_role_name || undefined,
+    deactivated_at: data.deactivated_at || undefined,
+    deactivated_reason: data.deactivated_reason || undefined,
+    reactivated_at: data.reactivated_at || undefined,
+    withdrawn_at: data.withdrawn_at || undefined,
+    withdrawal_reason: data.withdrawal_reason || undefined,
     last_activity_at: data.updated_at,
     created_at: data.created_at,
     updated_at: data.updated_at,
@@ -388,12 +399,16 @@ function mapProspectListToApplicantList(data: BackendProspectListResponse): Appl
     days_since_activity: data.days_since_activity,
     inactivity_alert_level: (data.inactivity_alert_level ?? 'normal') as InactivityAlertLevel,
     inactivity_timeout_days: data.inactivity_timeout_days ?? undefined,
+    target_role_name: data.target_role_name || undefined,
+    deactivated_at: data.deactivated_at || undefined,
+    withdrawn_at: data.withdrawn_at || undefined,
+    withdrawal_reason: data.withdrawal_reason || undefined,
     created_at: data.created_at,
   };
 }
 
 /** Map a backend election package response to a frontend ElectionPackage */
-function mapElectionPackageResponse(data: BackendElectionPackageResponse): ElectionPackage {
+export function mapElectionPackageResponse(data: BackendElectionPackageResponse): ElectionPackage {
   const snapshot = data.applicant_snapshot ?? {};
   const config = data.package_config ?? {};
 
@@ -426,6 +441,13 @@ function mapElectionPackageResponse(data: BackendElectionPackageResponse): Elect
     recommended_ballot_item: config.recommended_ballot_item,
     status: data.status,
     election_id: data.election_id || undefined,
+    // All four describe the ballot, and ElectionPackageSection renders the
+    // link only when `election_id && election_title` both survive the mapping.
+    // Carrying the id alone left that guard permanently false, so no package
+    // in any outcome state ever showed which ballot decided it.
+    election_title: data.election_title || undefined,
+    election_end_date: data.election_end_date || undefined,
+    election_status: data.election_status || undefined,
     candidate_id: config.candidate_id,
     created_at: data.created_at,
     updated_at: data.updated_at,
@@ -515,6 +537,8 @@ export const pipelineService = {
     if (data.is_template !== undefined) payload.is_template = data.is_template;
     if (data.inactivity_config !== undefined) payload.inactivity_config = data.inactivity_config;
     if (data.public_status_enabled !== undefined) payload.public_status_enabled = data.public_status_enabled;
+    if (data.public_show_future_stages !== undefined)
+      payload.public_show_future_stages = data.public_show_future_stages;
 
     const response = await api.put<BackendPipelineResponse>(`/prospective-members/pipelines/${pipelineId}`, payload);
     return mapPipelineResponse(response.data);
@@ -724,6 +748,10 @@ export const applicantService = {
     if (data.phone !== undefined) payload.phone = data.phone;
     if (data.date_of_birth !== undefined) payload.date_of_birth = data.date_of_birth;
     if (data.target_membership_type !== undefined) payload.desired_membership_type = data.target_membership_type;
+    // `!== undefined` rather than a truthiness test: null is the clear, and a
+    // truthy check would drop it and leave the old role in place behind a
+    // success toast.
+    if (data.target_role_id !== undefined) payload.target_role_id = data.target_role_id;
     if (data.notes !== undefined) payload.notes = data.notes;
     if (data.status !== undefined) payload.status = data.status;
     if (data.address) {
@@ -1133,7 +1161,7 @@ export const publicStatusService = {
     status: string;
     current_stage_name?: string | undefined;
     pipeline_name?: string | undefined;
-    total_stages: number;
+    total_stages: number | null;
     stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
     applied_at?: string | undefined;
     current_stage_action?: CurrentStageAction | undefined;
@@ -1144,7 +1172,7 @@ export const publicStatusService = {
       status: string;
       current_stage_name?: string | undefined;
       pipeline_name?: string | undefined;
-      total_stages: number;
+      total_stages: number | null;
       stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
       applied_at?: string | undefined;
       current_stage_action?: CurrentStageAction | undefined;
