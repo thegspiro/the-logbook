@@ -372,11 +372,13 @@ To permanently delete a member:
 
 > **Important:** Deletion is permanent and cannot be undone. Consider changing the member's status to **Archived** instead if you may need their records in the future.
 
-> **⚠️ Archiving is currently a one-way door in the UI** _(verified 2026-08-08)_.
-> You archive from the member profile, but reactivating is API only
-> (`POST /users/{id}/reactivate`) — there is no archived-members screen. Archiving
-> is still far safer than deleting, since the record and its history survive; just
-> be aware that undoing it needs an administrator with API access.
+> **Archived members can be reactivated** _(2026-09-24)_. On **Members**, choose
+> **Archived** in the status filter and use the **Reactivate** button on the row,
+> or open the member's profile and click their status. Archiving itself happens
+> automatically once a dropped member has returned all department property; there
+> is no manual Archive button (`POST /users/{id}/archive` exists for the API).
+> Deactivating (the Delete dialog's default) is different: a deactivated member is
+> removed from the list and cannot currently be restored from the app.
 
 ### When Deletion Is Refused _(2026-08-07)_
 
@@ -1046,20 +1048,19 @@ date may be in the future.
 
 Verified against the code on 2026-08-08:
 
-| Operation                                          | Where it is today                                                                   | State                                                                                                                        |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Change a member's status** (including archiving) | Member profile → status control                                                     | ✅ Full UI                                                                                                                   |
-| **Leave of absence — create**                      | [Waiver Management](#waiver-management) (`/waivers`)                                | ✅ Works, but it is not where you would look                                                                                 |
-| **Leave of absence — view**                        | Member profile (read-only card), and listed on Waiver Management / Training Waivers | ✅ Read-only                                                                                                                 |
-| **Leave of absence — edit or delete**              | —                                                                                   | ❌ API only (`updateLeaveOfAbsence`, `deleteLeaveOfAbsence` have no callers)                                                 |
-| **Archived members — list and reactivate**         | —                                                                                   | ❌ API only (`getArchivedMembers`, `reactivateMember` have no callers)                                                       |
-| **Overdue property returns**                       | —                                                                                   | ❌ API only for _members_. The Inventory module's members page shows an "Overdue Returns" figure, which is a different thing |
-| **Tier configuration**                             | —                                                                                   | ❌ API only (see [Membership Tiers](#membership-tiers))                                                                      |
+| Operation                                  | Where it is today                                                                   | State                                                                                                                        |
+| ------------------------------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Change a member's status**               | Member profile → status control                                                     | ✅ Full UI (archiving is automatic, not a status choice)                                                                     |
+| **Leave of absence — create**              | [Waiver Management](#waiver-management) (`/waivers`)                                | ✅ Works, but it is not where you would look                                                                                 |
+| **Leave of absence — view**                | Member profile (read-only card), and listed on Waiver Management / Training Waivers | ✅ Read-only                                                                                                                 |
+| **Leave of absence — edit or delete**      | —                                                                                   | ❌ API only (`updateLeaveOfAbsence`, `deleteLeaveOfAbsence` have no callers)                                                 |
+| **Archived members — list and reactivate** | Members → status filter **Archived** → **Reactivate**; or the member's profile      | ✅ Full UI (2026-09-24)                                                                                                      |
+| **Overdue property returns**               | —                                                                                   | ❌ API only for _members_. The Inventory module's members page shows an "Overdue Returns" figure, which is a different thing |
+| **Tier configuration**                     | —                                                                                   | ❌ API only (see [Membership Tiers](#membership-tiers))                                                                      |
 
-**What this means in practice.** Archiving a member works, and so does putting
-one on leave — but _reversing_ either one needs the API. If you archive somebody
-by mistake, or a leave of absence is entered with the wrong dates, there is no
-screen to fix it from. Budget for that before you archive in bulk.
+**What this means in practice.** An archived member can be reactivated from the
+Members list. A leave of absence is still one-way: if it is entered with the wrong
+dates, there is no screen to fix it from.
 
 > **This is a feature gap, not a bug.** The endpoints, permissions and service
 > methods all exist and are tested; what is missing is the screens. Tracked in
