@@ -105,6 +105,10 @@ sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=https://logbook.yourdomain.com|" .
 # Or for IP access:
 # sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=http://YOUR-EC2-PUBLIC-IP|" .env
 
+# Set FRONTEND_URL to the same public address — every link in outgoing
+# email is built from it, and the default points at localhost
+sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=https://logbook.yourdomain.com|" .env
+
 # Set production mode
 sed -i "s|^ENVIRONMENT=.*|ENVIRONMENT=production|" .env
 sed -i "s|^DEBUG=.*|DEBUG=false|" .env
@@ -296,6 +300,7 @@ sed -i "s|^REDIS_PORT=.*|REDIS_PORT=6379|" .env
 sed -i "s|^ENVIRONMENT=.*|ENVIRONMENT=production|" .env
 sed -i "s|^DEBUG=.*|DEBUG=false|" .env
 sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=https://logbook.yourdomain.com|" .env
+sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=https://logbook.yourdomain.com|" .env
 
 # Start WITHOUT local database and Redis (only backend + frontend), with the
 # production override layered on the base file (see the hardening note in Method 1)

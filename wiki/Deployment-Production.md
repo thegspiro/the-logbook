@@ -39,6 +39,7 @@ Best practices for deploying The Logbook in a production environment.
 - [ ] Set `ENVIRONMENT=production`
 - [ ] Set `DEBUG=false`
 - [ ] Configure `ALLOWED_ORIGINS` for your domain only
+- [ ] Set `FRONTEND_URL` to your public site URL — every emailed link is built from it, and a `localhost` value logs a startup warning
 - [ ] Enable HTTPS with valid SSL certificate
 - [ ] Review all `.env` settings
 - [ ] Ensure `.env` is in `.gitignore`
@@ -131,6 +132,9 @@ REDIS_PASSWORD=<strong-password>
 
 # CORS - your domain only
 ALLOWED_ORIGINS=["https://your-domain.com"]
+
+# Public site URL - every link in outgoing email is built from it
+FRONTEND_URL=https://your-domain.com
 
 # Frontend build
 VITE_API_URL=/api/v1

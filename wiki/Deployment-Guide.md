@@ -591,17 +591,18 @@ cp .env.example.full .env
 
 ### Key Variables
 
-| Variable          | Description                        | Default               |
-| ----------------- | ---------------------------------- | --------------------- |
-| `SECRET_KEY`      | JWT signing key (64 hex chars)     | Required              |
-| `ENCRYPTION_KEY`  | Data encryption key (64 hex chars) | Required              |
-| `ENCRYPTION_SALT` | Encryption salt (32 hex chars)     | Required              |
-| `DB_HOST`         | Database hostname                  | db                    |
-| `DB_PASSWORD`     | Database password                  | Required              |
-| `REDIS_PASSWORD`  | Redis password                     | Required              |
-| `FRONTEND_PORT`   | Frontend port                      | 3000                  |
-| `BACKEND_PORT`    | Backend port                       | 3001                  |
-| `ALLOWED_ORIGINS` | CORS origins                       | http://localhost:3000 |
+| Variable          | Description                         | Default               |
+| ----------------- | ----------------------------------- | --------------------- |
+| `SECRET_KEY`      | JWT signing key (64 hex chars)      | Required              |
+| `ENCRYPTION_KEY`  | Data encryption key (64 hex chars)  | Required              |
+| `ENCRYPTION_SALT` | Encryption salt (32 hex chars)      | Required              |
+| `DB_HOST`         | Database hostname                   | db                    |
+| `DB_PASSWORD`     | Database password                   | Required              |
+| `REDIS_PASSWORD`  | Redis password                      | Required              |
+| `FRONTEND_PORT`   | Frontend port                       | 3000                  |
+| `BACKEND_PORT`    | Backend port                        | 3001                  |
+| `ALLOWED_ORIGINS` | CORS origins                        | http://localhost:3000 |
+| `FRONTEND_URL`    | Public site URL for links in emails | http://localhost:3000 |
 
 ---
 
