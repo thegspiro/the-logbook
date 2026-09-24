@@ -317,6 +317,17 @@ part of `events.manage`, so that the organizer who closed an event cannot
 quietly reopen it and change numbers already fed into admin hours, training
 records and compliance. It is held by the three chief ranks and the president.
 
+**Finalizing also moves prospective members on** _(2026-09-16)_. If your
+department runs a membership pipeline, an applicant sitting on a **Meeting**
+stage that names this kind of event no longer advances the moment they sign in
+at the door — they advance when you **finalize** (End Event, recording an
+actual end time, or **Finalize Attendance** all count). So if an open house or
+business meeting had applicants in the room, closing it out is what moves them
+to their next stage; an event nobody finalizes releases them on its own seven
+days after it ends. See
+[What counts as attendance on a Meeting stage](./15-prospective-members.md#stage-types)
+for the coordinator's side.
+
 > **⚠️ If you tried to reopen an event on 24 August 2026, check whether it is
 > actually open.** Reopening returned an error for any event **that has a
 > location** — most real events — and it did so _after_ the reopen had already

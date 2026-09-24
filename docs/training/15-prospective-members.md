@@ -89,7 +89,7 @@ Each pipeline stage has a type that determines its behavior:
 | **Election Vote**   | Vote        | Members vote on the applicant (creates election package) | No — depends on election result                |
 | **Automated Email** | Mail        | System sends email to applicant on entry                 | Yes — auto-advances immediately after send     |
 | **Form Dropdown**   | ListChecks  | Coordinator selects a form for the applicant to fill     | No — manual action required                    |
-| **Meeting**         | Calendar    | Schedule an interview, orientation, or ride-along        | Optional — when attendance is recorded         |
+| **Meeting**         | Calendar    | Schedule an interview, orientation, or ride-along        | Optional — when the event is finalized         |
 
 > **What a form submission does to a Form Submission stage.** A submission of
 > the stage's linked form completes that stage and advances the applicant.
@@ -105,37 +105,78 @@ Each pipeline stage has a type that determines its behavior:
 > and advance them to the stage after it, which pulled people _backward_: an
 > applicant at the membership vote landed back on the welcome email.
 
-> **What counts as attendance on a Meeting stage.** A meeting stage set to
-> auto-advance moves the applicant on when they are **checked in at the
-> meeting**, from the moment that meeting's **check-in window** opens. That is
-> the same window the event's organizer configured for members, so an applicant
-> who arrives a little early and signs in — 9:40 for a 10:00 meeting, under the
-> usual settings — advances just as one who signs in at 10:05 does.
+> **What counts as attendance on a Meeting stage** _(revised 2026-09-16)_. A
+> meeting stage that **names its event** — it has an **Auto-Link Event Type**,
+> or was pinned to one specific event — is an attendance requirement. Two things
+> must both be true before the applicant can leave it:
 >
-> Recording attendance ahead of that window — a coordinator adding next
-> Monday's expected guests today — records the attendance but advances nobody;
-> nor does linking the event to the applicant, which the stage does for itself
-> when they reach it. The applicant must be checked in at an event matching the
-> stage's **Auto-Link Event Type** (and category, if one is set).
+> 1. They are **checked in** at an event matching the stage's Auto-Link Event
+>    Type (and category, if one is set), and
+> 2. that event's **attendance has been finalized** — the organizer ran **End
+>    Event**, recorded an **actual end time**, or pressed **Finalize
+>    Attendance**.
 >
-> **A stage with no Auto-Link Event Type auto-advances on nothing.** The type
-> is what tells the stage which event counts, and **Meeting Type** does not
-> stand in for it — that field names the stage's purpose for whoever reads it
-> and decides nothing. A stage naming no event used to take attendance at _any_
-> event in the department, so a stage reading "Meeting with the Fire Chief"
-> advanced an applicant who signed in at a fundraiser. It now advances on none
-> of them, and the stage builder refuses to save an auto-advancing meeting
-> stage until you pick a type. Stages that self-schedule through **Cal.com**
+> A sign-in at the door is not the department's final word on who attended: a
+> guest can be signed in and struck off ten minutes later, and until the event
+> is closed out the roster is still being decided. So an applicant who signs in
+> tonight **no longer jumps to the next stage during the meeting**. They advance
+> when the organizer closes the event out, together with everyone else who was
+> there.
+>
+> **An event nobody finalizes still settles on its own.** Seven days after the
+> event ends (the `PIPELINE_ATTENDANCE_SETTLE_DAYS` setting — your
+> administrator can change it), the check-in counts as settled, and a nightly
+> task advances anyone it clears. So the longest an applicant waits on an
+> organizer who never closed the event out is about a week.
+>
+> **Attendance from before the application was opened does not count.** When
+> the kiosk sign-in at a business meeting is what _creates_ an applicant, that
+> meeting still counts — but a later "attend a business meeting" stage now needs
+> a **second** meeting. It used to be satisfied by the very sign-in that created
+> the record.
+>
+> **This now applies to your own Advance button too, not just the automatic
+> path.** On a stage that names its event, **Advance**, a drag across the board,
+> **Bulk Advance** and every automatic advance are all refused until the
+> attendance is there. The applicant drawer says so before you click:
+>
+> _"The applicant must be checked in at this stage's event, and that event's
+> attendance must be finalized, before they can advance. A check-in recorded
+> before their application was opened does not count."_
+>
+> If you are refused, the message names the way out, in the order to reach for
+> them:
+>
+> 1. **Record the attendance that happened.** Add the applicant to that event's
+>    attendees and check them in — you can do this after the fact from the event
+>    itself. If the event is already finalized, somebody holding
+>    `events.reopen_attendance` must reopen it first; re-finalizing then
+>    advances them and skips anyone already moved.
+> 2. **Un-tick Required on the stage and Skip it**, if the department has
+>    decided this applicant does not need it.
+> 3. **Clear the stage's Auto-Link Event Type**, if the stage never should have
+>    named an event.
+>
+> If the applicant is checked in but the event is simply not finalized yet, the
+> refusal says that instead and names the event — the applicant did everything
+> asked of them, and the fix is for the organizer to close the event out.
+>
+> **A stage that names no event takes your word for it.** "Meet with the
+> Chief" is an arrangement nothing records, so a stage with Auto-Link Event
+> Type set to _None_ is never graded: **Advance** moves the applicant on every
+> path, bulk included. The trade-off is that such a stage **cannot
+> auto-advance** — it has no event to watch — and the stage builder refuses to
+> save an auto-advancing meeting stage until you pick a type. **Meeting Type**
+> does not stand in for it; that field names the stage's purpose for whoever
+> reads it and decides nothing. Stages that self-schedule through **Cal.com**
 > are the exception: they advance when Cal.com reports the meeting ended, so
 > they need no linked event.
 >
-> If someone attended and it was not recorded, use **Advance** — a coordinator's
-> manual advance is not gated on the attendance record. **Bulk Advance is**,
-> though: the exemption exists for the coordinator who watched _that_ applicant
-> arrive, and ticking thirty cards is not that. A bulk advance refuses anyone on
-> a meeting stage with no recorded attendance and names them in the result, the
-> same way it already reports a refused checklist or interview stage. Advance
-> them singly if you know they were there.
+> _History, for anyone reconciling past decisions:_ before 2026-09-15 a Bulk
+> Advance walked past the attendance check; from 2026-09-15 to 09-16 only Bulk
+> Advance was held to it and a single Advance was exempt; since 2026-09-16 the
+> stage decides, not the button. Before 2026-09-16 a stage auto-advanced at the
+> moment of check-in rather than at finalize.
 
 ### Stage Configuration Options
 
@@ -149,7 +190,7 @@ Each stage can be configured with:
 | **Email Settings** (automated email stage) | Subject, sections, welcome text, FAQ link, next meeting info, status tracker link |
 | **Form ID** (form stages)                  | Which form to link                                                                |
 | **Event Type** (meeting stage)             | Interview, orientation, or ride-along                                             |
-| **Auto-Link Event Type** (meeting stage)   | Which event type the stage waits on, and which attendance can advance it          |
+| **Auto-Link Event Type** (meeting stage)   | Which event type the stage waits on. Naming one makes attendance required         |
 | **Scheduling** (meeting stage)             | _Manual_ or _Cal.com self-scheduling_ — shown only when Cal.com is connected      |
 | **Collection Method** (document stage)     | _Upload_ or _Documenso e-signature_ — shown only when Documenso is connected      |
 
@@ -698,6 +739,26 @@ The pipeline dashboard shows summary statistics:
 | **By Stage**                | Count of applicants at each pipeline stage  |
 
 ![Pipeline statistics cards across the top of the applicant board](./images/15-12-pipeline-stats.png)
+
+> **The cards now count the applicants the list is showing** _(2026-09-16)_.
+> The cards and the applicant list are two separate requests, and they used to
+> drift apart. Three things caused it, and all three are fixed:
+>
+> - **Converting, skipping, assigning a stage, advancing, moving back, holding
+>   and bulk reactivating** refreshed the list and not the cards. Converting the
+>   last two active applicants left **Total Active: 2** over an empty table with
+>   **Converted: 0** beside it, which reads as two lost applicants. Every action
+>   now refreshes both, and so does the **Refresh** button.
+> - **A search or a source-event filter** narrowed the list but not the cards,
+>   so a filter that matched nobody still showed a non-zero count. The cards now
+>   count through the same search and event filter the list uses. The **status**
+>   filter is deliberately _not_ applied to the cards — counting through it would
+>   zero the Rejected, Withdrawn and Converted figures the same cards show.
+> - **Switching pipelines quickly** could let a slow reply for the pipeline you
+>   just left overwrite the one on screen. A late reply is now discarded.
+>
+> If you ever saw the header disagree with the table before this date, the
+> table was right.
 
 ---
 

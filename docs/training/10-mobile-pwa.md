@@ -95,7 +95,7 @@ Once installed, The Logbook runs in **standalone** mode:
 - **No browser toolbar** — the app uses the full screen, with the status bar showing your department's theme color (dark red by default)
 - **Own task/window** — it appears as a separate app in your task switcher, not as a browser tab
 - **Persistent login** — your session persists between app launches (subject to your department's session timeout policy)
-- **App icon** — the Logbook icon (or your department's logo) appears on your home screen
+- **App icon** — your **department's own logo** _(2026-09-17)_, if one is uploaded under Settings → Organization → Profile; otherwise the Logbook icon. See [Your department's logo as the app icon](#your-departments-logo-as-the-app-icon-2026-09-17)
 - **PWA shortcuts** — long-press the app icon to see quick shortcuts to Dashboard, Events, and Scheduling (supported on Android and some desktop platforms)
 - **Bottom tab bar** _(2026-08-07)_ — on phones, four destinations plus **More**
   sit within thumb reach at the bottom of the screen. See
@@ -107,6 +107,36 @@ Once installed, The Logbook runs in **standalone** mode:
 - **A proper launch screen on iOS** _(2026-08-07)_ — iOS does not derive one from
   the app manifest, so the installed app used to flash blank white on every cold
   start. Launch images now cover iPhone SE through 16 Pro Max and the iPad sizes.
+
+### Your department's logo as the app icon _(2026-09-17)_
+
+When a member installs The Logbook — **Add to Home Screen** on an iPhone,
+**Install** on Android or in Chrome/Edge on a desktop — the icon they get is
+**your department's logo**, and on an iPhone the launch screen shown while the
+app starts carries it too. The server draws the logo into every size and shape
+the phone asks for; there is nothing to configure beyond uploading the logo.
+
+Four things worth knowing:
+
+- **Anyone who installed before keeps the old icon.** A phone reads the icon
+  once, at install, and never looks again. To get the logo, remove the app from
+  the home screen and add it again. The same applies after you **change** the
+  logo.
+- **No logo uploaded means the stock Logbook icon**, exactly as before.
+- **A logo set as a link to an image elsewhere is not used** — only an
+  uploaded image is. The settings screen and onboarding both upload, so this
+  only affects a logo someone put in by other means.
+- **On Android the logo can look smaller than you expect.** Android trims the
+  icon to a circle, squircle or rounded square of the phone maker's choosing,
+  so the logo is fitted inside the area every one of those shapes keeps, on a
+  solid background. That is deliberate — fitting it larger would cut the
+  corners off a crest on some phones.
+
+> **Screenshot needed:**
+> _[A phone home screen (iPhone or Android) with the installed Logbook app
+> showing the **demo department's logo** as its icon, next to a couple of
+> ordinary apps for scale. Use the seeded demo department's logo, not a real
+> department's.]_
 
 ### Getting Around on a Phone _(2026-08-07)_
 

@@ -314,6 +314,15 @@ Approve button refusing]**
 
 **[SCREEN: Show the form builder briefly — adding fields, setting types]**
 
+**[SCREEN: A field "Previous EMT experience" set to Required, with conditional
+visibility "show when Membership Type equals EMT".]**
+
+> "Conditional questions are safe to make required now. A question that only
+> shows for some answers is only required while it's showing — before September
+> 2026, an applicant who picked a different answer couldn't submit the form at
+> all. And if somebody fills a question in and then changes the answer that
+> shows it, the hidden answer is thrown away instead of saved."
+
 > "You can review all submissions, export responses as CSV, and analyze results."
 
 **[SCREEN: Show the Review Submissions page (ReviewSubmissionsPage) briefly]**

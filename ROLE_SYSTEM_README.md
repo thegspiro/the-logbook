@@ -166,6 +166,7 @@ The following roles are automatically created for each organization:
 14. **Communications Officer** (Priority: 55)
     - Website, social media, newsletters, and notification management
     - Can create and manage events
+    - Can set up suggestion boxes (`suggestions.manage`, 2026-09-23) — but not read them unless named a reviewer
     - View access to members and organization info
     - Cannot be deleted
 
@@ -246,6 +247,7 @@ Each module has view and manage permissions:
 **Communication Modules:**
 
 - Notifications (`notifications.view`, `notifications.manage`)
+- Suggestions (`suggestions.manage`) _(2026-09-23)_ — creates and configures suggestion boxes and chooses their reviewers. **Deliberately reads nothing**: only a box's own reviewers read its submissions, which is decided per box rather than by a permission. Seeded on the three chief ranks, President and Communications Officer
 - Mobile (`mobile.view`, `mobile.manage`)
 
 **Advanced Modules:**

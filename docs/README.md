@@ -12,8 +12,24 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 
 ### 🔄 Recent-change handoff
 
+**[Change audit — 2026-09-15 through 2026-09-23](./CHANGE_AUDIT_2026-09-15_TO_09-23.md)**
+is the current release handoff. 40 pull requests and four migrations (head
+`5a70c5dcd138`): **suggestion boxes** with structural anonymity, meeting stages
+that advance on **finalized** attendance and bind a coordinator's own Advance,
+inventory **label tracking** with print-by-filter, server-side conditional
+form visibility, and the department's logo as the installed app's icon. It
+carries the Alembic route, the permission grant, and the screenshot / YouTube
+disposition. Operator lesson:
+[`training/20-september-2026-release-changes.md`](./training/20-september-2026-release-changes.md).
+
+Earlier windows since the entry below:
+[September 12–15](./CHANGE_AUDIT_2026-09-12_TO_09-15.md),
+[September 6–12](./CHANGE_AUDIT_2026-09-06_TO_09-12.md),
+[August 31 – September 6](./CHANGE_AUDIT_2026-08-31_TO_09-06.md) and
+[August 24–31](./CHANGE_AUDIT_2026-08-24_TO_31.md).
+
 **[Change audit — 2026-08-23 through 2026-08-24](./CHANGE_AUDIT_2026-08-23_TO_24.md)**
-is the current release handoff. 46 pull requests and twelve migrations in
+was the release handoff for its window. 46 pull requests and twelve migrations in
 nineteen hours: a scheduling board that claims a seat in one tap plus standing
 (recurring) shifts, NFC ID cards and an unattended check-in station, network
 label printers the server prints to directly, one shared frame across four

@@ -23,12 +23,13 @@ The Documents module provides centralized file storage for SOPs, policies, and s
 
 8. [Notification Rules & Logs](#notification-rules--logs)
 9. [Department Messages](#department-messages)
-10. [External Integrations](#external-integrations)
+10. [Suggestion Boxes](#suggestion-boxes-2026-09-23)
+11. [External Integrations](#external-integrations)
 
 ### Worked Examples
 
-11. [Realistic Example: Building a Vehicle Pre-Trip Inspection Form](#realistic-example-building-a-vehicle-pre-trip-inspection-form)
-12. [Troubleshooting](#troubleshooting)
+12. [Realistic Example: Building a Vehicle Pre-Trip Inspection Form](#realistic-example-building-a-vehicle-pre-trip-inspection-form)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -152,6 +153,29 @@ For each field, configure:
 - Validation rules (min/max, pattern)
 - Default value
 - Conditional visibility (show/hide based on other field values)
+
+> **A hidden question is really hidden now** _(2026-09-23)_. Conditional
+> visibility used to be a screen-only effect, and the server did not know about
+> it. Two things went wrong because of that, and both are fixed:
+>
+> - **A required question the submitter could not see blocked the form.** Make
+>   "Previous EMT experience" required and show it only when Membership Type is
+>   EMT, and an applicant who chose Administrative could never submit — the
+>   server demanded an answer to a question the form had hidden from them, and
+>   they saw an **LB-API-400** error saying the field was missing. A required
+>   question is now only required **while it is showing**.
+> - **An answer typed into a question that was later hidden was still saved.**
+>   Somebody who picked EMT, filled in their EMT experience, then switched to
+>   Administrative still sent the EMT answer, and it was stored against their
+>   submission. Answers to hidden questions are now discarded when the form is
+>   submitted.
+>
+> Both rules apply to internal and public forms alike. **Submissions saved
+> before this date may still hold such answers**; your administrator can clear
+> them with a one-off script (see the
+> [upgrade note](../UPGRADING.md)). Records other features already built from
+> those submissions — a prospective member created from an interest form, for
+> example — keep whatever they copied at the time.
 
 ### Form Builder Features
 
@@ -470,6 +494,161 @@ in-app notification is always delivered regardless of these settings.
 
 ---
 
+## Suggestion Boxes _(2026-09-23)_
+
+A department can run any number of **suggestion boxes** — "Training ideas",
+"Station 2 facilities", a complaints box — each with its own reviewers and its
+own rules about anonymity. Members submit from one place, reviewers work each
+box's submissions, and an anonymous submitter can still hold a conversation
+with the reviewers without ever being identified.
+
+| Who                       | Where                                                                                      | Needs                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Every member              | **Suggestions** in the sidebar (after **Messages**) — `/suggestions`                       | Signed in                                                       |
+| A box's reviewers         | The **Review** tab on the same page — it appears only for reviewers                        | Being named as a reviewer of a box, or forwarded one suggestion |
+| Whoever sets the boxes up | **Administration → Forms & Comms → Suggestion Boxes** — `/communications/suggestion-boxes` | `suggestions.manage`                                            |
+
+**Setting up boxes and reading them are deliberately separate.**
+`suggestions.manage` lets you create boxes and choose their reviewers. It does
+**not** let you read what anybody submitted — only a box's own reviewers can.
+That is what makes a complaints box possible in a department whose
+administrators might be what somebody is complaining about. It ships on the
+Fire Chief, Deputy Chief, Assistant Chief, President and Communications Officer
+positions.
+
+### Setting up a box
+
+**Required Permission:** `suggestions.manage`
+
+1. Go to **Administration → Forms & Comms → Suggestion Boxes** and press **New
+   box**.
+2. Give it a **Name** (unique in your department) and a **Description (shown to
+   members)** — say what the box is for and who reads it.
+3. Choose its **Anonymity**:
+   - **Submitter chooses** — the member ticks **Submit anonymously** or not.
+   - **Always anonymous** — no submission to this box ever records who sent it.
+   - **Always named** — every submission carries the member's name.
+4. Tick **Allow follow-up** if reviewers and submitters should be able to
+   exchange replies and the submitter should see the outcome. Leave it off for a
+   one-way box: reviewers read every submission but do not reply or report a
+   status.
+5. Pick the reviewers: any mix of **Reviewer positions** (whoever holds that
+   position) and **Reviewer members**. An active box needs at least one.
+6. Leave **Accepting submissions** ticked, and **Save box**.
+
+Boxes are never deleted — untick **Accepting submissions** to close one. Its
+existing submissions stay readable by its reviewers.
+
+> **Screenshot needed:**
+> _[The **New suggestion box** dialog filled in for a "Training ideas" box:
+> Name, Description, Anonymity set to **Submitter chooses**, **Allow follow-up**
+> ticked, two reviewer positions ticked, and the note "Managing boxes does not
+> by itself let you read them." visible above the reviewer pickers.]_
+
+### Submitting a suggestion (every member)
+
+1. Open **Suggestions** from the sidebar. The **Submit** tab is first.
+2. Pick the **Suggestion box**. Its description appears underneath, along with
+   whether your name will be recorded and whether reviewers will reply.
+3. Enter a **Title** and the **Details**, and optionally attach up to **five
+   screenshots** (PNG, JPEG, WebP or GIF, 10 MB each).
+4. If the box lets you choose, tick **Submit anonymously**.
+5. Press **Submit** (or **Submit anonymously**).
+
+Named submissions appear under **My submissions**, where you can follow the
+status and reply if the box allows follow-up.
+
+> **Screenshot needed:**
+> _[Suggestions → **Submit** tab with a box chosen, its description and the
+> "You can submit with your name or anonymously." hint visible, Title and
+> Details filled in, one screenshot attached, and **Submit anonymously**
+> ticked — showing the warning about checking screenshots for your name.]_
+
+### What "anonymous" means here
+
+It is built into what is stored, not just hidden on screen:
+
+- **No name is stored.** The submission has no author, and nothing is written
+  to the audit log about who sent it. **Reviewers cannot find out, and neither
+  can an administrator.**
+- **Times are kept to the day only**, so "submitted at 23:47, when only one
+  person was on shift" cannot be worked out from the record.
+- **Screenshots are re-encoded**, which strips location, device and other
+  hidden image data, and their filenames are discarded. What is _visible_ in a
+  screenshot is not changed — **if your name is on the screen you captured, it
+  is in the screenshot.** The form reminds you of this.
+
+**Following up anonymously uses a key.** In a follow-up box, an anonymous
+submission gives you a **follow-up key**, once:
+
+> **Save your follow-up key.** Your submission was sent anonymously. This key is
+> the only way to see replies and respond. It is shown once and cannot be
+> recovered — nobody, including the reviewers, can look it up for you.
+
+Press **Copy**, keep it somewhere private, then **I saved it**. Later, open
+**Follow up with a key**, paste it and press **Open submission** to see the
+status and any replies and to answer them — still without your name attached.
+**A lost key cannot be replaced**; the submission survives, but nobody can
+reconnect you to it.
+
+> **Screenshot needed:**
+> _[The receipt shown after an anonymous submission to a follow-up box — the
+> **Save your follow-up key** panel with the key, the **Copy** and **I saved
+> it** buttons. Use a demo key; never a real one.]_
+
+> **What anonymity does not cover.** Somebody with access to the **server
+> itself** — its logs and mail records — could line up the time a submission
+> arrived with who was signed in then. The application does not expose this to
+> anyone using it, but it is not a guarantee against the people who run the
+> server. The full list is in
+> [Known Limitations](../KNOWN_LIMITATIONS.md). If that matters for what you
+> want to report, say so to your department's leadership through another route.
+
+### Reviewing submissions
+
+Reviewers see a **Review** tab on the Suggestions page, with a count of open
+items. Filter by **Box** and by **Status** — the default, **Open**, means New or
+Under review.
+
+Open a submission to:
+
+- set its **Disposition** — **New**, **Under review**, **Accepted**,
+  **Implemented**, **Declined** or **Duplicate**. In a follow-up box, a named
+  submitter is emailed when it changes;
+- keep an **Internal note (reviewers only)** — never shown to the submitter;
+- reply in the **Follow-up** thread, if the box allows follow-up. An anonymous
+  author appears as **Anonymous submitter**.
+
+Reviewers are emailed when a submission or a submitter's reply arrives. **The
+email carries a link, never the submission's content.**
+
+**Forwarding one suggestion to somebody else.** A box's reviewer can press
+**Forward** and choose members and/or positions. They can read **that
+suggestion only** — its screenshots and thread — set its disposition, keep the
+note and reply, but they see nothing else in the box and cannot forward it on.
+They are emailed a link, and see a **Forwarded to you** badge. Reviewers see who
+it was forwarded to and can **Withdraw** a forward. An anonymous submitter stays
+anonymous when forwarded. Forwards and withdrawals are audit-logged.
+
+> **Screenshot needed:**
+> _[Suggestions → **Review** tab with one submission open: the Disposition
+> dropdown set to **Under review**, the Internal note field, the Follow-up
+> thread with an "Anonymous submitter" message and a reviewer reply, and the
+> **Forwarded to** list showing one position.]_
+
+### Edge cases
+
+| Scenario                                                      | Behavior                                                                                                 |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| You hold `suggestions.manage` but are not a reviewer          | You configure boxes and see no **Review** tab. That is by design                                         |
+| A reviewer position changes hands                             | Reviewing follows the position: the new holder reviews, the previous one no longer does                  |
+| An anonymous submission made before follow-up was switched on | It has no key, so its author cannot read replies. Reviewers are told so on the submission                |
+| Follow-up is off                                              | Submitters see no status and no replies; reviewers can still set a disposition and a note for themselves |
+| Communications module switched off                            | Suggestion boxes still work — they are deliberately not tied to that module switch                       |
+| More than five screenshots, or a file that is not an image    | Refused with a message naming the limit                                                                  |
+
+---
+
 ## External Integrations
 
 Navigate to **Integrations** in the sidebar to configure connections with external services.
@@ -650,27 +829,28 @@ She clicks **Export CSV** to download the data for the monthly operations report
 
 ## Troubleshooting
 
-| Issue                                                | Solution                                                                                                                                                                                                                                                 |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cannot upload a document                             | Check file size limits (configured by your department). Verify you have permission to upload to the selected folder.                                                                                                                                     |
-| Form not accepting submissions                       | Ensure the form status is **Active**. Draft forms cannot receive submissions.                                                                                                                                                                            |
-| Public form URL not working                          | Verify that Public Access is enabled on the form. The form must be in Active status. Ensure the URL uses the correct format: `/f/{slug}`.                                                                                                                |
-| Form builder drag-and-drop not working               | The builder uses `@dnd-kit` for reordering. Clear browser cache and reload. If the issue persists, run `cd frontend && npm install` to ensure dependencies are installed.                                                                                |
-| Public form shows 404 error                          | Fixed in March 2026 — a doubled `/v1` in the API URL path has been corrected. Pull latest code and rebuild.                                                                                                                                              |
-| Forms page not visible in navigation                 | The Forms page now requires `forms.view` permission (changed from `settings.manage` in March 2026). Ask your administrator to grant `forms.view` to your role.                                                                                           |
-| Integration reprocessing fails                       | Check that the target module (Membership or Inventory) is enabled and the field mapping is correct. Review the error details on the failed submission.                                                                                                   |
-| Not receiving email notifications                    | Check your notification preferences in My Account > Notifications. Verify your email address is correct. Check your spam folder. If using Cloudflare Email Service, verify the API token is valid in Administration > Organization Settings > Email tab. |
-| Slack integration not posting                        | Verify the webhook URL is correct and the Slack channel exists. Check the integration logs for errors.                                                                                                                                                   |
-| Calendar events not syncing                          | Ensure the calendar integration is connected. Some calendar apps cache iCal feeds and may take up to 24 hours to refresh.                                                                                                                                |
-| Form submissions not appearing in pipeline           | Fixed in March 2026 — multiple field mapping issues resolved. Pull latest backend code. Check backend logs for "Field mapping" warnings if issues persist.                                                                                               |
-| Cannot delete a form linked to a pipeline            | As of 2026-03-04, forms linked to active pipelines are protected from deletion. Remove the pipeline integration first (Pipeline Settings → edit stage → remove form link), then delete the form.                                                         |
-| Reprocessing submission doesn't update prospect      | Fixed in March 2026 — reprocessing now re-evaluates pipeline stage assignment. Pull latest backend code.                                                                                                                                                 |
-| Duplicate prospect not detected on form submission   | As of 2026-03-04, duplicate detection by email is active. The pipeline coordinator receives a notification with a link to the existing prospect.                                                                                                         |
-| Form field compatibility warning on save             | This is a new validation (2026-03-04) that checks if form fields match expected pipeline field mappings. Review the warning and update field names to match.                                                                                             |
-| Modal dialog buttons unresponsive (delete, confirm)  | Fixed in March 2026 — backdrop overlay no longer intercepts button clicks. Pull latest and rebuild.                                                                                                                                                      |
-| Form submission does not auto-advance prospect       | As of 2026-03-14, auto-advance must be explicitly enabled in the pipeline stage configuration. Open Pipeline Settings, edit the form_submission stage, and check "Auto-advance when form is submitted".                                                  |
-| Automated pipeline email not sent on form submission | The email is triggered when advancing to an `automated_email` stage, not when submitting a form. Verify the pipeline has an `automated_email` stage after the `form_submission` stage and that SMTP is configured. _(added 2026-03-14)_                  |
-| Public form submission by bot                        | The system uses a hidden honeypot field for bot detection. If filled, the submission returns HTTP 200 with no body (fake success) — no record is created. Legitimate users never see this field.                                                         |
+| Issue                                                          | Solution                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cannot upload a document                                       | Check file size limits (configured by your department). Verify you have permission to upload to the selected folder.                                                                                                                                                             |
+| Form not accepting submissions                                 | Ensure the form status is **Active**. Draft forms cannot receive submissions.                                                                                                                                                                                                    |
+| Public form URL not working                                    | Verify that Public Access is enabled on the form. The form must be in Active status. Ensure the URL uses the correct format: `/f/{slug}`.                                                                                                                                        |
+| Form builder drag-and-drop not working                         | The builder uses `@dnd-kit` for reordering. Clear browser cache and reload. If the issue persists, run `cd frontend && npm install` to ensure dependencies are installed.                                                                                                        |
+| Public form shows 404 error                                    | Fixed in March 2026 — a doubled `/v1` in the API URL path has been corrected. Pull latest code and rebuild.                                                                                                                                                                      |
+| Forms page not visible in navigation                           | The Forms page now requires `forms.view` permission (changed from `settings.manage` in March 2026). Ask your administrator to grant `forms.view` to your role.                                                                                                                   |
+| Integration reprocessing fails                                 | Check that the target module (Membership or Inventory) is enabled and the field mapping is correct. Review the error details on the failed submission.                                                                                                                           |
+| Not receiving email notifications                              | Check your notification preferences in My Account > Notifications. Verify your email address is correct. Check your spam folder. If using Cloudflare Email Service, verify the API token is valid in Administration > Organization Settings > Email tab.                         |
+| Slack integration not posting                                  | Verify the webhook URL is correct and the Slack channel exists. Check the integration logs for errors.                                                                                                                                                                           |
+| Calendar events not syncing                                    | Ensure the calendar integration is connected. Some calendar apps cache iCal feeds and may take up to 24 hours to refresh.                                                                                                                                                        |
+| Form submissions not appearing in pipeline                     | Fixed in March 2026 — multiple field mapping issues resolved. Pull latest backend code. Check backend logs for "Field mapping" warnings if issues persist.                                                                                                                       |
+| Cannot delete a form linked to a pipeline                      | As of 2026-03-04, forms linked to active pipelines are protected from deletion. Remove the pipeline integration first (Pipeline Settings → edit stage → remove form link), then delete the form.                                                                                 |
+| Reprocessing submission doesn't update prospect                | Fixed in March 2026 — reprocessing now re-evaluates pipeline stage assignment. Pull latest backend code.                                                                                                                                                                         |
+| Duplicate prospect not detected on form submission             | As of 2026-03-04, duplicate detection by email is active. The pipeline coordinator receives a notification with a link to the existing prospect.                                                                                                                                 |
+| Form field compatibility warning on save                       | This is a new validation (2026-03-04) that checks if form fields match expected pipeline field mappings. Review the warning and update field names to match.                                                                                                                     |
+| Modal dialog buttons unresponsive (delete, confirm)            | Fixed in March 2026 — backdrop overlay no longer intercepts button clicks. Pull latest and rebuild.                                                                                                                                                                              |
+| Form submission does not auto-advance prospect                 | As of 2026-03-14, auto-advance must be explicitly enabled in the pipeline stage configuration. Open Pipeline Settings, edit the form_submission stage, and check "Auto-advance when form is submitted".                                                                          |
+| Automated pipeline email not sent on form submission           | The email is triggered when advancing to an `automated_email` stage, not when submitting a form. Verify the pipeline has an `automated_email` stage after the `form_submission` stage and that SMTP is configured. _(added 2026-03-14)_                                          |
+| "Required field '…' is missing" on a question nobody could see | Fixed 2026-09-23. A required question hidden by its conditional-visibility rule is no longer enforced. If it still happens, check the rule: an operator the server does not recognise counts as **visible**, so the field stays required rather than silently becoming optional. |
+| Public form submission by bot                                  | The system uses a hidden honeypot field for bot detection. If filled, the submission returns HTTP 200 with no body (fake success) — no record is created. Legitimate users never see this field.                                                                                 |
 
 ---
 

@@ -151,14 +151,14 @@ The Logbook is an open-source modular intranet platform for fire departments and
 
 ### Frontend (`/frontend`)
 
-- **Bundler:** Vite 7.3
-- **Framework:** React 19.2 (SPA, not Next.js or React Native)
+- **Bundler:** Vite 8.3
+- **Framework:** React 19.3 (SPA, not Next.js or React Native)
 - **Language:** TypeScript 5.9 (strict mode — see below)
-- **Routing:** react-router 8.3 (core package; react-router-dom was retired with v7)
+- **Routing:** react-router 8.4 (core package; react-router-dom was retired with v7)
 - **State management:** Zustand 5.0
-- **Forms:** react-hook-form 7.71 + Zod 4.3 validation
+- **Forms:** react-hook-form 7.88 + Zod 4.6 validation
 - **Styling:** Tailwind CSS 4.2 (with `tailwind-merge`, dark mode via `class` strategy)
-- **HTTP client:** Axios 1.13
+- **HTTP client:** Axios 1.20
 - **Auth (client):** httpOnly cookies (managed by backend); no client-side JWT handling
 - **Icons:** lucide-react
 - **PWA:** vite-plugin-pwa
@@ -322,7 +322,7 @@ Consequences worth knowing:
 
 ### Frontend (Vitest + Testing Library)
 
-- **Runner:** Vitest 4.0 with jsdom environment
+- **Runner:** Vitest 5.0 with jsdom environment (jsdom held at 30.0.1 — see "jsdom held at 30.0.1" in `docs/KNOWN_LIMITATIONS.md`)
 - **Libraries:** @testing-library/react, @testing-library/jest-dom, @testing-library/user-event
 - **E2E:** Playwright
 - **Coverage:** @vitest/coverage-v8. Thresholds are a **ratchet floor** set a couple of points under current measured coverage (see `frontend/vitest.config.ts`) — they block regressions rather than demanding an aspirational number. Raise them as coverage grows; don't lower them

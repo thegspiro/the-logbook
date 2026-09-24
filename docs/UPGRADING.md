@@ -143,6 +143,113 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Every inventory item starts out "Needs a label" (2026-09-23)
+
+Inventory items now record when their barcode label was printed. Migration
+`5a70c5dcd138` adds two nullable columns to `inventory_items`
+(`label_printed_at`, `label_printed_by`) and an index; it is additive and
+reverses cleanly, losing only the print history.
+
+**There is no backfill**, because nothing recorded which items were labelled
+before. So on the first load after upgrading, **every item reads "Needs a
+label"** on its detail page and matches the items list's new **Needs a Label**
+filter. Nothing is wrong with your data; the department simply has no history
+yet.
+
+**If your stock is already labelled** and you want the filter to mean
+something from day one, catch the records up without printing: filter the
+items list to **Needs a Label**, tick one row, choose **Select all N
+matching** (up to 500 at a time), press **Print Labels**, **cancel** the
+browser's print dialog, and answer **Mark N items as labelled**. Repeat per
+category or storage room. Only confirm for items whose labels really are on
+the gear — that answer is the whole record.
+
+After that, a mark clears itself whenever the value the label encodes changes
+(barcode, else asset tag, else serial number), so an item whose barcode is
+edited goes back to needing a label. Details in
+[`training/05-inventory.md`](./training/05-inventory.md#knowing-which-items-still-need-a-label-2026-09-23).
+
+### Suggestion boxes, and a new permission on five seeded positions (2026-09-23)
+
+A new **Suggestions** item appears in every member's sidebar, and a
+**Suggestion Boxes** screen under **Administration → Forms & Comms**. Nothing
+is live until someone creates a box: with none, the page tells members "No suggestion boxes yet — Your department has not opened any suggestion boxes."
+
+**Three migrations** (`80e2004cd691`, `394600cbfae2`, `9cb132ad83dc`). Two add
+tables. The middle one **adds a grant**: `suggestions.manage` is written onto
+the system **Fire Chief, Deputy Chief, Assistant Chief, President** and
+**Communications Officer** positions, where absent. It only touches seeded
+(`is_system`) positions — a position your department created is left alone —
+and it is safe to run unconditionally because the permission did not exist
+before, so no department can have removed it on purpose.
+
+**What that grant does and does not do.** It lets the holder create boxes and
+choose their reviewers. **It does not let them read any submission** — only
+the reviewers named on a box can. That is deliberate: it is what lets a
+department run a complaints box that its own administrators cannot open. It
+also makes the **Administration** section visible to anyone holding it, which
+for these five positions changes nothing.
+
+**Suggestion boxes are not tied to the Communications module switch**, which
+ships off. A department that has never enabled Communications still gets the
+sidebar item; that is intended, since gating it on a switch nobody turns on
+would hide it everywhere.
+
+**Downgrade warning.** Reversing `80e2004cd691` drops the tables and with them
+**every suggestion, attachment record and reply**; uploaded screenshots are left
+on disk under `uploads/suggestions`. Reversing `394600cbfae2` removes the grant
+from the same five seeded positions, including one your department added by
+hand after upgrading — nothing distinguishes the two. Back up first if you might
+roll back.
+
+**Anonymity has limits worth telling members about.** An anonymous submission
+stores no author and no exact time, but whoever administers the **server** could
+correlate its arrival with access logs and mail records. The application does
+not expose that to any user. See
+[`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md) before promising anonymity to
+anyone on a department's behalf.
+
+### A form no longer demands, or keeps, answers to hidden questions (2026-09-23)
+
+Form fields with **conditional visibility** — "Previous EMT experience", shown
+only when Membership Type is EMT — were hidden on screen but not on the
+server. Two consequences, both fixed:
+
+- **A required question the submitter could not see made the form impossible
+  to submit.** The applicant who chose Administrative was refused with an
+  **LB-API-400** "Required field … is missing" for a question they were never
+  shown. If applicants have been reporting that they cannot submit an interest
+  or application form, this is the likely cause, and nothing needs changing on
+  the form itself.
+- **An answer typed into a question that was later hidden was stored.** It is
+  now discarded at submission.
+
+**Older submissions may still hold hidden answers.** A one-off script clears
+them, and it is careful about it: it only removes an answer whose rule — applied
+to that submission's own answers — hid it, **and** only when neither the
+question nor the question controlling it has been edited since the submission
+came in (no history of rule changes is kept, so anything newer is listed for a
+person instead). It is a dry run by default:
+
+```bash
+# See what it would remove — writes nothing:
+docker exec -it intranet-backend python scripts/clear_hidden_form_answers.py
+
+# Remove (the backup file is required and must not already exist):
+docker exec -it intranet-backend python scripts/clear_hidden_form_answers.py \
+    --apply --backup-file /tmp/hidden-answers-backup.json
+
+# Undo:
+docker exec -it intranet-backend python scripts/clear_hidden_form_answers.py \
+    --restore /tmp/hidden-answers-backup.json
+```
+
+The backup holds applicants' answers; it is written readable by its owner only.
+Delete it once you no longer need the undo. Running the script is optional — the
+stale answers do no harm beyond sitting in the record — and it does not touch
+records other features already built from those submissions. Full options in
+[`backend/scripts/README.md`](../backend/scripts/README.md#clear_hidden_form_answerspy).
+
 ### The installed app now carries the department's own logo (2026-09-17)
 
 A member who installs The Logbook from their browser — "Add to Home Screen" on

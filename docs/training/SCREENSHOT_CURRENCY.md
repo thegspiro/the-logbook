@@ -1,5 +1,56 @@
 # Screenshot currency
 
+## Disposition for September 15-23, 2026 - two new screens, and a new line on three old ones
+
+Audit: [`CHANGE_AUDIT_2026-09-15_TO_09-23.md`](../CHANGE_AUDIT_2026-09-15_TO_09-23.md).
+
+**Two screens are new** — **Suggestions** (`/suggestions`) and **Suggestion
+Box Management** (`/communications/suggestion-boxes`) — and the inventory label
+page gained a picker and a post-print prompt. Everything else is an existing
+address carrying one more control or one more line.
+
+**Eleven placeholders were written into the guides** by this pass:
+
+| #  | Image area                                                    | Disposition | Guide                                   | Notes                                                                                                              |
+| -- | ------------------------------------------------------------- | ----------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 1  | Sidebar with **Suggestions** + Suggestions **Submit** tab       | **NEW**     | 20 (release)                            | Capture as an ordinary member so the **Review** tab is absent                                                     |
+| 2  | **New suggestion box** dialog, filled in                      | **NEW**     | 07 (documents & forms)                  | The "Managing boxes does not by itself let you read them." note must be in frame — it is the point                 |
+| 3  | Suggestions → **Submit** with **Submit anonymously** ticked    | **NEW**     | 07                                      | The screenshot-content warning must be visible                                                                    |
+| 4  | **Save your follow-up key** receipt                           | **NEW**     | 07                                      | **Demo key only.** A real key is a credential. Shown once, so capture immediately after the demo submission       |
+| 5  | Suggestions → **Review**, one submission open                 | **NEW**     | 07                                      | Needs a reviewer account; seed an anonymous follow-up message and a reviewer reply first                           |
+| 6  | Items list: **Needs a Label** + **All N matching selected**    | **NEW**     | 05 (inventory)                          | N must be ≤ 500 or the select-all link is replaced by a message                                                   |
+| 7  | Label page **Print barcode labels** picker                    | **NEW**     | 05                                      | Open `/inventory/print-labels` with no query string                                                               |
+| 8  | "Did the labels print correctly?" prompt                      | **NEW**     | 05                                      | Appears the moment the print dialog opens; cancel the dialog and capture. **Do not press Mark** in a shared seed   |
+| 9  | Phone home screen with the department-logo icon               | **NEW**     | 10 (mobile)                             | Needs a real device or emulator install; the seeded demo logo only. The harness cannot produce this               |
+| 10 | Medical Screening **Add Record** with the amber notice        | **NEW**     | 13 (medical screening)                  | Create dialog only — the Edit dialog deliberately has no notice                                                   |
+| 11 | Applicant drawer on an event-naming **Meeting** stage          | **NEW**     | 20                                      | The requirement hint above the action row; a second frame with the Advance refusal is optional                    |
+
+**Existing images this window makes stale — REPLACE, no placeholder written.**
+None of these is wrong about anything a reader would act on; each is missing one
+new element. Schedule them after the NEW items.
+
+| Image                                                                  | Guide | Why                                                                                                                  | Priority      |
+| ---------------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `00-15-sidebar-member.png`                                             | 00    | No **Suggestions** item under Messages                                                                               | **Structural** — it is the image that teaches the sidebar |
+| `00-16-sidebar-admin.png`                                              | 00    | Administration → Forms & Comms has no **Suggestion Boxes** link                                                      | Structural    |
+| `05-47-items-filter-bar.png`                                           | 05    | The filter bar gained the label-status dropdown (**Any Label Status / Needs a Label / Label Printed**)                | Structural — its subject is the filter bar |
+| `05-01-inventory-items.png`, `05-02-items-pinned.png`, `05-03-items-grouped.png` | 05 | Same filter bar, incidentally                                                                                         | Cosmetic      |
+| `05-06-item-detail.png`, `05-56-item-barcode-value.png`, `05-61-item-barcode-fields.png`, `05-67-empty-asset-tag.png` | 05 | **Basic Info** gained a **Label Printed** line (date, or **Needs a label**) beneath Asset Tag              | Cosmetic      |
+| `10-16-mobile-item-detail.png`                                         | 10    | Same new Basic Info line                                                                                            | Cosmetic      |
+| `15-14-applicant-drawer-overview.png`, `15-05-applicant-actions.png`    | 15    | **Check, do not assume.** If the pictured applicant is on a meeting stage that names an event, the drawer now shows the requirement hint | Check         |
+| Stage builder → **Meeting** config (queued 09-15, no image yet)         | 15    | The checkbox is now **"Auto-advance when the event's attendance is finalized"**, and the Auto-Link Event Type help text says naming an event makes attendance required. Shoot the **current** labels when this is taken | Carried       |
+
+**No shot needed** for: the pipeline stat-card fix (a wrong number corrected,
+not a new layout — `15-12-pipeline-stats.png` stays), hidden form answers (the
+fix is the _absence_ of an error), and the dependency bumps.
+
+**Seed gaps to know before shooting.** The seeded department has **no
+suggestion boxes**, so items 1–5 need boxes, a reviewer assignment and at least
+one anonymous follow-up submission created first; and **every seeded inventory
+item reads "Needs a label"**, which is correct for item 6 but means the
+**Label Printed** state on the detail page needs one item confirmed by hand.
+Do that on a throwaway item, not one another shot depends on.
+
 ## Disposition for September 12-15, 2026 - the screens stayed put, their contents did not
 
 Audit: [`CHANGE_AUDIT_2026-09-12_TO_09-15.md`](../CHANGE_AUDIT_2026-09-12_TO_09-15.md).
