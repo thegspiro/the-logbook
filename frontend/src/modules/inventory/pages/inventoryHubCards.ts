@@ -466,6 +466,17 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
     requiresModule: 'inventory',
   },
   {
+    id: 'nfc-put-away',
+    label: 'Put Away by NFC',
+    description: 'Tap a shelf and the items on it to record where they are',
+    path: '/inventory/put-away',
+    icon: Nfc,
+    section: 'Setup & Tools',
+    tone: 'indigo',
+    permission: 'inventory.manage',
+    requiresModule: 'inventory',
+  },
+  {
     // The settings grant, like the route: the switch is written through the
     // organization-settings endpoint, which inventory.manage cannot reach.
     id: 'nfc-settings',

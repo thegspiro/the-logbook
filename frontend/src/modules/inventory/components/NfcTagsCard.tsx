@@ -1,14 +1,15 @@
 /**
- * The NFC tags stuck to one item: link a new one, mark one lost or found,
- * unlink one.
+ * The NFC tags stuck to one item or one storage area (a shelf, bin or
+ * cabinet): link a new one, mark one lost or found, unlink one.
  *
  * Two ways to link a tag from a phone, matching member ID cards
  * (`NfcCardCapture`):
  *
  * **Write a link** onto a blank tag. The preferred option: the tag then holds
  * a URL, so *any* phone that taps it — an iPhone included, with no app open —
- * lands on this item. The code in the URL is minted here and linked only once
- * the write has succeeded.
+ * lands on this item (for a shelf: on put-away, with the shelf chosen). The
+ * code in the URL is minted here and linked only once the write has
+ * succeeded.
  *
  * **Read the tag's serial**, for a tag that cannot be written (a locked or
  * pre-printed one). Only Android Chrome can then use it, from inside the app.
@@ -16,9 +17,9 @@
  * A typed field sits beside both, because a quartermaster at a desk with a USB
  * reader types the serial straight into it, and a desktop has no Web NFC.
  *
- * Rendered by the item page only for `inventory.manage` holders, and only when
- * the organization has NFC tracking switched on; the server refuses every
- * call here otherwise.
+ * Rendered by the item page and the storage area editor only for
+ * `inventory.manage` holders, and only when the organization has NFC tracking
+ * switched on; the server refuses every call here otherwise.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -33,12 +34,18 @@ import { InventoryNfcTagStatus, NfcCredentialType } from '../../../constants/enu
 import { buildInventoryTagUrl, generateInventoryTagCode } from '../../../constants/nfc';
 import { formatDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import type { InventoryNfcTag } from '../types/nfc';
+import type { InventoryNfcTag, InventoryNfcTagCreate, InventoryNfcTagTargetKind } from '../types/nfc';
 
-interface ItemNfcTagsCardProps {
-  itemId: string;
-  itemName: string;
+interface NfcTagsCardProps {
+  targetKind: InventoryNfcTagTargetKind;
+  targetId: string;
+  targetName: string;
 }
+
+const TARGET_NOUNS: Record<InventoryNfcTagTargetKind, string> = {
+  item: 'item',
+  storage_area: 'storage area',
+};
 
 /** Strips reader separators so what is shown matches what is stored. */
 function normalizeSerial(raw: string): string {
@@ -50,7 +57,8 @@ const CREDENTIAL_LABELS: Record<NfcCredentialType, string> = {
   [NfcCredentialType.SERIAL]: 'Chip serial',
 };
 
-export const ItemNfcTagsCard: React.FC<ItemNfcTagsCardProps> = ({ itemId, itemName }) => {
+export const NfcTagsCard: React.FC<NfcTagsCardProps> = ({ targetKind, targetId, targetName }) => {
+  const noun = TARGET_NOUNS[targetKind];
   const tz = useTimezone();
   const { confirm } = useConfirm();
   const [tags, setTags] = useState<InventoryNfcTag[]>([]);
@@ -62,14 +70,17 @@ export const ItemNfcTagsCard: React.FC<ItemNfcTagsCardProps> = ({ itemId, itemNa
 
   const load = useCallback(async () => {
     try {
-      const response = await inventoryService.getItemNfcTags(itemId);
+      const response =
+        targetKind === 'item'
+          ? await inventoryService.getItemNfcTags(targetId)
+          : await inventoryService.getStorageAreaNfcTags(targetId);
       setTags(response.items);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Could not load this item’s NFC tags.'));
+      setError(getErrorMessage(err, `Could not load this ${noun}’s NFC tags.`));
     } finally {
       setLoading(false);
     }
-  }, [itemId]);
+  }, [targetKind, targetId, noun]);
 
   useEffect(() => {
     void load();
@@ -80,12 +91,17 @@ export const ItemNfcTagsCard: React.FC<ItemNfcTagsCardProps> = ({ itemId, itemNa
       setLinking(true);
       setError(null);
       try {
-        await inventoryService.linkItemNfcTag(itemId, {
+        const payload: InventoryNfcTagCreate = {
           tag_uid: tagUid,
           credential_type: credentialType,
           label: label.trim() || undefined,
-        });
-        toast.success(`NFC tag linked to ${itemName}`);
+        };
+        if (targetKind === 'item') {
+          await inventoryService.linkItemNfcTag(targetId, payload);
+        } else {
+          await inventoryService.linkStorageAreaNfcTag(targetId, payload);
+        }
+        toast.success(`NFC tag linked to ${targetName}`);
         setLabel('');
         setTypedSerial('');
         await load();
@@ -100,7 +116,7 @@ export const ItemNfcTagsCard: React.FC<ItemNfcTagsCardProps> = ({ itemId, itemNa
         setLinking(false);
       }
     },
-    [itemId, itemName, label, load]
+    [targetKind, targetId, targetName, label, load]
   );
 
   // Refs because the scanner keeps the callback it started with, and the
@@ -171,7 +187,7 @@ export const ItemNfcTagsCard: React.FC<ItemNfcTagsCardProps> = ({ itemId, itemNa
   const unlink = async (tag: InventoryNfcTag) => {
     const ok = await confirm({
       title: 'Unlink this NFC tag?',
-      message: `Tapping tag …${tag.uid_preview} will no longer find ${itemName}. The tag itself is not erased, and can be linked to another item.`,
+      message: `Tapping tag …${tag.uid_preview} will no longer find ${targetName}. The tag itself is not erased, and can be linked to another item.`,
       confirmLabel: 'Unlink tag',
       cancelLabel: 'Keep it',
     });
@@ -201,7 +217,7 @@ export const ItemNfcTagsCard: React.FC<ItemNfcTagsCardProps> = ({ itemId, itemNa
       {loading ? (
         <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" aria-label="Loading NFC tags" />
       ) : tags.length === 0 ? (
-        <p className="text-theme-text-muted mb-4 text-sm">No NFC tags are linked to this item.</p>
+        <p className="text-theme-text-muted mb-4 text-sm">No NFC tags are linked to this {noun}.</p>
       ) : (
         <ul className="divide-theme-surface-border mb-4 divide-y">
           {tags.map((tag) => {
@@ -251,7 +267,7 @@ export const ItemNfcTagsCard: React.FC<ItemNfcTagsCardProps> = ({ itemId, itemNa
       <div className="space-y-3">
         <div>
           <label className="form-label" htmlFor="item-nfc-tag-label">
-            Where the new tag is on the item <span className="text-theme-text-muted">(optional)</span>
+            Where the new tag is on the {noun} <span className="text-theme-text-muted">(optional)</span>
           </label>
           <input
             id="item-nfc-tag-label"

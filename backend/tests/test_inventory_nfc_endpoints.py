@@ -4,6 +4,7 @@ The database behaviour (hashing, uniqueness, org isolation) is in
 ``test_inventory_nfc_service.py``; these run without a database.
 """
 
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -91,6 +92,11 @@ GUARDED_CALLS = [
     ("POST", "/inventory/items/item-1/nfc-tags", LINK_BODY),
     ("PATCH", "/inventory/nfc-tags/tag-1", {"label": "Left cuff"}),
     ("DELETE", "/inventory/nfc-tags/tag-1", None),
+    ("POST", "/inventory/nfc/resolve-any", RESOLVE_BODY),
+    ("POST", "/inventory/nfc/put-away", {"item_id": "i-1", "storage_area_id": "a-1"}),
+    ("GET", "/inventory/items/item-1/nfc-scans", None),
+    ("GET", "/inventory/storage-areas/area-1/nfc-tags", None),
+    ("POST", "/inventory/storage-areas/area-1/nfc-tags", LINK_BODY),
 ]
 
 
@@ -175,6 +181,32 @@ class TestPermissionGates:
         }
         assert _permission_set("/nfc-tags/{tag_id}", "PATCH") == {"inventory.manage"}
         assert _permission_set("/nfc-tags/{tag_id}", "DELETE") == {"inventory.manage"}
+
+    def test_a_tap_that_may_name_a_shelf_needs_only_view(self):
+        """The tag page resolves through it for every member."""
+        assert _permission_set("/nfc/resolve-any", "POST") == {"inventory.view"}
+
+    def test_moving_items_and_reading_the_trail_need_manage(self):
+        assert _permission_set("/nfc/put-away", "POST") == {"inventory.manage"}
+        assert _permission_set("/items/{item_id}/nfc-scans", "GET") == {
+            "inventory.manage"
+        }
+        assert _permission_set("/storage-areas/{storage_area_id}/nfc-tags", "GET") == {
+            "inventory.manage"
+        }
+        assert _permission_set("/storage-areas/{storage_area_id}/nfc-tags", "POST") == {
+            "inventory.manage"
+        }
+
+    async def test_a_viewer_cannot_put_an_item_away(self):
+        with _switch(on=True):
+            response = await _request(
+                _app_for(_user(permissions=("inventory.view",))),
+                "POST",
+                "/inventory/nfc/put-away",
+                {"item_id": "i-1", "storage_area_id": "a-1"},
+            )
+        assert response.status_code == 403
 
     async def test_a_viewer_cannot_link_a_tag(self):
         with _switch(on=True):
@@ -262,3 +294,68 @@ class TestResolveResponses:
                 {"code": "INVTABCD1234", "serial_number": "04A2245B"},
             )
         service.resolve.assert_awaited_once_with("org-1", ("INVTABCD1234", "04A2245B"))
+
+
+def _resolved_item():
+    """An item the response model accepts without a database behind it."""
+    from app.schemas.inventory import InventoryItemResponse
+
+    return InventoryItemResponse.model_construct(id=uuid.UUID(int=1), name="Helmet")
+
+
+class TestOnlyStaffTapsAreLogged:
+    """A member opening a written tag must not leave a trail of where they were."""
+
+    def _service(self):
+        from app.services.inventory_nfc_service import ResolvedTag
+
+        tag = SimpleNamespace(id="tag-1", uid_preview="1180")
+        item = SimpleNamespace(id="item-1")
+        service = MagicMock()
+        service.resolve = AsyncMock(return_value=(tag, item))
+        service.resolve_any = AsyncMock(return_value=ResolvedTag(tag=tag, item=item))
+        service.record_scan = AsyncMock()
+        return service
+
+    async def _call(self, permissions, path, body):
+        service = self._service()
+        with _switch(on=True), patch(
+            f"{MODULE}.InventoryNfcService", return_value=service
+        ), patch(
+            f"{MODULE}.ScanLookupResponse",
+            side_effect=lambda **kw: {
+                "item": _resolved_item(),
+                "matched_field": kw["matched_field"],
+                "matched_value": kw["matched_value"],
+            },
+        ), patch(
+            f"{MODULE}.InventoryNfcResolveAnyResponse",
+            side_effect=lambda **kw: {**kw, "item": _resolved_item()},
+        ):
+            await _request(_app_for(_user(permissions)), "POST", path, body)
+        return service
+
+    @pytest.mark.parametrize(
+        "path", ["/inventory/nfc/resolve", "/inventory/nfc/resolve-any"]
+    )
+    async def test_a_member_tap_is_resolved_but_not_recorded(self, path):
+        service = await self._call(("inventory.view",), path, RESOLVE_BODY)
+        service.record_scan.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "path", ["/inventory/nfc/resolve", "/inventory/nfc/resolve-any"]
+    )
+    async def test_a_quartermaster_tap_is_recorded(self, path):
+        service = await self._call(
+            ("inventory.manage", "inventory.view"), path, RESOLVE_BODY
+        )
+        service.record_scan.assert_awaited_once()
+        assert service.record_scan.await_args.kwargs["scanned_by"] == "admin-1"
+
+    async def test_the_put_away_screen_can_skip_the_lookup_row(self):
+        service = await self._call(
+            ("inventory.manage",),
+            "/inventory/nfc/resolve-any",
+            {**RESOLVE_BODY, "record": False},
+        )
+        service.record_scan.assert_not_awaited()

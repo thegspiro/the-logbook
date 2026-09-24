@@ -32,6 +32,13 @@ export const InventoryNfcTagStatus = {
 } as const;
 export type InventoryNfcTagStatus = (typeof InventoryNfcTagStatus)[keyof typeof InventoryNfcTagStatus];
 
+/** What a logged NFC tap did: identified an item, or moved it onto a shelf. */
+export const InventoryNfcScanAction = {
+  LOOKUP: 'lookup',
+  PUT_AWAY: 'put_away',
+} as const;
+export type InventoryNfcScanAction = (typeof InventoryNfcScanAction)[keyof typeof InventoryNfcScanAction];
+
 // ============================================
 // NFC ID Cards (member credentials)
 // ============================================
