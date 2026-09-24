@@ -196,7 +196,7 @@ application briefly to show the columns.]**
 
 > "**Delete the example row.** The template ships a filled-in John Doe so the
 > columns explain themselves. Leaving it in used to create a real member with a
-> live password-setup link; the import now catches its own example and rejects
+> working temporary password; the import now catches its own example and rejects
 > that row — but delete it anyway."
 
 **[SCREEN: Show uploading the completed CSV file]**
@@ -230,7 +230,7 @@ your roster · row width"]**
 **[SCREEN: The "Send welcome emails" checkbox, unchecked, in the review step]**
 
 > "Look at this checkbox before you confirm. Creating a member queues a
-> password-setup email immediately, and an import creates them by the dozen —
+> temporary-password email immediately, and an import creates them by the dozen —
 > loading a roster for testing, or from a list with stale addresses, used to put
 > unrecallable mail in front of every one of them. It's **off by default** for
 > imports now. Load the roster quietly, check it, then issue credentials from

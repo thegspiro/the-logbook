@@ -666,7 +666,7 @@ column]**
 **[SCREEN: An import in progress; then an inbox full of "Set your password"
 emails]**
 
-> "Creating a member queues a password-setup email immediately. An import creates
+> "Creating a member queues a temporary-password email immediately. An import creates
 > them by the dozen. Load a roster for testing — or from a list with old addresses
 > — and that mail is out. You can't recall it."
 
