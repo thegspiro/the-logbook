@@ -455,13 +455,14 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 ### Member-Facing Pages
 
-| URL                        | Page                         | Permission         |
-| -------------------------- | ---------------------------- | ------------------ |
-| `/inventory`               | Inventory Items List         | `inventory.manage` |
-| `/inventory/items`         | Inventory Items List (alias) | `inventory.manage` |
-| `/inventory/my-equipment`  | My Equipment                 | Authenticated      |
-| `/inventory/items/:id`     | Item Detail                  | Authenticated      |
-| `/inventory/storage-areas` | Storage Areas                | `inventory.manage` |
+| URL                                     | Page                         | Permission         |
+| --------------------------------------- | ---------------------------- | ------------------ |
+| `/inventory`                            | Inventory Items List         | `inventory.manage` |
+| `/inventory/items`                      | Inventory Items List (alias) | `inventory.manage` |
+| `/inventory/my-equipment`               | My Equipment                 | Authenticated      |
+| `/inventory/items/:id`                  | Item Detail                  | Authenticated      |
+| `/inventory/storage-areas`              | Storage Areas                | `inventory.manage` |
+| `/inventory/storage-areas/print-labels` | Storage Area Labels          | `inventory.manage` |
 
 > **The catalogue is manager-only; a member's own kit is not.** The two items-list
 > routes show the whole department's gear and gate on `inventory.manage`. A member's
@@ -1315,20 +1316,21 @@ lot's number or expiration date require `inventory.check_manage` or
 Print-optimized routes. They render a print layout rather than an app screen, and
 are opened from the corresponding module's list view.
 
-| URL                                 | Prints                  | Permission                                   |
-| ----------------------------------- | ----------------------- | -------------------------------------------- |
-| `/members/print-labels`             | Member labels           | `members.view`                               |
-| `/members/:userId/id-card`          | Member ID card          | Authenticated                                |
-| `/members/scan`                     | Member badge scanner    | `users.view` **OR** `members.manage`         |
-| `/prospective-members/print-labels` | Applicant badges        | `prospective_members.view`                   |
-| `/inventory/print-labels`           | Inventory labels        | `inventory.manage`                           |
-| `/apparatus/print-labels`           | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`   |
-| `/facilities/print-labels`          | Facility / room labels  | `facilities.view` **OR** `facilities.manage` |
-| `/training/print/member`            | Member training history | Authenticated                                |
-| `/training/print/program`           | Training program        | Authenticated                                |
-| `/training/print/compliance`        | Compliance matrix       | `training.manage`                            |
-| `/scheduling/checkin/print`         | Shift check-in sheet    | Authenticated                                |
-| `/scheduling/shift-reports/print`   | Shift report            | Authenticated                                |
+| URL                                     | Prints                  | Permission                                   |
+| --------------------------------------- | ----------------------- | -------------------------------------------- |
+| `/members/print-labels`                 | Member labels           | `members.view`                               |
+| `/members/:userId/id-card`              | Member ID card          | Authenticated                                |
+| `/members/scan`                         | Member badge scanner    | `users.view` **OR** `members.manage`         |
+| `/prospective-members/print-labels`     | Applicant badges        | `prospective_members.view`                   |
+| `/inventory/print-labels`               | Inventory labels        | `inventory.manage`                           |
+| `/inventory/storage-areas/print-labels` | Storage area labels     | `inventory.manage`                           |
+| `/apparatus/print-labels`               | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`   |
+| `/facilities/print-labels`              | Facility / room labels  | `facilities.view` **OR** `facilities.manage` |
+| `/training/print/member`                | Member training history | Authenticated                                |
+| `/training/print/program`               | Training program        | Authenticated                                |
+| `/training/print/compliance`            | Compliance matrix       | `training.manage`                            |
+| `/scheduling/checkin/print`             | Shift check-in sheet    | Authenticated                                |
+| `/scheduling/shift-reports/print`       | Shift report            | Authenticated                                |
 
 ---
 

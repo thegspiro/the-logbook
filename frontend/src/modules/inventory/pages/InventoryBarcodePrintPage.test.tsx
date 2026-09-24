@@ -14,6 +14,8 @@ const mockGetCategories = vi.fn();
 const mockGetStorageAreas = vi.fn();
 const mockGetLocations = vi.fn();
 const mockMarkLabelsPrinted = vi.fn();
+const mockListPrinters = vi.fn();
+const mockPrintToPrinter = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -31,9 +33,21 @@ vi.mock('../../../services/api', () => ({
   },
 }));
 
+vi.mock('../../../services/labelService', () => ({
+  PrinterLanguage: { ZPL: 'zpl', ESCPOS: 'escpos' },
+  Symbology: { CODE128: 'code128', QR: 'qr' },
+  labelPrinterService: {
+    list: (...a: unknown[]) => mockListPrinters(...a) as unknown,
+    print: (...a: unknown[]) => mockPrintToPrinter(...a) as unknown,
+  },
+}));
+
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../../utils/printEnvironment', () => ({ prefersPdfOverBrowserPrint: () => mockPrefersPdf() }));
 vi.mock('jsbarcode', () => ({ default: vi.fn() }));
+vi.mock('qrcode.react', () => ({
+  QRCodeSVG: ({ value }: { value: string }) => <div data-testid="qr-code">{value}</div>,
+}));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
 import InventoryBarcodePrintPage from './InventoryBarcodePrintPage';
@@ -74,6 +88,10 @@ describe('InventoryBarcodePrintPage', () => {
     for (const m of [mockGetItems, mockGetCategories, mockGetStorageAreas, mockGetLocations, mockMarkLabelsPrinted])
       m.mockReset();
     mockMarkLabelsPrinted.mockResolvedValue({ marked: 1 });
+    mockListPrinters.mockReset();
+    mockPrintToPrinter.mockReset();
+    // No network printer by default: the page must look exactly as it did.
+    mockListPrinters.mockResolvedValue([]);
     mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1, skip: 0, limit: 500 });
     mockGetCategories.mockResolvedValue([{ id: 'cat-1', name: 'Radios' }]);
     mockGetStorageAreas.mockResolvedValue([]);
@@ -133,11 +151,19 @@ describe('InventoryBarcodePrintPage', () => {
     await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith({ label_printed: false, skip: 0, limit: 500 }));
   });
 
-  it('blocks the picker when more items match than one batch holds', async () => {
-    mockGetItems.mockResolvedValue({ items: [], total: 501, skip: 0, limit: 1 });
+  it('tells the picker a run over one job will print in parts', async () => {
+    mockGetItems.mockResolvedValue({ items: [], total: 1200, skip: 0, limit: 1 });
     renderPage('');
 
-    expect(await screen.findByText(/501 items match. One batch holds at most 500/)).toBeInTheDocument();
+    expect(await screen.findByText(/1,200 items match. They print in 3 parts of up to 500 labels/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prepare 1,200 labels' })).toBeEnabled();
+  });
+
+  it('blocks the picker above what one print run can hold', async () => {
+    mockGetItems.mockResolvedValue({ items: [], total: 5001, skip: 0, limit: 1 });
+    renderPage('');
+
+    expect(await screen.findByText(/5,001 items match. One print run holds at most 5,000/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Prepare labels' })).toBeDisabled();
   });
 
@@ -160,12 +186,90 @@ describe('InventoryBarcodePrintPage', () => {
     });
   });
 
-  it('refuses a filter batch larger than the label API limit', async () => {
-    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 750, skip: 0, limit: 500 });
+  it('refuses a filter run larger than one print page holds, before fetching the rest', async () => {
+    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 5001, skip: 0, limit: 500 });
     renderPage('?all=1');
 
-    expect(await screen.findByText(/750 items match. A maximum of 500 inventory items/)).toBeInTheDocument();
+    expect(await screen.findByText(/5,001 items match. One print run can hold up to 5,000/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Choose different items/ })).toBeInTheDocument();
+    expect(mockGetItems).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a run larger than one print job', () => {
+    // 1,200 items across three list pages: 500, 500, 200.
+    const all = Array.from({ length: 1200 }, (_, i) =>
+      makeItem({ id: `it-${i + 1}`, name: `Tool ${i + 1}`, barcode: `INV-${i + 1}` })
+    );
+
+    beforeEach(() => {
+      mockGetItems.mockImplementation((params: { skip?: number; limit?: number }) => {
+        const skip = params.skip ?? 0;
+        return Promise.resolve({ items: all.slice(skip, skip + 500), total: all.length, skip, limit: 500 });
+      });
+    });
+
+    it('fetches every page and prints the first part of 500 labels', async () => {
+      const user = userEvent.setup();
+      renderPage('?all=1');
+
+      expect(await screen.findByText('Part 1 of 3')).toBeInTheDocument();
+      expect(mockGetItems.mock.calls.map((c) => (c[0] as { skip: number }).skip)).toEqual([0, 500, 1000]);
+
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+      const ids = mockGenerateLabels.mock.calls[0]?.[0] as string[];
+      expect(ids).toHaveLength(500);
+      expect(ids[0]).toBe('it-1');
+      expect(ids[499]).toBe('it-500');
+    });
+
+    it('moves to the next part after confirming this one, marking only this part', async () => {
+      mockMarkLabelsPrinted.mockResolvedValue({ marked: 500 });
+      const user = userEvent.setup();
+      renderPage('?all=1');
+      await screen.findByText('Part 1 of 3');
+
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await user.click(await screen.findByRole('button', { name: 'Mark 500 items as labelled' }));
+      expect((mockMarkLabelsPrinted.mock.calls[0]?.[0] as string[]).length).toBe(500);
+
+      await user.click(await screen.findByRole('button', { name: 'Next part (2 of 3)' }));
+
+      expect(await screen.findByText('Part 2 of 3')).toBeInTheDocument();
+      // A new part is a new print run: nothing is waiting to be confirmed.
+      expect(screen.queryByText(/marked as labelled/)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(2));
+      expect((mockGenerateLabels.mock.calls[1]?.[0] as string[])[0]).toBe('it-501');
+    });
+
+    it('starts the next part from the top of a sheet', async () => {
+      localStorage.setItem('inventory:labelPreset', 'letter');
+      const user = userEvent.setup();
+      renderPage('?all=1');
+      await screen.findByText('Part 1 of 3');
+      fireEvent.change(screen.getByLabelText('Start at label'), { target: { value: '12' } });
+
+      await user.click(screen.getByRole('button', { name: 'Next part' }));
+
+      expect(await screen.findByText('Part 2 of 3')).toBeInTheDocument();
+      expect(screen.getByLabelText('Start at label')).toHaveValue(1);
+    });
+
+    it('re-cuts the parts by label count when copies go up', async () => {
+      const user = userEvent.setup();
+      renderPage('?all=1');
+      await screen.findByText('Part 1 of 3');
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      fireEvent.change(screen.getByLabelText(/Copies per item/), { target: { value: '2' } });
+
+      // 250 items × 2 copies = 500 labels per part.
+      expect(await screen.findByText('Part 1 of 5')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+      expect(mockGenerateLabels.mock.calls[0]?.[0] as string[]).toHaveLength(500);
+    });
   });
 
   it('says so when no items match the filters', async () => {
@@ -317,7 +421,10 @@ describe('InventoryBarcodePrintPage', () => {
     await user.click(screen.getByRole('button', { name: /Rollo 4/ }));
 
     // The change is debounced (~500ms) then saved to the position.
-    await waitFor(() => expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'rollo_4x6' }), { timeout: 2000 });
+    await waitFor(
+      () => expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'rollo_4x6', symbology: 'code128' }),
+      { timeout: 2000 }
+    );
   });
 
   it('downloads a one-item PDF for a test label with the selected printer settings', async () => {
@@ -329,7 +436,9 @@ describe('InventoryBarcodePrintPage', () => {
     await user.click(screen.getByRole('button', { name: /Download Test Label/ }));
 
     await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
-    expect(mockGenerateLabels).toHaveBeenCalledWith(['it-1'], 'dymo_30252', undefined, undefined, false, []);
+    expect(mockGenerateLabels).toHaveBeenCalledWith(['it-1'], 'dymo_30252', undefined, undefined, false, [], {
+      symbology: 'code128',
+    });
   });
 
   it('uses the canonicalizing PDF path when printing an item without a stored identifier', async () => {
@@ -342,6 +451,124 @@ describe('InventoryBarcodePrintPage', () => {
 
     await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
     expect(mockGenerateLabels.mock.calls[0]?.[0]).toEqual(['it-1']);
+  });
+
+  describe('QR codes', () => {
+    beforeEach(() => {
+      mockGetLabelPreset.mockReset();
+      mockGetLabelPreset.mockResolvedValue({ preset: null });
+    });
+
+    it('draws a QR code instead of a barcode, and the PDF and preset follow', async () => {
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+      expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      await user.click(screen.getByRole('button', { name: /QR code/ }));
+
+      expect(screen.getByRole('button', { name: /QR code/ })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByTestId('qr-code')).toHaveTextContent('INV-0001');
+      expect(localStorage.getItem('inventory:labelSymbology')).toBe('qr');
+
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+      expect(mockGenerateLabels.mock.calls[0]?.[6]).toEqual({ symbology: 'qr' });
+      await waitFor(() => expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'dymo_30252', symbology: 'qr' }), {
+        timeout: 2000,
+      });
+    });
+
+    it('takes the barcode style saved for the position', async () => {
+      mockGetLabelPreset.mockResolvedValue({ preset: 'thermal_1x1', symbology: 'qr' });
+      renderPage('?ids=it-1');
+
+      expect(await screen.findByTestId('qr-code')).toHaveTextContent('INV-0001');
+    });
+
+    it('sends the QR choice to a network printer', async () => {
+      mockListPrinters.mockResolvedValue([
+        {
+          id: 'pr-1',
+          name: 'Station Zebra',
+          host: '10.0.0.5',
+          port: 9100,
+          language: 'zpl',
+          dpi: 203,
+          label_format: 'dymo_30252',
+          is_default: true,
+          is_active: true,
+        },
+      ]);
+      mockPrintToPrinter.mockResolvedValue({
+        printer_id: 'pr-1',
+        printer_name: 'Station Zebra',
+        labels_sent: 1,
+        auto_populated: 0,
+        printer_errors: [],
+        printer_warnings: [],
+        status_known: true,
+      });
+      localStorage.setItem('inventory:labelSymbology', 'qr');
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+
+      await user.click(await screen.findByRole('button', { name: 'Print to Station Zebra' }));
+
+      expect(mockPrintToPrinter).toHaveBeenCalledWith(
+        'inventory',
+        ['it-1'],
+        expect.objectContaining({ symbology: 'qr' })
+      );
+    });
+  });
+
+  describe('starting partway down a sheet', () => {
+    beforeEach(() => {
+      mockGetLabelPreset.mockReset();
+      mockGetLabelPreset.mockResolvedValue({ preset: null });
+      localStorage.setItem('inventory:labelPreset', 'letter');
+    });
+
+    it('leaves the used positions blank in the preview and the PDF', async () => {
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+      expect(screen.queryAllByTestId('skipped-label-position')).toHaveLength(0);
+
+      fireEvent.change(screen.getByLabelText('Start at label'), { target: { value: '8' } });
+
+      expect(screen.getAllByTestId('skipped-label-position')).toHaveLength(7);
+      expect(screen.getByText(/Labels 1–7 are left blank/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+      expect(mockGenerateLabels.mock.calls[0]?.[6]).toEqual({ symbology: 'code128', startPosition: 8 });
+    });
+
+    it('keeps the position on the sheet', async () => {
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+      const start = screen.getByLabelText('Start at label');
+
+      fireEvent.change(start, { target: { value: '45' } });
+      expect(start).toHaveValue(30);
+      fireEvent.change(start, { target: { value: '0' } });
+      expect(start).toHaveValue(1);
+    });
+
+    it('is not offered for a roll, and a roll PDF carries no position', async () => {
+      localStorage.setItem('inventory:labelPreset', 'rollo_2x1');
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+
+      expect(screen.queryByLabelText('Start at label')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+      expect(mockGenerateLabels.mock.calls[0]?.[6]).toEqual({ symbology: 'code128' });
+    });
   });
 
   describe('confirming the labels printed', () => {
@@ -391,6 +618,23 @@ describe('InventoryBarcodePrintPage', () => {
       expect(screen.queryByText(/marked as labelled\./)).not.toBeInTheDocument();
     });
 
+    it('records only the labels scanned when the member confirms by scanning', async () => {
+      mockGetItem.mockImplementation((id: string) =>
+        Promise.resolve(makeItem({ id, name: id === 'it-2' ? 'Spare Radio' : 'Thermal Camera', barcode: `INV-${id}` }))
+      );
+      const user = userEvent.setup();
+      renderPage('?ids=it-1,it-2');
+      await downloadPdf(user);
+
+      await user.click(await screen.findByRole('button', { name: /Scan labels to confirm/ }));
+      await user.type(screen.getByLabelText(/Scan or type a label/), 'INV-it-2{Enter}');
+      expect(await screen.findByText('Spare Radio — confirmed')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Mark 1 scanned item as labelled' }));
+
+      expect(mockMarkLabelsPrinted).toHaveBeenCalledWith(['it-2']);
+      expect(await screen.findByText('1 item marked as labelled.')).toBeInTheDocument();
+    });
+
     it('does not ask after a test label', async () => {
       const user = userEvent.setup();
       renderPage('?ids=it-1');
@@ -400,6 +644,88 @@ describe('InventoryBarcodePrintPage', () => {
       await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
 
       expect(screen.queryByText(/Did the labels print correctly/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('printing to a network label printer', () => {
+    const zebra = {
+      id: 'pr-1',
+      name: 'Station Zebra',
+      location: 'Supply room',
+      host: '10.0.0.5',
+      port: 9100,
+      language: 'zpl',
+      dpi: 203,
+      // Matches the page's default preset, so nothing blocks the send.
+      label_format: 'dymo_30252',
+      custom_width: null,
+      custom_height: null,
+      darkness: null,
+      is_default: true,
+      is_active: true,
+    };
+    const sent = {
+      printer_id: 'pr-1',
+      printer_name: 'Station Zebra',
+      labels_sent: 1,
+      auto_populated: 0,
+      printer_errors: [] as string[],
+      printer_warnings: [] as string[],
+      status_known: true,
+    };
+
+    beforeEach(() => {
+      mockListPrinters.mockResolvedValue([zebra]);
+      mockPrintToPrinter.mockResolvedValue(sent);
+    });
+
+    it('offers nothing new when no printer is registered', async () => {
+      mockListPrinters.mockResolvedValue([]);
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+      await waitFor(() => expect(mockListPrinters).toHaveBeenCalledTimes(1));
+      expect(screen.queryByLabelText('Label printer')).not.toBeInTheDocument();
+    });
+
+    it('sends the batch to the printer and then asks whether it printed', async () => {
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await user.click(await screen.findByRole('button', { name: 'Print to Station Zebra' }));
+
+      expect(mockPrintToPrinter).toHaveBeenCalledWith('inventory', ['it-1'], {
+        printer_id: 'pr-1',
+        label_format: 'dymo_30252',
+        copies: 1,
+        symbology: 'code128',
+      });
+      expect(await screen.findByText('The printer reported no faults.')).toBeInTheDocument();
+      expect(screen.getByText(/Did the labels print correctly/)).toBeInTheDocument();
+      expect(mockMarkLabelsPrinted).not.toHaveBeenCalled();
+    });
+
+    it('reports a fault the printer raised after accepting the job', async () => {
+      mockPrintToPrinter.mockResolvedValue({ ...sent, printer_errors: ['Media out'] });
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await user.click(await screen.findByRole('button', { name: 'Print to Station Zebra' }));
+
+      expect(await screen.findByText('Printer fault: Media out')).toBeInTheDocument();
+    });
+
+    it('refuses to send when the printer holds different stock', async () => {
+      mockListPrinters.mockResolvedValue([{ ...zebra, label_format: 'rollo_4x6' }]);
+      renderPage('?ids=it-1');
+
+      expect(await screen.findByText(/set up for different label stock/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Print to Station Zebra' })).toBeDisabled();
+    });
+
+    it('sends an item without a barcode to the PDF path first', async () => {
+      mockGetItem.mockResolvedValue(makeItem({ barcode: undefined, asset_tag: undefined, serial_number: undefined }));
+      renderPage('?ids=it-1');
+
+      expect(await screen.findByText(/download the PDF once to assign them/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Print to Station Zebra' })).toBeDisabled();
     });
   });
 });

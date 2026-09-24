@@ -369,4 +369,129 @@ describe('StorageAreasPage', () => {
     expect(mockDeleteStorageArea.mock.calls[0]?.[0]).toBe('a-rack');
     expect(mockToastSuccess).toHaveBeenCalledWith('"Rack A" deleted');
   });
+
+  describe('printing labels', () => {
+    beforeEach(() => {
+      window.history.pushState({}, '', '/inventory/storage-areas');
+      mockGetStorageAreas.mockResolvedValue([
+        makeArea({ id: 'rack-a', name: 'Rack A', barcode: 'SA-000001' }),
+        makeArea({ id: 'shelf-1', name: 'Shelf 1', parent_id: 'rack-a', barcode: 'SA-000002' }),
+        makeArea({ id: 'rack-b', name: 'Rack B', barcode: 'SA-000003' }),
+      ]);
+    });
+
+    const printedIds = () => new URLSearchParams(window.location.search).get('ids')?.split(',');
+
+    it('prints every area in view from the header', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StorageAreasPage />);
+      await screen.findByText('Rack A');
+
+      await user.click(screen.getByRole('button', { name: 'Print 3 labels' }));
+
+      expect(window.location.pathname).toBe('/inventory/storage-areas/print-labels');
+      expect(printedIds()).toEqual(['rack-a', 'shelf-1', 'rack-b']);
+    });
+
+    it('narrows the header print to the search results', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StorageAreasPage />);
+      await screen.findByText('Rack A');
+
+      await user.type(screen.getByRole('textbox', { name: /Search storage areas/ }), 'Rack B');
+      await user.click(await screen.findByRole('button', { name: 'Print 1 label' }));
+
+      expect(printedIds()).toEqual(['rack-b']);
+    });
+
+    it('prints one area from its row', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StorageAreasPage />);
+      await screen.findByText('Rack B');
+
+      await user.click(screen.getByRole('button', { name: 'Print label for Rack B' }));
+
+      expect(window.location.pathname).toBe('/inventory/storage-areas/print-labels');
+      expect(printedIds()).toEqual(['rack-b']);
+    });
+  });
+
+  describe('jumping to a scanned shelf', () => {
+    beforeEach(() => {
+      window.history.pushState({}, '', '/inventory/storage-areas');
+      mockGetStorageAreas.mockResolvedValue([
+        makeArea({ id: 'rack-a', name: 'Rack A', barcode: 'SA-000001' }),
+        makeArea({ id: 'shelf-1', name: 'Shelf 1', parent_id: 'rack-a', barcode: 'SA-000002' }),
+        makeArea({ id: 'rack-b', name: 'Rack B', barcode: 'SA-000003' }),
+      ]);
+    });
+
+    const focusedRow = () =>
+      screen.queryAllByTestId('storage-area-row').find((row) => row.getAttribute('aria-current') === 'true') ?? null;
+
+    const scan = async (user: ReturnType<typeof userEvent.setup>, code: string) => {
+      await user.click(screen.getByRole('button', { name: 'Scan shelf label' }));
+      await user.type(screen.getByLabelText(/Scan or type a shelf label/), `${code}{Enter}`);
+    };
+
+    it('opens the tree down to the scanned area and marks it', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StorageAreasPage />);
+      await screen.findByText('Rack A');
+      expect(screen.queryByText('Shelf 1')).not.toBeInTheDocument();
+
+      // Lower case: some scanners are configured to emit it.
+      await scan(user, 'sa-000002');
+
+      expect(await screen.findByText('Shelf 1')).toBeInTheDocument();
+      expect(focusedRow()?.getAttribute('data-storage-area-row')).toBe('shelf-1');
+      expect(new URLSearchParams(window.location.search).get('area')).toBe('shelf-1');
+      // The scan panel closes once it has found the shelf.
+      expect(screen.queryByLabelText(/Scan or type a shelf label/)).not.toBeInTheDocument();
+    });
+
+    it('says so when no area carries the code', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StorageAreasPage />);
+      await screen.findByText('Rack A');
+
+      await scan(user, 'SA-999999');
+
+      expect(await screen.findByText('No storage area has the barcode SA-999999.')).toBeInTheDocument();
+      expect(focusedRow()).toBeNull();
+    });
+
+    it('clears a search that would hide the scanned area', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StorageAreasPage />);
+      await screen.findByText('Rack A');
+      await user.type(screen.getByRole('textbox', { name: /Search storage areas/ }), 'Rack B');
+
+      await scan(user, 'SA-000002');
+
+      expect(await screen.findByText('Shelf 1')).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: /Search storage areas/ })).toHaveValue('');
+    });
+
+    it('opens put-away on the shelf in view', async () => {
+      window.history.pushState({}, '', '/inventory/storage-areas?area=shelf-1');
+      const user = userEvent.setup();
+      renderWithRouter(<StorageAreasPage />);
+      await waitFor(() => expect(focusedRow()?.getAttribute('data-storage-area-row')).toBe('shelf-1'));
+
+      await user.click(screen.getByRole('button', { name: 'Put away' }));
+
+      expect(screen.getByText('Rack A › Shelf 1')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Scan or type a shelf or item barcode/)).toBeInTheDocument();
+    });
+
+    it.each([1024, 375])('opens straight to an area linked with ?area= at %ipx', async (width) => {
+      setViewportWidth(width);
+      window.history.pushState({}, '', '/inventory/storage-areas?area=shelf-1');
+      renderWithRouter(<StorageAreasPage />);
+
+      // By the row, not its text: on a phone the name renders as a split path.
+      await waitFor(() => expect(focusedRow()?.getAttribute('data-storage-area-row')).toBe('shelf-1'));
+    });
+  });
 });

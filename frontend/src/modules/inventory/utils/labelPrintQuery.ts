@@ -13,8 +13,19 @@
  * fetches exactly the rows the list showed rather than re-deriving them.
  */
 
-/** The label PDF endpoint's per-request cap, which also bounds a print batch. */
+/**
+ * Labels per print job: the cap the label PDF, network-print and mark-printed
+ * endpoints each enforce per request. A larger batch is printed in parts of at
+ * most this many labels.
+ */
 export const MAX_LABEL_BATCH = 500;
+
+/**
+ * Items one print page will load. Not a server limit: every part is still at
+ * most MAX_LABEL_BATCH labels. It bounds what one browser tab holds and the
+ * number of list requests behind it (ten pages of 500).
+ */
+export const MAX_LABEL_ITEMS_TOTAL = 5000;
 
 /** `?all=1` marks a filter-addressed batch; with no filters it means every item. */
 export const ALL_ITEMS_PARAM = 'all';

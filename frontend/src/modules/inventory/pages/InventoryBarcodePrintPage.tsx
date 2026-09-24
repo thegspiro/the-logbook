@@ -14,8 +14,11 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router';
 import JsBarcode from 'jsbarcode';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   ArrowLeft,
+  Barcode,
+  QrCode,
   Printer,
   Loader2,
   AlertCircle,
@@ -24,6 +27,8 @@ import {
   AlertTriangle,
   RotateCw,
   TestTube2,
+  Send,
+  ScanLine,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { InventoryItem } from '../types';
@@ -34,7 +39,15 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { prefersPdfOverBrowserPrint } from '../../../utils/printEnvironment';
 import toast from 'react-hot-toast';
 import { LabelScopePicker } from '../components/LabelScopePicker';
-import { buildLabelFilterPath, MAX_LABEL_BATCH, parseLabelPrintQuery } from '../utils/labelPrintQuery';
+import { LabelScanConfirm } from '../components/LabelScanConfirm';
+import { PrinterLanguage, Symbology, labelPrinterService } from '../../../services/labelService';
+import type { LabelPrinterConfig, PrintLabelsResult } from '../../../services/labelService';
+import {
+  buildLabelFilterPath,
+  MAX_LABEL_BATCH,
+  MAX_LABEL_ITEMS_TOTAL,
+  parseLabelPrintQuery,
+} from '../utils/labelPrintQuery';
 
 // ── Label size presets ──────────────────────────────────────────
 
@@ -212,6 +225,37 @@ const CUSTOM_PRESET_ID = 'custom';
 // re-select it every time they print.
 const PRESET_STORAGE_KEY = 'inventory:labelPreset';
 const CUSTOM_DIMS_STORAGE_KEY = 'inventory:labelCustomDims';
+// The network printer last used from this page, on this browser. Per-viewer: a
+// quartermaster at the station and one at the warehouse want different rolls.
+const PRINTER_STORAGE_KEY = 'inventory:labelPrinterId';
+// The barcode style is also saved on the member's position with the label
+// size; this local copy covers a member with no position to save it on.
+const SYMBOLOGY_STORAGE_KEY = 'inventory:labelSymbology';
+
+// Avery 5160, the one sheet layout: 3 columns by 10 rows.
+const SHEET_LABELS_PER_PAGE = 30;
+
+function isSymbology(value: unknown): value is Symbology {
+  return value === Symbology.CODE128 || value === Symbology.QR;
+}
+
+function loadStoredSymbology(): Symbology {
+  try {
+    const stored = localStorage.getItem(SYMBOLOGY_STORAGE_KEY);
+    if (isSymbology(stored)) return stored;
+  } catch {
+    // Unavailable storage falls back to the symbology every label had before.
+  }
+  return Symbology.CODE128;
+}
+
+function loadStoredPrinterId(): string | null {
+  try {
+    return localStorage.getItem(PRINTER_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
 
 function loadStoredPresetId(): string {
   try {
@@ -245,8 +289,16 @@ function isKnownPreset(id: string): boolean {
 }
 
 /** A stable key for a preset choice, used to detect real changes worth saving. */
-function presetKey(preset: string, width: string, height: string): string {
-  return preset === CUSTOM_PRESET_ID ? `custom:${width}x${height}` : preset;
+function presetKey(preset: string, width: string, height: string, symbology: Symbology): string {
+  return `${preset === CUSTOM_PRESET_ID ? `custom:${width}x${height}` : preset}:${symbology}`;
+}
+
+/** QR side length in inches: square, so bounded by both label dimensions,
+ *  leaving room for the name above and the value below. */
+function qrSizeInches(preset: LabelPreset): number {
+  const width = parseFloat(preset.width);
+  const height = parseFloat(preset.height);
+  return Math.min(height * 0.5, width * 0.8, 1.5);
 }
 
 /** Synthesize a preset for an arbitrary width × height (inches) sticker so the
@@ -301,6 +353,7 @@ function getBarcodeValue(item: InventoryItem): string | null {
 interface BarcodeLabelProps {
   item: InventoryItem;
   preset: LabelPreset;
+  symbology: Symbology;
   extraLines?: string[];
   onRendered?: () => void;
 }
@@ -322,12 +375,14 @@ function buildExtraText(item: InventoryItem, extraLines?: string[]): string | nu
   return parts.length > 0 ? parts.join(' | ') : null;
 }
 
-const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, onRendered }) => {
+const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, symbology, extraLines, onRendered }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const barcodeValue = getBarcodeValue(item);
+  const isQr = symbology === Symbology.QR;
 
   useEffect(() => {
-    if (!svgRef.current || !barcodeValue) {
+    // QRCodeSVG draws during render, so a QR label is complete by now.
+    if (isQr || !svgRef.current || !barcodeValue) {
       onRendered?.();
       return;
     }
@@ -352,7 +407,7 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, o
       // Invalid barcode value — SVG stays empty
     }
     onRendered?.();
-  }, [barcodeValue, preset.barcodeWidth, preset.barcodeHeight, preset.barcodeFontSize, onRendered]);
+  }, [isQr, barcodeValue, preset.barcodeWidth, preset.barcodeHeight, preset.barcodeFontSize, onRendered]);
 
   if (!barcodeValue) {
     return (
@@ -421,17 +476,36 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, o
       >
         {item.name}
       </div>
-      <svg
-        ref={svgRef}
-        style={{
-          maxWidth: '100%',
-          flexShrink: 0,
-          display: 'block',
-          colorAdjust: 'exact',
-          WebkitPrintColorAdjust: 'exact',
-          printColorAdjust: 'exact',
-        }}
-      />
+      {isQr ? (
+        <>
+          <QRCodeSVG
+            value={barcodeValue}
+            level="M"
+            marginSize={2}
+            style={{
+              width: `${qrSizeInches(preset)}in`,
+              height: `${qrSizeInches(preset)}in`,
+              flexShrink: 0,
+              display: 'block',
+            }}
+          />
+          <div style={{ fontSize: preset.subtitleFontSize, fontFamily: 'monospace', color: '#000', lineHeight: 1.1 }}>
+            {barcodeValue}
+          </div>
+        </>
+      ) : (
+        <svg
+          ref={svgRef}
+          style={{
+            maxWidth: '100%',
+            flexShrink: 0,
+            display: 'block',
+            colorAdjust: 'exact',
+            WebkitPrintColorAdjust: 'exact',
+            printColorAdjust: 'exact',
+          }}
+        />
+      )}
       {subtitle && (
         <div
           style={{
@@ -477,10 +551,16 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const tz = useTimezone();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [items, setItems] = useState<InventoryItem[]>([]);
+  // Everything the request named; `items` below is the part being printed.
+  const [allItems, setAllItems] = useState<InventoryItem[]>([]);
+  const [part, setPart] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [presetId, setPresetId] = useState(loadStoredPresetId);
+  const [symbology, setSymbology] = useState<Symbology>(loadStoredSymbology);
+  // Where the first label lands on an Avery sheet, so a sheet with some
+  // labels already peeled off goes back in the printer instead of the bin.
+  const [startPosition, setStartPosition] = useState(1);
   const [copies, setCopies] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
   const [barcodesReady, setBarcodesReady] = useState(false);
@@ -488,8 +568,12 @@ const InventoryBarcodePrintPage: React.FC = () => {
   // After a print or PDF, ask whether the labels actually came out. Only a
   // confirmation takes items off the "needs a label" list: a cancelled print
   // dialog or a jammed roll looks identical to success from in here.
-  const [labelConfirm, setLabelConfirm] = useState<'idle' | 'asking' | 'saving' | 'done'>('idle');
+  const [labelConfirm, setLabelConfirm] = useState<'idle' | 'asking' | 'scanning' | 'saving' | 'done'>('idle');
   const [markedCount, setMarkedCount] = useState(0);
+  const [printers, setPrinters] = useState<LabelPrinterConfig[]>([]);
+  const [selectedPrinterId, setSelectedPrinterId] = useState('');
+  const [sendingToPrinter, setSendingToPrinter] = useState(false);
+  const [printResult, setPrintResult] = useState<PrintLabelsResult | null>(null);
   const [autoRotateOverride, setAutoRotateOverride] = useState<boolean | null>(null);
   const [extraLines, setExtraLines] = useState<string[]>([]);
   const [{ width: initialCustomWidth, height: initialCustomHeight }] = useState(loadStoredCustomDims);
@@ -499,8 +583,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const totalLabelsRef = useRef(0);
   // Mirror the current selection so the once-on-mount sync can read it without
   // becoming a dependency. null lastSavedKey = position preset not loaded yet.
-  const presetStateRef = useRef({ presetId, customWidth, customHeight });
-  presetStateRef.current = { presetId, customWidth, customHeight };
+  const presetStateRef = useRef({ presetId, customWidth, customHeight, symbology });
+  presetStateRef.current = { presetId, customWidth, customHeight, symbology };
   const lastSavedKeyRef = useRef<string | null>(null);
 
   const firstPreset = LABEL_PRESETS[0];
@@ -524,13 +608,33 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const isThermal = preset.columns === 1;
   // The label API accepts at most 500 records per PDF. Keep the copies control
   // inside that batch limit while retaining the existing per-item cap of 50.
-  const maxCopies = Math.max(1, Math.min(50, Math.floor(MAX_LABEL_BATCH / Math.max(items.length, 1))));
+  // Copies stay capped at 50 per item. A batch whose labels (items × copies)
+  // exceed one job is printed in parts, each at most MAX_LABEL_BATCH labels,
+  // so every print, PDF, network send and confirmation acts on one part.
+  const maxCopies = 50;
+  const itemsPerPart = Math.max(1, Math.floor(MAX_LABEL_BATCH / copies));
+  const partCount = Math.max(1, Math.ceil(allItems.length / itemsPerPart));
+  const currentPart = Math.min(part, partCount - 1);
+  const items = useMemo(
+    () => allItems.slice(currentPart * itemsPerPart, (currentPart + 1) * itemsPerPart),
+    [allItems, currentPart, itemsPerPart]
+  );
+  // Another part is another print run: its confirmation starts over.
+  const goToPart = (next: number) => {
+    setPart(Math.max(0, next));
+    setLabelConfirm('idle');
+    setPrintResult(null);
+    // A position describes the sheet in the printer for this run, not the next.
+    setStartPosition(1);
+  };
 
   const printRequest = useMemo(() => parseLabelPrintQuery(searchParams), [searchParams]);
 
   const fetchItems = useCallback(async () => {
     // A new batch has not been printed yet, whatever the last one was.
     setLabelConfirm('idle');
+    setPrintResult(null);
+    setPart(0);
     if (printRequest.kind === 'none') {
       // Nothing addressed: the picker renders instead of the labels.
       setLoading(false);
@@ -541,27 +645,36 @@ const InventoryBarcodePrintPage: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
-        // One request for the whole batch. The list endpoint caps `limit` at
-        // the same 500 the label PDF accepts, so `total` says whether the
-        // batch fits before anything is rendered.
-        const res = await inventoryService.getItems({
+        // Pages of 500, the list endpoint's own `limit` cap. The first page's
+        // `total` says whether the set fits under the page's ceiling before
+        // any more is fetched.
+        const first = await inventoryService.getItems({
           ...printRequest.filters,
           skip: 0,
           limit: MAX_LABEL_BATCH,
         });
-        const total = res.total ?? 0;
-        if (total > MAX_LABEL_BATCH) {
+        const total = first.total ?? 0;
+        if (total > MAX_LABEL_ITEMS_TOTAL) {
           setError(
-            `${formatNumber(total)} items match. A maximum of ${formatNumber(MAX_LABEL_BATCH)} inventory items can be printed in one batch — narrow the filters and try again.`
+            `${formatNumber(total)} items match. One print run can hold up to ${formatNumber(MAX_LABEL_ITEMS_TOTAL)} — narrow the filters and try again.`
           );
           return;
         }
-        const matched = asArray(res.items);
+        const matched = asArray(first.items);
+        for (let skip = MAX_LABEL_BATCH; skip < total; skip += MAX_LABEL_BATCH) {
+          const page = await inventoryService.getItems({ ...printRequest.filters, skip, limit: MAX_LABEL_BATCH });
+          const rows = asArray(page.items);
+          matched.push(...rows);
+          if (rows.length < MAX_LABEL_BATCH) break;
+        }
         if (matched.length === 0) {
           setError('No active items match these filters.');
           return;
         }
-        setItems(matched);
+        // An item added while paging shifts the offsets and can repeat a row
+        // across two pages; a label per item, not per page appearance.
+        const seen = new Set<string>();
+        setAllItems(matched.filter((item) => !seen.has(item.id) && seen.add(item.id)));
       } catch (err: unknown) {
         setError(getErrorMessage(err, 'Failed to load inventory items'));
       } finally {
@@ -586,7 +699,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
       setLoading(true);
       setError(null);
       const fetched = await Promise.all(ids.map((id) => inventoryService.getItem(id)));
-      setItems(fetched);
+      setAllItems(fetched);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load inventory items'));
     } finally {
@@ -616,6 +729,14 @@ const InventoryBarcodePrintPage: React.FC = () => {
     }
   }, [customWidth, customHeight]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(SYMBOLOGY_STORAGE_KEY, symbology);
+    } catch {
+      // Best-effort.
+    }
+  }, [symbology]);
+
   // On mount, load the label preset saved for the member's position (server)
   // and apply it over the local default. The position's printer choice follows
   // whoever fills the role, on any computer. Falls back silently to the local
@@ -628,6 +749,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
         if (cancelled) return;
         if (pref?.preset && isKnownPreset(pref.preset)) {
           setPresetId(pref.preset);
+          const sym = isSymbology(pref.symbology) ? pref.symbology : presetStateRef.current.symbology;
+          setSymbology(sym);
           let w = presetStateRef.current.customWidth;
           let h = presetStateRef.current.customHeight;
           if (pref.preset === CUSTOM_PRESET_ID) {
@@ -640,14 +763,14 @@ const InventoryBarcodePrintPage: React.FC = () => {
               setCustomHeight(h);
             }
           }
-          lastSavedKeyRef.current = presetKey(pref.preset, w, h);
+          lastSavedKeyRef.current = presetKey(pref.preset, w, h, sym);
         } else {
           const s = presetStateRef.current;
-          lastSavedKeyRef.current = presetKey(s.presetId, s.customWidth, s.customHeight);
+          lastSavedKeyRef.current = presetKey(s.presetId, s.customWidth, s.customHeight, s.symbology);
         }
       } catch {
         const s = presetStateRef.current;
-        lastSavedKeyRef.current = presetKey(s.presetId, s.customWidth, s.customHeight);
+        lastSavedKeyRef.current = presetKey(s.presetId, s.customWidth, s.customHeight, s.symbology);
       }
     })();
     return () => {
@@ -660,13 +783,14 @@ const InventoryBarcodePrintPage: React.FC = () => {
   useEffect(() => {
     if (lastSavedKeyRef.current === null) return; // position preset not loaded yet
     if (isCustom && !customValid) return; // don't save invalid custom dimensions
-    const key = presetKey(presetId, customWidth, customHeight);
+    const key = presetKey(presetId, customWidth, customHeight, symbology);
     if (key === lastSavedKeyRef.current) return;
     const timer = setTimeout(() => {
       lastSavedKeyRef.current = key;
       void inventoryService
         .setLabelPreset({
           preset: presetId,
+          symbology,
           ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
         })
         .catch(() => {
@@ -674,7 +798,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
         });
     }, 500);
     return () => clearTimeout(timer);
-  }, [presetId, customWidth, customHeight, isCustom, customValid, customW, customH]);
+  }, [presetId, customWidth, customHeight, symbology, isCustom, customValid, customW, customH]);
 
   // Track barcode rendering — compute expected total synchronously during
   // render so it's set before child useEffects fire onRendered callbacks.
@@ -686,7 +810,13 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const prevItemsRef = useRef(items);
   const prevCopiesRef = useRef(copies);
   const prevPresetRef = useRef(presetId);
-  if (prevItemsRef.current !== items || prevCopiesRef.current !== copies || prevPresetRef.current !== presetId) {
+  const prevSymbologyRef = useRef(symbology);
+  if (
+    prevItemsRef.current !== items ||
+    prevCopiesRef.current !== copies ||
+    prevPresetRef.current !== presetId ||
+    prevSymbologyRef.current !== symbology
+  ) {
     // Capture before updating refs so the comparison works correctly.
     const presetChanged = prevPresetRef.current !== presetId;
     renderedCountRef.current = 0;
@@ -694,6 +824,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
     prevItemsRef.current = items;
     prevCopiesRef.current = copies;
     prevPresetRef.current = presetId;
+    prevSymbologyRef.current = symbology;
     // Reset rotation override when switching presets so each preset
     // uses its own default until the user explicitly overrides it.
     if (presetChanged) {
@@ -709,6 +840,83 @@ const InventoryBarcodePrintPage: React.FC = () => {
   }, []);
 
   const itemsWithoutBarcodes = items.filter((item) => !getBarcodeValue(item));
+
+  // Registered network printers. Best-effort: an organization with none keeps
+  // the browser-print and PDF paths, which is all this page offered before.
+  useEffect(() => {
+    let cancelled = false;
+    labelPrinterService
+      .list()
+      .then((list) => {
+        if (cancelled) return;
+        setPrinters(list);
+        const stored = loadStoredPrinterId();
+        const initial = list.find((p) => p.id === stored) ?? list.find((p) => p.is_default) ?? list[0];
+        if (initial) setSelectedPrinterId(initial.id);
+      })
+      .catch(() => {
+        /* no printers, or no access to the list: the other print paths still work */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedPrinter = printers.find((p) => p.id === selectedPrinterId) ?? null;
+  // A receipt printer's roll decides the size, so this page's choice is not
+  // sent and cannot mismatch. A die-cut label printer must be loaded with the
+  // stock chosen here; an Avery sheet layout means nothing on a roll.
+  const isReceiptPrinter = selectedPrinter?.language === PrinterLanguage.ESCPOS;
+  const printerStockMismatch =
+    selectedPrinter !== null && !isReceiptPrinter && !isCustom && selectedPrinter.label_format !== preset.id;
+  // The network path renders labels read-only and never assigns a missing
+  // barcode (the PDF path does), so a batch with an unlabelable item would be
+  // refused by the server. Say so up front instead.
+  const networkPrintBlocker =
+    selectedPrinter === null
+      ? 'Choose a printer'
+      : !isReceiptPrinter && !isThermal
+        ? 'Choose a thermal label size to print to a label printer'
+        : printerStockMismatch
+          ? `${selectedPrinter.name} is set up for different label stock — match the label size to it first`
+          : itemsWithoutBarcodes.length > 0
+            ? 'Some items have no barcode yet — download the PDF once to assign them'
+            : isCustom && !customValid
+              ? 'Enter a valid custom size'
+              : null;
+
+  const sendToPrinter = async () => {
+    if (!selectedPrinter || items.length === 0) return;
+    setSendingToPrinter(true);
+    setPrintResult(null);
+    try {
+      const result = await labelPrinterService.print(
+        'inventory',
+        items.map((item) => item.id),
+        {
+          printer_id: selectedPrinter.id,
+          ...(isReceiptPrinter
+            ? {}
+            : {
+                label_format: isCustom ? CUSTOM_PRESET_ID : preset.id,
+                ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
+              }),
+          copies,
+          symbology,
+          ...(extraLines.length > 0 ? { extra_lines: extraLines } : {}),
+        }
+      );
+      setPrintResult(result);
+      toast.success(`Sent ${result.labels_sent} label${result.labels_sent !== 1 ? 's' : ''} to ${result.printer_name}`);
+      // A printer that is out of stock accepts the job and prints nothing, so
+      // the confirmation below still asks rather than assuming success.
+      setLabelConfirm('asking');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to send labels to the printer'));
+    } finally {
+      setSendingToPrinter(false);
+    }
+  };
 
   const handlePrint = () => {
     if (!barcodesReady) {
@@ -832,16 +1040,30 @@ const InventoryBarcodePrintPage: React.FC = () => {
     }
   };
 
+  const recordLabelsPrinted = async (ids: string[]) => {
+    const { marked } = await inventoryService.markLabelsPrinted(Array.from(new Set(ids)));
+    setMarkedCount(marked);
+    setLabelConfirm('done');
+  };
+
   const confirmLabelsPrinted = async () => {
     setLabelConfirm('saving');
     try {
-      const ids = Array.from(new Set(items.map((item) => item.id)));
-      const { marked } = await inventoryService.markLabelsPrinted(ids);
-      setMarkedCount(marked);
-      setLabelConfirm('done');
+      await recordLabelsPrinted(items.map((item) => item.id));
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not record the printed labels'));
       setLabelConfirm('asking');
+    }
+  };
+
+  // Scan mode records only what was scanned. A failure is reported and
+  // re-thrown so the scan panel stays open with every scan intact.
+  const confirmScannedLabels = async (ids: string[]) => {
+    try {
+      await recordLabelsPrinted(ids);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not record the printed labels'));
+      throw err;
     }
   };
 
@@ -860,7 +1082,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
         isCustom ? customW : undefined,
         isCustom ? customH : undefined,
         effectiveAutoRotate,
-        extraLines
+        extraLines,
+        { symbology, ...(isThermal ? {} : { startPosition }) }
       );
       if (autoPopulated > 0) {
         toast.success(`${autoPopulated} item${autoPopulated !== 1 ? 's' : ''} had barcode values auto-generated`);
@@ -892,7 +1115,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
         isCustom ? customW : undefined,
         isCustom ? customH : undefined,
         effectiveAutoRotate,
-        extraLines
+        extraLines,
+        { symbology }
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -908,6 +1132,9 @@ const InventoryBarcodePrintPage: React.FC = () => {
     }
   };
 
+  // Blank cells ahead of the first label, so the preview and a browser print
+  // lay the sheet out exactly as the PDF does. Rolls have no positions.
+  const skippedPositions = isThermal ? 0 : startPosition - 1;
   const labelItems: InventoryItem[] = [];
   for (let c = 0; c < copies; c++) {
     for (const item of items) {
@@ -1049,6 +1276,10 @@ const InventoryBarcodePrintPage: React.FC = () => {
               border: 1px dashed #ccc;
               background: white;
             }
+            .barcode-label-skipped {
+              border: 1px dashed #ddd;
+              background: repeating-linear-gradient(45deg, #f5f5f5 0 6px, #fff 6px 12px);
+            }
           }
         `}
       </style>
@@ -1070,7 +1301,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
               <h1 className="text-theme-text-primary text-xl font-bold">Print Barcode Labels</h1>
               <p className="text-theme-text-muted mt-1 text-sm">
                 {items.length} item{items.length !== 1 ? 's' : ''} &middot; {labelItems.length} label
-                {labelItems.length !== 1 ? 's' : ''} total
+                {labelItems.length !== 1 ? 's' : ''} {partCount > 1 ? 'in this part' : 'total'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -1102,20 +1333,191 @@ const InventoryBarcodePrintPage: React.FC = () => {
             </div>
           </div>
 
-          {labelConfirm !== 'idle' && (
+          {partCount > 1 && (
+            <div className="card-secondary mb-4 flex flex-wrap items-center gap-3 p-3" aria-live="polite">
+              <p className="text-theme-text-primary text-sm">
+                <span className="font-medium">
+                  Part {currentPart + 1} of {partCount}
+                </span>{' '}
+                &middot; items {formatNumber(currentPart * itemsPerPart + 1)}&ndash;
+                {formatNumber(currentPart * itemsPerPart + items.length)} of {formatNumber(allItems.length)}
+                <span className="text-theme-text-muted block text-xs">
+                  A print job holds at most {formatNumber(MAX_LABEL_BATCH)} labels, so this run prints in parts. Print
+                  and confirm each part in turn.
+                </span>
+              </p>
+              <div className="ml-auto flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => goToPart(currentPart - 1)}
+                  disabled={currentPart === 0}
+                  className="btn-secondary btn-sm"
+                >
+                  Previous part
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToPart(currentPart + 1)}
+                  disabled={currentPart >= partCount - 1}
+                  className="btn-secondary btn-sm"
+                >
+                  Next part
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!isThermal && (
+            <div className="card-secondary mb-4 flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+              <div className="flex-1">
+                <label htmlFor="sheet-start-position" className="form-label">
+                  Start at label
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="sheet-start-position"
+                    type="number"
+                    min={1}
+                    max={SHEET_LABELS_PER_PAGE}
+                    value={startPosition}
+                    onChange={(e) =>
+                      setStartPosition(Math.max(1, Math.min(SHEET_LABELS_PER_PAGE, parseInt(e.target.value) || 1)))
+                    }
+                    aria-describedby="sheet-start-position-help"
+                    className="form-input w-24"
+                  />
+                  <span className="text-theme-text-secondary text-sm">of {SHEET_LABELS_PER_PAGE}</span>
+                </div>
+                <p id="sheet-start-position-help" className="text-theme-text-muted mt-1 text-xs">
+                  {startPosition > 1
+                    ? `Labels 1–${startPosition - 1} are left blank, so a partly used sheet can go back in the printer.`
+                    : 'Reusing a sheet with some labels already peeled off? Start at the first label still on it, counting across each row.'}
+                </p>
+              </div>
+              <div
+                className="grid shrink-0 grid-cols-3 gap-0.5 self-center rounded border border-slate-300 bg-white p-1"
+                aria-hidden="true"
+              >
+                {Array.from({ length: SHEET_LABELS_PER_PAGE }, (_, index) => (
+                  <span
+                    key={index}
+                    className={`h-1.5 w-4 rounded-[1px] ${
+                      index < startPosition - 1
+                        ? 'bg-slate-300'
+                        : index === startPosition - 1
+                          ? 'bg-emerald-700'
+                          : 'border border-slate-300'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {printers.length > 0 && (
+            <div className="card-secondary mb-4 flex flex-col gap-3 p-3 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <label htmlFor="inventory-label-printer" className="form-label">
+                  Label printer
+                </label>
+                <select
+                  id="inventory-label-printer"
+                  className="form-input"
+                  value={selectedPrinterId}
+                  onChange={(e) => {
+                    setSelectedPrinterId(e.target.value);
+                    setPrintResult(null);
+                    try {
+                      localStorage.setItem(PRINTER_STORAGE_KEY, e.target.value);
+                    } catch {
+                      // Unavailable storage only costs remembering the choice.
+                    }
+                  }}
+                >
+                  {printers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.location ? ` — ${p.location}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {networkPrintBlocker && selectedPrinter && (
+                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">{networkPrintBlocker}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void sendToPrinter()}
+                disabled={sendingToPrinter || items.length === 0 || networkPrintBlocker !== null}
+                className="flex items-center justify-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
+              >
+                {sendingToPrinter ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {selectedPrinter ? `Print to ${selectedPrinter.name}` : 'Print to label printer'}
+              </button>
+            </div>
+          )}
+
+          {printResult && (
+            <div
+              className={`mb-4 rounded-lg border p-3 ${
+                printResult.printer_errors.length > 0
+                  ? 'border-red-500/30 bg-red-500/10'
+                  : 'border-emerald-500/30 bg-emerald-500/10'
+              }`}
+              role="status"
+            >
+              <p className="text-theme-text-primary text-sm font-medium">
+                {formatNumber(printResult.labels_sent)} label{printResult.labels_sent === 1 ? '' : 's'} sent to{' '}
+                {printResult.printer_name}
+              </p>
+              {printResult.printer_errors.length > 0 ? (
+                <p className="mt-1 text-sm text-red-700 dark:text-red-400">
+                  Printer fault: {printResult.printer_errors.join(', ')}
+                </p>
+              ) : printResult.printer_warnings.length > 0 ? (
+                <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+                  Printer warning: {printResult.printer_warnings.join(', ')}
+                </p>
+              ) : !printResult.status_known ? (
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  This printer does not report its status, so delivery could not be confirmed. Check the labels.
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-300">The printer reported no faults.</p>
+              )}
+            </div>
+          )}
+
+          {labelConfirm === 'scanning' && (
+            <LabelScanConfirm
+              items={items}
+              labelValueOf={getBarcodeValue}
+              onConfirm={confirmScannedLabels}
+              onCancel={() => setLabelConfirm('asking')}
+            />
+          )}
+
+          {labelConfirm !== 'idle' && labelConfirm !== 'scanning' && (
             <div
               className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3"
               role="status"
             >
               {labelConfirm === 'done' ? (
-                <p className="text-sm text-emerald-800 dark:text-emerald-300">
-                  {formatNumber(markedCount)} {markedCount === 1 ? 'item' : 'items'} marked as labelled.
-                </p>
+                <>
+                  <p className="text-sm text-emerald-800 dark:text-emerald-300">
+                    {formatNumber(markedCount)} {markedCount === 1 ? 'item' : 'items'} marked as labelled.
+                  </p>
+                  {currentPart < partCount - 1 && (
+                    <button type="button" onClick={() => goToPart(currentPart + 1)} className="btn-success btn-sm">
+                      Next part ({currentPart + 2} of {partCount})
+                    </button>
+                  )}
+                </>
               ) : (
                 <>
                   <p className="text-sm text-emerald-800 dark:text-emerald-300">
                     Did the labels print correctly? Confirming takes these items off the &ldquo;needs a label&rdquo;
-                    list.
+                    list. If only some came out, scan those to confirm just them.
                   </p>
                   <div className="flex gap-2">
                     <button
@@ -1127,6 +1529,14 @@ const InventoryBarcodePrintPage: React.FC = () => {
                       {labelConfirm === 'saving'
                         ? 'Saving…'
                         : `Mark ${formatNumber(items.length)} ${items.length === 1 ? 'item' : 'items'} as labelled`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLabelConfirm('scanning')}
+                      disabled={labelConfirm === 'saving'}
+                      className="btn-secondary btn-sm inline-flex items-center gap-1.5"
+                    >
+                      <ScanLine className="h-3.5 w-3.5" /> Scan labels to confirm
                     </button>
                     <button type="button" onClick={() => setLabelConfirm('idle')} className="btn-secondary btn-sm">
                       Not yet
@@ -1262,6 +1672,50 @@ const InventoryBarcodePrintPage: React.FC = () => {
               </div>
 
               <div>
+                <p className="text-theme-text-muted mb-2 block text-xs font-medium tracking-wider uppercase">
+                  Barcode Style
+                </p>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Barcode style">
+                  {[
+                    {
+                      id: Symbology.CODE128,
+                      icon: Barcode,
+                      name: 'Code 128',
+                      hint: 'The usual barcode; scans with any handheld scanner',
+                    },
+                    {
+                      id: Symbology.QR,
+                      icon: QrCode,
+                      name: 'QR code',
+                      hint: 'Fits a small square tag, survives scuffs, scans with a phone',
+                    },
+                  ].map((option) => {
+                    const Icon = option.icon;
+                    const active = symbology === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setSymbology(option.id)}
+                        className={`flex flex-1 items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors sm:flex-none ${
+                          active
+                            ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500'
+                            : 'border-theme-surface-border hover:bg-theme-surface-secondary'
+                        }`}
+                      >
+                        <Icon className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                          <span className="text-theme-text-primary block text-sm font-medium">{option.name}</span>
+                          <span className="text-theme-text-muted block text-xs">{option.hint}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
                 <label
                   htmlFor="label-copies"
                   className="text-theme-text-muted mb-1 block text-xs font-medium tracking-wider uppercase"
@@ -1274,7 +1728,11 @@ const InventoryBarcodePrintPage: React.FC = () => {
                   min={1}
                   max={maxCopies}
                   value={copies}
-                  onChange={(e) => setCopies(Math.max(1, Math.min(maxCopies, parseInt(e.target.value) || 1)))}
+                  onChange={(e) => {
+                    setCopies(Math.max(1, Math.min(maxCopies, parseInt(e.target.value) || 1)));
+                    // Parts are cut by label count, so a new copy count re-cuts them.
+                    goToPart(0);
+                  }}
                   className="form-input w-24"
                 />
               </div>
@@ -1444,11 +1902,21 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 justifyContent: isThermal ? undefined : 'center',
               }}
             >
+              {Array.from({ length: skippedPositions }, (_, index) => (
+                <div
+                  key={`skipped-${index}`}
+                  className="barcode-label-skipped"
+                  data-testid="skipped-label-position"
+                  aria-hidden="true"
+                  style={{ width: preset.width, height: preset.height, boxSizing: 'border-box' }}
+                />
+              ))}
               {labelItems.map((item, index) => (
                 <BarcodeLabel
                   key={`${item.id}-${index}`}
                   item={item}
                   preset={preset}
+                  symbology={symbology}
                   extraLines={extraLines}
                   onRendered={handleLabelRendered}
                 />
