@@ -327,8 +327,11 @@ counts regenerated into
 | `15-05`, `15-14` (drawer)                                     | **CHECK**   | 15    |
 | `15-12-pipeline-stats`                                        | NO CHANGE   | 15    |
 
-**The seeded department has no suggestion boxes**, so the five suggestion shots
-need boxes, a reviewer and an anonymous follow-up submission created first. **The
+**Suggestion boxes are seeded** _(2026-09-24)_: three boxes and four
+submissions covering every state the guides describe, reviewed by the
+Secretary position (`okittredge`, the manifest's `auth: "secretary"` account).
+Only the follow-up-key receipt still needs a live submission during capture,
+because the key exists only at the moment of submitting. **The
 home-screen icon cannot be produced by the capture harness** — it needs a real
 or emulated device install.
 

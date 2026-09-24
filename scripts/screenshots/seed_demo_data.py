@@ -470,6 +470,44 @@ class Api:
             content_type=f"multipart/form-data; boundary={boundary}",
         )
 
+    def post_multipart(
+        self,
+        path: str,
+        fields: dict[str, str],
+        files: list[tuple[str, str, bytes, str]],
+    ) -> Any:
+        """POST multipart/form-data with any number of files, including none.
+
+        `post_file` always sends exactly one file part. A form whose file field
+        is optional — a suggestion with no screenshots — must be able to send
+        the text fields alone, and an empty file part would be a zero-byte
+        upload the server rejects rather than an absent one.
+        """
+        boundary = "----logbookseed" + uuid.uuid4().hex
+        parts: list[bytes] = []
+        for name, value in fields.items():
+            parts.append(
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+                f"{value}\r\n".encode()
+            )
+        for field_name, filename, file_bytes, mime_type in files:
+            parts.append(
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="{field_name}"; '
+                f'filename="{filename}"\r\n'
+                f"Content-Type: {mime_type}\r\n\r\n".encode()
+            )
+            parts.append(file_bytes)
+            parts.append(b"\r\n")
+        parts.append(f"--{boundary}--\r\n".encode())
+        return self.call(
+            "POST",
+            path,
+            body=b"".join(parts),
+            content_type=f"multipart/form-data; boundary={boundary}",
+        )
+
     def login(self) -> None:
         self.login_as(DEMO_ADMIN_USERNAME, admin_password())
 
@@ -601,6 +639,46 @@ def _demo_pdf(title: str, subtitle: str) -> bytes:
     page.showPage()
     page.save()
     return buffer.getvalue()
+
+
+def _demo_png(width: int = 480, height: int = 300) -> bytes:
+    """A valid RGB PNG shaped like a cropped screenshot: a title bar over a body.
+
+    Suggestion screenshots are re-encoded server-side, which rejects anything
+    Pillow cannot open, so this has to be a real image rather than a byte
+    string with a PNG extension. Built with zlib and struct to keep the seeder
+    stdlib-only.
+    """
+    import zlib
+
+    bar = bytes((153, 27, 27)) * width  # the app's red-800 header
+    body = bytes((241, 245, 249)) * width
+    rule = bytes((203, 213, 225)) * width
+    rows = []
+    for y in range(height):
+        if y < 36:
+            row = bar
+        elif (y - 36) % 40 == 39:
+            row = rule
+        else:
+            row = body
+        rows.append(b"\x00" + row)
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        )
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(b"".join(rows), 9))
+        + chunk(b"IEND", b"")
+    )
 
 
 # ── Seed steps ────────────────────────────────────────────────────────
@@ -7656,6 +7734,299 @@ class Seeder:
         return created
 
     # -- documents ---------------------------------------------------
+
+    # -- suggestion boxes --------------------------------------------
+
+    # Seeded on the Secretary position so the demo secretary (the capture
+    # harness's `auth: "secretary"` account) is a reviewer and can photograph the
+    # Review tab. The administrator is deliberately NOT named on any box: holding
+    # suggestions.manage configures boxes and reads nothing, and a demo in which
+    # the chief could read the concerns box would picture the opposite of the
+    # rule the guides teach.
+    SUGGESTION_REVIEWER_USERNAME = "okittredge"
+    SUGGESTION_REVIEWER_POSITION = "Secretary"
+    SUGGESTION_FORWARD_POSITION = "Training Officer"
+
+    SUGGESTION_BOXES = [
+        {
+            "name": "Training ideas",
+            "description": (
+                "Drills you want to run, skills you want more time on, courses "
+                "worth bringing in. Read by the Secretary and the Training "
+                "Officer."
+            ),
+            "anonymity_mode": "allowed",
+            "follow_up_enabled": True,
+            "reviewer_positions": ["Secretary", "Training Officer"],
+        },
+        {
+            "name": "Station concerns",
+            "description": (
+                "Anything about the stations, the apparatus or how we treat each "
+                "other that you would rather raise without your name. Always "
+                "anonymous. Read by the Secretary only."
+            ),
+            "anonymity_mode": "required",
+            "follow_up_enabled": True,
+            "reviewer_positions": ["Secretary"],
+        },
+        {
+            "name": "Apparatus wish list",
+            "description": (
+                "Equipment you would like to see on the rigs. Collected for the "
+                "annual budget; reviewers read every entry but do not reply."
+            ),
+            "anonymity_mode": "disabled",
+            "follow_up_enabled": False,
+            "reviewer_positions": ["Secretary"],
+        },
+    ]
+
+    # Four submissions, one per state the guides describe: a named idea that was
+    # accepted with a two-way thread; an anonymous idea under review, with an
+    # anonymous reply and a forward to a position; an always-anonymous concern
+    # nobody has touched; and an entry in a one-way box.
+    SUGGESTION_SUBMISSIONS = [
+        {
+            "box": "Training ideas",
+            "title": "Night-time vehicle extrication drill",
+            "details": (
+                "Every extrication drill we have run this year was in daylight. "
+                "Most of our real MVAs on the bypass are after dark. Could we run "
+                "one at night with scene lighting from Engine 2, so crews "
+                "practise cribbing and tool placement without full visibility?"
+            ),
+            "anonymous": False,
+            "screenshot": True,
+            "reviewer_reply": (
+                "Good idea — pencilled in for the second Tuesday next month. Can "
+                "you help set up the cribbing?"
+            ),
+            "submitter_reply": "Happy to. I'll bring the step chocks from Engine 2.",
+            "disposition": "accepted",
+            "internal_note": "Added to next month's drill calendar.",
+        },
+        {
+            "box": "Training ideas",
+            "title": "More hands-on SCBA time for probationary members",
+            "details": (
+                "Probies get their air-pack sign-off and then barely touch one "
+                "until a real call. A regular hands-on session — donning, "
+                "emergency procedures, a short consumption drill — would help."
+            ),
+            "anonymous": True,
+            "screenshot": False,
+            "reviewer_reply": (
+                "Would a monthly Saturday session work, or does it need to be on "
+                "drill nights?"
+            ),
+            "submitter_reply": "Drill nights, please — most of us work Saturdays.",
+            "disposition": "under_review",
+            "internal_note": "Check drill-night capacity with the Training Officer.",
+            "forward_to": "Training Officer",
+        },
+        {
+            "box": "Station concerns",
+            "title": "Station 2 bay door sensor keeps sticking",
+            "details": (
+                "The safety sensor on bay 2 has stopped the door halfway three "
+                "times this month, once with Engine 2 already rolling. It has "
+                "been reported verbally twice."
+            ),
+            "anonymous": True,
+            "screenshot": False,
+        },
+        {
+            "box": "Apparatus wish list",
+            "title": "A second thermal imaging camera for Ladder 1",
+            "details": (
+                "Ladder 1 carries one TIC for a crew of four. A second would let "
+                "the search team and the vent team each carry one."
+            ),
+            "anonymous": False,
+            "screenshot": False,
+        },
+    ]
+
+    def _user_id(self, username: str) -> str:
+        users = items(self.api.get("/users?limit=200"), "users")
+        return next(
+            (str(pick(u, "id")) for u in users if pick(u, "username") == username),
+            "",
+        )
+
+    def _ensure_role(self, username: str, role_name: str) -> bool:
+        """Grant a position to a member, tolerating it already being held."""
+        user_id = self._user_id(username)
+        roles = self.api.get("/roles")
+        role_id = next(
+            (
+                str(pick(r, "id"))
+                for r in (roles if isinstance(roles, list) else items(roles, "roles"))
+                if pick(r, "name") == role_name
+            ),
+            "",
+        )
+        if not user_id or not role_id:
+            return False
+        try:
+            self.api.post(f"/users/{user_id}/roles/{role_id}", {})
+        except ApiError as exc:
+            if exc.code not in (400, 409):
+                raise
+        return True
+
+    def seed_suggestion_boxes(self) -> None:
+        """Three suggestion boxes and four submissions, in every state shown.
+
+        The seeded department had no boxes, so every suggestion-box placeholder
+        in guides 07 and 20 and chapter 7 of script 07 had nothing to photograph.
+        Boxes are created by the administrator (`suggestions.manage`);
+        submissions by the demo member; review work by the demo secretary.
+
+        Idempotent per submission title, read from the reviewer's own Review
+        list. An anonymous submission's follow-up key exists only in memory for
+        the length of this step — it is never printed or written anywhere, and a
+        re-run neither needs it nor re-creates the submission.
+        """
+        if not self._ensure_role(
+            self.SUGGESTION_REVIEWER_USERNAME, self.SUGGESTION_REVIEWER_POSITION
+        ):
+            self.blocked.append(
+                "suggestion boxes: could not give "
+                f"{self.SUGGESTION_REVIEWER_USERNAME} the "
+                f"{self.SUGGESTION_REVIEWER_POSITION} position"
+            )
+            return
+
+        options = self.api.get("/suggestions/admin/reviewer-options") or {}
+        position_ids = {
+            pick(p, "name"): str(pick(p, "id")) for p in items(options, "positions")
+        }
+        existing = {
+            pick(b, "name")
+            for b in items(self.api.get("/suggestions/admin/boxes"), "boxes")
+        }
+        for box in self.SUGGESTION_BOXES:
+            if box["name"] in existing:
+                continue
+            reviewer_ids = [
+                position_ids[name]
+                for name in box["reviewer_positions"]
+                if name in position_ids
+            ]
+            if not reviewer_ids:
+                self.blocked.append(
+                    f"suggestion boxes: no reviewer position for {box['name']!r}"
+                )
+                continue
+            self.api.post(
+                "/suggestions/admin/boxes",
+                {
+                    "name": box["name"],
+                    "description": box["description"],
+                    "anonymity_mode": box["anonymity_mode"],
+                    "follow_up_enabled": box["follow_up_enabled"],
+                    "is_active": True,
+                    "reviewer_position_ids": reviewer_ids,
+                    "reviewer_member_ids": [],
+                },
+            )
+
+        # `member_session`, not a bare `login_as`: an account the administrator
+        # created is flagged must-change-password, and every call after the
+        # sign-in would answer 403 until that clears.
+        reviewer = self.member_session(
+            self.base_url,
+            self._user_id(self.SUGGESTION_REVIEWER_USERNAME),
+            self.SUGGESTION_REVIEWER_USERNAME,
+        )
+        submitted = {
+            pick(s, "title")
+            for s in items(reviewer.get("/suggestions/review?limit=200"), "items")
+        }
+
+        member = self.member_session(
+            self.base_url, self._user_id(DEMO_MEMBER_USERNAME), DEMO_MEMBER_USERNAME
+        )
+        box_ids = {
+            pick(b, "name"): str(pick(b, "id"))
+            for b in items(member.get("/suggestions/boxes"), "boxes")
+        }
+
+        for entry in self.SUGGESTION_SUBMISSIONS:
+            if entry["title"] in submitted:
+                continue
+            box_id = box_ids.get(entry["box"])
+            if not box_id:
+                self.blocked.append(
+                    f"suggestion boxes: box {entry['box']!r} not open to members"
+                )
+                continue
+            fields = {
+                "title": entry["title"],
+                "details": entry["details"],
+                "anonymous": "true" if entry["anonymous"] else "false",
+            }
+            files = (
+                [("screenshots", "drill-board.png", _demo_png(), "image/png")]
+                if entry["screenshot"]
+                else []
+            )
+            receipt = member.post_multipart(
+                f"/suggestions/boxes/{box_id}/submissions", fields, files
+            )
+            follow_up_key = pick(receipt or {}, "follow_up_key", "followUpKey")
+
+            # The reviewer finds the new item by title; an anonymous one has no
+            # id in the receipt, by design.
+            suggestion_id = next(
+                (
+                    str(pick(s, "id"))
+                    for s in items(
+                        reviewer.get("/suggestions/review?limit=200"), "items"
+                    )
+                    if pick(s, "title") == entry["title"]
+                ),
+                "",
+            )
+            if not suggestion_id:
+                self.blocked.append(
+                    f"suggestion boxes: {entry['title']!r} not visible to its reviewer"
+                )
+                continue
+
+            if entry.get("reviewer_reply"):
+                reviewer.post(
+                    f"/suggestions/review/{suggestion_id}/messages",
+                    {"body": entry["reviewer_reply"]},
+                )
+            if entry.get("submitter_reply"):
+                if entry["anonymous"]:
+                    if follow_up_key:
+                        member.post(
+                            "/suggestions/follow-up/messages",
+                            {"key": follow_up_key, "body": entry["submitter_reply"]},
+                        )
+                else:
+                    member.post(
+                        f"/suggestions/mine/{suggestion_id}/messages",
+                        {"body": entry["submitter_reply"]},
+                    )
+            if entry.get("disposition"):
+                reviewer.patch(
+                    f"/suggestions/review/{suggestion_id}",
+                    {
+                        "disposition": entry["disposition"],
+                        "internal_note": entry.get("internal_note"),
+                    },
+                )
+            if entry.get("forward_to") and entry["forward_to"] in position_ids:
+                reviewer.post(
+                    f"/suggestions/review/{suggestion_id}/forwards",
+                    {"position_ids": [position_ids[entry["forward_to"]]]},
+                )
+            follow_up_key = None
 
     def seed_legal_documents(self) -> list[dict]:
         """One published notice and one draft, so the two states differ on screen.
@@ -14831,6 +15202,10 @@ class Seeder:
         self.step("shift reminder inbox", self.seed_shift_reminder_notification)
         self.step("officers", lambda: self.seed_officers(members))
         self.step("messages", lambda: self.seed_messages(self.base_url, members))
+        # After officers and messages; before the elections step, which also
+        # grants okittredge the Secretary position. This step asserts that
+        # grant itself rather than relying on the ordering.
+        self.step("suggestion boxes", self.seed_suggestion_boxes)
         forms = self.step("forms", self.seed_forms) or []
         self.step(
             "form submissions",

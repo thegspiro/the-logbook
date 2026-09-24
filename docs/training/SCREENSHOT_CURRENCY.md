@@ -44,9 +44,35 @@ new element. Schedule them after the NEW items.
 not a new layout — `15-12-pipeline-stats.png` stays), hidden form answers (the
 fix is the _absence_ of an error), and the dependency bumps.
 
-**Seed gaps to know before shooting.** The seeded department has **no
-suggestion boxes**, so items 1–5 need boxes, a reviewer assignment and at least
-one anonymous follow-up submission created first; and **every seeded inventory
+**Suggestion boxes are seeded** _(2026-09-24)_. `seed_demo_data.py`'s
+`suggestion boxes` step creates three boxes and four submissions, one per state
+the guides describe:
+
+| Box                     | Anonymity         | Follow-up | Reviewers                     |
+| ----------------------- | ----------------- | --------- | ----------------------------- |
+| **Training ideas**      | Submitter chooses | On        | Secretary, Training Officer   |
+| **Station concerns**    | Always anonymous  | On        | Secretary                     |
+| **Apparatus wish list** | Always named      | Off       | Secretary                     |
+
+| Submission (all by Nadia Belhaj, `nbelhaj`)          | State                                                                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Night-time vehicle extrication drill                 | Named, **Accepted**, internal note, a reviewer reply and her answer, one screenshot                    |
+| More hands-on SCBA time for probationary members     | **Anonymous**, **Under review**, internal note, a reviewer question and the **Anonymous submitter**'s reply, **forwarded to Training Officer** |
+| Station 2 bay door sensor keeps sticking             | Always-anonymous box, **New**, untouched                                                                |
+| A second thermal imaging camera for Ladder 1         | One-way box, named, **New**                                                                             |
+
+**Which account to shoot from.** The reviewer is the **Secretary** position, held
+by `okittredge` — the manifest's existing `auth: "secretary"` account — so items
+5 and 11's review frames sign in as that. Item 1 is `auth: "member"`
+(`nbelhaj`, who sees no Review tab). The administrator deliberately reviews no
+box: `suggestions.manage` configures boxes and reads nothing, and a demo in which
+the chief could open the concerns box would picture the opposite of the rule.
+Items 2 and 7's dialogs are shot as the administrator. **Items 3 and 4 still need
+a live submission** — the follow-up key is shown only in the moment of
+submitting, and the seeder never keeps one — so submit one more anonymous
+suggestion as the member during capture, into **Training ideas**.
+
+**Remaining seed gap.** **Every seeded inventory
 item reads "Needs a label"**, which is correct for item 6 but means the
 **Label Printed** state on the detail page needs one item confirmed by hand.
 Do that on a throwaway item, not one another shot depends on.

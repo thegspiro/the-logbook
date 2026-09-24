@@ -602,12 +602,20 @@ reads as a promise about the other. The Footers tab is at
 ## CHAPTER 7: Suggestion Boxes (17:35 – 20:35) — ADDED 2026-09-24
 
 > **Producer note:** everything in this chapter shipped on 2026-09-23. The
-> seeded demo department has **no suggestion boxes**, so before recording,
-> create two — "Training ideas" (Submitter chooses, follow-up on) and
-> "Station concerns" (Always anonymous, follow-up on) — name a reviewer
-> position on each, and make one anonymous and one named submission from a
-> second member account. **Every follow-up key on screen must be a demo key.**
-> A real key is the submitter's only credential, and this video is public.
+> demo seeder creates three boxes — **Training ideas** (Submitter chooses),
+> **Station concerns** (Always anonymous) and **Apparatus wish list** (Always
+> named, one-way) — reviewed by the Secretary position, which the demo
+> secretary **Owen Kittredge** (`okittredge`) holds. It also files four
+> submissions from **Nadia Belhaj** (`nbelhaj`), including an anonymous one
+> already under review, with a reply thread and a forward to the Training
+> Officer. Record the reviewer beats as Owen and the member beats as Nadia. The
+> **Creating a box** beat builds a new box on camera: do it as the
+> administrator, use a name that is not already seeded, and do **not** press
+> Save if the take will be reused — a saved box stays in the demo department.
+> The follow-up key only appears at the moment of submitting, so the member beat
+> needs one live anonymous submission. **Every follow-up key on screen must be
+> a demo key.** A real key is the submitter's only credential, and this video
+> is public.
 
 ### WHO SETS THEM UP (17:35 – 18:15)
 

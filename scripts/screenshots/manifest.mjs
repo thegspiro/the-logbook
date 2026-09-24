@@ -79,6 +79,11 @@ export const DEMO_MEMBER_CREDENTIALS = {
  * Must match LEGAL_PROPOSER_USERNAME in seed_demo_data.py, whose
  * `_ensure_legal_proposer` guarantees the role rather than leaving it to
  * arrive as a side effect of the election seeding.
+ *
+ * The same Secretary position is the reviewer on every seeded suggestion box
+ * (SUGGESTION_REVIEWER_USERNAME in seed_demo_data.py), so this is also the
+ * account that can photograph the Suggestions Review tab. The administrator
+ * reviews no box by design.
  */
 export const DEMO_SECRETARY_CREDENTIALS = {
   username: "okittredge",
