@@ -1318,7 +1318,7 @@ If your department holds its vote at a meeting and records the outcome by hand,
 **nothing changes**: a stage with no package, or one still _Draft_ or _Ready_,
 advances exactly as before.
 
-![An applicant's drawer after a losing vote — the Membership Vote stage, the red not elected package status and its banner, and an action row that offers Advance](./images/20-13-applicant-drawer-not-elected.png)
+![An applicant's drawer after a losing vote — the Membership Vote stage, the red not elected package status, the banner and a link to the closed ballot, and an action row that offers Advance](./images/20-13-applicant-drawer-not-elected.png)
 
 **A Meeting stage that names no event now advances on nothing.** The stage
 builder's **Auto-Link Event Type** is what tells a meeting stage which event

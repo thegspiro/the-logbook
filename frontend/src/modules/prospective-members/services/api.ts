@@ -394,7 +394,7 @@ function mapProspectListToApplicantList(data: BackendProspectListResponse): Appl
 }
 
 /** Map a backend election package response to a frontend ElectionPackage */
-function mapElectionPackageResponse(data: BackendElectionPackageResponse): ElectionPackage {
+export function mapElectionPackageResponse(data: BackendElectionPackageResponse): ElectionPackage {
   const snapshot = data.applicant_snapshot ?? {};
   const config = data.package_config ?? {};
 
@@ -427,6 +427,13 @@ function mapElectionPackageResponse(data: BackendElectionPackageResponse): Elect
     recommended_ballot_item: config.recommended_ballot_item,
     status: data.status,
     election_id: data.election_id || undefined,
+    // All four describe the ballot, and ElectionPackageSection renders the
+    // link only when `election_id && election_title` both survive the mapping.
+    // Carrying the id alone left that guard permanently false, so no package
+    // in any outcome state ever showed which ballot decided it.
+    election_title: data.election_title || undefined,
+    election_end_date: data.election_end_date || undefined,
+    election_status: data.election_status || undefined,
     candidate_id: config.candidate_id,
     created_at: data.created_at,
     updated_at: data.updated_at,

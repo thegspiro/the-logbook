@@ -4546,7 +4546,7 @@ export const SHOTS = [
     line: 1321,
     anchor:
       "the applicant detail drawer for an applicant whose election package reads",
-    alt: "An applicant's drawer after a losing vote — the Membership Vote stage, the red not elected package status and its banner, and an action row that offers Advance",
+    alt: "An applicant's drawer after a losing vote — the Membership Vote stage, the red not elected package status, the banner and a link to the closed ballot, and an action row that offers Advance",
     route: "/prospective-members",
     // The banner's own sentence. "Election Package" is the section heading and
     // renders for every applicant on this stage whatever the ballot decided,
@@ -4568,6 +4568,15 @@ export const SHOTS = [
       // not reachable. The caption says Advance, so assert Advance.
       await page
         .getByRole("button", { name: /^Advance$/ })
+        .first()
+        .waitFor({ timeout: 30_000 });
+      // The ballot that decided it, named beneath the banner. This is the one
+      // part of the panel a mapper regression removes silently -- the guard is
+      // `election_id && election_title`, so dropping the title renders nothing
+      // rather than failing. Asserted on the state rather than the seeded
+      // title so a renamed election does not fail the capture.
+      await page
+        .getByRole("button", { name: /Closed$/ })
         .first()
         .waitFor({ timeout: 30_000 });
       await page.waitForTimeout(800);

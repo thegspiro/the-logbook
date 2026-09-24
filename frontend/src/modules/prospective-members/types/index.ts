@@ -1021,6 +1021,9 @@ export interface BackendElectionPackageResponse {
   pipeline_id: string | null;
   step_id: string | null;
   election_id: string | null;
+  election_title: string | null;
+  election_end_date: string | null;
+  election_status: string | null;
   status: ElectionPackageStatus;
   applicant_snapshot: {
     first_name?: string;

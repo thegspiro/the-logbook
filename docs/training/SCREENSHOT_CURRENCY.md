@@ -93,17 +93,22 @@ as forward — which had already dragged the *elected* package onto an applicant
 at Background & Medical, quietly making guide 01's Elected badge unreproducible.
 `SCENARIO_STAGES` pins both. Do not remove it to "simplify the spread".
 
-**What the drawer does not show, and should.** The panel's banner is the whole
-of the outcome in this frame: the ballot that decided it is named by the
-backend — `election_title`, `election_status` and `election_end_date` all come
-back on `GET /prospective-members/prospects/{id}/election-package` — and
-`ElectionPackageSection` is written to render it as a link beneath the banner.
-It never appears, for any package in any outcome state, because
-`mapElectionPackageResponse` in the module's `services/api.ts` copies
-`election_id` and drops the other three, so the component's
-`election_id && election_title` guard is never satisfied. The shot is accurate
-to what ships; **fixing the mapper changes this frame and the shot would need
-re-taking.** Recorded rather than fixed here to keep this pass to its capture.
+**The ballot link was missing, and framing this shot is what found it.** The
+backend had been sending `election_title`, `election_status` and
+`election_end_date` on `GET /prospective-members/prospects/{id}/election-package`
+all along, and `ElectionPackageSection` renders them as a link beneath the
+banner — but `mapElectionPackageResponse` in the module's `services/api.ts`
+copied `election_id` and dropped the other three, so the component's
+`election_id && election_title` guard was permanently false. No package named
+the ballot that decided it, in any outcome state, and nothing failed: a guard
+that renders nothing has no error to report. The first capture pictured exactly
+that absence.
+
+The mapper now carries all four, and the shot was re-taken against the fixed
+build — the frame includes _Membership Vote — September Business Meeting —
+Closed_ under the banner. The manifest entry waits for that link before it
+shoots, so the capture fails rather than quietly losing it if the mapping
+regresses.
 
 ### The Open Shifts pair needs two sessions, not two clips
 
