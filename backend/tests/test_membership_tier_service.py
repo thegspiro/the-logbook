@@ -215,12 +215,18 @@ class TestAdvanceAllStaysOnTheLadder:
         )
 
     def _db(self, org, members):
-        """Answers the org read, the batch read, then one locked read each."""
+        """Answers the org read, the batch read, the stints read (none
+        recorded), then one locked read each."""
         queue = [
             MagicMock(scalar_one_or_none=MagicMock(return_value=org)),
             MagicMock(
                 scalars=MagicMock(
                     return_value=MagicMock(all=MagicMock(return_value=members))
+                )
+            ),
+            MagicMock(
+                scalars=MagicMock(
+                    return_value=MagicMock(all=MagicMock(return_value=[]))
                 )
             ),
         ]

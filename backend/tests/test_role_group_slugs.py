@@ -178,3 +178,13 @@ class TestTheConfigFallbackExemptions:
         """
         assert DEFAULT_COMPLIANCE_OFFICER_ROLES == ["compliance_officer"]
         assert "compliance_officer" in DEFAULT_POSITIONS
+
+    def test_compliance_officer_is_an_office_signing_as_that_position(self):
+        """The office auto-detects its holder from the same seeded slug the
+        cert-alert CC and the Compliance suggestion box use, so all three
+        name the same person."""
+        office = next(o for o in OFFICE_CATALOG if o["key"] == "compliance_officer")
+        assert office["position_slugs"] == DEFAULT_COMPLIANCE_OFFICER_ROLES
+        assert position_slugs_for_offices("compliance_officer") == [
+            "compliance_officer"
+        ]

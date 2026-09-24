@@ -14,7 +14,10 @@ from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
 
 from app.models.user import UserStatus
-from app.services.property_return_reminder_service import PropertyReturnReminderService
+from app.services.property_return_reminder_service import (
+    PropertyReturnReminderService,
+    latest_due_threshold,
+)
 
 
 def _one(obj):
@@ -114,20 +117,53 @@ class TestProcessReminders:
         )
         return svc
 
-    async def test_fires_both_thresholds_for_old_drop(self, monkeypatch):
-        # 95 days out, neither reminder sent -> both 30 and 90 fire.
+    async def test_old_drop_gets_only_the_latest_threshold(self, monkeypatch):
+        # 95 days out, neither reminder sent -> the 90-day one only. The 30-day
+        # reminder is superseded: this runs daily, and the backlog present when
+        # the schedule was switched on must not get two emails in one morning.
         db = _db(
             [
                 _scalars([_member(days_ago=95)]),
                 _one(_org()),
-                _one(None),  # existing 30-day -> none
                 _one(None),  # existing 90-day -> none
             ]
         )
         svc = self._svc(db, monkeypatch)
         out = await svc.process_reminders("org-1")
-        assert out["reminders_sent"] == 2
-        assert svc._send_reminder.await_count == 2
+        assert out["reminders_sent"] == 1
+        assert svc._send_reminder.await_count == 1
+        sent = svc._send_reminder.await_args.kwargs["threshold"]
+        assert sent["type"] == "90_day"
+
+    async def test_first_threshold_goes_out_when_it_is_the_latest(self, monkeypatch):
+        db = _db(
+            [
+                _scalars([_member(days_ago=45)]),
+                _one(_org()),
+                _one(None),  # existing 30-day -> none
+            ]
+        )
+        svc = self._svc(db, monkeypatch)
+        out = await svc.process_reminders("org-1")
+        assert out["reminders_sent"] == 1
+        sent = svc._send_reminder.await_args.kwargs["threshold"]
+        assert sent["type"] == "30_day"
+
+    async def test_superseded_threshold_is_never_sent_late(self, monkeypatch):
+        # 120 days out, 90-day already sent, 30-day never sent: nothing goes out,
+        # and the 30-day reminder is not even looked up.
+        db = _db(
+            [
+                _scalars([_member(days_ago=120)]),
+                _one(_org()),
+                _one(SimpleNamespace(id="r90")),  # existing 90-day -> sent
+            ]
+        )
+        svc = self._svc(db, monkeypatch)
+        out = await svc.process_reminders("org-1")
+        assert out["reminders_sent"] == 0
+        svc._send_reminder.assert_not_awaited()
+        assert db.execute.await_count == 3
 
     async def test_skips_when_below_threshold(self, monkeypatch):
         db = _db([_scalars([_member(days_ago=10)]), _one(_org())])
@@ -161,6 +197,18 @@ class TestProcessReminders:
         out = await svc.process_reminders("org-1")
         assert out["reminders_sent"] == 0
         svc._send_reminder.assert_not_awaited()
+
+
+class TestLatestDueThreshold:
+    def test_none_before_the_first_threshold(self):
+        assert latest_due_threshold(0) is None
+        assert latest_due_threshold(29) is None
+
+    def test_thresholds_start_on_their_day(self):
+        assert latest_due_threshold(30)["type"] == "30_day"
+        assert latest_due_threshold(89)["type"] == "30_day"
+        assert latest_due_threshold(90)["type"] == "90_day"
+        assert latest_due_threshold(4000)["type"] == "90_day"
 
 
 class TestOverdueReturns:

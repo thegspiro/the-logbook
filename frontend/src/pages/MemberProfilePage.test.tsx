@@ -52,6 +52,8 @@ const getUserWithRoles = vi.fn();
 const setMyProfileVisibility = vi.fn();
 const checkContactInfoEnabled = vi.fn();
 const reactivateMember = vi.fn();
+const getServiceHistory = vi.fn();
+const changeStatus = vi.fn();
 let nfcIdCardsConnected = false;
 
 vi.mock('../hooks/useConnectedIntegrations', () => ({
@@ -94,6 +96,8 @@ vi.mock('../services/api', () => ({
   memberStatusService: {
     getMemberLeaves: () => Promise.resolve([]),
     reactivateMember: (...args: unknown[]) => reactivateMember(...args) as unknown,
+    getServiceHistory: (...args: unknown[]) => getServiceHistory(...args) as unknown,
+    changeStatus: (...args: unknown[]) => changeStatus(...args) as unknown,
   },
 }));
 
@@ -201,6 +205,41 @@ const redactedColleague: UserWithRoles = {
   profile_visibility: null,
 };
 
+/** Five years, a gap, then back since 2024 with the clock restarted. */
+const RETURNED_HISTORY = {
+  user_id: TARGET_ID,
+  hire_date: '2015-09-24',
+  periods: [
+    {
+      id: 'p1',
+      start_date: '2015-09-24',
+      start_is_hire_date: true,
+      end_date: '2020-09-24',
+      separation_status: 'dropped_voluntary',
+      counts_toward_service: false,
+      notes: null,
+      days: 1827,
+    },
+    {
+      id: 'p2',
+      start_date: '2024-09-24',
+      start_is_hire_date: false,
+      end_date: null,
+      separation_status: null,
+      counts_toward_service: true,
+      notes: null,
+      days: 730,
+    },
+  ],
+  credited_days: 730,
+  credited_years: 2,
+  prior_days: 1827,
+  effective_service_start: '2024-09-24',
+  is_recorded: true,
+  is_estimated: false,
+  default_rejoin_credit: 'continue',
+};
+
 describe('MemberProfilePage membership and privacy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -215,6 +254,10 @@ describe('MemberProfilePage membership and privacy', () => {
     getUserInventory.mockResolvedValue({ permanent_assignments: [] });
     setMyProfileVisibility.mockReset();
     setMyProfileVisibility.mockImplementation((v: unknown) => Promise.resolve(v));
+    getServiceHistory.mockReset();
+    getServiceHistory.mockResolvedValue(RETURNED_HISTORY);
+    changeStatus.mockReset();
+    changeStatus.mockResolvedValue({ user_id: TARGET_ID, previous_status: 'retired', new_status: 'active' });
   });
 
   it('describes a colleague by rank and member type, not employment status', async () => {
@@ -340,11 +383,83 @@ describe('MemberProfilePage membership and privacy', () => {
     expect(await screen.findByRole('heading', { name: 'Reactivate Member' })).toBeInTheDocument();
     expect(screen.queryByText('Change Member Status')).not.toBeInTheDocument();
 
+    await screen.findByRole('group', { name: /Earlier service/ });
     const fetchesBefore = getUserWithRoles.mock.calls.length;
     await userEvent.click(screen.getByRole('button', { name: 'Reactivate' }));
 
-    await waitFor(() => expect(reactivateMember).toHaveBeenCalledWith(TARGET_ID, { reason: undefined }));
+    await waitFor(() =>
+      expect(reactivateMember).toHaveBeenCalledWith(
+        TARGET_ID,
+        expect.objectContaining({ reason: undefined, service_credit: 'continue' })
+      )
+    );
     await waitFor(() => expect(getUserWithRoles.mock.calls.length).toBeGreaterThan(fetchesBefore));
+  });
+
+  it('shows a members-manager the service history, with prior service noted', async () => {
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByRole('heading', { name: 'Service History' })).toBeInTheDocument();
+    expect(await screen.findByText('Prior service (not counted)')).toBeInTheDocument();
+    expect(screen.getByText('Dropped (voluntary)')).toBeInTheDocument();
+    expect(screen.getByText('Not counted')).toBeInTheDocument();
+    expect(getServiceHistory).toHaveBeenCalledWith(TARGET_ID);
+    expect(screen.getByRole('button', { name: 'Edit service history' })).toBeInTheDocument();
+  });
+
+  it('keeps the service history from a colleague, since it records how a member left', async () => {
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByText('Captain · Life member');
+    expect(screen.queryByRole('heading', { name: 'Service History' })).not.toBeInTheDocument();
+    expect(getServiceHistory).not.toHaveBeenCalled();
+  });
+
+  it('lets a member read their own service history but not edit it', async () => {
+    routeUserId = VIEWER_ID;
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, id: VIEWER_ID });
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByRole('heading', { name: 'Service History' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit service history' })).not.toBeInTheDocument();
+  });
+
+  it('asks how earlier service counts when a retired member is brought back', async () => {
+    const user = userEvent.setup();
+    grantedPermissions = ['members.manage'];
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.RETIRED });
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByTitle('Change member status'));
+    // Staying out of membership opens no stint, so nothing is asked.
+    expect(screen.queryByRole('group', { name: /Earlier service/ })).not.toBeInTheDocument();
+
+    await user.selectOptions(await screen.findByRole('combobox'), UserStatus.ACTIVE);
+    await screen.findByRole('group', { name: /Earlier service/ });
+    await user.click(screen.getByRole('radio', { name: /Restart at zero/ }));
+    await user.click(screen.getByRole('button', { name: 'Update Status' }));
+
+    await waitFor(() =>
+      expect(changeStatus).toHaveBeenCalledWith(
+        TARGET_ID,
+        expect.objectContaining({ new_status: UserStatus.ACTIVE, service_credit: 'restart' })
+      )
+    );
+  });
+
+  it('sends no service choice for a change within membership', async () => {
+    const user = userEvent.setup();
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByTitle('Change member status'));
+    await user.selectOptions(await screen.findByRole('combobox'), UserStatus.LEAVE);
+    await user.click(screen.getByRole('button', { name: 'Update Status' }));
+
+    await waitFor(() =>
+      expect(changeStatus).toHaveBeenCalledWith(TARGET_ID, { new_status: UserStatus.LEAVE, reason: undefined })
+    );
   });
 
   it('does not claim "no address on file" when only the personal email was shared', async () => {

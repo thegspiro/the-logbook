@@ -7,7 +7,7 @@
  * a screen that states something the system does not do.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import MembershipTiersSection from './MembershipTiersSection';
@@ -22,16 +22,20 @@ const tier = (overrides: Partial<MembershipTier> = {}): MembershipTier => ({
   ...overrides,
 });
 
+const onSetRejoinServiceCredit = vi.fn();
+
 const renderSection = (tiers: MembershipTier[]) =>
   render(
     <MembershipTiersSection
       tiers={tiers}
       autoAdvance
+      rejoinServiceCredit="continue"
       loading={false}
       saving={false}
       dirty={false}
       memberCount={() => 0}
       onSetAutoAdvance={vi.fn()}
+      onSetRejoinServiceCredit={onSetRejoinServiceCredit}
       onUpdateTier={vi.fn()}
       onUpdateBenefits={vi.fn()}
       onAddTier={vi.fn()}
@@ -117,5 +121,20 @@ describe('selective training exemptions', () => {
     await openRights(user);
 
     expect(screen.queryByText(/still counted as met for this tier/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('the rejoin default', () => {
+  it('shows the department choice and reports a change', async () => {
+    const user = userEvent.setup();
+    onSetRejoinServiceCredit.mockReset();
+    renderSection([tier()]);
+
+    const group = screen.getByRole('group', { name: 'When a former member rejoins' });
+    expect(within(group).getByRole('radio', { name: /Continue prior service/ })).toBeChecked();
+
+    await user.click(within(group).getByRole('radio', { name: /Restart at zero/ }));
+
+    expect(onSetRejoinServiceCredit).toHaveBeenCalledWith('restart');
   });
 });

@@ -175,8 +175,9 @@ way to be signed by the officer whose name belongs on it.
 A **department office directory** now backs every template. Each catalogued
 office — President, Vice President, Chief, Deputy Chief, Assistant Chief,
 Secretary, Assistant Secretary, Treasurer, Safety Officer, Training Officer,
-Quartermaster — exposes `{{<office>_name}}`, `{{<office>_title}}`,
-`{{<office>_email}}` and `{{<office>_phone}}`.
+Quartermaster, Compliance Officer, EMS Supply Officer — exposes
+`{{<office>_name}}`, `{{<office>_title}}`, `{{<office>_email}}` and
+`{{<office>_phone}}`.
 
 **Resolution order** for a holder: an admin override on the office → the member
 the office is linked to (so the values track that member's profile) →
