@@ -2489,10 +2489,11 @@ class MembershipPipelineService:
         # on. A skip is a coordinator bypass, not an approval — it must never
         # convert the prospect to a member, even if a stage flagged
         # is_final_step ended up mid-pipeline through reordering.
+        sent_email_step_id: Optional[str] = None
         if not will_auto_transfer:
             # Advance to next step. The transfer, when there is one, already
             # ran above and moved the prospect out of the pipeline.
-            await self._advance_current_step(prospect, step_id)
+            sent_email_step_id = await self._advance_current_step(prospect, step_id)
 
         # Some explicit operations have a domain-level audit event in addition
         # to the step-level event above.  Stage both before committing so the
@@ -2506,7 +2507,53 @@ class MembershipPipelineService:
             )
 
         await self.db.commit()
+
+        # An automated-email stage has nothing left for anyone to do once its
+        # email has gone out, so it completes itself rather than sitting "in
+        # progress" until a coordinator clicks past it. This runs after the
+        # commit above so the stage being left is durable whatever happens
+        # here, and it goes back through complete_step so the completion gets
+        # the same gates, activity entry and optional notice as a manual one —
+        # and chains, when the next stage is another automated email.
+        if sent_email_step_id:
+            return await self._complete_sent_email_step(
+                prospect_id, organization_id, sent_email_step_id
+            )
         return await self.get_prospect(prospect_id, organization_id)
+
+    async def _complete_sent_email_step(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        step_id: str,
+    ) -> Optional[ProspectiveMember]:
+        """Complete an automated-email stage whose email was just sent.
+
+        ``completed_by`` is None: the system sent the email, and the
+        coordinator whose action reached this stage did not complete it.
+        A refusal from the stage gate leaves the stage in progress for a
+        coordinator, exactly as it stood before this existed.
+        """
+        try:
+            return await self.complete_step(
+                prospect_id=prospect_id,
+                organization_id=organization_id,
+                step_id=step_id,
+                completed_by=None,
+                notes="Completed automatically when the stage email was sent",
+                action_result={
+                    "auto_advanced": True,
+                    "trigger": "stage_email_sent",
+                    "email_sent": True,
+                },
+                automated=True,
+            )
+        except ValueError as e:
+            logger.warning(
+                f"Stage email sent to prospect {prospect_id} but step "
+                f"{step_id} was left open: {e}"
+            )
+            return await self.get_prospect(prospect_id, organization_id)
 
     async def skip_current_step(
         self,
@@ -3213,10 +3260,17 @@ class MembershipPipelineService:
 
     async def _advance_current_step(
         self, prospect: ProspectiveMember, completed_step_id: str
-    ):
-        """After completing a step, move current_step_id to the next step"""
+    ) -> Optional[str]:
+        """After completing a step, move current_step_id to the next step.
+
+        Returns the id of the stage moved onto when it is an automated-email
+        stage whose email was sent, so the caller can complete it once its own
+        transaction is committed. Returns None otherwise — including when the
+        send failed, which leaves the stage open so a coordinator sees that
+        the applicant never received it.
+        """
         if not prospect.pipeline:
-            return
+            return None
 
         sorted_steps = sorted(prospect.pipeline.steps, key=lambda s: s.sort_order)
         current_idx = next(
@@ -3251,7 +3305,14 @@ class MembershipPipelineService:
             # (or a legacy action step with action_type=send_email)
             if self._is_email_step(next_step):
                 await self.db.flush()
-                await self._send_stage_email(prospect, next_step)
+                sent = await self._send_stage_email(prospect, next_step)
+                # A stage flagged final is where the department approves the
+                # applicant (and, with auto_transfer_on_approval, converts
+                # them). Sending an email is not that approval, so a final
+                # email stage stays for a coordinator to complete.
+                if sent and not next_step.is_final_step:
+                    return str(next_step.id)
+        return None
 
     # =========================================================================
     # Transfer to Membership
