@@ -442,6 +442,30 @@ class TestRenderer:
                 "thermal_1x1",
             )
 
+    @pytest.mark.parametrize("label_format", ["letter", "thermal_1x1"])
+    def test_a_hidden_name_is_not_drawn(self, label_format):
+        drawn = []
+        original = Canvas.drawString
+        original_centred = Canvas.drawCentredString
+
+        def record(canvas_obj, x, y, text, *args, **kwargs):
+            drawn.append(text)
+            return original(canvas_obj, x, y, text, *args, **kwargs)
+
+        def record_centred(canvas_obj, x, y, text, *args, **kwargs):
+            drawn.append(text)
+            return original_centred(canvas_obj, x, y, text, *args, **kwargs)
+
+        spec = LabelSpec(name="Thermal Camera", barcode_value="INV-1", show_name=False)
+        with (
+            patch.object(Canvas, "drawString", record),
+            patch.object(Canvas, "drawCentredString", record_centred),
+        ):
+            render_labels([spec], label_format)
+
+        assert "Thermal Camera" not in drawn
+        assert "INV-1" in drawn
+
     def test_unknown_format_raises(self):
         with pytest.raises(ValueError, match="Unknown label format"):
             render_labels([LabelSpec(name="x", barcode_value="y")], "bogus")

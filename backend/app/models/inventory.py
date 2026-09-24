@@ -2299,6 +2299,49 @@ class ItemVariantGroup(Base):
     )
 
 
+class InventoryLabelPrint(Base):
+    """One confirmed label print for an item: who confirmed it, and when.
+
+    ``inventory_items.label_printed_at`` / ``label_printed_by`` hold only the
+    latest confirmation, and the label listener clears them when the encoded
+    value changes. This is the history those two columns overwrite, written
+    alongside them by ``mark_labels_printed`` and never cleared.
+
+    ``organization_id`` is denormalized so every read is org-scoped without a
+    join (CLAUDE.md pitfall #14).
+    """
+
+    __tablename__ = "inventory_label_prints"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    printed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    printed_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # The value the label encoded, so a later reprint after a barcode change
+    # shows which code each label carried.
+    label_value = Column(String(255), nullable=True)
+
+    printer = relationship("User", foreign_keys=[printed_by])
+
+    __table_args__ = (
+        Index("idx_label_prints_item_printed", "item_id", "printed_at"),
+        Index("idx_label_prints_org", "organization_id"),
+    )
+
+
 class InventoryItemPin(Base):
     """A member's own shortlist of items, hoisted to the top of the items list.
 

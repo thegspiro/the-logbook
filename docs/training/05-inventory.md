@@ -761,7 +761,7 @@ Generate barcode labels for inventory items to attach to equipment.
 
    Your choice is remembered per position and per module, exactly like the label size.
 
-4. Optionally set **Copies per item**, choose **What Prints on the Label**, and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below). The item name and its code always print. The **Asset tag** and **Serial number** print unless you switch them off (either is left off anyway when it repeats the code). **Location**, **Storage area** (the shelf's full path, e.g. `Supply Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print on one extra line in the order you pick them. The choice is remembered per position, like the label size.
+4. Optionally set **Copies per item**, choose **What Prints on the Label**, and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below). The code always prints. The **Item name**, **Asset tag** and **Serial number** print unless you switch them off — leaving the name off gives a small tag's height to the code, and the asset tag or serial number is left off anyway when it repeats the code. **Location**, **Storage area** (the shelf's full path, e.g. `Supply Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print on one extra line in the order you pick them. The choice is remembered per position, like the label size.
 5. Print one of three ways:
    - **PDF** (recommended for sticker/thermal printers) — downloads a PDF sized to the exact label; open it and print with your label printer selected.
    - **Print Labels** — prints directly through the browser print dialog.
@@ -779,7 +779,7 @@ Generate barcode labels for inventory items to attach to equipment.
 
 Labels include the barcode (Code 128 with the required quiet-zone margins, or a QR), the item name, and the asset tag or serial number. A QR has no built-in human-readable line, so the value is printed underneath it.
 
-> **Saved setups for a print station.** Above the printer controls, **Save setup…** stores the current label size, barcode style, what prints on the label, copies per item and network printer under a name — e.g. _Rollo 2×1, QR_. Pick it from **Saved setup** to apply all of it at once. Setups are kept in this browser, because they describe the printer and stock at one station that several people share; up to 20, and saving under an existing name replaces it.
+> **Saved setups for the department.** Above the printer controls, **Save setup…** stores the current label size, barcode style, what prints on the label, copies per item and network printer under a name — e.g. _Rollo 2×1, QR_. Pick it from **Saved setup** to apply all of it at once. Setups are saved for the whole department, so anyone who prints inventory labels sees the same list on any computer; up to 20, saving under an existing name replaces it, and **Delete setup** removes it for everyone.
 
 > **When an edit makes a label out of date.** Editing an item that has a confirmed label shows a banner on the item page with a **Print label** button. If the edit changed the code the label encodes, the old label no longer scans to the item and should be replaced — the item also goes back on the _needs a label_ list. If it changed only printed text (name, asset tag or serial number), the old label still scans but reads wrong.
 
@@ -867,7 +867,10 @@ question. It is never asked after **Download Test Label**.
 - The item's **Basic Info** card has a **Label Printed** line: the date the
   label was confirmed and, for members who manage inventory, who confirmed it
   ("_20 Sep 2026 by Jane Smith_") — or **Needs a label**. It shows the latest
-  confirmation; reprinting replaces it.
+  confirmation.
+- The item's **History** tab lists every confirmed print — who confirmed it,
+  when, and the code that label carried — so a reprint after a barcode change
+  shows both labels.
 - The items list has a label-status filter: **Any Label Status**, **Needs a
   Label**, **Label Printed**. The same filter carries into **Export**.
 - The print page's picker has **Only items that still need a label**.

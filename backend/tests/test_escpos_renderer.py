@@ -57,6 +57,11 @@ class TestOutputShape:
     def test_the_name_is_printed(self):
         assert b"Helmet" in render_escpos([_spec()])
 
+    def test_a_hidden_name_is_not_printed(self):
+        out = render_escpos([_spec(show_name=False)])
+        assert b"Helmet" not in out
+        assert b"INV-000123" in out
+
 
 class TestPaperSizes:
     @pytest.mark.parametrize("paper", list(ESCPOS_PAPER))

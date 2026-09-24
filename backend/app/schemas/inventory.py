@@ -2615,6 +2615,36 @@ class LabelPresetUpdate(BaseModel):
     )
 
 
+class LabelSetupSave(BaseModel):
+    """A named print setup to save for the whole organization.
+
+    Saving under a name that already exists (in any case) replaces that setup.
+    """
+
+    name: str = Field(min_length=1, max_length=40)
+    preset: str = Field(min_length=1, max_length=50)
+    custom_width: Optional[float] = Field(None, ge=0.5, le=8)
+    custom_height: Optional[float] = Field(None, ge=0.5, le=11)
+    symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
+    extra_lines: List[Annotated[str, StringConstraints(max_length=100)]] = Field(
+        default_factory=list, max_length=20
+    )
+    copies: int = Field(1, ge=1, le=50)
+    printer_id: Optional[str] = Field(None, min_length=1, max_length=36)
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("A setup needs a name")
+        return value
+
+
+class LabelSetupResponse(LabelSetupSave):
+    id: str
+
+
 # ============================================
 # Impact Planner
 # Helps the quartermaster size up a prospective new issue (e.g. a new

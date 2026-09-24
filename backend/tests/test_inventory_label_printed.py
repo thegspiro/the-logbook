@@ -10,9 +10,9 @@ the listener and the label PDF must agree on.
 import uuid
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 
-from app.models.inventory import InventoryItem
+from app.models.inventory import InventoryItem, InventoryLabelPrint
 from app.services.inventory_service import InventoryService
 from app.utils.label_renderer import printable_label_value
 
@@ -252,3 +252,66 @@ class TestWhoPrintedIt:
         )
 
         assert payload.label_printed_by_name is None
+
+
+@pytest.mark.integration
+class TestPrintHistory:
+    """Every confirmation is kept, not just the latest one on the item."""
+
+    async def test_each_confirmation_is_recorded_with_the_value_it_encoded(
+        self, db_session
+    ):
+        org = await _make_org(db_session, "labels-hist")
+        user = await _make_user(db_session, org)
+        item = await _make_item(db_session, org, barcode="INV-0500")
+        svc = InventoryService(db_session)
+
+        await svc.mark_labels_printed(
+            item_ids=[uuid.UUID(item.id)],
+            organization_id=uuid.UUID(org),
+            user_id=uuid.UUID(user),
+        )
+        item.barcode = "INV-0501"
+        await db_session.flush()
+        await svc.mark_labels_printed(
+            item_ids=[uuid.UUID(item.id)],
+            organization_id=uuid.UUID(org),
+            user_id=uuid.UUID(user),
+        )
+
+        rows = (
+            await db_session.execute(
+                select(InventoryLabelPrint.label_value, InventoryLabelPrint.printed_by)
+                .where(InventoryLabelPrint.item_id == item.id)
+                .order_by(InventoryLabelPrint.label_value)
+            )
+        ).all()
+        assert [tuple(r) for r in rows] == [("INV-0500", user), ("INV-0501", user)]
+
+        history = await svc.get_item_history(uuid.UUID(item.id), uuid.UUID(org))
+        printed = [e for e in history if e["type"] == "label_printed"]
+        assert len(printed) == 2
+        assert printed[0]["summary"] == "Label printed by Quarter Master"
+        assert {e["details"]["label_value"] for e in printed} == {
+            "INV-0500",
+            "INV-0501",
+        }
+
+    async def test_another_organizations_item_gets_no_history(self, db_session):
+        org = await _make_org(db_session, "labels-hist-a")
+        other = await _make_org(db_session, "labels-hist-b")
+        user = await _make_user(db_session, org)
+        foreign = await _make_item(db_session, other, barcode="INV-0600")
+
+        await InventoryService(db_session).mark_labels_printed(
+            item_ids=[uuid.UUID(foreign.id)],
+            organization_id=uuid.UUID(org),
+            user_id=uuid.UUID(user),
+        )
+
+        count = await db_session.scalar(
+            select(func.count())
+            .select_from(InventoryLabelPrint)
+            .where(InventoryLabelPrint.item_id == foreign.id)
+        )
+        assert count == 0

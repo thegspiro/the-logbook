@@ -45,6 +45,7 @@ import type { LabelPrinterConfig, PrintLabelsResult } from '../../../services/la
 import {
   EMPTY_LABEL_NAMES,
   HIDE_ASSET_TAG,
+  HIDE_NAME,
   HIDE_SERIAL_NUMBER,
   LABEL_EXTRA_FIELDS,
   labelExtraLine,
@@ -53,13 +54,7 @@ import {
   storageAreaPaths,
 } from '../utils/labelLines';
 import type { LabelNames } from '../utils/labelLines';
-import {
-  MAX_LABEL_SETUPS,
-  MAX_SETUP_NAME,
-  loadLabelSetups,
-  storeLabelSetups,
-  upsertLabelSetup,
-} from '../utils/labelSetups';
+import { MAX_LABEL_SETUPS, MAX_SETUP_NAME, usableSetupLines } from '../utils/labelSetups';
 import type { LabelSetup } from '../utils/labelSetups';
 import { PromptDialog } from '../../../components/ux';
 import { SheetStartPicker } from '../../../components/labels/SheetStartPicker';
@@ -476,21 +471,23 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, symbology, la
         pageBreakInside: 'avoid',
       }}
     >
-      <div
-        style={{
-          fontSize: preset.nameFontSize,
-          fontWeight: 600,
-          textAlign: 'center',
-          lineHeight: 1.2,
-          maxWidth: '100%',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          color: '#000',
-        }}
-      >
-        {item.name}
-      </div>
+      {!labelLines.includes(HIDE_NAME) && (
+        <div
+          style={{
+            fontSize: preset.nameFontSize,
+            fontWeight: 600,
+            textAlign: 'center',
+            lineHeight: 1.2,
+            maxWidth: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            color: '#000',
+          }}
+        >
+          {item.name}
+        </div>
+      )}
       {isQr ? (
         <>
           <QRCodeSVG
@@ -577,7 +574,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
   // labels already peeled off goes back in the printer instead of the bin.
   const [startPosition, setStartPosition] = useState(1);
   const [copies, setCopies] = useState(1);
-  const [setups, setSetups] = useState<LabelSetup[]>(loadLabelSetups);
+  const [setups, setSetups] = useState<LabelSetup[]>([]);
   const [chosenSetup, setChosenSetup] = useState('');
   const [namingSetup, setNamingSetup] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -763,6 +760,23 @@ const InventoryBarcodePrintPage: React.FC = () => {
       // Best-effort.
     }
   }, [labelLines]);
+
+  // The department's saved setups. Best-effort: without them the page is
+  // exactly as it was, and saving one still works.
+  useEffect(() => {
+    let cancelled = false;
+    inventoryService
+      .getLabelSetups()
+      .then((list) => {
+        if (!cancelled) setSetups(Array.isArray(list) ? list : []);
+      })
+      .catch(() => {
+        /* no setups shown; the rest of the page is unaffected */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Names for the extra line, which items carry only as ids. Each list is
   // best-effort: a failure leaves that field reading as the printed PDF's
@@ -1188,58 +1202,62 @@ const InventoryBarcodePrintPage: React.FC = () => {
   // Blank cells ahead of the first label, so the preview and a browser print
   // lay the sheet out exactly as the PDF does. Rolls have no positions.
   const skippedPositions = isThermal ? 0 : startPosition - 1;
-  const saveSetup = (rawName: string) => {
+  const saveSetup = async (rawName: string) => {
     const name = rawName.slice(0, MAX_SETUP_NAME);
     const isNew = !setups.some((s) => s.name.toLowerCase() === name.toLowerCase());
     if (isNew && setups.length >= MAX_LABEL_SETUPS) {
-      toast.error(`This browser holds up to ${MAX_LABEL_SETUPS} setups. Delete one first.`);
+      toast.error(`The department can keep up to ${MAX_LABEL_SETUPS} setups. Delete one first.`);
       return;
     }
-    const next = upsertLabelSetup(setups, {
-      name,
-      preset: presetId,
-      customWidth,
-      customHeight,
-      symbology,
-      lines: labelLines,
-      copies,
-      printerId: selectedPrinterId || null,
-    });
-    setSetups(next);
-    storeLabelSetups(next);
-    setChosenSetup(name);
-    setNamingSetup(false);
-    toast.success(isNew ? `Saved "${name}"` : `Updated "${name}"`);
+    try {
+      const saved = await inventoryService.saveLabelSetup({
+        name,
+        preset: presetId,
+        ...(isCustom && customValid ? { custom_width: customW, custom_height: customH } : {}),
+        symbology,
+        extra_lines: labelLines,
+        copies,
+        ...(selectedPrinterId ? { printer_id: selectedPrinterId } : {}),
+      });
+      setSetups(saved);
+      setChosenSetup(saved.find((s) => s.name.toLowerCase() === name.toLowerCase())?.id ?? '');
+      setNamingSetup(false);
+      toast.success(isNew ? `Saved "${name}" for the department` : `Updated "${name}"`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not save the setup'));
+    }
   };
 
-  const applySetup = (name: string) => {
-    const setup = setups.find((s) => s.name === name);
+  const applySetup = (setupId: string) => {
+    const setup = setups.find((s) => s.id === setupId);
     if (!setup) return;
     setPresetId(isKnownPreset(setup.preset) ? setup.preset : DEFAULT_PRESET_ID);
-    if (setup.preset === CUSTOM_PRESET_ID) {
-      setCustomWidth(setup.customWidth);
-      setCustomHeight(setup.customHeight);
+    if (setup.preset === CUSTOM_PRESET_ID && setup.custom_width != null && setup.custom_height != null) {
+      setCustomWidth(String(setup.custom_width));
+      setCustomHeight(String(setup.custom_height));
     }
     setSymbology(setup.symbology);
-    setLabelLines(setup.lines);
+    setLabelLines(usableSetupLines(setup));
     if (setup.copies !== copies) {
       setCopies(setup.copies);
       // Parts are cut by label count, so a new copy count re-cuts them.
       goToPart(0);
     }
     // A printer this organization no longer has is left as it is.
-    if (setup.printerId && printers.some((p) => p.id === setup.printerId)) {
-      setSelectedPrinterId(setup.printerId);
+    if (setup.printer_id && printers.some((p) => p.id === setup.printer_id)) {
+      setSelectedPrinterId(setup.printer_id);
       setPrintResult(null);
     }
     toast.success(`Using "${setup.name}"`);
   };
 
-  const deleteSetup = (name: string) => {
-    const next = setups.filter((s) => s.name !== name);
-    setSetups(next);
-    storeLabelSetups(next);
-    setChosenSetup('');
+  const deleteSetup = async (setupId: string) => {
+    try {
+      setSetups(await inventoryService.deleteLabelSetup(setupId));
+      setChosenSetup('');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not delete the setup'));
+    }
   };
 
   const toggleLabelLine = (key: string) =>
@@ -1460,7 +1478,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 >
                   <option value="">Choose a saved setup…</option>
                   {setups.map((s) => (
-                    <option key={s.name} value={s.name}>
+                    <option key={s.id} value={s.id}>
                       {s.name}
                     </option>
                   ))}
@@ -1468,8 +1486,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
               </div>
             ) : (
               <p className="text-theme-text-muted flex-1 text-sm">
-                Save this label size, barcode style, content, copies and printer as a named setup to reuse at this
-                station.
+                Save this label size, barcode style, content, copies and printer as a named setup anyone in the
+                department can reuse.
               </p>
             )}
             <div className="flex gap-2">
@@ -1477,7 +1495,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 Save setup…
               </button>
               {chosenSetup && (
-                <button type="button" onClick={() => deleteSetup(chosenSetup)} className="btn-secondary btn-sm">
+                <button type="button" onClick={() => void deleteSetup(chosenSetup)} className="btn-secondary btn-sm">
                   Delete setup
                 </button>
               )}
@@ -1487,12 +1505,12 @@ const InventoryBarcodePrintPage: React.FC = () => {
           <PromptDialog
             isOpen={namingSetup}
             onClose={() => setNamingSetup(false)}
-            onSubmit={saveSetup}
+            onSubmit={(name) => void saveSetup(name)}
             title="Save print setup"
             label="Setup name"
             placeholder="e.g. Rollo 2x1, QR"
-            defaultValue={chosenSetup}
-            hint={`Saved in this browser. A setup with the same name is replaced. Up to ${MAX_SETUP_NAME} characters.`}
+            defaultValue={setups.find((s) => s.id === chosenSetup)?.name ?? ''}
+            hint={`Saved for the whole department. A setup with the same name is replaced. Up to ${MAX_SETUP_NAME} characters.`}
             confirmLabel="Save setup"
           />
 
@@ -1861,11 +1879,12 @@ const InventoryBarcodePrintPage: React.FC = () => {
                   What Prints on the Label
                 </p>
                 <p className="text-theme-text-muted mb-2 text-xs">
-                  The item name and its code always print. An asset tag or serial number that repeats the code is left
-                  off anyway.
+                  The code always prints. Leaving the name off gives a small tag&apos;s height to the code. An asset tag
+                  or serial number that repeats the code is left off anyway.
                 </p>
                 <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Identifiers">
                   {[
+                    { hideKey: HIDE_NAME, label: 'Item name' },
                     { hideKey: HIDE_ASSET_TAG, label: 'Asset tag' },
                     { hideKey: HIDE_SERIAL_NUMBER, label: 'Serial number' },
                   ].map(({ hideKey, label }) => {

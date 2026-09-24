@@ -92,6 +92,18 @@ async def test_both_identifiers_print_by_default(db_session):
     assert specs[0].extra is None
 
 
+async def test_the_name_can_be_left_off(db_session):
+    org = await _make_org(db_session, "label-noname")
+    item = await _item(db_session, org, await _area(db_session, org, "Bin 2"))
+
+    specs, _ = await InventoryService(db_session).build_label_specs(
+        [item.id], org, ["no_name"], persist=False
+    )
+
+    assert specs[0].show_name is False
+    assert specs[0].extra is None
+
+
 async def test_another_orgs_shelf_is_never_named(db_session):
     org = await _make_org(db_session, "label-home")
     other = await _make_org(db_session, "label-other")

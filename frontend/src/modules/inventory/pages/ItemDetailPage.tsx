@@ -75,6 +75,7 @@ const HISTORY_ICONS: Record<string, React.ReactNode> = {
   issuance: <Shirt className="h-4 w-4 text-purple-500" />,
   issuance_return: <Package className="h-4 w-4 text-teal-500" />,
   maintenance: <Wrench className="h-4 w-4 text-orange-500" />,
+  label_printed: <Printer className="h-4 w-4 text-slate-500" />,
 };
 
 function typeIcon(itemType: string) {

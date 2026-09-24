@@ -45,6 +45,7 @@ from app.models.inventory import (
     InventoryImpactPlan,
     InventoryItem,
     InventoryItemPin,
+    InventoryLabelPrint,
     InventoryLot,
     InventoryVendor,
     InventoryVendorContact,
@@ -404,6 +405,8 @@ CATEGORY_PRESETS: List[Dict[str, Any]] = [
 # print path, whose shared request has no other per-module field.
 LABEL_HIDE_ASSET_TAG = "no_asset_tag"
 LABEL_HIDE_SERIAL_NUMBER = "no_serial_number"
+# Leaves the item name off, for a tag too small to carry it and the code.
+LABEL_HIDE_NAME = "no_name"
 # Joins a storage area to its parents. ASCII, because the ZPL and ESC/POS
 # renderers drop anything a printer's font may not carry.
 _AREA_PATH_SEPARATOR = " > "
@@ -5689,6 +5692,7 @@ class InventoryService:
             area_paths = storage_area_paths(areas)
         show_asset_tag = LABEL_HIDE_ASSET_TAG not in lines
         show_serial = LABEL_HIDE_SERIAL_NUMBER not in lines
+        show_name = LABEL_HIDE_NAME not in lines
 
         specs = [
             LabelSpec(
@@ -5696,6 +5700,7 @@ class InventoryService:
                 barcode_value=printable_value(item),
                 asset_tag=item.asset_tag if show_asset_tag else None,
                 serial_number=item.serial_number if show_serial else None,
+                show_name=show_name,
                 extra=_build_extra_lines(item, extra_lines, area_paths) or None,
             )
             for item in items
@@ -5829,6 +5834,18 @@ class InventoryService:
                 continue
             item.label_printed_at = now
             item.label_printed_by = str(user_id)
+            # The item keeps only the latest print; this row is the history.
+            self.db.add(
+                InventoryLabelPrint(
+                    organization_id=item.organization_id,
+                    item_id=item.id,
+                    printed_by=str(user_id),
+                    printed_at=now,
+                    label_value=printable_label_value(
+                        item.barcode, item.asset_tag, item.serial_number
+                    ),
+                )
+            )
             marked += 1
         await self.db.commit()
         logger.info(
@@ -6470,6 +6487,34 @@ class InventoryService:
                         "passed": m.passed,
                         "condition_after": self._enum_value(m.condition_after),
                         "notes": m.notes,
+                    },
+                }
+            )
+
+        # --- Label prints ---
+        print_result = await self.db.execute(
+            select(InventoryLabelPrint)
+            .options(selectinload(InventoryLabelPrint.printer))
+            .where(
+                InventoryLabelPrint.item_id == str(item_id),
+                InventoryLabelPrint.organization_id == str(organization_id),
+            )
+        )
+        for p in print_result.scalars().all():
+            user_name = self._format_user_name(p.printer) if p.printer else None
+            events.append(
+                {
+                    "type": "label_printed",
+                    "id": p.id,
+                    "date": p.printed_at.isoformat(),
+                    "summary": (
+                        f"Label printed by {user_name}"
+                        if user_name
+                        else "Label printed"
+                    ),
+                    "details": {
+                        "user_name": user_name,
+                        "label_value": p.label_value,
                     },
                 }
             )

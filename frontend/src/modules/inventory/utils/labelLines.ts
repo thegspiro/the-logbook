@@ -19,11 +19,17 @@ export const LABEL_EXTRA_FIELDS = [
   { key: 'condition', label: 'Condition' },
 ] as const;
 
-// The asset tag and serial number print unless one of these is present.
+// The name, asset tag and serial number print unless one of these is present.
+export const HIDE_NAME = 'no_name';
 export const HIDE_ASSET_TAG = 'no_asset_tag';
 export const HIDE_SERIAL_NUMBER = 'no_serial_number';
 
-const KNOWN_KEYS = new Set<string>([...LABEL_EXTRA_FIELDS.map((f) => f.key), HIDE_ASSET_TAG, HIDE_SERIAL_NUMBER]);
+const KNOWN_KEYS = new Set<string>([
+  ...LABEL_EXTRA_FIELDS.map((f) => f.key),
+  HIDE_NAME,
+  HIDE_ASSET_TAG,
+  HIDE_SERIAL_NUMBER,
+]);
 
 /** Keep only keys this page offers, dropping anything stale or malformed. */
 export function sanitizeLabelLines(raw: unknown): string[] | null {

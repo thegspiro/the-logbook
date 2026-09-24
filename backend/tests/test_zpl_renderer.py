@@ -60,6 +60,17 @@ class TestProgramStructure:
         zpl = render_zpl([_spec(name="Ladder Belt")])
         assert "Ladder Belt" in zpl
 
+    def test_a_hidden_name_prints_no_line_and_frees_its_height(self):
+        shown = render_zpl([_spec(name="Ladder Belt")], "thermal_1x1")
+        hidden = render_zpl([_spec(name="Ladder Belt", show_name=False)], "thermal_1x1")
+        assert "Ladder Belt" not in hidden
+        assert "INV-000123" in hidden
+
+        def barcode_y(zpl):
+            return int(re.search(r"\^FO\d+,(\d+)\^B", zpl).group(1))
+
+        assert barcode_y(hidden) < barcode_y(shown)
+
 
 class TestDimensions:
     def test_print_width_and_length_track_dpi(self):

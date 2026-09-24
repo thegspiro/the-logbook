@@ -122,6 +122,31 @@ describe('ItemDetailPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('lists every confirmed label print in the history', async () => {
+    mockGetItemHistory.mockResolvedValue({
+      events: [
+        {
+          type: 'label_printed',
+          id: 'lp-2',
+          date: '2026-09-20T15:00:00Z',
+          summary: 'Label printed by Quarter Master',
+          details: { user_name: 'Quarter Master', label_value: 'INV-0501' },
+        },
+        {
+          type: 'label_printed',
+          id: 'lp-1',
+          date: '2026-09-01T10:00:00Z',
+          summary: 'Label printed by Quarter Master',
+          details: { user_name: 'Quarter Master', label_value: 'INV-0500' },
+        },
+      ],
+    });
+    renderPage();
+
+    expect(await screen.findAllByText('Label printed by Quarter Master')).toHaveLength(2);
+    expect(screen.getByText(/INV-0500/)).toBeInTheDocument();
+  });
+
   it('shows the date the label was confirmed printed', async () => {
     mockGetItem.mockResolvedValue(makeItem({ label_printed_at: '2026-09-20T15:00:00Z' }));
     renderPage();

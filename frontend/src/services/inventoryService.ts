@@ -4,6 +4,7 @@
 
 import api from './apiClient';
 import type { Symbology } from './labelService';
+import type { LabelSetup, LabelSetupSave } from '../modules/inventory/utils/labelSetups';
 import type {
   ItemPin,
   UserCheckoutItem,
@@ -655,6 +656,23 @@ export const inventoryService = {
     );
     const autoPopulated = parseInt((response.headers?.['x-barcodes-auto-populated'] as string) ?? '0', 10);
     return { blob: response.data, autoPopulated: isNaN(autoPopulated) ? 0 : autoPopulated };
+  },
+
+  /** The organization's saved label print setups. */
+  async getLabelSetups(): Promise<LabelSetup[]> {
+    const response = await api.get<LabelSetup[]>('/inventory/label-setups');
+    return response.data;
+  },
+
+  /** Save a setup for the whole organization, replacing one of the same name. */
+  async saveLabelSetup(setup: LabelSetupSave): Promise<LabelSetup[]> {
+    const response = await api.post<LabelSetup[]>('/inventory/label-setups', setup);
+    return response.data;
+  },
+
+  async deleteLabelSetup(setupId: string): Promise<LabelSetup[]> {
+    const response = await api.delete<LabelSetup[]>(`/inventory/label-setups/${setupId}`);
+    return response.data;
   },
 
   /** File scanned items under a storage area (shelf put-away). At most 500 per call. */
