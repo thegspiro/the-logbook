@@ -37,6 +37,16 @@ covers:
 It must be filmed as a **member**, with attendee visibility switched on. The
 seeded open-house event supplies the rest.
 
+**Script 04, event creation → RSVP Settings** _(Incomplete, added
+2026-09-24)_: the organizer walkthrough never mentioned who can see the going
+list, so a chief finishing it had no idea the setting existed. A new beat after
+RSVP Settings covers the per-event **Who can see who's going** dropdown (**Use
+organization default**, **Everyone in the department**, **Only event
+managers**), that members see names only, and the department default under
+**Manage Events → Settings → Attendance**, which ships as **Only event
+managers**. It adds about 20 seconds. Film it as an officer; nothing needs
+saving.
+
 ## Flagged by the 2026-09-15 → 09-23 changes
 
 Full reason/data-path context in
