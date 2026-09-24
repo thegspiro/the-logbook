@@ -24,11 +24,16 @@ interface ScanCodeFieldProps {
   /** Unique per page: html5-qrcode renders the preview into this element id. */
   viewportId: string;
   label: string;
-  /** Return true when the code was recognised, to flash the success cue. */
-  onCode: (code: string) => boolean;
+  /**
+   * Resolve true when the code was recognised, to flash the success cue. May
+   * be async for a caller that has to ask the server what a code belongs to.
+   */
+  onCode: (code: string) => boolean | Promise<boolean>;
+  /** Text of the button that submits a typed code. */
+  submitLabel?: string;
 }
 
-export const ScanCodeField: React.FC<ScanCodeFieldProps> = ({ viewportId, label, onCode }) => {
+export const ScanCodeField: React.FC<ScanCodeFieldProps> = ({ viewportId, label, onCode, submitLabel = 'Find' }) => {
   const [value, setValue] = useState('');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const lastRef = useRef<{ code: string; at: number } | null>(null);
@@ -41,7 +46,9 @@ export const ScanCodeField: React.FC<ScanCodeFieldProps> = ({ viewportId, label,
     const last = lastRef.current;
     if (last && last.code === code && now - last.at < REPEAT_WINDOW_MS) return;
     lastRef.current = { code, at: now };
-    if (onCode(code)) signalScanSuccess();
+    void Promise.resolve(onCode(code)).then((recognised) => {
+      if (recognised) signalScanSuccess();
+    });
   };
 
   const { scanning, startScanner, stopScanner, flashlightSupported, flashlightOn, toggleFlashlight } = useHtml5Scanner({
@@ -90,7 +97,7 @@ export const ScanCodeField: React.FC<ScanCodeFieldProps> = ({ viewportId, label,
             autoFocus
           />
           <button type="submit" className="btn-secondary btn-sm inline-flex items-center gap-1.5">
-            <ScanLine className="h-3.5 w-3.5" /> Find
+            <ScanLine className="h-3.5 w-3.5" /> {submitLabel}
           </button>
           <button
             type="button"

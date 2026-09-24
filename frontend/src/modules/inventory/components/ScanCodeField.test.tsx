@@ -61,4 +61,21 @@ describe('ScanCodeField', () => {
 
     expect(onCode).not.toHaveBeenCalled();
   });
+
+  it('flashes success once an async handler recognises the code, and not when it does not', async () => {
+    const user = userEvent.setup();
+    onCode.mockImplementation((code: string) => Promise.resolve(code === 'SA-000001'));
+    open();
+
+    await user.type(screen.getByLabelText('Scan a code'), 'NOPE{Enter}');
+    expect(screen.queryByTestId('scan-success-flash')).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Scan a code'), 'SA-000001{Enter}');
+    expect(await screen.findByTestId('scan-success-flash')).toBeInTheDocument();
+  });
+
+  it('names the submit button as the caller asks', () => {
+    render(<ScanCodeField viewportId="v2" label="Scan" submitLabel="Check" onCode={onCode} />);
+    expect(screen.getByRole('button', { name: 'Check' })).toBeInTheDocument();
+  });
 });

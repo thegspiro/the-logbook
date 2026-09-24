@@ -6,32 +6,17 @@
  * items that have no label and marking none. Scanning answers per item — and
  * proves the label actually scans, which is the point of having one.
  *
- * Two inputs feed the same handler: the phone or laptop camera, and a
- * handheld USB/Bluetooth scanner, which types the code into the focused text
- * box and presses Enter.
+ * Codes arrive through ScanCodeField — the camera or a handheld scanner, with
+ * the camera's repeat reads already filtered out — so this component only
+ * decides what a code means for the batch.
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Camera, CameraOff, CheckCircle2, Loader2, ScanLine, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { InventoryItem } from '../types';
-import { useHtml5Scanner } from '../../../hooks/useHtml5Scanner';
-import { useScanFeedback } from '../../../hooks/useScanFeedback';
-import {
-  BARCODE_SCAN_CONFIG,
-  INVENTORY_BARCODE_FORMATS,
-  describeCameraError,
-  getCameraUnavailableReason,
-} from '../../../constants/camera';
-import { ScanSuccessFlash } from '../../../components/ux/ScanSuccessFlash';
-import { FlashlightToggle } from '../../../components/ux/FlashlightToggle';
 import { formatNumber } from '../../../utils/dateFormatting';
-
-const VIEWPORT_ID = 'label-confirm-scanner-viewport';
-
-// The camera decodes the same label many times a second while it is in view.
-// Repeats inside this window are the same scan, not a second one.
-const REPEAT_WINDOW_MS = 1500;
+import { ScanCodeField } from './ScanCodeField';
 
 type ScanOutcome =
   | { kind: 'matched'; name: string }
@@ -51,15 +36,11 @@ interface LabelScanConfirmProps {
 export const LabelScanConfirm: React.FC<LabelScanConfirmProps> = ({ items, labelValueOf, onConfirm, onCancel }) => {
   const [scanned, setScanned] = useState<Set<string>>(new Set());
   const [outcome, setOutcome] = useState<ScanOutcome | null>(null);
-  const [manual, setManual] = useState('');
   const [saving, setSaving] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const lastCodeRef = useRef<{ code: string; at: number } | null>(null);
   // Mirrors `scanned` so the camera callback, which outlives renders, reads
   // the current set rather than the one it closed over.
   const scannedRef = useRef(scanned);
   scannedRef.current = scanned;
-  const { flashing, signalScanSuccess } = useScanFeedback();
 
   const byId = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   // Keyed on the exact encoded value. The label carries the value verbatim, so
@@ -73,74 +54,41 @@ export const LabelScanConfirm: React.FC<LabelScanConfirmProps> = ({ items, label
     return map;
   }, [items, labelValueOf]);
 
-  const accept = useCallback(
-    (item: InventoryItem) => {
-      if (scannedRef.current.has(item.id)) {
-        setOutcome({ kind: 'repeat', name: item.name });
-        return;
-      }
-      setScanned((prev) => new Set(prev).add(item.id));
-      setOutcome({ kind: 'matched', name: item.name });
-      signalScanSuccess();
-    },
-    [signalScanSuccess]
-  );
+  // True only for a label newly ticked off, so a repeat does not flash success.
+  const accept = useCallback((item: InventoryItem): boolean => {
+    if (scannedRef.current.has(item.id)) {
+      setOutcome({ kind: 'repeat', name: item.name });
+      return false;
+    }
+    scannedRef.current = new Set(scannedRef.current).add(item.id);
+    setScanned(scannedRef.current);
+    setOutcome({ kind: 'matched', name: item.name });
+    return true;
+  }, []);
 
   const handleCode = useCallback(
-    async (raw: string) => {
-      const code = raw.trim();
-      if (!code) return;
-      const now = Date.now();
-      const last = lastCodeRef.current;
-      if (last && last.code === code && now - last.at < REPEAT_WINDOW_MS) return;
-      lastCodeRef.current = { code, at: now };
-
+    async (code: string): Promise<boolean> => {
       const local = byValue.get(code);
-      if (local) {
-        accept(local);
-        return;
-      }
+      if (local) return accept(local);
       // Not a value this page rendered. The PDF path can assign a barcode as
       // it prints, which the items loaded here predate, so ask the server
       // which item the code belongs to before calling it foreign.
       try {
         const { results } = await inventoryService.lookupByCode(code);
         const match = results.map((r) => byId.get(r.item.id)).find((item) => item !== undefined);
-        if (match) accept(match);
-        else setOutcome({ kind: 'foreign', code });
+        if (match) return accept(match);
+        setOutcome({ kind: 'foreign', code });
       } catch {
         setOutcome({ kind: 'error', message: `Could not look up ${code}` });
       }
+      return false;
     },
     [accept, byId, byValue]
   );
 
-  const { scanning, startScanner, stopScanner, flashlightSupported, flashlightOn, toggleFlashlight } = useHtml5Scanner({
-    viewportId: VIEWPORT_ID,
-    scanConfig: BARCODE_SCAN_CONFIG,
-    onScan: (text) => void handleCode(text),
-    formatsToSupport: INVENTORY_BARCODE_FORMATS,
-  });
-
-  const cameraUnavailable = getCameraUnavailableReason();
-
-  const toggleCamera = async () => {
-    if (scanning) {
-      await stopScanner();
-      return;
-    }
-    setCameraError(null);
-    try {
-      await startScanner();
-    } catch (err: unknown) {
-      setCameraError(describeCameraError(err));
-    }
-  };
-
   const confirm = async () => {
     setSaving(true);
     try {
-      await stopScanner();
       await onConfirm(Array.from(scanned));
     } catch {
       // The caller reports the failure; staying open keeps every scan.
@@ -153,54 +101,16 @@ export const LabelScanConfirm: React.FC<LabelScanConfirmProps> = ({ items, label
 
   return (
     <div className="card-secondary mb-4 space-y-3 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-theme-text-primary text-sm font-medium" aria-live="polite">
-          {formatNumber(scanned.size)} of {formatNumber(items.length)} labels scanned
-        </p>
-        <button
-          type="button"
-          onClick={() => void toggleCamera()}
-          disabled={cameraUnavailable !== null}
-          title={cameraUnavailable ?? undefined}
-          className="btn-secondary btn-sm inline-flex items-center gap-1.5"
-        >
-          {scanning ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
-          {scanning ? 'Stop camera' : 'Use camera'}
-        </button>
-      </div>
+      <p className="text-theme-text-primary text-sm font-medium" aria-live="polite">
+        {formatNumber(scanned.size)} of {formatNumber(items.length)} labels scanned
+      </p>
 
-      <div className={`relative overflow-hidden rounded-lg ${scanning ? '' : 'hidden'}`}>
-        <div id={VIEWPORT_ID} className="w-full" />
-        {scanning && flashlightSupported && <FlashlightToggle on={flashlightOn} onToggle={toggleFlashlight} />}
-        <ScanSuccessFlash active={flashing} />
-      </div>
-      {cameraError && <p className="text-sm text-red-700 dark:text-red-400">{cameraError}</p>}
-
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void handleCode(manual);
-          setManual('');
-        }}
-      >
-        <label htmlFor="label-confirm-code" className="form-label">
-          Scan or type a label&rsquo;s barcode
-        </label>
-        <div className="flex gap-2">
-          <input
-            id="label-confirm-code"
-            className="form-input"
-            value={manual}
-            onChange={(e) => setManual(e.target.value)}
-            autoComplete="off"
-            // A handheld scanner types into whatever has focus.
-            autoFocus
-          />
-          <button type="submit" className="btn-secondary btn-sm inline-flex items-center gap-1.5">
-            <ScanLine className="h-3.5 w-3.5" /> Check
-          </button>
-        </div>
-      </form>
+      <ScanCodeField
+        viewportId="label-confirm-scanner-viewport"
+        label="Scan or type a label’s barcode"
+        submitLabel="Check"
+        onCode={handleCode}
+      />
 
       {outcome && (
         <p
@@ -248,14 +158,7 @@ export const LabelScanConfirm: React.FC<LabelScanConfirmProps> = ({ items, label
           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           Mark {formatNumber(scanned.size)} scanned {scanned.size === 1 ? 'item' : 'items'} as labelled
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            void stopScanner();
-            onCancel();
-          }}
-          className="btn-secondary btn-sm"
-        >
+        <button type="button" onClick={onCancel} className="btn-secondary btn-sm">
           Back
         </button>
       </div>
