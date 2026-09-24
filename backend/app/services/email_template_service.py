@@ -632,6 +632,7 @@ _SAMPLE_OFFICER_NAMES: Dict[str, str] = {
     "assistant_secretary": "Priya Raman",
     "treasurer": "Thomas Grady",
     "quartermaster": "Wesley Kim",
+    "compliance_officer": "Janet Okafor",
 }
 
 for _office in OFFICE_CATALOG:

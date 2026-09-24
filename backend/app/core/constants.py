@@ -161,6 +161,13 @@ OFFICE_CATALOG: list[dict[str, object]] = [
         "position_slugs": ["quartermaster"],
     },
     {
+        "key": "compliance_officer",
+        "label": "Compliance Officer",
+        "default_title": "Compliance Officer",
+        "category": "administrative",
+        "position_slugs": ["compliance_officer"],
+    },
+    {
         "key": "ems_supply_officer",
         "label": "EMS Supply Officer",
         "default_title": "EMS Supply Officer",
