@@ -374,32 +374,58 @@ class Api:
             if body is not None
             else json.dumps(payload).encode() if payload is not None else None
         )
-        req = urllib.request.Request(url, data=data, method=method)
-        req.add_header("Content-Type", content_type)
-        # Double-submit CSRF: state-changing calls echo the cookie as a header.
-        if method != "GET":
-            token = self._csrf()
-            if token:
-                req.add_header("X-CSRF-Token", token)
-        # Seeding drives hundreds of writes in a burst, which trips the API's
-        # rate limiter on the auth and admin routes. That limiter is doing its
-        # job, so back off and retry rather than asking for it to be widened.
-        for attempt in range(6):
+        # A full seed runs for over an hour (the login limiter paces the
+        # member sign-ins), and an access token lives 30 minutes. Without a
+        # refresh the administrator's session lapsed partway through and every
+        # later step answered 401 -- so a 401 is answered the way the frontend
+        # answers it: one cookie-based refresh, then one retry.
+        refreshed = False
+        attempt = 0
+        while True:
+            req = urllib.request.Request(url, data=data, method=method)
+            req.add_header("Content-Type", content_type)
+            # Double-submit CSRF: state-changing calls echo the cookie as a
+            # header. Read per attempt -- a refresh rotates the cookie.
+            if method != "GET":
+                token = self._csrf()
+                if token:
+                    req.add_header("X-CSRF-Token", token)
             try:
                 with self.opener.open(req, timeout=120) as resp:
                     return json.loads(resp.read().decode() or "null")
             except urllib.error.HTTPError as exc:
+                # Seeding drives hundreds of writes in a burst, which trips the
+                # API's rate limiter on the auth and admin routes. That limiter
+                # is doing its job, so back off and retry rather than asking
+                # for it to be widened.
                 if exc.code == 429 and attempt < 5:
+                    attempt += 1
                     # Honour Retry-After where the server sends one: the admin
                     # password-reset limiter is 5 per 5 minutes, so a fixed
                     # few-second backoff would never clear it.
                     retry_after = exc.headers.get("Retry-After")
-                    sleep(int(retry_after) if retry_after else 5 * (attempt + 1))
+                    sleep(int(retry_after) if retry_after else 5 * attempt)
                     continue
+                if exc.code == 401 and not refreshed and not path.startswith("/auth/"):
+                    refreshed = True
+                    if self._refresh():
+                        continue
                 raise ApiError(
                     method, path, exc.code, exc.read().decode()[:600]
                 ) from exc
-        return None
+
+    def _refresh(self) -> bool:
+        """Renew an expired access token from the refresh-token cookie.
+
+        False when there is nothing to refresh (a session that never signed in)
+        or the refresh itself is refused; the caller then reports the original
+        401 rather than this one, since that is the call that failed.
+        """
+        try:
+            self.call("POST", "/auth/refresh", {})
+        except ApiError:
+            return False
+        return True
 
     def get(self, path: str) -> Any:
         return self.call("GET", path)
@@ -463,6 +489,44 @@ class Api:
         )
         parts.append(file_bytes)
         parts.append(f"\r\n--{boundary}--\r\n".encode())
+        return self.call(
+            "POST",
+            path,
+            body=b"".join(parts),
+            content_type=f"multipart/form-data; boundary={boundary}",
+        )
+
+    def post_multipart(
+        self,
+        path: str,
+        fields: dict[str, str],
+        files: list[tuple[str, str, bytes, str]],
+    ) -> Any:
+        """POST multipart/form-data with any number of files, including none.
+
+        `post_file` always sends exactly one file part. A form whose file field
+        is optional — a suggestion with no screenshots — must be able to send
+        the text fields alone, and an empty file part would be a zero-byte
+        upload the server rejects rather than an absent one.
+        """
+        boundary = "----logbookseed" + uuid.uuid4().hex
+        parts: list[bytes] = []
+        for name, value in fields.items():
+            parts.append(
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+                f"{value}\r\n".encode()
+            )
+        for field_name, filename, file_bytes, mime_type in files:
+            parts.append(
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="{field_name}"; '
+                f'filename="{filename}"\r\n'
+                f"Content-Type: {mime_type}\r\n\r\n".encode()
+            )
+            parts.append(file_bytes)
+            parts.append(b"\r\n")
+        parts.append(f"--{boundary}--\r\n".encode())
         return self.call(
             "POST",
             path,
@@ -601,6 +665,46 @@ def _demo_pdf(title: str, subtitle: str) -> bytes:
     page.showPage()
     page.save()
     return buffer.getvalue()
+
+
+def _demo_png(width: int = 480, height: int = 300) -> bytes:
+    """A valid RGB PNG shaped like a cropped screenshot: a title bar over a body.
+
+    Suggestion screenshots are re-encoded server-side, which rejects anything
+    Pillow cannot open, so this has to be a real image rather than a byte
+    string with a PNG extension. Built with zlib and struct to keep the seeder
+    stdlib-only.
+    """
+    import zlib
+
+    bar = bytes((153, 27, 27)) * width  # the app's red-800 header
+    body = bytes((241, 245, 249)) * width
+    rule = bytes((203, 213, 225)) * width
+    rows = []
+    for y in range(height):
+        if y < 36:
+            row = bar
+        elif (y - 36) % 40 == 39:
+            row = rule
+        else:
+            row = body
+        rows.append(b"\x00" + row)
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        )
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(b"".join(rows), 9))
+        + chunk(b"IEND", b"")
+    )
 
 
 # ── Seed steps ────────────────────────────────────────────────────────
@@ -7657,6 +7761,299 @@ class Seeder:
 
     # -- documents ---------------------------------------------------
 
+    # -- suggestion boxes --------------------------------------------
+
+    # Seeded on the Secretary position so the demo secretary (the capture
+    # harness's `auth: "secretary"` account) is a reviewer and can photograph the
+    # Review tab. The administrator is deliberately NOT named on any box: holding
+    # suggestions.manage configures boxes and reads nothing, and a demo in which
+    # the chief could read the concerns box would picture the opposite of the
+    # rule the guides teach.
+    SUGGESTION_REVIEWER_USERNAME = "okittredge"
+    SUGGESTION_REVIEWER_POSITION = "Secretary"
+    SUGGESTION_FORWARD_POSITION = "Training Officer"
+
+    SUGGESTION_BOXES = [
+        {
+            "name": "Training ideas",
+            "description": (
+                "Drills you want to run, skills you want more time on, courses "
+                "worth bringing in. Read by the Secretary and the Training "
+                "Officer."
+            ),
+            "anonymity_mode": "allowed",
+            "follow_up_enabled": True,
+            "reviewer_positions": ["Secretary", "Training Officer"],
+        },
+        {
+            "name": "Station concerns",
+            "description": (
+                "Anything about the stations, the apparatus or how we treat each "
+                "other that you would rather raise without your name. Always "
+                "anonymous. Read by the Secretary only."
+            ),
+            "anonymity_mode": "required",
+            "follow_up_enabled": True,
+            "reviewer_positions": ["Secretary"],
+        },
+        {
+            "name": "Apparatus wish list",
+            "description": (
+                "Equipment you would like to see on the rigs. Collected for the "
+                "annual budget; reviewers read every entry but do not reply."
+            ),
+            "anonymity_mode": "disabled",
+            "follow_up_enabled": False,
+            "reviewer_positions": ["Secretary"],
+        },
+    ]
+
+    # Four submissions, one per state the guides describe: a named idea that was
+    # accepted with a two-way thread; an anonymous idea under review, with an
+    # anonymous reply and a forward to a position; an always-anonymous concern
+    # nobody has touched; and an entry in a one-way box.
+    SUGGESTION_SUBMISSIONS = [
+        {
+            "box": "Training ideas",
+            "title": "Night-time vehicle extrication drill",
+            "details": (
+                "Every extrication drill we have run this year was in daylight. "
+                "Most of our real MVAs on the bypass are after dark. Could we run "
+                "one at night with scene lighting from Engine 2, so crews "
+                "practise cribbing and tool placement without full visibility?"
+            ),
+            "anonymous": False,
+            "screenshot": True,
+            "reviewer_reply": (
+                "Good idea — pencilled in for the second Tuesday next month. Can "
+                "you help set up the cribbing?"
+            ),
+            "submitter_reply": "Happy to. I'll bring the step chocks from Engine 2.",
+            "disposition": "accepted",
+            "internal_note": "Added to next month's drill calendar.",
+        },
+        {
+            "box": "Training ideas",
+            "title": "More hands-on SCBA time for probationary members",
+            "details": (
+                "Probies get their air-pack sign-off and then barely touch one "
+                "until a real call. A regular hands-on session — donning, "
+                "emergency procedures, a short consumption drill — would help."
+            ),
+            "anonymous": True,
+            "screenshot": False,
+            "reviewer_reply": (
+                "Would a monthly Saturday session work, or does it need to be on "
+                "drill nights?"
+            ),
+            "submitter_reply": "Drill nights, please — most of us work Saturdays.",
+            "disposition": "under_review",
+            "internal_note": "Check drill-night capacity with the Training Officer.",
+            "forward_to": "Training Officer",
+        },
+        {
+            "box": "Station concerns",
+            "title": "Station 2 bay door sensor keeps sticking",
+            "details": (
+                "The safety sensor on bay 2 has stopped the door halfway three "
+                "times this month, once with Engine 2 already rolling. It has "
+                "been reported verbally twice."
+            ),
+            "anonymous": True,
+            "screenshot": False,
+        },
+        {
+            "box": "Apparatus wish list",
+            "title": "A second thermal imaging camera for Ladder 1",
+            "details": (
+                "Ladder 1 carries one TIC for a crew of four. A second would let "
+                "the search team and the vent team each carry one."
+            ),
+            "anonymous": False,
+            "screenshot": False,
+        },
+    ]
+
+    def _user_id(self, username: str) -> str:
+        users = items(self.api.get("/users?limit=200"), "users")
+        return next(
+            (str(pick(u, "id")) for u in users if pick(u, "username") == username),
+            "",
+        )
+
+    def _ensure_role(self, username: str, role_name: str) -> bool:
+        """Grant a position to a member, tolerating it already being held."""
+        user_id = self._user_id(username)
+        roles = self.api.get("/roles")
+        role_id = next(
+            (
+                str(pick(r, "id"))
+                for r in (roles if isinstance(roles, list) else items(roles, "roles"))
+                if pick(r, "name") == role_name
+            ),
+            "",
+        )
+        if not user_id or not role_id:
+            return False
+        try:
+            self.api.post(f"/users/{user_id}/roles/{role_id}", {})
+        except ApiError as exc:
+            if exc.code not in (400, 409):
+                raise
+        return True
+
+    def seed_suggestion_boxes(self) -> None:
+        """Three suggestion boxes and four submissions, in every state shown.
+
+        The seeded department had no boxes, so every suggestion-box placeholder
+        in guides 07 and 20 and chapter 7 of script 07 had nothing to photograph.
+        Boxes are created by the administrator (`suggestions.manage`);
+        submissions by the demo member; review work by the demo secretary.
+
+        Idempotent per submission title, read from the reviewer's own Review
+        list. An anonymous submission's follow-up key exists only in memory for
+        the length of this step — it is never printed or written anywhere, and a
+        re-run neither needs it nor re-creates the submission.
+        """
+        if not self._ensure_role(
+            self.SUGGESTION_REVIEWER_USERNAME, self.SUGGESTION_REVIEWER_POSITION
+        ):
+            self.blocked.append(
+                "suggestion boxes: could not give "
+                f"{self.SUGGESTION_REVIEWER_USERNAME} the "
+                f"{self.SUGGESTION_REVIEWER_POSITION} position"
+            )
+            return
+
+        options = self.api.get("/suggestions/admin/reviewer-options") or {}
+        position_ids = {
+            pick(p, "name"): str(pick(p, "id")) for p in items(options, "positions")
+        }
+        existing = {
+            pick(b, "name")
+            for b in items(self.api.get("/suggestions/admin/boxes"), "boxes")
+        }
+        for box in self.SUGGESTION_BOXES:
+            if box["name"] in existing:
+                continue
+            reviewer_ids = [
+                position_ids[name]
+                for name in box["reviewer_positions"]
+                if name in position_ids
+            ]
+            if not reviewer_ids:
+                self.blocked.append(
+                    f"suggestion boxes: no reviewer position for {box['name']!r}"
+                )
+                continue
+            self.api.post(
+                "/suggestions/admin/boxes",
+                {
+                    "name": box["name"],
+                    "description": box["description"],
+                    "anonymity_mode": box["anonymity_mode"],
+                    "follow_up_enabled": box["follow_up_enabled"],
+                    "is_active": True,
+                    "reviewer_position_ids": reviewer_ids,
+                    "reviewer_member_ids": [],
+                },
+            )
+
+        # `member_session`, not a bare `login_as`: an account the administrator
+        # created is flagged must-change-password, and every call after the
+        # sign-in would answer 403 until that clears.
+        reviewer = self.member_session(
+            self.base_url,
+            self._user_id(self.SUGGESTION_REVIEWER_USERNAME),
+            self.SUGGESTION_REVIEWER_USERNAME,
+        )
+        submitted = {
+            pick(s, "title")
+            for s in items(reviewer.get("/suggestions/review?limit=200"), "items")
+        }
+
+        member = self.member_session(
+            self.base_url, self._user_id(DEMO_MEMBER_USERNAME), DEMO_MEMBER_USERNAME
+        )
+        box_ids = {
+            pick(b, "name"): str(pick(b, "id"))
+            for b in items(member.get("/suggestions/boxes"), "boxes")
+        }
+
+        for entry in self.SUGGESTION_SUBMISSIONS:
+            if entry["title"] in submitted:
+                continue
+            box_id = box_ids.get(entry["box"])
+            if not box_id:
+                self.blocked.append(
+                    f"suggestion boxes: box {entry['box']!r} not open to members"
+                )
+                continue
+            fields = {
+                "title": entry["title"],
+                "details": entry["details"],
+                "anonymous": "true" if entry["anonymous"] else "false",
+            }
+            files = (
+                [("screenshots", "drill-board.png", _demo_png(), "image/png")]
+                if entry["screenshot"]
+                else []
+            )
+            receipt = member.post_multipart(
+                f"/suggestions/boxes/{box_id}/submissions", fields, files
+            )
+            follow_up_key = pick(receipt or {}, "follow_up_key", "followUpKey")
+
+            # The reviewer finds the new item by title; an anonymous one has no
+            # id in the receipt, by design.
+            suggestion_id = next(
+                (
+                    str(pick(s, "id"))
+                    for s in items(
+                        reviewer.get("/suggestions/review?limit=200"), "items"
+                    )
+                    if pick(s, "title") == entry["title"]
+                ),
+                "",
+            )
+            if not suggestion_id:
+                self.blocked.append(
+                    f"suggestion boxes: {entry['title']!r} not visible to its reviewer"
+                )
+                continue
+
+            if entry.get("reviewer_reply"):
+                reviewer.post(
+                    f"/suggestions/review/{suggestion_id}/messages",
+                    {"body": entry["reviewer_reply"]},
+                )
+            if entry.get("submitter_reply"):
+                if entry["anonymous"]:
+                    if follow_up_key:
+                        member.post(
+                            "/suggestions/follow-up/messages",
+                            {"key": follow_up_key, "body": entry["submitter_reply"]},
+                        )
+                else:
+                    member.post(
+                        f"/suggestions/mine/{suggestion_id}/messages",
+                        {"body": entry["submitter_reply"]},
+                    )
+            if entry.get("disposition"):
+                reviewer.patch(
+                    f"/suggestions/review/{suggestion_id}",
+                    {
+                        "disposition": entry["disposition"],
+                        "internal_note": entry.get("internal_note"),
+                    },
+                )
+            if entry.get("forward_to") and entry["forward_to"] in position_ids:
+                reviewer.post(
+                    f"/suggestions/review/{suggestion_id}/forwards",
+                    {"position_ids": [position_ids[entry["forward_to"]]]},
+                )
+            follow_up_key = None
+
     def seed_legal_documents(self) -> list[dict]:
         """One published notice and one draft, so the two states differ on screen.
 
@@ -12509,7 +12906,9 @@ class Seeder:
                 if not self._advance_recording_interview(prospect_id, "spread"):
                     break
 
-    def _advance_recording_interview(self, prospect_id: str, label: str) -> bool:
+    def _advance_recording_interview(
+        self, prospect_id: str, label: str, report: bool = True
+    ) -> bool:
         """Advance one stage, recording an interview where the stage demands one.
 
         Advancing out of an `interview_requirement` stage legitimately refuses
@@ -12522,13 +12921,23 @@ class Seeder:
         actually runs — crashed the whole prospective-members step the first
         time a new applicant had to clear the Interview stage, and the
         applicants after that one were never created at all.
+
+        ``report=False`` is for bulk filler, where another gate stopping one
+        applicant (documents, the ballot) is expected and a "blocked" line per
+        applicant would bury the ones that mean something. It stays quiet only
+        for a 409 refusal; any other error is raised.
         """
         try:
             self.api.post(f"/prospective-members/prospects/{prospect_id}/advance")
             return True
         except ApiError as exc:
             if "interview" not in str(exc).lower():
-                self.blocked.append(f"{label} applicant: {exc}")
+                # Quiet is for a gate saying no (409), never for a failure:
+                # anything else still surfaces.
+                if not report and exc.code != 409:
+                    raise
+                if report:
+                    self.blocked.append(f"{label} applicant: {exc}")
                 return False
             try:
                 self.api.post(
@@ -12545,7 +12954,8 @@ class Seeder:
                 self.api.post(f"/prospective-members/prospects/{prospect_id}/advance")
                 return True
             except ApiError as inner:
-                self.blocked.append(f"{label} applicant: {inner}")
+                if report:
+                    self.blocked.append(f"{label} applicant: {inner}")
                 return False
 
     PROSPECTS = [
@@ -12581,9 +12991,11 @@ class Seeder:
         "devon.marsh@example.org": "Membership Vote",
     }
 
+    DEFAULT_PIPELINE_NAME = "Volunteer Membership Pipeline"
+
     def seed_prospective_members(self) -> dict[str, list[dict]]:
         pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
-        if not any(p.get("name") == "Volunteer Membership Pipeline" for p in pipelines):
+        if not any(p.get("name") == self.DEFAULT_PIPELINE_NAME for p in pipelines):
             pipelines.append(
                 self.api.post(
                     "/prospective-members/pipelines",
@@ -12613,12 +13025,26 @@ class Seeder:
                     },
                 )
             )
+        # By name, not by position: the department also has the meeting-stage
+        # pipeline (seed_meeting_stage_applicant), and list order is not a
+        # promise about which one is the default.
+        pipelines = [
+            p for p in pipelines if p.get("name") == self.DEFAULT_PIPELINE_NAME
+        ]
         pipeline_id = pick(pipelines[0], "id") if pipelines else None
         self._backfill_pipeline_stages(pipeline_id)
 
-        prospects = items(
-            self.api.get("/prospective-members/prospects?limit=100"), "prospects"
-        )
+        # Only this pipeline's applicants. Every helper below picks applicants
+        # by stage name or position, and one sitting on the other pipeline's
+        # Meeting stage would otherwise be handed an election package or this
+        # pipeline's documents.
+        prospects = [
+            p
+            for p in items(
+                self.api.get("/prospective-members/prospects?limit=100"), "prospects"
+            )
+            if not pipeline_id or p.get("pipeline_id") in (None, pipeline_id)
+        ]
         emails = {p.get("email") for p in prospects}
 
         def already_exists(email: str) -> bool:
@@ -12673,6 +13099,104 @@ class Seeder:
         self._link_prospect_events(prospects)
         self._upload_prospect_documents(prospects)
         return {"pipelines": pipelines, "prospects": prospects}
+
+    # A second, non-default pipeline whose middle stage is a Meeting that names
+    # its event, and one applicant parked on it. The default pipeline has no
+    # Meeting stage, so without this the applicant drawer's attendance
+    # requirement (2026-09-16) had nothing to appear on. A separate pipeline
+    # rather than a seventh stage on the default: every kanban shot is built on
+    # "seven applicants across six stages", and this leaves them true.
+    MEETING_PIPELINE_NAME = "Associate Member Pipeline"
+    MEETING_STAGE_NAME = "Attend a Business Meeting"
+    MEETING_APPLICANT = ("Priya", "Deshmukh", "priya.deshmukh@example.org")
+
+    def seed_meeting_stage_applicant(self) -> None:
+        pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
+        pipeline = next(
+            (p for p in pipelines if p.get("name") == self.MEETING_PIPELINE_NAME),
+            None,
+        )
+        if pipeline is None:
+            steps = [
+                ("Interest Form Received", "manual_approval", {}),
+                (
+                    self.MEETING_STAGE_NAME,
+                    "meeting",
+                    # Naming the event type is what makes attendance required
+                    # on every path, a coordinator's Advance included.
+                    {"linked_event_type": "business_meeting", "auto_advance": True},
+                ),
+                ("Committee Approval", "manual_approval", {}),
+            ]
+            pipeline = self.api.post(
+                "/prospective-members/pipelines",
+                {
+                    "name": self.MEETING_PIPELINE_NAME,
+                    "description": (
+                        "Associate (non-operational) members: an interest form, "
+                        "one business meeting, then committee approval."
+                    ),
+                    "is_default": False,
+                    "is_active": True,
+                    "steps": [
+                        {
+                            "name": name,
+                            "description": f"{name} stage.",
+                            "step_type": step_type,
+                            "is_first_step": order == 0,
+                            "is_final_step": order == len(steps) - 1,
+                            "sort_order": order,
+                            "required": True,
+                            "config": config,
+                        }
+                        for order, (name, step_type, config) in enumerate(steps)
+                    ],
+                },
+            )
+        pipeline_id = str(pick(pipeline, "id"))
+
+        first, last, email = self.MEETING_APPLICANT
+        found = items(
+            self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+            "prospects",
+        )
+        prospect = next((p for p in found if p.get("email") == email), None)
+        if prospect is None:
+            prospect = self.api.post(
+                "/prospective-members/prospects",
+                {
+                    "first_name": first,
+                    "last_name": last,
+                    "email": email,
+                    "address_city": "Oakville",
+                    "address_state": "VA",
+                    "address_zip": "22046",
+                    "interest_reason": "Wants to help with fundraising and outreach.",
+                    "referral_source": "Word of mouth",
+                    "desired_membership_type": "administrative",
+                    "pipeline_id": pipeline_id,
+                },
+            )
+        # The interest-form stage is a manual approval, so a coordinator's
+        # Advance moves them onto the meeting stage -- and there they stay,
+        # because nothing records them at a finalized business meeting.
+        if prospect.get("current_step_name") != self.MEETING_STAGE_NAME:
+            self.api.post(
+                f"/prospective-members/prospects/{pick(prospect, 'id')}/advance",
+                {},
+            )
+            # Re-read from the list: neither the create nor the advance
+            # response carries the stage's name, which the list rows do.
+            found = items(
+                self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+                "prospects",
+            )
+            prospect = next((p for p in found if p.get("email") == email), prospect)
+        if prospect.get("current_step_name") != self.MEETING_STAGE_NAME:
+            self.blocked.append(
+                f"meeting-stage applicant: on {prospect.get('current_step_name')!r}, "
+                f"not {self.MEETING_STAGE_NAME!r}"
+            )
 
     # Consolidated reporting buckets, in pipeline order. Named by what the
     # stages have in common rather than by stage count, because the Pipeline
@@ -13201,7 +13725,12 @@ class Seeder:
         if target <= 0:
             return 0
 
-        existing = self.api.get("/prospective-members/prospects?limit=1&status=active")
+        # Scoped to this pipeline: the meeting-stage pipeline's applicant is
+        # also active, and counting it would leave the board one short.
+        existing = self.api.get(
+            "/prospective-members/prospects?limit=1&status=active"
+            + (f"&pipeline_id={pipeline_id}" if pipeline_id else "")
+        )
         current = (
             existing.get("total", 0) if isinstance(existing, dict) else len(existing)
         )
@@ -13244,15 +13773,18 @@ class Seeder:
 
             created_ids.append(pick(prospect, "id"))
 
-            # Every fourth one moves down the board. Advancing past the final
-            # stage is refused with a 409, so the count is bounded by the
-            # pipeline length rather than relying on the API to absorb it.
+            # Every fourth one moves down the board. Through the shared helper,
+            # not a bare advance: the Interview stage refuses until an interview
+            # exists, and a bare advance 409'd the whole step on the first
+            # filler to reach it -- nine applicants into 236. A later gate
+            # (documents, the ballot) just parks that applicant where it is.
             if index % 4:
                 continue
             for _ in range(1 + (index // 4) % (len(self.PIPELINE_STAGES) - 1)):
-                self.api.post(
-                    f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
-                )
+                if not self._advance_recording_interview(
+                    pick(prospect, "id"), "bulk", report=False
+                ):
+                    break
 
         # Park the two most recently created at the *final* stage.
         #
@@ -13265,15 +13797,12 @@ class Seeder:
             if not prospect_id:
                 continue
             for _ in range(len(self.PIPELINE_STAGES)):
-                try:
-                    self.api.post(
-                        f"/prospective-members/prospects/{prospect_id}/advance"
-                    )
-                except ApiError as exc:
-                    # 409 is the pipeline saying "already at the end", which is
-                    # exactly where this is trying to get to.
-                    if exc.code != 409:
-                        raise
+                # False at the end of the pipeline, which is where this is
+                # trying to get to -- or at a gate short of it, which still
+                # leaves a bulk advance from page one partly refused.
+                if not self._advance_recording_interview(
+                    prospect_id, "bulk", report=False
+                ):
                     break
         return created
 
@@ -14831,6 +15360,10 @@ class Seeder:
         self.step("shift reminder inbox", self.seed_shift_reminder_notification)
         self.step("officers", lambda: self.seed_officers(members))
         self.step("messages", lambda: self.seed_messages(self.base_url, members))
+        # After officers and messages; before the elections step, which also
+        # grants okittredge the Secretary position. This step asserts that
+        # grant itself rather than relying on the ordering.
+        self.step("suggestion boxes", self.seed_suggestion_boxes)
         forms = self.step("forms", self.seed_forms) or []
         self.step(
             "form submissions",
@@ -14878,6 +15411,10 @@ class Seeder:
         # that step creates.
         self.step("membership vote outcome", self.seed_membership_vote_outcome)
         self.step("declined vote outcome", self.seed_declined_vote_outcome)
+        # Last of the pipeline steps: seed_prospective_members scopes itself to
+        # the default pipeline by name, so order is not load-bearing, but the
+        # vote outcomes above are the steps that assume one pipeline.
+        self.step("meeting-stage applicant", self.seed_meeting_stage_applicant)
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("compliance profiles", self.seed_compliance_profiles)

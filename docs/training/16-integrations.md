@@ -258,6 +258,12 @@ Add this URL as a Cal.com webhook subscribed to the **MEETING_ENDED** event, usi
 > as a **no-show** is ignored, so a meeting nobody joined advances nobody. Cal.com
 > cannot prove somebody was present, though: if your department needs presence
 > recorded rather than assumed, leave the stage on manual advancement.
+>
+> **Older pipelines: fixed 2026-09-16.** A Meeting stage created under the
+> pipeline's earliest stage format (an "action" stage whose action is
+> _schedule meeting_) was never reached by this webhook, so a booking that
+> should have advanced the applicant silently did nothing. It now advances them
+> like any other Cal.com meeting stage.
 
 ### Using Cal.com in the Membership Pipeline
 

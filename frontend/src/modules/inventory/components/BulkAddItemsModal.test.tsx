@@ -102,6 +102,8 @@ describe('BulkAddItemsModal', () => {
         { name: 'Gauze', tracking_type: 'pool', quantity: 24, unit_of_measure: 'Box' },
       ]);
     });
+    // The created ids go back so the list can offer to print their labels.
+    expect(onCreated).toHaveBeenCalledWith(['a', 'b']);
   });
 
   it('defaults a counted item with no stated quantity to none on hand', async () => {

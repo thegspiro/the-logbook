@@ -30,7 +30,11 @@ schema on first start, so an empty database is the expected starting point.
 ```bash
 # Use a unique password for this disposable environment. It is consumed by all
 # three commands and is never stored in the repository.
-export SCREENSHOT_ADMIN_PASSWORD="$(python -c 'import secrets; print(secrets.token_urlsafe(24))')"
+# The "-Aa1" suffix is not decoration: the backend requires a special
+# character, an upper- and lower-case letter and a digit, and a bare
+# token_urlsafe(24) contains no "-" or "_" roughly a third of the time, which
+# fails bootstrap at the administrator step with the organization already made.
+export SCREENSHOT_ADMIN_PASSWORD="$(python -c 'import secrets; print(secrets.token_urlsafe(24) + "-Aa1")')"
 
 # 1. Create the demo organization and administrator (once per database)
 python scripts/screenshots/bootstrap_demo.py

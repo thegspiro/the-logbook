@@ -1,7 +1,7 @@
 """Add inventory_nfc_tags: NFC tags attached to inventory items.
 
 Revision ID: ced0061dedc8
-Revises: 1b52ea3a079e
+Revises: 941e1251ad74
 
 A new table only; nothing existing is altered. The table is created whether or
 not a department uses NFC — the feature is off until an administrator sets
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "ced0061dedc8"
-down_revision = "1b52ea3a079e"
+down_revision = "941e1251ad74"
 branch_labels = None
 depends_on = None
 

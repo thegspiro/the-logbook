@@ -64,6 +64,7 @@ _ADMINISTRATIVE = (
     "historian",
     "apparatus_officer",
     "membership_coordinator",
+    "assistant_membership_coordinator",
     "safety_officer",
     "training_officer",
     "fundraising_chair",

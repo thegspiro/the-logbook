@@ -41,7 +41,7 @@ Per-module pages are listed in full in `_Sidebar.md`. Added most recently:
 ### Release handoffs
 
 One page per change window, newest first. The current one is
-**Recent-Changes-2026-09-12-to-09-15.md**; `_Sidebar.md` links the rest.
+**Recent-Changes-2026-09-15-to-09-23.md**; `_Sidebar.md` links the rest.
 
 ### Security
 

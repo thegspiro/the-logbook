@@ -320,6 +320,17 @@ When an applicant (or their coordinator) decides to withdraw from the process:
 
 The Withdrawn tab on the main page shows all withdrawn applications with name, last stage, withdrawal date, and reason.
 
+#### Applicant self-withdrawal _(2026-09-24)_
+
+An applicant can also withdraw from their own public **Application Status** page (`/application-status/:token`). A **Withdraw Application** button opens a confirmation dialog with an optional reason, and calls `POST /api/public/v1/application-status/{token}/withdraw`.
+
+- **Same credential, same conditions as the read.** The emailed status token authenticates it; an unknown or expired token, or a pipeline with public status pages turned off, answers 404 exactly as `GET /application-status/{token}` does.
+- **Only an open application.** `active` and `on_hold` can be withdrawn; anything else answers 409. `approved` is excluded deliberately — it is the department's decision awaiting conversion, so an applicant declining at that point contacts the coordinator. The status response carries `can_withdraw`, and the page shows the button only when it is true.
+- **Attribution.** The activity-log entry has no `performed_by` user and carries `"by_applicant": true`; an audit event `membership_pipeline.prospect_self_withdrawn` records the organization and client IP. The row is locked for the status check, as coordinator status changes are.
+- A coordinator can reactivate a self-withdrawn application exactly like any other.
+- **The coordinators are emailed.** After the withdrawal commits, every active member holding the **Membership Coordinator** or **Assistant Membership Coordinator** position receives an email naming the applicant, the pipeline, the stage they were at and any reason they gave. If nobody holds either position, it goes instead to every member who can manage prospective members (`prospective_members.manage`), so a withdrawal is never announced to no one. The send is best-effort: a mail failure is logged and never undoes the withdrawal or errors on the applicant's page. A `withdrawal_notice_sent` activity entry records how many were emailed. Email only — no SMS (CLAUDE.md pitfall #18).
+- **The applicant gets a confirmation.** After the coordinator notice, the applicant is emailed that their withdrawal went through, with the date in the department's timezone. It uses the **Application Withdrawn** template (`application_withdrawn`, under _Members & Accounts_ in Communications → Email Templates), so the department can reword it; until someone opens that screen, the built-in default is sent. The two emails are independent — either failing leaves the other, and the withdrawal, untouched — and a `withdrawal_confirmation_sent` activity entry records whether it was delivered. Migration `941e1251ad74` adds the type to the `template_type` enum on `email_templates` and `scheduled_emails`.
+
 ### Desired Membership Type
 
 Each applicant has an optional `desired_membership_type` field (`'regular'` or `'administrative'`) indicating what kind of membership they are seeking. The options are presented as **Regular Member** (starts as probationary) and **Administrative Member** (non-operational role). "Probationary" is not offered as a direct choice since it is a transitional status that all regular members pass through, not a membership type applicants select.
@@ -427,6 +438,17 @@ The stats bar on the main page shows up to seven metrics:
 | Approaching Timeout | Active applicants in warning or critical alert state                    |
 | Inactive            | Count of applicants with `status = 'inactive'`                          |
 | Withdrawn           | Count of applicants with `status = 'withdrawn'` (shown when > 0)        |
+
+**The stats bar and the applicant list agree** _(2026-09-16)_. They are two
+requests, and three things let them drift: mutations that refreshed only the
+list (`ConversionModal` called `fetchApplicants` alone, and skip-stage,
+assign-stage, advance, regress, hold and bulk reactivate never refreshed the
+counts), filters the stats did not count through, and out-of-order responses.
+`refreshPipelineView` now refreshes both halves and every mutation goes through
+it; `pipelineRefreshIntegrity.test.ts` fails on a new bare `fetchApplicants`
+caller. The six list fetches each carry a sequence number, and a stale response
+is dropped whole — no rows, no cleared loading flag, no error against a list it
+no longer describes.
 
 The leadership Pipeline Overview report additionally provides year-over-year applicant volume and growth, annual conversion and time-to-convert cohorts, referral-source effectiveness, configurable stage-group throughput, and applicant-level detail for authorized users. Date-range filters apply to the application date, so annual cohorts remain tied to the year in which each applicant entered the pipeline.
 
@@ -551,9 +573,21 @@ prefix is `/prospective-members`, so the full paths are as shown.
 
 ### Statistics Endpoint
 
-| Method | Path                                | Permission | Description             |
-| ------ | ----------------------------------- | ---------- | ----------------------- |
-| `GET`  | `/api/v1/prospective-members/stats` | `view`     | Get pipeline statistics |
+| Method | Path                                                        | Permission         | Description             |
+| ------ | ----------------------------------------------------------- | ------------------ | ----------------------- |
+| `GET`  | `/api/v1/prospective-members/pipelines/{pipeline_id}/stats` | `view` or `manage` | Get pipeline statistics |
+
+Optional query parameters _(2026-09-16)_: `search` and `event_id` narrow the
+counted population exactly as they narrow `GET /prospects`, through one shared
+predicate builder. Omitting both returns the whole-pipeline counts, so clients
+written before they existed are unaffected. `event_id` is confirmed in-org
+before it is counted through (pitfall #14c). The status filter is deliberately
+**not** accepted: it scopes the open-pipeline view alone, and counting through
+it would zero the Rejected / Withdrawn / Converted figures the same response
+feeds.
+
+_(Corrected 2026-09-24: this table previously gave the path as
+`/api/v1/prospective-members/stats`, which does not exist.)_
 
 ### Query Parameters (Applicant List)
 
@@ -648,6 +682,21 @@ and a partial failure surfaced as a bare count naming nobody.
 
 **One failure never aborts the rest** — the outcome is itemized so the caller
 can name who was skipped and why.
+
+#### One bulk bar for both views _(2026-09-24)_
+
+The page (`ProspectiveMembersPage`) owns the selection and draws the only bulk
+bar: **Print Badges**, **Advance All**, **Hold All** and **Reject All**. It
+serves the kanban board and the table alike.
+
+`PipelineTable` used to draw a second bar of its own whenever rows were
+selected, so Table view stacked two "N selected" bars. Its **Advance** matched
+the page's **Advance All** but reached it by a different path: one
+`advance` request per applicant, reporting only a count of failures. Its
+**Hold** existed nowhere else. The table's bar has been removed. **Hold All**
+is now on the page's bar and goes through `bulk-status` with `on_hold`. The
+table's selection props are now required, so it cannot draw a bar of its own
+again unnoticed.
 
 #### Edge cases
 
@@ -830,23 +879,72 @@ submitted.
 does not support. Eight stage types carry a gate; two of them changed in this
 window, and they are gated differently on purpose.
 
-| Stage type              | Gate                                                                                         | Applies to a coordinator's click? |
-| ----------------------- | -------------------------------------------------------------------------------------------- | --------------------------------- |
-| `election_vote`         | The applicant's latest election package must not read _Added to Ballot_ or _Not Elected_     | **Yes**                           |
-| `meeting`               | An `EventExternalAttendee` row with `checked_in` set, at an event the stage's config accepts | No — automatic advances only      |
-| `document_upload`       | The configured documents are present                                                         | Yes                               |
-| `reference_check`       | The configured references are recorded                                                       | Yes                               |
-| `checklist`             | The checklist items are ticked                                                               | Yes                               |
-| `interview_requirement` | The interview is recorded                                                                    | Yes                               |
-| `multi_approval`        | The approvals are recorded                                                                   | Yes                               |
-| `medical_screening`     | The screening is recorded                                                                    | Yes                               |
+| Stage type              | Gate                                                                                       | Applies to a coordinator's click? |
+| ----------------------- | ------------------------------------------------------------------------------------------ | --------------------------------- |
+| `election_vote`         | The applicant's latest election package must not read _Added to Ballot_ or _Not Elected_   | **Yes**                           |
+| `meeting`               | A settled check-in at an event the stage's config names — see below _(revised 2026-09-16)_ | **Yes**, when the stage names one |
+| `document_upload`       | The configured documents are present                                                       | Yes                               |
+| `reference_check`       | The configured references are recorded                                                     | Yes                               |
+| `checklist`             | The checklist items are ticked                                                             | Yes                               |
+| `interview_requirement` | The interview is recorded                                                                  | Yes                               |
+| `multi_approval`        | The approvals are recorded                                                                 | Yes                               |
+| `medical_screening`     | The screening is recorded                                                                  | Yes                               |
 
-**Why `election_vote` binds the coordinator and `meeting` does not.** A ballot
-result is a decision the department has already made, recorded by the Elections
-module — a coordinator clicking past it is overriding the membership, not
-exercising judgement. Attendance is evidence that may simply never have been
-recorded, so the manual **Advance** stays as the escape hatch, exactly as
-`_assert_meeting_attended` already documented.
+**Why `election_vote` binds the coordinator.** A ballot result is a decision the
+department has already made, recorded by the Elections module — a coordinator
+clicking past it is overriding the membership, not exercising judgement.
+
+**The `meeting` gate is decided by the stage, not by the caller** _(2026-09-16,
+superseding the 2026-09-13 and 2026-09-15 rules)_. The gate used to key on
+`automated` — who was advancing — so the same coordinator, applicant and stage
+were refused in a bulk advance and allowed one card at a time. Now:
+
+| Stage config                                                       | Every path (Advance, drag, bulk, automatic)                      |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| Names an event (`linked_event_type` or a pinned `linked_event_id`) | Refused until a **settled** check-in exists at a matching event  |
+| Names no event                                                     | Never graded — takes the coordinator's word; cannot auto-advance |
+
+A check-in counts as evidence only when **all three** hold:
+
+1. It is at an event `meeting_config_matches_event` accepts for the stage.
+2. The event's check-in window was open **at or after the prospect record was
+   created**. Measured against the window's _close_, not the check-in instant:
+   the kiosk writes the prospect and its attendance within milliseconds in an
+   order nothing should depend on, so this keeps the meeting that opened the
+   record and excludes attendance from before the application existed.
+3. The attendance is **settled** (`attendance_is_settled`): the event's
+   attendance is finalized, **or** the event ended more than
+   `PIPELINE_ATTENDANCE_SETTLE_DAYS` (default 7, `0` = at the event's end) ago.
+   A sign-in at the door is not the department's final roster.
+
+**What advances an applicant now.** The check-in hook is gone from both sign-in
+paths (kiosk and staff-entered). Instead:
+
+- **Finalizing an event** advances every checked-in applicant it clears, in one
+  pass. End Event and recording an actual end time both finalize, so all three
+  routes are covered. `finalize_event_attendance` returns early when no member
+  RSVP checked in — the ordinary shape of an open house — so the pass hangs off
+  both exits, not only the tail.
+- **The nightly `prospect_attendance_advance` task** (05:30, cron
+  `30 5 * * *`) re-asks the question for events nobody finalized. It is driven
+  from the applicants on meeting stages, not from events, because the active
+  applicant set is bounded while an "events that ended N days ago" lookback
+  would need a far edge that silently drops the applicant it exists to rescue.
+- **Re-finalizing** (after a reopen by an `events.reopen_attendance` holder)
+  re-runs the pass and skips anyone already moved.
+
+Two refusals, worded for their remedies. With no evidence, the message names
+the three ways out in order: record the attendance, un-tick **Required** and
+Skip, or clear the stage's Auto-Link Event Type. With a check-in at an event
+that is not yet settled, it names the event and asks for the finalize — the
+applicant did everything asked of them and the organizer did not.
+
+Two adjacent defects fixed in the same change:
+`complete_current_step_for_integration_event` compared the raw `step_type`, so a
+legacy `action` + `schedule_meeting` stage was unreachable from the Cal.com
+webhook meant to advance it; it now resolves through `effective_step_type`. And
+`GuestCheckInService._meeting_config_matches_event`'s docstring still taught the
+pre-2026-09-13 rule.
 
 **The package graded is the one the drawer shows** — latest by `created_at` — so
 `ElectionPackageSection` and the Advance button cannot disagree (CLAUDE.md

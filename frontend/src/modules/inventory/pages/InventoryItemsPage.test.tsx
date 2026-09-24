@@ -51,10 +51,22 @@ vi.mock('../../../hooks/useInventoryWebSocket', () => ({ useInventoryWebSocket: 
 
 // Stub heavy / out-of-scope child components.
 vi.mock('../components/ItemFormModal', () => ({
-  ItemFormModal: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>item-form-modal</div> : null),
+  ItemFormModal: ({ isOpen, onSaved }: { isOpen: boolean; onSaved: (ids?: string[]) => void }) =>
+    isOpen ? (
+      <div>
+        <span>item-form-modal</span>
+        <button onClick={() => onSaved(['new-1', 'new-2'])}>stub-create</button>
+      </div>
+    ) : null,
 }));
 vi.mock('../components/ReceiveStockModal', () => ({
-  default: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>receive-stock-modal</div> : null),
+  default: ({ isOpen, onReceived }: { isOpen: boolean; onReceived?: (ids: string[]) => void }) =>
+    isOpen ? (
+      <div>
+        <span>receive-stock-modal</span>
+        <button onClick={() => onReceived?.(['it-7'])}>stub-receive</button>
+      </div>
+    ) : null,
 }));
 vi.mock('../../../components/MemberPickerModal', () => ({ MemberPickerModal: () => null }));
 vi.mock('../../../components/InventoryScanModal', () => ({ InventoryScanModal: () => null }));
@@ -1639,6 +1651,57 @@ describe('InventoryItemsPage — CSV export', () => {
   });
 });
 
+describe('InventoryItemsPage — offering labels for items just added', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1 });
+    mockGetSummary.mockResolvedValue({
+      total_items: 1,
+      non_medical_items: 1,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockGetItemColors.mockReset();
+    mockGetItemColors.mockResolvedValue([]);
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(true);
+    window.history.pushState({}, '', '/inventory/items');
+  });
+
+  it('offers to print labels for newly created items, by id', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('Cordless Drill');
+
+    await user.click(screen.getByRole('button', { name: /Add Item/ }));
+    await user.click(await screen.findByRole('button', { name: 'stub-create' }));
+
+    expect(await screen.findByText(/2 items added/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Print labels/ }));
+    expect(window.location.pathname).toBe('/inventory/print-labels');
+    expect(new URLSearchParams(window.location.search).get('ids')).toBe('new-1,new-2');
+  });
+
+  it('offers a label for received stock, and can be dismissed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('Cordless Drill');
+
+    await user.click(screen.getByRole('button', { name: /Receive Stock/ }));
+    await user.click(await screen.findByRole('button', { name: 'stub-receive' }));
+
+    expect(await screen.findByText(/1 item received/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByText(/1 item received/)).not.toBeInTheDocument();
+  });
+});
+
 describe('InventoryItemsPage — selecting every matching item for labels', () => {
   const firstPage = [makeItem({ id: 'it-1', name: 'Drill' }), makeItem({ id: 'it-2', name: 'Saw' })];
   const everyMatch = Array.from({ length: 120 }, (_, i) => makeItem({ id: `it-${i + 1}`, name: `Tool ${i + 1}` }));
@@ -1709,14 +1772,19 @@ describe('InventoryItemsPage — selecting every matching item for labels', () =
     expect(qs.get('ids')?.split(',')).toHaveLength(119);
   });
 
-  it('does not offer select-all when more items match than one batch holds', async () => {
+  it('offers to print, not select, every match when more match than one batch', async () => {
     mockGetItems.mockImplementation(listing(600));
     const user = userEvent.setup();
     renderWithRouter(<InventoryItemsPage />);
     await selectLoaded(user);
 
-    expect(await screen.findByText(/600 match — narrow the filters to 500 or fewer/)).toBeInTheDocument();
+    // Selection stays capped: it also feeds bulk status changes and retiring.
+    expect(await screen.findByText(/600 match — select-all is limited to 500/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Select all 600/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Print labels for all 600 matching' }));
+    expect(window.location.pathname).toBe('/inventory/print-labels');
+    expect(new URLSearchParams(window.location.search).get('all')).toBe('1');
   });
 
   it('keeps the existing selection when the set grew past the cap before the request landed', async () => {

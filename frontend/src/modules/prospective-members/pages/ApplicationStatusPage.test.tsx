@@ -1,12 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router';
 
 const mockGetApplicationStatus = vi.fn();
+const mockWithdrawApplication = vi.fn();
+const mockToastSuccess = vi.fn();
+const mockToastError = vi.fn();
 
 vi.mock('../services/api', () => ({
   publicStatusService: {
     getApplicationStatus: (...args: unknown[]) => mockGetApplicationStatus(...args) as unknown,
+    withdrawApplication: (...args: unknown[]) => mockWithdrawApplication(...args) as unknown,
+  },
+}));
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: (...args: unknown[]) => mockToastSuccess(...args) as unknown,
+    error: (...args: unknown[]) => mockToastError(...args) as unknown,
   },
 }));
 
@@ -130,5 +142,70 @@ describe('ApplicationStatusPage progress count', () => {
 
     expect(await screen.findByText('1 completed')).toBeInTheDocument();
     expect(screen.queryByText(/\/ /)).not.toBeInTheDocument();
+  });
+});
+
+describe('ApplicationStatusPage withdraw application', () => {
+  beforeEach(() => {
+    mockGetApplicationStatus.mockReset();
+    mockWithdrawApplication.mockReset();
+    mockToastSuccess.mockReset();
+    mockToastError.mockReset();
+  });
+
+  it('offers no withdraw button when the backend does not allow it', async () => {
+    mockGetApplicationStatus.mockResolvedValue({ ...baseStatus, status: 'approved', can_withdraw: false });
+
+    renderPage();
+
+    await screen.findByText('Application Status');
+    expect(screen.queryByRole('button', { name: /Withdraw Application/i })).not.toBeInTheDocument();
+  });
+
+  it('withdraws after confirmation and shows the refreshed status', async () => {
+    const user = userEvent.setup();
+    mockGetApplicationStatus
+      .mockResolvedValueOnce({ ...baseStatus, can_withdraw: true })
+      .mockResolvedValueOnce({ ...baseStatus, status: 'withdrawn', can_withdraw: false });
+    mockWithdrawApplication.mockResolvedValue({ status: 'withdrawn', message: 'ok' });
+
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Withdraw Application/i }));
+    expect(screen.getByText('Withdraw your application?')).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Reason/i), 'Moving away');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Withdraw Application/i }));
+
+    await waitFor(() => expect(mockWithdrawApplication).toHaveBeenCalledWith('tok123', 'Moving away'));
+    expect(await screen.findByText('Withdrawn')).toBeInTheDocument();
+    expect(mockToastSuccess).toHaveBeenCalledWith('Your application has been withdrawn.');
+    expect(screen.queryByRole('button', { name: /Withdraw Application/i })).not.toBeInTheDocument();
+  });
+
+  it('does nothing when the applicant keeps their application', async () => {
+    const user = userEvent.setup();
+    mockGetApplicationStatus.mockResolvedValue({ ...baseStatus, can_withdraw: true });
+
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Withdraw Application/i }));
+    await user.click(screen.getByRole('button', { name: /Keep My Application/i }));
+
+    expect(mockWithdrawApplication).not.toHaveBeenCalled();
+    expect(screen.getByText('In Progress')).toBeInTheDocument();
+  });
+
+  it('reports a failed withdrawal and keeps the application shown as open', async () => {
+    const user = userEvent.setup();
+    mockGetApplicationStatus.mockResolvedValue({ ...baseStatus, can_withdraw: true });
+    mockWithdrawApplication.mockRejectedValue(new Error('This application is no longer open'));
+
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Withdraw Application/i }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Withdraw Application/i }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('This application is no longer open'));
+    expect(screen.getByText('In Progress')).toBeInTheDocument();
   });
 });

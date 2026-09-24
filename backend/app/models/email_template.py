@@ -60,6 +60,7 @@ class EmailTemplateType(str, enum.Enum):
     STOREFRONT_WINDOW_CLOSING = "storefront_window_closing"
     STOREFRONT_WINDOW_CLOSED = "storefront_window_closed"
     STOREFRONT_VENDOR_ORDER_PLACED = "storefront_vendor_order_placed"
+    APPLICATION_WITHDRAWN = "application_withdrawn"
     CUSTOM = "custom"
 
 

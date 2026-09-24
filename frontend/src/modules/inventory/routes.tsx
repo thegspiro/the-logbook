@@ -21,6 +21,7 @@ const InventoryAdminHub = lazyWithRetry(() =>
 );
 const InventoryCheckoutsPage = lazyWithRetry(() => import('../../pages/InventoryCheckoutsPage'));
 const StorageAreasPage = lazyWithRetry(() => import('./pages/StorageAreasPage'));
+const StorageAreaLabelPrintPage = lazyWithRetry(() => import('./pages/StorageAreaLabelPrintPage'));
 const ImportInventoryPage = lazyWithRetry(() => import('../../pages/ImportInventory'));
 const InventoryBarcodePrintPage = lazyWithRetry(() => import('./pages/InventoryBarcodePrintPage'));
 const ItemDetailPage = lazyWithRetry(() => import('./pages/ItemDetailPage'));
@@ -327,6 +328,19 @@ export const getInventoryRoutes = () => {
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <StorageAreasPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Inventory - Storage area barcode labels. Manage-gated to match the
+          storage_areas label module, which can also assign a missing barcode. */}
+      <Route
+        path="/inventory/storage-areas/print-labels"
+        element={
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <StorageAreaLabelPrintPage />
             </Suspense>
           </ProtectedRoute>
         }

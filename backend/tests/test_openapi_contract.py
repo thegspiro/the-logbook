@@ -58,6 +58,11 @@ class TestPublicRouteErrorResponses:
             ("/api/public/v1/forms/{slug}", "get", {"404", "429"}),
             ("/api/public/v1/calendar/{token}.ics", "get", {"404", "429"}),
             ("/api/public/v1/finance/approvals/{token}", "get", {"404", "429"}),
+            (
+                "/api/public/v1/application-status/{token}/withdraw",
+                "post",
+                {"404", "409", "429"},
+            ),
             ("/api/public/v1/webhooks/calcom/{integration_id}", "post", {"404", "429"}),
             # Guest check-in answers 400 when the window is closed, when the
             # service refuses the sign-in, and when the body will not parse,

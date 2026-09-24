@@ -11,6 +11,7 @@ import { SUGGESTION_DISPOSITION_COLORS, SUGGESTION_DISPOSITION_LABELS } from '..
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { useScrollDetailIntoView } from '../hooks/useScrollDetailIntoView';
 import { suggestionsService } from '../services/suggestionsService';
 import type { MySuggestionSummary, SubmitterSuggestionDetail } from '../types/suggestions';
 import SubmitterSuggestionView from './SubmitterSuggestionView';
@@ -28,6 +29,7 @@ const MySuggestionsPanel: React.FC<MySuggestionsPanelProps> = ({ selectedId, onS
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<SubmitterSuggestionDetail | null>(null);
+  const detailRef = useScrollDetailIntoView<HTMLDivElement>(detail?.id);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,35 +110,38 @@ const MySuggestionsPanel: React.FC<MySuggestionsPanelProps> = ({ selectedId, onS
               type="button"
               onClick={() => onSelect(item.id)}
               aria-current={item.id === selectedId ? 'true' : undefined}
-              className={`card flex w-full items-start justify-between gap-3 p-4 text-left max-md:min-h-[44px] ${
+              className={`card flex w-full items-center justify-between gap-3 p-4 text-left max-md:min-h-[44px] ${
                 item.id === selectedId ? 'border-l-theme-info border-l-4' : ''
               }`}
             >
-              <span className="min-w-0">
+              {/* Status and counts sit under the title — see SuggestionReviewPanel. */}
+              <span className="min-w-0 flex-1">
                 <span className="text-theme-text-primary block font-medium">{item.title}</span>
                 <span className="text-theme-text-muted block text-xs">
                   {item.boxName} · {formatDateTime(item.createdAt, tz)}
                 </span>
-              </span>
-              <span className="flex shrink-0 items-center gap-2">
-                {item.disposition && (
-                  <span className={`badge ${SUGGESTION_DISPOSITION_COLORS[item.disposition] ?? ''}`}>
-                    {SUGGESTION_DISPOSITION_LABELS[item.disposition] ?? item.disposition}
+                {(item.disposition || item.messageCount > 0) && (
+                  <span className="mt-2 flex flex-wrap items-center gap-2">
+                    {item.disposition && (
+                      <span className={`badge ${SUGGESTION_DISPOSITION_COLORS[item.disposition] ?? ''}`}>
+                        {SUGGESTION_DISPOSITION_LABELS[item.disposition] ?? item.disposition}
+                      </span>
+                    )}
+                    {item.messageCount > 0 && (
+                      <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
+                        <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                        {item.messageCount}
+                      </span>
+                    )}
                   </span>
                 )}
-                {item.messageCount > 0 && (
-                  <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
-                    <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
-                    {item.messageCount}
-                  </span>
-                )}
-                <ChevronRight className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
               </span>
+              <ChevronRight className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
             </button>
           </li>
         ))}
       </ul>
-      <div>
+      <div ref={detailRef} className="scroll-mt-20">
         {detail ? (
           <SubmitterSuggestionView detail={detail} loadAttachment={loadAttachment} onReply={reply} />
         ) : (

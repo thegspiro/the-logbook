@@ -131,6 +131,10 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'prospective_members',
     ],
   },
+  assistant_membership_coordinator: {
+    view: ['members', 'events', 'storefront', 'notifications', 'positions'],
+    manage: ['prospective_members'],
+  },
   assistant_secretary: {
     view: ['members', 'events', 'documents', 'storefront', 'minutes', 'notifications', 'positions', 'settings'],
     manage: ['members', 'documents', 'minutes'],

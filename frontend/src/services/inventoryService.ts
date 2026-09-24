@@ -3,6 +3,7 @@
  */
 
 import api from './apiClient';
+import type { Symbology } from './labelService';
 import type {
   ItemPin,
   UserCheckoutItem,
@@ -51,6 +52,7 @@ import type {
   ChargeManagementResponse,
   ReturnRequestItem,
   LocationInventorySummary,
+  PutAwayResult,
   ReorderRequest,
   ReorderRequestCreate,
   ReorderRequestUpdate,
@@ -670,7 +672,10 @@ export const inventoryService = {
     customWidth?: number,
     customHeight?: number,
     autoRotate?: boolean,
-    extraLines?: string[]
+    extraLines?: string[],
+    // symbology defaults to Code 128 and startPosition to the top of a sheet
+    // on the server; a roll ignores startPosition.
+    options: { symbology?: Symbology; startPosition?: number } = {}
   ): Promise<{ blob: Blob; autoPopulated: number }> {
     const response = await api.post<Blob>(
       '/inventory/labels/generate',
@@ -681,6 +686,8 @@ export const inventoryService = {
         custom_height: customHeight,
         auto_rotate: autoRotate,
         extra_lines: extraLines && extraLines.length > 0 ? extraLines : undefined,
+        symbology: options.symbology,
+        start_position: options.startPosition,
       },
       {
         responseType: 'blob',
@@ -688,6 +695,14 @@ export const inventoryService = {
     );
     const autoPopulated = parseInt((response.headers?.['x-barcodes-auto-populated'] as string) ?? '0', 10);
     return { blob: response.data, autoPopulated: isNaN(autoPopulated) ? 0 : autoPopulated };
+  },
+
+  /** File scanned items under a storage area (shelf put-away). At most 500 per call. */
+  async putAwayItems(areaId: string, itemIds: string[]): Promise<PutAwayResult> {
+    const response = await api.post<PutAwayResult>(`/inventory/storage-areas/${areaId}/put-away`, {
+      item_ids: itemIds,
+    });
+    return response.data;
   },
 
   /** Record that labels printed correctly for these items (after the user confirms). */
@@ -702,12 +717,14 @@ export const inventoryService = {
     preset: string | null;
     custom_width?: number | null;
     custom_height?: number | null;
+    symbology?: Symbology | null;
     position_id?: string | null;
   }> {
     const response = await api.get<{
       preset: string | null;
       custom_width?: number | null;
       custom_height?: number | null;
+      symbology?: Symbology | null;
       position_id?: string | null;
     }>('/inventory/label-preset');
     return response.data;
@@ -717,6 +734,7 @@ export const inventoryService = {
     preset: string;
     custom_width?: number;
     custom_height?: number;
+    symbology?: Symbology;
   }): Promise<{ preset: string | null; position_id?: string | null }> {
     const response = await api.put<{ preset: string | null; position_id?: string | null }>(
       '/inventory/label-preset',

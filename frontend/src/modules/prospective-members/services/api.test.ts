@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { mapProspectToApplicant } from './api';
-import type { BackendProspectResponse, BackendStepProgressResponse } from '../types';
+import { mapElectionPackageResponse, mapProspectToApplicant } from './api';
+import type { BackendElectionPackageResponse, BackendProspectResponse, BackendStepProgressResponse } from '../types';
 import { StepProgressStatus } from '../types';
 
 /** Helper to build a minimal BackendStepProgressResponse */
@@ -299,5 +299,116 @@ describe('mapProspectToApplicant', () => {
     const result = mapProspectToApplicant(data);
 
     expect(result.status).toBe('on_hold');
+  });
+});
+
+/** Helper to build a minimal BackendElectionPackageResponse */
+function makeElectionPackageResponse(
+  overrides: Partial<BackendElectionPackageResponse> = {}
+): BackendElectionPackageResponse {
+  return {
+    id: 'pkg-1',
+    prospect_id: 'prospect-1',
+    pipeline_id: 'pipeline-1',
+    step_id: 'step-1',
+    election_id: 'election-1',
+    election_title: 'Membership Vote — September Business Meeting',
+    election_end_date: '2026-10-01T18:28:41Z',
+    election_status: 'closed',
+    status: 'not_elected',
+    applicant_snapshot: { first_name: 'Devon', last_name: 'Marsh' },
+    coordinator_notes: null,
+    package_config: null,
+    created_at: '2026-09-01T00:00:00Z',
+    updated_at: '2026-09-22T00:00:00Z',
+    ...overrides,
+  };
+}
+
+describe('mapElectionPackageResponse', () => {
+  // ElectionPackageSection renders the ballot link behind
+  // `election_id && election_title`. The mapper used to copy the id alone, so
+  // that guard was permanently false and no package in any outcome state named
+  // the ballot that decided it -- while the backend had been sending all four
+  // fields the whole time.
+  it('carries every field describing the election, not just its id', () => {
+    const result = mapElectionPackageResponse(makeElectionPackageResponse());
+
+    expect(result.election_id).toBe('election-1');
+    expect(result.election_title).toBe('Membership Vote — September Business Meeting');
+    expect(result.election_end_date).toBe('2026-10-01T18:28:41Z');
+    expect(result.election_status).toBe('closed');
+  });
+
+  it('leaves the election fields undefined for a package on no ballot', () => {
+    const result = mapElectionPackageResponse(
+      makeElectionPackageResponse({
+        election_id: null,
+        election_title: null,
+        election_end_date: null,
+        election_status: null,
+        status: 'draft',
+      })
+    );
+
+    expect(result.election_id).toBeUndefined();
+    expect(result.election_title).toBeUndefined();
+    expect(result.election_end_date).toBeUndefined();
+    expect(result.election_status).toBeUndefined();
+  });
+});
+
+describe('mapProspectToApplicant — target role and lifecycle stamps', () => {
+  // Seven fields the drawer and the conversion dialog read. Before the
+  // columns landed there was nothing to carry: no schema sent them and no
+  // table stored them, so the banners rendered nothing and ConversionModal
+  // sent an always-undefined target_role_id, dropping the role silently.
+  const withLifecycle = (overrides: Partial<BackendProspectResponse> = {}): BackendProspectResponse => ({
+    ...makeProspectResponse([]),
+    target_role_id: 'role-1',
+    target_role_name: 'Safety Officer',
+    deactivated_at: '2026-06-01T08:00:00Z',
+    deactivated_reason: 'Lapsed',
+    reactivated_at: '2026-07-04T14:15:00Z',
+    withdrawn_at: null,
+    withdrawal_reason: null,
+    ...overrides,
+  });
+
+  it('carries the target role and every lifecycle stamp', () => {
+    const result = mapProspectToApplicant(withLifecycle());
+
+    expect(result.target_role_id).toBe('role-1');
+    expect(result.target_role_name).toBe('Safety Officer');
+    expect(result.deactivated_at).toBe('2026-06-01T08:00:00Z');
+    expect(result.deactivated_reason).toBe('Lapsed');
+    expect(result.reactivated_at).toBe('2026-07-04T14:15:00Z');
+  });
+
+  it('leaves an application with no role or history undefined', () => {
+    const result = mapProspectToApplicant(
+      withLifecycle({
+        target_role_id: null,
+        target_role_name: null,
+        deactivated_at: null,
+        deactivated_reason: null,
+        reactivated_at: null,
+      })
+    );
+
+    expect(result.target_role_id).toBeUndefined();
+    expect(result.target_role_name).toBeUndefined();
+    expect(result.deactivated_at).toBeUndefined();
+    expect(result.deactivated_reason).toBeUndefined();
+    expect(result.reactivated_at).toBeUndefined();
+  });
+
+  it('keeps a deactivation alongside a later reactivation', () => {
+    // The drawer's Details block renders them as a history pair, so the
+    // reactivation must not read as having replaced the deactivation.
+    const result = mapProspectToApplicant(withLifecycle());
+
+    expect(result.deactivated_at).toBe('2026-06-01T08:00:00Z');
+    expect(result.reactivated_at).toBe('2026-07-04T14:15:00Z');
   });
 });

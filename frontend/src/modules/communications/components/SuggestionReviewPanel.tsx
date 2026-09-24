@@ -18,6 +18,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
+import { useScrollDetailIntoView } from '../hooks/useScrollDetailIntoView';
 import { suggestionsService } from '../services/suggestionsService';
 import type {
   ReviewFilter,
@@ -252,6 +253,7 @@ const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, se
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReviewSuggestionDetail | null>(null);
+  const detailRef = useScrollDetailIntoView<HTMLDivElement>(detail?.id);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -376,37 +378,40 @@ const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, se
                     type="button"
                     onClick={() => onSelect(item.id)}
                     aria-current={item.id === selectedId ? 'true' : undefined}
-                    className={`card flex w-full items-start justify-between gap-3 p-4 text-left max-md:min-h-[44px] ${
+                    className={`card flex w-full items-center justify-between gap-3 p-4 text-left max-md:min-h-[44px] ${
                       item.id === selectedId ? 'border-l-theme-info border-l-4' : ''
                     }`}
                   >
-                    <span className="min-w-0">
+                    {/* Status and counts sit under the title, not beside it: beside
+                        it they squeezed the title to a word per line in the narrow
+                        list column of a landscape tablet. */}
+                    <span className="min-w-0 flex-1">
                       <span className="text-theme-text-primary block font-medium">{item.title}</span>
                       <span className="text-theme-text-muted block text-xs">
                         {item.boxName} · {item.isAnonymous ? 'Anonymous' : (item.submitterName ?? 'Former member')} ·{' '}
                         {formatSuggestionTime(item.createdAt, item.timestampPrecision, tz)}
                       </span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-2">
-                      {item.viaForward && (
-                        <span className="badge bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
-                          Forwarded to you
+                      <span className="mt-2 flex flex-wrap items-center gap-2">
+                        {item.viaForward && (
+                          <span className="badge bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                            Forwarded to you
+                          </span>
+                        )}
+                        <span className={`badge ${SUGGESTION_DISPOSITION_COLORS[item.disposition] ?? ''}`}>
+                          {SUGGESTION_DISPOSITION_LABELS[item.disposition] ?? item.disposition}
                         </span>
-                      )}
-                      <span className={`badge ${SUGGESTION_DISPOSITION_COLORS[item.disposition] ?? ''}`}>
-                        {SUGGESTION_DISPOSITION_LABELS[item.disposition] ?? item.disposition}
+                        {item.attachmentCount > 0 && (
+                          <Paperclip className="text-theme-text-muted h-3.5 w-3.5" aria-label="Has screenshots" />
+                        )}
+                        {item.messageCount > 0 && (
+                          <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
+                            <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                            {item.messageCount}
+                          </span>
+                        )}
                       </span>
-                      {item.attachmentCount > 0 && (
-                        <Paperclip className="text-theme-text-muted h-3.5 w-3.5" aria-label="Has screenshots" />
-                      )}
-                      {item.messageCount > 0 && (
-                        <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
-                          <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
-                          {item.messageCount}
-                        </span>
-                      )}
-                      <ChevronRight className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
                     </span>
+                    <ChevronRight className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
                   </button>
                 </li>
               ))}
@@ -424,7 +429,7 @@ const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, se
             </button>
           )}
         </div>
-        <div>
+        <div ref={detailRef} className="scroll-mt-20">
           {detail ? (
             <ReviewDetail detail={detail} onChange={handleChange} />
           ) : (
