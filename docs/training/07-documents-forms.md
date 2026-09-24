@@ -619,7 +619,27 @@ They are emailed a link, and see a **Forwarded to you** badge. Reviewers see who
 it was forwarded to and can **Withdraw** a forward. An anonymous submitter stays
 anonymous when forwarded. Forwards and withdrawals are audit-logged.
 
-![Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the internal note, the Forwarded to list naming the Training Officer position, and the follow-up thread with the reviewer's question and the anonymous submitter's reply](./images/07-17-suggestion-review.png)
+![Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the internal note, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply](./images/07-17-suggestion-review.png)
+
+The person it was forwarded to finds it on their own **Review** tab, even if
+they review no box. Only the suggestions forwarded to them appear there, each
+marked **Forwarded to you**, and the **Forward** button is replaced by a note
+that only the box's reviewers can forward it.
+
+> **Screenshot needed:**
+> _[What a forward recipient sees: Suggestions → **Review** for a member who
+> reviews no box, with the one forwarded submission marked **Forwarded to you**
+> and open, and under **Forwarded to** the note that only the box's reviewers can
+> forward it — no **Forward** button.]_
+
+**On a phone** the list and the open submission stack rather than sitting side
+by side. Tap a submission and the page scrolls down to it; scroll back up for the
+list.
+
+> **Screenshot needed:**
+> _[Suggestions → **Review** on a phone, a submission open: its title and
+> details at the top of the screen, then the **Disposition** and **Internal
+> note**, with the mobile bottom navigation below.]_
 
 ### Edge cases
 

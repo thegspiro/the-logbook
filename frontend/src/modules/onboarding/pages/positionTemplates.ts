@@ -336,6 +336,14 @@ const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
         ]),
       },
       {
+        id: 'compliance_officer',
+        name: 'Compliance Officer',
+        description: 'Compliance records, attestations, and compliance concerns',
+        icon: BadgeCheck,
+        priority: 60,
+        permissions: generateRolePermissions(modules, 'specialist', ['training', 'reports', 'documents']),
+      },
+      {
         id: 'communications_officer',
         name: 'Communications Officer / PIO',
         description: 'Public information, website, social media, newsletters, and notification management',

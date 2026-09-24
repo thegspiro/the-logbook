@@ -86,6 +86,64 @@ Communications module switch. What anonymity does not defeat — someone with
 access to the server's own logs lining up times — is recorded in the repository's
 `docs/KNOWN_LIMITATIONS.md`.
 
+## Added September 24, after the window
+
+These changes landed a day after the window closed, in
+[#2653](https://github.com/thegspiro/the-logbook/pull/2653) and
+[#2667](https://github.com/thegspiro/the-logbook/pull/2667).
+
+**Membership coordinators: one bulk-action bar in Table view** (#2653).
+
+- **Selecting applicants in Table view used to show two bars stacked**, both
+  reading "N selected". The page's bar offered Print Badges, Advance All and
+  Reject All; the table's own offered Advance, Hold and Reject.
+- **Now there is one bar**, the same in Kanban and Table: **Print Badges**,
+  **Advance All**, **Hold All** and **Reject All** (with an optional reason).
+  Nothing was lost: Hold moved onto this bar.
+- **Hold All now names anyone it skipped**, like the other bulk actions. The
+  old Hold sent one request per applicant and could only report how many
+  failed.
+- The header checkbox shows a **minus** when only some rows are selected, where
+  it used to look the same as all selected.
+
+**Members and event organizers: the event page's Event Information card** (#2667).
+
+- **Capacity shows on any event with a cap.** It used to show only on events
+  that require an RSVP. A capped event puts people on a waitlist either way, so
+  a waitlisted member could not see the "3 / 3, Event Full" that explained why.
+- **No more empty card.** An event that needs no RSVP, has no cap and allows no
+  guests used to show the card's heading with nothing under it. The card is now
+  left out.
+- **Managers see capacity once.** It stays in the Statistics card and is no
+  longer repeated in Event Information.
+
+**Nothing to do on upgrade** for either fix. Both are on the web page only: no
+migration and no setting.
+
+**If you maintain the training screenshots:**
+
+- **Every placeholder in the guides is now filled (600 of 600).**
+- **One image shows a simulated result, and its caption says so.** It is
+  Settings → Email with Microsoft 365 passing Test Connection, since the demo
+  has no Microsoft 365 tenant.
+- **Nine new steps in `scripts/screenshots/seed_demo_data.py`** create what the
+  new screens needed. They run at the end of a normal seed and are safe to
+  re-run:
+  - an org chart;
+  - two testing runs;
+  - a capped event with a waitlisted member;
+  - past closed-out shifts;
+  - a retired call type;
+  - photo-consent answers;
+  - a member's privacy settings;
+  - a long department message;
+  - one out-of-stock coat size.
+- **The Testing Checklist module stays off in the demo department**, as on a
+  fresh install. The two testing screenshots switch it on for themselves and
+  off again afterwards.
+- `docs/training/SCREENSHOT_CURRENCY.md` records each shot, the data behind it,
+  and the two frames that were requested but cannot exist.
+
 ## Upgrade notes
 
 **Four migrations. Head is `5a70c5dcd138`.** Back up, confirm `alembic heads`

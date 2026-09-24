@@ -369,6 +369,17 @@ Set `FRONTEND_URL` to your real, externally reachable site URL. Emailed links
 than from the incoming request URL, so leaving it unset or wrong produces
 broken links in emails.
 
+`unraid-setup.sh` does **not** write `FRONTEND_URL`, so after running it add the
+same HTTPS origin you gave for `ALLOWED_ORIGINS`:
+
+```bash
+FRONTEND_URL=https://logbook.yourdomain.com
+```
+
+In production, a `FRONTEND_URL` that still points at `localhost` (or any
+loopback address) logs `WARNING: FRONTEND_URL ...` at startup and appears under
+"Advisory" in `python -m app.preflight`. It does not stop the container.
+
 ### Database / Redis TLS (`DB_SSL` / `REDIS_SSL`)
 
 If you enable `DB_SSL` or `REDIS_SSL`, also set the matching CA path

@@ -108,7 +108,14 @@ def test_report_deletion_accepts_reports_manage():
 
 @pytest.mark.parametrize(
     "slug",
-    ["president", "vice_president", "secretary", "safety_officer", "training_officer"],
+    [
+        "president",
+        "vice_president",
+        "secretary",
+        "safety_officer",
+        "compliance_officer",
+        "training_officer",
+    ],
 )
 def test_officer_positions_hold_compliance_manage(slug):
     """The positions expected to set member hour requirements can actually

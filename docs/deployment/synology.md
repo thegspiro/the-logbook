@@ -90,6 +90,10 @@ sudo sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD
 NAS_IP=$(hostname -I | awk '{print $1}')
 sudo sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=http://${NAS_IP}:3000|" .env
 
+# Links in outgoing email are built from FRONTEND_URL; use the address members
+# will open (your HTTPS hostname once a reverse proxy is in front)
+sudo sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=http://${NAS_IP}:3000|" .env
+
 # Set production mode
 sudo sed -i "s|^ENVIRONMENT=.*|ENVIRONMENT=production|" .env
 sudo sed -i "s|^DEBUG=.*|DEBUG=false|" .env

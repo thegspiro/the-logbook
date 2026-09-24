@@ -590,6 +590,35 @@ smtp_port: 587
 use_ssl: true # Wrong! Port 587 needs TLS, not SSL
 ```
 
+### Links in Emails Point to localhost or Will Not Open
+
+**Symptom**: Emails arrive, but the password reset, ballot, approval or
+reminder link opens `http://localhost:3000/...` (or another address members
+cannot reach). The send itself reports success.
+
+**Cause**: Every emailed link is built from the server's `FRONTEND_URL` setting,
+never from the address the request arrived on. The shipped default is
+`http://localhost:3000`, and neither installer sets it.
+
+**Check**: In production the backend logs this at startup, and
+`python -m app.preflight` lists it under "Advisory":
+
+```
+WARNING: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...
+```
+
+**Solution**:
+
+1. Set `FRONTEND_URL` in `.env` to the address members use, e.g.
+   `FRONTEND_URL=https://logbook.yourdept.org`.
+2. Confirm it reaches the container: `docker compose config | grep FRONTEND_URL`.
+   If nothing prints, add `FRONTEND_URL: ${FRONTEND_URL}` to the backend
+   service's `environment:` block — a hand-maintained compose file (including
+   Unraid Compose Manager) does not pick up variables it does not list.
+3. Restart the backend.
+4. Links already sent keep the old address. Re-send what is still needed —
+   members request a new password reset, the secretary re-sends ballots.
+
 ---
 
 ## User Account Issues
@@ -1356,6 +1385,11 @@ Password reset links expire after **30 minutes**.
 1. Each reset link can only be used once
 2. Request a new link from the login page
 3. Copy the full URL from the email (don't modify it)
+
+#### Symptom: The reset link opens localhost or a page that will not load
+
+**Cause**: `FRONTEND_URL` is not set to the site's public address. See
+[Links in Emails Point to localhost or Will Not Open](#links-in-emails-point-to-localhost-or-will-not-open).
 
 ---
 

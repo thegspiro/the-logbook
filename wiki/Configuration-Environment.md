@@ -37,6 +37,11 @@ container because nothing passes it through. Previously those silently became
 defaults, which is the failure mode where production runs with a development
 setting and nothing says so.
 
+Items listed under **"Advisory, does not prevent startup"** boot normally but
+name something that works worse than intended. In production that includes
+`FRONTEND_URL` still pointing at `localhost` — see
+[Application Settings](#application-settings).
+
 Full procedure: [`docs/UPGRADING.md`](../docs/UPGRADING.md).
 
 ---
@@ -68,12 +73,25 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
 
 ## Application Settings
 
-| Variable      | Description         | Default            |
-| ------------- | ------------------- | ------------------ |
-| `ENVIRONMENT` | Runtime environment | `development`      |
-| `DEBUG`       | Enable debug mode   | `false`            |
-| `TZ`          | Timezone            | `America/New_York` |
-| `LOG_LEVEL`   | Logging verbosity   | `INFO`             |
+| Variable       | Description                                                | Default                 |
+| -------------- | ---------------------------------------------------------- | ----------------------- |
+| `ENVIRONMENT`  | Runtime environment                                        | `development`           |
+| `DEBUG`        | Enable debug mode                                          | `false`                 |
+| `TZ`           | Timezone                                                   | `America/New_York`      |
+| `LOG_LEVEL`    | Logging verbosity                                          | `INFO`                  |
+| `FRONTEND_URL` | Public site URL used to build every link in outgoing email | `http://localhost:3000` |
+
+> **`FRONTEND_URL`** _(2026-09-24)_: password resets, ballots, approvals,
+> reminders and applicant status links are all built from this value — never
+> from the address a request arrived on, because that comes from the
+> client-controlled `Host` header. Set it to the address members actually use
+> (e.g. `https://logbook.yourdept.org`). Left at the default, every emailed link
+> points at `localhost` and opens for nobody. In `production` the backend logs a
+> non-blocking `WARNING: FRONTEND_URL ...` at startup, and preflight lists it
+> as advisory, when the host is `localhost`, `*.localhost`, a loopback address
+> (`127.x.x.x`, `::1`), `0.0.0.0`, or cannot be parsed. Neither installer
+> (`scripts/universal-install.sh`, `unraid/unraid-setup.sh`) writes this value,
+> so set it by hand after installing.
 
 > **`COMPOSE_FILE`** _(2026-07)_: production installs (via `install.sh`) pin
 > `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so that

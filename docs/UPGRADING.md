@@ -33,6 +33,31 @@ development reports nothing regardless of how broken a production
 configuration is. To test production values from elsewhere, add
 `--as production`.
 
+### Advisory items
+
+Below any blocking items, preflight lists an **"Advisory, does not prevent
+startup"** section. These are printed in the startup log too, and the service
+boots with them — but each one names something that works worse than intended.
+
+One worth checking on every production install:
+
+```
+WARNING: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...
+```
+
+Every link in an outgoing email — password resets, ballots, approvals,
+reminders, applicant status — is built from `FRONTEND_URL`, never from the
+address a request arrived on. Left at the shipped default, those emails go out
+with links nobody else can open, and nothing else reports it. The check fires
+in `production` only, when the URL's host is `localhost`, a `*.localhost` name,
+a loopback address (`127.x.x.x`, `::1`), `0.0.0.0`, or cannot be parsed. Set
+`FRONTEND_URL` to the site's public address (for example
+`https://logbook.yourdept.org`) and confirm it lands:
+
+```bash
+docker compose config | grep FRONTEND_URL
+```
+
 ### "I set it in .env and nothing changed"
 
 A Docker Compose `environment:` block is a **whitelist**. A variable missing

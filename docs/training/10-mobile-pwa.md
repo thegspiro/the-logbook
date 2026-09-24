@@ -921,10 +921,9 @@ Before this, every one of them was reached the same way: tap **More**, wait for
 the drawer, find the module, find the page, find its button. **Four taps and two
 page loads before the first field.**
 
-> **Screenshot needed:**
-> _[The phone bottom bar at 390px with the Add button in the centre, and the
-> Quick Add sheet open showing the entry rows. Capture as a member — the officer
-> rows are gated and should not appear in a member's sheet.]_
+![The phone bottom bar at 390px as an ordinary member: Home and Events on the left, the round Add button in the centre, and Schedule and More on the right](./images/10-24-bottom-bar-add.png)
+
+![At 390px as an ordinary member: the Quick Add sheet opened from the centre Add button of the bottom bar, listing the entry rows a member can use and none of the officer-only rows](./images/10-23-quick-add-sheet.png)
 
 **Quick Add adds no forms of its own.** Each row goes to the screen that already
 owns that entry, so there is no second path for the same data to drift down and

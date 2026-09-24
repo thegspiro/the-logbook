@@ -73,6 +73,9 @@ REDIS_PASSWORD=<strong-password>
 # CORS
 ALLOWED_ORIGINS=["http://localhost:3000"]
 
+# Public site URL — every link in outgoing email is built from it
+FRONTEND_URL=http://localhost:3000
+
 # Ports
 FRONTEND_PORT=3000
 BACKEND_PORT=3001
