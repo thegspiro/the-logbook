@@ -3078,8 +3078,13 @@ class MembershipPipelineService:
         changed_by: Optional[str],
         reason: Optional[str],
         bulk: bool,
+        by_applicant: bool = False,
     ) -> None:
         """Move one prospect to ``target``, recording ``reason`` as activity.
+
+        ``by_applicant`` marks a change the applicant made themselves from the
+        public status page, which has no ``changed_by`` user to attribute it
+        to — without the flag it would read as an unattributed system change.
 
         The reason is deliberately kept out of ``prospect.notes``: it is the
         coordinator's running record of the applicant, and writing a
@@ -3114,15 +3119,18 @@ class MembershipPipelineService:
         if previous == target.value:
             raise ValueError(f"Prospect is already {target.value}")
         prospect.status = target
+        details: Dict[str, Any] = {
+            "from": previous,
+            "to": target.value,
+            "reason": reason,
+            "bulk": bulk,
+        }
+        if by_applicant:
+            details["by_applicant"] = True
         await self._log_activity(
             prospect_id=str(prospect.id),
             action="prospect_status_changed",
-            details={
-                "from": previous,
-                "to": target.value,
-                "reason": reason,
-                "bulk": bulk,
-            },
+            details=details,
             performed_by=changed_by,
         )
 
@@ -6057,6 +6065,80 @@ class MembershipPipelineService:
     # Status tokens expire after 30 days to limit exposure if leaked.
     _STATUS_TOKEN_TTL_DAYS = 30
 
+    # An applicant may withdraw only an application that is still open. An
+    # approved one is the department's decision awaiting conversion, and the
+    # closed statuses have nothing left to withdraw from.
+    _SELF_WITHDRAWABLE_STATUSES = frozenset(
+        {ProspectStatus.ACTIVE.value, ProspectStatus.ON_HOLD.value}
+    )
+
+    def _status_token_usable(self, prospect: ProspectiveMember) -> bool:
+        """Whether ``prospect``'s status token may still unlock the public page.
+
+        Shared by the read and the withdrawal so the two cannot disagree about
+        which links are live: an expired token, or a pipeline that has not
+        opted in to public status pages, grants neither.
+        """
+        from datetime import timedelta
+
+        if prospect.status_token_created_at:
+            age = datetime.now(timezone.utc) - prospect.status_token_created_at
+            if age > timedelta(days=self._STATUS_TOKEN_TTL_DAYS):
+                logger.info(
+                    f"Status token for prospect {prospect.id} expired "
+                    f"({age.days} days old)"
+                )
+                return False
+
+        return bool(prospect.pipeline and prospect.pipeline.public_status_enabled)
+
+    @classmethod
+    def _can_self_withdraw(cls, prospect: ProspectiveMember) -> bool:
+        status = getattr(prospect.status, "value", prospect.status)
+        return status in cls._SELF_WITHDRAWABLE_STATUSES
+
+    async def withdraw_prospect_by_token(
+        self, token: str, reason: Optional[str] = None
+    ) -> Optional[ProspectiveMember]:
+        """Withdraw the application behind a public status token, at the
+        applicant's own request.
+
+        Returns None when the token would not unlock the status page (unknown,
+        expired, or the pipeline is not public), so the endpoint answers 404
+        exactly as the read does. Raises ValueError when the application is no
+        longer open.
+
+        The row is locked for the reason set_prospect_status locks it: the
+        status guard below must not read a snapshot older than a concurrent
+        transfer or coordinator decision, or this write would clobber it.
+        """
+        result = await self.db.execute(
+            select(ProspectiveMember)
+            .where(ProspectiveMember.status_token == token)
+            .options(selectinload(ProspectiveMember.pipeline))
+            .with_for_update()
+        )
+        prospect = result.scalars().first()
+        if not prospect or not self._status_token_usable(prospect):
+            return None
+
+        if not self._can_self_withdraw(prospect):
+            raise ValueError(
+                "This application is no longer open, so it cannot be withdrawn. "
+                "Please contact the department."
+            )
+
+        await self._apply_status_change(
+            prospect,
+            ProspectStatus.WITHDRAWN,
+            changed_by=None,
+            reason=reason,
+            bulk=False,
+            by_applicant=True,
+        )
+        await self.db.commit()
+        return prospect
+
     @staticmethod
     def _build_current_stage_action(step: Any) -> Optional[Dict[str, Any]]:
         """Derive an applicant-facing action from the current step's config.
@@ -6126,23 +6208,7 @@ class MembershipPipelineService:
         )
         result = await self.db.execute(query)
         prospect = result.scalars().first()
-        if not prospect:
-            return None
-
-        # Check token expiration
-        from datetime import timedelta
-
-        if prospect.status_token_created_at:
-            age = datetime.now(timezone.utc) - prospect.status_token_created_at
-            if age > timedelta(days=self._STATUS_TOKEN_TTL_DAYS):
-                logger.info(
-                    f"Status token for prospect {prospect.id} expired "
-                    f"({age.days} days old)"
-                )
-                return None
-
-        # Check if the pipeline has opted in to public status pages
-        if not prospect.pipeline or not prospect.pipeline.public_status_enabled:
+        if not prospect or not self._status_token_usable(prospect):
             return None
 
         # Keep the token stable — it is the credential embedded in the
@@ -6239,6 +6305,7 @@ class MembershipPipelineService:
             "applied_at": (
                 prospect.created_at.isoformat() if prospect.created_at else None
             ),
+            "can_withdraw": self._can_self_withdraw(prospect),
         }
 
     # =========================================================================

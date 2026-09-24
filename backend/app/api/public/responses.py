@@ -42,6 +42,10 @@ BAD_REQUEST = {
     400: _response("The request was malformed, expired, or already acted on."),
 }
 
+CONFLICT = {
+    409: _response("The record is no longer in a state that allows this action."),
+}
+
 UNAUTHORIZED = {
     401: _response("Missing or invalid API key."),
 }
