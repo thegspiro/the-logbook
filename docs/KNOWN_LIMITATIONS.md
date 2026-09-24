@@ -4868,7 +4868,7 @@ covers only hard seat/quantity caps today (RSVP, shift assignment, budgets,
 inventory) and has no entry for a time-range overlap check. Full write-up:
 `docs/security-review/EV-16-events-requests.md` → Pass 5 (EV-26).
 
-## Prospects — Seven Drawer Fields Have Readers and No Producer (2026-09-24)
+## Prospects — Seven Drawer Fields Have Readers and No Producer (2026-09-24, resolved 2026-09-24)
 
 Found by the mapper sweep that followed the `election_title` fix (see below).
 The frontend `Applicant`, `ApplicantListItem` and `ElectionPackage` types
@@ -4892,16 +4892,42 @@ the default `member` role — the fallback below that branch guarantees it — b
 never the role the drawer's own Target Role block was written to carry, and no
 error says so.
 
-**Two ways to close it**, and they are opposite: add the columns and serialise
-them (a schema change, and a decision about whether deactivation is a first-class
-prospect state or an activity-log entry), or delete the fields and their readers
-and let `status` carry it. Deleting is smaller and loses nothing that renders
-today; adding is what the UI was written expecting. Either way the conversion's
-role assignment needs an answer first, since that one silently does less than
-the screen implies.
+**Resolved by adding the columns**, which is the direction the UI was written
+expecting. `20260924_1540_77d4aa7798dd` adds `target_role_id` (FK to
+`positions`, `SET NULL`) and the five lifecycle columns, and backfills the
+latter from `prospect_activity_log`, which had been recording every status
+change and its reason all along — so an existing department sees real dates on
+applications it withdrew years ago rather than the blank fields this entry was
+about.
 
-`frontend/src/mapperFieldIntegrity.test.ts` lists all seven as known exceptions,
-so they stay visible and a new one fails the build.
+The stamps are historical rather than mirrors of `status`: the drawer's Details
+block renders "Deactivated:" and "Last reactivated:" whatever the application's
+status is now, and its inactive banner expects to show a _prior_ reactivation on
+a record that has gone inactive again. `_apply_status_change` — the single choke
+point for every transition, single and bulk — stamps forward on that same rule
+and never clears, and the backfill used it too.
+
+The target role is now settable on the three surfaces that display it: the
+add-applicant form, the drawer's contact editor, and the conversion dialog,
+where it is pre-filled and changeable because that is the last moment anyone can
+correct it. `_do_transfer` uses an explicit `role_ids` when given and the
+application's own target role otherwise, which also reaches the automatic path
+at `_complete_step` — that one passes no roles at all and so could never have
+honoured the applicant's role.
+
+**Two further defects surfaced while closing this**, both fixed here:
+
+- `new_user.roles = roles` in `_do_transfer` was a lazy load on a persistent
+  instance (the role query autoflushes the INSERT), so it raised
+  `MissingGreenlet`. It was unreachable only because `role_ids` was always
+  empty — meaning the explicit-role path was broken too, not just the default.
+- `ApplicantListItem.current_stage_type` was declared, never populated and
+  never read on that type. Removed.
+
+The one gap that remains is `ElectionPackage.target_role_name`, which
+`mapperFieldIntegrity.test.ts` still carries as its single `KNOWN_GAPS` entry —
+see the comment there for why resolving it live would put a current value beside
+two frozen snapshot ones in the same panel.
 
 ## Prospects — `auto_transfer_on_approval` Cannot Be Set or Seen From the UI (2026-09-24)
 

@@ -853,6 +853,10 @@ def _prospect_list_item(prospect, now: datetime) -> ProspectListResponse:
         days_since_activity=enriched["days_since_activity"],
         inactivity_alert_level=enriched["inactivity_alert_level"],
         inactivity_timeout_days=enriched["inactivity_timeout_days"],
+        target_role_name=(prospect.target_role.name if prospect.target_role else None),
+        deactivated_at=prospect.deactivated_at,
+        withdrawn_at=prospect.withdrawn_at,
+        withdrawal_reason=prospect.withdrawal_reason,
     )
 
 

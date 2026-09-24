@@ -55,22 +55,17 @@ const MAPPED_TYPES = [
  * a field somebody wired up against data that does not exist.
  */
 const KNOWN_GAPS = new Set([
-  // Read by ConversionModal, which sends target_role_id on every conversion.
-  // It is always undefined, so convertToMember never sets role_ids.
-  'Applicant.target_role_id',
-  'Applicant.target_role_name',
-  'ApplicantListItem.target_role_name',
+  // `ElectionPackageSection` shows Name / Membership Type / Target Role as a
+  // summary of the applicant, and the first two come from
+  // `applicant_snapshot` — a deliberately field-gated projection frozen when
+  // the package is created. The prospect's live `target_role_name` is not in
+  // it, and resolving it live on the response would put a current value beside
+  // two frozen ones in the same panel, which is how two readings of the same
+  // record start disagreeing (CLAUDE.md #29). Closing this means deciding
+  // whether the target role belongs in the snapshot, with the privacy gate the
+  // snapshot's other optional fields carry; recorded in
+  // docs/KNOWN_LIMITATIONS.md rather than guessed at here.
   'ElectionPackage.target_role_name',
-  // Read by the drawer's status lines and the applicant table's columns, which
-  // render nothing and "—" respectively for every applicant.
-  'Applicant.deactivated_at',
-  'Applicant.deactivated_reason',
-  'Applicant.reactivated_at',
-  'Applicant.withdrawn_at',
-  'Applicant.withdrawal_reason',
-  'ApplicantListItem.deactivated_at',
-  'ApplicantListItem.withdrawn_at',
-  'ApplicantListItem.withdrawal_reason',
 ]);
 
 const typesSource = fs.readFileSync(path.join(MODULE, 'types/index.ts'), 'utf8');
@@ -112,8 +107,45 @@ const declaredFields = (name: string): string[] => {
   return [...flattened.matchAll(/^\s*(\w+)\??\s*:/gm)].map((match) => match[1] ?? '');
 };
 
-/** Every key assigned in api.ts — the mappers build plain object literals. */
-const assignedKeys = new Set([...apiSource.matchAll(/^\s*(\w+)\s*:/gm)].map((match) => match[1] ?? ''));
+/**
+ * Keys each mapper assigns, kept per-mapper rather than pooled across the file.
+ *
+ * Pooling them hid exactly the kind of gap this file exists to find: with one
+ * set for the whole module, `target_role_name` assigned in the *Applicant*
+ * mapper made `ElectionPackage.target_role_name` look filled when
+ * `mapElectionPackageResponse` never touches it. A mapper is only credited
+ * with what it assigns itself.
+ *
+ * Keys nested inside an object literal in the same body count too, which can
+ * over-credit a mapper whose nested key happens to share a name with one of
+ * its type's own fields. That is a much smaller blind spot than pooling, and
+ * narrowing it further would mean parsing the returned literal rather than the
+ * body.
+ */
+const assignedKeysByType = (): Map<string, Set<string>> => {
+  const byType = new Map<string, Set<string>>();
+  const signature = /(?:export )?function \w+\([^)]*\)\s*:\s*(\w+)\s*\{/g;
+
+  for (const match of apiSource.matchAll(signature)) {
+    const returnType = match[1] ?? '';
+    let index = (match.index ?? 0) + match[0].length;
+    let depth = 1;
+    const bodyStart = index;
+    while (depth > 0 && index < apiSource.length) {
+      const char = apiSource[index];
+      if (char === '{') depth += 1;
+      else if (char === '}') depth -= 1;
+      index += 1;
+    }
+    const keys = [...apiSource.slice(bodyStart, index - 1).matchAll(/^\s*(\w+)\s*:/gm)].map((m) => m[1] ?? '');
+    const existing = byType.get(returnType) ?? new Set<string>();
+    for (const key of keys) existing.add(key);
+    byType.set(returnType, existing);
+  }
+  return byType;
+};
+
+const mapperKeys = assignedKeysByType();
 
 const collectFiles = (dir: string): string[] => {
   const found: string[] = [];
@@ -138,7 +170,11 @@ const readerSource = collectFiles(MODULE)
 describe('mapper field integrity', () => {
   it('reads the module it checks', () => {
     expect(declaredFields('Applicant').length).toBeGreaterThan(10);
-    expect(assignedKeys.size).toBeGreaterThan(50);
+    // Every mapped type must have been matched to a mapper, or the signature
+    // pattern has drifted and this file is checking nothing.
+    for (const type of MAPPED_TYPES) {
+      expect(mapperKeys.get(type)?.size ?? 0, `no mapper found returning ${type}`).toBeGreaterThan(0);
+    }
     expect(readerSource.length).toBeGreaterThan(10_000);
   });
 
@@ -149,8 +185,9 @@ describe('mapper field integrity', () => {
       const fields = declaredFields(type);
       expect(fields.length, `${type} was not found in types/index.ts`).toBeGreaterThan(0);
 
+      const assigned = mapperKeys.get(type) ?? new Set<string>();
       for (const field of fields) {
-        if (assignedKeys.has(field)) continue;
+        if (assigned.has(field)) continue;
         // Only a field something actually renders or branches on is a defect;
         // an unread declaration costs nothing and has nowhere to show up.
         if (!new RegExp(`\\.${field}\\b`).test(readerSource)) continue;
@@ -173,8 +210,8 @@ describe('mapper field integrity', () => {
     // A gap that has been closed should leave this list, or the list stops
     // describing the code and starts excusing it.
     const stale = [...KNOWN_GAPS].filter((id) => {
-      const field = id.split('.')[1] ?? '';
-      return assignedKeys.has(field);
+      const [type, field] = id.split('.');
+      return (mapperKeys.get(type ?? '') ?? new Set<string>()).has(field ?? '');
     });
 
     expect(stale, 'These fields are assigned now — remove them from KNOWN_GAPS.').toEqual([]);

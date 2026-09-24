@@ -42,7 +42,7 @@ from app.models.membership_pipeline import (
     ProspectStepProgress,
     StepProgressStatus,
 )
-from app.models.user import Organization, User, UserStatus, generate_uuid
+from app.models.user import Organization, Role, User, UserStatus, generate_uuid
 from app.utils.membership import ADMINISTRATIVE_RANK_MESSAGE, is_administrative
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
@@ -1224,6 +1224,10 @@ class MembershipPipelineService:
                 selectinload(ProspectiveMember.current_step),
                 selectinload(ProspectiveMember.pipeline),
                 selectinload(ProspectiveMember.step_progress),
+                # _prospect_list_item reads the target role's name, and both
+                # the list and the kanban board go through it -- a lazy load
+                # out of the async response path raises MissingGreenlet.
+                selectinload(ProspectiveMember.target_role),
             )
         )
         query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
@@ -1333,6 +1337,7 @@ class MembershipPipelineService:
                 # Interview is the third stage of the default pipeline, so this
                 # blocked advancing anyone past it, including in bulk.
                 selectinload(ProspectiveMember.interviews),
+                selectinload(ProspectiveMember.target_role),
             )
             # Refresh identity-map instances: the prospect's pipeline/steps
             # may already be cached in this session from an earlier call, and
@@ -1352,6 +1357,13 @@ class MembershipPipelineService:
             # of those paths returns through). Non-mapped attribute; never persisted.
             prospect.pipeline_name = (
                 prospect.pipeline.name if prospect.pipeline else None
+            )
+            # Same shape, same reason: ProspectResponse declares a flat
+            # target_role_name that no column backs. Resolved from the
+            # relationship rather than stored, so renaming a position does not
+            # leave a stale copy on every application that wanted it.
+            prospect.target_role_name = (
+                prospect.target_role.name if prospect.target_role else None
             )
         return prospect
 
@@ -1455,6 +1467,19 @@ class MembershipPipelineService:
             label="referring member",
         )
 
+        # The target role is copied onto the User at transfer (_do_transfer's
+        # role_ids), so an unvalidated id does not merely dangle on the
+        # application -- it grants a position from another organization to a
+        # brand-new member. XC-1 / CLAUDE.md pitfall #14c.
+        await assert_in_org(
+            self.db,
+            Role,
+            data.get("target_role_id"),
+            organization_id,
+            allow_none=True,
+            label="target role",
+        )
+
         # Use org default pipeline if none specified
         if not pipeline_id:
             default_pipeline = await self._get_default_pipeline(organization_id)
@@ -1486,6 +1511,7 @@ class MembershipPipelineService:
             referral_source=data.get("referral_source"),
             referred_by=data.get("referred_by"),
             desired_membership_type=data.get("desired_membership_type"),
+            target_role_id=data.get("target_role_id"),
             current_step_id=first_step_id,
             status=ProspectStatus.ACTIVE,
             metadata_=data.get("metadata_", {}),
@@ -1556,6 +1582,15 @@ class MembershipPipelineService:
             "transferred_user",
             "documents",
             "election_packages",
+            # Written only by _stamp_lifecycle, on the status-change path.
+            # ProspectUpdate does not declare them either, so this is the
+            # second of two locks rather than the only one.
+            "deactivated_at",
+            "deactivated_reason",
+            "reactivated_at",
+            "withdrawn_at",
+            "withdrawal_reason",
+            "target_role",
         }
     )
 
@@ -1595,8 +1630,9 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
-        # referred_by is the one client-supplied foreign key this update
-        # accepts; every other FK is in _PROSPECT_PROTECTED_FIELDS.
+        # referred_by and target_role_id are the client-supplied foreign keys
+        # this update accepts; every other FK is in
+        # _PROSPECT_PROTECTED_FIELDS.
         if "referred_by" in data:
             await assert_in_org(
                 self.db,
@@ -1605,6 +1641,15 @@ class MembershipPipelineService:
                 organization_id,
                 allow_none=True,
                 label="referring member",
+            )
+        if "target_role_id" in data:
+            await assert_in_org(
+                self.db,
+                Role,
+                data.get("target_role_id"),
+                organization_id,
+                allow_none=True,
+                label="target role",
             )
 
         # TRANSFERRED is derived, not chosen (see _apply_status_change) — the
@@ -3071,6 +3116,41 @@ class MembershipPipelineService:
         except ValueError:
             raise ValueError(f"Invalid status: {status}")
 
+    @staticmethod
+    def _stamp_lifecycle(
+        prospect: ProspectiveMember,
+        previous: str,
+        target: ProspectStatus,
+        reason: Optional[str],
+    ) -> None:
+        """Record when an application left the active board, and why.
+
+        These are historical stamps rather than flags mirroring ``status``, and
+        the drawer is what settles that: its Details block renders
+        "Deactivated:" and "Last reactivated:" whatever the application's
+        status is now, and its inactive banner expects to show a *prior*
+        reactivation on a record that has gone inactive again. So nothing here
+        clears a stamp — a later transition overwrites its own, and leaves the
+        others as the history they are. `20260924_1540_77d4aa7798dd` backfilled
+        existing rows from the activity log on exactly this rule.
+
+        Called from ``_apply_status_change``, which is the single choke point
+        for every transition, single and bulk alike, so there is no path that
+        changes a status without passing through here.
+        """
+        now = datetime.now(timezone.utc)
+        if target == ProspectStatus.WITHDRAWN:
+            prospect.withdrawn_at = now
+            prospect.withdrawal_reason = reason
+        elif target == ProspectStatus.INACTIVE:
+            prospect.deactivated_at = now
+            prospect.deactivated_reason = reason
+        elif (
+            target == ProspectStatus.ACTIVE
+            and previous == ProspectStatus.INACTIVE.value
+        ):
+            prospect.reactivated_at = now
+
     async def _apply_status_change(
         self,
         prospect: ProspectiveMember,
@@ -3114,6 +3194,7 @@ class MembershipPipelineService:
         if previous == target.value:
             raise ValueError(f"Prospect is already {target.value}")
         prospect.status = target
+        self._stamp_lifecycle(prospect, previous, target, reason)
         await self._log_activity(
             prospect_id=str(prospect.id),
             action="prospect_status_changed",
@@ -3577,7 +3658,25 @@ class MembershipPipelineService:
         )
         self.db.add(new_user)
 
-        # Assign initial roles/positions if provided
+        # Assign initial roles/positions. An explicit `role_ids` from the
+        # caller wins; otherwise the application's own target role is used.
+        #
+        # The fallback is the point of the column. Before it, the target role
+        # was displayed on the applicant and on the conversion summary and then
+        # dropped on the way through: ConversionModal sent an id nothing had
+        # ever populated, so `role_ids` was always empty and every converted
+        # member came out with the default `member` position alone -- silently,
+        # since the fallback below still grants that one. It also reaches the
+        # automatic path at _complete_step's _do_transfer call, which passes no
+        # roles at all and so could never have honoured the applicant's role.
+        #
+        # Already validated in-org: create_prospect and update_prospect assert
+        # target_role_id belongs to the organization before storing it, and the
+        # query below re-filters on organization_id regardless.
+        if not role_ids and prospect.target_role_id:
+            role_ids = [str(prospect.target_role_id)]
+
+        assigned: List[Any] = []
         if role_ids:
             from app.models.user import Role
 
@@ -3588,13 +3687,27 @@ class MembershipPipelineService:
             )
             roles = list(role_result.scalars().all())
             if roles:
-                new_user.roles = roles
+                # Refresh before assigning, exactly as the member-role branch
+                # below does. The query above autoflushes, so new_user is
+                # persistent by now and assigning to the collection has to
+                # load the existing one to diff it -- a lazy load, and so a
+                # MissingGreenlet under async.
+                await self.db.refresh(new_user, ["positions"])
+                new_user.positions = roles
+                assigned = roles
 
         # Ensure default "member" role is always assigned
         from app.core.constants import ROLE_MEMBER
         from app.models.user import Role
 
-        assigned_slugs = {r.slug for r in (new_user.roles or [])}
+        # Read from the list just assigned rather than back off the
+        # relationship. The query above autoflushes, so by this point new_user
+        # is persistent and `new_user.roles` is a lazy load -- which raises
+        # MissingGreenlet under async. That was latent while role_ids was
+        # always empty (the branch above never ran, so new_user was still
+        # pending here); the target-role fallback makes the branch the normal
+        # case, which is what surfaced it.
+        assigned_slugs = {r.slug for r in assigned}
         if ROLE_MEMBER not in assigned_slugs:
             member_result = await self.db.execute(
                 select(Role).where(
@@ -4339,6 +4452,10 @@ class MembershipPipelineService:
                 selectinload(ProspectiveMember.current_step),
                 selectinload(ProspectiveMember.pipeline),
                 selectinload(ProspectiveMember.step_progress),
+                # _prospect_list_item reads the target role's name, and both
+                # the list and the kanban board go through it -- a lazy load
+                # out of the async response path raises MissingGreenlet.
+                selectinload(ProspectiveMember.target_role),
             )
             .order_by(ProspectiveMember.created_at)
             .limit(self.MAX_KANBAN_CARDS)
