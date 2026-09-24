@@ -539,11 +539,7 @@ positions.
 Boxes are never deleted — untick **Accepting submissions** to close one. Its
 existing submissions stay readable by its reviewers.
 
-> **Screenshot needed:**
-> _[The **New suggestion box** dialog filled in for a "Training ideas" box:
-> Name, Description, Anonymity set to **Submitter chooses**, **Allow follow-up**
-> ticked, two reviewer positions ticked, and the note "Managing boxes does not
-> by itself let you read them." visible above the reviewer pickers.]_
+![The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up ticked, the note that managing boxes does not let you read them, and two reviewer positions ticked](./images/07-14-suggestion-box-dialog.png)
 
 ### Submitting a suggestion (every member)
 
@@ -558,11 +554,7 @@ existing submissions stay readable by its reviewers.
 Named submissions appear under **My submissions**, where you can follow the
 status and reply if the box allows follow-up.
 
-> **Screenshot needed:**
-> _[Suggestions → **Submit** tab with a box chosen, its description and the
-> "You can submit with your name or anonymously." hint visible, Title and
-> Details filled in, one screenshot attached, and **Submit anonymously**
-> ticked — showing the warning about checking screenshots for your name.]_
+![Suggestions → Submit with the Training ideas box chosen, its description and anonymity hint showing, a title and details filled in, one screenshot attached, and Submit anonymously ticked with the warning to check screenshots for your name](./images/07-15-suggestion-submit-anonymous.png)
 
 ### What "anonymous" means here
 
@@ -591,10 +583,7 @@ status and any replies and to answer them — still without your name attached.
 **A lost key cannot be replaced**; the submission survives, but nobody can
 reconnect you to it.
 
-> **Screenshot needed:**
-> _[The receipt shown after an anonymous submission to a follow-up box — the
-> **Save your follow-up key** panel with the key, the **Copy** and **I saved
-> it** buttons. Use a demo key; never a real one.]_
+![The Save your follow-up key panel shown after an anonymous submission, with a demonstration key and the Copy and I saved it buttons](./images/07-16-suggestion-follow-up-key.png)
 
 > **What anonymity does not cover.** Somebody with access to the **server
 > itself** — its logs and mail records — could line up the time a submission
@@ -630,11 +619,7 @@ They are emailed a link, and see a **Forwarded to you** badge. Reviewers see who
 it was forwarded to and can **Withdraw** a forward. An anonymous submitter stays
 anonymous when forwarded. Forwards and withdrawals are audit-logged.
 
-> **Screenshot needed:**
-> _[Suggestions → **Review** tab with one submission open: the Disposition
-> dropdown set to **Under review**, the Internal note field, the Follow-up
-> thread with an "Anonymous submitter" message and a reviewer reply, and the
-> **Forwarded to** list showing one position.]_
+![Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the internal note, the Forwarded to list naming the Training Officer position, and the follow-up thread with the reviewer's question and the anonymous submitter's reply](./images/07-17-suggestion-review.png)
 
 ### Edge cases
 

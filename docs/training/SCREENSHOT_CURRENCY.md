@@ -9,15 +9,17 @@ Box Management** (`/communications/suggestion-boxes`) — and the inventory labe
 page gained a picker and a post-print prompt. Everything else is an existing
 address carrying one more control or one more line.
 
-**Eleven placeholders were written into the guides** by this pass:
+**Eleven placeholders were written into the guides** by this pass. **Five are
+shot** (2026-09-24) — all five suggestion-box items — so the library moves from
+533/589 to **538/589**:
 
 | #  | Image area                                                    | Disposition | Guide                                   | Notes                                                                                                              |
 | -- | ------------------------------------------------------------- | ----------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| 1  | Sidebar with **Suggestions** + Suggestions **Submit** tab       | **NEW**     | 20 (release)                            | Capture as an ordinary member so the **Review** tab is absent                                                     |
-| 2  | **New suggestion box** dialog, filled in                      | **NEW**     | 07 (documents & forms)                  | The "Managing boxes does not by itself let you read them." note must be in frame — it is the point                 |
-| 3  | Suggestions → **Submit** with **Submit anonymously** ticked    | **NEW**     | 07                                      | The screenshot-content warning must be visible                                                                    |
-| 4  | **Save your follow-up key** receipt                           | **NEW**     | 07                                      | **Demo key only.** A real key is a credential. Shown once, so capture immediately after the demo submission       |
-| 5  | Suggestions → **Review**, one submission open                 | **NEW**     | 07                                      | Needs a reviewer account; seed an anonymous follow-up message and a reviewer reply first                           |
+| 1  | Sidebar with **Suggestions** + Suggestions **Submit** tab       | **NEW**     | 20 (release)                            | **Shot** 09-24 as `20-13-suggestions-sidebar-submit`, as `auth: "member"`                                        |
+| 2  | **New suggestion box** dialog, filled in                      | **NEW**     | 07 (documents & forms)                  | **Shot** 09-24 as `07-14-suggestion-box-dialog`. Named "Officer development", never saved                         |
+| 3  | Suggestions → **Submit** with **Submit anonymously** ticked    | **NEW**     | 07                                      | **Shot** 09-24 as `07-15-suggestion-submit-anonymous`. Attachment drawn in-page; never submitted                   |
+| 4  | **Save your follow-up key** receipt                           | **NEW**     | 07                                      | **Shot** 09-24 as `07-16-suggestion-follow-up-key`. The POST is answered by a route mock with a `DEMO-KEY-…` value |
+| 5  | Suggestions → **Review**, one submission open                 | **NEW**     | 07                                      | **Shot** 09-24 as `07-17-suggestion-review`, as `auth: "secretary"` on the seeded anonymous submission           |
 | 6  | Items list: **Needs a Label** + **All N matching selected**    | **NEW**     | 05 (inventory)                          | N must be ≤ 500 or the select-all link is replaced by a message                                                   |
 | 7  | Label page **Print barcode labels** picker                    | **NEW**     | 05                                      | Open `/inventory/print-labels` with no query string                                                               |
 | 8  | "Did the labels print correctly?" prompt                      | **NEW**     | 05                                      | Appears the moment the print dialog opens; cancel the dialog and capture. **Do not press Mark** in a shared seed   |
@@ -62,15 +64,29 @@ the guides describe:
 | A second thermal imaging camera for Ladder 1         | One-way box, named, **New**                                                                             |
 
 **Which account to shoot from.** The reviewer is the **Secretary** position, held
-by `okittredge` — the manifest's existing `auth: "secretary"` account — so items
-5 and 11's review frames sign in as that. Item 1 is `auth: "member"`
+by `okittredge` — the manifest's existing `auth: "secretary"` account — so item
+5's review frame signs in as that. Item 1 is `auth: "member"`
 (`nbelhaj`, who sees no Review tab). The administrator deliberately reviews no
 box: `suggestions.manage` configures boxes and reads nothing, and a demo in which
 the chief could open the concerns box would picture the opposite of the rule.
-Items 2 and 7's dialogs are shot as the administrator. **Items 3 and 4 still need
-a live submission** — the follow-up key is shown only in the moment of
-submitting, and the seeder never keeps one — so submit one more anonymous
-suggestion as the member during capture, into **Training ideas**.
+Item 2's dialog is shot as the administrator.
+
+**Nothing the five suggestion shots do is written.** The box dialog is filled
+and never saved; the anonymous submission (item 3) is filled and never sent;
+and the follow-up-key receipt (item 4) sends its submission into a route mock
+(`beforeNavigate` in `07-16`) that answers with the endpoint's exact response
+shape and a visibly fake `DEMO-KEY-…`. That was chosen over the plan this
+paragraph used to carry — submitting for real during capture — because a real
+submission adds a suggestion to the demo department on every capture run and
+puts a real follow-up key, the submitter's only credential, into a public
+image. Verified after the run: still three boxes and four submissions.
+
+**Two framings the first capture got wrong, both fixed in the manifest.**
+`20-13` landed with the Suggestions item below the fold of the member's menu —
+only its active marker's top edge showed — so the entry now scrolls the item
+into view and refuses to shoot if it is still off screen. `07-14` clipped to
+`[role="dialog"]`, which `Modal` puts on the full-screen backdrop, and so
+photographed the whole dimmed page; it now clips to `modal-panel`.
 
 **Remaining seed gap.** **Every seeded inventory
 item reads "Needs a label"**, which is correct for item 6 but means the

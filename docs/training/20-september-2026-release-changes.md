@@ -1532,11 +1532,7 @@ key**. It is shown **once**. Copy it and keep it somewhere private; paste it
 into **Follow up with a key** later to read replies and answer them. **A lost
 key cannot be replaced.**
 
-> **Screenshot needed:**
-> _[The sidebar with the new **Suggestions** item highlighted just below
-> **Messages**, and the Suggestions page open on its **Submit** tab with a box
-> chosen and its description showing. Capture as an ordinary member so the
-> **Review** tab is absent.]_
+![An ordinary member's view: the Suggestions item in the sidebar just below Messages, and the Suggestions page open on its Submit tab with the Training ideas box chosen and its description showing — no Review tab](./images/20-13-suggestions-sidebar-submit.png)
 
 Full walkthrough: [Documents, Forms & Communications →
 Suggestion Boxes](./07-documents-forms.md#suggestion-boxes-2026-09-23).

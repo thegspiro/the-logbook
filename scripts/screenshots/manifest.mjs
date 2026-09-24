@@ -4558,6 +4558,26 @@ export const SHOTS = [
       await page
         .locator("#suggestion-box")
         .selectOption({ label: "Training ideas" });
+      // The member's menu is longer than the desktop viewport and Suggestions
+      // sits below Messages, past the fold -- the first capture showed only
+      // the active marker's top edge. Scroll it into view inside the menu, and
+      // refuse to shoot if it is still off screen: the item is the subject.
+      // Sidebar items are buttons that navigate, not links; the current one
+      // carries aria-current, which also proves the item is highlighted.
+      const item = page
+        .locator('button[aria-current="page"]', { hasText: /^Suggestions$/ })
+        .first();
+      await item.scrollIntoViewIfNeeded();
+      const box = await item.boundingBox();
+      const viewport = page.viewportSize();
+      if (
+        !box ||
+        !viewport ||
+        box.y < 0 ||
+        box.y + box.height > viewport.height
+      ) {
+        throw new Error("the Suggestions sidebar item is not on screen");
+      }
       // The member must not be a reviewer, or the frame shows the tab the
       // caption says is absent.
       if (await page.getByRole("tab", { name: /^Review/ }).count()) {
@@ -9933,7 +9953,9 @@ export const SHOTS = [
     // the reviewer pickers, so a frame cut short above it also fails here.
     expect: "Managing boxes does not by itself let you read them",
     viewport: { width: 1280, height: 1500 },
-    selector: '[role="dialog"]',
+    // The panel, not `[role="dialog"]`: Modal puts that role on the fixed
+    // full-screen backdrop, so clipping to it photographs the whole dimmed page.
+    selector: '[data-testid="modal-panel"]',
     prepare: async (page) => {
       await page
         .getByRole("button", { name: /New box/ })
