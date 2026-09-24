@@ -40,9 +40,10 @@ def _svc_for(prospect):
     db.execute = AsyncMock(return_value=result)
     db.commit = AsyncMock()
     svc = MembershipPipelineService(db)
-    # The coordinator email has its own tests below; stubbing it keeps these
-    # about the withdrawal itself.
+    # Both emails have their own tests below; stubbing them keeps these about
+    # the withdrawal itself.
     svc._notify_coordinators_of_withdrawal = AsyncMock()
+    svc._confirm_withdrawal_to_applicant = AsyncMock()
     return svc
 
 
@@ -106,6 +107,23 @@ class TestWithdrawProspectByToken:
         )
         assert order == ["commit", "notify"]
 
+    async def test_applicant_is_sent_a_confirmation_after_the_commit(self):
+        prospect = _prospect()
+        svc = _svc_for(prospect)
+        order = []
+        svc.db.commit.side_effect = lambda: order.append("commit")
+        svc._notify_coordinators_of_withdrawal.side_effect = lambda *a: order.append(
+            "notify"
+        )
+        svc._confirm_withdrawal_to_applicant.side_effect = lambda *a: order.append(
+            "confirm"
+        )
+
+        await svc.withdraw_prospect_by_token("tok_original")
+
+        svc._confirm_withdrawal_to_applicant.assert_awaited_once_with(prospect)
+        assert order == ["commit", "notify", "confirm"]
+
     @pytest.mark.parametrize(
         "status",
         [
@@ -126,6 +144,7 @@ class TestWithdrawProspectByToken:
         assert prospect.status == status
         svc.db.commit.assert_not_awaited()
         svc._notify_coordinators_of_withdrawal.assert_not_awaited()
+        svc._confirm_withdrawal_to_applicant.assert_not_awaited()
 
     async def test_unknown_token_returns_none(self):
         svc = _svc_for(None)
@@ -143,6 +162,7 @@ class TestWithdrawProspectByToken:
         assert prospect.status == ProspectStatus.ACTIVE
         svc.db.commit.assert_not_awaited()
         svc._notify_coordinators_of_withdrawal.assert_not_awaited()
+        svc._confirm_withdrawal_to_applicant.assert_not_awaited()
 
     async def test_pipeline_not_opted_in_returns_none(self):
         prospect = _prospect(public_enabled=False)
@@ -292,6 +312,124 @@ class TestNotifyCoordinatorsOfWithdrawal:
         )
 
         svc.db.commit.assert_not_awaited()
+
+
+class TestConfirmWithdrawalToApplicant:
+    def _prospect(self, withdrawn_at):
+        return SimpleNamespace(
+            id="p1",
+            organization_id="org1",
+            email="jane@example.com",
+            first_name="Jane",
+            last_name="Doe",
+            withdrawn_at=withdrawn_at,
+        )
+
+    def _svc(self, timezone_name="America/New_York", org=True):
+        db = MagicMock()
+        org_result = MagicMock()
+        org_result.scalar_one_or_none.return_value = (
+            SimpleNamespace(id="org1", name="Station 7 FD", timezone=timezone_name)
+            if org
+            else None
+        )
+        db.execute = AsyncMock(return_value=org_result)
+        db.commit = AsyncMock()
+        return MembershipPipelineService(db)
+
+    async def _confirm(self, svc, prospect, send=None):
+        email_cls = MagicMock()
+        email_cls.return_value.send_application_withdrawn_email = send or AsyncMock(
+            return_value=True
+        )
+        with patch("app.services.email_service.EmailService", email_cls):
+            await svc._confirm_withdrawal_to_applicant(prospect)
+        return email_cls.return_value.send_application_withdrawn_email
+
+    async def test_sends_the_confirmation_to_the_applicant(self):
+        svc = self._svc()
+        prospect = self._prospect(datetime(2026, 3, 3, 15, 0, tzinfo=timezone.utc))
+
+        send = await self._confirm(svc, prospect)
+
+        send.assert_awaited_once_with(
+            to_email="jane@example.com",
+            applicant_name="Jane Doe",
+            organization_name="Station 7 FD",
+            withdrawal_date="March 03, 2026",
+            db=svc.db,
+            organization_id="org1",
+        )
+        [log] = _logged_activity(svc)
+        assert log.action == "withdrawal_confirmation_sent"
+        assert log.details == {"delivered": True}
+        svc.db.commit.assert_awaited_once()
+
+    async def test_date_is_in_the_departments_timezone(self):
+        # 02:00 UTC on the 4th is still the evening of the 3rd in New York.
+        svc = self._svc("America/New_York")
+        prospect = self._prospect(datetime(2026, 3, 4, 2, 0, tzinfo=timezone.utc))
+
+        send = await self._confirm(svc, prospect)
+
+        assert send.await_args.kwargs["withdrawal_date"] == "March 03, 2026"
+
+    async def test_unknown_timezone_falls_back_to_utc(self):
+        svc = self._svc("Not/AZone")
+        prospect = self._prospect(datetime(2026, 3, 4, 2, 0, tzinfo=timezone.utc))
+
+        send = await self._confirm(svc, prospect)
+
+        assert send.await_args.kwargs["withdrawal_date"] == "March 04, 2026"
+
+    async def test_a_mail_failure_does_not_raise(self):
+        svc = self._svc()
+        prospect = self._prospect(datetime(2026, 3, 3, tzinfo=timezone.utc))
+
+        await self._confirm(
+            svc, prospect, send=AsyncMock(side_effect=RuntimeError("smtp down"))
+        )
+
+        svc.db.commit.assert_not_awaited()
+
+    async def test_missing_organization_sends_nothing(self):
+        svc = self._svc(org=False)
+
+        send = await self._confirm(
+            svc, self._prospect(datetime(2026, 3, 3, tzinfo=timezone.utc))
+        )
+
+        send.assert_not_awaited()
+
+
+class TestApplicationWithdrawnEmail:
+    """The send method renders the default template and tags the send."""
+
+    async def test_renders_default_and_escapes_the_name(self):
+        from app.models.email_template import EmailTemplateType
+        from app.models.user import Organization
+        from app.services.email_service import EmailService
+
+        svc = EmailService(Organization(id="org1", name="Station 7 FD"))
+        svc.send_email = AsyncMock(return_value=(1, 0))
+
+        sent = await svc.send_application_withdrawn_email(
+            to_email="jane@example.com",
+            applicant_name="Jane <b>Doe</b>",
+            organization_name="Station 7 FD",
+            withdrawal_date="March 03, 2026",
+        )
+
+        assert sent is True
+        kwargs = svc.send_email.await_args.kwargs
+        assert kwargs["to_emails"] == ["jane@example.com"]
+        assert kwargs["template_type"] == EmailTemplateType.APPLICATION_WITHDRAWN.value
+        assert "Station 7 FD" in kwargs["subject"]
+        assert "March 03, 2026" in kwargs["html_body"]
+        assert "Jane &lt;b&gt;Doe&lt;/b&gt;" in kwargs["html_body"]
+        assert "<b>Doe</b>" not in kwargs["html_body"]
+        assert "{{" not in kwargs["html_body"]
+        assert "March 03, 2026" in kwargs["text_body"]
 
 
 class TestCanWithdrawOnRead:
