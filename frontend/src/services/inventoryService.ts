@@ -50,6 +50,7 @@ import type {
   ChargeManagementResponse,
   ReturnRequestItem,
   LocationInventorySummary,
+  PutAwayResult,
   ReorderRequest,
   ReorderRequestCreate,
   ReorderRequestUpdate,
@@ -648,6 +649,14 @@ export const inventoryService = {
     );
     const autoPopulated = parseInt((response.headers?.['x-barcodes-auto-populated'] as string) ?? '0', 10);
     return { blob: response.data, autoPopulated: isNaN(autoPopulated) ? 0 : autoPopulated };
+  },
+
+  /** File scanned items under a storage area (shelf put-away). At most 500 per call. */
+  async putAwayItems(areaId: string, itemIds: string[]): Promise<PutAwayResult> {
+    const response = await api.post<PutAwayResult>(`/inventory/storage-areas/${areaId}/put-away`, {
+      item_ids: itemIds,
+    });
+    return response.data;
   },
 
   /** Record that labels printed correctly for these items (after the user confirms). */

@@ -1590,6 +1590,35 @@ class LabelMarkPrintedResponse(BaseModel):
     marked: int
 
 
+class PutAwayRequest(BaseModel):
+    """Items scanned onto one storage area."""
+
+    item_ids: List[UUID] = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Item UUIDs to file under the storage area (max 500)",
+    )
+
+
+class PutAwaySkipped(BaseModel):
+    """An item the put-away left where it was, and why."""
+
+    item_id: UUID
+    name: str
+    reason: str
+
+
+class PutAwayResponse(BaseModel):
+    """What a put-away changed. Ids outside the organization are only counted."""
+
+    storage_area_id: UUID
+    moved: List[UUID] = []
+    already_here: List[UUID] = []
+    skipped: List[PutAwaySkipped] = []
+    not_found: int = 0
+
+
 # ============================================
 # Equipment Request Schemas
 # ============================================

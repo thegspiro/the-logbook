@@ -5641,6 +5641,101 @@ class InventoryService:
         ]
         return specs, auto_populated
 
+    # Statuses that mean the item is not physically the department's to shelve:
+    # a member holds it, or its record says it is gone. Put-away refuses them
+    # rather than quietly rewriting a custody or loss record from a shelf scan.
+    _PUT_AWAY_BLOCKED = {
+        ItemStatus.ASSIGNED: "assigned to a member — return it first",
+        ItemStatus.CHECKED_OUT: "checked out — check it in first",
+        ItemStatus.LOST: "marked lost — update its status first",
+        ItemStatus.STOLEN: "marked stolen — update its status first",
+        ItemStatus.RETIRED: "retired",
+    }
+
+    async def put_away_items(
+        self,
+        area_id: UUID,
+        item_ids: List[UUID],
+        organization_id: UUID,
+    ) -> Optional[Dict[str, Any]]:
+        """File scanned items under one storage area.
+
+        Returns None when the area is not in the caller's organization. Item
+        ids from another organization are counted in ``not_found`` and left
+        alone. Each moved item also takes the area's location — inherited from
+        the nearest ancestor that has one — so the item lists under the room
+        its shelf is in; an area with no location leaves the item's as it was.
+        """
+        org_id = str(organization_id)
+        area = await self.db.scalar(
+            select(StorageArea).where(
+                StorageArea.id == str(area_id),
+                StorageArea.organization_id == org_id,
+            )
+        )
+        if area is None:
+            return None
+
+        location_id = area.location_id
+        seen = {area.id}
+        parent_id = area.parent_id
+        while location_id is None and parent_id and parent_id not in seen:
+            seen.add(parent_id)
+            parent = await self.db.scalar(
+                select(StorageArea).where(
+                    StorageArea.id == parent_id,
+                    StorageArea.organization_id == org_id,
+                )
+            )
+            if parent is None:
+                break
+            location_id = parent.location_id
+            parent_id = parent.parent_id
+
+        unique_ids = list(dict.fromkeys(str(i) for i in item_ids))
+        rows = await self.db.execute(
+            select(InventoryItem).where(
+                InventoryItem.id.in_(unique_ids),
+                InventoryItem.organization_id == org_id,
+            )
+        )
+        items = {item.id: item for item in rows.scalars().all()}
+
+        moved: List[str] = []
+        already_here: List[str] = []
+        skipped: List[Dict[str, Any]] = []
+        for item_id in unique_ids:
+            item = items.get(item_id)
+            if item is None:
+                continue
+            blocked = self._PUT_AWAY_BLOCKED.get(item.status)
+            if blocked is None and not item.active:
+                blocked = "retired"
+            if blocked:
+                skipped.append(
+                    {"item_id": item.id, "name": item.name, "reason": blocked}
+                )
+                continue
+            if item.storage_area_id == area.id and (
+                location_id is None or item.location_id == location_id
+            ):
+                already_here.append(item.id)
+                continue
+            item.storage_area_id = area.id
+            if location_id is not None:
+                item.location_id = location_id
+            moved.append(item.id)
+
+        if moved:
+            await self.db.commit()
+        return {
+            "storage_area_id": area.id,
+            "moved": moved,
+            "already_here": already_here,
+            "skipped": skipped,
+            "not_found": len(unique_ids) - len(items),
+        }
+
     async def mark_labels_printed(
         self,
         item_ids: List[UUID],

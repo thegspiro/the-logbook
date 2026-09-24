@@ -22,6 +22,7 @@ import {
   ExternalLink,
   Printer,
   ScanLine,
+  PackageCheck,
 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { facilitiesService, inventoryService, locationsService } from '../../../services/api';
@@ -34,6 +35,7 @@ import { formCoercions } from '../../../utils/formValues';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { Breadcrumbs } from '../../../components/ux';
 import { ScanCodeField } from '../components/ScanCodeField';
+import { PutAwayPanel } from '../components/PutAwayPanel';
 
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
@@ -409,6 +411,7 @@ const StorageAreasPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
+  const [putAwayOpen, setPutAwayOpen] = useState(false);
   const [scanMiss, setScanMiss] = useState<string | null>(null);
 
   const toggleItemsPanel = (id: string) => {
@@ -612,6 +615,25 @@ const StorageAreasPage: React.FC = () => {
     [areaById, setSearchParams]
   );
 
+  // "Station 1 › Rack A › Shelf 2" style label for an area, for the put-away
+  // panel's target line; the same parent walk the tree rows use.
+  const areaPathLabel = useCallback(
+    (area: StorageAreaResponse): string => {
+      const names = [area.name];
+      const seen = new Set([area.id]);
+      let parentId = area.parent_id;
+      while (parentId && !seen.has(parentId)) {
+        seen.add(parentId);
+        const parent = areaById.get(parentId);
+        if (!parent) break;
+        names.unshift(parent.name);
+        parentId = parent.parent_id;
+      }
+      return names.join(' › ');
+    },
+    [areaById]
+  );
+
   // A shelf label carries the area's barcode verbatim. Case-insensitive so a
   // scanner configured to emit lower case still finds `SA-000123`.
   const handleScannedCode = (code: string): boolean => {
@@ -763,7 +785,18 @@ const StorageAreasPage: React.FC = () => {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => {
+              setPutAwayOpen((open) => !open);
+              setScanOpen(false);
+            }}
+            aria-expanded={putAwayOpen}
+            className="btn-secondary btn-md flex items-center gap-2"
+          >
+            <PackageCheck className="h-4 w-4" /> Put away
+          </button>
+          <button
+            onClick={() => {
               setScanOpen((open) => !open);
+              setPutAwayOpen(false);
               setScanMiss(null);
             }}
             aria-expanded={scanOpen}
@@ -786,6 +819,19 @@ const StorageAreasPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {putAwayOpen && (
+        <PutAwayPanel
+          areas={storageAreas}
+          initialArea={focusedId ? (areaById.get(focusedId) ?? null) : null}
+          pathOf={areaPathLabel}
+          onFiled={(area) => {
+            void loadStorageAreas();
+            focusArea(area);
+          }}
+          onClose={() => setPutAwayOpen(false)}
+        />
+      )}
 
       {scanOpen && (
         <div className="card-secondary space-y-2 p-3">
