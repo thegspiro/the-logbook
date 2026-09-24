@@ -170,6 +170,84 @@ async def _build_member_specs(db, org_id, ids, extra_lines):
     return specs, 0
 
 
+async def _build_storage_area_specs(db, org_id, ids, extra_lines):
+    """Shelf, rack and compartment labels.
+
+    Every storage area is meant to carry an ``SA-`` barcode, assigned at
+    create time. Areas made before that was mandatory may still have none;
+    they are given the next code in the same series here, and committed, so
+    the label printed is the value stored. Printing a fallback instead would
+    put a code on the shelf that nothing could ever look up.
+    """
+    from app.models.inventory import StorageArea
+    from app.models.location import Location
+    from app.services.inventory_service import InventoryService
+
+    # Request order, deduplicated: the print page pairs each preview with the
+    # id at the same position.
+    wanted = list(dict.fromkeys(str(i) for i in ids))
+    # The whole org's areas, not just the requested ones: a label names its
+    # parents ("Engine 1 › Driver side"), and a compartment is only
+    # identifiable by the rig it is on.
+    rows = await db.scalars(
+        select(StorageArea).where(StorageArea.organization_id == org_id)
+    )
+    areas = {a.id: a for a in rows.all()}
+    targets = [areas[i] for i in wanted if i in areas]
+
+    location_ids = {a.location_id for a in areas.values() if a.location_id}
+    location_names: Dict[str, str] = {}
+    if location_ids:
+        loc_rows = await db.execute(
+            select(Location.id, Location.name).where(
+                Location.organization_id == org_id,
+                Location.id.in_(location_ids),
+            )
+        )
+        location_names = {row.id: row.name for row in loc_rows}
+
+    assigned = 0
+    service = InventoryService(db)
+    for area in targets:
+        if not area.barcode or not sanitize_barcode_value(area.barcode):
+            area.barcode = await service.next_storage_area_barcode(org_id)
+            assigned += 1
+    if assigned:
+        await db.commit()
+
+    def trail(area) -> str:
+        parts: List[str] = []
+        seen: Set[str] = set()
+        node = areas.get(area.parent_id) if area.parent_id else None
+        root = area
+        # `seen` bounds the walk; a parent cycle in the data must not hang.
+        while node is not None and node.id not in seen:
+            seen.add(node.id)
+            parts.insert(0, node.label or node.name)
+            root = node
+            node = areas.get(node.parent_id) if node.parent_id else None
+        location = location_names.get(root.location_id or area.location_id or "")
+        if location:
+            parts.insert(0, location)
+        return " › ".join(parts)
+
+    specs = []
+    for area in targets:
+        title = area.name or "Storage area"
+        if area.label and area.label != area.name:
+            title = f"{area.label} · {title}"
+        specs.append(
+            LabelSpec(
+                name=title,
+                barcode_value=_first_scannable_identifier(
+                    area.barcode, fallback=_short_id(area.id)
+                ),
+                extra=trail(area) or None,
+            )
+        )
+    return specs, assigned
+
+
 # module -> (permissions accepted to print (any-of), spec builder).
 # `permission_matches` does not treat manage as implying view, so both are
 # listed explicitly — mirroring how module endpoints pair view/manage.
@@ -188,6 +266,9 @@ MODULE_LABELS: Dict[str, Tuple[Tuple[str, ...], SpecBuilder]] = {
     ),
     "facilities": (("facilities.view", "facilities.manage"), _build_facility_specs),
     "membership": (("members.view", "members.manage"), _build_member_specs),
+    # Manage-only like inventory: the storage-areas screen is, and printing
+    # can assign a barcode to an area that lacks one.
+    "storage_areas": (("inventory.manage",), _build_storage_area_specs),
 }
 
 

@@ -678,6 +678,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/inventory/storage-areas/print-labels',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/inventory/import',
     source: 'src/modules/inventory/routes.tsx',
     coverage: 'exempt',

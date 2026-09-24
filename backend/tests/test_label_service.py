@@ -31,9 +31,9 @@ def module_permission_prefix(module: str) -> str:
     """The permission namespace a label module authorizes against.
 
     Matches the module key except for ``membership``, whose grants are
-    ``members.*``.
+    ``members.*``, and ``storage_areas``, which is part of inventory.
     """
-    return "members" if module == "membership" else module
+    return {"membership": "members", "storage_areas": "inventory"}.get(module, module)
 
 
 class TestGetPreset:
@@ -175,6 +175,7 @@ class TestModuleRegistry:
             "prospective_members",
             "facilities",
             "membership",
+            "storage_areas",
         ]:
             assert ls.is_known_label_module(m)
             assert ls.required_permissions_for_module(m)
@@ -188,7 +189,9 @@ class TestModuleRegistry:
     #: arbitrary item ids is a read of that catalogue — registering
     #: inventory.view here would leave the generic endpoint as a way around
     #: the page gate, since every seeded member holds it.
-    MANAGE_ONLY_MODULES = {"inventory"}
+    #: Storage areas follow inventory: their screen is manage-only, and
+    #: printing can assign a barcode to an area that lacks one.
+    MANAGE_ONLY_MODULES = {"inventory", "storage_areas"}
 
     def test_every_module_accepts_its_manage_grant(self):
         """A manage-only user must be able to print.

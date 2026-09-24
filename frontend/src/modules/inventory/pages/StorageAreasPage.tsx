@@ -20,8 +20,9 @@ import {
   Layers,
   Search,
   ExternalLink,
+  Printer,
 } from 'lucide-react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { facilitiesService, inventoryService, locationsService } from '../../../services/api';
 import type { StorageAreaResponse, StorageAreaCreate, Location, InventoryItem } from '../types';
 import { STORAGE_TYPES, getStatusStyle, getStatusLabel, getConditionColor } from '../types';
@@ -190,6 +191,7 @@ interface TreeRowProps {
   onToggle: (id: string) => void;
   onEdit: (a: StorageAreaResponse) => void;
   onDelete: (a: StorageAreaResponse) => void;
+  onPrint: (a: StorageAreaResponse) => void;
   itemsVisible: Set<string>;
   onToggleItems: (id: string) => void;
   path: TreeNode[];
@@ -225,6 +227,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
   onToggle,
   onEdit,
   onDelete,
+  onPrint,
   itemsVisible,
   onToggleItems,
   path,
@@ -327,6 +330,13 @@ const TreeRow: React.FC<TreeRowProps> = ({
         )}
         <div className="flex shrink-0 items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
           <button
+            onClick={() => onPrint(node)}
+            aria-label={`Print label for ${node.name}`}
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-2"
+          >
+            <Printer className="h-4 w-4" />
+          </button>
+          <button
             onClick={() => onEdit(node)}
             aria-label={`Edit ${node.name}`}
             className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-2"
@@ -355,6 +365,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
             onToggle={onToggle}
             onEdit={onEdit}
             onDelete={onDelete}
+            onPrint={onPrint}
             itemsVisible={itemsVisible}
             onToggleItems={onToggleItems}
             path={[...path, c]}
@@ -368,6 +379,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
 
 /* ---------- Main page ---------- */
 const StorageAreasPage: React.FC = () => {
+  const navigate = useNavigate();
   const isDesktopTree = useMediaQuery('(min-width: 768px)');
   const [locations, setLocations] = useState<Location[]>([]);
   const [facilityNames, setFacilityNames] = useState<Map<string, string>>(new Map());
@@ -457,6 +469,12 @@ const StorageAreasPage: React.FC = () => {
   }, [storageAreas, searchQuery]);
 
   const tree = useMemo(() => buildTree(scopedAreas), [scopedAreas]);
+  // "Print labels" covers what the member is looking at: the search results
+  // while searching, otherwise the facility/room scope chosen above.
+  const areasInView = isShowingSearch ? searchResults : scopedAreas;
+  const printLabels = (ids: string[]) => {
+    if (ids.length > 0) void navigate(`/inventory/storage-areas/print-labels?ids=${ids.join(',')}`);
+  };
   const searchTree = useMemo(() => buildTree(searchResults), [searchResults]);
   const displayTree = isShowingSearch ? searchTree : tree;
   const areaById = useMemo(() => new Map(storageAreas.map((area) => [area.id, area])), [storageAreas]);
@@ -654,9 +672,21 @@ const StorageAreasPage: React.FC = () => {
           <h1 className="text-theme-text-primary text-2xl font-bold">Storage Areas</h1>
           <p className="text-theme-text-secondary mt-1">Manage hierarchical storage locations within rooms.</p>
         </div>
-        <button onClick={openCreateModal} className="btn-info btn-md flex items-center gap-2">
-          <Plus className="h-4 w-4" /> Add Storage Area
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => printLabels(areasInView.map((area) => area.id))}
+            disabled={areasInView.length === 0}
+            className="btn-secondary btn-md flex items-center gap-2"
+          >
+            <Printer className="h-4 w-4" />
+            {areasInView.length > 0
+              ? `Print ${areasInView.length} ${areasInView.length === 1 ? 'label' : 'labels'}`
+              : 'Print labels'}
+          </button>
+          <button onClick={openCreateModal} className="btn-info btn-md flex items-center gap-2">
+            <Plus className="h-4 w-4" /> Add Storage Area
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -785,6 +815,7 @@ const StorageAreasPage: React.FC = () => {
               onToggle={toggleExpand}
               onEdit={openEditModal}
               onDelete={setDeleteTarget}
+              onPrint={(area) => printLabels([area.id])}
               itemsVisible={itemsVisible}
               onToggleItems={toggleItemsPanel}
               path={pathFor(n)}

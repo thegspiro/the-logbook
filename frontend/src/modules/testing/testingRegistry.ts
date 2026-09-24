@@ -667,6 +667,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/inventory/checkouts', label: 'Checkouts', permission: 'inventory.manage', module: 'inventory' },
       { path: '/inventory/storage-areas', label: 'Storage areas', permission: 'inventory.manage', module: 'inventory' },
+      {
+        path: '/inventory/storage-areas/print-labels',
+        label: 'Print storage area labels',
+        permission: 'inventory.manage',
+        module: 'inventory',
+      },
       { path: '/inventory/import', label: 'Import inventory', permission: 'inventory.manage', module: 'inventory' },
       {
         path: '/inventory/print-labels',

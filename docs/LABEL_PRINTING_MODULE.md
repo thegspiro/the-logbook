@@ -36,11 +36,12 @@ that registers no printer simply never sees the direct-print controls.
 
 ## What prints
 
-**Labels** — five modules generate them, each gated on its own permission:
+**Labels** — six modules generate them, each gated on its own permission:
 
 | Module key            | Permissions (any-of)                                     | Label carries                    |
 | --------------------- | -------------------------------------------------------- | -------------------------------- |
-| `inventory`           | `inventory.view`, `inventory.manage`                     | item name, asset tag             |
+| `inventory`           | `inventory.manage`                                       | item name, asset tag             |
+| `storage_areas`       | `inventory.manage`                                       | area name, parent/location trail |
 | `apparatus`           | `apparatus.view`, `apparatus.manage`                     | unit name, identifier            |
 | `facilities`          | `facilities.view`, `facilities.manage`                   | facility name                    |
 | `membership`          | `members.view`, `members.manage`                         | member name, membership number   |
@@ -53,8 +54,10 @@ that registers no printer simply never sees the direct-print controls.
 > the point (it is the applicant's own label), but it means these labels should
 > be handled like the token they carry: not left on a noticeboard, not
 > photographed into a group chat. `facilities` labels carry a facility record
-> only — there is no storage-area label builder, so a storage-area id produces
-> no label.
+> only; shelves, racks and compartments print through `storage_areas`, whose
+> builder encodes the area's `SA-` barcode and assigns the next one in that
+> series to an area created before barcodes were mandatory, so the label always
+> carries a value the area stores.
 
 **Station documents** — built from live records on request and printed at the
 watch desk. Nothing is stored; these are separate from `/documents`, which is

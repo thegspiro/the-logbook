@@ -369,4 +369,50 @@ describe('StorageAreasPage', () => {
     expect(mockDeleteStorageArea.mock.calls[0]?.[0]).toBe('a-rack');
     expect(mockToastSuccess).toHaveBeenCalledWith('"Rack A" deleted');
   });
+
+  describe('printing labels', () => {
+    beforeEach(() => {
+      window.history.pushState({}, '', '/inventory/storage-areas');
+      mockGetStorageAreas.mockResolvedValue([
+        makeArea({ id: 'rack-a', name: 'Rack A', barcode: 'SA-000001' }),
+        makeArea({ id: 'shelf-1', name: 'Shelf 1', parent_id: 'rack-a', barcode: 'SA-000002' }),
+        makeArea({ id: 'rack-b', name: 'Rack B', barcode: 'SA-000003' }),
+      ]);
+    });
+
+    const printedIds = () => new URLSearchParams(window.location.search).get('ids')?.split(',');
+
+    it('prints every area in view from the header', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StorageAreasPage />);
+      await screen.findByText('Rack A');
+
+      await user.click(screen.getByRole('button', { name: 'Print 3 labels' }));
+
+      expect(window.location.pathname).toBe('/inventory/storage-areas/print-labels');
+      expect(printedIds()).toEqual(['rack-a', 'shelf-1', 'rack-b']);
+    });
+
+    it('narrows the header print to the search results', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StorageAreasPage />);
+      await screen.findByText('Rack A');
+
+      await user.type(screen.getByRole('textbox', { name: /Search storage areas/ }), 'Rack B');
+      await user.click(await screen.findByRole('button', { name: 'Print 1 label' }));
+
+      expect(printedIds()).toEqual(['rack-b']);
+    });
+
+    it('prints one area from its row', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StorageAreasPage />);
+      await screen.findByText('Rack B');
+
+      await user.click(screen.getByRole('button', { name: 'Print label for Rack B' }));
+
+      expect(window.location.pathname).toBe('/inventory/storage-areas/print-labels');
+      expect(printedIds()).toEqual(['rack-b']);
+    });
+  });
 });
