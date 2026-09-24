@@ -244,6 +244,24 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['inventory.manage'],
   },
   {
+    path: '/inventory/shelf-audit',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+  },
+  {
+    path: '/inventory/admin/nfc/enroll',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+  },
+  {
+    path: '/inventory/admin/not-seen',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+  },
+  {
     path: '/inventory/admin/nfc',
     maxSmallTargets: 0,
     maxTinyText: 0,

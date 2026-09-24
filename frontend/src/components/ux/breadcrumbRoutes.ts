@@ -130,6 +130,9 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // themselves "NFC Tags" and "Put Away by NFC". Gates match the routes.
   '/inventory/admin/nfc': { label: 'NFC Tags', permissions: ['settings.manage', 'organization.update_settings'] },
   '/inventory/put-away': { label: 'Put Away by NFC', permissions: ['inventory.manage'] },
+  '/inventory/shelf-audit': { label: 'Shelf Audit', permissions: ['inventory.manage'] },
+  '/inventory/admin/nfc/enroll': { label: 'Tag Items in Bulk', permissions: ['inventory.manage'] },
+  '/inventory/admin/not-seen': { label: 'Items Not Seen', permissions: ['inventory.manage'] },
   '/inventory/items': { permissions: ['inventory.manage'] },
   '/inventory/storage-areas': { label: 'Storage Areas', permissions: ['inventory.manage'] },
   '/onboarding/modules': {},

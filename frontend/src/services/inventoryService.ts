@@ -91,6 +91,10 @@ import type {
   RequestableCatalogResponse,
 } from './eventServices';
 import type {
+  InventoryNfcAuditCreate,
+  InventoryNfcAuditDetail,
+  InventoryNfcAuditListResponse,
+  InventoryNfcMember,
   InventoryNfcPutAwayRequest,
   InventoryNfcPutAwayResponse,
   InventoryNfcResolveAnyRequest,
@@ -102,8 +106,11 @@ import type {
   InventoryNfcTagCreate,
   InventoryNfcTagListResponse,
   InventoryNfcTagUpdate,
+  InventoryNfcUntaggedListResponse,
+  NotSeenFilters,
+  NotSeenReport,
 } from '../modules/inventory/types/nfc';
-import { asArray } from '../utils/asArray';
+import { asArray, expectArray } from '../utils/asArray';
 
 export const inventoryService = {
   /**
@@ -677,6 +684,62 @@ export const inventoryService = {
 
   async unlinkNfcTag(tagId: string): Promise<void> {
     await api.delete(`/inventory/nfc-tags/${tagId}`);
+  },
+
+  async createNfcAudit(data: InventoryNfcAuditCreate): Promise<InventoryNfcAuditDetail> {
+    const response = await api.post<InventoryNfcAuditDetail>('/inventory/nfc/audits', data);
+    return { ...response.data, items: expectArray(response.data?.items, 'shelf audit') };
+  },
+
+  async getNfcAudits(params?: {
+    storage_area_id?: string | undefined;
+    limit?: number | undefined;
+  }): Promise<InventoryNfcAuditListResponse> {
+    const response = await api.get<InventoryNfcAuditListResponse>('/inventory/nfc/audits', { params });
+    // A history list: rendering nothing beats a dead page.
+    const items = asArray(response.data?.items);
+    return { items, total: items.length };
+  },
+
+  async getNfcAudit(auditId: string): Promise<InventoryNfcAuditDetail> {
+    const response = await api.get<InventoryNfcAuditDetail>(`/inventory/nfc/audits/${auditId}`);
+    return { ...response.data, items: expectArray(response.data?.items, 'shelf audit') };
+  },
+
+  async applyNfcAudit(auditId: string, itemIds: string[]): Promise<InventoryNfcAuditDetail> {
+    const response = await api.post<InventoryNfcAuditDetail>(`/inventory/nfc/audits/${auditId}/apply`, {
+      item_ids: itemIds,
+    });
+    return { ...response.data, items: expectArray(response.data?.items, 'shelf audit') };
+  },
+
+  /** A member ID card tapped at the quartermaster's phone. POST so the serial stays out of access logs. */
+  async resolveNfcMember(data: InventoryNfcResolveRequest): Promise<InventoryNfcMember> {
+    const response = await api.post<InventoryNfcMember>('/inventory/nfc/resolve-member', data);
+    return response.data;
+  },
+
+  async getUntaggedItems(params?: {
+    search?: string | undefined;
+    category_id?: string | undefined;
+    limit?: number | undefined;
+  }): Promise<InventoryNfcUntaggedListResponse> {
+    const response = await api.get<InventoryNfcUntaggedListResponse>('/inventory/nfc/untagged', { params });
+    // An empty list here is a claim ("every item is tagged"), so a bad body fails.
+    const items = expectArray(response.data?.items, 'untagged items');
+    return { items, total: items.length };
+  },
+
+  // Not-seen report — not gated by the NFC switch.
+  async getNotSeenReport(params?: NotSeenFilters): Promise<NotSeenReport> {
+    const response = await api.get<NotSeenReport>('/inventory/not-seen', { params });
+    // An empty list here is a claim ("every item has been seen"), so a bad body fails.
+    return { ...response.data, items: expectArray(response.data?.items, 'not-seen report') };
+  },
+
+  async exportNotSeenReport(params?: Omit<NotSeenFilters, 'limit'>): Promise<Blob> {
+    const response = await api.get<Blob>('/inventory/not-seen/export', { params, responseType: 'blob' });
+    return response.data;
   },
 
   async distributeItems(data: DistributeItemsRequest): Promise<DistributeItemsResponse> {
