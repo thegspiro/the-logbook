@@ -10,6 +10,7 @@ import enum
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -2570,7 +2571,12 @@ class InventoryNfcTagStatus(str, enum.Enum):
 
 
 class InventoryNfcTag(Base):
-    """An NFC tag physically attached to an inventory item.
+    """An NFC tag physically attached to an inventory item or a storage area.
+
+    Exactly one of ``item_id`` / ``storage_area_id`` is set (enforced by
+    ``ck_inventory_nfc_tags_one_target``). An item tag names a thing; a
+    storage-area tag names a place, and tapping one during put-away is what
+    moves items onto that shelf.
 
     Only in use when the organization has switched NFC tracking on (see
     ``app/utils/inventory_nfc.py``); the table exists regardless.
@@ -2600,7 +2606,13 @@ class InventoryNfcTag(Base):
     item_id = Column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+        index=True,
+    )
+    storage_area_id = Column(
+        String(36),
+        ForeignKey("storage_areas.id", ondelete="CASCADE"),
+        nullable=True,
         index=True,
     )
 
@@ -2644,6 +2656,7 @@ class InventoryNfcTag(Base):
     )
 
     item = relationship("InventoryItem", foreign_keys=[item_id])
+    storage_area = relationship("StorageArea", foreign_keys=[storage_area_id])
 
     __table_args__ = (
         # Per organization: a tag registered in one department must not be
@@ -2652,4 +2665,82 @@ class InventoryNfcTag(Base):
             "organization_id", "uid_hash", name="uq_inventory_nfc_tag_org_uid"
         ),
         Index("idx_inventory_nfc_tag_org_item", "organization_id", "item_id"),
+        CheckConstraint(
+            "(item_id IS NOT NULL AND storage_area_id IS NULL) OR "
+            "(item_id IS NULL AND storage_area_id IS NOT NULL)",
+            name="one_target",
+        ),
+    )
+
+
+class InventoryNfcScanAction(str, enum.Enum):
+    """What a logged tap did."""
+
+    # A tag was tapped to identify an item (scanner, or a written tag's link).
+    LOOKUP = "lookup"
+    # An item was moved onto a storage area by tapping.
+    PUT_AWAY = "put_away"
+
+
+class InventoryNfcScan(Base):
+    """One staff tap of an NFC tag on an item — the "last seen" trail.
+
+    Only taps by ``inventory.manage`` holders are written (see
+    ``InventoryNfcService.record_scan``'s callers). A member opening a written
+    tag from their own phone leaves no row: a tap log of everybody would be a
+    record of where each member was, which is not what the quartermaster
+    asked for.
+
+    The foreign keys other than the organization's are ``SET NULL`` so the
+    trail outlives an unlinked tag, a deleted storage area, or a departed
+    member; only deleting the item itself takes its trail with it.
+    """
+
+    __tablename__ = "inventory_nfc_scans"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    tag_id = Column(
+        String(36),
+        ForeignKey("inventory_nfc_tags.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    action = Column(
+        Enum(InventoryNfcScanAction, values_callable=_enum_values),
+        nullable=False,
+    )
+    # Where the item was put (PUT_AWAY), and where it was before.
+    storage_area_id = Column(
+        String(36),
+        ForeignKey("storage_areas.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    from_storage_area_id = Column(
+        String(36),
+        ForeignKey("storage_areas.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    scanned_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    scanned_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_inventory_nfc_scan_org_item_time",
+            "organization_id",
+            "item_id",
+            "scanned_at",
+        ),
     )

@@ -150,6 +150,7 @@ const UNCACHEABLE_SUBSTRINGS = [
   '/issuances', // who currently holds a pool item (member names) — the same
   // disclosure '/inventory/checkout/' and '/inventory/users/' are already
   // excluded for, reached through the item instead of through the member.
+  '/nfc-scans', // GET /inventory/items/{id}/nfc-scans: who tapped the item, when and where (PII)
   '/nfc-tags', // GET /inventory/items/{id}/nfc-tags — reached through the item, like
   // '/issuances'; the '/inventory/nfc' prefix above cannot see it
   '/exposures', // NFPA exposure records: user_id, exposure type, incident

@@ -1,18 +1,20 @@
 """
 Inventory NFC Tag Pydantic Schemas
 
-Request/response shapes for NFC tags attached to inventory items. Snake-case
-on the wire, like the rest of the inventory API.
+Request/response shapes for NFC tags attached to inventory items and storage
+areas, put-away, and the staff tap log. Snake-case on the wire, like the rest
+of the inventory API.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models.inventory import InventoryNfcTagStatus
+from app.models.inventory import InventoryNfcScanAction, InventoryNfcTagStatus
 from app.models.nfc_tag import NfcCredentialType
 from app.schemas.base import UTCResponseBase
+from app.schemas.inventory import InventoryItemResponse
 
 # The same two shapes a member ID card admits (see schemas/nfc_tag.py): a chip
 # serial, arriving with or without separators depending on the reader, or a
@@ -34,7 +36,7 @@ def _require_enough_characters(value: str) -> str:
 
 
 class InventoryNfcTagCreate(BaseModel):
-    """Link a tag to an item."""
+    """Link a tag to an item or a storage area (the target is in the path)."""
 
     tag_uid: str = Field(..., pattern=_UID_PATTERN)
     credential_type: NfcCredentialType = NfcCredentialType.SERIAL
@@ -61,7 +63,9 @@ class InventoryNfcTagResponse(UTCResponseBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    item_id: str
+    # Exactly one of these is set.
+    item_id: Optional[str] = None
+    storage_area_id: Optional[str] = None
     uid_preview: str
     credential_type: NfcCredentialType
     label: Optional[str] = None
@@ -103,6 +107,84 @@ class InventoryNfcResolveRequest(BaseModel):
         if not (self.code or self.serial_number):
             raise ValueError("A tag code or serial number is required")
         return self
+
+
+class InventoryNfcResolveAnyRequest(InventoryNfcResolveRequest):
+    """A tap that may name an item or a storage area."""
+
+    record: bool = Field(
+        True,
+        description=(
+            "Log an item lookup in the tap log (inventory managers only). "
+            "The put-away screen sends false: the move it makes is logged "
+            "on its own, and a lookup row beside it would say the same thing "
+            "twice."
+        ),
+    )
+
+
+class InventoryNfcStorageAreaSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    label: Optional[str] = None
+    location_id: Optional[str] = None
+
+
+class InventoryNfcResolveAnyResponse(BaseModel):
+    """Exactly one of ``item`` / ``storage_area`` is set, per ``kind``."""
+
+    kind: Literal["item", "storage_area"]
+    tag_id: str
+    tag_uid_preview: str
+    item: Optional[InventoryItemResponse] = None
+    storage_area: Optional[InventoryNfcStorageAreaSummary] = None
+
+
+class InventoryNfcPutAwayRequest(BaseModel):
+    """Move an item onto a storage area."""
+
+    item_id: str = Field(..., min_length=1, max_length=36)
+    storage_area_id: str = Field(..., min_length=1, max_length=36)
+    item_tag_id: Optional[str] = Field(
+        None,
+        max_length=36,
+        description="The item tag that was tapped, recorded in the tap log",
+    )
+
+
+class InventoryNfcPutAwayResponse(BaseModel):
+    item_id: str
+    item_name: str
+    storage_area_id: str
+    storage_area_name: str
+    from_storage_area_id: Optional[str] = None
+    from_storage_area_name: Optional[str] = None
+    # False when the item was already on that storage area; the tap is still
+    # logged, because "it was seen there" is what the log is for.
+    moved: bool
+
+
+class InventoryNfcScanResponse(UTCResponseBase):
+    """One row of an item's tap log."""
+
+    id: str
+    item_id: str
+    action: InventoryNfcScanAction
+    tag_uid_preview: Optional[str] = None
+    storage_area_id: Optional[str] = None
+    storage_area_name: Optional[str] = None
+    from_storage_area_id: Optional[str] = None
+    from_storage_area_name: Optional[str] = None
+    scanned_by: Optional[str] = None
+    scanned_by_name: Optional[str] = None
+    scanned_at: datetime
+
+
+class InventoryNfcScanListResponse(BaseModel):
+    items: List[InventoryNfcScanResponse]
+    total: int
 
 
 class InventoryNfcSettingsResponse(BaseModel):
