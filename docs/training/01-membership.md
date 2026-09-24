@@ -14,13 +14,23 @@ The Membership module is the foundation of The Logbook. It manages your departme
 6. [Member Audit History](#member-audit-history)
 7. [Deleting Members](#deleting-members)
 8. [Prospective Members Pipeline](#prospective-members-pipeline)
-9. [Member Status Management](#member-status-management)
-10. [Leave of Absence](#leave-of-absence)
-11. [Waiver Management](#waiver-management)
-12. [Rank Validation](#rank-validation)
-13. [Membership Tiers](#membership-tiers)
-14. [Member Lifecycle Management](#member-lifecycle-management)
-15. [Troubleshooting](#troubleshooting)
+9. [Member Class and Member Status](#member-class-and-member-status-changed-2026-08-26)
+10. [Rank and Qualification Are Different Things](#rank-and-qualification-are-different-things-2026-08-26)
+11. [Member Status Management](#member-status-management)
+12. [Leave of Absence](#leave-of-absence)
+13. [Waiver Management](#waiver-management)
+14. [Rank Validation](#rank-validation)
+15. [Membership Tiers](#membership-tiers)
+16. [Member Lifecycle Management](#member-lifecycle-management)
+17. [EVOC Certification](#evoc-certification)
+18. [Troubleshooting](#troubleshooting)
+19. [Department Email Generation, Username Safety & Default Roles](#department-email-generation-username-safety--default-roles-2026-03-24)
+20. [Realistic Example: New Member Onboarding](#realistic-example-new-member-onboarding-end-to-end)
+
+Dated change notes follow the walkthrough: directory profiles and ID-card
+scanner access, member ID cards and the check-in station, the profile gear
+change, the roster as a directory, member-chosen visibility, platoon
+assignments, and the Membership Coordinator rename.
 
 ---
 
@@ -28,13 +38,13 @@ The Membership module is the foundation of The Logbook. It manages your departme
 
 Navigate to **Members** in the sidebar to view your department roster.
 
-The directory shows all active members with their name, rank, status, and contact information. You can:
+The directory lists every current member, whatever their status, with their name, membership number and status, plus contact details where your department's contact-visibility setting allows. Officers with `members.manage` also see username, hire date and row actions. You can:
 
-- **Search** by name using the search bar
-- **Filter** by status (Active, Inactive, On Leave, Retired)
+- **Search** by name, membership number or email (officers can also search by username)
+- **Filter** by status (Active, Inactive, On Leave, Retired; officers with `members.manage` also get **Archived**)
 - **Click** any member to view their full profile
 
-![Member directory listing members with rank, status, and contact columns](./images/01-01-member-directory.png)
+![Member directory listing members with their status and contact columns](./images/01-01-member-directory.png)
 
 **Member Statuses:**
 
@@ -44,6 +54,7 @@ The directory shows all active members with their name, rank, status, and contac
 | **Inactive**              | Temporarily not participating       |
 | **Suspended**             | Account suspended by administration |
 | **Probationary**          | New member in probationary period   |
+| **On Leave**              | On an approved leave of absence     |
 | **Retired**               | Retired from active service         |
 | **Dropped (Voluntary)**   | Member who voluntarily left         |
 | **Dropped (Involuntary)** | Member removed from the department  |
@@ -51,7 +62,7 @@ The directory shows all active members with their name, rank, status, and contac
 
 ### Printing Member Badges
 
-Select members in the directory (the row checkboxes), then click **Print Badges** on the selection bar to open the shared label print page for those members. Choose a label size — any sticker/thermal printer (Dymo, Rollo, or a custom size) — and download a PDF or print. The badge barcode encodes the member's **membership number**. The chosen printer is remembered for your role, separately from the inventory/apparatus printers.
+Officers with `members.manage` can select members in the directory's desktop (table) view — the row checkboxes — then click **Print Badges** on the selection bar to open the shared label print page for those members. Choose a label size — any sticker/thermal printer (Dymo, Rollo, or a custom size) — and download a PDF or print. The badge barcode encodes the member's **membership number**. The chosen printer is remembered for your role, separately from the inventory/apparatus printers.
 
 ![The Members directory selection bar with Print Badges, Export Selected and Clear Selection](./images/01-23-print-member-badges.png)
 
@@ -61,21 +72,25 @@ Select members in the directory (the row checkboxes), then click **Print Badges*
 
 Click on any member in the directory to view their profile. The profile page includes:
 
+**Header:** photo (with upload/change), name, rank and member type, username, membership number, position badges, an **ID Card** link, and — for officers with `members.manage` — a status control.
+
 **Left Column:**
 
-- **Basic Information** - Name, rank, membership number, hire date, station
-- **Profile Photo** - Member photo with upload/change capability
-- **Compliance Summary** - Green/yellow/red indicator showing training compliance status, requirements met/total, hours this year, active certifications, and expiring certifications
-- **Training Records** - Recent training completions and course history
-- **Assigned Inventory** - Equipment currently assigned to the member
+- **Training & Certifications** - Compliance summary (green/yellow/red, requirements met, hours this year, certifications) and recent training. Shown only to the member themselves and to `training.manage` holders
+- **Administrative Hours** - Where the viewer can see them
+- **Assigned Inventory** - Equipment currently assigned. Shown only to the member themselves and to `inventory.manage` holders
 
 **Right Column:**
 
-- **Contact Information** - Email, phone, mobile, address (editable by the member or officers). Which fields other members see depends on your department's [contact info visibility](./08-admin-reports.md#contact-info-visibility) setting; home address is never shown to ordinary members
+- **Contact Information** - Email, phone, mobile (editable by the member or officers). Which fields other members see depends on your department's [contact info visibility](./08-admin-reports.md#contact-info-visibility) setting and on what the member chose to share
+- **Address** - Home address, where visible
 - **Emergency Contacts** - Emergency contact list. **Visible only to leadership (`members.manage`) and to the member themselves** — the section is hidden entirely for everyone else, and no setting publishes it. Date of birth is restricted the same way
-- **Roles & Permissions** - Assigned positions and their permissions
-- **Quick Stats** - Training count, total hours, assigned equipment count
+- **Membership** - Rank, member type, station, platoon and "Member since"; officers also see the status here
+- **Service History** - Credited and prior length of service, stint by stint. Shown only to the member and to `members.manage` holders (see [Former Members Who Rejoin](#former-members-who-rejoin-2026-09-24))
+- **Quick Stats** - Training, hours and equipment counts the viewer is allowed to see
 - **Leave of Absence** - Any active leave periods (shown if applicable)
+
+Position names appear as badges in the header; the permissions they carry are not shown on the profile.
 
 ![Member profile page with the photo, compliance summary, and detail panels](./images/01-02-member-profile.png)
 
@@ -104,7 +119,7 @@ Members can edit their own limited profile fields directly from their profile pa
 - Emergency contacts
 - Notification preferences
 
-Click the **Edit** button (pencil icon) on the relevant section to make changes. Officers with `members.manage` permission can edit all fields for any member.
+Click **Edit** in the heading of the relevant section to make changes. Officers with `members.manage` permission can edit all fields for any member.
 
 > **Hint:** Members can edit their own contact information and notification preferences. Officers with the `members.manage` permission can edit any member's profile using the full Admin Edit page.
 
@@ -112,29 +127,24 @@ Click the **Edit** button (pencil icon) on the relevant section to make changes.
 
 ## Adding Members
 
-**Required Permission:** `users.create`
+**Required Permission:** `users.create` (plus `members.manage` to open the Members Administration hub)
 
 Navigate to **Administration > Members > Member Management**, then click the **Add Member** tab.
 
-1. Fill in the required fields:
-   - **First Name** and **Last Name**
-   - **Email** (must be unique within the department)
-   - **Username** (auto-generated or custom)
-2. Optionally set:
-   - Rank, station, membership number
-   - Hire date
-   - Assigned roles/positions
-3. Check **Send Welcome Email** to automatically email the new member their login credentials.
-4. Click **Create Member**.
+1. Fill in the required fields: first and last name, membership number, home address (street, city, state, ZIP), primary phone, email, and a primary emergency contact (name, relationship, phone). The **username** is created automatically from the part of the email before `@`.
+2. Optionally set middle name, date of birth, secondary phone, join date, membership type, rank, position, station, platoon and a secondary emergency contact.
+3. Leave **Set initial password** unchecked to have a temporary password generated and emailed to the member, or check it to choose a password yourself (at least 12 characters) — no email is sent in that case.
+4. Click **Save Member**.
 
 ![Add Member form with personal information and role assignment fields](./images/01-05-add-member-form.png)
 
-> **Hint:** The system generates a temporary password for the new member. If you uncheck "Send Welcome Email," you will need to share the credentials manually. The member will be prompted to change their password on first login.
+> **Hint:** If you leave **Set initial password** unchecked, the system generates a temporary password and emails it to the member. If you set one yourself, no email is sent, so share that password with the member. Either way the member must change it at first login.
 
 **Edge Cases:**
 
-- If the email address is already in use, you will see an error. Each member must have a unique email within the department.
-- Badge numbers and membership numbers must also be unique if provided.
+- If the email address is already in use, you will see an error. Each member must have a unique email within the department. If the email belongs to an **archived** member, you are told to reactivate that member instead of creating a duplicate.
+- Membership numbers must also be unique.
+- Because the username comes from the email, two addresses with the same part before `@` collide ("Username already exists").
 
 ---
 
@@ -144,7 +154,7 @@ Navigate to **Administration > Members > Member Management**, then click the **A
 
 For bulk onboarding, you can import members from a CSV file:
 
-1. Navigate to **Administration > Members > Import Members**.
+1. Navigate to **Administration > Members > Member Management** and open the **Import Members** tab.
 2. Download the **CSV template** to see the required column format.
 3. Fill in the spreadsheet with your member data. **Delete the example row** —
    see the note below.
@@ -157,7 +167,7 @@ For bulk onboarding, you can import members from a CSV file:
 
 ![Import Members page with the file upload area and template download link](./images/01-06-import-members.png)
 
-**CSV Columns:** (the downloaded template contains all of them, in this order)
+**CSV Columns:** (the downloaded template contains all of them; column order does not matter)
 
 | Column                                                                           | Notes                                                    |
 | -------------------------------------------------------------------------------- | -------------------------------------------------------- |
@@ -166,7 +176,7 @@ For bulk onboarding, you can import members from a CSV file:
 | `middleName`                                                                     |                                                          |
 | `membershipNumber`                                                               | Must be unique. Leave blank to have one auto-assigned    |
 | `username`                                                                       | Login name; defaults to the part of the email before `@` |
-| `dateOfBirth`, `joinDate`                                                        | Format: `YYYY-MM-DD`                                     |
+| `dateOfBirth`, `joinDate`                                                        | Format: `YYYY-MM-DD` or `MM/DD/YYYY`                     |
 | `street`, `city`, `state`, `zipCode`                                             | Wrap any value containing a comma in double quotes       |
 | `primaryPhone`, `secondaryPhone`                                                 |                                                          |
 | `rank`, `station`, `platoon`                                                     |                                                          |
@@ -181,7 +191,8 @@ ignored, including `departmentId`, which older templates used as the name for
 `membershipNumber` and which is still accepted.
 
 Imported members are always created with **Active** status; there is no status
-column. Adjust status afterwards from the member's admin edit page. If your file
+column. Adjust status afterwards from the member's profile: click their status to
+open **Change Member Status**. If your file
 _has_ a `status` column, the import now tells you it is being dropped when you
 select the file, rather than letting it vanish behind a successful upload.
 
@@ -201,16 +212,16 @@ What is checked before anything is created:
 
 | Check                                      | Example message                                                                               |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| Required fields present                    | `lastName: required`                                                                          |
-| Email shape                                | `email: "5715551212" looks like a phone number`                                               |
-| Date format                                | `dateOfBirth: Invalid date format`                                                            |
-| Field lengths                              | `rank: exceeds 50 characters`                                                                 |
+| Required fields present                    | `Missing required field: lastName`                                                            |
+| Email shape                                | `email "5715551212" is not an email address — that looks like a phone number, …`              |
+| Date format                                | `dateOfBirth "31/12/1990" is not a recognized date — use YYYY-MM-DD or MM/DD/YYYY`            |
+| Field lengths                              | `rank is 104 characters long; the limit is 100`                                               |
 | Username minimum (3 characters)            | Including a username **derived** from a short email local part — a column your file never had |
 | Emergency contacts complete                | Names both columns by number                                                                  |
-| `role` matches a configured role           | `role: "Engine Operator" matches no configured role`                                          |
-| Duplicates **inside the file**             | `email: already used on line 14`                                                              |
-| Duplicates **against the existing roster** | `membershipNumber: 214 belongs to J. Alvarez`                                                 |
-| Row width vs. header width                 | `row has 19 values, header has 21`                                                            |
+| `role` matches a configured role           | `role "Engine Operator" does not match any role configured under Roles — …`                   |
+| Duplicates **inside the file**             | `email "…" is already used on line 14 of this file`                                           |
+| Duplicates **against the existing roster** | `membershipNumber "214" already belongs to J. Alvarez in this organization — …`               |
+| Row wider than the header                  | `Row has 21 values but the header has 19 columns, …`                                          |
 
 The review reads the count back before anything happens — **"2 of 6 rows are
 ready; 4 will be skipped"** — previews the rows that will import, and lists the
@@ -238,7 +249,8 @@ reasons in a leading `errorReason` column.
 
 ### Welcome Emails Are Off by Default for Imports
 
-Creating a member queues a password-setup link **immediately**, and an import
+Creating a member emails them a temporary password and a login link
+**immediately**, and an import
 creates them by the dozen. Loading a roster for staging, or from a list with
 stale addresses, used to put unrecallable mail in front of every one of them.
 
@@ -246,21 +258,22 @@ The review step now carries a **Send welcome emails** checkbox, unchecked by
 default. Left off, the roster loads quietly and you issue credentials afterwards
 from Member Management.
 
-> **Add Member** — which creates one member deliberately — is unchanged and still
-> offers the checkbox on by default.
+> **Add Member** — which creates one member deliberately — emails credentials by
+> default, unless you check **Set initial password** and choose one yourself.
 
 ### Edge Cases Worth Knowing
 
 - **Delete the template's example row.** The template ships a filled-in John Doe
   so the columns explain themselves. Leaving it in used to create a real member
-  with a live password-setup link. The importer now recognises its own example
+  with a working temporary password. The importer now recognises its own example
   and rejects that row — first name, last name **and** email must all match, so a
   real John Doe on your roster is unaffected.
 - **A shifted row is rejected, never guessed at.** An unquoted comma in an
   address pushes every later column one place along, so a phone number can land
-  in the email field. The import compares each row's value count to the header's
-  and rejects a mismatch, naming both counts. A _missing_ comma shifts the other
-  way while keeping the count plausible, so email columns are shape-checked too.
+  in the email field. The import rejects any row with more values than the header
+  has columns, naming both counts. A _missing_ comma shifts the other way without
+  adding values — the row's trailing cells are read as blank — so email columns
+  are shape-checked too.
 - **Line numbers account for quoted newlines.** A value containing a line break
   puts record 12 well below line 13; errors name the line the record actually
   started on, so you can find it.
@@ -285,15 +298,17 @@ from Member Management.
 
 **Required Permission:** `members.manage`
 
-Navigate to **Members > Admin**, click on a member, then click **Edit** to open the full Admin Edit page at `/members/admin/edit/:userId`.
+Open **Administration > Members > Member Management** and click **Edit** on the member's row to open the Admin Edit page at `/members/admin/edit/:userId`.
 
-The Admin Edit page provides complete control over all member fields:
+The Admin Edit page covers:
 
-- **Personal Information** - First name, last name, email, username, phone, mobile, address
-- **Department Information** - Rank (dropdown from configured operational ranks), station (dropdown from configured stations), membership number, hire date
-- **Status Management** - Change member status (Active, Inactive, Suspended, Probationary, etc.) with reason
-- **Role Assignment** - Assign or remove positions/roles and their associated permissions
+- **Personal Information** - Name, date of birth, personal email
+- **Department Information** - Membership number, rank (dropdown from configured operational ranks), station (dropdown from configured stations), platoon, hire date, membership type, and the compliance exemption
+- **Contact Information** - Phone and mobile; the organization email is shown read-only
+- **Address**
 - **Emergency Contacts** - Add, edit, or remove emergency contact entries
+
+Status is not changed here: use the status control on the member's profile. Positions are assigned with **Manage Roles** on the member's row in Member Management.
 
 ![Admin member edit form with personal, department and access sections](./images/01-07-admin-member-edit.png)
 
@@ -305,7 +320,7 @@ The Admin Edit page provides complete control over all member fields:
 
 **Required Permission:** `members.manage`
 
-Navigate to **Members > Admin**, click on a member, then click **History** to view the full audit trail at `/members/admin/history/:userId`.
+Open the member's Admin Edit page (above) and click **View History** at the bottom to see the full audit trail at `/members/admin/history/:userId`.
 
 The audit history page shows a chronological list of all changes made to a member's record, including:
 
@@ -338,13 +353,15 @@ To permanently delete a member:
 
 1. Open **Members** and find the member's row (or the Members Admin hub's
    Member Management tab — both open the same dialog).
-2. Click the **trash icon** in the row's Actions column. You cannot delete
-   yourself, so the icon is absent on your own row.
-3. The **Remove Member** dialog opens on its **Deactivate** tab, which is the
-   reversible option. Switch to **Permanently Delete**.
+2. Click the **trash icon** in the row's Actions column (on the Member
+   Management tab it is a **Delete** button). You cannot delete yourself, so the
+   control is absent on your own row.
+3. The **Remove Member** dialog opens on its **Deactivate** tab, which keeps the
+   member's records. Switch to **Permanently Delete**.
 4. Read the **Records affected** breakdown — training records, inventory items
    still issued to the member, and documents whose uploader would be cleared.
-5. Type the member's full name in the confirmation box, exactly as shown, then
+5. Type the member's name in the confirmation box as shown (capitalization does
+   not matter), then
    click **Permanently Delete**. The button stays disabled until the name
    matches.
 
@@ -370,13 +387,13 @@ To permanently delete a member:
   The impact preview no longer claims uploaded documents are deleted; they are
   not.
 
-> **Important:** Deletion is permanent and cannot be undone. Consider changing the member's status to **Archived** instead if you may need their records in the future.
+> **Important:** Deletion is permanent and cannot be undone. If you may need the member's records later, change their status to **Dropped** or **Retired** instead. A dropped member is archived automatically once their department property is resolved, and can be reactivated.
 
 > **Archived members can be reactivated** _(2026-09-24)_. On **Members**, choose
 > **Archived** in the status filter and use the **Reactivate** button on the row,
 > or open the member's profile and click their status. Archiving itself happens
-> automatically once a dropped member has returned all department property; there
-> is no manual Archive button (`POST /users/{id}/archive` exists for the API).
+> automatically once a dropped member has returned all department property and
+> their departure clearance has been completed; there is no manual Archive button (`POST /users/{id}/archive` exists for the API).
 > Deactivating (the Delete dialog's default) is different: a deactivated member is
 > removed from the list and cannot currently be restored from the app.
 
@@ -384,18 +401,19 @@ To permanently delete a member:
 
 Some records cannot have their owner cleared without falsifying who requested or
 filed them — **budgets, purchase requests, expense reports and IP exceptions**
-among them. If the member owns any of these, permanent deletion is **refused**,
-and the message names exactly which ones.
+among them. If the member owns any of these, permanent deletion is **refused**
+with a message explaining why. It does not list the specific records.
 
 That is not a failure to work around. The correct route for a member with
-financial history is **Deactivate, then Anonymize**: it strips their personal
-information while leaving those records owned, so the department's financial
-trail stays intelligible.
+financial history is to **deactivate, then anonymize** them: it strips their
+personal information while leaving those records owned, so the department's
+financial trail stays intelligible. **Anonymizing has no button in the app
+yet** — it is available only through the API (`POST /users/{id}/anonymize`,
+`members.manage`).
 
 > **If you tried to permanently delete a member before 2026-08-07 and got
 > "Unable to permanently delete the member" with no detail, that was this — the
-> page was discarding the server's explanation.** It now shows you the reason and
-> the affected record types. Two related bugs were fixed at the same time: a
+> page was discarding the server's explanation.** It now shows you the reason. Two related bugs were fixed at the same time: a
 > member who had ever created _any_ record could fail deletion outright, and
 > **saving a member's roles silently stripped all of their positions**. If a
 > member's positions disappeared after a role save, re-add them; the save now
@@ -405,7 +423,7 @@ trail stays intelligible.
 
 ## Prospective Members Pipeline
 
-**Required Permission:** `members.manage`
+**Required Permission:** `prospective_members.manage` (printing applicant badges needs only `prospective_members.view`)
 
 The pipeline manages people who are interested in joining but are not yet full members. Navigate to **Administration > Members > Prospective** to access the pipeline.
 
@@ -413,7 +431,7 @@ The pipeline manages people who are interested in joining but are not yet full m
 
 The pipeline offers two views:
 
-- **Kanban Board** - Drag-and-drop cards through stages
+- **Kanban Board** - Drag a card one stage forward (Advance) or one stage back (Back)
 - **Table View** - Traditional list with sorting and filtering
 
 ![Prospective members kanban board with pipeline stages as columns](./images/01-10-prospective-pipeline.png)
@@ -427,7 +445,7 @@ The pipeline offers two views:
 
 ### Working with Prospects
 
-1. **Add a Prospect** - Click **Add Prospect** and fill in their basic information (name, email, phone, interest reason, and **desired membership type** — regular or administrative).
+1. **Add an Applicant** - Click **Add Applicant** and enter their first and last name, email, phone, **membership type** (Regular Member or Administrative) and, optionally, a **Target Role** to apply when they are converted. Click **Add to Pipeline**.
 2. **Complete Steps** - Each pipeline stage has steps (action items, checkboxes, notes). Mark steps as completed as the prospect progresses.
 3. **Advance** - Move the prospect to the next stage when all required steps are complete. If the next stage is an automated email stage, the configured email is sent automatically. If the prospect is already at the final stage, **Advance** now reports that there is nowhere to move them _(2026-08-08)_; it used to say "Advanced" and change nothing, while still writing an entry into the audit log.
 4. **Back** - If a prospect needs to return to a previous stage (e.g., missing documents discovered after advancing), click **Back** in the prospect's detail drawer. The previous stage's progress is reset to allow re-completion. The button is absent while the prospect is still on the first stage, since there is nowhere to go back to.
@@ -449,11 +467,13 @@ Uploading and removing are offered on **active** applicants only. A withdrawn or
 rejected applicant's paperwork stays readable — it is part of the record of the
 decision — but is no longer editable.
 
-6. **Transfer to Member** - When the prospect is approved, click **Transfer to Membership** to convert them to a full member account. The membership type is pre-filled from the prospect's desired type.
+6. **Convert to Member** - When the applicant is on the last stage, click **Convert** in the drawer. In the **Convert to Member** dialog, the membership type is pre-filled from the applicant's desired type.
 
 The drawer's action bar carries all of these, left to right: **Interview**,
 **Back**, then **Withdraw**, **Hold**, **Skip**, **Reject** and **Advance**.
-On the final stage the last button reads **Convert** instead.
+It appears for active applicants only. **Back** is absent on the first stage; on
+the final stage **Skip** is not offered and the last button reads **Convert**
+instead.
 
 ![The applicant drawer's action bar — Interview, Back, Withdraw, Hold, Skip, Reject and Advance](./images/01-25-applicant-action-bar.png)
 
@@ -472,7 +492,7 @@ Prospective members can indicate their preferred membership type when applying:
   cards — Regular Member and Administrative — and clicking the other one
   switches it. There is no badge or dropdown on the Kanban card itself
 - During conversion to full member, the system pre-fills "Regular" or "Administrative" based on the prospect's selection
-- Regular members start with probationary status; administrative members start with active status
+- Both start with an Active account. A Regular applicant becomes a probationary member (membership type); an Administrative applicant becomes an administrative member
 
 ![Desired Membership Type — Regular Member selected, Administrative beside it as the alternative](./images/01-34-desired-membership-type.png)
 
@@ -486,8 +506,9 @@ and its reversal.
 
 Everything about one applicant is in the drawer, in this order: who they are and
 how to reach them, the membership type they asked for, the stage they are on and
-when they reached it, the events they are booked into, their documents, and the
-action bar. On the **last** stage the action bar's final button reads **Convert**
+when they reached it, the events they are booked into, their documents, then any
+sections for the current stage type, their progress and stage history, notes, the
+activity log, and finally the action bar. On the **last** stage the action bar's final button reads **Convert**
 rather than Advance — the same button, naming what it does there.
 
 ![An applicant's drawer on the last stage of the pipeline — their details, the stage they are on, and Convert where Advance sits elsewhere](./images/01-35-applicant-drawer-final-stage.png)
@@ -507,23 +528,23 @@ Select applicants in the pipeline (the checkboxes), then click **Print Badges** 
 
 The pipeline supports **twelve** stage types, each tailored to a specific step
 in the membership process. The stage type is chosen from a grid of tiles in the
-Add/Edit Pipeline Stage dialog, and picking one swaps the configuration panel
+Add Pipeline Stage / Edit Stage dialog, and picking one swaps the configuration panel
 below it.
 
-| Stage Type                | Purpose                                | What Happens                                                                                                                                       |
-| ------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Form Submission**       | Collect information from the applicant | Links to a form from the Forms module. Can auto-advance when the form is submitted                                                                 |
-| **Document Upload**       | Collect required documents             | Applicant uploads documents (ID, background check, etc.). Can auto-advance when all documents are uploaded                                         |
-| **Meeting**               | Schedule interview/orientation         | Requires attendance at or scheduling of a meeting; links to upcoming events                                                                        |
-| **Election / Vote**       | Membership vote                        | Auto-creates an election package for the Elections module when a prospect reaches this stage                                                       |
-| **Manual Approval**       | Coordinator sign-off                   | An admin or designated role manually marks this stage as complete                                                                                  |
-| **Enable Status Page**    | Turn on public tracking                | Activates the prospect's public application-status page at this stage                                                                              |
-| **Automated Email**       | Send a notification email              | Sends a configurable email when the prospect reaches this stage. Configure subject, welcome message, FAQ link, meeting details and custom sections |
-| **Reference Check**       | Collect references                     | Collect and verify personal or professional references                                                                                             |
-| **Checklist**             | Multi-item sign-off                    | A checklist of items (orientation, gear issue, etc.) rather than a single approval                                                                 |
-| **Interview Requirement** | Require N interviews                   | Requires a set number of interviews before the prospect can advance                                                                                |
-| **Multi-Signer Approval** | Several roles must agree               | Requires multiple designated roles to all sign off                                                                                                 |
-| **Medical Screening**     | Physical or medical clearance          | Requires a physical exam or medical clearance before advancing                                                                                     |
+| Stage Type                | Purpose                                | What Happens                                                                                                                                                                                                                       |
+| ------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Form Submission**       | Collect information from the applicant | Links to a form from the Forms module. Can auto-advance when the form is submitted                                                                                                                                                 |
+| **Document Upload**       | Collect required documents             | Applicant uploads documents (ID, background check, etc.). Can auto-advance when all documents are uploaded                                                                                                                         |
+| **Meeting**               | Schedule interview/orientation         | Requires attendance at or scheduling of a meeting; links to upcoming events                                                                                                                                                        |
+| **Election / Vote**       | Membership vote                        | Advancing an applicant onto this stage with **Advance** (or by dragging the card) creates an election package for the Elections module. Advance All, Skip and auto-advance do not; create the package from the drawer in that case |
+| **Manual Approval**       | Coordinator sign-off                   | An admin or designated role manually marks this stage as complete                                                                                                                                                                  |
+| **Enable Status Page**    | Turn on public tracking                | Stores an enable/disable setting, but nothing acts on it yet. Whether applicants can use the public status page is set for the whole pipeline in Pipeline Settings > **Public Application Status Page**                            |
+| **Automated Email**       | Send a notification email              | Sends a configurable email when the prospect reaches this stage. Configure subject, welcome message, FAQ link, meeting details and custom sections                                                                                 |
+| **Reference Check**       | Collect references                     | Collect and verify personal or professional references                                                                                                                                                                             |
+| **Checklist**             | Multi-item sign-off                    | A checklist of items (orientation, gear issue, etc.) rather than a single approval                                                                                                                                                 |
+| **Interview Requirement** | Require N interviews                   | Requires a set number of interviews before the prospect can advance                                                                                                                                                                |
+| **Multi-Signer Approval** | Several roles must agree               | Requires multiple designated roles to all sign off                                                                                                                                                                                 |
+| **Medical Screening**     | Physical or medical clearance          | Requires a physical exam or medical clearance before advancing                                                                                                                                                                     |
 
 > **Corrected 2026-08-10.** This table previously listed seven types, one of
 > which — "Form Dropdown" — has never existed; it described the form picker
@@ -540,15 +561,15 @@ starting configuration in one click.
 
 ### Auto-Advance
 
-Form submission and document upload stages can be configured to **auto-advance** the prospect when the condition is met:
+Form Submission, Document Upload, Meeting, Checklist, Interview Requirement, Medical Screening and Reference Check stages can each be set to **auto-advance** the applicant when the stage's condition is met:
 
-1. Open the stage configuration (pencil icon in Pipeline Builder)
-2. Check **"Auto-advance when form is submitted"** or **"Auto-advance when documents are uploaded"**
-3. Save the pipeline
+1. Open the stage (pencil icon in the Pipeline Builder)
+2. Tick the stage's **Auto-advance when…** checkbox — on by default for form stages, off for the rest
+3. Click **Update Stage**; the change is saved immediately
 
 When enabled, the prospect automatically moves to the next stage without coordinator intervention.
 
-> **Edge case:** Auto-advance does not trigger conversion at the final stage. A coordinator must always manually convert a prospect to a full member.
+> **Edge case:** Auto-advance on the final stage converts the applicant only if the pipeline has auto-transfer on approval enabled. That setting defaults to off and can only be changed through the API, so a pipeline set up in the app always needs a coordinator to click **Convert**.
 
 ### Automated Email Stages
 
@@ -571,7 +592,7 @@ field for it.
 
 ![The automated-email stage configuration with its subject, welcome message and custom sections](./images/01-28-stage-email-config.png)
 
-> **Edge case:** If your department has not configured SMTP email settings (in Settings > Email or during onboarding), automated emails will be skipped silently. Check **Settings > Email** to verify your SMTP configuration.
+> **Edge case:** If email is not configured (Settings > Email) or the send fails, no email goes out and the applicant **stays on the automated email stage** instead of moving past it. An applicant sitting on an email stage is the sign to check your email settings.
 
 ### Pipeline Configuration
 
@@ -584,7 +605,9 @@ any of the configuration below appears. From there you can:
 - Add, remove, or reorder stages (twelve stage types available)
 - Configure auto-advance, email templates, form links, and event linking per stage
 - Set a default pipeline for new prospects
-- Enable auto-transfer on final step approval
+- Turn the pipeline's **Public Application Status Page** on or off
+
+Auto-transfer on final-stage approval (`auto_transfer_on_approval`) has no control on this page; it can only be set through the API.
 
 > **Hint:** You can create multiple pipelines for different scenarios (e.g., "Standard Application", "Lateral Transfer", "Junior Firefighter").
 
@@ -751,10 +774,22 @@ Officers change a member's status from the member's profile page.
 
 1. Navigate to the member's profile.
 2. Click the **status badge** beside the member's name, or the pencil next to
-   **Status** in the Employment panel. Both open the same dialog.
-3. Pick the new status from **New Status**. The list holds all nine statuses:
+   **Status** in the Membership panel. Both open the same dialog.
+3. Pick the new status from **New Status**. The list holds eight statuses:
    Active, Inactive, Suspended, Probationary, Leave, Retired, Dropped
-   Voluntary, Dropped Involuntary and Archived.
+   Voluntary and Dropped Involuntary. **Archived** is not offered: a dropped
+   member is archived automatically once their property is returned and their
+   departure clearance is completed. Not every
+   move is allowed — a retired member can only return to Active or Inactive, and
+   a dropped member only to Probationary or Active — and the dialog shows an
+   error for one that is not.
+   When the member is dropped or retired and you pick a status that brings them
+   back, the dialog also asks how their **earlier service** counts (**Continue
+   prior service** or **Restart at zero**, with your department's default marked)
+   and for a **Return date** — see
+   [Former Members Who Rejoin](#former-members-who-rejoin-2026-09-24). On an
+   **archived** member the status control opens a **Reactivate Member** dialog
+   instead.
 4. Optionally give a **reason**. The field is not required.
 5. Click **Update Status**. It stays disabled while the selection still matches
    the member's current status.
@@ -766,7 +801,8 @@ happen automatically — the dialog has no per-change options for them.
 > **Corrected 2026-08-10.** This previously described a return deadline,
 > custom instructions and a "send notification" toggle inside the dialog. None
 > of the three exists; the dialog holds a status dropdown, an optional reason,
-> and the drop note above.
+> the drop note above, and — when bringing a member back — the earlier-service
+> choice.
 
 ![The Change Member Status dialog with a drop status selected and its property-return note](./images/01-29-status-change-modal.png)
 
@@ -785,11 +821,14 @@ happen automatically — the dialog has no per-change options for them.
 
 When a member is dropped, the system automatically:
 
-1. Generates a **property return report** listing all assigned equipment
-2. Emails that report to the member (the status dialog has no option to skip
-   it; only the API's `send_property_return_email: false` does)
-3. Tracks outstanding items, and sends reminders while any remain (below)
-4. Auto-archives the member once all property is returned
+1. Generates a **property return report** listing all assigned equipment and saves it to Documents
+2. Emails the report to the member (and any CC recipients your drop-notification settings name)
+3. Opens a **departure clearance** to track outstanding items
+4. Archives the member automatically once every item is returned **and** the departure clearance has been completed
+
+The 30- and 90-day reminder emails are sent only when
+`POST /users/property-return-reminders/process` is called; nothing runs it on a
+schedule.
 
 **Reminders.** A daily scheduled task emails the member when they pass **30
 days** and again at **90 days** since the drop with property still out, and
@@ -800,7 +839,7 @@ one. A reminder already sent is never repeated.
 
 > **Hint:** Overdue property returns are tracked by the API
 > (`GET /users/property-return-reminders/overdue`) but **have no screen** as of
-> 2026-08-08. The Inventory module's members page shows an "Overdue Returns"
+> 2026-09-24. The Inventory module's members page shows an "Overdue Returns"
 > figure, which counts inventory checkouts rather than offboarding property, so
 > it is not a substitute. See
 > [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08).
@@ -809,7 +848,9 @@ one. A reminder already sent is never repeated.
 
 ## Leave of Absence
 
-**Required Permission:** `members.manage`
+**Required Permission:** `members.manage` to view or deactivate a leave.
+Creating one also requires `scheduling.assign`, because a leave cancels the
+member's shift assignments inside it.
 
 When a member takes a leave of absence, their time away should be recorded so that rolling-period training and shift requirements are adjusted. Months during a leave are excluded from the denominator when calculating compliance.
 
@@ -827,7 +868,7 @@ listed there, alongside training waivers.
 
 1. Open the **Create Waiver** tab.
 2. Select the **member** from the dropdown.
-3. Choose the **waiver type**: Leave of Absence, Medical, Military, Personal, Administrative, or Other.
+3. Choose the **waiver type**: Leave of Absence, Medical, Military, Personal, Administrative, New Member, or Other.
 4. Under **Applies To**, tick which requirements the leave suspends — training, meeting attendance, shifts, or all three.
 5. Set the **start date** and **end date**, or tick **Permanent (no end date)**.
 6. Optionally provide a **reason**.
@@ -847,21 +888,22 @@ For rolling-period requirements (e.g., "12 hours of training over 12 months"):
 
 ### Viewing Leaves
 
-- **Waiver Management** lists all active (and optionally inactive) leaves across
-  the department; the **Training Waivers** officer view lists them too
+- **Waiver Management** lists active leaves on its **Active Waivers** tab; the
+  **Training Waivers** officer view lists them too
 - Individual member profiles show active leaves in the right sidebar, read-only
-- Toggle **Show inactive leaves** to see historical records
+- For historical records, open the **All Waivers** tab and choose the
+  **Past/Inactive** filter
 
-> **Hint:** Deactivating a leave does not delete it -- it becomes inactive and remains in the history. You can toggle "Show inactive leaves" to review past records.
+> **Hint:** Deactivating a leave does not delete it -- it becomes inactive and remains in the history, under **All Waivers → Past/Inactive**.
 
-> **⚠️ You cannot edit or cancel a leave from any screen** _(verified
-> 2026-08-08)_. Creating one works; correcting one does not — `PATCH` and
-> `DELETE /users/leaves-of-absence/{id}` exist and are tested, but nothing in the
-> application calls them.
+> **⚠️ You cannot edit a leave from any screen** _(verified 2026-09-24)_. You
+> can cancel one with **Deactivate** on the Active Waivers tab, which also
+> deactivates its linked training waiver. Changing a leave's dates is API only:
+> `PATCH /users/leaves-of-absence/{id}` exists, but no screen calls it.
 >
 > **Check the dates before you save.** A leave pro-rates the member's hours,
 > shift and call requirements, so a wrong end date quietly changes their
-> compliance and there is no screen to put it right. Tracked in
+> compliance. To correct one, deactivate it and create it again. Tracked in
 > [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08).
 
 ### LOA and Training Waiver Auto-Linking
@@ -871,7 +913,7 @@ When a Leave of Absence is created, the system **automatically creates a linked 
 - You do **not** need to separately create a training waiver after creating an LOA
 - If the LOA dates are updated, the linked training waiver dates sync automatically
 - If the LOA is deactivated, the linked training waiver is also deactivated
-- To opt out of auto-linking for a specific leave, set `exempt_from_training_waiver` on the leave (available via the "Meetings & Shifts Only" option in the Waiver Management page)
+- To opt out of auto-linking for a specific leave, tick **Meeting Attendance** and/or **Shift Requirements** under **Applies To** and leave **Training Requirements** unticked (this sets `exempt_from_training_waiver` on the leave)
 
 > For detailed technical documentation on how waivers adjust training compliance, see [Training Waivers & Leaves of Absence](../../backend/app/docs/TRAINING_WAIVERS.md).
 
@@ -895,10 +937,10 @@ Navigate to **Members > Admin > Waivers** to access the unified Waiver Managemen
 
 1. Click the **Create Waiver** tab.
 2. Select the **member** from the dropdown.
-3. Choose the **Applies To** scope:
-   - **All (LOA + Training Waiver)** — Creates a Leave of Absence and automatically links a training waiver. This is the most common choice.
-   - **Training Only** — Creates a standalone training waiver without affecting meeting attendance or scheduling.
-   - **Meetings & Shifts Only** — Creates a Leave of Absence with training waiver opt-out. Training requirements are not adjusted.
+3. Under **Applies To**, tick any of **Training Requirements**, **Meeting Attendance** and **Shift Requirements**. What you tick decides what is created, and the text under the checkboxes says which:
+   - **Training plus meetings and/or shifts** — a Leave of Absence with a linked training waiver. This is the most common choice.
+   - **Training only** — a standalone training waiver, with no leave; meeting attendance and scheduling are unaffected.
+   - **Meetings and/or shifts only** — a Leave of Absence that opts out of the training waiver, so training requirements are not adjusted.
 4. Select the **leave type** and set the **date range**.
 5. Optionally provide a **reason**.
 6. Click **Create Waiver**.
@@ -924,11 +966,11 @@ The rank validation feature helps identify members whose rank does not match any
 
 ### How It Works
 
-The system compares each active member's rank against the organization's configured list of operational ranks. Members whose rank does not match (case-sensitive) are flagged for review.
+The system compares each current member's rank against the rank codes the organization recognizes — its configured operational ranks plus the built-in defaults. A rank that does not match a code exactly, including one that differs only in capitalization or spacing, is flagged. Archived, retired and dropped members are not checked.
 
 ### Viewing Rank Mismatches
 
-Rank validation results are visible in the **Members Admin Hub**. Members with unrecognized ranks are surfaced with their current rank and the list of valid ranks to choose from.
+Rank validation results appear on **Members Admin → Settings → Operational Ranks**. A warning lists each member whose rank is unrecognized, with the rank value they currently hold.
 
 ### Resolving Mismatches
 
@@ -936,7 +978,7 @@ Rank validation results are visible in the **Members Admin Hub**. Members with u
 2. Use the **rank dropdown** to select the correct operational rank.
 3. Save the changes.
 
-> **Hint:** If a member's rank is legitimate but not in the system, add it to the organization's operational ranks in **Settings** before correcting individual member records.
+> **Hint:** If a member's rank is legitimate but not in the system, add it under **Members Admin → Settings → Operational Ranks** before correcting individual member records.
 
 ---
 
@@ -946,29 +988,28 @@ Rank validation results are visible in the **Members Admin Hub**. Members with u
 
 Membership tiers classify members by their years of service and grant benefits like voting eligibility, office-holding rights, and training exemptions.
 
-### Configuring Tiers — API Only
+### Configuring Tiers
 
-> **⚠️ There is no screen for this.** Membership tiers work, and the API is
-> complete, but **no page in the application reads or writes the tier
-> configuration**. Verified against the code on 2026-08-08: the service methods
-> (`getTierConfig`, `updateTierConfig`, `advanceMembershipTiers`) exist in
-> `frontend/src/services/adminServices.ts` with **zero callers**.
->
-> This section previously described a "Tier Configuration" tab on a "Member
-> Lifecycle Management" page. Neither exists — see
-> [Member Lifecycle Management](#member-lifecycle-management) below. Configure
-> tiers through the API until the screen is built, or leave them unconfigured, in
-> which case membership types are free-form and unvalidated.
+Open **Members Admin → Settings → Membership Tiers**
+(`/members/admin/settings/tiers`); the same editor is also a step in initial
+setup. There you can add, rename, reorder and remove tiers, set each tier's years
+of service and benefits, turn **Advance members automatically by years of
+service** on or off, and choose what happens **When a former member rejoins**.
+Click **Save tiers** to apply. A tier that members currently hold cannot be
+removed or renamed until they are moved to another one.
+
+> _Corrected 2026-09-24:_ this section previously said tiers were API only and
+> had no screen. The screen has existed since the tier editor shipped.
 
 The configuration is stored in the organization's settings under
-`membership_tiers` and is read and written through:
+`membership_tiers`, and the API is:
 
-| Method | Endpoint                                  | Permission       |
-| ------ | ----------------------------------------- | ---------------- |
-| `GET`  | `/api/v1/users/membership-tiers/config`   | `members.manage` |
-| `PUT`  | `/api/v1/users/membership-tiers/config`   | `members.manage` |
-| `POST` | `/api/v1/users/advance-membership-tiers`  | `members.manage` |
-| `POST` | `/api/v1/users/{user_id}/membership-tier` | `members.manage` |
+| Method  | Endpoint                                  | Permission       |
+| ------- | ----------------------------------------- | ---------------- |
+| `GET`   | `/api/v1/users/membership-tiers/config`   | `members.manage` |
+| `PUT`   | `/api/v1/users/membership-tiers/config`   | `members.manage` |
+| `POST`  | `/api/v1/users/advance-membership-tiers`  | `members.manage` |
+| `PATCH` | `/api/v1/users/{user_id}/membership-type` | `members.manage` |
 
 Each tier carries:
 
@@ -977,25 +1018,29 @@ Each tier carries:
 - **Benefits**: voting eligible, can hold office, training exempt, requires
   meeting attendance for voting
 
-**What still works without the screen:**
+**Related behaviour:**
 
-- **Changing one member's tier** is available in the UI, from the member's
-  profile — that path goes through the status-change control, not through tier
-  configuration.
+- **Changing one member's tier** is done on the member's **Admin Edit** page
+  (`/members/admin/edit/:userId`) with the membership type field. It is separate
+  from the profile's status control.
 - **Validation.** If tiers _are_ configured, a tier change is rejected unless the
-  target tier id is one of them. If none are configured, any value is accepted —
-  so an unconfigured department has membership types that nothing checks.
-- **Auto-advancement** runs when `POST /users/advance-membership-tiers` is
-  called. Because nothing in the UI calls it, in practice it only runs if an
-  operator invokes it.
+  target tier id is one of them. If none are saved, any value is accepted — so an
+  unconfigured department has membership types that nothing checks.
+- **Auto-advancement** runs automatically on the first of each month (see below).
+  `POST /users/advance-membership-tiers` also runs it on demand, but no screen
+  calls that endpoint.
 
 ### Auto-Advancement
 
 Auto-advancement promotes each active or probationary member to the highest tier
 their **credited years of service** qualify them for. It runs on the first of each
 month (`membership_tier_advance`), when **Advance members automatically by years
-of service** is on under **Members Admin → Settings → Tiers**. _(Corrected
-2026-09-24: this section previously said no scheduled job existed.)_
+of service** is on under **Members Admin → Settings → Membership Tiers**.
+_(Corrected 2026-09-24: this section previously said no scheduled job existed.)_
+
+A member is only moved up the ladder they are already on: someone whose current
+membership type is not one of the configured tiers is skipped, and nobody is
+moved down.
 
 Credited service is the time a member was actually in the department:
 
@@ -1018,7 +1063,7 @@ Probationary or Inactive. The dialog asks how their earlier service counts:
 | **Continue prior service** | Earlier stints plus the new one, minus the time away | Keep counting                                 |
 | **Restart at zero**        | The new stint only                                   | Kept on record and shown as **prior service** |
 
-The department's default is set under **Settings → Tiers → When a former member
+The department's default is set under **Members Admin → Settings → Membership Tiers → When a former member
 rejoins**; the officer can choose the other option for any one member. The dialog
 also takes the **return date**, and — for a member whose earlier service was never
 recorded — the **last day of previous service**, pre-filled from their last status
@@ -1042,36 +1087,40 @@ date may be in the future.
 > **⚠️ Corrected 2026-08-08 — this page does not exist.** Earlier versions of this
 > guide described a "Member Lifecycle Management" page under Members Admin with
 > four tabs: Archived Members, Overdue Returns, Leave of Absence, and Tier
-> Configuration. **None of it is real.** `/members/admin` has exactly three tabs —
-> Member Management, Add Member, Import Members — and there is no lifecycle page
-> anywhere in the application.
+> Configuration. **None of it is real.** `/members/admin` has four tabs — Member
+> Management, Add Member and Import Members (both need `users.create`), and
+> Settings — and there is no lifecycle page anywhere in the application. Several
+> of those operations now have screens elsewhere; the table below says where.
 >
 > The screenshot below was captured at `/members/admin` and applied under the old
 > caption, so it shows the Members Admin hub, not a lifecycle page. It has been
 > re-captioned rather than removed, since the page it actually shows is a real one.
 
-![The Members Admin hub — Member Management, Add Member and Import Members tabs](./images/01-22-member-lifecycle.png)
+![The Members Admin hub, captured before its Settings tab was added](./images/01-22-member-lifecycle.png)
 
 ### Where Each Lifecycle Operation Actually Lives
 
-Verified against the code on 2026-08-08:
+Verified against the code on 2026-09-24:
 
 | Operation                                  | Where it is today                                                                   | State                                                                                                                        |
 | ------------------------------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | **Change a member's status**               | Member profile → status control                                                     | ✅ Full UI (archiving is automatic, not a status choice)                                                                     |
-| **Leave of absence — create**              | [Waiver Management](#waiver-management) (`/waivers`)                                | ✅ Works, but it is not where you would look                                                                                 |
+| **Leave of absence — create**              | [Waiver Management](#waiver-management) (`/members/admin/waivers`)                  | ✅ Works, but it is not where you would look                                                                                 |
 | **Leave of absence — view**                | Member profile (read-only card), and listed on Waiver Management / Training Waivers | ✅ Read-only                                                                                                                 |
-| **Leave of absence — edit or delete**      | —                                                                                   | ❌ API only (`updateLeaveOfAbsence`, `deleteLeaveOfAbsence` have no callers)                                                 |
+| **Leave of absence — deactivate**          | Waiver Management → Active Waivers → **Deactivate**                                 | ✅ Full UI                                                                                                                   |
+| **Leave of absence — edit**                | —                                                                                   | ❌ API only (`updateLeaveOfAbsence` has no callers)                                                                          |
 | **Archived members — list and reactivate** | Members → status filter **Archived** → **Reactivate**; or the member's profile      | ✅ Full UI (2026-09-24)                                                                                                      |
 | **Overdue property returns**               | —                                                                                   | ❌ API only for _members_. The Inventory module's members page shows an "Overdue Returns" figure, which is a different thing |
-| **Tier configuration**                     | —                                                                                   | ❌ API only (see [Membership Tiers](#membership-tiers))                                                                      |
+| **Tier configuration**                     | Members Admin → Settings → Membership Tiers                                         | ✅ Full UI (the monthly job advances members; a manual "advance now" is API only)                                            |
 
 **What this means in practice.** An archived member can be reactivated from the
-Members list. A leave of absence is still one-way: if it is entered with the wrong
-dates, there is no screen to fix it from.
+Members list, and tiers are configured under Settings. A leave of absence cannot
+be edited: if it is entered with the wrong dates, deactivate it from Waiver
+Management and create it again.
 
-> **This is a feature gap, not a bug.** The endpoints, permissions and service
-> methods all exist and are tested; what is missing is the screens. Tracked in
+> **The remaining gaps are editing a leave of absence and listing overdue
+> property returns for departed members.** Both endpoints exist and are tested;
+> what is missing is the screen. Tracked in
 > [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08)
 > with the exact API surface, so whoever builds the page does not have to
 > rediscover it.
@@ -1130,43 +1179,43 @@ their expiration date — and compares it against that requirement.
 
 ## Troubleshooting
 
-| Issue                                                                | Solution                                                                                                                                                                                                                                                                                                                                           |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Email already in use" when adding a member                          | Each member must have a unique email. Check if the email belongs to an existing or archived member.                                                                                                                                                                                                                                                |
-| Member cannot log in after creation                                  | Ensure the welcome email was sent, or manually share the temporary password. Check that the member's status is Active.                                                                                                                                                                                                                             |
-| CSV import rows failing                                              | As of 2026-08-07 every row is checked when you select the file, before anything is created, and each rejection names the column and the value. Use **Download Error Report** to get the failed rows back with the reasons in a leading `errorReason` column — fix them, delete that column, and upload that file.                                  |
-| A phone number was imported as a member's email                      | Fixed 2026-08-07 — a comma inside an _unquoted_ value shifted every later column one place right. Rows whose value count does not match the header are now rejected, and any email column holding a phone number is called out. Keep values containing commas wrapped in double quotes.                                                            |
-| "Email already exists" for a member who is not in the system         | The address appears twice in your file. As of 2026-08-07 repeats of email, username and membershipNumber are caught before importing, naming the line the value was first used on. Two different addresses can still collide on username, since it is derived from the part before the `@` — add a `username` column to separate them.             |
-| Importing sent welcome emails I did not want sent                    | As of 2026-08-07 **Send welcome emails now** sits on the review step and is **off by default** for imports — the roster loads without sending anything, and you issue credentials afterwards from Member Management → Reset Password. Tick the box to email everyone a password-setup link as they are created.                                    |
-| A member is already on the roster                                    | As of 2026-08-07 the current roster is checked when you select the file, so a row matching an existing member's email, username or membership number is reported up front, naming who owns the value. Useful when re-uploading a corrected file.                                                                                                   |
-| The import created a member called John Doe                          | The template's example row was left in the file. As of 2026-08-07 the importer recognizes its own example and rejects that row; delete it from the file.                                                                                                                                                                                           |
-| A large import seems to hang, or was started by mistake              | The review step shows "Importing 23 of 47" and a **Stop importing** button. Members already created stay created. Rows not reached appear in the error report as "Not imported — the import was stopped before this row", so that file is exactly what remains and can be uploaded to finish.                                                      |
-| CSV upload rejected with "Missing required columns: departmentid"    | Fixed 2026-08-04 — the generated template and the uploader disagreed on that column's name. Pull latest and re-download the template. Rosters built from an older template still import.                                                                                                                                                           |
-| A row that looks complete fails as "Missing required fields"         | Fixed 2026-08-04 — a comma inside a field (typically an address) used to shift every column after it. Pull latest, and keep such values wrapped in double quotes.                                                                                                                                                                                  |
-| Imported members have no position assigned                           | Fixed 2026-08-04 — the `role` column was read but never applied. Pull latest and use the exact role name from **Roles**; an unmatched name now fails that row rather than importing without a role.                                                                                                                                                |
-| Import row fails "Username already exists" but no username was given | Usernames default to the part of the email before `@`, so `j.doe@a.com` and `j.doe@b.org` collide. Add a `username` column with distinct values.                                                                                                                                                                                                   |
-| Imported members are all Active regardless of the spreadsheet        | Expected — the create endpoint has no status field, and the misleading `status` column was removed from the template on 2026-08-04. As of 2026-08-06 the uploader says so when your file still carries a `status` column, instead of dropping it silently. Set status afterwards from Admin Edit.                                                  |
-| A column in my spreadsheet was not imported                          | As of 2026-08-06 the uploader names every column it does not recognize when you select the file. Anything outside the template's columns is ignored — move that data into a template column or record it on the member afterwards.                                                                                                                 |
-| Every row fails "Unknown role"                                       | The `role` column must match a role name configured under **Roles**, not a rank or an assignment ("Engine Operator", "EMT" are usually the latter). As of 2026-08-06 unmatched names are reported when you select the file rather than one row at a time after importing. Create the roles, or clear the column and set the `rank` column instead. |
-| Prospect not showing in pipeline                                     | Check the pipeline filter. Prospects may be in a different pipeline or have a status of Withdrawn/Transferred.                                                                                                                                                                                                                                     |
-| Auto-advance not triggering                                          | Verify that "Auto-advance when form is submitted" (or documents uploaded) is checked in the stage configuration. The setting defaults to off.                                                                                                                                                                                                      |
-| Automated email not sent                                             | Check that SMTP is configured in Settings > Email. Verify the prospect has a valid email address. Check the scheduled email logs for errors.                                                                                                                                                                                                       |
-| "Move Back" button not visible                                       | The prospect must be on a stage beyond the first. The "Move Back" action is only available for active prospects not at the first stage.                                                                                                                                                                                                            |
-| Email showing UTC times                                              | Ensure the organization's timezone is configured in Settings > Organization. Scheduled emails display times in the organization's timezone. _(fixed 2026-03-14)_                                                                                                                                                                                   |
-| Days-in-stage always shows 0                                         | Fixed 2026-03-15 — days-in-stage is now computed server-side from the prospect's `updated_at` timestamp. Pull latest and restart.                                                                                                                                                                                                                  |
-| Pipeline email sections in wrong order                               | As of 2026-03-15, use drag-and-drop to reorder email sections in the pipeline email configuration. The order persists in the `section_order` array.                                                                                                                                                                                                |
-| Pipeline email preview not available                                 | Added 2026-03-15 — preview rendered email content before sending from the pipeline email configuration panel.                                                                                                                                                                                                                                      |
-| Pipeline overview report not showing                                 | Added 2026-03-15 — enable the pipeline overview report in Reports. Configure stage grouping in Pipeline Settings > Report Stage Groups.                                                                                                                                                                                                            |
-| SMTP connection error on email send                                  | Verify SMTP settings: Gmail/Office 365 use STARTTLS on port 587 (`EMAIL_USE_SSL=false`); self-hosted servers may use SSL on port 465 (`EMAIL_USE_SSL=true`). _(fixed 2026-03-13)_                                                                                                                                                                  |
-| Member still showing as active after being dropped                   | The status change may not have been saved. Verify from the member's profile.                                                                                                                                                                                                                                                                       |
-| Property return report not generating                                | The member must have inventory items assigned. If none are assigned, no report is generated.                                                                                                                                                                                                                                                       |
-| Membership tier not advancing                                        | Verify the member has a **hire_date** set and that auto-advance is enabled. The member must have an Active status.                                                                                                                                                                                                                                 |
-| LOA created but training not adjusted                                | Check that the LOA does not have `exempt_from_training_waiver` set. The auto-linked training waiver should appear in the Training Waivers tab. If missing, create a standalone waiver from the Waiver Management page.                                                                                                                             |
-| Rank shows as unrecognized in validation                             | The member's rank must exactly match a configured operational rank (case-sensitive). Edit the member's rank or add the rank to the organization's configuration.                                                                                                                                                                                   |
-| Audit history is empty                                               | Audit entries are only tracked for changes made after the feature was deployed. Earlier changes will not appear.                                                                                                                                                                                                                                   |
-| Cannot find Admin Edit page                                          | Navigate to Members > Admin, click a member, then click **Edit**. The page is at `/members/admin/edit/:userId`.                                                                                                                                                                                                                                    |
-| Photo upload fails                                                   | Check the file type (JPEG, PNG, WebP only) and file size. Ensure the backend has sufficient disk space for uploads.                                                                                                                                                                                                                                |
-| Compliance card shows wrong status                                   | Refresh the page. Red = expired certs or <50% requirements met; Yellow = expiring certs or incomplete requirements; Green = fully compliant.                                                                                                                                                                                                       |
+| Issue                                                                | Solution                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Email already in use" when adding a member                          | Each member must have a unique email. Check if the email belongs to an existing or archived member.                                                                                                                                                                                                                                                              |
+| Member cannot log in after creation                                  | Ensure the welcome email was sent, or manually share the temporary password. Check that the member's status is Active.                                                                                                                                                                                                                                           |
+| CSV import rows failing                                              | As of 2026-08-07 every row is checked when you select the file, before anything is created, and each rejection names the column and the value. Use **Download Error Report** to get the failed rows back with the reasons in a leading `errorReason` column — fix them, delete that column, and upload that file.                                                |
+| A phone number was imported as a member's email                      | Fixed 2026-08-07 — a comma inside an _unquoted_ value shifted every later column one place right. Rows whose value count does not match the header are now rejected, and any email column holding a phone number is called out. Keep values containing commas wrapped in double quotes.                                                                          |
+| "Email already exists" for a member who is not in the system         | The address appears twice in your file. As of 2026-08-07 repeats of email, username and membershipNumber are caught before importing, naming the line the value was first used on. Two different addresses can still collide on username, since it is derived from the part before the `@` — add a `username` column to separate them.                           |
+| Importing sent welcome emails I did not want sent                    | As of 2026-08-07 **Send welcome emails now** sits on the review step and is **off by default** for imports — the roster loads without sending anything, and you issue credentials afterwards from Member Management → Reset Password. Tick the box to email everyone a password-setup link as they are created.                                                  |
+| A member is already on the roster                                    | As of 2026-08-07 the current roster is checked when you select the file, so a row matching an existing member's email, username or membership number is reported up front, naming who owns the value. Useful when re-uploading a corrected file.                                                                                                                 |
+| The import created a member called John Doe                          | The template's example row was left in the file. As of 2026-08-07 the importer recognizes its own example and rejects that row; delete it from the file.                                                                                                                                                                                                         |
+| A large import seems to hang, or was started by mistake              | The review step shows "Importing 23 of 47" and a **Stop importing** button. Members already created stay created. Rows not reached appear in the error report as "Not imported — the import was stopped before this row", so that file is exactly what remains and can be uploaded to finish.                                                                    |
+| CSV upload rejected with "Missing required columns: departmentid"    | Fixed 2026-08-04 — the generated template and the uploader disagreed on that column's name. Pull latest and re-download the template. Rosters built from an older template still import.                                                                                                                                                                         |
+| A row that looks complete fails as "Missing required fields"         | Fixed 2026-08-04 — a comma inside a field (typically an address) used to shift every column after it. Pull latest, and keep such values wrapped in double quotes.                                                                                                                                                                                                |
+| Imported members have no position assigned                           | Fixed 2026-08-04 — the `role` column was read but never applied. Pull latest and use the exact role name from **Roles**; an unmatched name now fails that row rather than importing without a role.                                                                                                                                                              |
+| Import row fails "Username already exists" but no username was given | Usernames default to the part of the email before `@`, so `j.doe@a.com` and `j.doe@b.org` collide. Add a `username` column with distinct values.                                                                                                                                                                                                                 |
+| Imported members are all Active regardless of the spreadsheet        | Expected — the create endpoint has no status field, and the misleading `status` column was removed from the template on 2026-08-04. As of 2026-08-06 the uploader says so when your file still carries a `status` column, instead of dropping it silently. Set status afterwards from Admin Edit.                                                                |
+| A column in my spreadsheet was not imported                          | As of 2026-08-06 the uploader names every column it does not recognize when you select the file. Anything outside the template's columns is ignored — move that data into a template column or record it on the member afterwards.                                                                                                                               |
+| Every row fails "Unknown role"                                       | The `role` column must match a role name configured under **Roles**, not a rank or an assignment ("Engine Operator", "EMT" are usually the latter). As of 2026-08-06 unmatched names are reported when you select the file rather than one row at a time after importing. Create the roles, or clear the column and set the `rank` column instead.               |
+| Prospect not showing in pipeline                                     | Check the pipeline filter. Prospects may be in a different pipeline or have a status of Withdrawn/Transferred.                                                                                                                                                                                                                                                   |
+| Auto-advance not triggering                                          | Verify that auto-advance is checked in the stage configuration. It is on by default for form-submission stages and off by default for document, checklist and other stages.                                                                                                                                                                                      |
+| Automated email not sent                                             | Check that SMTP is configured in Settings > Email. Verify the prospect has a valid email address. Check the scheduled email logs for errors.                                                                                                                                                                                                                     |
+| "Move Back a Stage" not visible                                      | The prospect must be on a stage beyond the first. The action is only available for active prospects not at the first stage.                                                                                                                                                                                                                                      |
+| Email showing UTC times                                              | Ensure the organization's timezone is configured in Settings > Organization. Scheduled emails display times in the organization's timezone. _(fixed 2026-03-14)_                                                                                                                                                                                                 |
+| Days-in-stage always shows 0                                         | Fixed 2026-03-15 — days-in-stage is now computed server-side from the prospect's `updated_at` timestamp. Pull latest and restart.                                                                                                                                                                                                                                |
+| Pipeline email sections in wrong order                               | As of 2026-03-15, use drag-and-drop to reorder email sections in the pipeline email configuration. The order persists in the `section_order` array.                                                                                                                                                                                                              |
+| Pipeline email preview not available                                 | Added 2026-03-15 — preview rendered email content before sending from the pipeline email configuration panel.                                                                                                                                                                                                                                                    |
+| Pipeline overview report not showing                                 | Added 2026-03-15 — enable the pipeline overview report in Reports. Configure stage grouping in Pipeline Settings > Report Stage Groups.                                                                                                                                                                                                                          |
+| SMTP connection error on email send                                  | Verify SMTP settings: Gmail/Office 365 use STARTTLS on port 587 (`EMAIL_USE_SSL=false`); self-hosted servers may use SSL on port 465 (`EMAIL_USE_SSL=true`). _(fixed 2026-03-13)_                                                                                                                                                                                |
+| Member still showing as active after being dropped                   | The status change may not have been saved. Verify from the member's profile.                                                                                                                                                                                                                                                                                     |
+| Property return report not generating                                | The member must have inventory items assigned. If none are assigned, no report is generated.                                                                                                                                                                                                                                                                     |
+| Membership tier not advancing                                        | Check that **Advance members automatically by years of service** is on under Members Admin → Settings → Membership Tiers, that the member is Active or Probationary, that their current membership type is one of the configured tiers, and that their hire date or Service History gives them enough credited years. Advancement runs on the 1st of each month. |
+| LOA created but training not adjusted                                | Check that the LOA does not have `exempt_from_training_waiver` set. The auto-linked training waiver should appear in the Training Waivers tab. If missing, create a standalone waiver from the Waiver Management page.                                                                                                                                           |
+| Rank shows as unrecognized in validation                             | The member's rank must exactly match a recognized rank code, including capitalization and spacing. Edit the member's rank, or add the rank under Members Admin → Settings → Operational Ranks.                                                                                                                                                                   |
+| Audit history is empty                                               | Audit entries are only tracked for changes made after the feature was deployed. Earlier changes will not appear.                                                                                                                                                                                                                                                 |
+| Cannot find Admin Edit page                                          | Navigate to Members > Admin, click a member, then click **Edit**. The page is at `/members/admin/edit/:userId`.                                                                                                                                                                                                                                                  |
+| Photo upload fails                                                   | Check the file type (JPEG, PNG, WebP only) and file size. Ensure the backend has sufficient disk space for uploads.                                                                                                                                                                                                                                              |
+| Compliance card shows wrong status                                   | Refresh the page. Red = expired certs or <50% requirements met; Yellow = expiring certs or incomplete requirements; Green = fully compliant.                                                                                                                                                                                                                     |
 
 ---
 
@@ -1205,20 +1254,21 @@ When a prospect is elected to full membership (transferred from the prospective 
 
 The prospect's **personal email** is preserved in the `personal_email` field on their user profile, so you always have a way to contact them outside the department system.
 
-> **Edge case:** If the generated email already exists (e.g., two members named John Smith), the system automatically appends a numeric suffix: `john.smith2@firedept.org`, `john.smith3@firedept.org`, etc.
+> **Edge case:** If the generated email already exists (e.g., two members named John Smith), the system automatically appends a numeric suffix: `john.smith1@firedept.org`, `john.smith2@firedept.org`, etc.
 
 > **Edge case:** If department email generation is disabled in settings, the prospect's personal email becomes their primary account email.
 
 ### Username Collision Handling
 
-When members are created (via admin, self-registration, or prospect transfer), the system now generates unique usernames automatically:
+When a prospect is **transferred to membership**, the system generates a unique username:
 
 - First attempt: `jsmith` (first initial + last name)
 - If taken: `jsmith1`, `jsmith2`, etc.
 
-This prevents registration failures when multiple members share similar names.
-
-> **Edge case:** Manually provided usernames are also validated for uniqueness. If you enter a username that already exists, you'll receive an error asking you to choose a different one.
+The other two paths do not suffix. **Add Member** derives the username from the
+part of the email before `@`, and self-registrants choose their own; in both
+cases a username that already exists is refused ("Username already exists")
+rather than adjusted.
 
 ### Default Member Role
 
@@ -1226,15 +1276,14 @@ All new members — whether created by an admin, self-registered, or transferred
 
 ### Password Security on Creation
 
-All member creation paths now set `password_changed_at` to the creation time, ensuring HIPAA password age checks work correctly from day one. Self-registered users additionally have `must_change_password=True`, forcing a password change on first login.
+All member creation paths now set `password_changed_at` to the creation time, ensuring HIPAA password age checks work correctly from day one. Members created by an admin or transferred from the pipeline get a temporary password and `must_change_password=True`, forcing a password change on first login. Self-registered users chose their own password and are not forced to change it.
 
 ### Membership ID Auto-Generation
 
-Membership IDs are now auto-generated when a member is created or transferred. Additional safety features:
+When membership IDs are enabled **with auto-generation** in the department's membership ID settings (both are off by default), a number is generated when a member is created or transferred. Additional safety features:
 
-- When a member is archived (soft-deleted), their membership number is preserved in `previous_membership_number`
-- When a member is reactivated, their previous membership number is automatically restored
-- The active membership number column is NULLed on archive so the number can be reassigned if needed
+- When a member is **deleted** (deactivated), their membership number is moved to `previous_membership_number` and the active number is cleared, so it can be reassigned. **Archiving** a member keeps their number
+- When a member whose number was cleared is reactivated, the previous number is restored if no one else holds it
 
 The generated number appears on the member's **admin edit** page, under
 Department Information, next to Rank and Station. It shows on the member's
@@ -1247,22 +1296,22 @@ profile too, as `#021` beneath their name.
 > officer can overwrite a generated number, which is what makes reassigning a
 > retired number possible. Two guardrails apply instead of read-only — the field
 > is one of the restricted ones (`hire_date`, `rank`, `station`, `platoon`,
-> `membership_number` — hire date joined the set 2026-08-16 because it drives
+> `membership_number`, `member_class`, `member_status` — hire date joined the set 2026-08-16 because it drives
 > automatic membership-tier advancement), so it takes leadership, secretary or
 > membership coordinator permission to change; and the number must be unique within your
 > department, so saving a number another active member already holds is refused
 > with "A member with this membership number already exists".
 
-> **Edge case:** If a member is archived and then a new member is assigned their old number, reactivating the archived member will generate a new number instead of conflicting.
+> **Edge case:** If a member's old number has been given to someone else, reactivation leaves the member without a membership number and keeps the old one in `previous_membership_number`; assign a new number on the Admin Edit page.
 
 ### Troubleshooting Additions (2026-03-24)
 
-| Issue                                                     | Solution                                                                                                             |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Department email shows collision error                    | System auto-resolves by appending numeric suffix. If issue persists, check for deleted users with the same email.    |
-| Username "already exists" on admin create                 | Choose a different username or let the system auto-generate one.                                                     |
-| New member has no permissions                             | All members now get the "member" role automatically. If still no access, verify the role exists in Settings > Roles. |
-| Member reactivated but old membership number not restored | Number is restored only if no other active member has been assigned that number since archival.                      |
+| Issue                                                     | Solution                                                                                                                                                                                     |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Department email shows collision error                    | System auto-resolves by appending numeric suffix. If issue persists, check for deleted users with the same email.                                                                            |
+| Username "already exists" on admin create                 | Add Member builds the username from the email address, so a clash means another member's email starts the same way. Use a different email address, or change the existing member's username. |
+| New member has no permissions                             | All members now get the "member" role automatically. If still no access, verify the Member position exists in Organization Settings > Role Management.                                       |
+| Member reactivated but old membership number not restored | Number is restored only if no other active member has been assigned that number since archival.                                                                                              |
 
 ---
 
@@ -1287,11 +1336,13 @@ This walkthrough follows a single applicant — **Alex Rivera** — from first c
 
 Alex discovers OFD's recruitment page and submits an interest form through the **public portal**.
 
-1. Lt. Morrison opens **Administration > Members > Prospective** and clicks **Add Prospect**. She enters Alex's name, email, phone, and sets the desired membership type to **Regular**.
-2. The prospect card appears in the Kanban board at **Stage 1: Interest Form** (a Form Submission stage linked to the Membership Interest Form in the Forms module).
-3. Because Stage 1 is configured as an **Automated Email** follow-up, the system sends Alex a welcome email containing a status tracker link and instructions for completing the interest form.
-4. Alex clicks the link, fills out the interest form online, and submits it.
-5. The stage has **auto-advance** enabled, so Alex's card automatically moves to **Stage 2: Application Review**.
+1. Lt. Morrison opens **Administration > Members > Prospective** and clicks **Add Applicant**. She enters Alex's name, email and phone, and sets Membership Type to **Regular Member**.
+2. The applicant card appears in the Kanban board at **Stage 1: Interest Form** (a Form Submission stage linked to the Membership Interest Form in the Forms module).
+3. Alex fills out the interest form online and submits it.
+4. Form stages auto-advance by default, so Alex's card moves to **Stage 2: Application Review**.
+
+A stage has exactly one type, so a welcome email with a status-tracker link would
+be its own **Automated Email** stage placed where it should go out.
 
 **Edge case — duplicate detection:** The check runs **before the applicant
 exists**, not after. When Lt. Morrison clicks **Add to Pipeline**, the email and
@@ -1313,7 +1364,7 @@ board itself is pictured in
 
 1. Lt. Morrison advances Alex to **Stage 3: Background Check** (a Document Upload stage).
 2. The background check takes three weeks. On January 31, the results are uploaded as a PDF document to Alex's prospect record (up to 50 MB, PDF/DOC/DOCX/JPEG/PNG/GIF).
-3. With the document uploaded and auto-advance enabled, Alex moves to **Stage 4: Interview** (a Meeting stage linked to the February interview event).
+3. With the document uploaded and auto-advance enabled on that stage, Alex moves to **Stage 4: Interview** (an Interview Requirement stage).
 
 **Interview panel — three officers evaluate Alex:**
 
@@ -1323,7 +1374,7 @@ board itself is pictured in
 | Lt. Hernandez | Recommend                   | "Excellent communication skills"                           |
 | FF Brooks     | Recommend with reservations | "Limited weekday availability — works full-time until May" |
 
-Each interviewer records their recommendation in the prospect's pipeline steps. FF Brooks's reservation is captured as a note on the step but does not block advancement — the pipeline requires a majority "Recommend" to proceed, not unanimity.
+Each interviewer records an interview with their recommendation on Alex's record. The stage requires the configured number of interviews and, if set, at least one interview with the required recommendation — there is no majority or unanimity rule, so FF Brooks's reservation does not block advancement.
 
 4. Lt. Morrison reviews all three recommendations and advances Alex to **Stage 5: Membership Vote**.
 
@@ -1333,22 +1384,23 @@ Each interviewer records their recommendation in the prospect's pipeline steps. 
 
 ### Part 3: Membership Vote (March Business Meeting)
 
-When Alex reaches the **Election/Vote** stage, the system automatically creates an **election package** in the Elections module. The package includes:
+When Lt. Morrison advances Alex onto the **Election/Vote** stage with **Advance**, an **election package** is created for the Elections module. It captures:
 
-- Alex's name, photo, and desired membership type
-- A snapshot of pipeline progress (all stages completed, interviewer recommendations)
-- Uploaded documents (background check results, interest form responses)
+- Alex's name, desired membership type, interest reason and notes
+- The list of completed stages with their dates
+- The names of uploaded documents
+- Email, phone, address and date of birth, if the stage is configured to include them
 
-1. Secretary Sarah Kim opens **Elections** and sees the auto-created package with status **Pending**.
-2. She adds Alex to the **March Business Meeting** election ballot.
+1. The package starts as **Draft**. Once Lt. Morrison clicks **Mark Ready for Ballot** in the applicant's drawer, Secretary Sarah Kim sees it under **Pending Member Applications** on the election's page.
+2. She adds Alex to the **March Business Meeting** election ballot. (It can also be added to a draft election from the applicant's drawer.)
 3. At the meeting, 38 members are present. The vote proceeds:
    - **Yes:** 35
    - **No:** 3
    - **Result:** Approved (simple majority required)
-4. Secretary Kim records the results. The election package status changes to **Elected**.
+4. When the election closes, the package status is set from the tallied Approve/Deny votes: **Elected**, because Approve outnumbered Deny.
 5. Alex's prospect card in the pipeline automatically reflects the election result.
 
-**Edge case — failed vote:** If the vote had been 15-23 (Not Elected), the election package status would change to **Not Elected**. Alex would remain in the pipeline at the Election/Vote stage with the option to re-apply after a configurable waiting period (default: 6 months). Lt. Morrison would see a "Re-application eligible" date on the prospect card.
+**Edge case — failed vote:** If the vote had been 15-23 (Not Elected), the election package status would change to **Not Elected**. Alex could not be converted to a member. There is no built-in re-application waiting period; the coordinator decides whether to reject the application or hold it.
 
 ![The applicant drawer's Election Package section, its status badge reading Elected](./images/01-37-elected-package-badge.png)
 
@@ -1363,33 +1415,29 @@ counts produced: the package status, beside the applicant it belongs to.
 
 #### Conversion to Full Member
 
-1. Lt. Morrison clicks **Transfer to Membership** on Alex's prospect card.
+1. Lt. Morrison clicks **Convert** on Alex's applicant, then **Convert to Member**.
 2. The system creates a new user account:
    - **Rank:** Probationary Firefighter
    - **Station:** Station 1
-   - **Status:** Probationary
-   - **Membership number:** OFD-2026-047 (auto-generated)
-   - **Department email:** alex.rivera@oakvillefd.org (auto-generated from the `first.last` pattern)
+   - **Status:** Active, with membership type **Probationary**
+   - **Membership number:** OFD-0047 (auto-generated, if membership IDs are enabled with auto-generation)
+   - **Department email:** alex.rivera@oakvillefd.org (generated from the `first.last` pattern, if the department has enabled it)
    - **Personal email:** preserved from the prospect record
    - **Role:** "member" (assigned automatically)
-3. A welcome email is sent to Alex's personal email with login credentials and a prompt to change the password on first login.
+   - **Training:** enrolled automatically in the **Probationary Firefighter Program** — the department's auto-enroll program, or else the first active program whose name contains "probationary"
+3. If **Send welcome email with login credentials** is ticked (the default), a welcome email with a temporary password goes to Alex's new login email — the department address, when one was generated. Alex must change the password on first login.
 
 #### Gear Assignment via Impact Planner
 
 4. Lt. Walsh opens the **Inventory** module and navigates to the **Impact Planner**.
-5. He runs an analysis filtered to **Station 1 probationary members needing PPE**.
-6. Alex appears in the results as **"Needs item"** for five categories:
-   - Turnout coat
-   - Turnout pants
-   - Helmet
-   - Gloves
-   - Boots
+5. He filters by **Station 1** and the probationary membership type and runs one analysis per item category — turnout coat, turnout pants, helmet, gloves and boots.
+6. Alex appears as **"Needs item"** in each.
 7. Alex's sizes are not on file. The results say so — **"_N_ members need the
    item but have no size on file"** — and the **Request sizes** button beside
    that line notifies **all of them at once**, not one member at a time. There
    is no per-member request: the planner works on the whole analysis, and the
    button reports back how many were notified.
-8. Alex logs in for the first time, changes their password, and navigates to **My Issued Gear > Size Preferences**. Alex enters:
+8. Alex logs in for the first time, changes their password, and navigates to **My Issued Gear** and opens **My Sizes**. Alex enters:
    - Coat: L Regular
    - Pants: 34x32
    - Helmet: 7 1/4
@@ -1442,13 +1490,13 @@ Capt. Alvarez opens the **Medical Screening** module and creates screening recor
 - Overall status: **Fully Compliant** (green badge)
 - Next expiration: March 25, 2027 (Annual Physical)
 
-**Edge case — failed drug screen:** If the drug screen result had been **Failed**, the screening record would display a red "Failed" badge. Alex's membership would be automatically flagged for HR review. The compliance summary would show **1 / 2 requirements met** with a red "Non-Compliant" status. HR would receive a notification to initiate the department's substance abuse policy procedures.
+**Edge case — failed drug screen:** If the drug screen had been recorded as **Failed**, the record would show Failed and the requirement would count as not met. Nothing is flagged or sent automatically — follow the department's substance abuse policy by hand.
 
 ---
 
 ### Part 6: Training Enrollment (March 25)
 
-Capt. Davis opens the **Training** module and enrolls Alex in the **Probationary Firefighter Program** — a Sequential program with four phases:
+Converting Alex enrolled them in the **Probationary Firefighter Program** automatically (see Part 4). Capt. Davis opens the enrollment in the **Training** module. It is a **Phase-based** program with four phases:
 
 **Phase 1: Orientation (4 requirements)**
 
@@ -1477,7 +1525,7 @@ Capt. Davis opens the **Training** module and enrolls Alex in the **Probationary
 - 40 hours supervised fireground operations
 - Officer sign-off on fireground competency
 
-Alex completes all four Phase 1 orientation requirements during the first week (March 25--31). Capt. Davis marks each requirement as complete in the training program tracker. Phase 1 status changes to **Complete**, and Phase 2 unlocks (sequential programs require phase completion in order).
+Alex completes all four Phase 1 orientation requirements during the first week (March 25--31). Capt. Davis marks each requirement as complete in the training program tracker. Phase 1 status changes to **Complete**, and Phase 2 unlocks (a phase-based program advances to the next phase when the current phase's requirements are complete, unless the phase is set to advance manually).
 
 **Edge case — prior certification credit:** Alex holds a current CPR/AED certification from a previous employer. Alex uploads the certification card as a training record attachment. Capt. Davis reviews the document, confirms the certification is current and from an accredited provider, and approves it. The Phase 3 CPR/AED requirement is automatically credited — Alex will only need to complete the remaining two EMS requirements when Phase 3 unlocks.
 
@@ -1522,21 +1570,21 @@ The shift officer submits the completion report for review. Once approved, the t
 - **Station:** Station 1, A Platoon
 - **Training:** 25% through Probationary Firefighter Program (Phase 2 in progress)
 - **Medical:** 2/2 compliant (physical expires March 2027)
-- **Equipment:** All PPE assigned (gloves on backorder)
+- **Equipment:** Coat, pants, helmet and boots issued; gloves not yet issued (still listed as needed)
 - **Shifts:** 4 shifts completed, 96 hours logged
 
 ---
 
 ### Summary: Alex's Status After 3 Months
 
-| Module     | Status                                         |
-| ---------- | ---------------------------------------------- |
-| Membership | Probationary Firefighter, Station 1, A Platoon |
-| Inventory  | Full PPE kit issued (gloves on backorder)      |
-| Medical    | Fully compliant (physical expires March 2027)  |
-| Training   | 25% through Probationary Program (Phase 2)     |
-| Scheduling | A Platoon, 4 shifts completed, 96 hours logged |
-| Finance    | Annual dues generated ($100, pending)          |
+| Module     | Status                                                    |
+| ---------- | --------------------------------------------------------- |
+| Membership | Probationary Firefighter, Station 1, A Platoon            |
+| Inventory  | Coat, pants, helmet and boots issued; gloves still needed |
+| Medical    | Fully compliant (physical expires March 2027)             |
+| Training   | 25% through Probationary Program (Phase 2)                |
+| Scheduling | A Platoon, 4 shifts completed, 96 hours logged            |
+| Finance    | Dues appear once the treasurer generates the schedule     |
 
 ---
 
@@ -1558,26 +1606,26 @@ Prospective Pipeline → converts to → Membership (User record)
 
 Key integration points:
 
-- **Pipeline to Membership:** The "Transfer to Membership" action creates a user record, auto-generates a membership number and department email, assigns the default "member" role, and sends the welcome email — all in one step.
-- **Pipeline to Elections:** Reaching an Election/Vote pipeline stage auto-creates an election package with the prospect's snapshot and documents.
+- **Pipeline to Membership:** **Convert** creates a user record, generates a membership number and department email (where enabled), assigns the default "member" role, auto-enrolls the member in the probationary training program, and sends the welcome email — all in one step.
+- **Pipeline to Elections:** Advancing an applicant onto an Election/Vote stage creates an election package with the applicant's snapshot and document list.
 - **Membership to Inventory:** The Impact Planner queries membership records to identify new members needing gear. Size preferences entered by the member flow into kit assignment matching.
 - **Membership to Medical:** New members appear in the Medical Screening module as needing baseline screenings. Compliance status feeds back to the member's profile.
 - **Membership to Training:** Program enrollment links the member to a structured curriculum. Shift completion reports auto-credit training requirements.
 - **Membership to Scheduling:** Platoon assignment drives shift scheduling. Shift reports flow into training credit and attendance tracking.
-- **Membership to Finance:** Member creation triggers dues generation based on the membership tier and billing cycle configured in Finance settings.
+- **Membership to Finance:** A treasurer generates dues for active members from a dues schedule in Finance; a new member is picked up the next time dues are generated for that schedule.
 
 ---
 
 ### Cross-Module Edge Cases
 
-| Scenario                                                       | Behavior                                                                    |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Membership vote fails                                          | Applicant stays in pipeline; can re-apply after configurable waiting period |
-| Gear out of stock during onboarding                            | Partial kit issued; reorder request auto-created; admin notified            |
-| Drug screen fails                                              | Membership flagged for HR review; medical record shows "Failed"             |
-| Training program phase requires certification Alex already has | Upload cert as attachment; officer approves; requirement auto-credited      |
-| Alex goes on leave during probation                            | Training requirements pro-rated; shifts excluded from compliance            |
-| Dues not paid by grace period                                  | Status auto-changes to Overdue; late fee applied if configured              |
+| Scenario                                                       | Behavior                                                                                                                                                     |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Membership vote fails                                          | Package is Not Elected and the applicant cannot be converted; no built-in re-application waiting period                                                      |
+| Gear out of stock during onboarding                            | Items with stock are issued; the rest are skipped with a reason. The quartermaster raises reorder requests or draft purchase orders from the planner results |
+| Drug screen fails                                              | Record shows "Failed" and the requirement counts as not met; nothing is flagged or sent automatically                                                        |
+| Training program phase requires certification Alex already has | Upload cert as attachment; officer approves; requirement auto-credited                                                                                       |
+| Alex goes on leave during probation                            | Training requirements pro-rated; shifts excluded from compliance                                                                                             |
+| Dues not paid by the due date                                  | Marked Overdue the day after the due date; late fees are not applied automatically                                                                           |
 
 ---
 
@@ -1633,7 +1681,7 @@ administrator, or somebody who obtains a database backup — can read a member's
 card number back out of The Logbook. The last four characters are kept only so
 an officer can tell two of a member's cards apart on screen.
 
-**Revoking is permanent.** A revoked card is never reactivated; issue a
+**Revoking or reporting a card lost is permanent.** Neither card is ever reactivated; issue a
 replacement instead. **Suspension is the reversible state**, for a card a
 member has mislaid and may still find.
 
@@ -1649,11 +1697,11 @@ captured page-wide rather than into a box you have to keep focused — a kiosk
 loses focus to the first stray tap, and a station that has silently stopped
 reading is worse than one that was never armed.
 
-| Member status                         | Tap accepted | Why                                                                |
-| ------------------------------------- | ------------ | ------------------------------------------------------------------ |
-| Active, probationary                  | Yes          | —                                                                  |
-| **Retired, on leave**                 | **Yes**      | They attend meetings and banquets, which is what a station records |
-| Suspended, dropped, archived, deleted | No           | —                                                                  |
+| Member status                                   | Tap accepted | Why                                                                |
+| ----------------------------------------------- | ------------ | ------------------------------------------------------------------ |
+| Active, probationary                            | Yes          | —                                                                  |
+| **Retired, on leave**                           | **Yes**      | They attend meetings and banquets, which is what a station records |
+| Inactive, suspended, dropped, archived, deleted | No           | —                                                                  |
 
 A station **offers a shift until an officer finalizes it**, not until it ends
 — checking out has no deadline, so a crew coming off a tour can still tap out

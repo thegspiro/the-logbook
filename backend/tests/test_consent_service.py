@@ -3,8 +3,9 @@
 import uuid
 
 import pytest
+from sqlalchemy import select, text
 
-from app.models.consent import ConsentType
+from app.models.consent import ConsentType, UserConsent
 from app.models.user import Organization, User, UserStatus
 from app.services.consent_service import ConsentService
 
@@ -72,6 +73,56 @@ class TestConsentService:
         assert (
             await service.has_consent(user_b.id, ConsentType.SMS_NOTIFICATIONS)
         ) is False
+
+
+class TestGrantedDefaultsToNotGranted:
+    """A consent row written without an explicit value records a refusal.
+
+    Consent is never presumed, so the only safe default for `granted` is
+    False — at the ORM and in the database, for a writer that bypasses the
+    ORM."""
+
+    async def test_orm_insert_without_granted_is_not_granted(self, db_session):
+        user = await _make_member(db_session)
+        db_session.add(
+            UserConsent(
+                organization_id=user.organization_id,
+                user_id=user.id,
+                consent_type=ConsentType.SMS_NOTIFICATIONS,
+            )
+        )
+        await db_session.flush()
+
+        row = (
+            await db_session.execute(
+                select(UserConsent).where(UserConsent.user_id == user.id)
+            )
+        ).scalar_one()
+        assert row.granted is False
+        assert (
+            await ConsentService(db_session).has_consent(
+                user.id, ConsentType.SMS_NOTIFICATIONS
+            )
+        ) is False
+
+    async def test_database_default_applies_to_a_raw_insert(self, db_session):
+        user = await _make_member(db_session)
+        await db_session.execute(
+            text(
+                "INSERT INTO user_consents "
+                "(id, organization_id, user_id, consent_type) "
+                "VALUES (:id, :org, :user, 'photo_use')"
+            ),
+            {"id": str(uuid.uuid4()), "org": user.organization_id, "user": user.id},
+        )
+
+        granted = (
+            await db_session.execute(
+                text("SELECT granted FROM user_consents WHERE user_id = :user"),
+                {"user": user.id},
+            )
+        ).scalar_one()
+        assert granted == 0
 
 
 async def _make_org(db, label="Roster FD"):

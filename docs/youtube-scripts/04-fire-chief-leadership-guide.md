@@ -133,6 +133,16 @@ event participation, member activity]**
 
 **[SCREEN: Configure RSVP settings]**
 
+> "Right below that, **Who can see who's going**. Leave it on **Use
+> organization default**, or pick **Everyone in the department** for a drill
+> where members want to know who else is coming. They see names only — never
+> contact details, notes or accessibility information. The department-wide
+> default lives under **Manage Events → Settings → Attendance**, and it starts
+> out as **Only event managers**."
+
+**[SCREEN: The Who can see who's going dropdown on the event form, open on its
+three choices; then Manage Events → Settings → Attendance.]**
+
 > "**QR Check-In** — enable this and the system generates a unique QR code for
 > the event. Members scan it with their phone when they arrive for instant,
 > contactless attendance tracking."
