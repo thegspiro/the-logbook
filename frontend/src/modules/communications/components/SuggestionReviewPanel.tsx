@@ -102,7 +102,7 @@ const ReviewDetail: React.FC<ReviewDetailProps> = ({ detail, onChange }) => {
   };
 
   return (
-    <article className="card space-y-4">
+    <article className="card space-y-4 p-4 sm:p-6">
       <header className="space-y-1">
         <h2 className="text-theme-text-primary text-lg font-semibold">{detail.title}</h2>
         <p className="text-theme-text-muted text-xs">
@@ -376,7 +376,7 @@ const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, se
                     type="button"
                     onClick={() => onSelect(item.id)}
                     aria-current={item.id === selectedId ? 'true' : undefined}
-                    className={`card flex w-full items-start justify-between gap-3 p-3 text-left max-md:min-h-[44px] ${
+                    className={`card flex w-full items-start justify-between gap-3 p-4 text-left max-md:min-h-[44px] ${
                       item.id === selectedId ? 'border-l-theme-info border-l-4' : ''
                     }`}
                   >

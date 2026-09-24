@@ -162,7 +162,7 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
         </div>
       )}
 
-      <form onSubmit={(e) => void handleSubmit(e)} className="card space-y-4">
+      <form onSubmit={(e) => void handleSubmit(e)} className="card space-y-4 p-4 sm:p-6">
         <div>
           <label htmlFor="suggestion-box" className="form-label">
             Suggestion box

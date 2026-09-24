@@ -94,7 +94,7 @@ const SuggestionBoxesAdminPage: React.FC = () => {
       ) : (
         <ul className="space-y-3">
           {boxes.map((box) => (
-            <li key={box.id} className="card flex flex-wrap items-start justify-between gap-3">
+            <li key={box.id} className="card flex flex-wrap items-start justify-between gap-3 p-4">
               <div className="min-w-0 space-y-1">
                 <p className="text-theme-text-primary flex flex-wrap items-center gap-2 font-semibold">
                   {box.name}

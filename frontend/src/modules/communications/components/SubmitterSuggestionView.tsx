@@ -23,7 +23,7 @@ const SubmitterSuggestionView: React.FC<SubmitterSuggestionViewProps> = ({ detai
   const disposition = detail.disposition ?? '';
 
   return (
-    <article className="card space-y-4">
+    <article className="card space-y-4 p-4 sm:p-6">
       <header className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-theme-text-primary text-lg font-semibold">{detail.title}</h2>
