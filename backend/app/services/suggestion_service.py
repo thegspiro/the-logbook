@@ -78,11 +78,13 @@ OPEN_DISPOSITIONS = (
 EMAIL_TEMPLATE_TYPE = "suggestion_box"
 
 # The box every department starts with, reviewed by the seeded Compliance
-# Officer position. Seeded **inactive**: a new position has no holder yet, and a
-# live box whose only reviewer is an empty position accepts reports that nobody
-# can read — the same void ``_validate_box_write`` refuses for a box with no
-# reviewer at all. An administrator appoints the officer, then switches it on.
-# Migration ``3c918c06466d`` carries a frozen copy for existing departments.
+# Officer position. Seeded **active** by the owner's decision (2026-09-24), so
+# members can file a concern from day one. The cost is accepted: until someone
+# is appointed to the position, reports land in a box nobody reads. Where no
+# position carries the reviewer slug the box is seeded inactive instead, because
+# ``_validate_box_write`` refuses a live box with no reviewer at all. Migration
+# ``3c918c06466d`` carries a frozen copy for existing departments, and
+# ``7d2b4e8a1c35`` switches on the boxes it seeded inactive.
 COMPLIANCE_BOX_NAME = "Compliance"
 COMPLIANCE_BOX_DESCRIPTION = (
     "Report a compliance concern: a policy, safety, training-record or "
@@ -215,7 +217,7 @@ class SuggestionService:
     async def seed_compliance_box(
         self, organization_id: str
     ) -> Optional[SuggestionBox]:
-        """Create the default Compliance box, inactive, if the org lacks one.
+        """Create the default Compliance box if the org lacks one.
 
         Flushes without committing so onboarding keeps it in the same
         transaction as the organization it belongs to. A box already named
@@ -245,7 +247,7 @@ class SuggestionService:
             description=COMPLIANCE_BOX_DESCRIPTION,
             anonymity_mode=SuggestionAnonymityMode.ALLOWED.value,
             follow_up_enabled=True,
-            is_active=False,
+            is_active=position_id is not None,
             reviewers=[],
         )
         if position_id:
