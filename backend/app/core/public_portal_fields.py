@@ -141,6 +141,12 @@ PUBLIC_PORTAL_FIELDS: tuple[PublicPortalField, ...] = (
     # ---- events: GET /public/events/public ----
     PublicPortalField(
         "events",
+        "id",
+        "The event's identifier, for a consumer that needs a stable key.",
+        False,
+    ),
+    PublicPortalField(
+        "events",
         "title",
         "Event title.",
         False,

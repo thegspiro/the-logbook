@@ -315,16 +315,45 @@ class PublicOrganizationStats(BaseModel):
 
 
 class PublicEvent(UTCResponseBase):
-    """Public event information"""
+    """Public event information
 
-    id: UUID
-    title: str
-    description: Optional[str]
-    event_type: str
-    start_time: datetime
-    end_time: Optional[datetime]
-    location: Optional[str]
-    is_public: bool
+    Every field defaults to ``None`` for the same reason as
+    :class:`PublicOrganizationInfo`, and the field *names* are the keys
+    ``portal.py`` actually puts in the dictionary this model is constructed
+    from. Both halves were wrong (security review PUB-7): all eight fields
+    were required, and three of the names — ``start_time``, ``end_time`` and
+    ``is_public`` — did not exist in what the handler produced. So any
+    non-empty filtered event raised ``ValidationError``, and the route could
+    only ever answer 200 by returning ``[]``. A department got a 500 on its
+    public website at the moment an administrator finished configuring it.
+
+    The names follow the handler rather than the other way round because the
+    whitelist stores them: a row in ``public_portal_data_whitelist`` is keyed
+    by ``field_name``, so re-keying the handler to the documented
+    ``start_time``/``end_time`` would silently orphan every row an
+    administrator has enabled. ``docs/PUBLIC_API_DOCUMENTATION.md`` described
+    a response that had never been served — no client can have been written
+    against a shape that 500s — so the documentation was corrected to the
+    shape this serves.
+
+    ``is_public`` is gone rather than renamed: ``Event`` has no such column,
+    and the query already restricts the list to non-cancelled, non-draft,
+    future ``PUBLIC_EDUCATION`` events, so the field could only ever have
+    been a constant ``true``.
+
+    Like the other two, its route must pass
+    ``response_model_exclude_unset=True``, or the defaults that make an
+    un-enabled field constructible serialize it back out as an explicit
+    ``null``.
+    """
+
+    id: Optional[UUID] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    event_type: Optional[str] = None
+    start_datetime: Optional[datetime] = None
+    end_datetime: Optional[datetime] = None
+    location: Optional[str] = None
 
 
 # ==============================================================================
