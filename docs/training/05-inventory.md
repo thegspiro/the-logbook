@@ -2733,11 +2733,9 @@ know what the department calls a thing had nowhere to start.
   record selects the row you stored as "L". Any other size the department stocks
   is one tap away.
 
-> **Screenshot needed:**
-> _[The rebuilt gear request form at the product-selection step, showing the
-> category filters and one row per product with an on-hand count; then a second
-> capture of the size step with the member's recorded size preselected and an
-> out-of-stock size visibly selectable and labelled as such.]_
+![Request Equipment at the product step: category filters across the top and one row per product with its on-hand count and number of sizes, or None on hand — you can still ask](./images/05-86-gear-request-products.png)
+
+![The size step for Structural Coat: L preselected from the member's size on file, and XXL labelled none on hand but still selectable](./images/05-87-gear-request-size.png)
 
 ### A member can ask for something you do not stock
 

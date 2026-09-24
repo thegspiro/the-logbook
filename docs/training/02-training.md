@@ -850,16 +850,24 @@ When you finalize a training session, what happens next depends on the **Require
 
 **Required Permission:** `training.manage`
 
-Navigate to **Training Admin > Compliance Matrix** to see a grid view of all members vs. all active requirements.
+Navigate to **Training Admin > Compliance Matrix** to work through who is short.
+It is a triage rail, not a grid: members are grouped by standing — Non-compliant,
+At risk, Compliant — worst first, and you step through them one at a time.
 
-The matrix displays:
+- Each member's row shows how many applicable requirements they meet, with a
+  strip of coloured marks (green met, amber short, orange due soon, red lapsed)
+- Opening a member shows each requirement's figure — _"44 of 24 hours"_,
+  _"Nothing on file"_, _"1 of 1 shifts"_ — with its status and the date or
+  window it was judged against
+- **By requirement** turns it around: requirements grouped by how many members
+  are behind on them
+- Arriving from the dashboard's non-compliant link filters the rail and shows a
+  **Non-compliant + at risk only** chip; clear it to see everyone
 
-- **Green** cells for compliant members
-- **Yellow** cells for members in progress
-- **Red** cells for non-compliant members
-- Percentage completion in each cell
+The redesign, and why the grid went, is under
+[The Compliance Matrix is a queue you can work](#the-compliance-matrix-is-a-queue-you-can-work-2026-09-05) below.
 
-![Compliance matrix grid of members against requirements](./images/02-66-compliance-matrix.png)
+![The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 1 of 1 shifts](./images/02-66-compliance-matrix.png)
 
 > **Hint:** Use this view for annual reporting and to identify which members need attention before compliance deadlines.
 
@@ -2615,12 +2623,7 @@ ordered worst-first, and stepped through one at a time, with the numbers behind
 each status on the row: _"6 of 24 hours"_, _"Lapsed 41 days ago"_, _"Expires in
 26 days"_.
 
-> **Screenshot needed:**
-> _[The redesigned Compliance Matrix triage rail: members grouped by standing
-> with the worst first, one member's detail open showing the per-requirement
-> figures, and the status chip from a dashboard deep link visible above it.
-> Every existing capture of this screen shows the icon grid, which no longer
-> exists — this is a replacement, not an addition.]_
+![The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 1 of 1 shifts](./images/02-66-compliance-matrix.png)
 
 ### ⚠️ Your compliance percentages may move
 
@@ -2679,10 +2682,7 @@ implemented) and the syllabus builder — already did.
 The gate is on the page content rather than the route, because the same page is
 mounted inside the training admin hub where the officer does hold the grant.
 
-> **Screenshot needed:**
-> _[The Course Library as a member without `training.manage`: the course list
-> readable, with Add / Edit / Delete / Manage classes absent. Pair it with the
-> existing officer capture so the difference is the lesson.]_
+![The Course Library as an ordinary member: every course card readable, with no Add Course button and no Edit, Delete or Manage classes controls on the cards](./images/02-106-course-library-member.png)
 
 ### Training Programs
 

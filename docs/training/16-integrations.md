@@ -789,11 +789,9 @@ Assistants_.
 > answers nothing until an IT administrator issues a service key.** Both steps
 > are deliberate and separate.
 
-> **Screenshot needed:**
-> _[Integrations → Claude (MCP): the connect form with the access mode and the
-> three data switches (finance, medical, schedule) visibly **off** — that is the
-> shipped default and the point of the shot — and a second capture of the
-> Service key panel in its shown-once state, with the key itself redacted.]_
+![Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening and full duty schedule switches all off, as shipped](./images/16-08-mcp-connect-form.png)
+
+![The Claude (MCP) service key panel in its shown-once state: Copy this key now, it is shown once and cannot be recovered, above a demo key value standing in for the real one](./images/16-09-mcp-service-key.png)
 
 ### What it can reach
 

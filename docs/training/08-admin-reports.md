@@ -2596,18 +2596,11 @@ structure is not an org chart, and a guessed diagram is one nobody recognises �
 correcting it would take longer than drawing it. Start with your top seat and
 work down.
 
-> **[SCREENSHOT NEEDED — the org chart, outline view.** _Demo data:_ a chart
-> four levels deep — Chief, two Deputy Chiefs sharing one seat, three Captains
-> under one of them, one seat with a non-member holder. Expand the branch
-> containing the shared seat so both names are visible.**]**
+![The org chart as an outline: Fire Chief, the Deputy Chief seat shared by Marcus Bell and Priya Raman with its three captains beneath and a lieutenant under Station 1, the Station 3 captain held by a non-member, and Administration & Records](./images/08-81-org-chart-outline.png)
 
-> **[SCREENSHOT NEEDED — the org chart, diagram view.** _Demo data:_ the same
-> chart. The two views are not interchangeable; one capture cannot stand in for
-> the other.**]**
+![The same chart as a diagram: four levels from the Fire Chief down to the Station 1 lieutenant, with the shared Deputy Chief seat and the mutual-aid captain](./images/08-82-org-chart-diagram.png)
 
-> **[SCREENSHOT NEEDED — the org chart node modal.** _Demo data:_ a seat with
-> two member holders and one non-member holder, responsibility text filled in,
-> and the position link visible.**]**
+![Editing the Administration & Records seat: its responsibility text, the link to the Secretary position that brings Owen Kittredge, Esme Caldwell added as a member holder and Margaret Hale as a non-member holder](./images/08-83-org-chart-node.png)
 
 ---
 
@@ -2640,9 +2633,7 @@ reappear the moment the module is on.
 checking an installation, not a decision a department needs to make while
 making every other one.
 
-> **[SCREENSHOT NEEDED — Settings → Modules with Testing Checklist off.**
-> _Demo data:_ the module list on a fresh install. This is the answer to "where
-> did /testing go".**]**
+![Settings → Modules with the Testing Checklist module switched off, as it ships](./images/08-84-modules-testing-off.png)
 
 ### Runs
 
@@ -2683,13 +2674,9 @@ That distinction is what makes this more than a list of tickboxes: it separates
 `j` / `k` move between boxes, `p` / `f` / `b` mark the focused one, `n` jumps
 to the next page with no mark.
 
-> **[SCREENSHOT NEEDED — Testing Home with a named run and the run picker
-> open.** _Demo data:_ a current run, one archived predecessor, a mix of pass /
-> fail / blocked marks, and at least one gate mismatch flagged.**]**
+![Testing Home on the September release check: the run picker reading September release check (current), with the archived August release check behind it, and the tally of passed, failed and blocked marks with one gate mismatch flagged](./images/08-85-testing-home-runs.png)
 
-> **[SCREENSHOT NEEDED — the printable testing report.** _Demo data:_ the same
-> run, with a failure carrying a note and a gate mismatch, so both sections
-> have content.**]**
+![The printable testing report for the September release check: the failure on Documents with its note, and the gate mismatch where a firefighter opened the finance dashboard](./images/08-86-testing-report.png)
 
 ---
 
@@ -2833,11 +2820,7 @@ their own console only by typing the address.
   asked to acknowledge the same message again; a notification marked read could
   return to the feed, taking the unread count back up with it.
 
-> **Screenshot needed:**
-> _[The dashboard timeline card titled "Next 30 Days" with its All Shifts
-> control, and the hours card below it showing Administrative hours as a figure
-> rather than "Unavailable". The duplicate "N hrs in Month" chip is gone from
-> the header, so an old capture of this area is wrong in three places at once.]_
+![The personal dashboard: the timeline card titled Next 30 Days with its All Shifts control in the main column, and in the side column the My Hours card showing Administrative hours as a figure, with no hours chip in the page header](./images/08-87-dashboard-next-30-days.png)
 
 ## Table headings finally sit over their own columns _(2026-09-05)_
 

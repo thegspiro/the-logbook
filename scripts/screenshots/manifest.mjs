@@ -2096,6 +2096,147 @@ async function restoreDepartmentLogo(page) {
   logoBeforeIconShot = null;
 }
 
+/**
+ * The Claude (MCP) service-key panel renders only for a connected
+ * integration, and its subject is the one moment a key is readable. Both are
+ * set up for the shot and taken down afterwards:
+ *
+ * - The integration is connected with the shipped defaults (read-only, every
+ *   data switch off) and `disconnectMcp` returns it to available. Disconnect
+ *   also revokes every key, so nothing issued here could outlive the shot.
+ * - No key is actually issued. The create request is answered by a route mock
+ *   whose value is visibly a placeholder, for the same reason as `07-16`: a
+ *   real key in a public image is a real credential, and a redaction drawn over
+ *   one after the fact is a credential with a smudge on it.
+ */
+async function mcpIntegrationId(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/integrations", {
+      credentials: "include",
+    });
+    const rows = await response.json();
+    const list = Array.isArray(rows) ? rows : (rows.integrations ?? []);
+    return (
+      list.find((row) => row.integration_type === "claude-mcp")?.id ?? null
+    );
+  });
+  if (!id) throw new Error("no claude-mcp integration row to connect");
+  return id;
+}
+
+async function postIntegration(page, path, body) {
+  const status = await page.evaluate(
+    async ({ path, body }) => {
+      const csrf =
+        document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+      const response = await fetch(`/api/v1/integrations/${path}`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": decodeURIComponent(csrf),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      return response.status;
+    },
+    { path, body },
+  );
+  if (status !== 200) {
+    throw new Error(`POST /integrations/${path} returned ${status}`);
+  }
+}
+
+async function connectMcpAndShowIssuedKey(page) {
+  const id = await mcpIntegrationId(page);
+  await postIntegration(page, `${id}/connect`, {
+    config: {
+      access_mode: "read_only",
+      expose_finance: false,
+      expose_medical_screening: false,
+      expose_full_schedule: false,
+    },
+  });
+  await page.route("**/api/v1/integrations/claude-mcp/keys", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    const now = new Date().toISOString();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        key: {
+          id: "demo-key",
+          name: "Claude",
+          key_prefix: "lbmcp_DEMO",
+          expires_at: null,
+          last_used_at: null,
+          revoked_at: null,
+          created_at: now,
+          created_by: null,
+          is_active: true,
+        },
+        plaintext: "lbmcp_DEMO-KEY-not-a-real-credential-0000000000",
+        revoked: [],
+        endpoint_path: "/api/mcp",
+      }),
+    });
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page
+    .getByRole("button", { name: /Service key/ })
+    .first()
+    .click();
+  await page.getByRole("button", { name: /^Issue key$/ }).click();
+  await page
+    .getByText("It is shown once and cannot be recovered", { exact: false })
+    .waitFor({ timeout: 10_000 });
+  await page
+    .getByText("lbmcp_DEMO-KEY-not-a-real-credential", { exact: false })
+    .scrollIntoViewIfNeeded();
+}
+
+async function disconnectMcp(page) {
+  await page.unroute("**/api/v1/integrations/claude-mcp/keys");
+  await postIntegration(page, `${await mcpIntegrationId(page)}/disconnect`);
+}
+
+/**
+ * The Testing Checklist module is off in the demo department, as it is on a
+ * fresh install, so `08-84` can picture it off and the sidebar captures carry
+ * no Testing entry. The two testing captures switch it on for themselves and
+ * off again in cleanup. The seeded runs and marks survive the module being
+ * off: the gate hides the routes and deletes nothing.
+ */
+async function setTestingModule(page, enabled) {
+  const status = await page.evaluate(async (on) => {
+    const csrf =
+      document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+    const response = await fetch("/api/v1/organization/modules", {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": decodeURIComponent(csrf),
+      },
+      body: JSON.stringify({ testing: on }),
+    });
+    return response.status;
+  }, enabled);
+  if (status !== 200) {
+    throw new Error(`switching the testing module returned ${status}`);
+  }
+}
+
+function withTestingModule(then) {
+  return async (page) => {
+    await setTestingModule(page, true);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await then(page);
+  };
+}
+
+const disableTestingModule = (page) => setTestingModule(page, false);
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -11640,12 +11781,21 @@ export const SHOTS = [
   {
     id: "02-66-compliance-matrix",
     doc: "02-training.md",
-    line: 591,
+    line: 2618,
     anchor:
       "Screenshot of the Compliance Matrix showing a grid with member names on rows",
-    alt: "Compliance matrix grid of members against requirements",
-    route: "/training/admin?page=dashboard&tab=compliance",
-    fullPage: true,
+    alt: "The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 1 of 1 shifts",
+    // Re-shot 2026-09-24: the icon grid this pictured was replaced by the
+    // triage rail. Opened through the dashboard's deep link so the status chip
+    // it adds is in frame; the same image fills the two placeholders that asked
+    // for the redesign.
+    route: "/training/admin?page=dashboard&tab=compliance&status=noncompliant",
+    selector: 'div.card:has(h2:text-is("Compliance"))',
+    expect: "Non-compliant + at risk only",
+    // "No date on record" is a figure, not an empty screen: it is what the
+    // rail prints for a certification with nothing filed, which is the member's
+    // open item.
+    allowEmptyState: true,
   },
   {
     id: "02-67-competency-matrix",
@@ -12602,6 +12752,24 @@ export const SHOTS = [
       "The event has requires_rsvp off, so its RSVP section correctly " +
       "reads no RSVPs yet -- guests sign in at the kiosk. The Prospective " +
       "Members card lower on the page carries the three named applicants.",
+  },
+  {
+    id: "04-50-event-attendees-member",
+    doc: "04-events-meetings.md",
+    line: 1798,
+    anchor:
+      "An event detail page as a member with attendee visibility switched on",
+    alt: "An event as an ordinary member with attendee visibility on: her RSVP reads Waitlisted, You're #1 of 1 on the waitlist, and Who's going lists the three members by name only",
+    route: "/events",
+    auth: "member",
+    expect: "on the waitlist",
+    prepare: openFirstFromApi(
+      "/events?limit=200",
+      (id) => `/events/${id}`,
+      "events",
+      (event) => event.title === "Station Open House — Setup Crew",
+    ),
+    fullPage: true,
   },
   {
     // Signed-in member, not the guest kiosk -- the marker is explicit that a
@@ -13626,6 +13794,36 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "19-42-message-detail",
+    doc: "19-august-2026-release-changes.md",
+    line: 2190,
+    anchor: "`/messages/:id`",
+    alt: "A department message on its own page: the breadcrumb back to Messages, the title, sender and sent date, and a body several paragraphs long",
+    route: "/messages",
+    auth: "member",
+    expect: "Fall Hose Testing and Station Cleanup",
+    prepare: async (page) => {
+      await page
+        .getByText("Fall Hose Testing and Station Cleanup", { exact: false })
+        .first()
+        .click();
+      await page.waitForURL(/\/messages\/[^/]+$/);
+    },
+    fullPage: true,
+  },
+  {
+    id: "19-43-photo-use-consent",
+    doc: "19-august-2026-release-changes.md",
+    line: 2208,
+    anchor: "`/communications/photo-use-consent`",
+    alt: "Photo Use Consent, captured as the administrator (who holds users.view_consents): one member agreed, one declined and twenty not answered, with the roster showing each member's standing",
+    route: "/communications/photo-use-consent",
+    expect: "Not answered",
+    fullPage: true,
+    // "No station" is a column value for members not assigned to one.
+    allowEmptyState: true,
+  },
+  {
     // Applied through the picker rather than the API: the point of the pair is
     // that nothing in the confirmation says the voting method is about to
     // change, so the change has to arrive by the route a secretary takes.
@@ -13738,6 +13936,408 @@ export const SHOTS = [
     route: "/scheduling?tab=my-shifts",
     prepare: clickByName(/^Request Time Off$/),
     fullPage: false,
+  },
+  // ── Remaining placeholders, 2026-09-24 ───────────────────────────────
+  {
+    id: "00-26-sidebar-officer-operations",
+    doc: "00-getting-started.md",
+    line: 492,
+    anchor: "The sidebar as an officer, showing the Operations section",
+    alt: "The sidebar as an officer, clipped to the navigation: Operations expanded to My Issued Gear, Inventory, Medical Supplies, My Checklists, Fleet Readiness, Apparatus Inventory, Apparatus and Facilities, and below it the Administration section with Scheduling Admin and Inventory Admin",
+    route: "/dashboard",
+    // Tall enough that the whole navigation fits without its own scroll, so
+    // Operations and Administration share one frame.
+    viewport: { width: 1440, height: 1700 },
+    selector: "nav#side-navigation",
+    expect: { selector: 'nav#side-navigation :text-is("Fleet Readiness")' },
+    prepare: async (page) => {
+      await page
+        .locator("nav#side-navigation")
+        .getByRole("button", { name: /^Operations$/ })
+        .click();
+      await page
+        .locator("nav#side-navigation")
+        .getByText("Fleet Readiness", { exact: true })
+        .waitFor({ timeout: 10_000 });
+    },
+  },
+  {
+    id: "01-40-member-directory-member",
+    doc: "01-membership.md",
+    line: 1674,
+    anchor: "`/members` as a member without `members.manage`",
+    alt: "The Member Directory as an ordinary member: name, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes",
+    route: "/members",
+    auth: "member",
+    expect: "Member Directory",
+  },
+  {
+    id: "02-106-course-library-member",
+    doc: "02-training.md",
+    line: 2677,
+    anchor: "The Course Library as a member without `training.manage`",
+    alt: "The Course Library as an ordinary member: every course card readable, with no Add Course button and no Edit, Delete or Manage classes controls on the cards",
+    route: "/training/courses",
+    auth: "member",
+    expect: "Course Library",
+  },
+  {
+    id: "03-102-shift-details-modal",
+    doc: "03-scheduling.md",
+    line: 3415,
+    anchor: "The Shift Details modal at laptop width",
+    alt: "The Shift Details modal at laptop width, centred over the schedule, with the shift's time and apparatus at the top and the crew board of seats below",
+    route: "/scheduling",
+    viewport: { width: 1280, height: 1000 },
+    selector: '[role="dialog"]',
+    expect: { selector: '[role="dialog"]' },
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Shift details$/ })
+        .first()
+        .click();
+      await page
+        .locator('[role="dialog"]')
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(800);
+    },
+    // "No calls logged for this shift" is true of today's shift and sits below
+    // the crew board, which is the subject.
+    allowEmptyState: true,
+  },
+  {
+    id: "03-103-shift-details-modal-phone",
+    doc: "03-scheduling.md",
+    line: 3417,
+    anchor: "__paired-with-03-102__",
+    alt: "The same Shift Details modal at 390px phone width, filling the screen with the crew board stacked beneath the shift's details",
+    route: "/scheduling",
+    viewport: { width: 390, height: 844 },
+    expect: { selector: '[role="dialog"]' },
+    // A phone shows the week as a strip of days, and Shift details only
+    // appears in the day panel under the one tapped.
+    prepare: async (page) => {
+      await clickByName(/Thursday, September 24/)(page);
+      await page.waitForTimeout(800);
+      await clickByName(/^Shift details$/)(page);
+      await page
+        .locator('[role="dialog"]')
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(800);
+    },
+  },
+  {
+    id: "03-104-my-shifts-hours",
+    doc: "03-scheduling.md",
+    line: 3436,
+    anchor: "The Hours view in My Shifts",
+    alt: "My Shifts on its Hours view: cards for this month, this year and all time, above the month-by-month table with its vs. busiest month bar column",
+    route: "/scheduling?tab=my-shifts",
+    expect: "busiest month",
+    prepare: clickByName(/^Hours$/),
+    fullPage: true,
+  },
+  {
+    id: "06-28-facility-settings",
+    doc: "06-apparatus-facilities.md",
+    line: 919,
+    anchor: "`/facilities/settings`",
+    alt: "Facility Settings at laptop width: the Facility Types lookup list with order, name, state, owner and usage columns, and the further lookup categories below it",
+    route: "/facilities/settings",
+    viewport: { width: 1280, height: 900 },
+    expect: "Facility Types",
+    fullPage: true,
+  },
+  {
+    id: "08-87-dashboard-next-30-days",
+    doc: "08-admin-reports.md",
+    line: 2823,
+    anchor: 'The dashboard timeline card titled "Next 30 Days"',
+    alt: "The personal dashboard: the timeline card titled Next 30 Days with its All Shifts control in the main column, and in the side column the My Hours card showing Administrative hours as a figure, with no hours chip in the page header",
+    route: "/dashboard",
+    selector: "#dashboard-panel-personal",
+    expect: { selector: "#next-thirty-days-heading" },
+  },
+  {
+    id: "10-23-quick-add-sheet",
+    doc: "10-mobile-pwa.md",
+    line: 926,
+    anchor: "The phone bottom bar at 390px with the Add button in the centre",
+    alt: "At 390px as an ordinary member: the Quick Add sheet opened from the centre Add button of the bottom bar, listing the entry rows a member can use and none of the officer-only rows",
+    route: "/dashboard",
+    auth: "member",
+    viewport: { width: 390, height: 844 },
+    expect: { selector: '[role="dialog"]' },
+    prepare: async (page) => {
+      await page
+        .locator('nav[aria-label="Primary"]')
+        .getByRole("button", { name: /^Add$/ })
+        .click();
+      await page
+        .locator('[role="dialog"]')
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    // The bar hides while any sheet is open (useOverlaySurface), so the Add
+    // button and the Quick Add sheet can never share a frame. This is the bar
+    // half of the pair; 10-23 is the sheet.
+    id: "10-24-bottom-bar-add",
+    doc: "10-mobile-pwa.md",
+    line: 924,
+    anchor: "__paired-with-10-23__",
+    alt: "The phone bottom bar at 390px as an ordinary member: Home and Events on the left, the round Add button in the centre, and Schedule and More on the right",
+    route: "/dashboard",
+    auth: "member",
+    viewport: { width: 390, height: 844 },
+    selector: 'nav[aria-label="Primary"]',
+    expect: { selector: 'nav[aria-label="Primary"] button:has-text("Add")' },
+  },
+  {
+    id: "16-08-mcp-connect-form",
+    doc: "16-integrations.md",
+    line: 792,
+    anchor: "Integrations → Claude (MCP): the connect form",
+    alt: "Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening and full duty schedule switches all off, as shipped",
+    route: "/integrations",
+    // Tall enough to hold the whole form, down to the Connect button that is
+    // never pressed.
+    viewport: { width: 1440, height: 1300 },
+    selector: '.modal-panel:has-text("Connect Claude (MCP)")',
+    expect: "Share the full duty schedule",
+    // Opened and never saved: Connect is not pressed, so the integration stays
+    // available and every switch shows the shipped default.
+    prepare: async (page) => {
+      const card = page
+        .locator("div")
+        .filter({ hasText: /^Claude \(MCP\)/ })
+        .filter({ has: page.getByRole("button", { name: /^Connect$/ }) })
+        .last();
+      await card.getByRole("button", { name: /^Connect$/ }).click();
+      await page
+        .locator('.modal-panel:has-text("Connect Claude (MCP)")')
+        .first()
+        .waitFor({ timeout: 10_000 });
+    },
+  },
+  {
+    id: "16-09-mcp-service-key",
+    doc: "16-integrations.md",
+    line: 794,
+    anchor: "__paired-with-16-08__",
+    alt: "The Claude (MCP) service key panel in its shown-once state: Copy this key now, it is shown once and cannot be recovered, above a demo key value standing in for the real one",
+    route: "/integrations",
+    expect: "It is shown once and cannot be recovered",
+    prepare: connectMcpAndShowIssuedKey,
+    cleanup: disconnectMcp,
+    selector: '[data-testid="mcp-key-panel"]',
+    // "No active key" is honest: the key is mocked, so the server has none on
+    // record, and the shown-once block above it is the subject.
+    allowEmptyState: true,
+  },
+  {
+    id: "20-16-scheduling-admin-hub",
+    doc: "20-september-2026-release-changes.md",
+    line: 92,
+    anchor: "The `/scheduling/admin` hub",
+    alt: "The Scheduling Administration hub: the headline metrics To close out, Short-staffed, Hours this month and Needs attention, the Needs attention queue, and the card grid grouped Before the shift, On the shift, After the shift, People & eligibility, Reporting and Department settings",
+    route: "/scheduling/admin",
+    expect: "To close out",
+    fullPage: true,
+  },
+  {
+    id: "20-17-staffing-gaps",
+    doc: "20-september-2026-release-changes.md",
+    line: 299,
+    anchor: "The staffing-gaps view at `/scheduling/admin/planning`",
+    alt: "Shift Planning on its Staffing gaps tab: a date range, the count of short shifts and open seats, and each short shift with its empty seats and an assign control, beside the Templates and Patterns tabs",
+    route: "/scheduling/admin/planning",
+    viewport: { width: 1440, height: 1100 },
+    expect: "Staffing gaps",
+  },
+  {
+    id: "01-41-profile-visibility",
+    doc: "01-membership.md",
+    line: 1703,
+    anchor: "The profile-visibility controls on a member's own profile",
+    alt: "My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email, phone and mobile the note that the department's own setting has them off for everyone",
+    route: "/account",
+    auth: "member",
+    expect: "Only you and leadership",
+    prepare: clickByName(/^Privacy$/),
+    fullPage: true,
+  },
+  {
+    id: "03-100-open-shifts-member",
+    doc: "03-scheduling.md",
+    line: 194,
+    anchor: "Scheduling → Open Shifts as an ordinary member",
+    alt: "Open Shifts as an ordinary member (a firefighter): only the shifts with a seat her rank can fill",
+    route: "/scheduling?tab=open-shifts",
+    auth: "member",
+    viewport: { width: 1440, height: 1100 },
+    expect: "Open Shifts",
+  },
+  {
+    // The pair the marker asks for: the same URL, a different signed-in
+    // account. Nothing about the frame says which is which, so the captions do.
+    id: "03-105-open-shifts-admin",
+    doc: "03-scheduling.md",
+    line: 196,
+    anchor: "__paired-with-03-100__",
+    alt: "The same Open Shifts tab as the scheduling administrator: every short-staffed shift in the department, including the officer and driver seats the firefighter's list leaves out",
+    route: "/scheduling?tab=open-shifts",
+    viewport: { width: 1440, height: 1100 },
+    expect: "Open Shifts",
+  },
+  {
+    id: "03-101-call-types-editor",
+    doc: "03-scheduling.md",
+    line: 3374,
+    anchor: "The Call types editor in Scheduling Admin → General",
+    alt: "The Call types editor: each type with rename field and up and down controls, Service Call switched off as retired, and the delete control greyed out on every type with calls on record while Other, with none, can be deleted",
+    route: "/scheduling/admin/settings/general",
+    // Clipped to the Call types card, which is taller than a viewport.
+    selector: 'div.card-secondary:has(h3:text-is("Call types"))',
+    expect: { selector: 'h3:text-is("Call types")' },
+  },
+  {
+    id: "05-86-gear-request-products",
+    doc: "05-inventory.md",
+    line: 2736,
+    anchor: "The rebuilt gear request form at the product-selection step",
+    alt: "Request Equipment at the product step: category filters across the top and one row per product with its on-hand count and number of sizes, or None on hand — you can still ask",
+    route: "/inventory/my-equipment",
+    auth: "member",
+    viewport: { width: 1440, height: 1900 },
+    selector: '.modal-panel:has-text("Request Equipment")',
+    expect: "you can still ask",
+    prepare: clickByName(/^Request Equipment$/),
+  },
+  {
+    id: "05-87-gear-request-size",
+    doc: "05-inventory.md",
+    line: 2738,
+    anchor: "__paired-with-05-86__",
+    alt: "The size step for Structural Coat: L preselected from the member's size on file, and XXL labelled none on hand but still selectable",
+    route: "/inventory/my-equipment",
+    auth: "member",
+    viewport: { width: 1440, height: 1000 },
+    selector: '.modal-panel:has-text("Request Equipment")',
+    expect: "none on hand",
+    prepare: async (page) => {
+      await clickByName(/^Request Equipment$/)(page);
+      await page.getByText("Structural Coat", { exact: false }).first().click();
+      await page.getByText("Your size on file", { exact: false }).waitFor();
+    },
+  },
+  {
+    id: "08-81-org-chart-outline",
+    doc: "08-admin-reports.md",
+    line: 2599,
+    anchor: "the org chart, outline view",
+    alt: "The org chart as an outline: Fire Chief, the Deputy Chief seat shared by Marcus Bell and Priya Raman with its three captains beneath and a lieutenant under Station 1, the Station 3 captain held by a non-member, and Administration & Records",
+    route: "/governance/org-chart",
+    expect: "Priya Raman",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Show the chart as a list" })
+        .click();
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-82-org-chart-diagram",
+    doc: "08-admin-reports.md",
+    line: 2601,
+    anchor: "the org chart, diagram view",
+    alt: "The same chart as a diagram: four levels from the Fire Chief down to the Station 1 lieutenant, with the shared Deputy Chief seat and the mutual-aid captain",
+    route: "/governance/org-chart",
+    expect: "Lieutenant — Station 1",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Show the chart as a diagram" })
+        .click();
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-83-org-chart-node",
+    doc: "08-admin-reports.md",
+    line: 2603,
+    anchor: "the org chart node modal",
+    alt: "Editing the Administration & Records seat: its responsibility text, the link to the Secretary position that brings Owen Kittredge, Esme Caldwell added as a member holder and Margaret Hale as a non-member holder",
+    route: "/governance/org-chart",
+    viewport: { width: 1440, height: 1500 },
+    // Holder names are form inputs here, not text, so the panel is found by
+    // its title and the non-member holder is asserted by its input value.
+    selector: '[data-testid="modal-panel"]',
+    expect: "Edit Administration & Records",
+    // Opened and closed unsaved.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit Administration & Records" })
+        .first()
+        .click();
+      await page.locator('[data-testid="modal-panel"]').first().waitFor();
+      const holders = await page
+        .locator('[data-testid="modal-panel"] input')
+        .evaluateAll((inputs) => inputs.map((input) => input.value));
+      if (!holders.some((value) => value.includes("Margaret Hale"))) {
+        throw new Error("the non-member holder is not in the seat editor");
+      }
+    },
+  },
+  {
+    id: "08-84-modules-testing-off",
+    doc: "08-admin-reports.md",
+    line: 2636,
+    anchor: "Settings → Modules with Testing Checklist off",
+    alt: "Settings → Modules with the Testing Checklist module switched off, as it ships",
+    route: "/settings?tab=modules",
+    expect: "Testing Checklist",
+    // Testing Checklist is opt-in, so it lists under Additional Modules.
+    prepare: clickByName(/Additional Modules/),
+    fullPage: true,
+  },
+  {
+    id: "08-85-testing-home-runs",
+    doc: "08-admin-reports.md",
+    line: 2677,
+    anchor: "Testing Home with a named run and the run picker open",
+    alt: "Testing Home on the September release check: the run picker reading September release check (current), with the archived August release check behind it, and the tally of passed, failed and blocked marks with one gate mismatch flagged",
+    route: "/testing",
+    expect: "September release check",
+    prepare: withTestingModule(async (page) => {
+      await page.getByText("September release check").first().waitFor();
+    }),
+    cleanup: disableTestingModule,
+    // The run picker is a native select, and an open native dropdown is drawn
+    // by the browser outside the page, so no screenshot can show it open. The
+    // frame shows it closed on the current run; the caption names the archived
+    // one. The top of the page holds the run and its tally; below is the full
+    // route index, which is not the subject.
+    viewport: { width: 1440, height: 1100 },
+  },
+  {
+    id: "08-86-testing-report",
+    doc: "08-admin-reports.md",
+    line: 2679,
+    anchor: "the printable testing report",
+    alt: "The printable testing report for the September release check: the failure on Documents with its note, and the gate mismatch where a firefighter opened the finance dashboard",
+    route: "/testing/report/print",
+    expect: "September release check",
+    prepare: withTestingModule(async (page) => {
+      await page.getByText("September release check").first().waitFor();
+    }),
+    cleanup: disableTestingModule,
+    fullPage: true,
   },
 ];
 
