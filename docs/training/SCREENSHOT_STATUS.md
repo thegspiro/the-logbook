@@ -9,7 +9,7 @@ image still matches the application is tracked by hand in
 [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) — this file is
 regenerated wholesale, so that audit cannot live here.
 
-**543 of 589 placeholders filled** (46 remaining).
+**544 of 589 placeholders filled** (45 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
@@ -23,7 +23,7 @@ regenerated wholesale, so that audit cannot live here.
 | [07-documents-forms.md](./07-documents-forms.md) | 17 | 0 |
 | [08-admin-reports.md](./08-admin-reports.md) | 46 | 7 |
 | [09-skills-testing.md](./09-skills-testing.md) | 24 | 0 |
-| [10-mobile-pwa.md](./10-mobile-pwa.md) | 15 | 2 |
+| [10-mobile-pwa.md](./10-mobile-pwa.md) | 16 | 1 |
 | [11-finance.md](./11-finance.md) | 11 | 0 |
 | [12-grants-fundraising.md](./12-grants-fundraising.md) | 10 | 0 |
 | [13-medical-screening.md](./13-medical-screening.md) | 7 | 0 |
@@ -34,5 +34,5 @@ regenerated wholesale, so that audit cannot live here.
 | [18-storefront.md](./18-storefront.md) | 4 | 0 |
 | [19-august-2026-release-changes.md](./19-august-2026-release-changes.md) | 40 | 9 |
 | [20-september-2026-release-changes.md](./20-september-2026-release-changes.md) | 14 | 15 |
-| **Total** | **543** | **46** |
+| **Total** | **544** | **45** |
 

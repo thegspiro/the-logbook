@@ -1901,6 +1901,201 @@ async function unpinEverything(page) {
   }
 }
 
+/**
+ * The installed-app icon, as a phone would show it.
+ *
+ * No phone or emulator is available to the pipeline, so this shot cannot be a
+ * device capture. What it can guarantee is that the icons in it are real: the
+ * logo is uploaded through the same profile endpoint the settings screen uses,
+ * and both icons are fetched from the branding endpoint a phone downloads at
+ * install. Only the home screen around them is drawn, and each OS's icon shape
+ * is applied the way that OS applies it. The guide captions it as an
+ * illustration for that reason.
+ *
+ * The demo department has no seeded logo, deliberately: the sidebar draws the
+ * logo on nearly every page, and seeding one would put it into every later
+ * capture while the existing ones keep the stock icon. So the logo exists only
+ * while this shot runs, and `restoreDepartmentLogo` puts back whatever was
+ * there before.
+ */
+let logoBeforeIconShot = null;
+
+async function patchLogo(page, logo) {
+  const status = await page.evaluate(async (value) => {
+    const csrf =
+      document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+    const response = await fetch("/api/v1/organization/profile", {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": decodeURIComponent(csrf),
+      },
+      body: JSON.stringify({ logo: value }),
+    });
+    return response.status;
+  }, logo);
+  if (status !== 200) {
+    throw new Error(`setting the department logo returned ${status}`);
+  }
+}
+
+async function composeInstalledAppIcon(page) {
+  const current = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/organization/profile", {
+      credentials: "include",
+    });
+    if (!response.ok) return { error: response.status };
+    return { logo: (await response.json()).logo ?? null };
+  });
+  if ("error" in current) {
+    throw new Error(`reading the department profile returned ${current.error}`);
+  }
+  logoBeforeIconShot = current.logo;
+
+  // A crest drawn for the demo, marked DEMO so it cannot be mistaken for any
+  // real department's insignia.
+  const crest = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+    const shield = () => {
+      ctx.beginPath();
+      ctx.moveTo(256, 24);
+      ctx.lineTo(456, 84);
+      ctx.lineTo(456, 250);
+      ctx.bezierCurveTo(456, 380, 360, 450, 256, 490);
+      ctx.bezierCurveTo(152, 450, 56, 380, 56, 250);
+      ctx.lineTo(56, 84);
+      ctx.closePath();
+    };
+    shield();
+    ctx.fillStyle = "#7f1d1d";
+    ctx.fill();
+    ctx.lineWidth = 18;
+    ctx.strokeStyle = "#f5c542";
+    ctx.stroke();
+    ctx.fillStyle = "#f5c542";
+    ctx.save();
+    ctx.translate(256, 210);
+    for (let arm = 0; arm < 4; arm += 1) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-58, -118);
+      ctx.lineTo(0, -88);
+      ctx.lineTo(58, -118);
+      ctx.closePath();
+      ctx.fill();
+      ctx.rotate(Math.PI / 2);
+    }
+    ctx.restore();
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.font = "bold 76px sans-serif";
+    ctx.fillText("OFD", 256, 400);
+    ctx.font = "bold 30px sans-serif";
+    ctx.fillText("DEMO", 256, 442);
+    return canvas.toDataURL("image/png");
+  });
+  await patchLogo(page, crest);
+
+  const icons = await page.evaluate(async () => {
+    const out = {};
+    for (const variant of ["apple-touch", "maskable-512"]) {
+      const response = await fetch(
+        `/api/public/v1/branding/icon/${variant}.png`,
+        {
+          cache: "no-store",
+        },
+      );
+      const type = response.headers.get("content-type") ?? "";
+      if (!response.ok || !type.startsWith("image/png")) {
+        return { error: `${variant}: ${response.status} ${type}` };
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      let binary = "";
+      for (const byte of bytes) binary += String.fromCharCode(byte);
+      out[variant] = `data:image/png;base64,${btoa(binary)}`;
+    }
+    return out;
+  });
+  if (icons.error) {
+    throw new Error(`the branded icon was not served — ${icons.error}`);
+  }
+
+  const app = (label, color, glyph) =>
+    `<div class="app"><div class="tile" style="background:${color}">${glyph}</div><span>${label}</span></div>`;
+  const others = [
+    app("Phone", "#16a34a", "&#9990;"),
+    app("Messages", "#22c55e", "&#9993;"),
+    app("Camera", "#475569", "&#9673;"),
+    app("Calendar", "#ffffff;color:#dc2626", "24"),
+    app("Clock", "#111827", "&#9719;"),
+    app("Weather", "#0ea5e9", "&#9728;"),
+    app("Notes", "#facc15;color:#78350f", "&#9998;"),
+  ];
+  const grid = (logbook) =>
+    [...others.slice(0, 5), logbook, ...others.slice(5)].join("");
+
+  await page.setContent(`<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  body { margin: 0; background: #f1f5f9; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #home-screens { display: flex; gap: 48px; padding: 40px 48px 32px; width: max-content; }
+  figure { margin: 0; text-align: center; }
+  figcaption { margin-top: 14px; font-size: 14px; color: #334155; }
+  .phone { width: 300px; height: 600px; border-radius: 44px; border: 10px solid #0f172a; overflow: hidden; position: relative; box-sizing: border-box; }
+  .ios { background: linear-gradient(160deg, #1e3a8a, #7c3aed 55%, #db2777); }
+  .android { background: linear-gradient(200deg, #064e3b, #0f766e 50%, #1e293b); border-radius: 32px; }
+  .status { display: flex; justify-content: space-between; color: #fff; font-size: 13px; font-weight: 600; padding: 14px 24px 0; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); row-gap: 22px; padding: 30px 16px 0; }
+  .app { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .app span { color: #fff; font-size: 11px; text-shadow: 0 1px 2px rgba(0,0,0,.5); max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile { width: 54px; height: 54px; display: flex; align-items: center; justify-content: center; font-size: 26px; color: #fff; font-weight: 600; }
+  .ios .tile { border-radius: 12px; }
+  .android .tile { border-radius: 50%; }
+  .tile img { width: 100%; height: 100%; border-radius: inherit; display: block; }
+  .dock { position: absolute; left: 12px; right: 12px; bottom: 14px; height: 76px; border-radius: 26px; background: rgba(255,255,255,.22); }
+  .android .dock { background: rgba(255,255,255,.12); height: 44px; border-radius: 22px; left: 24px; right: 24px; }
+</style></head><body>
+<div id="home-screens">
+  <figure>
+    <div class="phone ios"><div class="status"><span>9:41</span><span>&#9679;&#9679;&#9679;</span></div>
+      <div class="grid">${grid(`<div class="app"><div class="tile"><img alt="" src="${icons["apple-touch"]}"></div><span>The Logbook</span></div>`)}</div>
+      <div class="dock"></div></div>
+    <figcaption>iPhone — the apple-touch icon, corners rounded by iOS</figcaption>
+  </figure>
+  <figure>
+    <div class="phone android"><div class="status"><span>9:41</span><span>&#9679;&#9679;&#9679;</span></div>
+      <div class="grid">${grid(`<div class="app"><div class="tile"><img alt="" src="${icons["maskable-512"]}"></div><span>Logbook</span></div>`)}</div>
+      <div class="dock"></div></div>
+    <figcaption>Android — the maskable icon, trimmed to a circle</figcaption>
+  </figure>
+</div></body></html>`);
+  await page.waitForFunction(() =>
+    [...document.images].every((img) => img.complete && img.naturalWidth > 0),
+  );
+}
+
+async function restoreDepartmentLogo(page) {
+  // The profile endpoint set the logo, so the same page and session put it
+  // back. setContent replaced the document but not the origin or cookies.
+  await patchLogo(page, logoBeforeIconShot);
+  if (logoBeforeIconShot === null) {
+    const status = await page.evaluate(async () => {
+      const response = await fetch(
+        "/api/public/v1/branding/icon/apple-touch.png",
+        { cache: "no-store" },
+      );
+      return response.status;
+    });
+    if (status !== 404) {
+      throw new Error(`the demo logo is still being served (${status})`);
+    }
+  }
+  logoBeforeIconShot = null;
+}
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -13218,6 +13413,23 @@ export const SHOTS = [
     viewport: { width: 1024, height: 768 },
     prepare: armStationAndTap,
     fullPage: true,
+  },
+  {
+    id: "10-22-installed-app-icon",
+    // The server's icons, inlined once fetched. Nothing else on the composed
+    // screen is an image, so this fails if either icon never arrived.
+    expect: { selector: '#home-screens img[src^="data:image/png"]' },
+    doc: "10-mobile-pwa.md",
+    line: 135,
+    anchor:
+      "A phone home screen (iPhone or Android) with the installed Logbook app",
+    alt: "An illustration built from the server's real icons, not a device capture: an iPhone home screen with the demo department's crest as The Logbook icon, corners rounded, and an Android home screen with the maskable icon trimmed to a circle, each beside ordinary apps for scale",
+    route: "/dashboard",
+    viewport: { width: 1280, height: 900 },
+    prepare: composeInstalledAppIcon,
+    cleanup: restoreDepartmentLogo,
+    selector: "#home-screens",
+    allowEmptyState: true,
   },
   {
     id: "10-21-check-in-station-tablet",

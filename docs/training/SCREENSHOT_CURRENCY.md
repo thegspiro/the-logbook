@@ -9,9 +9,10 @@ Box Management** (`/communications/suggestion-boxes`) — and the inventory labe
 page gained a picker and a post-print prompt. Everything else is an existing
 address carrying one more control or one more line.
 
-**Eleven placeholders were written into the guides** by this pass. **Ten are
-shot** (2026-09-24), so the library moves from 533/589 to **543/589**. The one
-left is item 9, the installed-app icon, which needs a real or emulated device:
+**Eleven placeholders were written into the guides** by this pass. **All
+eleven are shot** (2026-09-24), so the library moves from 533/589 to
+**544/589**. Item 9, the installed-app icon, is an illustration rather than a
+device capture; its row says why:
 
 | #  | Image area                                                    | Disposition | Guide                                   | Notes                                                                                                              |
 | -- | ------------------------------------------------------------- | ----------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -23,7 +24,7 @@ left is item 9, the installed-app icon, which needs a real or emulated device:
 | 6  | Items list: **Needs a Label** + **All N matching selected**    | **NEW**     | 05 (inventory)                          | **Shot** 09-24 as `05-83-items-select-all-matching` — Structural PPE, 11 items |
 | 7  | Label page **Print barcode labels** picker                    | **NEW**     | 05                                      | **Shot** 09-24 as `05-84-label-scope-picker`, clipped to the picker card |
 | 8  | "Did the labels print correctly?" prompt                      | **NEW**     | 05                                      | **Shot** 09-24 as `05-85-label-print-confirm`, full page so the preview is in frame. Mark never pressed |
-| 9  | Phone home screen with the department-logo icon               | **NEW**     | 10 (mobile)                             | Needs a real device or emulator install; the seeded demo logo only. The harness cannot produce this               |
+| 9  | Phone home screen with the department-logo icon               | **NEW**     | 10 (mobile)                             | **Shot** 09-24 as `10-22-installed-app-icon`, **an illustration**: no device or emulator here (no KVM). A DEMO-marked crest is uploaded for the shot only and removed by `cleanup`; both icons are fetched from `/api/public/v1/branding/icon/`, and only the home screens around them are drawn |
 | 10 | Medical Screening **Add Record** with the amber notice        | **NEW**     | 13 (medical screening)                  | **Shot** 09-24 as `13-07-add-record-linkage-notice`. Dialog opened, never saved |
 | 11 | Applicant drawer on an event-naming **Meeting** stage          | **NEW**     | 20                                      | **Shot** 09-24 as `20-14-applicant-meeting-stage-hint`, on the seeded Associate Member Pipeline |
 

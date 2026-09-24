@@ -132,11 +132,12 @@ Four things worth knowing:
   solid background. That is deliberate — fitting it larger would cut the
   corners off a crest on some phones.
 
-> **Screenshot needed:**
-> _[A phone home screen (iPhone or Android) with the installed Logbook app
-> showing the **demo department's logo** as its icon, next to a couple of
-> ordinary apps for scale. Use the seeded demo department's logo, not a real
-> department's.]_
+![An illustration built from the server's real icons, not a device capture: an iPhone home screen with the demo department's crest as The Logbook icon, corners rounded, and an Android home screen with the maskable icon trimmed to a circle, each beside ordinary apps for scale](./images/10-22-installed-app-icon.png)
+
+_An illustration, not a photo of a phone. Both icons are exactly what the
+server sends a phone at install, made from a demo crest; the home screens
+around them are drawn. On the right you can see the Android point above: the
+crest sits well inside the circle._
 
 ### Getting Around on a Phone _(2026-08-07)_
 
