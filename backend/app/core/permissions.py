@@ -2239,6 +2239,28 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             NOTIFICATIONS_VIEW.name,
         ],
     },
+    "assistant_membership_coordinator": {
+        "name": "Assistant Membership Coordinator",
+        "slug": "assistant_membership_coordinator",
+        "description": "Helps run the applicant pipeline alongside the Membership Coordinator",
+        "is_system": True,
+        "priority": 50,
+        # Deliberately narrower than the coordinator: the applicant pipeline
+        # and read access to the roster it feeds, but no member-record edits,
+        # position assignment or disclosure-policy settings. Holders receive
+        # the coordinator's pipeline notices (applicant withdrawals).
+        "permissions": [
+            USERS_VIEW.name,
+            MEMBERS_VIEW.name,
+            PROSPECTIVE_MEMBERS_MANAGE.name,
+            POSITIONS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
+            EVENTS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
+        ],
+    },
     "safety_officer": {
         "name": "Safety Officer",
         "slug": "safety_officer",

@@ -63,6 +63,10 @@ def test_backfill_covers_every_seeded_position_holding_the_grants():
     ``storefront.view`` for a ticked View box, so those rows already carry both
     grants. There is nothing for this frozen migration to repair, and it could
     not be widened to cover it anyway (CLAUDE.md pitfall #20).
+
+    ``assistant_membership_coordinator`` (2026-09-24) is registered later
+    still, and revision ``43e9df281412`` creates it on existing departments
+    with the storefront grants already in place.
     """
     # Thirteen corporate positions gained the grants in a later revision, which
     # carries its own backfill — they are not this migration's to cover.
@@ -81,7 +85,8 @@ def test_backfill_covers_every_seeded_position_holding_the_grants():
         slug
         for slug, definition in DEFAULT_POSITIONS.items()
         if slug not in later
-        and slug != "emt"  # registered after this migration — see the docstring
+        # Registered after this migration — see the docstring.
+        and slug not in {"emt", "assistant_membership_coordinator"}
         and "storefront.view" in definition["permissions"]
         # A wildcard row already covers the grants and the backfill skips it.
         and "*" not in definition["permissions"]
