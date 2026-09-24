@@ -251,6 +251,26 @@ describe('InventoryItemsPage', () => {
     await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'assigned' })));
   });
 
+  it('filters to items that still need a label, and back', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('No items found');
+
+    const labelSelect = screen.getByLabelText('Filter by label status');
+    await user.selectOptions(labelSelect, 'needed');
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ label_printed: false }))
+    );
+    await user.selectOptions(labelSelect, 'printed');
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ label_printed: true }))
+    );
+    await user.selectOptions(labelSelect, '');
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ label_printed: undefined }))
+    );
+  });
+
   it('hides the add-item action without the manage permission', async () => {
     mockCheckPermission.mockReturnValue(false);
     mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1 });

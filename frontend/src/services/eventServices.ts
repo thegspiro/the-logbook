@@ -910,6 +910,10 @@ export interface InventoryItem {
   /** The garment's full style: sleeve / fit / neckline / closure. */
   style_attributes?: string[] | null;
   variant_group_id?: string;
+  /** When a label was last confirmed printed. Null means the item needs one,
+   *  including after the value its label encodes changed. */
+  label_printed_at?: string | null;
+  label_printed_by?: string | null;
   active: boolean;
   created_at: string;
   updated_at: string;

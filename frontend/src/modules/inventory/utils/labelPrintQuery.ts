@@ -40,6 +40,8 @@ export type LabelFilterParams = {
   [K in StringFilterKey]?: string | undefined;
 } & {
   unassigned_location?: boolean | undefined;
+  /** false = only items still needing a label; true = only labelled ones. */
+  label_printed?: boolean | undefined;
   sort_order?: 'asc' | 'desc' | undefined;
 };
 
@@ -58,6 +60,7 @@ export function buildLabelFilterPath(filters: LabelFilterParams): string {
     if (value) qs.set(key, value);
   }
   if (filters.unassigned_location) qs.set('unassigned_location', 'true');
+  if (filters.label_printed !== undefined) qs.set('label_printed', String(filters.label_printed));
   if (filters.sort_order) qs.set('sort_order', filters.sort_order);
   return `/inventory/print-labels?${qs.toString()}`;
 }
@@ -80,6 +83,8 @@ export function parseLabelPrintQuery(params: URLSearchParams): LabelPrintRequest
     if (value) filters[key] = value;
   }
   if (params.get('unassigned_location') === 'true') filters.unassigned_location = true;
+  const printed = params.get('label_printed');
+  if (printed === 'true' || printed === 'false') filters.label_printed = printed === 'true';
   const order = params.get('sort_order');
   if (order === 'asc' || order === 'desc') filters.sort_order = order;
   return { kind: 'filter', filters };

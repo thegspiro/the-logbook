@@ -983,6 +983,8 @@ const InventoryItemsPage: React.FC = () => {
   const [fSize, setFSize] = useState('');
   const [fColor, setFColor] = useState('');
   const [fStyle, setFStyle] = useState('');
+  // '' = either; 'needed' / 'printed' map to label_printed=false / true.
+  const [fLabel, setFLabel] = useState<'' | 'needed' | 'printed'>('');
   const [sortBy, setSortBy] = useState<SortKey>('name');
   const [sortOrd, setSortOrd] = useState<'asc' | 'desc'>('asc');
   const [groupBy, setGroupBy] = useState<GroupKey>('');
@@ -1094,11 +1096,12 @@ const InventoryItemsPage: React.FC = () => {
       size: fSize || undefined,
       color: fColor || undefined,
       style: fStyle || undefined,
+      label_printed: fLabel === '' ? undefined : fLabel === 'printed',
       sort_by: sortBy,
       sort_order: sortOrd,
       group_by: groupBy || undefined,
     }),
-    [search, fCat, fStatus, fCond, fType, fLoc, vendorFilter, fSize, fColor, fStyle, sortBy, sortOrd, groupBy]
+    [search, fCat, fStatus, fCond, fType, fLoc, vendorFilter, fSize, fColor, fStyle, fLabel, sortBy, sortOrd, groupBy]
   );
 
   const loadItems = useCallback(
@@ -1890,7 +1893,7 @@ const InventoryItemsPage: React.FC = () => {
             ))}
           </select>
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <select
             aria-label="Filter by size"
             className="form-input"
@@ -1942,6 +1945,16 @@ const InventoryItemsPage: React.FC = () => {
                 ))}
               </optgroup>
             ))}
+          </select>
+          <select
+            aria-label="Filter by label status"
+            className="form-input"
+            value={fLabel}
+            onChange={(e) => setFLabel(e.target.value as '' | 'needed' | 'printed')}
+          >
+            <option value="">Any Label Status</option>
+            <option value="needed">Needs a Label</option>
+            <option value="printed">Label Printed</option>
           </select>
         </div>
       </div>
@@ -2050,7 +2063,7 @@ const InventoryItemsPage: React.FC = () => {
           icon={Package}
           title="No items found"
           description={
-            search || fCat || fStatus || fCond || fType || fLoc || fSize || fColor || fStyle || vendorFilter
+            search || fCat || fStatus || fCond || fType || fLoc || fSize || fColor || fStyle || fLabel || vendorFilter
               ? 'Try adjusting your filters.'
               : 'Get started by adding your first inventory item.'
           }

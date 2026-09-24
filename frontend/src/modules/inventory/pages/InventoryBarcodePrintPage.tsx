@@ -485,6 +485,11 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [barcodesReady, setBarcodesReady] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  // After a print or PDF, ask whether the labels actually came out. Only a
+  // confirmation takes items off the "needs a label" list: a cancelled print
+  // dialog or a jammed roll looks identical to success from in here.
+  const [labelConfirm, setLabelConfirm] = useState<'idle' | 'asking' | 'saving' | 'done'>('idle');
+  const [markedCount, setMarkedCount] = useState(0);
   const [autoRotateOverride, setAutoRotateOverride] = useState<boolean | null>(null);
   const [extraLines, setExtraLines] = useState<string[]>([]);
   const [{ width: initialCustomWidth, height: initialCustomHeight }] = useState(loadStoredCustomDims);
@@ -524,6 +529,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const printRequest = useMemo(() => parseLabelPrintQuery(searchParams), [searchParams]);
 
   const fetchItems = useCallback(async () => {
+    // A new batch has not been printed yet, whatever the last one was.
+    setLabelConfirm('idle');
     if (printRequest.kind === 'none') {
       // Nothing addressed: the picker renders instead of the labels.
       setLoading(false);
@@ -814,6 +821,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
       win?.addEventListener('afterprint', removeFrame, { once: true });
       setTimeout(removeFrame, 60000);
       win?.print();
+      setLabelConfirm('asking');
     };
 
     iframe.onload = triggerPrint;
@@ -821,6 +829,19 @@ const InventoryBarcodePrintPage: React.FC = () => {
     // readyState=complete before onload is wired up
     if (iframeDoc.readyState === 'complete') {
       triggerPrint();
+    }
+  };
+
+  const confirmLabelsPrinted = async () => {
+    setLabelConfirm('saving');
+    try {
+      const ids = Array.from(new Set(items.map((item) => item.id)));
+      const { marked } = await inventoryService.markLabelsPrinted(ids);
+      setMarkedCount(marked);
+      setLabelConfirm('done');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not record the printed labels'));
+      setLabelConfirm('asking');
     }
   };
 
@@ -851,6 +872,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       toast.success('PDF downloaded');
+      setLabelConfirm('asking');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to generate PDF'));
     } finally {
@@ -1079,6 +1101,41 @@ const InventoryBarcodePrintPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {labelConfirm !== 'idle' && (
+            <div
+              className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3"
+              role="status"
+            >
+              {labelConfirm === 'done' ? (
+                <p className="text-sm text-emerald-800 dark:text-emerald-300">
+                  {formatNumber(markedCount)} {markedCount === 1 ? 'item' : 'items'} marked as labelled.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-emerald-800 dark:text-emerald-300">
+                    Did the labels print correctly? Confirming takes these items off the &ldquo;needs a label&rdquo;
+                    list.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void confirmLabelsPrinted()}
+                      disabled={labelConfirm === 'saving'}
+                      className="btn-success btn-sm"
+                    >
+                      {labelConfirm === 'saving'
+                        ? 'Saving…'
+                        : `Mark ${formatNumber(items.length)} ${items.length === 1 ? 'item' : 'items'} as labelled`}
+                    </button>
+                    <button type="button" onClick={() => setLabelConfirm('idle')} className="btn-secondary btn-sm">
+                      Not yet
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Warning for items without barcodes */}
           {itemsWithoutBarcodes.length > 0 && (

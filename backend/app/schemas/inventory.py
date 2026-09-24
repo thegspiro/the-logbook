@@ -708,6 +708,11 @@ class InventoryItemResponse(InventoryItemBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
+    # When a label was last confirmed printed for this item, and by whom. Null
+    # means it needs one — including after its barcode value changed.
+    label_printed_at: Optional[datetime] = None
+    label_printed_by: Optional[UUID] = None
+
     # Ready units across the item's in-date stock lots, and whether it is
     # stocked that way at all. Lots and `quantity` are separate ledgers, so a
     # consumable kept as dated stock has a `quantity` nothing maintains; a
@@ -1566,6 +1571,23 @@ class LabelGenerateRequest(BaseModel):
         description="Optional extra fields to print on labels: "
         "'location', 'category', 'condition'. Space permitting.",
     )
+
+
+class LabelMarkPrintedRequest(BaseModel):
+    """Confirm that labels came off the printer for these items."""
+
+    item_ids: List[UUID] = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Item UUIDs whose labels printed correctly (max 500)",
+    )
+
+
+class LabelMarkPrintedResponse(BaseModel):
+    """How many of the requested items were marked as labelled."""
+
+    marked: int
 
 
 # ============================================

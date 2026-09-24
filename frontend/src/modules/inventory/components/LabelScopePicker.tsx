@@ -53,6 +53,7 @@ export const LabelScopePicker: React.FC<LabelScopePickerProps> = ({ onChoose }) 
   const [categoryId, setCategoryId] = useState('');
   const [locationId, setLocationId] = useState('');
   const [areaId, setAreaId] = useState('');
+  const [needsLabelOnly, setNeedsLabelOnly] = useState(false);
   const [matchCount, setMatchCount] = useState<number | null>(null);
   const [countError, setCountError] = useState<string | null>(null);
 
@@ -82,8 +83,9 @@ export const LabelScopePicker: React.FC<LabelScopePickerProps> = ({ onChoose }) 
       location_id: locationId && locationId !== UNASSIGNED_LOCATION ? locationId : undefined,
       unassigned_location: locationId === UNASSIGNED_LOCATION ? true : undefined,
       storage_area_id: areaId || undefined,
+      label_printed: needsLabelOnly ? false : undefined,
     }),
-    [categoryId, locationId, areaId]
+    [categoryId, locationId, areaId, needsLabelOnly]
   );
 
   useEffect(() => {
@@ -193,6 +195,20 @@ export const LabelScopePicker: React.FC<LabelScopePickerProps> = ({ onChoose }) 
               </select>
             </div>
           )}
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="form-checkbox mt-0.5"
+              checked={needsLabelOnly}
+              onChange={(e) => setNeedsLabelOnly(e.target.checked)}
+            />
+            <span>
+              <span className="text-theme-text-primary block">Only items that still need a label</span>
+              <span className="text-theme-text-muted block text-xs">
+                Items never confirmed as labelled, or whose barcode changed since.
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="mt-4 text-sm" aria-live="polite">

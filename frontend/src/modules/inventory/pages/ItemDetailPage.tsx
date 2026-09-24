@@ -397,6 +397,10 @@ const ItemDetailPage: React.FC = () => {
           <Field label="Condition" value={labelFor(item.condition)} />
           <Field label="Barcode" value={item.barcode || '--'} />
           <Field label="Asset Tag" value={item.asset_tag || '--'} />
+          <Field
+            label="Label Printed"
+            value={item.label_printed_at ? formatDate(item.label_printed_at, tz) : 'Needs a label'}
+          />
           <Field label="Description" value={item.description || '--'} />
           {item.notes && <Field label="Notes" value={item.notes} />}
         </Card>

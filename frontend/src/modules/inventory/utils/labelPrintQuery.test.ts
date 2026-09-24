@@ -22,6 +22,14 @@ describe('labelPrintQuery', () => {
     });
   });
 
+  it('carries the needs-a-label filter in both directions', () => {
+    const needs = buildLabelFilterPath({ label_printed: false });
+    expect(needs).toBe('/inventory/print-labels?all=1&label_printed=false');
+    expect(parse(needs)).toEqual({ kind: 'filter', filters: { label_printed: false } });
+    expect(parse('/p?all=1&label_printed=true')).toEqual({ kind: 'filter', filters: { label_printed: true } });
+    expect(parse('/p?all=1&label_printed=maybe')).toEqual({ kind: 'filter', filters: {} });
+  });
+
   it('treats a bare all=1 as every item', () => {
     expect(parse('/p?all=1')).toEqual({ kind: 'filter', filters: {} });
   });
