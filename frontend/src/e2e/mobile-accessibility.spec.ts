@@ -210,6 +210,15 @@ test.describe('mobile accessibility', () => {
     // runner and a tighter cap was once reached by load alone.
     test.setTimeout(2_400_000);
 
+    // Contrast is measured on the settled page, not mid-animation. `EmptyState`
+    // fades in over one second (`animate-fade-in`, opacity 0 -> 1) and the audit
+    // starts 350ms after the first heading appears, so on a loaded runner axe
+    // measured its buttons through a partial opacity and reported white on
+    // red-800 as failing AA — a result that came and went with runner speed.
+    // index.css collapses every animation to 0.01ms under reduced motion, which
+    // makes each render final the moment it paints.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+
     let granted: SignInState | null = null;
 
     /**
