@@ -147,11 +147,13 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({
           <MembershipTiersSection
             tiers={editor.tiers}
             autoAdvance={editor.autoAdvance}
+            rejoinServiceCredit={editor.rejoinServiceCredit}
             loading={editor.loading}
             saving={editor.saving}
             dirty={editor.dirty}
             memberCount={editor.memberCount}
             onSetAutoAdvance={editor.setAutoAdvance}
+            onSetRejoinServiceCredit={editor.setRejoinServiceCredit}
             onUpdateTier={editor.updateTier}
             onUpdateBenefits={editor.updateBenefits}
             onAddTier={editor.addTier}

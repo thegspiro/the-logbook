@@ -24,6 +24,7 @@ import { UserStatus } from '../constants/enums';
 const mockGetUsers = vi.fn();
 const mockCheckContactInfoEnabled = vi.fn();
 const mockReactivateMember = vi.fn();
+const mockGetServiceHistory = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: {
@@ -33,6 +34,7 @@ vi.mock('../services/api', () => ({
   },
   memberStatusService: {
     reactivateMember: (...args: unknown[]) => mockReactivateMember(...args) as unknown,
+    getServiceHistory: (...args: unknown[]) => mockGetServiceHistory(...args) as unknown,
   },
 }));
 
@@ -132,6 +134,19 @@ function installDefaults(held: string[]): void {
   mockNavigate.mockReset();
   mockReactivateMember.mockReset();
   mockReactivateMember.mockResolvedValue({ user_id: 'u3', new_status: UserStatus.ACTIVE });
+  mockGetServiceHistory.mockReset();
+  mockGetServiceHistory.mockResolvedValue({
+    user_id: 'u3',
+    hire_date: '2015-09-24',
+    periods: [],
+    credited_days: 0,
+    credited_years: 0,
+    prior_days: 0,
+    effective_service_start: null,
+    is_recorded: true,
+    is_estimated: false,
+    default_rejoin_credit: 'continue',
+  });
   mockGetUsers.mockResolvedValue(ROSTER);
   mockCheckContactInfoEnabled.mockResolvedValue({
     enabled: true,
@@ -406,11 +421,15 @@ describe('Members roster — archived members', () => {
       expect(mockGetUsers).toHaveBeenCalledTimes(1);
 
       await user.click(within(table()).getByLabelText('Reactivate Casey Former'));
-      await user.type(await screen.findByLabelText(/Reason/), 'Moved back to the district');
+      await screen.findByRole('group', { name: /Earlier service/ });
+      await user.type(screen.getByLabelText(/Reason/), 'Moved back to the district');
       await user.click(screen.getByRole('button', { name: 'Reactivate' }));
 
       await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(2));
-      expect(mockReactivateMember).toHaveBeenCalledWith('u3', { reason: 'Moved back to the district' });
+      expect(mockReactivateMember).toHaveBeenCalledWith(
+        'u3',
+        expect.objectContaining({ reason: 'Moved back to the district', service_credit: 'continue' })
+      );
     });
   });
 

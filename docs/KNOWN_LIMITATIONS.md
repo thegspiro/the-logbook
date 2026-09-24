@@ -2526,6 +2526,31 @@ common case — an unrecognized `membership_type` is `off_ladder`-counted and
 skipped, not silently re-corrupted further. (Security review USR-10a,
 `docs/security-review/USR-07-users-organizations.md`.)
 
+## Membership — Length of Service Across a Break: What Is Deliberately Left Alone (2026-09-24)
+
+Credited service now comes from recorded stints (`member_service_periods`,
+`app/services/member_service_history_service.py`): time a member spent dropped,
+retired or archived is not counted, and a returning member's earlier stints can
+either keep counting or be kept on record as prior service. Tier advancement is
+the reader. Four things are unchanged on purpose, each for the owner to revisit:
+
+- **Members reinstated before this shipped have no recorded gap.** Nothing
+  recorded when a member left before 2026-09-24, and inferring breaks from the
+  audit log was rejected: it only reaches back as far as auditing does, and
+  `status_changed_at` is overwritten on archive. Their service still runs
+  unbroken from `hire_date` — the pre-existing behaviour, so nobody's tier moves
+  on upgrade — until an officer edits their **Service History**.
+- **Other `hire_date` readers are untouched.** The ID card's "Member since", the
+  roster's Hire Date column, the Salesforce sync and event-attendance cut-offs
+  still read `hire_date`. It remains the date the member first joined; credited
+  service is a separate figure.
+- **An archived member's inferred last day is the archive date.** When a member
+  with no recorded stints is reactivated, the end of their earlier service is
+  taken from `status_changed_at`, which archiving overwrites. The Reactivate
+  dialog pre-fills it and asks the officer to correct it.
+- **A soft-deleted (deactivated) member still cannot be restored.** Service
+  history does not change that; see the Deactivate dialog's wording.
+
 ## Membership Pipeline — Election Packages Have No List Bound or Creation Cap (2026-08-25)
 
 `GET /prospective-members/election-packages` (`list_election_packages`) runs

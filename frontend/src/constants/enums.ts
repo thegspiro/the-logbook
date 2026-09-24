@@ -125,6 +125,29 @@ export const UserStatus = {
 } as const;
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
 
+/** Statuses in which a member is away from the department (time not counted as service). */
+export const SEPARATED_STATUSES: readonly UserStatus[] = [
+  UserStatus.DROPPED_VOLUNTARY,
+  UserStatus.DROPPED_INVOLUNTARY,
+  UserStatus.RETIRED,
+  UserStatus.ARCHIVED,
+];
+
+/** How a returning member's earlier stints count toward length of service. */
+export const RejoinServiceCredit = {
+  CONTINUE: 'continue',
+  RESTART: 'restart',
+} as const;
+export type RejoinServiceCredit = (typeof RejoinServiceCredit)[keyof typeof RejoinServiceCredit];
+
+/** How a closed service stint ended. */
+export const SeparationStatus = {
+  DROPPED_VOLUNTARY: 'dropped_voluntary',
+  DROPPED_INVOLUNTARY: 'dropped_involuntary',
+  RETIRED: 'retired',
+} as const;
+export type SeparationStatus = (typeof SeparationStatus)[keyof typeof SeparationStatus];
+
 // ============================================
 // Election Status
 // ============================================

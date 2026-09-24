@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**273 tables · 4569 columns · 887 foreign keys**
+**274 tables · 4580 columns · 890 foreign keys**
 
 ---
 
@@ -623,6 +623,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`member_leaves_of_absence`](#member_leaves_of_absence) | `MemberLeaveOfAbsence` | 14 | Records periods where a member is on leave from the department. |
+| [`member_service_periods`](#member_service_periods) | `MemberServicePeriod` | 11 | One continuous stint of membership, for calculating length of service. |
 | [`organizations`](#organizations) | `Organization` | 38 | Organization/Department model |
 | [`password_history`](#password_history) | `PasswordHistory` | 4 | Password history for HIPAA compliance (§164.312(d)) |
 | [`positions`](#positions) | `Position` | 11 | Corporate Position model for permission-based access control. |
@@ -9329,6 +9330,31 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_member_leave_org_user` (`organization_id`, `user_id`)
 - `ix_member_leaves_of_absence_user_id` (`user_id`)
 
+### `member_service_periods`
+
+**MemberServicePeriod** · `app/models/user.py`
+
+> One continuous stint of membership, for calculating length of service. A member who leaves (dropped or retired) and later rejoins has two or more rows here. Credited service is the sum of the rows with ``counts_toward_service`` set, so the time away between stints is never counted. When a department restarts a returning member's clock, the earlier stints stay on record with ``counts_toward_service`` false: they are shown as prior service rather than deleted. A member with no rows at all has never separated, and their service is derived from ``users.hire_date`` exactly as it was before this table existed -- which is why no backfill was needed. ``start_date`` NULL means "the member's hire date". The stint written when a member first separates is the one that began at hire, and pointing at the column rather than copying it keeps a later correction of ``hire_date`` flowing through instead of leaving a stale copy behind. Rows written through the API always carry an explicit date.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `start_date` | DATE | yes |  |  |  |
+| `end_date` | DATE | yes |  |  |  |
+| `separation_status` | VARCHAR(32) | yes |  |  |  |
+| `counts_toward_service` | BOOL | no |  | `1` |  |
+| `notes` | TEXT | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_member_service_periods_org_user` (`organization_id`, `user_id`)
+- `ix_member_service_periods_user_id` (`user_id`)
+
 ### `organizations`
 
 **Organization** · `app/models/user.py`
@@ -9590,7 +9616,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (328 references)
+### → `users` (330 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9791,6 +9817,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_leaves_of_absence` | `granted_by` | NO ACTION | yes |
 | `member_leaves_of_absence` | `user_id` | CASCADE | no |
 | `member_qualifications` | `user_id` | CASCADE | no |
+| `member_service_periods` | `created_by` | SET NULL | yes |
+| `member_service_periods` | `user_id` | CASCADE | no |
 | `member_size_preferences` | `user_id` | CASCADE | no |
 | `membership_pipelines` | `created_by` | NO ACTION | yes |
 | `message_history` | `sent_by` | SET NULL | yes |
@@ -9923,7 +9951,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (219 references)
+### → `organizations` (220 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10056,6 +10084,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_dues` | `organization_id` | CASCADE | no |
 | `member_leaves_of_absence` | `organization_id` | CASCADE | no |
 | `member_qualifications` | `organization_id` | CASCADE | no |
+| `member_service_periods` | `organization_id` | CASCADE | no |
 | `member_size_preferences` | `organization_id` | CASCADE | no |
 | `membership_pipelines` | `organization_id` | CASCADE | no |
 | `message_history` | `organization_id` | CASCADE | yes |
