@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Download,
   Printer,
+  RotateCcw,
 } from 'lucide-react';
 import { userService } from '../services/api';
 import { User } from '../types/user';
@@ -23,6 +24,7 @@ import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { useAuthStore } from '../stores/authStore';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
+import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
 import { Breadcrumbs, SkeletonPage, EmptyState, Pagination, Avatar } from '../components/ux';
 import { SortableHeader, sortItems } from '../components/ux/SortableHeader';
 import type { SortDirection } from '../components/ux/SortableHeader';
@@ -71,6 +73,7 @@ const Members: React.FC = () => {
     show_mobile: false,
   });
   const [deleteModalMember, setDeleteModalMember] = useState<User | null>(null);
+  const [reactivateModalMember, setReactivateModalMember] = useState<User | null>(null);
 
   // Bulk selection state (#33)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -389,6 +392,7 @@ const Members: React.FC = () => {
                 <option value="inactive">Inactive</option>
                 <option value="leave">On Leave</option>
                 <option value="retired">Retired</option>
+                {canManageMembers && <option value={UserStatus.ARCHIVED}>Archived</option>}
               </select>
             </div>
 
@@ -521,6 +525,16 @@ const Members: React.FC = () => {
                         >
                           <Edit className="h-4 w-4" />
                         </button>
+                        {member.status === UserStatus.ARCHIVED && (
+                          <button
+                            onClick={() => setReactivateModalMember(member)}
+                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400"
+                            title="Reactivate"
+                            aria-label={`Reactivate ${member.first_name} ${member.last_name}`}
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </button>
+                        )}
                         {currentUser?.id !== member.id && (
                           <button
                             onClick={() => handleDeleteMember(member)}
@@ -741,6 +755,16 @@ const Members: React.FC = () => {
                               >
                                 <Edit className="h-4 w-4" />
                               </button>
+                              {member.status === UserStatus.ARCHIVED && (
+                                <button
+                                  onClick={() => setReactivateModalMember(member)}
+                                  className="rounded-sm p-2 text-green-700 transition-colors hover:bg-green-500/10 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+                                  title="Reactivate"
+                                  aria-label={`Reactivate ${member.first_name} ${member.last_name}`}
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                </button>
+                              )}
                               {currentUser?.id !== member.id && (
                                 <button
                                   onClick={() => handleDeleteMember(member)}
@@ -794,6 +818,25 @@ const Members: React.FC = () => {
           }
           onSoftDelete={handleSoftDelete}
           onHardDelete={handleHardDelete}
+        />
+      )}
+
+      {canManageMembers && (
+        <ReactivateMemberModal
+          isOpen={!!reactivateModalMember}
+          onClose={() => setReactivateModalMember(null)}
+          member={
+            reactivateModalMember
+              ? {
+                  id: reactivateModalMember.id,
+                  name:
+                    reactivateModalMember.full_name ||
+                    `${reactivateModalMember.first_name || ''} ${reactivateModalMember.last_name || ''}`.trim() ||
+                    reactivateModalMember.username,
+                }
+              : null
+          }
+          onReactivated={loadMembers}
         />
       )}
     </div>

@@ -57,6 +57,7 @@ import EmergencyContactsSection from '../components/member-profile/EmergencyCont
 import { VisibilityControl } from '../components/member-profile/VisibilityControl';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
+import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
 
 // Types for inventory data
 interface InventoryItem {
@@ -149,6 +150,7 @@ export const MemberProfilePage: React.FC = () => {
 
   // Status change modal state
   const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [reactivateModalOpen, setReactivateModalOpen] = useState(false);
 
   // Takes the fixed mobile bottom bar off this overlay while it is open.
   useOverlaySurface(statusModalOpen);
@@ -347,6 +349,12 @@ export const MemberProfilePage: React.FC = () => {
 
   const handleOpenStatusModal = () => {
     if (!user) return;
+    // No ordinary status change leads out of `archived` -- the backend
+    // refuses every one -- so the only useful control is reactivation.
+    if (user.status === UserStatus.ARCHIVED) {
+      setReactivateModalOpen(true);
+      return;
+    }
     setNewStatus(user.status);
     setStatusReason('');
     setStatusModalOpen(true);
@@ -805,7 +813,7 @@ export const MemberProfilePage: React.FC = () => {
                         ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
                         : 'bg-theme-surface-secondary text-theme-text-secondary'
                     }`}
-                    title="Change member status"
+                    title={user.status === UserStatus.ARCHIVED ? 'Reactivate member' : 'Change member status'}
                   >
                     {user.status.replace(/_/g, ' ')}
                     <Pencil className="h-3 w-3" />
@@ -1225,8 +1233,8 @@ export const MemberProfilePage: React.FC = () => {
                         type="button"
                         onClick={handleOpenStatusModal}
                         className="text-theme-text-muted transition hover:text-blue-500"
-                        title="Change status"
-                        aria-label="Change status"
+                        title={user.status === UserStatus.ARCHIVED ? 'Reactivate member' : 'Change status'}
+                        aria-label={user.status === UserStatus.ARCHIVED ? 'Reactivate member' : 'Change status'}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
@@ -1339,11 +1347,15 @@ export const MemberProfilePage: React.FC = () => {
                     onChange={(e) => setNewStatus(e.target.value)}
                     className="form-input px-3 text-sm focus:ring-blue-500"
                   >
-                    {Object.values(UserStatus).map((s) => (
-                      <option key={s} value={s}>
-                        {s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                      </option>
-                    ))}
+                    {/* Archiving has its own endpoint and preconditions; the status
+                        change rejects it, so offering it here only produces an error. */}
+                    {Object.values(UserStatus)
+                      .filter((s) => s !== UserStatus.ARCHIVED)
+                      .map((s) => (
+                        <option key={s} value={s}>
+                          {s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                        </option>
+                      ))}
                   </select>
                 </div>
                 <div>
@@ -1383,6 +1395,18 @@ export const MemberProfilePage: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {canManageMembers && user && userId && (
+          <ReactivateMemberModal
+            isOpen={reactivateModalOpen}
+            onClose={() => setReactivateModalOpen(false)}
+            member={{
+              id: userId,
+              name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username,
+            }}
+            onReactivated={() => fetchUserData(userId)}
+          />
         )}
       </div>
     </div>
