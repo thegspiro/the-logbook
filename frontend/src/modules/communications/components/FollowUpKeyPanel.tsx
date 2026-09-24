@@ -61,7 +61,7 @@ const FollowUpKeyPanel: React.FC = () => {
   return (
     <div className="space-y-4">
       {!detail && (
-        <form onSubmit={(e) => void lookup(e)} className="card space-y-3 p-4 sm:p-6">
+        <form onSubmit={(e) => void lookup(e)} className="card max-w-3xl space-y-3 p-4 sm:p-6">
           <p className="text-theme-text-secondary text-sm">
             Enter the follow-up key you were given when you submitted anonymously. It shows the status and any replies,
             and lets you respond — without your name being attached.
