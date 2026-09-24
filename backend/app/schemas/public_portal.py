@@ -10,6 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.public_portal_fields import catalogue_entry
 from app.schemas.base import UTCResponseBase
 
 # ==============================================================================
@@ -171,17 +172,53 @@ class PublicPortalDataWhitelistUpdate(BaseModel):
 
 
 class PublicPortalDataWhitelistResponse(UTCResponseBase):
-    """Schema for data whitelist entry response"""
+    """Schema for data whitelist entry response
+
+    ``category``, ``description`` and ``is_sensitive`` come from
+    :data:`app.core.public_portal_fields.PUBLIC_PORTAL_FIELDS` rather than from
+    the row, because they describe the field itself and not one department's
+    decision about it. They are **required and have no defaults**: this model
+    is built by :meth:`from_entry`, and a caller that reaches for
+    ``from_attributes`` instead fails loudly rather than quietly serving
+    ``is_sensitive=False`` for a field that carries a person's phone number.
+    """
 
     id: UUID
     organization_id: UUID
     data_category: str
+    # The same value as ``data_category``. The admin screen groups on
+    # ``category``; the name is duplicated rather than renamed so that a
+    # caller written against either spelling keeps working.
+    category: str
     field_name: str
+    description: Optional[str]
+    is_sensitive: bool
     is_enabled: bool
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @classmethod
+    def from_entry(cls, entry: Any) -> "PublicPortalDataWhitelistResponse":
+        """Build a response from a stored row plus its catalogue entry."""
+        known = catalogue_entry(entry.data_category, entry.field_name)
+        return cls(
+            id=entry.id,
+            organization_id=entry.organization_id,
+            data_category=entry.data_category,
+            category=entry.data_category,
+            field_name=entry.field_name,
+            description=known.description if known else None,
+            # A row the catalogue does not know is inert: no handler puts that
+            # key in a dictionary, so enabling it exposes nothing. Reporting
+            # it as not sensitive states that, rather than warning about a
+            # field the public API cannot serve.
+            is_sensitive=known.is_sensitive if known else False,
+            is_enabled=entry.is_enabled,
+            created_at=entry.created_at,
+            updated_at=entry.updated_at,
+        )
 
 
 class PublicPortalDataWhitelistBulkUpdate(BaseModel):
