@@ -182,7 +182,8 @@ All settings are in `.env` file at: `/mnt/user/appdata/the-logbook/.env`
 # Your Unraid IP (auto-detected)
 ALLOWED_ORIGINS=http://192.168.1.10:7880
 
-# Public site URL for links in emails (NOT set by the setup script)
+# Public site URL for links in emails (set by the setup script from the
+# HTTPS URL you gave it)
 FRONTEND_URL=https://logbook.yourdomain.com
 
 # Ports (change if needed)
@@ -213,10 +214,12 @@ This stack runs in **production posture**. The setup script configures a
 - **Before real use**: front the app with an HTTPS reverse proxy (SWAG /
   Nginx Proxy Manager / Cloudflare Tunnel), set `ALLOWED_ORIGINS` to your
   `https://` origin, and **delete the `COOKIE_SECURE` line from `.env`**.
-- **Set `FRONTEND_URL`** to that same `https://` origin. The setup script does
-  not write it, and every link in outgoing email (password resets, ballots,
-  reminders) is built from it — left at the default it points at `localhost`,
-  and the backend logs a `WARNING: FRONTEND_URL ...` line at startup.
+- **Check `FRONTEND_URL`** matches that same `https://` origin. Every link in
+  outgoing email (password resets, ballots, reminders) is built from it. The
+  setup script writes it from the HTTPS URL you give it, and on an update fills
+  it in when it is missing or still points at `localhost`; if you change your
+  public address later, change it here too. A `localhost` value logs a
+  `WARNING: FRONTEND_URL ...` line at startup.
 - **API docs (`/docs`) are OFF by default** — enabling them blocks boot in production.
 - **Leave `TRUSTED_PROXY_IPS` empty** — the compose publishes the backend port
   directly, so the connecting peer is the real client. Only set it when you add a

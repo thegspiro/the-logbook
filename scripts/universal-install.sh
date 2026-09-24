@@ -15,6 +15,8 @@
 #   ./scripts/universal-install.sh --profile full       # All features (8GB+ RAM)
 #   ./scripts/universal-install.sh --arm                # Force ARM configuration
 #   ./scripts/universal-install.sh --no-docker          # Skip Docker installation
+#   ./scripts/universal-install.sh --public-url https://logbook.example.org
+#                                                       # Address used in emailed links
 #   ./scripts/universal-install.sh --help               # Show help
 # ============================================
 
@@ -33,6 +35,14 @@ PROFILE="standard"
 INSTALL_DOCKER=true
 FORCE_ARM=false
 INSTALL_DIR="${INSTALL_DIR:-$(pwd)}"
+# The address members open the site at. Every link the app emails is built
+# from it (FRONTEND_URL). Taken as a flag or environment variable rather than a
+# prompt because this script is commonly run as `curl ... | bash`, where stdin
+# is the script itself and a prompt cannot be answered. The variable is
+# prefixed because a bare PUBLIC_URL is already used by other tooling (Create
+# React App among them) and would be picked up from an unrelated shell.
+PUBLIC_URL="${LOGBOOK_PUBLIC_URL:-}"
+DEFAULT_FRONTEND_URL="http://localhost:3000"
 
 # The production stack is ALWAYS the base file plus the production override.
 # COMPOSE_FILE_LIST is what gets pinned into .env (for the operator's later bare
@@ -47,6 +57,81 @@ COMPOSE_FILE_ARGS=(-f docker-compose.yml -f docker-compose.prod.yml)
 # ============================================
 # Helper Functions
 # ============================================
+
+# Mirrors the backend's startup check (_is_loopback_url in
+# backend/app/core/config.py): a host only this machine can reach, or none at
+# all. Kept in sync by hand because this script runs before the backend image
+# exists.
+frontend_url_is_loopback() {
+    local host="${1#*://}"
+    host="${host%%/*}"
+    host="${host##*@}"
+    case "$host" in
+        \[*\]*) host="${host%%]*}]" ;;
+        *) host="${host%%:*}" ;;
+    esac
+    host=$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')
+    case "$host" in
+        ""|localhost|*.localhost|127.*|0.0.0.0|"[::1]"|"[::]") return 0 ;;
+    esac
+    return 1
+}
+
+# The value lands verbatim in .env, where Docker Compose interpolates `$` and
+# treats `#` as a comment, so anything beyond a plain URL is refused rather
+# than written into a file that would then mean something else.
+validate_public_url() {
+    local url="$1"
+    case "$url" in
+        http://?*|https://?*) ;;
+        *)
+            log_error "--public-url must start with http:// or https:// (got: $url)"
+            return 1
+            ;;
+    esac
+    case "$url" in
+        *[[:space:]\"\'\$\`\\#]*)
+            log_error "--public-url must not contain spaces, quotes, \$, backticks, backslashes or #"
+            return 1
+            ;;
+    esac
+    if frontend_url_is_loopback "$url"; then
+        log_warning "--public-url $url points at this machine; emailed links will not open elsewhere"
+    fi
+    return 0
+}
+
+# Replaces the line by filtering rather than with sed, whose replacement text
+# would misread a "|" or "&" in the URL.
+write_frontend_url() {
+    local env_file="$1" url="$2" tmp
+    tmp=$(mktemp)
+    grep -vE '^[[:space:]]*FRONTEND_URL=' "$env_file" > "$tmp" || true
+    printf 'FRONTEND_URL=%s\n' "$url" >> "$tmp"
+    cat "$tmp" > "$env_file"
+    rm -f "$tmp"
+}
+
+# A preserved .env is the operator's, so an existing public FRONTEND_URL is
+# never rewritten. One that is absent or still points at this machine is
+# replaced when --public-url was given, and reported otherwise.
+reconcile_frontend_url() {
+    local env_file="$1" current
+    current=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$env_file" | tail -n 1)
+    if [[ -n "$current" ]] && ! frontend_url_is_loopback "$current"; then
+        if [[ -n "$PUBLIC_URL" && "$current" != "$PUBLIC_URL" ]]; then
+            log_warning "Your .env already sets FRONTEND_URL=$current — keeping it, not --public-url"
+        fi
+        return 0
+    fi
+    if [[ -n "$PUBLIC_URL" ]]; then
+        write_frontend_url "$env_file" "$PUBLIC_URL"
+        log_info "Set FRONTEND_URL=$PUBLIC_URL in your .env"
+    else
+        log_warning "Your .env has no public FRONTEND_URL, so links in outgoing email point at"
+        log_warning "this machine. Set it, or re-run with --public-url <address members use>."
+    fi
+}
 
 print_banner() {
     echo -e "${CYAN}"
@@ -366,6 +451,7 @@ EOF
             log_warning "(DB_SSL/DB_SSL_CA, REDIS_SSL/REDIS_SSL_CA) or add an explicit"
             log_warning "SECURITY_REQUIRE_TLS=false for the bundled plaintext services."
         fi
+        reconcile_frontend_url "$INSTALL_DIR/.env"
         return
     fi
 
@@ -467,6 +553,9 @@ REDIS_SSL=false
 # NETWORK
 # ============================================
 ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+# Every link in outgoing email (password resets, ballots, reminders) is built
+# from this. Set it to the address members open the site at.
+FRONTEND_URL=${PUBLIC_URL:-$DEFAULT_FRONTEND_URL}
 FRONTEND_PORT=3000
 BACKEND_PORT=3001
 
@@ -621,6 +710,14 @@ print_success_message() {
     echo -e "  Architecture:    ${GREEN}$ARCH${NC}"
     echo -e "  Config file:     ${GREEN}$INSTALL_DIR/.env${NC}"
     echo
+    local frontend_url
+    frontend_url=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$INSTALL_DIR/.env" | tail -n 1)
+    if frontend_url_is_loopback "$frontend_url"; then
+        echo -e "${YELLOW}Emailed links:${NC} FRONTEND_URL is '${frontend_url}', so password resets,"
+        echo -e "  ballots and reminders will link to this machine only. Set FRONTEND_URL in"
+        echo -e "  $INSTALL_DIR/.env to the address members use, then restart the backend."
+        echo
+    fi
     if [[ "$INSTALL_DOCKER" == "true" ]] && [[ "$OS_FAMILY" != "darwin" ]]; then
         echo -e "${YELLOW}Note: You may need to log out and back in for Docker group changes.${NC}"
         echo
@@ -644,6 +741,11 @@ OPTIONS:
     --arm               Force ARM configuration (auto-detected normally)
     --no-docker         Skip Docker installation
     --dir <path>        Installation directory (default: current directory)
+    --public-url <url>  Address members open the site at (for example
+                        https://logbook.example.org). Written to FRONTEND_URL,
+                        which every link in outgoing email is built from.
+                        Also read from the LOGBOOK_PUBLIC_URL environment
+                        variable.
     --help              Show this help message
 
 EXAMPLES:
@@ -692,6 +794,14 @@ parse_args() {
                 INSTALL_DIR="$2"
                 shift 2
                 ;;
+            --public-url)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    log_error "--public-url needs a value, for example --public-url https://logbook.example.org"
+                    exit 1
+                fi
+                PUBLIC_URL="$2"
+                shift 2
+                ;;
             --help|-h)
                 show_help
                 exit 0
@@ -707,6 +817,12 @@ parse_args() {
 
 main() {
     parse_args "$@"
+
+    # Validated before anything is installed, so a mistyped address fails fast.
+    PUBLIC_URL="${PUBLIC_URL%/}"
+    if [[ -n "$PUBLIC_URL" ]]; then
+        validate_public_url "$PUBLIC_URL" || exit 1
+    fi
 
     print_banner
 

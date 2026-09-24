@@ -598,7 +598,9 @@ cannot reach). The send itself reports success.
 
 **Cause**: Every emailed link is built from the server's `FRONTEND_URL` setting,
 never from the address the request arrived on. The shipped default is
-`http://localhost:3000`, and neither installer sets it.
+`http://localhost:3000`. Installs made before 2026-09-24 never had it set by
+either installer; `unraid-setup.sh` now writes the HTTPS address it asks for,
+and `universal-install.sh` writes it only when given `--public-url`.
 
 **Check**: In production the backend logs this at startup, and
 `python -m app.preflight` lists it under "Advisory":
@@ -2764,13 +2766,13 @@ Only explicitly named users can evaluate.
 
 **Solutions**:
 
-- If the person is a returning member: use `POST /api/v1/users/{user_id}/reactivate` to restore their archived profile
+- If the person is a returning member: restore their archived profile from **Members → status filter: Archived → Reactivate** (or `POST /api/v1/users/{user_id}/reactivate`)
 - If it's a genuinely different person who happens to share the email: update the archived member's email first, then retry
 - Use `POST /api/v1/prospective-members/prospects/check-existing?email=...` to preview matches before creating
 
 #### Cannot Reactivate Member
 
-**Symptoms**: Reactivation endpoint returns an error
+**Symptoms**: The Reactivate dialog (Members list or the member's profile) shows an error, or the reactivation endpoint returns one
 
 **Causes**:
 
@@ -2780,7 +2782,7 @@ Only explicitly named users can evaluate.
 **Solutions**:
 
 - Verify the member's current status — only `archived` members can be reactivated
-- If the member is still in a dropped status, archive them first, then reactivate
+- If the member is still in a dropped or retired status, they are not archived and need no reactivation: open their profile, click the status badge, and change it to Active (or Probationary)
 - If the member was soft-deleted, this requires direct database intervention
 
 ---
