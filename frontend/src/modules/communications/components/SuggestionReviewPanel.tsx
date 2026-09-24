@@ -18,6 +18,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
+import { useScrollDetailIntoView } from '../hooks/useScrollDetailIntoView';
 import { suggestionsService } from '../services/suggestionsService';
 import type {
   ReviewFilter,
@@ -252,6 +253,7 @@ const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, se
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReviewSuggestionDetail | null>(null);
+  const detailRef = useScrollDetailIntoView<HTMLDivElement>(detail?.id);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -424,7 +426,7 @@ const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, se
             </button>
           )}
         </div>
-        <div>
+        <div ref={detailRef} className="scroll-mt-20">
           {detail ? (
             <ReviewDetail detail={detail} onChange={handleChange} />
           ) : (

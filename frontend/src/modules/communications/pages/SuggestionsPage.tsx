@@ -9,7 +9,7 @@
  * `?tab=` and `?id=` are what the notification emails link to.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { Lightbulb } from 'lucide-react';
 import { Breadcrumbs } from '../../../components/ux';
@@ -27,6 +27,12 @@ const TAB_LABELS: Record<Tab, string> = {
   mine: 'My submissions',
   key: 'Follow up with a key',
   review: 'Review',
+};
+
+// Shorter labels for phones, where four full labels overflow the tab strip.
+const SHORT_TAB_LABELS: Partial<Record<Tab, string>> = {
+  mine: 'Mine',
+  key: 'Follow up',
 };
 
 const SuggestionsPage: React.FC = () => {
@@ -58,6 +64,14 @@ const SuggestionsPage: React.FC = () => {
     requested && (tabs.includes(requested) || (requested === 'review' && summary === null)) ? requested : 'submit';
   const selectedId = searchParams.get('id') ?? '';
 
+  const activeTabRef = useRef<HTMLButtonElement>(null);
+  // The strip scrolls sideways on a phone, so the active tab can sit off the
+  // edge. Bring it into view whenever it changes — including when the Review
+  // tab appears only after the reviewer summary loads.
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [active, tabs.length]);
+
   const selectTab = (tab: Tab) => setSearchParams(tab === 'submit' ? {} : { tab });
   const selectItem = (tab: Tab) => (id: string) => setSearchParams({ tab, id });
 
@@ -75,13 +89,21 @@ const SuggestionsPage: React.FC = () => {
             key={tab}
             type="button"
             role="tab"
+            ref={active === tab ? activeTabRef : undefined}
             aria-selected={active === tab}
             className={`mobile-touch-target px-4 py-2 text-sm font-medium whitespace-nowrap ${
               active === tab ? 'border-theme-accent-red text-theme-accent-red border-b-2' : 'text-theme-text-secondary'
             }`}
             onClick={() => selectTab(tab)}
           >
-            {TAB_LABELS[tab]}
+            {SHORT_TAB_LABELS[tab] ? (
+              <>
+                <span className="sm:hidden">{SHORT_TAB_LABELS[tab]}</span>
+                <span className="hidden sm:inline">{TAB_LABELS[tab]}</span>
+              </>
+            ) : (
+              TAB_LABELS[tab]
+            )}
             {tab === 'review' && summary && summary.openCount > 0 && (
               <span className="badge ml-2 bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
                 {summary.openCount}
