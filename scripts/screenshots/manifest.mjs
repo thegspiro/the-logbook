@@ -4546,6 +4546,28 @@ export const SHOTS = [
     },
   },
   {
+    id: "20-13-suggestions-sidebar-submit",
+    doc: "20-september-2026-release-changes.md",
+    line: 1535,
+    anchor: "capture as an ordinary member so the",
+    alt: "An ordinary member's view: the Suggestions item in the sidebar just below Messages, and the Suggestions page open on its Submit tab with the Training ideas box chosen and its description showing — no Review tab",
+    route: "/suggestions",
+    auth: "member",
+    expect: "Read by the Secretary and the Training Officer",
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Training ideas" });
+      // The member must not be a reviewer, or the frame shows the tab the
+      // caption says is absent.
+      if (await page.getByRole("tab", { name: /^Review/ }).count()) {
+        throw new Error(
+          "the demo member has a Review tab; they must review no box",
+        );
+      }
+    },
+  },
+  {
     id: "20-04-org-profile-navigation-layout",
     doc: "20-september-2026-release-changes.md",
     line: 940,
@@ -9898,6 +9920,213 @@ export const SHOTS = [
       throw new Error("no message requires acknowledgment");
     },
     fullPage: true,
+  },
+  // ── 07 Suggestion boxes (2026-09-23): seeded by seed_suggestion_boxes ──
+  {
+    id: "07-14-suggestion-box-dialog",
+    doc: "07-documents-forms.md",
+    line: 542,
+    anchor: 'dialog filled in for a "training ideas" box',
+    alt: "The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up ticked, the note that managing boxes does not let you read them, and two reviewer positions ticked",
+    route: "/communications/suggestion-boxes",
+    // The sentence the shot exists to carry. It sits between the switches and
+    // the reviewer pickers, so a frame cut short above it also fails here.
+    expect: "Managing boxes does not by itself let you read them",
+    viewport: { width: 1280, height: 1500 },
+    selector: '[role="dialog"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /New box/ })
+        .first()
+        .click();
+      const dialog = page.locator('[role="dialog"]');
+      await dialog.waitFor({ state: "visible" });
+      // Not "Training ideas", which the seeder already created: the picture is
+      // of setting up a box, and a name the page behind already lists would
+      // save as "A suggestion box with that name already exists." Nothing is
+      // saved either way -- Save box is never pressed.
+      await dialog.locator("#box-name").fill("Officer development");
+      await dialog
+        .locator("#box-description")
+        .fill(
+          "Ideas for officer training, mentoring and promotion prep. Read by the Secretary and the Training Officer.",
+        );
+      await dialog.locator("#box-anonymity").selectOption("allowed");
+      const followUp = dialog
+        .locator("label", { hasText: "Allow follow-up" })
+        .locator('input[type="checkbox"]');
+      if (!(await followUp.isChecked())) await followUp.check();
+      const positions = dialog.locator("fieldset", {
+        has: page.locator("legend", { hasText: "Reviewer positions" }),
+      });
+      for (const name of ["Secretary", "Training Officer"]) {
+        await positions
+          .locator("label", { hasText: new RegExp(`^${name}$`) })
+          .locator('input[type="checkbox"]')
+          .check();
+      }
+      // The position list scrolls inside a 12rem box and runs alphabetically,
+      // so the two ticked rows can sit below its fold. Bring the first into
+      // view inside the list, not the page.
+      await positions
+        .locator("label", { hasText: /^Secretary$/ })
+        .scrollIntoViewIfNeeded();
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+    },
+  },
+  {
+    id: "07-15-suggestion-submit-anonymous",
+    doc: "07-documents-forms.md",
+    line: 561,
+    anchor: "one screenshot attached, and",
+    alt: "Suggestions → Submit with the Training ideas box chosen, its description and anonymity hint showing, a title and details filled in, one screenshot attached, and Submit anonymously ticked with the warning to check screenshots for your name",
+    route: "/suggestions",
+    auth: "member",
+    // Shown only once the submission will be anonymous, so it proves the
+    // checkbox took effect and not just that the form rendered.
+    expect: "Check the screenshots themselves do not show your name",
+    viewport: { width: 1280, height: 1600 },
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Training ideas" });
+      await page
+        .locator("label", { hasText: "Submit anonymously" })
+        .locator('input[type="checkbox"]')
+        .check();
+      await page
+        .locator("#suggestion-title")
+        .fill("Pair probationary members with a mentor for their first year");
+      await page
+        .locator("#suggestion-details")
+        .fill(
+          "New members learn most from whoever they ride with. A named mentor for the first twelve months — someone they can ask the questions they would not ask an officer — would help them settle in and stay.",
+        );
+      // Drawn in the page rather than read from disk: the manifest imports
+      // nothing, and a real screen capture could carry somebody's name --
+      // exactly what the warning in this frame tells members to check for.
+      const base64 = await page.evaluate(() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 640;
+        canvas.height = 400;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#f1f5f9";
+        ctx.fillRect(0, 0, 640, 400);
+        ctx.fillStyle = "#991b1b";
+        ctx.fillRect(0, 0, 640, 56);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 24px sans-serif";
+        ctx.fillText("Mentor pairing — draft", 24, 37);
+        ctx.fillStyle = "#334155";
+        ctx.font = "18px sans-serif";
+        [
+          "Month 1: ride-alongs",
+          "Month 3: first review",
+          "Month 6: skills sign-off",
+          "Month 12: close-out",
+        ].forEach((line, i) => ctx.fillText(line, 32, 110 + i * 56));
+        return canvas.toDataURL("image/png").split(",")[1];
+      });
+      await page.locator('input[type="file"]').setInputFiles({
+        name: "mentor-pairing-draft.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(base64, "base64"),
+      });
+      await page.getByText("mentor-pairing-draft.png").first().waitFor();
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+    },
+  },
+  {
+    id: "07-16-suggestion-follow-up-key",
+    doc: "07-documents-forms.md",
+    line: 594,
+    anchor: "the receipt shown after an anonymous submission",
+    alt: "The Save your follow-up key panel shown after an anonymous submission, with a demonstration key and the Copy and I saved it buttons",
+    route: "/suggestions",
+    auth: "member",
+    expect: "Save your follow-up key",
+    selector: '[role="tabpanel"] > div > div:first-child',
+    // The submission is answered here, never sent. A real receipt would write a
+    // suggestion into the demo department on every capture run, and would put
+    // a real follow-up key -- the submitter's only credential -- into a public
+    // image. The body is the endpoint's exact response shape with a key that is
+    // visibly a demonstration value.
+    beforeNavigate: async (page) => {
+      await page.route(
+        "**/api/v1/suggestions/boxes/*/submissions",
+        async (route) => {
+          if (route.request().method() !== "POST") return route.fallback();
+          await route.fulfill({
+            status: 201,
+            contentType: "application/json",
+            body: JSON.stringify({
+              id: null,
+              isAnonymous: true,
+              followUpKey: "DEMO-KEY-kR7vQ2mX9pLw4NcT8hYa3sBe6uFj1ZdG5oVq",
+            }),
+          });
+        },
+      );
+    },
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Training ideas" });
+      await page
+        .locator("label", { hasText: "Submit anonymously" })
+        .locator('input[type="checkbox"]')
+        .check();
+      await page
+        .locator("#suggestion-title")
+        .fill("Rotate drill leads each month");
+      await page
+        .locator("#suggestion-details")
+        .fill("Let a different firefighter plan and lead one drill a month.");
+      await page.getByRole("button", { name: "Submit anonymously" }).click();
+      await page.getByText("Save your follow-up key").waitFor();
+    },
+  },
+  {
+    id: "07-17-suggestion-review",
+    doc: "07-documents-forms.md",
+    line: 633,
+    anchor: "tab with one submission open: the disposition",
+    alt: "Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the internal note, the Forwarded to list naming the Training Officer position, and the follow-up thread with the reviewer's question and the anonymous submitter's reply",
+    route: "/suggestions?tab=review",
+    // The seeded reviewer is the Secretary position, which this account holds.
+    // The administrator reviews no box, by design, and has no Review tab.
+    auth: "secretary",
+    expect: "Anonymous submitter",
+    viewport: { width: 1280, height: 1800 },
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: /More hands-on SCBA time for probationary members/,
+        })
+        .first()
+        .click();
+      await page
+        .locator("article h2", {
+          hasText: "More hands-on SCBA time for probationary members",
+        })
+        .waitFor();
+      const disposition = await page
+        .locator("#suggestion-disposition")
+        .inputValue();
+      if (disposition !== "under_review") {
+        throw new Error(
+          `disposition reads ${disposition}; re-run seed_demo_data.py, which leaves this submission under review`,
+        );
+      }
+    },
   },
 
   // ── Seventh batch: apparatus labels, badges and EVOC ────────────────
