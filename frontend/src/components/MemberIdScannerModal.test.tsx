@@ -59,6 +59,20 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+// The card tap has its own tests (MemberCardTap.test.tsx); here only the
+// modal's wiring to it is checked.
+vi.mock('./MemberCardTap', () => ({
+  MemberCardTap: ({
+    onMemberIdentified,
+  }: {
+    onMemberIdentified: (m: { userId: string; memberName: string }) => void;
+  }) => (
+    <button type="button" onClick={() => onMemberIdentified({ userId: 'u-7', memberName: 'Dana Reyes' })}>
+      Card tapped
+    </button>
+  ),
+}));
+
 describe('MemberIdScannerModal', () => {
   const defaultProps = {
     isOpen: true,
@@ -182,5 +196,13 @@ describe('MemberIdScannerModal', () => {
 
     await waitFor(() => expect(mockStop).toHaveBeenCalledWith());
     expect(screen.queryByText('Scan Member ID')).not.toBeInTheDocument();
+  });
+
+  it('hands a member identified by an ID card tap to the caller', async () => {
+    const user = userEvent.setup();
+    const onMemberIdentified = vi.fn();
+    render(<MemberIdScannerModal {...defaultProps} onMemberIdentified={onMemberIdentified} />);
+    await user.click(screen.getByRole('button', { name: 'Card tapped' }));
+    expect(onMemberIdentified).toHaveBeenCalledWith({ userId: 'u-7', memberName: 'Dana Reyes' });
   });
 });

@@ -394,6 +394,7 @@ const routes = ({
   ['**/api/v1/inventory/storage-areas**', () => []],
   ['**/api/v1/inventory/vendors**', () => []],
   ['**/api/v1/inventory/summary/by-location**', () => []],
+  ['**/api/v1/inventory/not-seen**', () => ({ items: [], total: 0, cutoff: new Date().toISOString() })],
   ['**/api/v1/locations**', () => []],
 
   [

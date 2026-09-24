@@ -27,6 +27,9 @@ function describeScan(scan: InventoryNfcScan): string {
     if (scan.from_storage_area_id === scan.storage_area_id) return `Seen on ${to}`;
     return scan.from_storage_area_name ? `Moved from ${scan.from_storage_area_name} to ${to}` : `Put away on ${to}`;
   }
+  if (scan.action === InventoryNfcScanAction.AUDIT) {
+    return `Found on ${scan.storage_area_name ?? 'a storage area that has since been removed'} during a shelf audit`;
+  }
   return 'Tag tapped';
 }
 

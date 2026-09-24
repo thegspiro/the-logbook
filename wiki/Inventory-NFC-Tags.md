@@ -2,13 +2,21 @@
 
 _Added 2026-09-24._ Stick an NFC tag on a helmet, a radio, an SCBA case or a
 shelf, link it to its item or storage area, and a phone tap finds it. Tags work
-for three things:
+for these things:
 
 - **Finding an item.** In the distribute and return scanner, or from a phone's
   home screen.
 - **Putting things away.** Tap a shelf, then the items on it, to record where
   they are.
 - **A "last seen" trail.** Every tap by a quartermaster is logged on the item.
+- **Shelf audits.** Tap everything on a shelf to see what is missing and what
+  does not belong there.
+- **Identifying a member** by tapping their NFC ID card, where the department
+  issues them.
+
+A **not-seen report** sits alongside: the items nobody has handled in months.
+It uses assignments and checkouts as well as taps, so it also works without
+tags.
 
 > **Off until you turn it on.** The feature is gated by an organization
 > setting, `inventory.nfc_tracking_enabled`, and the check is on the
@@ -55,13 +63,16 @@ settings page.
 
 ### Who does what
 
-| Task                                   | Permission                                          |
-| -------------------------------------- | --------------------------------------------------- |
-| Turn the feature on or off             | `settings.manage` or `organization.update_settings` |
-| Link, relabel, mark lost/found, unlink | `inventory.manage`                                  |
-| Put items away by tap                  | `inventory.manage`                                  |
-| See an item's tap log (Last Seen)      | `inventory.manage`                                  |
-| Tap a tag to open an item              | `inventory.view` (held by the seeded member roles)  |
+| Task                                   | Permission                                            |
+| -------------------------------------- | ----------------------------------------------------- |
+| Turn the feature on or off             | `settings.manage` or `organization.update_settings`   |
+| Link, relabel, mark lost/found, unlink | `inventory.manage`                                    |
+| Put items away by tap                  | `inventory.manage`                                    |
+| See an item's tap log (Last Seen)      | `inventory.manage`                                    |
+| Shelf audits, bulk tagging             | `inventory.manage`                                    |
+| Identify a member by ID card tap       | `inventory.manage`, plus the NFC ID Cards integration |
+| Items Not Seen report                  | `inventory.manage` (works with NFC off)               |
+| Tap a tag to open an item              | `inventory.view` (held by the seeded member roles)    |
 
 ## Step 1: turn it on
 
@@ -123,6 +134,22 @@ Tapping a shelf's written tag with a phone:
   chosen;
 - **as anyone else** shows which storage area the tag marks.
 
+### Tagging many items at once
+
+**Inventory → Administration → Tag Items in Bulk**
+(`/inventory/admin/nfc/enroll`) lists the active items with no working tag. An
+item whose only tag is marked lost counts as untagged. Narrow the list with
+**Which items**, then:
+
+- **Write links**: tap **Write a tag for** the item shown, and hold a blank
+  tag to the phone. The item is linked once the write succeeds, and the page
+  moves on. One press per item, so a write only lands on the tag you meant.
+- **Read serials**: tap **Start reading tags**, then tap each item's tag in
+  turn. The reader stays on and each tag links to the item shown, then moves
+  on. A tag read twice while held still is ignored.
+- A typed or USB-read serial works in either mode. **Skip this item** passes
+  one over.
+
 ## Using the tags
 
 ### In the distribute and return scanner
@@ -159,6 +186,52 @@ A move uses the **same rule as the barcode Put away panel** on Storage Areas:
 - An item that is **assigned to a member, checked out, lost, stolen or
   retired** is refused with the reason. Return it, check it in, or update its
   status first.
+
+### Shelf audits
+
+**Inventory → Administration → Shelf Audit** (`/inventory/shelf-audit`). Tap
+**Start tapping tags**, tap the shelf (or pick it), tap every item on it, then
+**Finish audit**. The audit is saved, and shows:
+
+| List           | Means                                             | What happens                                                                      |
+| -------------- | ------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Missing**    | Recorded on this shelf, not tapped                | Listed only. **Never marked lost**: look for it, then update it yourself          |
+| **Unexpected** | Tapped here, recorded somewhere else (or nowhere) | Tick and **Move selected**: uses the put-away rule, so assigned items are refused |
+| **Found**      | Recorded here, tapped                             | Nothing                                                                           |
+
+- The audit covers **exactly** the storage area tapped, not the bins inside
+  it. Audit each bin on its own.
+- Items that are assigned, checked out, lost, stolen or retired are not
+  expected on a shelf, so they are never reported missing. Tapping one on a
+  shelf shows it as unexpected, which is usually worth a look.
+- Tapping a different shelf mid-audit is refused. Finish or cancel first.
+- Every tapped item is logged in its **Last Seen** trail as found on that
+  shelf. **Recent audits** keeps the last ten; **View** reopens one.
+
+### Identifying a member by ID card
+
+Where the department issues [Member ID Cards](Member-ID-Cards) (**Settings →
+Integrations → NFC ID Cards** connected), the **Scan Member ID** window on the
+inventory screens also shows **Or tap their ID card** to `inventory.manage`
+holders on an Android phone. Hold the member's card to the phone. A card
+marked lost, an unregistered card, or an inactive member is refused with the
+reason. Card taps are not written to the equipment tap log.
+
+### Items not seen
+
+**Inventory → Administration → Items Not Seen** (`/inventory/admin/not-seen`)
+lists active items nobody has handled in 30, 90, 180 (the default) or 365
+days, never-handled first. "Handled" is the latest of:
+
+- a tap by a quartermaster (lookup, put-away or shelf audit);
+- an assignment to a member, or its return;
+- a checkout or check-in;
+- a pool issuance, or its return.
+
+Editing an item's record does **not** count, and neither does a barcode
+put-away, which leaves no per-item record to read. Retired items are left out.
+**Download CSV** exports up to 5,000 rows. The report works with NFC turned
+off.
 
 ### Last Seen
 
@@ -198,11 +271,14 @@ record**: the log tracks equipment, not where members were.
 | A tag linked on a phone does not match at the desk reader | Many USB readers type the serial as a **decimal** number, or with the bytes **reversed**. The app matches the hexadecimal serial a phone reads. Set the reader to hexadecimal, forward byte order, or link tags with the same reader you will read them with |
 | An iPhone tap opens the login page                        | Expected: the member must be signed in. After signing in, the tag's page finds the item                                                                                                                                                                      |
 | Put-away refuses an item                                  | It is assigned, checked out, lost, stolen or retired. The message says which; fix the record first                                                                                                                                                           |
+| A shelf audit lists an item as missing that is there      | Its tag was not read. Tap it again before **Finish audit**; an item on a shelf with no tag is always missing                                                                                                                                                 |
+| **Or tap their ID card** does not appear                  | The NFC ID Cards integration is not connected, inventory NFC is off, or the phone has no Web NFC                                                                                                                                                             |
 
 ## Reference
 
 - Endpoints and data model: [Inventory → NFC Tags](Module-Inventory#nfc-tags-2026-09-24).
-- Tables: `inventory_nfc_tags`, `inventory_nfc_scans`. See
+- Tables: `inventory_nfc_tags`, `inventory_nfc_scans`, `inventory_nfc_audits`,
+  `inventory_nfc_audit_items`. See
   [Database Schema](Database-Schema).
 - Tag identifiers are stored as a **peppered SHA-256 hash** plus the last four
   characters, the same scheme as member ID cards. The phone that links

@@ -5,7 +5,12 @@
  * inventory API.
  */
 
-import type { InventoryNfcScanAction, InventoryNfcTagStatus, NfcCredentialType } from '../../../constants/enums';
+import type {
+  InventoryNfcAuditResult,
+  InventoryNfcScanAction,
+  InventoryNfcTagStatus,
+  NfcCredentialType,
+} from '../../../constants/enums';
 import type { InventoryItem } from './index';
 
 export interface InventoryNfcTag {
@@ -108,4 +113,131 @@ export interface InventoryNfcScan {
 export interface InventoryNfcScanListResponse {
   items: InventoryNfcScan[];
   total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Shelf audits
+// ---------------------------------------------------------------------------
+
+/** Mirrors `MAX_AUDIT_TAPS` in the backend schema. */
+export const MAX_AUDIT_TAPS = 500;
+
+export interface InventoryNfcAuditTap {
+  item_id: string;
+  tag_id?: string | undefined;
+}
+
+export interface InventoryNfcAuditCreate {
+  storage_area_id: string;
+  tapped: InventoryNfcAuditTap[];
+}
+
+export interface InventoryNfcAuditLine {
+  id: string;
+  /** Null once the item has been deleted; the name is a snapshot. */
+  item_id: string | null;
+  item_name: string;
+  result: InventoryNfcAuditResult;
+  /** Where the system had the item when the audit ran. */
+  recorded_storage_area_id: string | null;
+  recorded_storage_area_name: string | null;
+  moved: boolean;
+}
+
+export interface InventoryNfcAuditSummary {
+  id: string;
+  /** Null once the shelf has been deleted; the name is a snapshot. */
+  storage_area_id: string | null;
+  storage_area_name: string;
+  expected_count: number;
+  found_count: number;
+  missing_count: number;
+  unexpected_count: number;
+  audited_by: string | null;
+  audited_by_name: string | null;
+  audited_at: string;
+  applied_by: string | null;
+  applied_by_name: string | null;
+  applied_at: string | null;
+}
+
+export interface InventoryNfcAuditSkipped {
+  item_id: string;
+  name: string;
+  reason: string;
+}
+
+export interface InventoryNfcAuditDetail extends InventoryNfcAuditSummary {
+  items: InventoryNfcAuditLine[];
+  /** Set only on the response to an apply. */
+  moved_item_ids?: string[] | null;
+  skipped?: InventoryNfcAuditSkipped[] | null;
+}
+
+export interface InventoryNfcAuditListResponse {
+  items: InventoryNfcAuditSummary[];
+  total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Member ID card lookup
+// ---------------------------------------------------------------------------
+
+export interface InventoryNfcMember {
+  user_id: string;
+  member_name: string;
+  membership_number: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk enrollment
+// ---------------------------------------------------------------------------
+
+export interface InventoryNfcUntaggedItem {
+  id: string;
+  name: string;
+  serial_number: string | null;
+  asset_tag: string | null;
+  category_name: string | null;
+  storage_area_name: string | null;
+}
+
+export interface InventoryNfcUntaggedListResponse {
+  items: InventoryNfcUntaggedItem[];
+  total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Not-seen report (not NFC-gated; lives here beside the tap log it reads)
+// ---------------------------------------------------------------------------
+
+export type LastSeenSource =
+  'nfc_tap' | 'assignment' | 'return' | 'checkout' | 'check_in' | 'issuance' | 'issuance_return';
+
+export interface NotSeenItem {
+  id: string;
+  name: string;
+  serial_number: string | null;
+  asset_tag: string | null;
+  category_name: string | null;
+  /** An item status value; labels via `getStatusLabel`. */
+  status: string;
+  storage_area_name: string | null;
+  /** All three are null for an item with no recorded event at all. */
+  last_seen_at: string | null;
+  last_seen_source: LastSeenSource | null;
+  days_since_seen: number | null;
+}
+
+export interface NotSeenReport {
+  items: NotSeenItem[];
+  /** Every match, even when `items` was cut to the requested limit. */
+  total: number;
+  cutoff: string;
+}
+
+export interface NotSeenFilters {
+  days?: number | undefined;
+  category_id?: string | undefined;
+  limit?: number | undefined;
 }

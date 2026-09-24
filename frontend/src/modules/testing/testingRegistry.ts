@@ -528,6 +528,24 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'inventory',
       },
       {
+        path: '/inventory/shelf-audit',
+        label: 'Shelf audit by NFC',
+        permission: 'inventory.manage',
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/admin/nfc/enroll',
+        label: 'Tag items in bulk',
+        permission: 'inventory.manage',
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/admin/not-seen',
+        label: 'Items not seen report',
+        permission: 'inventory.manage',
+        module: 'inventory',
+      },
+      {
         path: '/inventory/tag/:code',
         label: 'NFC tag link (resolves to the item)',
         permission: 'inventory.view',

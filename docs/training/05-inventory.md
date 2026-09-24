@@ -809,6 +809,66 @@ The item page lists the item's recent NFC taps under **Last Seen (NFC)**: who
 tapped it, and where it was put away. Only quartermaster taps are recorded. A
 member opening a tag from their own phone leaves no record.
 
+### Auditing a shelf
+
+**Required Permission:** `inventory.manage`
+
+1. Go to **Inventory Admin > Shelf Audit** and tap **Start tapping tags**.
+2. Tap the shelf's tag (or choose it from **Or pick a shelf**).
+3. Tap every item on the shelf. Each appears in the list once, however many
+   times it is read. Remove one with its **×** if it was tapped by mistake.
+4. Tap **Finish audit**.
+
+The result has three lists:
+
+- **Missing**: recorded on this shelf, not tapped. **Nothing is marked lost.**
+  Look for them, then update each item yourself if it really is gone.
+- **Unexpected**: tapped here, recorded somewhere else. Tick the ones that
+  belong here and tap **Move selected onto** the shelf. An item assigned to a
+  member or checked out is not moved, and the page says why.
+- **Found**: recorded here and tapped.
+
+Items assigned to a member, checked out, lost, stolen or retired are not
+expected on a shelf, so they are never reported missing. **Recent audits**
+lists past audits; **View** opens one.
+
+> **Hint:** Audit one shelf or bin at a time. An audit covers exactly the
+> storage area you tapped, not the bins inside it.
+
+### Tagging many items at once
+
+**Required Permission:** `inventory.manage`
+
+1. Go to **Inventory Admin > Tag Items in Bulk**. It lists items with no
+   working tag. Type in **Which items** and press **Find items** to narrow it.
+2. Choose **Write links** (a blank tag for each item) or **Read serials**.
+3. With **Write links**, tap **Write a tag for** the item shown and hold a blank
+   tag to the phone. With **Read serials**, tap **Start reading tags**, then
+   tap each item's tag in turn.
+4. The page moves to the next item after each link. **Skip this item** passes
+   one over.
+
+### Identifying a member by their ID card
+
+If your department issues NFC ID cards (Settings > Integrations > NFC ID
+Cards), the **Scan Member ID** window on the inventory screens also shows
+**Or tap their ID card**. Tap it and hold the member's card to the phone. A
+card marked lost, or one belonging to an inactive member, is refused with the
+reason.
+
+### Items not seen
+
+**Required Permission:** `inventory.manage`
+
+**Inventory Admin > Items Not Seen** lists items nobody has handled in 30, 90,
+180 (the default) or 365 days. "Handled" means an NFC tap by a quartermaster,
+an assignment or return, a checkout or check-in, or an issuance or its return.
+Editing the item's record does not count. Items never handled at all are
+listed first as **Never**. Filter by **Category**, and use **Download CSV** for
+the full list.
+
+This report works whether or not NFC tags are turned on.
+
 ---
 
 ## Label Printing
