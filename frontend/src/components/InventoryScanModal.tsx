@@ -18,7 +18,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { Modal } from './Modal';
-import { Camera, Check, AlertTriangle, Package, Trash2, Loader2, Search } from 'lucide-react';
+import { Camera, Check, AlertTriangle, Package, Trash2, Loader2, Search, Nfc } from 'lucide-react';
 import { RETURN_CONDITION_OPTIONS } from '../constants/enums';
 import {
   inventoryService,
@@ -28,6 +28,10 @@ import {
   BatchReturnResponse,
 } from '../services/api';
 import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
+import { useNfcScanner } from '../hooks/useNfcScanner';
+import { useInventoryNfcEnabled } from '../modules/inventory/hooks/useInventoryNfcEnabled';
+import { parseInventoryTagCode } from '../constants/nfc';
+import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useScanFeedback } from '../hooks/useScanFeedback';
@@ -555,6 +559,57 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     void handleCodeScanned(code);
   };
 
+  // ── NFC tags ─────────────────────────────────────────────────
+  //
+  // A tapped tag goes to its own exact-match endpoint, never to the partial
+  // barcode lookup: a chip serial that happened to be a substring of some
+  // item's barcode would otherwise add the wrong item.
+  const handleNfcTag = async (tag: { serialNumber: string; payload: string | null }) => {
+    const code = parseInventoryTagCode(tag.payload);
+    const serial = tag.serialNumber.replace(/[^0-9A-Za-z]/g, '');
+    if (!code && serial.length < 4) {
+      setLookupError('That tag could not be read. Hold the phone still against it and try again.');
+      setTimeout(() => setLookupError(null), 3000);
+      return;
+    }
+    setLookupLoading(true);
+    setLookupError(null);
+    try {
+      const match = await inventoryService.resolveNfcTag({
+        code: code || undefined,
+        serial_number: serial.length >= 4 ? serial : undefined,
+      });
+      signalScanSuccess();
+      addItemFromResult(match);
+    } catch (err: unknown) {
+      setLookupError(getErrorMessage(err, 'Failed to look up the tag. Please check your connection and try again.'));
+      setTimeout(() => setLookupError(null), 3000);
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+  const handleNfcTagRef = useRef(handleNfcTag);
+  handleNfcTagRef.current = handleNfcTag;
+
+  const { enabled: nfcEnabled } = useInventoryNfcEnabled(isOpen);
+  const {
+    supported: nfcSupported,
+    scanning: nfcScanning,
+    error: nfcError,
+    start: startNfc,
+    stop: stopNfc,
+  } = useNfcScanner({
+    // Stays armed after each tap, like the camera, so a whole kit can be
+    // tapped into the list one item after another.
+    onTag: (tag) => void handleNfcTagRef.current(tag),
+  });
+
+  // Closing the dialog must disarm the radio: an armed scan behind a closed
+  // modal would keep adding tapped items to a list nobody can see.
+  useEffect(() => {
+    if (!isOpen) stopNfc();
+  }, [isOpen, stopNfc]);
+
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // If dropdown is showing and an item is highlighted, add it
@@ -840,8 +895,10 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           <>
             {/* Scan input area */}
             <div className="space-y-3">
-              {/* Camera toggle + manual input */}
-              <div className="flex gap-2">
+              {/* Camera toggle + manual input. Wraps so a third button (NFC)
+                  pushes the search box to its own line on a phone rather
+                  than squeezing it. */}
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={
@@ -860,7 +917,24 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                   <Camera className="h-4 w-4" />
                   {cameraActive ? 'Stop Camera' : 'Start Camera'}
                 </button>
-                <form onSubmit={handleManualSubmit} className="flex flex-1 gap-2">
+                {nfcEnabled && nfcSupported && (
+                  <button
+                    type="button"
+                    // scan() needs this click's user activation, so it starts
+                    // in the handler rather than in an effect.
+                    onClick={nfcScanning ? stopNfc : () => void startNfc()}
+                    aria-pressed={nfcScanning}
+                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                      nfcScanning
+                        ? 'border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-900/20 dark:text-red-400'
+                        : 'border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary'
+                    }`}
+                  >
+                    <Nfc className={`h-4 w-4 ${nfcScanning ? 'animate-pulse' : ''}`} aria-hidden="true" />
+                    {nfcScanning ? 'Stop NFC' : 'Tap NFC'}
+                  </button>
+                )}
+                <form onSubmit={handleManualSubmit} className="flex min-w-48 flex-1 gap-2">
                   <div className="relative flex-1">
                     <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                     <input
@@ -980,6 +1054,12 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 <div className="flex items-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-2 dark:border-yellow-800 dark:bg-yellow-900/20">
                   <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-600" />
                   <p className="text-sm text-yellow-700 dark:text-yellow-400">{lookupError}</p>
+                </div>
+              )}
+              {nfcEnabled && nfcError && (
+                <div className="flex items-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-2 dark:border-yellow-800 dark:bg-yellow-900/20">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-600" />
+                  <p className="text-sm text-yellow-700 dark:text-yellow-400">{nfcError}</p>
                 </div>
               )}
             </div>

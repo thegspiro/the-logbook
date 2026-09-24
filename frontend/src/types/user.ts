@@ -238,6 +238,16 @@ export interface ArchivedMember {
   status_change_reason?: string;
 }
 
+/** `POST /users/{id}/reactivate` — the archived member restored to active. */
+export interface MemberReactivationResponse {
+  user_id: string;
+  member_name: string;
+  previous_status: string;
+  new_status: string;
+  reactivated_at: string;
+  reason: string;
+}
+
 export interface OverdueMember {
   user_id: string;
   name: string;

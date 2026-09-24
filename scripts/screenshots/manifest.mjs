@@ -91,6 +91,23 @@ export const DEMO_SECRETARY_CREDENTIALS = {
 };
 
 /**
+ * A member who reviews no suggestion box and has one suggestion forwarded to
+ * them, so the Review tab reaches them through the forward alone.
+ *
+ * Shots marked `auth: "forwardee"` sign in as this account. It is the only
+ * demo account that sees a suggestion as "Forwarded to you": the secretary
+ * reviews every box, and the ordinary demo member must keep having no Review
+ * tab, which `20-15` pictures.
+ *
+ * Must match SUGGESTION_FORWARD_MEMBER_USERNAME in seed_demo_data.py, whose
+ * `_seed_suggestion_member_forward` creates the forward on every seed.
+ */
+export const DEMO_FORWARDEE_CREDENTIALS = {
+  username: "cfrazier",
+  password: "DemoMember!2026",
+};
+
+/**
  * The one account enrolled in TOTP, used to photograph the login page's
  * authentication-code step.
  *
@@ -10572,7 +10589,7 @@ export const SHOTS = [
     doc: "07-documents-forms.md",
     line: 633,
     anchor: "tab with one submission open: the disposition",
-    alt: "Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the internal note, the Forwarded to list naming the Training Officer position, and the follow-up thread with the reviewer's question and the anonymous submitter's reply",
+    alt: "Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the internal note, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply",
     route: "/suggestions?tab=review",
     // The seeded reviewer is the Secretary position, which this account holds.
     // The administrator reviews no box, by design, and has no Review tab.
@@ -10600,6 +10617,78 @@ export const SHOTS = [
           `disposition reads ${disposition}; re-run seed_demo_data.py, which leaves this submission under review`,
         );
       }
+    },
+  },
+  {
+    id: "07-18-suggestion-forwarded-to-you",
+    doc: "07-documents-forms.md",
+    line: 629,
+    anchor: "What a forward recipient sees: Suggestions",
+    alt: "Suggestions → Review as a member who reviews no box: the one submission forwarded to them, marked Forwarded to you, open on the right with its disposition, internal note and thread, and under Forwarded to the note that only the box's reviewers can forward it, with no Forward button",
+    route: "/suggestions?tab=review",
+    // Reviews no box, so everything on this tab arrives by forward -- which is
+    // the state the guide describes. The secretary reviews every box and would
+    // photograph the same item with a Forward button and no badge.
+    auth: "forwardee",
+    expect: "only the box's reviewers can forward it",
+    viewport: { width: 1280, height: 1800 },
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      const row = page
+        .getByRole("button", {
+          name: /More hands-on SCBA time for probationary members/,
+        })
+        .first();
+      await row.getByText("Forwarded to you").waitFor();
+      await row.click();
+      await page
+        .locator("article h2", {
+          hasText: "More hands-on SCBA time for probationary members",
+        })
+        .waitFor();
+      if (
+        await page.getByRole("button", { name: "Forward", exact: true }).count()
+      ) {
+        throw new Error(
+          "a Forward button is showing, so this account reviews the box; re-run seed_demo_data.py and check SUGGESTION_FORWARD_MEMBER_USERNAME",
+        );
+      }
+    },
+  },
+  {
+    id: "07-19-suggestion-review-phone",
+    doc: "07-documents-forms.md",
+    line: 639,
+    anchor: "Review** on a phone, a submission open",
+    alt: "Suggestions → Review on a phone with a submission open: the list has scrolled away above, and the screen shows the submission's title, box, details and screenshots heading, then the Disposition and Internal note, above the mobile bottom navigation",
+    route: "/suggestions?tab=review",
+    auth: "secretary",
+    viewport: "mobile",
+    // Framed on the viewport, not the tab panel: what a reviewer gets on a phone
+    // is the page scrolled down to the open submission, and a full-panel shot
+    // would picture a layout nobody sees at once.
+    expect: { selector: "#suggestion-disposition" },
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: /More hands-on SCBA time for probationary members/,
+        })
+        .first()
+        .click();
+      const heading = page.locator("article h2", {
+        hasText: "More hands-on SCBA time for probationary members",
+      });
+      await heading.waitFor();
+      // useScrollDetailIntoView moves the page itself; wait until the heading
+      // sits near the top rather than shooting mid-scroll.
+      await page.waitForFunction(() => {
+        const h = document.querySelector("article h2");
+        return h !== null && h.getBoundingClientRect().top < 200;
+      });
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
     },
   },
 

@@ -235,6 +235,14 @@ export const ALL_ROUTES: RouteCheck[] = [
   },
   // Also needs settings.manage: its four values are written through the
   // organization-settings endpoint, so the checklist grant is not enough.
+  // Written through the organization-settings endpoint, so it needs the
+  // settings grant; inventory.view is what its read asks for.
+  {
+    path: '/inventory/admin/nfc',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.view', 'settings.manage'],
+  },
   {
     path: '/inventory/admin/checklists/settings',
     maxSmallTargets: 0,

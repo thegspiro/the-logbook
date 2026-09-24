@@ -641,8 +641,14 @@ export const memberStatusService = {
     return response.data;
   },
 
-  async reactivateMember(userId: string, data: { reason: string }): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>(`/users/${userId}/reactivate`, data);
+  async reactivateMember(
+    userId: string,
+    data: { reason?: string | undefined }
+  ): Promise<import('../types/user').MemberReactivationResponse> {
+    const response = await api.post<import('../types/user').MemberReactivationResponse>(
+      `/users/${userId}/reactivate`,
+      data
+    );
     return response.data;
   },
 

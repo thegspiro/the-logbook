@@ -6,10 +6,11 @@ Requires authentication and appropriate permissions.
 """
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import and_, case, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -425,6 +426,16 @@ async def get_access_logs(
     return logs
 
 
+def _count_if(condition) -> Any:
+    """SUM(CASE WHEN ... THEN 1 ELSE 0 END), as a portable conditional count."""
+    return func.sum(case((condition, 1), else_=0))
+
+
+def _as_int(value: Any) -> int:
+    """SUM() answers Decimal, and None over an empty table."""
+    return int(value or 0)
+
+
 @router.get("/usage-stats", response_model=PublicPortalUsageStats)
 async def get_usage_stats(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
@@ -433,124 +444,151 @@ async def get_usage_stats(
     Get usage statistics for the public portal.
 
     Returns aggregated statistics about API usage.
+
+    Every count over the access log is conditional aggregation in **one** pass
+    rather than a query per figure: this answers twice as many numbers as the
+    version that preceded it (which computed eight and left the dashboard's
+    thirteen rolling-window fields to be invented by the frontend) while
+    making four round trips instead of eight.
+
+    Cut-offs are passed as datetimes, not ``.isoformat()`` strings. Both work
+    — MySQL coerces the string — but only one of them says so without relying
+    on the coercion.
     """
     org_id = str(current_user.organization_id)
     now = datetime.now(timezone.utc)
 
-    # Total requests
-    result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id)).where(
-            PublicPortalAccessLog.organization_id == org_id
-        )
-    )
-    total_requests = result.scalar() or 0
-
-    # Requests today
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id)).where(
-            and_(
-                PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.timestamp >= today_start.isoformat(),
-            )
-        )
-    )
-    requests_today = result.scalar() or 0
-
-    # Requests this week
     week_start = today_start - timedelta(days=today_start.weekday())
-    result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id)).where(
-            and_(
-                PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.timestamp >= week_start.isoformat(),
-            )
-        )
-    )
-    requests_this_week = result.scalar() or 0
-
-    # Requests this month
     month_start = today_start.replace(day=1)
-    result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id)).where(
-            and_(
-                PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.timestamp >= month_start.isoformat(),
-            )
-        )
-    )
-    requests_this_month = result.scalar() or 0
+    last_24h = now - timedelta(hours=24)
+    last_7d = now - timedelta(days=7)
+    last_30d = now - timedelta(days=30)
 
-    # Unique IPs
-    result = await db.execute(
-        select(func.count(func.distinct(PublicPortalAccessLog.ip_address))).where(
-            PublicPortalAccessLog.organization_id == org_id
-        )
-    )
-    unique_ips = result.scalar() or 0
+    mine = PublicPortalAccessLog.organization_id == org_id
+    recent = PublicPortalAccessLog.timestamp >= last_24h
+    status_code = PublicPortalAccessLog.status_code
 
-    # Average response time
-    result = await db.execute(
-        select(func.avg(PublicPortalAccessLog.response_time_ms)).where(
-            and_(
-                PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.response_time_ms.isnot(None),
-            )
+    totals = (
+        await db.execute(
+            select(
+                func.count(PublicPortalAccessLog.id),
+                _count_if(PublicPortalAccessLog.timestamp >= today_start),
+                _count_if(PublicPortalAccessLog.timestamp >= week_start),
+                _count_if(PublicPortalAccessLog.timestamp >= month_start),
+                _count_if(recent),
+                _count_if(PublicPortalAccessLog.timestamp >= last_7d),
+                _count_if(PublicPortalAccessLog.timestamp >= last_30d),
+                func.count(func.distinct(PublicPortalAccessLog.ip_address)),
+                func.count(
+                    func.distinct(case((recent, PublicPortalAccessLog.ip_address)))
+                ),
+                func.avg(PublicPortalAccessLog.response_time_ms),
+                _count_if(PublicPortalAccessLog.flagged_suspicious.is_(True)),
+                _count_if(
+                    and_(recent, PublicPortalAccessLog.flagged_suspicious.is_(True))
+                ),
+                # The rate limiter answers 429 from authenticate_api_key, which
+                # logs the refusal itself — see the comment there for why the
+                # handler body cannot.
+                _count_if(and_(recent, status_code == 429)),
+                _count_if(and_(recent, status_code >= 200, status_code < 300)),
+                _count_if(and_(recent, status_code >= 400, status_code < 500)),
+                _count_if(and_(recent, status_code >= 500)),
+            ).where(mine)
         )
+    ).one()
+
+    (
+        total_requests,
+        requests_today,
+        requests_this_week,
+        requests_this_month,
+        requests_24h,
+        requests_7d,
+        requests_30d,
+        unique_ips,
+        unique_ips_24h,
+        avg_response_time,
+        flagged_requests,
+        flagged_24h,
+        rate_limit_hits_24h,
+        status_2xx_24h,
+        status_4xx_24h,
+        status_5xx_24h,
+    ) = totals
+
+    total_requests = _as_int(total_requests)
+    requests_24h = _as_int(requests_24h)
+    status_4xx_24h = _as_int(status_4xx_24h)
+    status_5xx_24h = _as_int(status_5xx_24h)
+
+    # A denominator of nothing is not a clean bill of health (CLAUDE.md #29):
+    # report "not measurable" and let the screen say so, rather than a
+    # reassuring 0.00% that is indistinguishable from a quiet, healthy day.
+    error_rate = (
+        ((status_4xx_24h + status_5xx_24h) / requests_24h) * 100
+        if requests_24h
+        else None
     )
-    avg_response_time = result.scalar() or 0.0
 
     # Top endpoints (last 7 days)
-    seven_days_ago = now - timedelta(days=7)
     result = await db.execute(
         select(
             PublicPortalAccessLog.endpoint,
             func.count(PublicPortalAccessLog.id).label("count"),
         )
-        .where(
-            and_(
-                PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.timestamp >= seven_days_ago.isoformat(),
-            )
-        )
+        .where(and_(mine, PublicPortalAccessLog.timestamp >= last_7d))
         .group_by(PublicPortalAccessLog.endpoint)
         .order_by(desc("count"))
         .limit(10)
     )
     top_endpoints = [{"endpoint": row[0], "count": row[1]} for row in result.all()]
 
-    # Requests by status code
+    # Requests by status code (all time)
     result = await db.execute(
-        select(
-            PublicPortalAccessLog.status_code,
-            func.count(PublicPortalAccessLog.id).label("count"),
-        )
-        .where(PublicPortalAccessLog.organization_id == org_id)
-        .group_by(PublicPortalAccessLog.status_code)
+        select(status_code, func.count(PublicPortalAccessLog.id).label("count"))
+        .where(mine)
+        .group_by(status_code)
     )
     requests_by_status = {row[0]: row[1] for row in result.all()}
 
-    # Flagged requests
+    # Active API keys: enabled, and not past an expiry it may not have.
     result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id)).where(
+        select(func.count(PublicPortalAPIKey.id)).where(
             and_(
-                PublicPortalAccessLog.organization_id == org_id,
-                PublicPortalAccessLog.flagged_suspicious == True,  # noqa: E712
+                PublicPortalAPIKey.organization_id == org_id,
+                PublicPortalAPIKey.is_active.is_(True),
+                or_(
+                    PublicPortalAPIKey.expires_at.is_(None),
+                    PublicPortalAPIKey.expires_at > now,
+                ),
             )
         )
     )
-    flagged_requests = result.scalar() or 0
+    active_api_keys = result.scalar() or 0
 
     return PublicPortalUsageStats(
         total_requests=total_requests,
-        requests_today=requests_today,
-        requests_this_week=requests_this_week,
-        requests_this_month=requests_this_month,
-        unique_ips=unique_ips,
-        average_response_time_ms=avg_response_time,
+        requests_today=_as_int(requests_today),
+        requests_this_week=_as_int(requests_this_week),
+        requests_this_month=_as_int(requests_this_month),
+        unique_ips=_as_int(unique_ips),
+        average_response_time_ms=float(avg_response_time or 0.0),
         top_endpoints=top_endpoints,
         requests_by_status=requests_by_status,
-        flagged_requests=flagged_requests,
+        flagged_requests=_as_int(flagged_requests),
+        total_requests_24h=requests_24h,
+        total_requests_7d=_as_int(requests_7d),
+        total_requests_30d=_as_int(requests_30d),
+        unique_ips_24h=_as_int(unique_ips_24h),
+        active_api_keys=active_api_keys,
+        rate_limit_hits_24h=_as_int(rate_limit_hits_24h),
+        flagged_suspicious_24h=_as_int(flagged_24h),
+        status_2xx_24h=_as_int(status_2xx_24h),
+        status_4xx_24h=status_4xx_24h,
+        status_5xx_24h=status_5xx_24h,
+        error_rate_percentage=error_rate,
     )
 
 

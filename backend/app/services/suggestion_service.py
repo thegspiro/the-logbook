@@ -77,6 +77,21 @@ OPEN_DISPOSITIONS = (
 )
 EMAIL_TEMPLATE_TYPE = "suggestion_box"
 
+# The box every department starts with, reviewed by the seeded Compliance
+# Officer position. Seeded **active** by the owner's decision (2026-09-24), so
+# members can file a concern from day one. The cost is accepted: until someone
+# is appointed to the position, reports land in a box nobody reads. Where no
+# position carries the reviewer slug the box is seeded inactive instead, because
+# ``_validate_box_write`` refuses a live box with no reviewer at all. Migration
+# ``3c918c06466d`` carries a frozen copy for existing departments, and
+# ``7d2b4e8a1c35`` switches on the boxes it seeded inactive.
+COMPLIANCE_BOX_NAME = "Compliance"
+COMPLIANCE_BOX_DESCRIPTION = (
+    "Report a compliance concern: a policy, safety, training-record or "
+    "regulatory issue. Reviewed by the Compliance Officer."
+)
+COMPLIANCE_REVIEWER_SLUG = "compliance_officer"
+
 
 def hash_follow_up_key(key: str) -> str:
     # A bare digest is enough: the key is 256 bits of randomness, so there is
@@ -198,6 +213,53 @@ class SuggestionService:
         self._replace_reviewers(box, organization_id, data)
         await self.db.commit()
         return await self._reload_admin_view(organization_id, box.id)
+
+    async def seed_compliance_box(
+        self, organization_id: str
+    ) -> Optional[SuggestionBox]:
+        """Create the default Compliance box if the org lacks one.
+
+        Flushes without committing so onboarding keeps it in the same
+        transaction as the organization it belongs to. A box already named
+        ``Compliance`` is the department's own and is left alone. The reviewer
+        is whichever position holds the ``compliance_officer`` slug — the
+        seeded one, or a custom position a department created under it.
+        """
+        existing = await self.db.execute(
+            select(SuggestionBox.id).where(
+                SuggestionBox.organization_id == str(organization_id),
+                SuggestionBox.name == COMPLIANCE_BOX_NAME,
+            )
+        )
+        if existing.first() is not None:
+            return None
+        position_id = (
+            await self.db.execute(
+                select(Position.id).where(
+                    Position.organization_id == str(organization_id),
+                    Position.slug == COMPLIANCE_REVIEWER_SLUG,
+                )
+            )
+        ).scalar_one_or_none()
+        box = SuggestionBox(
+            organization_id=str(organization_id),
+            name=COMPLIANCE_BOX_NAME,
+            description=COMPLIANCE_BOX_DESCRIPTION,
+            anonymity_mode=SuggestionAnonymityMode.ALLOWED.value,
+            follow_up_enabled=True,
+            is_active=position_id is not None,
+            reviewers=[],
+        )
+        if position_id:
+            box.reviewers.append(
+                SuggestionBoxReviewer(
+                    organization_id=str(organization_id),
+                    position_id=position_id,
+                )
+            )
+        self.db.add(box)
+        await self.db.flush()
+        return box
 
     async def reviewer_options(self, organization_id: str) -> Dict[str, Any]:
         positions = await self.db.execute(
