@@ -6105,7 +6105,8 @@ class MembershipPipelineService:
         if the token has expired, or if no match is found.
         Only steps with public_visible=True are included in the timeline.
         When the pipeline's ``public_show_future_stages`` is off, the timeline
-        is further limited to completed stages and ``total_stages`` is None.
+        is limited to completed stages, and the current stage, its action and
+        ``total_stages`` are all None.
 
         Successful lookups refresh the token's inactivity timestamp. The
         bearer token itself is never reflected into the response.
@@ -6205,10 +6206,16 @@ class MembershipPipelineService:
         # the thing a department hiding future stages has chosen not to say.
         total_public_stages = len(public_step_ids) if show_future else None
 
-        # Current stage name — only show if it's public_visible
+        # Current stage name — only show if it's public_visible, and only when
+        # the department shows stages beyond the completed ones. Its action
+        # card goes with it: the card is labelled by the stage it belongs to.
         current_stage_name = None
         current_stage_action = None
-        if prospect.current_step and str(prospect.current_step.id) in public_step_ids:
+        if (
+            show_future
+            and prospect.current_step
+            and str(prospect.current_step.id) in public_step_ids
+        ):
             current_stage_name = prospect.current_step.name
             current_stage_action = self._build_current_stage_action(
                 prospect.current_step

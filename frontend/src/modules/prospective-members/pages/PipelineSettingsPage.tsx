@@ -982,8 +982,8 @@ export const PipelineSettingsPage: React.FC = () => {
                   <span>
                     Show upcoming stages
                     <span className="text-theme-text-muted block text-xs">
-                      When off, prospects see only the public-visible stages they have completed, and not how many
-                      stages remain.
+                      When off, prospects see only the public-visible stages they have completed — not the stage they
+                      are on now, and not how many stages remain.
                     </span>
                   </span>
                 </label>

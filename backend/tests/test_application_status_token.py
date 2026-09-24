@@ -266,6 +266,7 @@ async def test_future_stages_shown_by_default():
         "Vote",
     ]
     assert result["total_stages"] == 3
+    assert result["current_stage_name"] == "Interview"
 
 
 async def test_hiding_future_stages_lists_only_completed_ones():
@@ -276,5 +277,6 @@ async def test_hiding_future_stages_lists_only_completed_ones():
     assert [s["stage_name"] for s in result["stage_timeline"]] == ["Interest Form"]
     # The total alone would reveal how many stages are left.
     assert result["total_stages"] is None
-    # Where the applicant is now is still theirs to see.
-    assert result["current_stage_name"] == "Interview"
+    # Only completed stages: the one they are on now is withheld too.
+    assert result["current_stage_name"] is None
+    assert result["current_stage_action"] is None
