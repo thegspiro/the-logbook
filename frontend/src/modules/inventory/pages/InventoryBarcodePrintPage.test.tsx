@@ -147,11 +147,19 @@ describe('InventoryBarcodePrintPage', () => {
     await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith({ label_printed: false, skip: 0, limit: 500 }));
   });
 
-  it('blocks the picker when more items match than one batch holds', async () => {
-    mockGetItems.mockResolvedValue({ items: [], total: 501, skip: 0, limit: 1 });
+  it('tells the picker a run over one job will print in parts', async () => {
+    mockGetItems.mockResolvedValue({ items: [], total: 1200, skip: 0, limit: 1 });
     renderPage('');
 
-    expect(await screen.findByText(/501 items match. One batch holds at most 500/)).toBeInTheDocument();
+    expect(await screen.findByText(/1,200 items match. They print in 3 parts of up to 500 labels/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prepare 1,200 labels' })).toBeEnabled();
+  });
+
+  it('blocks the picker above what one print run can hold', async () => {
+    mockGetItems.mockResolvedValue({ items: [], total: 5001, skip: 0, limit: 1 });
+    renderPage('');
+
+    expect(await screen.findByText(/5,001 items match. One print run holds at most 5,000/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Prepare labels' })).toBeDisabled();
   });
 
@@ -174,12 +182,77 @@ describe('InventoryBarcodePrintPage', () => {
     });
   });
 
-  it('refuses a filter batch larger than the label API limit', async () => {
-    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 750, skip: 0, limit: 500 });
+  it('refuses a filter run larger than one print page holds, before fetching the rest', async () => {
+    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 5001, skip: 0, limit: 500 });
     renderPage('?all=1');
 
-    expect(await screen.findByText(/750 items match. A maximum of 500 inventory items/)).toBeInTheDocument();
+    expect(await screen.findByText(/5,001 items match. One print run can hold up to 5,000/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Choose different items/ })).toBeInTheDocument();
+    expect(mockGetItems).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a run larger than one print job', () => {
+    // 1,200 items across three list pages: 500, 500, 200.
+    const all = Array.from({ length: 1200 }, (_, i) =>
+      makeItem({ id: `it-${i + 1}`, name: `Tool ${i + 1}`, barcode: `INV-${i + 1}` })
+    );
+
+    beforeEach(() => {
+      mockGetItems.mockImplementation((params: { skip?: number; limit?: number }) => {
+        const skip = params.skip ?? 0;
+        return Promise.resolve({ items: all.slice(skip, skip + 500), total: all.length, skip, limit: 500 });
+      });
+    });
+
+    it('fetches every page and prints the first part of 500 labels', async () => {
+      const user = userEvent.setup();
+      renderPage('?all=1');
+
+      expect(await screen.findByText('Part 1 of 3')).toBeInTheDocument();
+      expect(mockGetItems.mock.calls.map((c) => (c[0] as { skip: number }).skip)).toEqual([0, 500, 1000]);
+
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+      const ids = mockGenerateLabels.mock.calls[0]?.[0] as string[];
+      expect(ids).toHaveLength(500);
+      expect(ids[0]).toBe('it-1');
+      expect(ids[499]).toBe('it-500');
+    });
+
+    it('moves to the next part after confirming this one, marking only this part', async () => {
+      mockMarkLabelsPrinted.mockResolvedValue({ marked: 500 });
+      const user = userEvent.setup();
+      renderPage('?all=1');
+      await screen.findByText('Part 1 of 3');
+
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await user.click(await screen.findByRole('button', { name: 'Mark 500 items as labelled' }));
+      expect((mockMarkLabelsPrinted.mock.calls[0]?.[0] as string[]).length).toBe(500);
+
+      await user.click(await screen.findByRole('button', { name: 'Next part (2 of 3)' }));
+
+      expect(await screen.findByText('Part 2 of 3')).toBeInTheDocument();
+      // A new part is a new print run: nothing is waiting to be confirmed.
+      expect(screen.queryByText(/marked as labelled/)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(2));
+      expect((mockGenerateLabels.mock.calls[1]?.[0] as string[])[0]).toBe('it-501');
+    });
+
+    it('re-cuts the parts by label count when copies go up', async () => {
+      const user = userEvent.setup();
+      renderPage('?all=1');
+      await screen.findByText('Part 1 of 3');
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      fireEvent.change(screen.getByLabelText(/Copies per item/), { target: { value: '2' } });
+
+      // 250 items × 2 copies = 500 labels per part.
+      expect(await screen.findByText('Part 1 of 5')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+      expect(mockGenerateLabels.mock.calls[0]?.[0] as string[]).toHaveLength(500);
+    });
   });
 
   it('says so when no items match the filters', async () => {

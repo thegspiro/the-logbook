@@ -1772,14 +1772,19 @@ describe('InventoryItemsPage — selecting every matching item for labels', () =
     expect(qs.get('ids')?.split(',')).toHaveLength(119);
   });
 
-  it('does not offer select-all when more items match than one batch holds', async () => {
+  it('offers to print, not select, every match when more match than one batch', async () => {
     mockGetItems.mockImplementation(listing(600));
     const user = userEvent.setup();
     renderWithRouter(<InventoryItemsPage />);
     await selectLoaded(user);
 
-    expect(await screen.findByText(/600 match — narrow the filters to 500 or fewer/)).toBeInTheDocument();
+    // Selection stays capped: it also feeds bulk status changes and retiring.
+    expect(await screen.findByText(/600 match — select-all is limited to 500/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Select all 600/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Print labels for all 600 matching' }));
+    expect(window.location.pathname).toBe('/inventory/print-labels');
+    expect(new URLSearchParams(window.location.search).get('all')).toBe('1');
   });
 
   it('keeps the existing selection when the set grew past the cap before the request landed', async () => {

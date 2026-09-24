@@ -74,7 +74,7 @@ import {
 } from '../types';
 import { onHandQuantity } from '../utils/onHand';
 import { asArray } from '../../../utils/asArray';
-import { buildLabelFilterPath, MAX_LABEL_BATCH } from '../utils/labelPrintQuery';
+import { buildLabelFilterPath, MAX_LABEL_BATCH, MAX_LABEL_ITEMS_TOTAL } from '../utils/labelPrintQuery';
 import type { LabelFilterParams } from '../utils/labelPrintQuery';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { Breadcrumbs } from '../../../components/ux';
@@ -2009,10 +2009,25 @@ const InventoryItemsPage: React.FC = () => {
                 {selectingAll ? 'Selecting…' : `Select all ${formatNumber(total)} matching`}
               </button>
             ) : (
-              <span className="text-theme-text-muted text-xs">
-                {formatNumber(total)} match — narrow the filters to {formatNumber(MAX_LABEL_BATCH)} or fewer to select
-                them all
-              </span>
+              <>
+                {/* Selection stays capped because it also feeds bulk status
+                    changes and retirement; printing alone goes by filter,
+                    and the print page splits a large run into parts. */}
+                <span className="text-theme-text-muted text-xs">
+                  {formatNumber(total)} match — select-all is limited to {formatNumber(MAX_LABEL_BATCH)}
+                </span>
+                {total <= MAX_LABEL_ITEMS_TOTAL && loadedParams && (
+                  <button
+                    onClick={() => {
+                      const { group_by: _groupBy, ...filters } = loadedParams;
+                      void navigate(buildLabelFilterPath(filters));
+                    }}
+                    className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300"
+                  >
+                    Print labels for all {formatNumber(total)} matching
+                  </button>
+                )}
+              </>
             ))}
           <button onClick={printLabels} className="btn-secondary btn-sm inline-flex items-center gap-1.5">
             <Printer className="h-3.5 w-3.5" /> Print Labels

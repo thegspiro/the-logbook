@@ -39,7 +39,12 @@ import { LabelScopePicker } from '../components/LabelScopePicker';
 import { LabelScanConfirm } from '../components/LabelScanConfirm';
 import { PrinterLanguage, labelPrinterService } from '../../../services/labelService';
 import type { LabelPrinterConfig, PrintLabelsResult } from '../../../services/labelService';
-import { buildLabelFilterPath, MAX_LABEL_BATCH, parseLabelPrintQuery } from '../utils/labelPrintQuery';
+import {
+  buildLabelFilterPath,
+  MAX_LABEL_BATCH,
+  MAX_LABEL_ITEMS_TOTAL,
+  parseLabelPrintQuery,
+} from '../utils/labelPrintQuery';
 
 // ── Label size presets ──────────────────────────────────────────
 
@@ -493,7 +498,9 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const tz = useTimezone();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [items, setItems] = useState<InventoryItem[]>([]);
+  // Everything the request named; `items` below is the part being printed.
+  const [allItems, setAllItems] = useState<InventoryItem[]>([]);
+  const [part, setPart] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [presetId, setPresetId] = useState(loadStoredPresetId);
@@ -544,7 +551,23 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const isThermal = preset.columns === 1;
   // The label API accepts at most 500 records per PDF. Keep the copies control
   // inside that batch limit while retaining the existing per-item cap of 50.
-  const maxCopies = Math.max(1, Math.min(50, Math.floor(MAX_LABEL_BATCH / Math.max(items.length, 1))));
+  // Copies stay capped at 50 per item. A batch whose labels (items × copies)
+  // exceed one job is printed in parts, each at most MAX_LABEL_BATCH labels,
+  // so every print, PDF, network send and confirmation acts on one part.
+  const maxCopies = 50;
+  const itemsPerPart = Math.max(1, Math.floor(MAX_LABEL_BATCH / copies));
+  const partCount = Math.max(1, Math.ceil(allItems.length / itemsPerPart));
+  const currentPart = Math.min(part, partCount - 1);
+  const items = useMemo(
+    () => allItems.slice(currentPart * itemsPerPart, (currentPart + 1) * itemsPerPart),
+    [allItems, currentPart, itemsPerPart]
+  );
+  // Another part is another print run: its confirmation starts over.
+  const goToPart = (next: number) => {
+    setPart(Math.max(0, next));
+    setLabelConfirm('idle');
+    setPrintResult(null);
+  };
 
   const printRequest = useMemo(() => parseLabelPrintQuery(searchParams), [searchParams]);
 
@@ -552,6 +575,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
     // A new batch has not been printed yet, whatever the last one was.
     setLabelConfirm('idle');
     setPrintResult(null);
+    setPart(0);
     if (printRequest.kind === 'none') {
       // Nothing addressed: the picker renders instead of the labels.
       setLoading(false);
@@ -562,27 +586,36 @@ const InventoryBarcodePrintPage: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
-        // One request for the whole batch. The list endpoint caps `limit` at
-        // the same 500 the label PDF accepts, so `total` says whether the
-        // batch fits before anything is rendered.
-        const res = await inventoryService.getItems({
+        // Pages of 500, the list endpoint's own `limit` cap. The first page's
+        // `total` says whether the set fits under the page's ceiling before
+        // any more is fetched.
+        const first = await inventoryService.getItems({
           ...printRequest.filters,
           skip: 0,
           limit: MAX_LABEL_BATCH,
         });
-        const total = res.total ?? 0;
-        if (total > MAX_LABEL_BATCH) {
+        const total = first.total ?? 0;
+        if (total > MAX_LABEL_ITEMS_TOTAL) {
           setError(
-            `${formatNumber(total)} items match. A maximum of ${formatNumber(MAX_LABEL_BATCH)} inventory items can be printed in one batch — narrow the filters and try again.`
+            `${formatNumber(total)} items match. One print run can hold up to ${formatNumber(MAX_LABEL_ITEMS_TOTAL)} — narrow the filters and try again.`
           );
           return;
         }
-        const matched = asArray(res.items);
+        const matched = asArray(first.items);
+        for (let skip = MAX_LABEL_BATCH; skip < total; skip += MAX_LABEL_BATCH) {
+          const page = await inventoryService.getItems({ ...printRequest.filters, skip, limit: MAX_LABEL_BATCH });
+          const rows = asArray(page.items);
+          matched.push(...rows);
+          if (rows.length < MAX_LABEL_BATCH) break;
+        }
         if (matched.length === 0) {
           setError('No active items match these filters.');
           return;
         }
-        setItems(matched);
+        // An item added while paging shifts the offsets and can repeat a row
+        // across two pages; a label per item, not per page appearance.
+        const seen = new Set<string>();
+        setAllItems(matched.filter((item) => !seen.has(item.id) && seen.add(item.id)));
       } catch (err: unknown) {
         setError(getErrorMessage(err, 'Failed to load inventory items'));
       } finally {
@@ -607,7 +640,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
       setLoading(true);
       setError(null);
       const fetched = await Promise.all(ids.map((id) => inventoryService.getItem(id)));
-      setItems(fetched);
+      setAllItems(fetched);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load inventory items'));
     } finally {
@@ -1181,7 +1214,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
               <h1 className="text-theme-text-primary text-xl font-bold">Print Barcode Labels</h1>
               <p className="text-theme-text-muted mt-1 text-sm">
                 {items.length} item{items.length !== 1 ? 's' : ''} &middot; {labelItems.length} label
-                {labelItems.length !== 1 ? 's' : ''} total
+                {labelItems.length !== 1 ? 's' : ''} {partCount > 1 ? 'in this part' : 'total'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -1212,6 +1245,40 @@ const InventoryBarcodePrintPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {partCount > 1 && (
+            <div className="card-secondary mb-4 flex flex-wrap items-center gap-3 p-3" aria-live="polite">
+              <p className="text-theme-text-primary text-sm">
+                <span className="font-medium">
+                  Part {currentPart + 1} of {partCount}
+                </span>{' '}
+                &middot; items {formatNumber(currentPart * itemsPerPart + 1)}&ndash;
+                {formatNumber(currentPart * itemsPerPart + items.length)} of {formatNumber(allItems.length)}
+                <span className="text-theme-text-muted block text-xs">
+                  A print job holds at most {formatNumber(MAX_LABEL_BATCH)} labels, so this run prints in parts. Print
+                  and confirm each part in turn.
+                </span>
+              </p>
+              <div className="ml-auto flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => goToPart(currentPart - 1)}
+                  disabled={currentPart === 0}
+                  className="btn-secondary btn-sm"
+                >
+                  Previous part
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToPart(currentPart + 1)}
+                  disabled={currentPart >= partCount - 1}
+                  className="btn-secondary btn-sm"
+                >
+                  Next part
+                </button>
+              </div>
+            </div>
+          )}
 
           {printers.length > 0 && (
             <div className="card-secondary mb-4 flex flex-col gap-3 p-3 sm:flex-row sm:items-end">
@@ -1302,9 +1369,16 @@ const InventoryBarcodePrintPage: React.FC = () => {
               role="status"
             >
               {labelConfirm === 'done' ? (
-                <p className="text-sm text-emerald-800 dark:text-emerald-300">
-                  {formatNumber(markedCount)} {markedCount === 1 ? 'item' : 'items'} marked as labelled.
-                </p>
+                <>
+                  <p className="text-sm text-emerald-800 dark:text-emerald-300">
+                    {formatNumber(markedCount)} {markedCount === 1 ? 'item' : 'items'} marked as labelled.
+                  </p>
+                  {currentPart < partCount - 1 && (
+                    <button type="button" onClick={() => goToPart(currentPart + 1)} className="btn-success btn-sm">
+                      Next part ({currentPart + 2} of {partCount})
+                    </button>
+                  )}
+                </>
               ) : (
                 <>
                   <p className="text-sm text-emerald-800 dark:text-emerald-300">
@@ -1476,7 +1550,11 @@ const InventoryBarcodePrintPage: React.FC = () => {
                   min={1}
                   max={maxCopies}
                   value={copies}
-                  onChange={(e) => setCopies(Math.max(1, Math.min(maxCopies, parseInt(e.target.value) || 1)))}
+                  onChange={(e) => {
+                    setCopies(Math.max(1, Math.min(maxCopies, parseInt(e.target.value) || 1)));
+                    // Parts are cut by label count, so a new copy count re-cuts them.
+                    goToPart(0);
+                  }}
                   className="form-input w-24"
                 />
               </div>
