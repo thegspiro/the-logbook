@@ -194,6 +194,10 @@ class TestFrontendUrlMustNotBeLoopback:
         warnings = self._frontend_warnings(_prod(FRONTEND_URL="http://localhost"))
         assert not any("CRITICAL" in w for w in warnings)
 
+    def test_staging_does_not_warn(self):
+        settings = _prod(ENVIRONMENT="staging", FRONTEND_URL="http://localhost")
+        assert self._frontend_warnings(settings) == []
+
     def test_development_does_not_warn(self):
         settings = Settings(ENVIRONMENT="development", FRONTEND_URL="http://localhost")
         assert self._frontend_warnings(settings) == []

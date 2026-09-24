@@ -493,7 +493,9 @@ class Settings(BaseSettings):
             # Advisory, not CRITICAL: a wrong FRONTEND_URL breaks emailed links
             # but weakens no control, and blocking would stop existing installs
             # that shipped with the default from booting after an upgrade.
-            if _is_loopback_url(self.FRONTEND_URL):
+            # Production only: staging is often reached on an internal or
+            # loopback address on purpose, where this would be noise.
+            if self.ENVIRONMENT == "production" and _is_loopback_url(self.FRONTEND_URL):
                 warnings.append(
                     f"WARNING: FRONTEND_URL is {self.FRONTEND_URL!r}, which "
                     "points at this machine. Every link in an outgoing email "
