@@ -405,6 +405,23 @@ describe('InventoryBarcodePrintPage', () => {
       expect(screen.queryByText(/marked as labelled\./)).not.toBeInTheDocument();
     });
 
+    it('records only the labels scanned when the member confirms by scanning', async () => {
+      mockGetItem.mockImplementation((id: string) =>
+        Promise.resolve(makeItem({ id, name: id === 'it-2' ? 'Spare Radio' : 'Thermal Camera', barcode: `INV-${id}` }))
+      );
+      const user = userEvent.setup();
+      renderPage('?ids=it-1,it-2');
+      await downloadPdf(user);
+
+      await user.click(await screen.findByRole('button', { name: /Scan labels to confirm/ }));
+      await user.type(screen.getByLabelText(/Scan or type a label/), 'INV-it-2{Enter}');
+      expect(await screen.findByText('Spare Radio — confirmed')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Mark 1 scanned item as labelled' }));
+
+      expect(mockMarkLabelsPrinted).toHaveBeenCalledWith(['it-2']);
+      expect(await screen.findByText('1 item marked as labelled.')).toBeInTheDocument();
+    });
+
     it('does not ask after a test label', async () => {
       const user = userEvent.setup();
       renderPage('?ids=it-1');

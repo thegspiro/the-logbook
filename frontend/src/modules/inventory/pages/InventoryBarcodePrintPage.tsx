@@ -25,6 +25,7 @@ import {
   RotateCw,
   TestTube2,
   Send,
+  ScanLine,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { InventoryItem } from '../types';
@@ -35,6 +36,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { prefersPdfOverBrowserPrint } from '../../../utils/printEnvironment';
 import toast from 'react-hot-toast';
 import { LabelScopePicker } from '../components/LabelScopePicker';
+import { LabelScanConfirm } from '../components/LabelScanConfirm';
 import { PrinterLanguage, labelPrinterService } from '../../../services/labelService';
 import type { LabelPrinterConfig, PrintLabelsResult } from '../../../services/labelService';
 import { buildLabelFilterPath, MAX_LABEL_BATCH, parseLabelPrintQuery } from '../utils/labelPrintQuery';
@@ -502,7 +504,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
   // After a print or PDF, ask whether the labels actually came out. Only a
   // confirmation takes items off the "needs a label" list: a cancelled print
   // dialog or a jammed roll looks identical to success from in here.
-  const [labelConfirm, setLabelConfirm] = useState<'idle' | 'asking' | 'saving' | 'done'>('idle');
+  const [labelConfirm, setLabelConfirm] = useState<'idle' | 'asking' | 'scanning' | 'saving' | 'done'>('idle');
   const [markedCount, setMarkedCount] = useState(0);
   const [printers, setPrinters] = useState<LabelPrinterConfig[]>([]);
   const [selectedPrinterId, setSelectedPrinterId] = useState('');
@@ -927,16 +929,30 @@ const InventoryBarcodePrintPage: React.FC = () => {
     }
   };
 
+  const recordLabelsPrinted = async (ids: string[]) => {
+    const { marked } = await inventoryService.markLabelsPrinted(Array.from(new Set(ids)));
+    setMarkedCount(marked);
+    setLabelConfirm('done');
+  };
+
   const confirmLabelsPrinted = async () => {
     setLabelConfirm('saving');
     try {
-      const ids = Array.from(new Set(items.map((item) => item.id)));
-      const { marked } = await inventoryService.markLabelsPrinted(ids);
-      setMarkedCount(marked);
-      setLabelConfirm('done');
+      await recordLabelsPrinted(items.map((item) => item.id));
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not record the printed labels'));
       setLabelConfirm('asking');
+    }
+  };
+
+  // Scan mode records only what was scanned. A failure is reported and
+  // re-thrown so the scan panel stays open with every scan intact.
+  const confirmScannedLabels = async (ids: string[]) => {
+    try {
+      await recordLabelsPrinted(ids);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not record the printed labels'));
+      throw err;
     }
   };
 
@@ -1271,7 +1287,16 @@ const InventoryBarcodePrintPage: React.FC = () => {
             </div>
           )}
 
-          {labelConfirm !== 'idle' && (
+          {labelConfirm === 'scanning' && (
+            <LabelScanConfirm
+              items={items}
+              labelValueOf={getBarcodeValue}
+              onConfirm={confirmScannedLabels}
+              onCancel={() => setLabelConfirm('asking')}
+            />
+          )}
+
+          {labelConfirm !== 'idle' && labelConfirm !== 'scanning' && (
             <div
               className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3"
               role="status"
@@ -1284,7 +1309,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 <>
                   <p className="text-sm text-emerald-800 dark:text-emerald-300">
                     Did the labels print correctly? Confirming takes these items off the &ldquo;needs a label&rdquo;
-                    list.
+                    list. If only some came out, scan those to confirm just them.
                   </p>
                   <div className="flex gap-2">
                     <button
@@ -1296,6 +1321,14 @@ const InventoryBarcodePrintPage: React.FC = () => {
                       {labelConfirm === 'saving'
                         ? 'Saving…'
                         : `Mark ${formatNumber(items.length)} ${items.length === 1 ? 'item' : 'items'} as labelled`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLabelConfirm('scanning')}
+                      disabled={labelConfirm === 'saving'}
+                      className="btn-secondary btn-sm inline-flex items-center gap-1.5"
+                    >
+                      <ScanLine className="h-3.5 w-3.5" /> Scan labels to confirm
                     </button>
                     <button type="button" onClick={() => setLabelConfirm('idle')} className="btn-secondary btn-sm">
                       Not yet
