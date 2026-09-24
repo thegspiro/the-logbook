@@ -144,8 +144,10 @@ class TestMarkLabelsPrinted:
         )
         _, everything = await service.get_items(organization_id=uuid.UUID(org))
 
-        assert [i.id for i in needs] == [todo.id] and needs_total == 1
-        assert [i.id for i in printed] == [done.id] and printed_total == 1
+        assert [i.id for i in needs] == [todo.id]
+        assert needs_total == 1
+        assert [i.id for i in printed] == [done.id]
+        assert printed_total == 1
         assert everything == 2
 
 
