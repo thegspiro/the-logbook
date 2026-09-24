@@ -89,8 +89,9 @@ access to the server's own logs lining up times — is recorded in the repositor
 ## Added September 24, after the window
 
 These changes landed a day after the window closed, in
-[#2653](https://github.com/thegspiro/the-logbook/pull/2653) and
-[#2667](https://github.com/thegspiro/the-logbook/pull/2667).
+[#2653](https://github.com/thegspiro/the-logbook/pull/2653),
+[#2667](https://github.com/thegspiro/the-logbook/pull/2667) and
+[#2687](https://github.com/thegspiro/the-logbook/pull/2687).
 
 **Membership coordinators: one bulk-action bar in Table view** (#2653).
 
@@ -174,9 +175,23 @@ House — Setup Crew"** event is already full, with `nbelhaj` on the waitlist.
 **The two corrections fix old mistakes; the Event Information change did not
 cause them.** Attendee visibility ships set to managers only, so on a default
 install a member never sees a going list, and neither line could be filmed as
-written. Script 04's organizer beat is unchanged: it uses the Statistics card,
-which did not change. `docs/youtube-scripts/SCRIPT_CURRENCY.md` has the
+written. Script 04's Statistics beat is unchanged, because the Statistics card
+did not change. `docs/youtube-scripts/SCRIPT_CURRENCY.md` has the
 before-and-after wording.
+
+**Script 04, creating an event — new beat for the officer's side**
+([#2687](https://github.com/thegspiro/the-logbook/pull/2687)). The walkthrough
+never said who can see the going list, so an officer had no way to learn the
+setting existed. Right after RSVP Settings, it now covers:
+
+- the event form's **Who can see who's going** dropdown: **Use organization
+  default**, **Everyone in the department** or **Only event managers**;
+- that members see names only, never contact details, notes or accessibility
+  information;
+- the department default under **Manage Events → Settings → Attendance**,
+  which starts out as **Only event managers**.
+
+It adds about 20 seconds. Film it as an officer; nothing needs saving.
 
 ## Upgrade notes
 
