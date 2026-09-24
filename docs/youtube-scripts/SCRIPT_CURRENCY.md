@@ -24,9 +24,18 @@ seen from a member who has a Going RSVP on it. The screenshot demo department
 seeds exactly this: **"Station Open House — Setup Crew"**, three places, with
 `nbelhaj` waitlisted.
 
-The suggested short **"Who's going to this event — and where you stand on the
-waitlist"** (listed under the 2026-08-31 → 09-06 changes) is still unwritten.
-Its capacity line can now be filmed on any capped event.
+**Short 8AU, "Who's Going — and Where You Stand on the Waitlist"** _(written
+2026-09-24)_, is the short suggested under the 2026-08-31 → 09-06 changes. It
+covers:
+
+- the names-only going list;
+- the waitlist position;
+- the Event Information capacity;
+- the officer setting (**Manage Events → Settings → Attendance**, off by
+  default).
+
+It must be filmed as a **member**, with attendee visibility switched on. The
+seeded open-house event supplies the rest.
 
 ## Flagged by the 2026-09-15 → 09-23 changes
 
@@ -316,7 +325,7 @@ content lives only in SCRIPT_CURRENCY):
 3. **Name your own call types** — and why you _retire_ one with history rather
    than deleting it.
 4. **What you have worked this year** — the Hours view in My Shifts.
-5. **Who's going to this event** — and where you stand on the waitlist.
+5. **Who's going to this event** — and where you stand on the waitlist. _Written as **8AU** (2026-09-24)._
 6. **Ask for a size we don't stock** — the request path that had no way to
    record the one thing a quartermaster cannot otherwise learn.
 
