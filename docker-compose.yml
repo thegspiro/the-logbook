@@ -154,6 +154,13 @@ services:
       # Frontend URL (for CORS)
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
 
+      # Public site URL that emailed links (applicant status tracker, ballots,
+      # password resets, approvals) are built from. Must be passed through:
+      # this environment block is a whitelist, so without this line a value
+      # set in .env never reached the container and every link pointed at the
+      # app's localhost default.
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+
       # Production security gates. This environment block is a whitelist with
       # no env_file, so a variable absent here cannot be set from .env at all.
       # ENVIRONMENT above IS honored from .env, so a base-only deployment can
