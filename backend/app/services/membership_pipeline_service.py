@@ -6115,7 +6115,10 @@ class MembershipPipelineService:
         result = await self.db.execute(
             select(ProspectiveMember)
             .where(ProspectiveMember.status_token == token)
-            .options(selectinload(ProspectiveMember.pipeline))
+            .options(
+                selectinload(ProspectiveMember.pipeline),
+                selectinload(ProspectiveMember.current_step),
+            )
             .with_for_update()
         )
         prospect = result.scalars().first()
@@ -6137,7 +6140,149 @@ class MembershipPipelineService:
             by_applicant=True,
         )
         await self.db.commit()
+        await self._notify_coordinators_of_withdrawal(prospect, reason)
         return prospect
+
+    # The seeded positions whose holders run the applicant pipeline.
+    _MEMBERSHIP_COORDINATOR_SLUGS = frozenset(
+        {"membership_coordinator", "assistant_membership_coordinator"}
+    )
+
+    async def _withdrawal_notice_recipients(self, organization_id: str) -> List[User]:
+        """Members to tell that an applicant withdrew.
+
+        Holders of the Membership Coordinator or Assistant Membership
+        Coordinator position. A department may leave both empty, so when nobody
+        holds either the notice goes to every member who can manage prospective
+        members instead — a withdrawal must never be announced to no one, since
+        nothing else tells the department.
+        """
+        from app.core.permissions import permission_matches_any
+
+        result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == organization_id)
+            .where(User.is_active)
+            .where(User.email.isnot(None))
+            .options(selectinload(User.positions))
+        )
+        users = [u for u in result.scalars().all() if u.email]
+
+        coordinators = [
+            u
+            for u in users
+            if any(
+                p.slug in self._MEMBERSHIP_COORDINATOR_SLUGS for p in u.positions or []
+            )
+        ]
+        if coordinators:
+            return coordinators
+
+        managers: List[User] = []
+        for user in users:
+            granted: set[str] = set()
+            for position in user.positions or []:
+                granted.update(position.permissions or [])
+            if permission_matches_any(("prospective_members.manage",), granted):
+                managers.append(user)
+        return managers
+
+    async def _notify_coordinators_of_withdrawal(
+        self, prospect: ProspectiveMember, reason: Optional[str]
+    ) -> None:
+        """Email the membership coordinators that an applicant withdrew.
+
+        Best-effort and after the withdrawal has committed: the applicant's
+        decision stands whether or not the email goes out, so a mail failure is
+        logged rather than raised back to the public status page.
+        """
+        import html as _html
+
+        try:
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == prospect.organization_id)
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return
+
+            recipients = await self._withdrawal_notice_recipients(
+                str(prospect.organization_id)
+            )
+            if not recipients:
+                logger.warning(
+                    f"No coordinator to notify of withdrawal by prospect "
+                    f"{prospect.id} in org {prospect.organization_id}"
+                )
+                return
+
+            from app.core.config import settings as app_settings
+            from app.services.email_service import EmailService, build_email_logo_html
+
+            applicant_name = f"{prospect.first_name} {prospect.last_name}".strip()
+            pipeline_name = prospect.pipeline.name if prospect.pipeline else None
+            stage_name = prospect.current_step.name if prospect.current_step else None
+            frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
+            pipeline_url = f"{frontend_url}/prospective-members"
+
+            subject = f"Application withdrawn: {applicant_name}"
+
+            e_name = _html.escape(applicant_name)
+            rows = [f"<li><strong>Applicant:</strong> {e_name}</li>"]
+            text_lines = [f"Applicant: {applicant_name}"]
+            if pipeline_name:
+                rows.append(
+                    f"<li><strong>Pipeline:</strong> {_html.escape(pipeline_name)}</li>"
+                )
+                text_lines.append(f"Pipeline: {pipeline_name}")
+            if stage_name:
+                rows.append(
+                    f"<li><strong>Stage at withdrawal:</strong> "
+                    f"{_html.escape(stage_name)}</li>"
+                )
+                text_lines.append(f"Stage at withdrawal: {stage_name}")
+            rows.append(
+                "<li><strong>Reason given:</strong> "
+                f"{_html.escape(reason) if reason else '<em>None given</em>'}</li>"
+            )
+            text_lines.append(f"Reason given: {reason or 'None given'}")
+
+            html_body = f"""<div style="font-family:Arial,sans-serif;max-width:600px;">
+{build_email_logo_html(org)}
+<p>An applicant has withdrawn their application from their application status page.</p>
+<ul>
+{"".join(rows)}
+</ul>
+<p>The application is now in the Withdrawn tab and can be reactivated there if needed.</p>
+<p><a href="{_html.escape(pipeline_url)}">Open Prospective Members</a></p>
+</div>"""
+            text_body = (
+                "An applicant has withdrawn their application from their "
+                "application status page.\n\n"
+                + "\n".join(text_lines)
+                + "\n\nThe application is now in the Withdrawn tab and can be "
+                f"reactivated there if needed.\n\n{pipeline_url}\n"
+            )
+
+            success, _ = await EmailService(org).send_email(
+                to_emails=[u.email for u in recipients],
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+                db=self.db,
+            )
+
+            await self._log_activity(
+                prospect_id=str(prospect.id),
+                action="withdrawal_notice_sent",
+                details={"recipient_count": len(recipients), "delivered": success},
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.warning(
+                f"Failed to notify coordinators of withdrawal by prospect "
+                f"{prospect.id}: {e}"
+            )
 
     @staticmethod
     def _build_current_stage_action(step: Any) -> Optional[Dict[str, Any]]:

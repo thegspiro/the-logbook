@@ -145,7 +145,13 @@ def _granted_later() -> set[str]:
 #: (``_VIEW_IMPLIED_PERMISSIONS``). Those rows already hold both grants. A
 #: position registered later that *would* be seeded belongs in a backfill of
 #: its own, not in this frozen one (CLAUDE.md pitfall #20).
-_REGISTERED_AFTER_THIS_MIGRATION = frozenset({"emt"})
+#:
+#: ``assistant_membership_coordinator`` (2026-09-24) is that case: revision
+#: ``43e9df281412`` creates it on existing departments with the storefront
+#: grants already in place, so there is no stored row missing them.
+_REGISTERED_AFTER_THIS_MIGRATION = frozenset(
+    {"emt", "assistant_membership_coordinator"}
+)
 
 
 def _seeded_slugs_with_storefront() -> set[str]:
