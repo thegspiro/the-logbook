@@ -1984,7 +1984,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `users.id` ON DELETE CASCADE |
 | `consent_type` | ENUM(`photo_use`, `public_roster_listing`, `sms_notifications`) | no |  |  |  |
-| `granted` | BOOL | no |  |  |  |
+| `granted` | BOOL | no |  | `false` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 

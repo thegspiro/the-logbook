@@ -15,7 +15,7 @@ callers must treat that as "no consent", never as a default grant.
 import enum
 
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Index, String
-from sqlalchemy.sql import func
+from sqlalchemy.sql import false, func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
@@ -53,7 +53,9 @@ class UserConsent(Base):
         Enum(ConsentType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    granted = Column(Boolean, nullable=False)
+    # Defaults to not granted: consent is never presumed (see module docstring),
+    # and SMS consent is a TCPA requirement.
+    granted = Column(Boolean, nullable=False, default=False, server_default=false())
 
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
