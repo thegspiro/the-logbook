@@ -16,6 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import MemberLeaveOfAbsence, Organization, User, UserStatus
+from app.services.member_service_history_service import (
+    MemberServiceHistoryService,
+    summarize,
+    whole_years,
+)
 from app.utils.membership import is_administrative
 
 
@@ -134,15 +139,12 @@ class MembershipTierService:
 
     @staticmethod
     def years_of_service(hire_date: Optional[date]) -> int:
-        """Calculate years of service from hire_date to today."""
-        if not hire_date:
-            return 0
-        today = date.today()
-        return (
-            today.year
-            - hire_date.year
-            - ((today.month, today.day) < (hire_date.month, hire_date.day))
-        )
+        """Completed years from hire_date to today, ignoring any time away.
+
+        Tier advancement uses credited service (``summarize``) instead; this
+        is the same anniversary arithmetic for a single unbroken stint.
+        """
+        return whole_years(hire_date, date.today())
 
     def resolve_tier(
         self, tiers: List[Dict[str, Any]], yos: int
@@ -225,6 +227,16 @@ class MembershipTierService:
         )
         members = result.scalars().all()
 
+        # Credited service, not time since hire: a member who left and came
+        # back does not advance on the years they were away. One query for
+        # every candidate's stints; a member with none is one unbroken stint
+        # from hire_date, so their years are exactly what they always were.
+        history = MemberServiceHistoryService(self.db)
+        stints_by_member = await history.periods_by_user(
+            organization_id, [m.id for m in members]
+        )
+        today = date.today()
+
         advanced = []
         # Members whose current membership_type is not one of this
         # organization's tiers. Counted rather than silently dropped: an
@@ -234,7 +246,9 @@ class MembershipTierService:
         now = datetime.now(timezone.utc)
 
         for candidate in members:
-            yos = self.years_of_service(candidate.hire_date)
+            yos = summarize(
+                candidate, stints_by_member.get(str(candidate.id), []), today
+            ).credited_years
             target_tier = self.resolve_tier(tiers, yos)
             if not target_tier:
                 continue

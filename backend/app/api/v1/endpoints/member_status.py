@@ -8,7 +8,7 @@ report is automatically generated, saved to documents, and optionally emailed.
 
 import copy
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -22,12 +22,17 @@ from app.api.dependencies import require_permission
 from app.core.audit import log_audit_event
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.core.database import database_manager, get_db
-from app.core.utils import ensure_found, handle_service_errors
+from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.user import Organization, User, UserStatus
+from app.schemas.member_service import RejoinServiceOptions
 from app.schemas.organization import MembershipTierSettings
 from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
+)
+from app.services.member_service_history_service import (
+    MemberServiceHistoryService,
+    is_separated,
 )
 from app.utils.membership import LEGACY_MEMBERSHIP_TYPES, is_administrative
 
@@ -141,8 +146,12 @@ def assert_transition_allowed(
         )
 
 
-class MemberStatusChangeRequest(BaseModel):
-    """Request body for changing a member's status."""
+class MemberStatusChangeRequest(RejoinServiceOptions):
+    """Request body for changing a member's status.
+
+    The inherited service-credit fields apply only when the change brings a
+    dropped or retired member back into membership; they are ignored otherwise.
+    """
 
     new_status: str = Field(
         ..., description="New status value (e.g. 'dropped_voluntary')"
@@ -373,6 +382,34 @@ async def change_member_status(
         except LastAdministratorError as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+    # Length of service: leaving closes the current stint, coming back opens
+    # a new one. Written before the status changes -- a rejoin infers the end
+    # of any unrecorded earlier service from the status being left -- and
+    # committed with it, so the history never disagrees with the status.
+    history = MemberServiceHistoryService(db)
+    previous = UserStatus(previous_status)
+    service_credit = None
+    if not is_separated(previous) and is_separated(new_status):
+        await history.record_separation(
+            member, new_status, date.today(), str(current_user.id)
+        )
+    elif is_separated(previous) and not is_separated(new_status):
+        service_credit = request.service_credit or await history.get_rejoin_default(
+            str(current_user.organization_id)
+        )
+        try:
+            await history.record_rejoin(
+                member,
+                request.rejoin_date or date.today(),
+                service_credit,
+                str(current_user.id),
+                previous_service_end=request.previous_service_end,
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+            )
+
     # Update the status and record when it changed
     member.status = new_status
     member.status_changed_at = datetime.now(timezone.utc)
@@ -392,6 +429,7 @@ async def change_member_status(
             "previous_status": previous_status,
             "new_status": new_status.value,
             "reason": request.reason,
+            **({"service_credit": service_credit.value} if service_credit else {}),
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -628,7 +666,7 @@ class ArchiveMemberRequest(BaseModel):
     reason: str | None = Field(None, description="Reason for archiving")
 
 
-class ReactivateMemberRequest(BaseModel):
+class ReactivateMemberRequest(RejoinServiceOptions):
     """Request body for reactivating an archived member."""
 
     reason: str | None = Field(None, description="Reason for reactivation")
@@ -742,6 +780,9 @@ async def reactivate_member(
             organization_id=str(current_user.organization_id),
             reactivated_by=str(current_user.id),
             reason=request.reason,
+            service_credit=request.service_credit,
+            rejoin_date=request.rejoin_date,
+            previous_service_end=request.previous_service_end,
         )
 
     return result

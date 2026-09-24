@@ -981,13 +981,49 @@ Each tier carries:
 
 ### Auto-Advancement
 
-Auto-advancement computes each member's years of service from their `hire_date`
-and promotes them to the highest tier they qualify for under the organization's
-configured tiers.
+Auto-advancement promotes each active or probationary member to the highest tier
+their **credited years of service** qualify them for. It runs on the first of each
+month (`membership_tier_advance`), when **Advance members automatically by years
+of service** is on under **Members Admin → Settings → Tiers**. _(Corrected
+2026-09-24: this section previously said no scheduled job existed.)_
 
-> **There is no "Advance Eligible Now" button** and no scheduled job for this —
-> the endpoint has to be called deliberately. An earlier version of this guide
-> described both; neither exists.
+Credited service is the time a member was actually in the department:
+
+- A member who has never left is credited from their **hire date**, exactly as
+  before.
+- A member who was dropped or retired and later came back is not credited for
+  the time away. Each continuous stint of membership is recorded in the
+  member's **Service History** card on their profile.
+- Leave of absence, suspension and inactive status are still membership, so they
+  keep counting.
+
+### Former Members Who Rejoin _(2026-09-24)_
+
+Bringing a former member back opens a new stint: **Reactivate** for an archived
+member, or changing a dropped or retired member's status back to Active,
+Probationary or Inactive. The dialog asks how their earlier service counts:
+
+| Choice                     | Credited service                                     | Earlier stints                                |
+| -------------------------- | ---------------------------------------------------- | --------------------------------------------- |
+| **Continue prior service** | Earlier stints plus the new one, minus the time away | Keep counting                                 |
+| **Restart at zero**        | The new stint only                                   | Kept on record and shown as **prior service** |
+
+The department's default is set under **Settings → Tiers → When a former member
+rejoins**; the officer can choose the other option for any one member. The dialog
+also takes the **return date**, and — for a member whose earlier service was never
+recorded — the **last day of previous service**, pre-filled from their last status
+change.
+
+**Service History card.** Visible to the member and to anyone with
+`members.manage`, since it records how a member left. Members-managers can
+**Edit** it to add stints from before this was tracked, correct dates, or mark a
+stint as not counted. The list is saved as a whole and must be consistent: stints
+may not overlap, only a serving member may have a stint with no end date, and no
+date may be in the future.
+
+> **Members reinstated before 2026-09-24 have no recorded gap.** Their service is
+> still counted from their hire date, including the time away. Correct it by
+> editing their Service History.
 
 ---
 

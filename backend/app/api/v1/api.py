@@ -46,6 +46,7 @@ from app.api.v1.endpoints import (
     medical_supplies,
     meetings,
     member_leaves,
+    member_service_history,
     member_status,
     membership_pipeline,
     message_history,
@@ -265,6 +266,9 @@ api_router.include_router(
     message_history.router, prefix="/message-history", tags=["message-history"]
 )
 api_router.include_router(member_status.router, prefix="/users", tags=["member-status"])
+api_router.include_router(
+    member_service_history.router, prefix="/users", tags=["member-status"]
+)
 api_router.include_router(
     membership_pipeline.router,
     prefix="/prospective-members",

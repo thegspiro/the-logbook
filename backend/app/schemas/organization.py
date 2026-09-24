@@ -638,7 +638,7 @@ class MembershipTier(BaseModel):
     years_required: int = Field(
         default=0,
         ge=0,
-        description="Minimum years of service (from hire_date) to reach this tier",
+        description="Minimum credited years of service to reach this tier (time away between stints is not counted)",
     )
     sort_order: int = Field(
         default=0,
@@ -648,6 +648,13 @@ class MembershipTier(BaseModel):
         default_factory=MembershipTierBenefits,
         description="Benefits granted to members at this tier",
     )
+
+
+class RejoinServiceCredit(str, Enum):
+    """How a returning member's earlier stints count toward length of service."""
+
+    CONTINUE = "continue"
+    RESTART = "restart"
 
 
 class MembershipTierSettings(BaseModel):
@@ -661,6 +668,16 @@ class MembershipTierSettings(BaseModel):
     auto_advance: bool = Field(
         default=True,
         description="Automatically advance members to higher tiers when they meet the years-of-service threshold",
+    )
+    rejoin_service_credit: RejoinServiceCredit = Field(
+        default=RejoinServiceCredit.CONTINUE,
+        description=(
+            "What a former member's earlier service counts for when they "
+            "rejoin, unless the officer reinstating them chooses otherwise: "
+            "'continue' keeps crediting it (only the time away is excluded), "
+            "'restart' starts their service at zero and keeps the earlier "
+            "time on record as prior service"
+        ),
     )
     tiers: List[MembershipTier] = Field(
         # Bounded because this is reachable from the API directly, and the
