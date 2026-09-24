@@ -52,12 +52,10 @@ from app.utils.inventory_nfc import inventory_nfc_enabled, require_inventory_nfc
 
 router = APIRouter()
 
-MANAGE = "inventory.manage"
-
 
 def _is_staff(user: User) -> bool:
     """Whether this caller's taps belong in the tap log."""
-    return user_has_permission(user, MANAGE)
+    return user_has_permission(user, "inventory.manage")
 
 
 @router.get("/nfc/settings", response_model=InventoryNfcSettingsResponse)
@@ -148,7 +146,7 @@ async def resolve_any_inventory_nfc_tag(
 async def put_away_inventory_item(
     data: InventoryNfcPutAwayRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(MANAGE)),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Move an item onto a storage area, as recorded by tapping both."""
     org_id = str(current_user.organization_id)
@@ -193,7 +191,7 @@ async def list_item_nfc_scans(
     item_id: str,
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(MANAGE)),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """An item's tap log, newest first — its "last seen" trail."""
     org_id = str(current_user.organization_id)
@@ -213,7 +211,7 @@ async def list_item_nfc_scans(
 async def list_storage_area_nfc_tags(
     storage_area_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(MANAGE)),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """List the tags linked to one storage area."""
     org_id = str(current_user.organization_id)
@@ -235,7 +233,7 @@ async def link_storage_area_nfc_tag(
     storage_area_id: str,
     data: InventoryNfcTagCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(MANAGE)),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Link a tag to a storage area (a shelf, bin or cabinet)."""
     org_id = str(current_user.organization_id)
