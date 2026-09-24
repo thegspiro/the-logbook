@@ -1356,6 +1356,13 @@ is recorded rather than fixed. The training guide claimed the drawer showed the
 referral source; corrected 2026-08-10 to point at Linked Events, and to say the
 stamped text is reachable only through an export or the API.
 
+**Re-verified 2026-09-24, and it is three fields, not one.** The mapper sweep
+confirms this still holds and that `interest_reason` and `referred_by` are in
+the same position: all three are columns on `prospective_members`, all three are
+returned by `ProspectResponse`, and none is declared on the frontend `Applicant`
+type or read by any mapper. Unlike the seven fields recorded below, nothing on
+the frontend reads these, so they are unused data rather than a blank screen.
+
 ## Events — Guest Check-In Switched Itself Off On Every Read (2026-08-10)
 
 Fixed 2026-08-10. `_build_event_response` names each field it passes rather
@@ -4860,6 +4867,121 @@ new site to `tests/test_capacity_locking.py`'s enumeration — that guard test
 covers only hard seat/quantity caps today (RSVP, shift assignment, budgets,
 inventory) and has no entry for a time-range overlap check. Full write-up:
 `docs/security-review/EV-16-events-requests.md` → Pass 5 (EV-26).
+
+## Prospects — Seven Drawer Fields Have Readers and No Producer (2026-09-24, resolved 2026-09-24)
+
+Found by the mapper sweep that followed the `election_title` fix (see below).
+The frontend `Applicant`, `ApplicantListItem` and `ElectionPackage` types
+declare seven fields that components read and nothing anywhere supplies:
+`target_role_id`, `target_role_name`, `deactivated_at`, `deactivated_reason`,
+`reactivated_at`, `withdrawn_at` and `withdrawal_reason`.
+
+These are not dropped in the mapping — the `prospective_members` table has no
+such columns, no schema serialises them, and a repository-wide search finds
+`target_role` in the backend only under training and messaging, which are
+unrelated. The status lifecycle is carried by `status`, `metadata_` and the
+activity log instead.
+
+**What it costs today.** The drawer's "Deactivated: …", "Previously reactivated
+on …" and withdrawal-reason lines never render; the deactivated/withdrawn
+columns in the applicant table render `—` for every row. The live one is the
+conversion: `ConversionModal` sends `target_role_id: applicant.target_role_id`,
+which is always `undefined`, so `convertToMember` never populates `role_ids` and
+`_do_transfer` takes its `if role_ids:` branch never. The new member still gets
+the default `member` role — the fallback below that branch guarantees it — but
+never the role the drawer's own Target Role block was written to carry, and no
+error says so.
+
+**Resolved by adding the columns**, which is the direction the UI was written
+expecting. `20260924_1540_77d4aa7798dd` adds `target_role_id` (FK to
+`positions`, `SET NULL`) and the five lifecycle columns, and backfills the
+latter from `prospect_activity_log`, which had been recording every status
+change and its reason all along — so an existing department sees real dates on
+applications it withdrew years ago rather than the blank fields this entry was
+about.
+
+The stamps are historical rather than mirrors of `status`: the drawer's Details
+block renders "Deactivated:" and "Last reactivated:" whatever the application's
+status is now, and its inactive banner expects to show a _prior_ reactivation on
+a record that has gone inactive again. `_apply_status_change` — the single choke
+point for every transition, single and bulk — stamps forward on that same rule
+and never clears, and the backfill used it too.
+
+The target role is now settable on the three surfaces that display it: the
+add-applicant form, the drawer's contact editor, and the conversion dialog,
+where it is pre-filled and changeable because that is the last moment anyone can
+correct it. `_do_transfer` uses an explicit `role_ids` when given and the
+application's own target role otherwise, which also reaches the automatic path
+at `_complete_step` — that one passes no roles at all and so could never have
+honoured the applicant's role.
+
+**Two further defects surfaced while closing this**, both fixed here:
+
+- `new_user.roles = roles` in `_do_transfer` was a lazy load on a persistent
+  instance (the role query autoflushes the INSERT), so it raised
+  `MissingGreenlet`. It was unreachable only because `role_ids` was always
+  empty — meaning the explicit-role path was broken too, not just the default.
+- `ApplicantListItem.current_stage_type` was declared, never populated and
+  never read on that type. Removed.
+
+The one gap that remains is `ElectionPackage.target_role_name`, which
+`mapperFieldIntegrity.test.ts` still carries as its single `KNOWN_GAPS` entry —
+see the comment there for why resolving it live would put a current value beside
+two frozen snapshot ones in the same panel.
+
+## Prospects — `auto_transfer_on_approval` Cannot Be Set or Seen From the UI (2026-09-24)
+
+`MembershipPipeline.auto_transfer_on_approval` decides whether completing a
+stage flagged `is_final_step` converts the prospect into a full member
+(`membership_pipeline_service.py`, `will_auto_transfer`). The backend accepts it
+on pipeline create and update and returns it on read.
+
+The frontend names it in exactly two places, both of which are wire-shape
+declarations — `BackendPipelineResponse` and `BackendPipelineListResponse`. The
+`Pipeline` type does not carry it, no mapper reads it, no screen renders it and
+no payload sends it. So a department cannot turn the switch on, cannot turn it
+off, and cannot see which way it is set.
+
+This is CLAUDE.md pitfall #19 in its mirror image: not a setting stored with no
+reader, but a reader with no setting. The column defaults to `False`, so a
+pipeline created through the app has auto-transfer off and unreachable; the
+behaviour the September release lesson describes — "on a pipeline with
+auto-transfer and the vote as its final stage, that click made them a member" —
+is reachable only for a pipeline whose flag was set through the API directly or
+cloned from one that already had it (`create_pipeline_from_template` copies
+`source.auto_transfer_on_approval`).
+
+**What would fix it.** Carry the field on `Pipeline`, `PipelineCreate` and
+`PipelineUpdate`, map it, and put it in the pipeline settings screen beside the
+stage list — with wording that says what it does, because a switch that converts
+people to members on a stage completion deserves more than a checkbox label.
+
+## Prospects — The Screen Re-Derives "Last Stage" Instead of Reading `is_final_step` (2026-09-24)
+
+`ProspectiveMembersPage` computes `isLastStage` as "the stage with the highest
+`sort_order`", and that is what decides whether the drawer's action row offers
+**Advance** or **Convert**. The backend ships `is_final_step` per step and
+decides auto-transfer from the flag, not from the ordering.
+
+They normally agree: `reorder_steps` normalises the flag onto the new last
+position after a reorder. But it does so **only for a pipeline that already has
+some step flagged** — deliberately, so normalisation cannot invent an
+auto-transfer trigger nobody configured — and a step can be created with
+`is_final_step=True` in any position. The service's own comments at
+`membership_pipeline_service.py:2397` and `:2491` guard the skip path against
+exactly that state, which is the evidence it occurs.
+
+Where they disagree, completing a mid-pipeline stage can auto-convert a prospect
+while the UI labelled that stage's action **Advance** — a conversion nobody read
+as a conversion. This is CLAUDE.md pitfall #29: the screen re-deriving a
+decision the backend already made and shipped.
+
+**What would fix it.** Carry `is_final_step` and `is_first_step` on
+`PipelineStage`, map them, and read the flag instead of the ordering. The one
+judgement needed first is what **Convert** should mean on a pipeline with no
+flagged final stage: today the button appears on the highest-`sort_order` stage
+and the manual `/transfer` it calls works regardless of the flag, so reading the
+flag alone would remove the button from those pipelines entirely.
 
 ## Process
 
