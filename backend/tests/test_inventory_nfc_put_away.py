@@ -317,13 +317,14 @@ class TestPutAway:
     @pytest.mark.parametrize(
         ("status", "message"),
         [
-            ("assigned", "Return it"),
-            ("checked_out", "Check it in"),
-            ("lost", "Record it found"),
-            ("stolen", "Record it found"),
+            ("assigned", "return it first"),
+            ("checked_out", "check it in first"),
+            ("lost", "update its status first"),
+            ("stolen", "update its status first"),
+            ("retired", "retired"),
         ],
     )
-    async def test_an_item_out_of_the_building_is_refused(
+    async def test_the_barcode_put_away_rule_refuses_it(
         self, db_session, service, org, status, message
     ):
         area = await _make_area(db_session, org, "Shelf 5")
@@ -337,16 +338,25 @@ class TestPutAway:
             )
         assert await _scans(db_session, item) == []
 
-    async def test_an_inactive_shelf_is_refused(self, db_session, service, org):
-        area = await _make_area(db_session, org, "Gone shelf", active=False)
-        item = await _make_item(db_session, org, "Axe")
-        with pytest.raises(ValueError, match="no longer an active storage area"):
-            await service.put_away(
-                organization_id=org,
-                item_id=item,
-                storage_area_id=area,
-                scanned_by=None,
-            )
+    async def test_the_room_comes_from_the_nearest_shelf_above_with_one(
+        self, db_session, service, org
+    ):
+        """The shared rule: a bin inside a cabinet lists under the cabinet's
+        room when the bin itself names none."""
+        room = await _make_location(db_session, org, "Stores")
+        cabinet = await _make_area(db_session, org, "Cabinet 2", location_id=room)
+        bin_ = await _make_area(db_session, org, "Bin 7")
+        await db_session.execute(
+            text("UPDATE storage_areas SET parent_id = :p WHERE id = :b"),
+            {"p": cabinet, "b": bin_},
+        )
+        item = await _make_item(db_session, org, "Batteries")
+        await service.put_away(
+            organization_id=org, item_id=item, storage_area_id=bin_, scanned_by=None
+        )
+        stored = await _item(db_session, item)
+        assert stored.storage_area_id == bin_
+        assert stored.location_id == room
 
     async def test_nothing_crosses_an_organization(
         self, db_session, service, org, other_org

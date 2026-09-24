@@ -34,6 +34,7 @@ import {
   BarChart3,
   ListChecks,
   Copy,
+  FileX,
   CalendarRange,
   UserX,
   Bell,
@@ -73,6 +74,7 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   election_report: { icon: BarChart3, label: 'Election Report', color: 'text-emerald-600' },
   ballot_eligibility_summary: { icon: ListChecks, label: 'Ballot Eligibility Summary', color: 'text-amber-600' },
   duplicate_application: { icon: Copy, label: 'Duplicate Application', color: 'text-slate-500' },
+  application_withdrawn: { icon: FileX, label: 'Application Withdrawn', color: 'text-slate-500' },
   series_end_reminder: { icon: CalendarRange, label: 'Series End Reminder', color: 'text-purple-400' },
   shift_assignment: { icon: CalendarCheck, label: 'Shift Assignment', color: 'text-green-600' },
   shift_decline: { icon: UserX, label: 'Shift Decline', color: 'text-red-400' },
@@ -121,6 +123,7 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'member_archived',
       'inactivity_warning',
       'duplicate_application',
+      'application_withdrawn',
     ],
   },
   {

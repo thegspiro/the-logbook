@@ -168,14 +168,17 @@ async def put_away_inventory_item(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     if result["moved"]:
+        # The barcode put-away's event type and shape, so an auditor searching
+        # for put-aways finds both ways of doing one.
         await log_audit_event(
             db=db,
-            event_type="inventory_item_put_away",
+            event_type="inventory_items_put_away",
             event_category="inventory",
             severity="info",
             event_data={
-                "item_id": result["item_id"],
                 "storage_area_id": result["storage_area_id"],
+                "item_ids": [result["item_id"]],
+                "skipped": 0,
                 "from_storage_area_id": result["from_storage_area_id"],
                 "method": "nfc",
             },

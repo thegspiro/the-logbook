@@ -42,7 +42,7 @@ from app.models.membership_pipeline import (
     ProspectStepProgress,
     StepProgressStatus,
 )
-from app.models.user import Organization, User, UserStatus, generate_uuid
+from app.models.user import Organization, Role, User, UserStatus, generate_uuid
 from app.utils.membership import ADMINISTRATIVE_RANK_MESSAGE, is_administrative
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
@@ -1224,6 +1224,10 @@ class MembershipPipelineService:
                 selectinload(ProspectiveMember.current_step),
                 selectinload(ProspectiveMember.pipeline),
                 selectinload(ProspectiveMember.step_progress),
+                # _prospect_list_item reads the target role's name, and both
+                # the list and the kanban board go through it -- a lazy load
+                # out of the async response path raises MissingGreenlet.
+                selectinload(ProspectiveMember.target_role),
             )
         )
         query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
@@ -1333,6 +1337,7 @@ class MembershipPipelineService:
                 # Interview is the third stage of the default pipeline, so this
                 # blocked advancing anyone past it, including in bulk.
                 selectinload(ProspectiveMember.interviews),
+                selectinload(ProspectiveMember.target_role),
             )
             # Refresh identity-map instances: the prospect's pipeline/steps
             # may already be cached in this session from an earlier call, and
@@ -1352,6 +1357,13 @@ class MembershipPipelineService:
             # of those paths returns through). Non-mapped attribute; never persisted.
             prospect.pipeline_name = (
                 prospect.pipeline.name if prospect.pipeline else None
+            )
+            # Same shape, same reason: ProspectResponse declares a flat
+            # target_role_name that no column backs. Resolved from the
+            # relationship rather than stored, so renaming a position does not
+            # leave a stale copy on every application that wanted it.
+            prospect.target_role_name = (
+                prospect.target_role.name if prospect.target_role else None
             )
         return prospect
 
@@ -1455,6 +1467,19 @@ class MembershipPipelineService:
             label="referring member",
         )
 
+        # The target role is copied onto the User at transfer (_do_transfer's
+        # role_ids), so an unvalidated id does not merely dangle on the
+        # application -- it grants a position from another organization to a
+        # brand-new member. XC-1 / CLAUDE.md pitfall #14c.
+        await assert_in_org(
+            self.db,
+            Role,
+            data.get("target_role_id"),
+            organization_id,
+            allow_none=True,
+            label="target role",
+        )
+
         # Use org default pipeline if none specified
         if not pipeline_id:
             default_pipeline = await self._get_default_pipeline(organization_id)
@@ -1486,6 +1511,7 @@ class MembershipPipelineService:
             referral_source=data.get("referral_source"),
             referred_by=data.get("referred_by"),
             desired_membership_type=data.get("desired_membership_type"),
+            target_role_id=data.get("target_role_id"),
             current_step_id=first_step_id,
             status=ProspectStatus.ACTIVE,
             metadata_=data.get("metadata_", {}),
@@ -1556,6 +1582,15 @@ class MembershipPipelineService:
             "transferred_user",
             "documents",
             "election_packages",
+            # Written only by _stamp_lifecycle, on the status-change path.
+            # ProspectUpdate does not declare them either, so this is the
+            # second of two locks rather than the only one.
+            "deactivated_at",
+            "deactivated_reason",
+            "reactivated_at",
+            "withdrawn_at",
+            "withdrawal_reason",
+            "target_role",
         }
     )
 
@@ -1595,8 +1630,9 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
-        # referred_by is the one client-supplied foreign key this update
-        # accepts; every other FK is in _PROSPECT_PROTECTED_FIELDS.
+        # referred_by and target_role_id are the client-supplied foreign keys
+        # this update accepts; every other FK is in
+        # _PROSPECT_PROTECTED_FIELDS.
         if "referred_by" in data:
             await assert_in_org(
                 self.db,
@@ -1605,6 +1641,15 @@ class MembershipPipelineService:
                 organization_id,
                 allow_none=True,
                 label="referring member",
+            )
+        if "target_role_id" in data:
+            await assert_in_org(
+                self.db,
+                Role,
+                data.get("target_role_id"),
+                organization_id,
+                allow_none=True,
+                label="target role",
             )
 
         # TRANSFERRED is derived, not chosen (see _apply_status_change) — the
@@ -3071,6 +3116,41 @@ class MembershipPipelineService:
         except ValueError:
             raise ValueError(f"Invalid status: {status}")
 
+    @staticmethod
+    def _stamp_lifecycle(
+        prospect: ProspectiveMember,
+        previous: str,
+        target: ProspectStatus,
+        reason: Optional[str],
+    ) -> None:
+        """Record when an application left the active board, and why.
+
+        These are historical stamps rather than flags mirroring ``status``, and
+        the drawer is what settles that: its Details block renders
+        "Deactivated:" and "Last reactivated:" whatever the application's
+        status is now, and its inactive banner expects to show a *prior*
+        reactivation on a record that has gone inactive again. So nothing here
+        clears a stamp — a later transition overwrites its own, and leaves the
+        others as the history they are. `20260924_1540_77d4aa7798dd` backfilled
+        existing rows from the activity log on exactly this rule.
+
+        Called from ``_apply_status_change``, which is the single choke point
+        for every transition, single and bulk alike, so there is no path that
+        changes a status without passing through here.
+        """
+        now = datetime.now(timezone.utc)
+        if target == ProspectStatus.WITHDRAWN:
+            prospect.withdrawn_at = now
+            prospect.withdrawal_reason = reason
+        elif target == ProspectStatus.INACTIVE:
+            prospect.deactivated_at = now
+            prospect.deactivated_reason = reason
+        elif (
+            target == ProspectStatus.ACTIVE
+            and previous == ProspectStatus.INACTIVE.value
+        ):
+            prospect.reactivated_at = now
+
     async def _apply_status_change(
         self,
         prospect: ProspectiveMember,
@@ -3078,8 +3158,13 @@ class MembershipPipelineService:
         changed_by: Optional[str],
         reason: Optional[str],
         bulk: bool,
+        by_applicant: bool = False,
     ) -> None:
         """Move one prospect to ``target``, recording ``reason`` as activity.
+
+        ``by_applicant`` marks a change the applicant made themselves from the
+        public status page, which has no ``changed_by`` user to attribute it
+        to — without the flag it would read as an unattributed system change.
 
         The reason is deliberately kept out of ``prospect.notes``: it is the
         coordinator's running record of the applicant, and writing a
@@ -3114,15 +3199,19 @@ class MembershipPipelineService:
         if previous == target.value:
             raise ValueError(f"Prospect is already {target.value}")
         prospect.status = target
+        self._stamp_lifecycle(prospect, previous, target, reason)
+        details: Dict[str, Any] = {
+            "from": previous,
+            "to": target.value,
+            "reason": reason,
+            "bulk": bulk,
+        }
+        if by_applicant:
+            details["by_applicant"] = True
         await self._log_activity(
             prospect_id=str(prospect.id),
             action="prospect_status_changed",
-            details={
-                "from": previous,
-                "to": target.value,
-                "reason": reason,
-                "bulk": bulk,
-            },
+            details=details,
             performed_by=changed_by,
         )
 
@@ -3577,7 +3666,25 @@ class MembershipPipelineService:
         )
         self.db.add(new_user)
 
-        # Assign initial roles/positions if provided
+        # Assign initial roles/positions. An explicit `role_ids` from the
+        # caller wins; otherwise the application's own target role is used.
+        #
+        # The fallback is the point of the column. Before it, the target role
+        # was displayed on the applicant and on the conversion summary and then
+        # dropped on the way through: ConversionModal sent an id nothing had
+        # ever populated, so `role_ids` was always empty and every converted
+        # member came out with the default `member` position alone -- silently,
+        # since the fallback below still grants that one. It also reaches the
+        # automatic path at _complete_step's _do_transfer call, which passes no
+        # roles at all and so could never have honoured the applicant's role.
+        #
+        # Already validated in-org: create_prospect and update_prospect assert
+        # target_role_id belongs to the organization before storing it, and the
+        # query below re-filters on organization_id regardless.
+        if not role_ids and prospect.target_role_id:
+            role_ids = [str(prospect.target_role_id)]
+
+        assigned: List[Any] = []
         if role_ids:
             from app.models.user import Role
 
@@ -3588,13 +3695,27 @@ class MembershipPipelineService:
             )
             roles = list(role_result.scalars().all())
             if roles:
-                new_user.roles = roles
+                # Refresh before assigning, exactly as the member-role branch
+                # below does. The query above autoflushes, so new_user is
+                # persistent by now and assigning to the collection has to
+                # load the existing one to diff it -- a lazy load, and so a
+                # MissingGreenlet under async.
+                await self.db.refresh(new_user, ["positions"])
+                new_user.positions = roles
+                assigned = roles
 
         # Ensure default "member" role is always assigned
         from app.core.constants import ROLE_MEMBER
         from app.models.user import Role
 
-        assigned_slugs = {r.slug for r in (new_user.roles or [])}
+        # Read from the list just assigned rather than back off the
+        # relationship. The query above autoflushes, so by this point new_user
+        # is persistent and `new_user.roles` is a lazy load -- which raises
+        # MissingGreenlet under async. That was latent while role_ids was
+        # always empty (the branch above never ran, so new_user was still
+        # pending here); the target-role fallback makes the branch the normal
+        # case, which is what surfaced it.
+        assigned_slugs = {r.slug for r in assigned}
         if ROLE_MEMBER not in assigned_slugs:
             member_result = await self.db.execute(
                 select(Role).where(
@@ -4339,6 +4460,10 @@ class MembershipPipelineService:
                 selectinload(ProspectiveMember.current_step),
                 selectinload(ProspectiveMember.pipeline),
                 selectinload(ProspectiveMember.step_progress),
+                # _prospect_list_item reads the target role's name, and both
+                # the list and the kanban board go through it -- a lazy load
+                # out of the async response path raises MissingGreenlet.
+                selectinload(ProspectiveMember.target_role),
             )
             .order_by(ProspectiveMember.created_at)
             .limit(self.MAX_KANBAN_CARDS)
@@ -6057,6 +6182,275 @@ class MembershipPipelineService:
     # Status tokens expire after 30 days to limit exposure if leaked.
     _STATUS_TOKEN_TTL_DAYS = 30
 
+    # An applicant may withdraw only an application that is still open. An
+    # approved one is the department's decision awaiting conversion, and the
+    # closed statuses have nothing left to withdraw from.
+    _SELF_WITHDRAWABLE_STATUSES = frozenset(
+        {ProspectStatus.ACTIVE.value, ProspectStatus.ON_HOLD.value}
+    )
+
+    def _status_token_usable(self, prospect: ProspectiveMember) -> bool:
+        """Whether ``prospect``'s status token may still unlock the public page.
+
+        Shared by the read and the withdrawal so the two cannot disagree about
+        which links are live: an expired token, or a pipeline that has not
+        opted in to public status pages, grants neither.
+        """
+        from datetime import timedelta
+
+        if prospect.status_token_created_at:
+            age = datetime.now(timezone.utc) - prospect.status_token_created_at
+            if age > timedelta(days=self._STATUS_TOKEN_TTL_DAYS):
+                logger.info(
+                    f"Status token for prospect {prospect.id} expired "
+                    f"({age.days} days old)"
+                )
+                return False
+
+        return bool(prospect.pipeline and prospect.pipeline.public_status_enabled)
+
+    @classmethod
+    def _can_self_withdraw(cls, prospect: ProspectiveMember) -> bool:
+        status = getattr(prospect.status, "value", prospect.status)
+        return status in cls._SELF_WITHDRAWABLE_STATUSES
+
+    async def withdraw_prospect_by_token(
+        self, token: str, reason: Optional[str] = None
+    ) -> Optional[ProspectiveMember]:
+        """Withdraw the application behind a public status token, at the
+        applicant's own request.
+
+        Returns None when the token would not unlock the status page (unknown,
+        expired, or the pipeline is not public), so the endpoint answers 404
+        exactly as the read does. Raises ValueError when the application is no
+        longer open.
+
+        The row is locked for the reason set_prospect_status locks it: the
+        status guard below must not read a snapshot older than a concurrent
+        transfer or coordinator decision, or this write would clobber it.
+        """
+        result = await self.db.execute(
+            select(ProspectiveMember)
+            .where(ProspectiveMember.status_token == token)
+            .options(
+                selectinload(ProspectiveMember.pipeline),
+                selectinload(ProspectiveMember.current_step),
+            )
+            .with_for_update()
+        )
+        prospect = result.scalars().first()
+        if not prospect or not self._status_token_usable(prospect):
+            return None
+
+        if not self._can_self_withdraw(prospect):
+            raise ValueError(
+                "This application is no longer open, so it cannot be withdrawn. "
+                "Please contact the department."
+            )
+
+        await self._apply_status_change(
+            prospect,
+            ProspectStatus.WITHDRAWN,
+            changed_by=None,
+            reason=reason,
+            bulk=False,
+            by_applicant=True,
+        )
+        await self.db.commit()
+        await self._notify_coordinators_of_withdrawal(prospect, reason)
+        await self._confirm_withdrawal_to_applicant(prospect)
+        return prospect
+
+    # The seeded positions whose holders run the applicant pipeline.
+    _MEMBERSHIP_COORDINATOR_SLUGS = frozenset(
+        {"membership_coordinator", "assistant_membership_coordinator"}
+    )
+
+    async def _withdrawal_notice_recipients(self, organization_id: str) -> List[User]:
+        """Members to tell that an applicant withdrew.
+
+        Holders of the Membership Coordinator or Assistant Membership
+        Coordinator position. A department may leave both empty, so when nobody
+        holds either the notice goes to every member who can manage prospective
+        members instead — a withdrawal must never be announced to no one, since
+        nothing else tells the department.
+        """
+        from app.core.permissions import permission_matches_any
+
+        result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == organization_id)
+            .where(User.is_active)
+            .where(User.email.isnot(None))
+            .options(selectinload(User.positions))
+        )
+        users = [u for u in result.scalars().all() if u.email]
+
+        coordinators = [
+            u
+            for u in users
+            if any(
+                p.slug in self._MEMBERSHIP_COORDINATOR_SLUGS for p in u.positions or []
+            )
+        ]
+        if coordinators:
+            return coordinators
+
+        managers: List[User] = []
+        for user in users:
+            granted: set[str] = set()
+            for position in user.positions or []:
+                granted.update(position.permissions or [])
+            if permission_matches_any(("prospective_members.manage",), granted):
+                managers.append(user)
+        return managers
+
+    async def _confirm_withdrawal_to_applicant(
+        self, prospect: ProspectiveMember
+    ) -> None:
+        """Email the applicant that their withdrawal went through.
+
+        Best-effort and after the commit, like the coordinator notice, and
+        independent of it: either email failing must not stop the other, and
+        neither may undo a withdrawal the applicant has already made.
+        """
+        try:
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == prospect.organization_id)
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return
+
+            from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+            from app.services.email_service import EmailService
+
+            try:
+                tz = ZoneInfo(org.timezone or "UTC")
+            except (ZoneInfoNotFoundError, ValueError):
+                tz = ZoneInfo("UTC")
+            # _apply_status_change stamped this in the same transaction.
+            withdrawn_at = prospect.withdrawn_at or datetime.now(timezone.utc)
+            withdrawal_date = withdrawn_at.astimezone(tz).strftime("%B %d, %Y")
+
+            sent = await EmailService(org).send_application_withdrawn_email(
+                to_email=prospect.email,
+                applicant_name=f"{prospect.first_name} {prospect.last_name}".strip(),
+                organization_name=org.name or "the department",
+                withdrawal_date=withdrawal_date,
+                db=self.db,
+                organization_id=str(prospect.organization_id),
+            )
+
+            await self._log_activity(
+                prospect_id=str(prospect.id),
+                action="withdrawal_confirmation_sent",
+                details={"delivered": bool(sent)},
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.warning(
+                f"Failed to confirm withdrawal to prospect {prospect.id}: {e}"
+            )
+
+    async def _notify_coordinators_of_withdrawal(
+        self, prospect: ProspectiveMember, reason: Optional[str]
+    ) -> None:
+        """Email the membership coordinators that an applicant withdrew.
+
+        Best-effort and after the withdrawal has committed: the applicant's
+        decision stands whether or not the email goes out, so a mail failure is
+        logged rather than raised back to the public status page.
+        """
+        import html as _html
+
+        try:
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == prospect.organization_id)
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return
+
+            recipients = await self._withdrawal_notice_recipients(
+                str(prospect.organization_id)
+            )
+            if not recipients:
+                logger.warning(
+                    f"No coordinator to notify of withdrawal by prospect "
+                    f"{prospect.id} in org {prospect.organization_id}"
+                )
+                return
+
+            from app.core.config import settings as app_settings
+            from app.services.email_service import EmailService, build_email_logo_html
+
+            applicant_name = f"{prospect.first_name} {prospect.last_name}".strip()
+            pipeline_name = prospect.pipeline.name if prospect.pipeline else None
+            stage_name = prospect.current_step.name if prospect.current_step else None
+            frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
+            pipeline_url = f"{frontend_url}/prospective-members"
+
+            subject = f"Application withdrawn: {applicant_name}"
+
+            e_name = _html.escape(applicant_name)
+            rows = [f"<li><strong>Applicant:</strong> {e_name}</li>"]
+            text_lines = [f"Applicant: {applicant_name}"]
+            if pipeline_name:
+                rows.append(
+                    f"<li><strong>Pipeline:</strong> {_html.escape(pipeline_name)}</li>"
+                )
+                text_lines.append(f"Pipeline: {pipeline_name}")
+            if stage_name:
+                rows.append(
+                    f"<li><strong>Stage at withdrawal:</strong> "
+                    f"{_html.escape(stage_name)}</li>"
+                )
+                text_lines.append(f"Stage at withdrawal: {stage_name}")
+            rows.append(
+                "<li><strong>Reason given:</strong> "
+                f"{_html.escape(reason) if reason else '<em>None given</em>'}</li>"
+            )
+            text_lines.append(f"Reason given: {reason or 'None given'}")
+
+            html_body = f"""<div style="font-family:Arial,sans-serif;max-width:600px;">
+{build_email_logo_html(org)}
+<p>An applicant has withdrawn their application from their application status page.</p>
+<ul>
+{"".join(rows)}
+</ul>
+<p>The application is now in the Withdrawn tab and can be reactivated there if needed.</p>
+<p><a href="{_html.escape(pipeline_url)}">Open Prospective Members</a></p>
+</div>"""
+            text_body = (
+                "An applicant has withdrawn their application from their "
+                "application status page.\n\n"
+                + "\n".join(text_lines)
+                + "\n\nThe application is now in the Withdrawn tab and can be "
+                f"reactivated there if needed.\n\n{pipeline_url}\n"
+            )
+
+            success, _ = await EmailService(org).send_email(
+                to_emails=[u.email for u in recipients],
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+                db=self.db,
+            )
+
+            await self._log_activity(
+                prospect_id=str(prospect.id),
+                action="withdrawal_notice_sent",
+                details={"recipient_count": len(recipients), "delivered": success},
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.warning(
+                f"Failed to notify coordinators of withdrawal by prospect "
+                f"{prospect.id}: {e}"
+            )
+
     @staticmethod
     def _build_current_stage_action(step: Any) -> Optional[Dict[str, Any]]:
         """Derive an applicant-facing action from the current step's config.
@@ -6126,23 +6520,7 @@ class MembershipPipelineService:
         )
         result = await self.db.execute(query)
         prospect = result.scalars().first()
-        if not prospect:
-            return None
-
-        # Check token expiration
-        from datetime import timedelta
-
-        if prospect.status_token_created_at:
-            age = datetime.now(timezone.utc) - prospect.status_token_created_at
-            if age > timedelta(days=self._STATUS_TOKEN_TTL_DAYS):
-                logger.info(
-                    f"Status token for prospect {prospect.id} expired "
-                    f"({age.days} days old)"
-                )
-                return None
-
-        # Check if the pipeline has opted in to public status pages
-        if not prospect.pipeline or not prospect.pipeline.public_status_enabled:
+        if not prospect or not self._status_token_usable(prospect):
             return None
 
         # Keep the token stable — it is the credential embedded in the
@@ -6239,6 +6617,7 @@ class MembershipPipelineService:
             "applied_at": (
                 prospect.created_at.isoformat() if prospect.created_at else None
             ),
+            "can_withdraw": self._can_self_withdraw(prospect),
         }
 
     # =========================================================================

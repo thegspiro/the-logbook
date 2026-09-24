@@ -42,6 +42,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Notification Netting** — Offsetting actions (assign→unassign) automatically cancel pending notifications
 - **Barcode & QR Scanning** — Camera-based scanning for check-in/check-out operations via BarcodeDetector API (Chrome/Edge) with html5-qrcode fallback (Firefox/Safari/desktop). Desktop webcam support via environment→user facingMode fallback
 - **Thermal Label Printing** — Dymo (2.25×1.25″), Rollo (4×6″), and sheet (8.5×11″) label generation with Code128 barcodes
+- **Label print tracking** _(2026-09-23)_ — every item records when its label was confirmed printed; the items list filters on **Needs a Label** / **Label Printed**, **Select all N matching** takes a whole filtered set (up to 500) to the print page, and the print page opened with nothing selected offers a category / location / storage-area picker
 - **Category Management** — Organize items by category with low-stock thresholds and maintenance requirements
 - **Gear Requests** — Members can request checkouts, issuances, or purchases; admins approve/deny
 - **Org-Scoped Uniqueness** — Serial numbers, barcodes, and asset tags are unique per organization
@@ -213,7 +214,7 @@ wildcard, exactly as `view_medical` / `manage_medical` already were.
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage` |
 | `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage` |
-| `/inventory/print-labels`         | Barcode Label Printing    | Authenticated      |
+| `/inventory/print-labels`         | Barcode Label Printing    | `inventory.manage` |
 
 ---
 
@@ -221,19 +222,19 @@ wildcard, exactly as `view_medical` / `manage_medical` already were.
 
 ### Core Tables
 
-| Table                       | Purpose                                                                                                                                                                              |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `inventory_categories`      | Item categories with type, requirements, low-stock thresholds                                                                                                                        |
-| `inventory_items`           | Items with serial/barcode/asset tag, condition, status, tracking type                                                                                                                |
-| `inventory_lots`            | A dated batch of a consumable held as ready stock: lot number, expiration, quantity, received date. **The source of "on hand" for any item that has lots** _(documented 2026-08-10)_ |
-| `item_assignments`          | Permanent/temporary assignments of individual items to members                                                                                                                       |
-| `item_issuances`            | Pool item issuance records (quantity tracking)                                                                                                                                       |
-| `checkout_records`          | Temporary checkout records with expected return dates                                                                                                                                |
-| `maintenance_records`       | Maintenance history (inspection, repair, calibration, etc.)                                                                                                                          |
-| `inventory_vendors`         | Suppliers: name (unique per organization), account number, phone/email/fax/website, address, payment terms, preferred and active flags _(2026-08-16)_                                |
-| `inventory_vendor_contacts` | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag _(2026-08-16)_                                                         |
-| `inventory_nfc_tags`        | NFC tags on items or storage areas: hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization _(2026-09-24)_                              |
-| `inventory_nfc_scans`       | Staff NFC taps on items (lookups and put-aways): who, when, which tag, to and from which storage area _(2026-09-24)_                                                                 |
+| Table                       | Purpose                                                                                                                                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inventory_categories`      | Item categories with type, requirements, low-stock thresholds                                                                                                                                                                         |
+| `inventory_items`           | Items with serial/barcode/asset tag, condition, status, tracking type. `label_printed_at` / `label_printed_by` _(2026-09-23, migration `5a70c5dcd138`)_ record a confirmed label print and are cleared when the printed value changes |
+| `inventory_lots`            | A dated batch of a consumable held as ready stock: lot number, expiration, quantity, received date. **The source of "on hand" for any item that has lots** _(documented 2026-08-10)_                                                  |
+| `item_assignments`          | Permanent/temporary assignments of individual items to members                                                                                                                                                                        |
+| `item_issuances`            | Pool item issuance records (quantity tracking)                                                                                                                                                                                        |
+| `checkout_records`          | Temporary checkout records with expected return dates                                                                                                                                                                                 |
+| `maintenance_records`       | Maintenance history (inspection, repair, calibration, etc.)                                                                                                                                                                           |
+| `inventory_vendors`         | Suppliers: name (unique per organization), account number, phone/email/fax/website, address, payment terms, preferred and active flags _(2026-08-16)_                                                                                 |
+| `inventory_vendor_contacts` | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag _(2026-08-16)_                                                                                                          |
+| `inventory_nfc_tags`        | NFC tags on items or storage areas: hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization _(2026-09-24)_                                                                               |
+| `inventory_nfc_scans`       | Staff NFC taps on items (lookups and put-aways): who, when, which tag, to and from which storage area _(2026-09-24)_                                                                                                                  |
 
 ### Workflow Tables
 
@@ -384,10 +385,11 @@ POST   /api/v1/inventory/storage-areas/{id}/nfc-tags     # Link a tag to a stora
   (`ck_inventory_nfc_tags_one_target`).
 - **Put away** (`/inventory/put-away`). Tapping a shelf first _opens_ it: every
   item tapped afterwards goes onto it. Tapping an item first holds it until a
-  shelf is tapped, moves it there, and leaves no shelf open. The item's room
-  follows the shelf's when the shelf belongs to one. An item that is issued,
-  checked out, lost or stolen is refused: return, check in, or record it found
-  first.
+  shelf is tapped, moves it there, and leaves no shelf open. The move is the
+  barcode put-away's own (`InventoryService.put_away_items`), so both ways
+  follow one rule: the item takes the room of the nearest area that has one,
+  and an item that is assigned, checked out, lost, stolen or retired is
+  refused with the reason.
 - **The tap log** (`inventory_nfc_scans`) records taps by `inventory.manage`
   holders only: lookups in the scanner or through a written tag, and every
   put-away with where the item came from. A member opening a written tag from
@@ -399,6 +401,8 @@ POST   /api/v1/inventory/storage-areas/{id}/nfc-tags     # Link a tag to a stora
 ```
 GET    /api/v1/inventory/labels/formats                  # Available formats
 POST   /api/v1/inventory/labels/generate                 # Generate PDF labels
+POST   /api/v1/inventory/labels/mark-printed             # Record a confirmed print (inventory.manage; 1–500 ids) — 2026-09-23
+GET    /api/v1/inventory/items?label_printed=true|false  # Filter by label status (also on /items/export) — 2026-09-23
 ```
 
 ### Maintenance
@@ -685,13 +689,13 @@ A new Quartermaster planning tool (`/inventory/admin/impact-planner`, `inventory
 
 ### Edge Cases (2026-03-22)
 
-| Scenario                             | Behavior                                                  |
-| ------------------------------------ | --------------------------------------------------------- |
-| Barcode with insufficient quiet zone | ISO-compliant quiet zones enforced                        |
-| Thermal printer landscape label      | Auto-rotated to correct orientation                       |
-| Label batch > limit                  | Capped with user warning                                  |
-| Non-admin on inventory dashboard     | Sees only personally assigned equipment                   |
-| Desktop barcode scanning             | Falls back to user-facing camera if no environment camera |
+| Scenario                             | Behavior                                                                                 |
+| ------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Barcode with insufficient quiet zone | ISO-compliant quiet zones enforced                                                       |
+| Thermal printer landscape label      | Auto-rotated to correct orientation                                                      |
+| Label batch > limit                  | Refused above 500 with the match count; narrow the filters _(500 cap stated 2026-09-23)_ |
+| Non-admin on inventory dashboard     | Sees only personally assigned equipment                                                  |
+| Desktop barcode scanning             | Falls back to user-facing camera if no environment camera                                |
 
 ---
 

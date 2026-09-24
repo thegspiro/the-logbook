@@ -79,6 +79,11 @@ export const DEMO_MEMBER_CREDENTIALS = {
  * Must match LEGAL_PROPOSER_USERNAME in seed_demo_data.py, whose
  * `_ensure_legal_proposer` guarantees the role rather than leaving it to
  * arrive as a side effect of the election seeding.
+ *
+ * The same Secretary position is the reviewer on every seeded suggestion box
+ * (SUGGESTION_REVIEWER_USERNAME in seed_demo_data.py), so this is also the
+ * account that can photograph the Suggestions Review tab. The administrator
+ * reviews no box by design.
  */
 export const DEMO_SECRETARY_CREDENTIALS = {
   username: "okittredge",
@@ -1894,6 +1899,201 @@ async function unpinEverything(page) {
       `unpin cleanup gave up after ${UNPIN_LIMIT} pins — the list is not draining`,
     );
   }
+}
+
+/**
+ * The installed-app icon, as a phone would show it.
+ *
+ * No phone or emulator is available to the pipeline, so this shot cannot be a
+ * device capture. What it can guarantee is that the icons in it are real: the
+ * logo is uploaded through the same profile endpoint the settings screen uses,
+ * and both icons are fetched from the branding endpoint a phone downloads at
+ * install. Only the home screen around them is drawn, and each OS's icon shape
+ * is applied the way that OS applies it. The guide captions it as an
+ * illustration for that reason.
+ *
+ * The demo department has no seeded logo, deliberately: the sidebar draws the
+ * logo on nearly every page, and seeding one would put it into every later
+ * capture while the existing ones keep the stock icon. So the logo exists only
+ * while this shot runs, and `restoreDepartmentLogo` puts back whatever was
+ * there before.
+ */
+let logoBeforeIconShot = null;
+
+async function patchLogo(page, logo) {
+  const status = await page.evaluate(async (value) => {
+    const csrf =
+      document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+    const response = await fetch("/api/v1/organization/profile", {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": decodeURIComponent(csrf),
+      },
+      body: JSON.stringify({ logo: value }),
+    });
+    return response.status;
+  }, logo);
+  if (status !== 200) {
+    throw new Error(`setting the department logo returned ${status}`);
+  }
+}
+
+async function composeInstalledAppIcon(page) {
+  const current = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/organization/profile", {
+      credentials: "include",
+    });
+    if (!response.ok) return { error: response.status };
+    return { logo: (await response.json()).logo ?? null };
+  });
+  if ("error" in current) {
+    throw new Error(`reading the department profile returned ${current.error}`);
+  }
+  logoBeforeIconShot = current.logo;
+
+  // A crest drawn for the demo, marked DEMO so it cannot be mistaken for any
+  // real department's insignia.
+  const crest = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+    const shield = () => {
+      ctx.beginPath();
+      ctx.moveTo(256, 24);
+      ctx.lineTo(456, 84);
+      ctx.lineTo(456, 250);
+      ctx.bezierCurveTo(456, 380, 360, 450, 256, 490);
+      ctx.bezierCurveTo(152, 450, 56, 380, 56, 250);
+      ctx.lineTo(56, 84);
+      ctx.closePath();
+    };
+    shield();
+    ctx.fillStyle = "#7f1d1d";
+    ctx.fill();
+    ctx.lineWidth = 18;
+    ctx.strokeStyle = "#f5c542";
+    ctx.stroke();
+    ctx.fillStyle = "#f5c542";
+    ctx.save();
+    ctx.translate(256, 210);
+    for (let arm = 0; arm < 4; arm += 1) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-58, -118);
+      ctx.lineTo(0, -88);
+      ctx.lineTo(58, -118);
+      ctx.closePath();
+      ctx.fill();
+      ctx.rotate(Math.PI / 2);
+    }
+    ctx.restore();
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.font = "bold 76px sans-serif";
+    ctx.fillText("OFD", 256, 400);
+    ctx.font = "bold 30px sans-serif";
+    ctx.fillText("DEMO", 256, 442);
+    return canvas.toDataURL("image/png");
+  });
+  await patchLogo(page, crest);
+
+  const icons = await page.evaluate(async () => {
+    const out = {};
+    for (const variant of ["apple-touch", "maskable-512"]) {
+      const response = await fetch(
+        `/api/public/v1/branding/icon/${variant}.png`,
+        {
+          cache: "no-store",
+        },
+      );
+      const type = response.headers.get("content-type") ?? "";
+      if (!response.ok || !type.startsWith("image/png")) {
+        return { error: `${variant}: ${response.status} ${type}` };
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      let binary = "";
+      for (const byte of bytes) binary += String.fromCharCode(byte);
+      out[variant] = `data:image/png;base64,${btoa(binary)}`;
+    }
+    return out;
+  });
+  if (icons.error) {
+    throw new Error(`the branded icon was not served — ${icons.error}`);
+  }
+
+  const app = (label, color, glyph) =>
+    `<div class="app"><div class="tile" style="background:${color}">${glyph}</div><span>${label}</span></div>`;
+  const others = [
+    app("Phone", "#16a34a", "&#9990;"),
+    app("Messages", "#22c55e", "&#9993;"),
+    app("Camera", "#475569", "&#9673;"),
+    app("Calendar", "#ffffff;color:#dc2626", "24"),
+    app("Clock", "#111827", "&#9719;"),
+    app("Weather", "#0ea5e9", "&#9728;"),
+    app("Notes", "#facc15;color:#78350f", "&#9998;"),
+  ];
+  const grid = (logbook) =>
+    [...others.slice(0, 5), logbook, ...others.slice(5)].join("");
+
+  await page.setContent(`<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  body { margin: 0; background: #f1f5f9; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #home-screens { display: flex; gap: 48px; padding: 40px 48px 32px; width: max-content; }
+  figure { margin: 0; text-align: center; }
+  figcaption { margin-top: 14px; font-size: 14px; color: #334155; }
+  .phone { width: 300px; height: 600px; border-radius: 44px; border: 10px solid #0f172a; overflow: hidden; position: relative; box-sizing: border-box; }
+  .ios { background: linear-gradient(160deg, #1e3a8a, #7c3aed 55%, #db2777); }
+  .android { background: linear-gradient(200deg, #064e3b, #0f766e 50%, #1e293b); border-radius: 32px; }
+  .status { display: flex; justify-content: space-between; color: #fff; font-size: 13px; font-weight: 600; padding: 14px 24px 0; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); row-gap: 22px; padding: 30px 16px 0; }
+  .app { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .app span { color: #fff; font-size: 11px; text-shadow: 0 1px 2px rgba(0,0,0,.5); max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile { width: 54px; height: 54px; display: flex; align-items: center; justify-content: center; font-size: 26px; color: #fff; font-weight: 600; }
+  .ios .tile { border-radius: 12px; }
+  .android .tile { border-radius: 50%; }
+  .tile img { width: 100%; height: 100%; border-radius: inherit; display: block; }
+  .dock { position: absolute; left: 12px; right: 12px; bottom: 14px; height: 76px; border-radius: 26px; background: rgba(255,255,255,.22); }
+  .android .dock { background: rgba(255,255,255,.12); height: 44px; border-radius: 22px; left: 24px; right: 24px; }
+</style></head><body>
+<div id="home-screens">
+  <figure>
+    <div class="phone ios"><div class="status"><span>9:41</span><span>&#9679;&#9679;&#9679;</span></div>
+      <div class="grid">${grid(`<div class="app"><div class="tile"><img alt="" src="${icons["apple-touch"]}"></div><span>The Logbook</span></div>`)}</div>
+      <div class="dock"></div></div>
+    <figcaption>iPhone — the apple-touch icon, corners rounded by iOS</figcaption>
+  </figure>
+  <figure>
+    <div class="phone android"><div class="status"><span>9:41</span><span>&#9679;&#9679;&#9679;</span></div>
+      <div class="grid">${grid(`<div class="app"><div class="tile"><img alt="" src="${icons["maskable-512"]}"></div><span>Logbook</span></div>`)}</div>
+      <div class="dock"></div></div>
+    <figcaption>Android — the maskable icon, trimmed to a circle</figcaption>
+  </figure>
+</div></body></html>`);
+  await page.waitForFunction(() =>
+    [...document.images].every((img) => img.complete && img.naturalWidth > 0),
+  );
+}
+
+async function restoreDepartmentLogo(page) {
+  // The profile endpoint set the logo, so the same page and session put it
+  // back. setContent replaced the document but not the origin or cookies.
+  await patchLogo(page, logoBeforeIconShot);
+  if (logoBeforeIconShot === null) {
+    const status = await page.evaluate(async () => {
+      const response = await fetch(
+        "/api/public/v1/branding/icon/apple-touch.png",
+        { cache: "no-store" },
+      );
+      return response.status;
+    });
+    if (status !== 404) {
+      throw new Error(`the demo logo is still being served (${status})`);
+    }
+  }
+  logoBeforeIconShot = null;
 }
 
 export const SHOTS = [
@@ -4204,22 +4404,27 @@ export const SHOTS = [
     // scrolling element, so an element screenshot renders it whole and would
     // be the same picture as the member-section shot above. Scrolling it and
     // taking the viewport is what actually shows the admin half.
+    // Forms & Comms rather than Members: the Suggestion Boxes link under it is
+    // what this image was last re-shot for (2026-09-24). Scrolling the link
+    // itself into view replaces setting the nav's scrollTop, which silently
+    // did nothing once the scrolling element changed, leaving the top of the
+    // sidebar in frame.
     prepare: async (page) => {
       await page
-        .getByRole("button", { name: /^Members$/ })
+        .getByRole("button", { name: /^Forms & Comms$/ })
         .last()
-        .click({ timeout: 10_000 })
-        .catch(() => {});
-      await page.waitForTimeout(300);
-      await page
+        .click({ timeout: 10_000 });
+      const link = page
         .locator("nav")
-        .first()
-        .evaluate((el) => {
-          el.scrollTop = el.scrollHeight;
-        })
-        .catch(() => {});
+        .getByText("Suggestion Boxes", { exact: true })
+        .first();
+      await link.waitFor({ timeout: 10_000 });
+      // Centred, so the whole Forms & Comms group sits mid-sidebar rather than
+      // its last link resting against the footer.
+      await link.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(400);
     },
+    expect: { selector: 'nav :text-is("Suggestion Boxes")' },
     fullPage: false,
   },
   {
@@ -4487,6 +4692,37 @@ export const SHOTS = [
     },
   },
   {
+    id: "15-15-meeting-stage-config",
+    doc: "15-prospective-members.md",
+    line: 197,
+    anchor: "the Meeting stage editor with an Auto-Link Event Type set",
+    alt: "Editing the Attend a Business Meeting stage: Auto-Link Event Type set to Next Business Meeting, its help text saying that naming an event makes attendance required, the next upcoming meeting it will link, and the checkbox reading Auto-advance when the event's attendance is finalized, with its explanation that a sign-in at the door is not enough on its own",
+    route: "/prospective-members/settings",
+    // The checkbox label changed on 2026-09-16; asserting its new wording is
+    // what tells a stale frontend from a current one.
+    expect: "Auto-advance when the event's attendance is finalized",
+    viewport: { width: 1280, height: 2000 },
+    selector: '[aria-labelledby="stage-config-modal-title"] > div',
+    // The seeded Associate Member Pipeline carries the only Meeting stage that
+    // names its event. The dialog is opened and closed unsaved.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Associate Member Pipeline/i })
+        .first()
+        .click();
+      const row = page
+        .locator("div")
+        .filter({ hasText: "Attend a Business Meeting" })
+        .filter({ has: page.locator('button[title="Edit stage"]') })
+        .last();
+      await row.locator('button[title="Edit stage"]').first().click();
+      await page
+        .locator('[aria-labelledby="stage-config-modal-title"]')
+        .getByText("Auto-advance when the event's attendance is finalized")
+        .waitFor({ timeout: 10_000 });
+    },
+  },
+  {
     id: "20-12-stage-picker-election-vote",
     doc: "20-september-2026-release-changes.md",
     line: 1355,
@@ -4539,6 +4775,128 @@ export const SHOTS = [
         );
       }
     },
+  },
+  {
+    id: "20-15-suggestions-sidebar-submit",
+    doc: "20-september-2026-release-changes.md",
+    line: 1528,
+    anchor: "capture as an ordinary member so the",
+    alt: "An ordinary member's view: the Suggestions item in the sidebar just below Messages, and the Suggestions page open on its Submit tab with the Training ideas box chosen and its description showing — no Review tab",
+    route: "/suggestions",
+    auth: "member",
+    expect: "Read by the Secretary and the Training Officer",
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Training ideas" });
+      // The member's menu is longer than the desktop viewport and Suggestions
+      // sits below Messages, past the fold -- the first capture showed only
+      // the active marker's top edge. Scroll it into view inside the menu, and
+      // refuse to shoot if it is still off screen: the item is the subject.
+      // Sidebar items are buttons that navigate, not links; the current one
+      // carries aria-current, which also proves the item is highlighted.
+      const item = page
+        .locator('button[aria-current="page"]', { hasText: /^Suggestions$/ })
+        .first();
+      await item.scrollIntoViewIfNeeded();
+      const box = await item.boundingBox();
+      const viewport = page.viewportSize();
+      if (
+        !box ||
+        !viewport ||
+        box.y < 0 ||
+        box.y + box.height > viewport.height
+      ) {
+        throw new Error("the Suggestions sidebar item is not on screen");
+      }
+      // The member must not be a reviewer, or the frame shows the tab the
+      // caption says is absent.
+      if (await page.getByRole("tab", { name: /^Review/ }).count()) {
+        throw new Error(
+          "the demo member has a Review tab; they must review no box",
+        );
+      }
+    },
+  },
+  {
+    id: "20-14-applicant-meeting-stage-hint",
+    doc: "20-september-2026-release-changes.md",
+    line: 1584,
+    anchor:
+      "the applicant detail drawer for an applicant on a **meeting** stage whose",
+    alt: "The applicant drawer for an applicant on the Attend a Business Meeting stage, whose Auto-Link Event Type is set: the hint above the action row says they must be checked in at the stage's event and that event's attendance must be finalized before they can advance",
+    route: "/prospective-members",
+    // The hint's own words. It renders only on a Meeting stage that names its
+    // event, so it cannot be satisfied by any other stage or drawer state.
+    expect: "attendance must be finalized, before they can advance",
+    viewport: { width: 1280, height: 1600 },
+    selector: '[aria-label="Applicant details"]',
+    // A new applicant has uploaded nothing, so the drawer honestly reads "No
+    // documents yet" -- as 15-14 allows for the same reason. The subject is
+    // the hint, which `expect` already proves is in frame.
+    allowEmptyState: true,
+    prepare: async (page) => {
+      // The default pipeline has no Meeting stage; seed_meeting_stage_applicant
+      // parks one applicant on a second, non-default pipeline for this shot.
+      await page
+        .locator("select", {
+          has: page.locator("option", { hasText: "Associate Member Pipeline" }),
+        })
+        .first()
+        .selectOption({ label: "Associate Member Pipeline" });
+      await page.getByText("Priya Deshmukh").first().click();
+      await page.locator('[aria-label="Applicant details"]').waitFor();
+    },
+  },
+  {
+    id: "20-13-applicant-drawer-not-elected",
+    doc: "20-september-2026-release-changes.md",
+    line: 1324,
+    anchor:
+      "the applicant detail drawer for an applicant whose election package reads",
+    alt: "An applicant's drawer after a losing vote — the Membership Vote stage, the red not elected package status, the banner and a link to the closed ballot, and an action row that offers Advance",
+    route: "/prospective-members",
+    // The banner's own sentence. "Election Package" is the section heading and
+    // renders for every applicant on this stage whatever the ballot decided,
+    // so it would be satisfied by the elected and draft packages too -- the
+    // three sit on the same stage by design, and the board offers all three.
+    expect: "This applicant was not elected by the membership vote",
+    prepare: async (page) => {
+      // Devon Marsh is the seeded losing vote (6/14). The status is written
+      // only by `_sync_package_statuses` when an election closes, so no other
+      // seeded applicant can stand in for this one.
+      const card = page.locator("[role='button'][aria-label^='Devon Marsh']");
+      await card.first().waitFor({ timeout: 30_000 });
+      await card.first().click();
+      await page
+        .getByText("This applicant was not elected by the membership vote")
+        .waitFor({ timeout: 30_000 });
+      // Advance, not Convert: the panel renders only on the vote stage and
+      // Convert only on the pipeline's last one, so a frame holding both is
+      // not reachable. The caption says Advance, so assert Advance.
+      await page
+        .getByRole("button", { name: /^Advance$/ })
+        .first()
+        .waitFor({ timeout: 30_000 });
+      // The ballot that decided it, named beneath the banner. This is the one
+      // part of the panel a mapper regression removes silently -- the guard is
+      // `election_id && election_title`, so dropping the title renders nothing
+      // rather than failing. Asserted on the state rather than the seeded
+      // title so a renamed election does not fail the capture.
+      await page
+        .getByRole("button", { name: /Closed$/ })
+        .first()
+        .waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+    },
+    // The drawer rather than the screen: it is taller than the viewport, and
+    // the subject runs from the stage panel down to the action row.
+    selector: "div.drawer-panel",
+    // "No documents yet" -- Devon Marsh is seeded as a vote outcome and carries
+    // no uploads. The phrase sits below the drawer's own scroll, so it is in
+    // the DOM the check reads and not in the frame; the subject, the package
+    // status and the action row, is fully rendered.
+    allowEmptyState: true,
   },
   {
     id: "20-04-org-profile-navigation-layout",
@@ -9894,6 +10252,215 @@ export const SHOTS = [
     },
     fullPage: true,
   },
+  // ── 07 Suggestion boxes (2026-09-23): seeded by seed_suggestion_boxes ──
+  {
+    id: "07-14-suggestion-box-dialog",
+    doc: "07-documents-forms.md",
+    line: 542,
+    anchor: 'dialog filled in for a "training ideas" box',
+    alt: "The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up ticked, the note that managing boxes does not let you read them, and two reviewer positions ticked",
+    route: "/communications/suggestion-boxes",
+    // The sentence the shot exists to carry. It sits between the switches and
+    // the reviewer pickers, so a frame cut short above it also fails here.
+    expect: "Managing boxes does not by itself let you read them",
+    viewport: { width: 1280, height: 1500 },
+    // The panel, not `[role="dialog"]`: Modal puts that role on the fixed
+    // full-screen backdrop, so clipping to it photographs the whole dimmed page.
+    selector: '[data-testid="modal-panel"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /New box/ })
+        .first()
+        .click();
+      const dialog = page.locator('[role="dialog"]');
+      await dialog.waitFor({ state: "visible" });
+      // Not "Training ideas", which the seeder already created: the picture is
+      // of setting up a box, and a name the page behind already lists would
+      // save as "A suggestion box with that name already exists." Nothing is
+      // saved either way -- Save box is never pressed.
+      await dialog.locator("#box-name").fill("Officer development");
+      await dialog
+        .locator("#box-description")
+        .fill(
+          "Ideas for officer training, mentoring and promotion prep. Read by the Secretary and the Training Officer.",
+        );
+      await dialog.locator("#box-anonymity").selectOption("allowed");
+      const followUp = dialog
+        .locator("label", { hasText: "Allow follow-up" })
+        .locator('input[type="checkbox"]');
+      if (!(await followUp.isChecked())) await followUp.check();
+      const positions = dialog.locator("fieldset", {
+        has: page.locator("legend", { hasText: "Reviewer positions" }),
+      });
+      for (const name of ["Secretary", "Training Officer"]) {
+        await positions
+          .locator("label", { hasText: new RegExp(`^${name}$`) })
+          .locator('input[type="checkbox"]')
+          .check();
+      }
+      // The position list scrolls inside a 12rem box and runs alphabetically,
+      // so the two ticked rows can sit below its fold. Bring the first into
+      // view inside the list, not the page.
+      await positions
+        .locator("label", { hasText: /^Secretary$/ })
+        .scrollIntoViewIfNeeded();
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+    },
+  },
+  {
+    id: "07-15-suggestion-submit-anonymous",
+    doc: "07-documents-forms.md",
+    line: 561,
+    anchor: "one screenshot attached, and",
+    alt: "Suggestions → Submit with the Training ideas box chosen, its description and anonymity hint showing, a title and details filled in, one screenshot attached, and Submit anonymously ticked with the warning to check screenshots for your name",
+    route: "/suggestions",
+    auth: "member",
+    // Shown only once the submission will be anonymous, so it proves the
+    // checkbox took effect and not just that the form rendered.
+    expect: "Check the screenshots themselves do not show your name",
+    viewport: { width: 1280, height: 1600 },
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Training ideas" });
+      await page
+        .locator("label", { hasText: "Submit anonymously" })
+        .locator('input[type="checkbox"]')
+        .check();
+      await page
+        .locator("#suggestion-title")
+        .fill("Pair probationary members with a mentor for their first year");
+      await page
+        .locator("#suggestion-details")
+        .fill(
+          "New members learn most from whoever they ride with. A named mentor for the first twelve months — someone they can ask the questions they would not ask an officer — would help them settle in and stay.",
+        );
+      // Drawn in the page rather than read from disk: the manifest imports
+      // nothing, and a real screen capture could carry somebody's name --
+      // exactly what the warning in this frame tells members to check for.
+      const base64 = await page.evaluate(() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 640;
+        canvas.height = 400;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#f1f5f9";
+        ctx.fillRect(0, 0, 640, 400);
+        ctx.fillStyle = "#991b1b";
+        ctx.fillRect(0, 0, 640, 56);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 24px sans-serif";
+        ctx.fillText("Mentor pairing — draft", 24, 37);
+        ctx.fillStyle = "#334155";
+        ctx.font = "18px sans-serif";
+        [
+          "Month 1: ride-alongs",
+          "Month 3: first review",
+          "Month 6: skills sign-off",
+          "Month 12: close-out",
+        ].forEach((line, i) => ctx.fillText(line, 32, 110 + i * 56));
+        return canvas.toDataURL("image/png").split(",")[1];
+      });
+      await page.locator('input[type="file"]').setInputFiles({
+        name: "mentor-pairing-draft.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(base64, "base64"),
+      });
+      await page.getByText("mentor-pairing-draft.png").first().waitFor();
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+    },
+  },
+  {
+    id: "07-16-suggestion-follow-up-key",
+    doc: "07-documents-forms.md",
+    line: 594,
+    anchor: "the receipt shown after an anonymous submission",
+    alt: "The Save your follow-up key panel shown after an anonymous submission, with a demonstration key and the Copy and I saved it buttons",
+    route: "/suggestions",
+    auth: "member",
+    expect: "Save your follow-up key",
+    selector: '[role="tabpanel"] > div > div:first-child',
+    // The submission is answered here, never sent. A real receipt would write a
+    // suggestion into the demo department on every capture run, and would put
+    // a real follow-up key -- the submitter's only credential -- into a public
+    // image. The body is the endpoint's exact response shape with a key that is
+    // visibly a demonstration value.
+    beforeNavigate: async (page) => {
+      await page.route(
+        "**/api/v1/suggestions/boxes/*/submissions",
+        async (route) => {
+          if (route.request().method() !== "POST") return route.fallback();
+          await route.fulfill({
+            status: 201,
+            contentType: "application/json",
+            body: JSON.stringify({
+              id: null,
+              isAnonymous: true,
+              followUpKey: "DEMO-KEY-kR7vQ2mX9pLw4NcT8hYa3sBe6uFj1ZdG5oVq",
+            }),
+          });
+        },
+      );
+    },
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Training ideas" });
+      await page
+        .locator("label", { hasText: "Submit anonymously" })
+        .locator('input[type="checkbox"]')
+        .check();
+      await page
+        .locator("#suggestion-title")
+        .fill("Rotate drill leads each month");
+      await page
+        .locator("#suggestion-details")
+        .fill("Let a different firefighter plan and lead one drill a month.");
+      await page.getByRole("button", { name: "Submit anonymously" }).click();
+      await page.getByText("Save your follow-up key").waitFor();
+    },
+  },
+  {
+    id: "07-17-suggestion-review",
+    doc: "07-documents-forms.md",
+    line: 633,
+    anchor: "tab with one submission open: the disposition",
+    alt: "Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the internal note, the Forwarded to list naming the Training Officer position, and the follow-up thread with the reviewer's question and the anonymous submitter's reply",
+    route: "/suggestions?tab=review",
+    // The seeded reviewer is the Secretary position, which this account holds.
+    // The administrator reviews no box, by design, and has no Review tab.
+    auth: "secretary",
+    expect: "Anonymous submitter",
+    viewport: { width: 1280, height: 1800 },
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: /More hands-on SCBA time for probationary members/,
+        })
+        .first()
+        .click();
+      await page
+        .locator("article h2", {
+          hasText: "More hands-on SCBA time for probationary members",
+        })
+        .waitFor();
+      const disposition = await page
+        .locator("#suggestion-disposition")
+        .inputValue();
+      if (disposition !== "under_review") {
+        throw new Error(
+          `disposition reads ${disposition}; re-run seed_demo_data.py, which leaves this submission under review`,
+        );
+      }
+    },
+  },
 
   // ── Seventh batch: apparatus labels, badges and EVOC ────────────────
   {
@@ -10526,6 +11093,17 @@ export const SHOTS = [
       for (let index = 0; index < count; index += 1) {
         await boxes.nth(index).click({ timeout: 10_000 });
       }
+      // The table once drew a second bar under the page's, and this shot
+      // pictured both for weeks. One "N selected" is the whole claim.
+      const bars = await page
+        .getByText(`${count} selected`, { exact: true })
+        .count();
+      if (bars !== 1) {
+        throw new Error(`expected one bulk bar, found ${bars}`);
+      }
+      await page
+        .getByRole("button", { name: /hold all/i })
+        .waitFor({ timeout: 10_000 });
     },
     fullPage: true,
   },
@@ -11001,6 +11579,28 @@ export const SHOTS = [
     route: "/medical-screening",
     prepare: clickByName(/^compliance$/i),
     fullPage: true,
+  },
+  {
+    id: "13-07-add-record-linkage-notice",
+    doc: "13-medical-screening.md",
+    line: 239,
+    anchor: "dialog, showing the amber",
+    alt: "The Add Screening Record dialog with the amber notice at the top: not linked to a member or prospect, so the record will not count toward anyone's compliance",
+    route: "/medical-screening",
+    // The notice's own words, not the dialog title: the Edit dialog shares the
+    // title shape and deliberately has no notice, so only this proves the
+    // create dialog is the one in frame.
+    expect: "Not linked to a member or prospect",
+    selector: '[aria-labelledby="screening-record-dialog-title"] .modal-panel',
+    prepare: async (page) => {
+      await clickByName(/records/i)(page);
+      await page
+        .getByRole("button", { name: /Add Record/ })
+        .first()
+        .click();
+      await page.locator("#screening-record-dialog-title").waitFor();
+      // Nothing is saved: the dialog is closed by the next shot's navigation.
+    },
   },
   {
     id: "04-08-calendar-view",
@@ -12112,6 +12712,101 @@ export const SHOTS = [
     prepare: openOverdueItem,
     fullPage: true,
   },
+  // ── 05 Label printing (2026-09-23): print by filter, and printed tracking ──
+  // Every seeded item reads "Needs a label" -- there is no print history on a
+  // fresh department -- which is exactly the state these three picture. None of
+  // them answers the "Did the labels print correctly?" question, so nothing is
+  // marked and a re-run finds the same state.
+  {
+    id: "05-83-items-select-all-matching",
+    doc: "05-inventory.md",
+    line: 803,
+    anchor: "chosen in the new label-status dropdown, one row ticked",
+    alt: "The inventory items list filtered to Structural PPE and Needs a Label, one row ticked, and the bulk bar reading All 11 matching selected beside the Print Labels button",
+    route: "/inventory",
+    expect: "matching selected",
+    prepare: async (page) => {
+      await page
+        .locator('select[aria-label="Filter by category"]')
+        .selectOption({ label: "Structural PPE" });
+      await page
+        .locator('select[aria-label="Filter by label status"]')
+        .selectOption("needed");
+      await page.waitForTimeout(1_200);
+      await page.locator('table tbody input[type="checkbox"]').first().check();
+      await page
+        .getByRole("button", { name: /^Select all \d+ matching$/ })
+        .click();
+      await page.getByText(/^All \d+ matching selected$/).waitFor();
+      await page.evaluate(() => window.scrollTo(0, 0));
+    },
+  },
+  {
+    id: "05-84-label-scope-picker",
+    doc: "05-inventory.md",
+    line: 817,
+    anchor: "the label print page opened with no items selected",
+    alt: "The label print page opened with nothing selected: the Print barcode labels picker with Category set to Structural PPE, Location and Storage area left on All, Only items that still need a label ticked, the live count reading 11 items match, and the Prepare 11 labels button",
+    route: "/inventory/print-labels",
+    expect: "items match",
+    selector: 'div.card:has(h1:text-is("Print barcode labels"))',
+    prepare: async (page) => {
+      await page.getByText("Print barcode labels").first().waitFor();
+      await page
+        .locator("#label-scope-category")
+        .selectOption({ label: "Structural PPE" });
+      await page
+        .locator("label", { hasText: "Only items that still need a label" })
+        .locator('input[type="checkbox"]')
+        .check();
+      await page
+        .getByText(/\d+ items? match\./)
+        .first()
+        .waitFor();
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+    },
+  },
+  {
+    id: "05-85-label-print-confirm",
+    doc: "05-inventory.md",
+    line: 863,
+    anchor: "immediately after pressing **print labels**",
+    alt: "The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark 11 items as labelled and Not yet, above the label preview",
+    route: "/inventory/print-labels",
+    expect: "Did the labels print correctly?",
+    // Full page, as 05-33 is: this page renders its label preview well below
+    // the fold, and a viewport shot shows the prompt with nothing it refers to.
+    fullPage: true,
+    // The print runs through a hidden iframe's print(). Headless Chromium
+    // returns from it at once, so the prompt appears as it would the moment a
+    // real print dialog closes. Mark is never pressed: nothing is recorded.
+    prepare: async (page) => {
+      await page
+        .locator("#label-scope-category")
+        .selectOption({ label: "Structural PPE" });
+      await page
+        .locator("label", { hasText: "Only items that still need a label" })
+        .locator('input[type="checkbox"]')
+        .check();
+      await page.getByRole("button", { name: /^Prepare \d+ labels?$/ }).click();
+      const print = page.getByRole("button", { name: /Print\s*Labels/ });
+      await print.waitFor();
+      await page.waitForFunction(
+        () =>
+          [...document.querySelectorAll("button")].some(
+            (b) => /Print\s*Labels/.test(b.textContent ?? "") && !b.disabled,
+          ),
+        null,
+        { timeout: 20_000 },
+      );
+      await print.click();
+      await page.getByText("Did the labels print correctly?").waitFor();
+      await page.evaluate(() => window.scrollTo(0, 0));
+    },
+  },
   {
     // Separation of duties is about people, not permissions: the chief holds
     // `scheduling.manage` and still cannot review the swap they raised. Shot as
@@ -12804,6 +13499,23 @@ export const SHOTS = [
     viewport: { width: 1024, height: 768 },
     prepare: armStationAndTap,
     fullPage: true,
+  },
+  {
+    id: "10-22-installed-app-icon",
+    // The server's icons, inlined once fetched. Nothing else on the composed
+    // screen is an image, so this fails if either icon never arrived.
+    expect: { selector: '#home-screens img[src^="data:image/png"]' },
+    doc: "10-mobile-pwa.md",
+    line: 135,
+    anchor:
+      "A phone home screen (iPhone or Android) with the installed Logbook app",
+    alt: "An illustration built from the server's real icons, not a device capture: an iPhone home screen with the demo department's crest as The Logbook icon, corners rounded, and an Android home screen with the maskable icon trimmed to a circle, each beside ordinary apps for scale",
+    route: "/dashboard",
+    viewport: { width: 1280, height: 900 },
+    prepare: composeInstalledAppIcon,
+    cleanup: restoreDepartmentLogo,
+    selector: "#home-screens",
+    allowEmptyState: true,
   },
   {
     id: "10-21-check-in-station-tablet",

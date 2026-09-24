@@ -738,6 +738,22 @@ printing the two `.env` lines.]**
 > They're browsing in Safari. The push API only exists once the app is installed
 > to the home screen. That's Apple's rule."
 
+**[SCREEN: Two phones side by side — the installed app's icon showing the demo
+department's logo on both.]**
+
+> "Related, and new in September 2026: the installed app's icon is now your
+> department's logo, drawn by the server into every size the phones ask for. No
+> setting — upload a logo and it's used. Two things land on your desk. Members
+> who installed before keep the old icon until they reinstall; there's no way to
+> push a new one. And if you put your **own** reverse proxy in front of the
+> stack, make sure the icon paths — `/pwa-192x192.png`, `/apple-touch-icon.png`,
+> the `apple-splash` images and the new maskable icon — go through to the
+> frontend container. If your proxy serves the built files straight off disk,
+> you'll keep serving the stock icon, because the branded one never exists on
+> disk."
+
+**[CALLOUT: "Own reverse proxy? Pass the icon paths to the frontend container"]**
+
 **[SCREEN: `SECURITY_REQUIRE_TLS=true` in the `.env`.]**
 
 > "While you're in that file — `SECURITY_REQUIRE_TLS`. If your database and Redis

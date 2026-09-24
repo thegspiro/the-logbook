@@ -455,13 +455,14 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 ### Member-Facing Pages
 
-| URL                        | Page                         | Permission         |
-| -------------------------- | ---------------------------- | ------------------ |
-| `/inventory`               | Inventory Items List         | `inventory.manage` |
-| `/inventory/items`         | Inventory Items List (alias) | `inventory.manage` |
-| `/inventory/my-equipment`  | My Equipment                 | Authenticated      |
-| `/inventory/items/:id`     | Item Detail                  | Authenticated      |
-| `/inventory/storage-areas` | Storage Areas                | `inventory.manage` |
+| URL                                     | Page                         | Permission         |
+| --------------------------------------- | ---------------------------- | ------------------ |
+| `/inventory`                            | Inventory Items List         | `inventory.manage` |
+| `/inventory/items`                      | Inventory Items List (alias) | `inventory.manage` |
+| `/inventory/my-equipment`               | My Equipment                 | Authenticated      |
+| `/inventory/items/:id`                  | Item Detail                  | Authenticated      |
+| `/inventory/storage-areas`              | Storage Areas                | `inventory.manage` |
+| `/inventory/storage-areas/print-labels` | Storage Area Labels          | `inventory.manage` |
 
 > **The catalogue is manager-only; a member's own kit is not.** The two items-list
 > routes show the whole department's gear and gate on `inventory.manage`. A member's
@@ -542,7 +543,7 @@ Compliance, Department Store, and Setup & Tools.
 
 > **NFC tags on items are opt-in** _(2026-09-24)_. `/inventory/admin/nfc` turns on `inventory.nfc_tracking_enabled` in the organization settings; until then every `/inventory/nfc*` and `/inventory/items/{id}/nfc-tags` endpoint answers 403. Once on, item detail shows an **NFC Tags** card to `inventory.manage` holders (link by writing a URL onto a blank tag, by reading the chip serial, or by typing the serial), and the distribute/return scanner gains **Tap NFC**. A written tag carries `/inventory/tag/<code>`: the code names the tag, not the item, so unlinking a tag stops its URL resolving, and any phone — an iPhone included — opens the item by tapping it. Only Chrome on Android can link tags or read them inside the app.
 >
-> **Phase 2** _(2026-09-24)_: storage areas carry tags too (linked from the storage area editor), and `/inventory/put-away` records where items are by tap — shelf first opens the shelf for every item tapped after it; item first moves that one item onto the next shelf tapped. Put-away refuses an item that is issued, checked out, lost or stolen. Every tap by an `inventory.manage` holder is logged in `inventory_nfc_scans` and shown on the item as **Last Seen (NFC)**; a member opening a written tag from their own phone is not logged. A shelf's written tag opens put-away with that shelf chosen for an inventory manager.
+> **Phase 2** _(2026-09-24)_: storage areas carry tags too (linked from the storage area editor), and `/inventory/put-away` records where items are by tap — shelf first opens the shelf for every item tapped after it; item first moves that one item onto the next shelf tapped. The move goes through the barcode put-away's rule (`InventoryService.put_away_items`), so an item that is assigned, checked out, lost, stolen or retired is refused, and the item takes the room of the nearest storage area that has one. Every tap by an `inventory.manage` holder is logged in `inventory_nfc_scans` and shown on the item as **Last Seen (NFC)**; a member opening a written tag from their own phone is not logged. A shelf's written tag opens put-away with that shelf chosen for an inventory manager.
 
 > **Receiving a delivery and stocking the catalog are both one-pass jobs now** _(2026-08-10)_. Two modals open from the items list (`/inventory`, and the same screen at `/inventory/admin/items`):
 >
@@ -1322,20 +1323,21 @@ lot's number or expiration date require `inventory.check_manage` or
 Print-optimized routes. They render a print layout rather than an app screen, and
 are opened from the corresponding module's list view.
 
-| URL                                 | Prints                  | Permission                                   |
-| ----------------------------------- | ----------------------- | -------------------------------------------- |
-| `/members/print-labels`             | Member labels           | `members.view`                               |
-| `/members/:userId/id-card`          | Member ID card          | Authenticated                                |
-| `/members/scan`                     | Member badge scanner    | `users.view` **OR** `members.manage`         |
-| `/prospective-members/print-labels` | Applicant badges        | `prospective_members.view`                   |
-| `/inventory/print-labels`           | Inventory labels        | `inventory.manage`                           |
-| `/apparatus/print-labels`           | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`   |
-| `/facilities/print-labels`          | Facility / room labels  | `facilities.view` **OR** `facilities.manage` |
-| `/training/print/member`            | Member training history | Authenticated                                |
-| `/training/print/program`           | Training program        | Authenticated                                |
-| `/training/print/compliance`        | Compliance matrix       | `training.manage`                            |
-| `/scheduling/checkin/print`         | Shift check-in sheet    | Authenticated                                |
-| `/scheduling/shift-reports/print`   | Shift report            | Authenticated                                |
+| URL                                     | Prints                  | Permission                                   |
+| --------------------------------------- | ----------------------- | -------------------------------------------- |
+| `/members/print-labels`                 | Member labels           | `members.view`                               |
+| `/members/:userId/id-card`              | Member ID card          | Authenticated                                |
+| `/members/scan`                         | Member badge scanner    | `users.view` **OR** `members.manage`         |
+| `/prospective-members/print-labels`     | Applicant badges        | `prospective_members.view`                   |
+| `/inventory/print-labels`               | Inventory labels        | `inventory.manage`                           |
+| `/inventory/storage-areas/print-labels` | Storage area labels     | `inventory.manage`                           |
+| `/apparatus/print-labels`               | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`   |
+| `/facilities/print-labels`              | Facility / room labels  | `facilities.view` **OR** `facilities.manage` |
+| `/training/print/member`                | Member training history | Authenticated                                |
+| `/training/print/program`               | Training program        | Authenticated                                |
+| `/training/print/compliance`            | Compliance matrix       | `training.manage`                            |
+| `/scheduling/checkin/print`             | Shift check-in sheet    | Authenticated                                |
+| `/scheduling/shift-reports/print`       | Shift report            | Authenticated                                |
 
 ---
 

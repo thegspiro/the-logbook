@@ -10,12 +10,12 @@ Guide to developing the React/TypeScript frontend for The Logbook.
 | --------------- | ------- | ------------------------------------------------- |
 | React           | 19      | UI framework                                      |
 | TypeScript      | 5.9     | Type-safe JavaScript                              |
-| Vite            | 7.3     | Build tool and dev server                         |
-| Vitest          | 4       | Unit/integration testing                          |
+| Vite            | 8.3     | Build tool and dev server                         |
+| Vitest          | 5       | Unit/integration testing                          |
 | Tailwind CSS    | 4.2     | Utility-first CSS                                 |
 | Zod             | 4       | Schema validation                                 |
 | ESLint          | 9       | Linting (flat config)                             |
-| React Router    | 8.3     | Client-side routing (core `react-router` package) |
+| React Router    | 8.4     | Client-side routing (core `react-router` package) |
 | React Hook Form | 7.8x    | Form management                                   |
 | Lucide React    | 1.x     | Icons                                             |
 | React Hot Toast | —       | Toast notifications                               |

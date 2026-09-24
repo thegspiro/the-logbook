@@ -424,7 +424,13 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         'Configure pipeline stages',
         'Convert applicants to members',
       ],
-      defaultManagePositions: ['it_manager', 'president', 'fire_chief', 'membership_coordinator'],
+      defaultManagePositions: [
+        'it_manager',
+        'president',
+        'fire_chief',
+        'membership_coordinator',
+        'assistant_membership_coordinator',
+      ],
     },
   },
 

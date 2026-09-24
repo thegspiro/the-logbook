@@ -802,7 +802,8 @@ appear.]**
 
 > "The Logbook is a Progressive Web App — which means it works on your phone's
 > browser just like a native app. On most phones, you can 'Add to Home Screen'
-> to get an app icon."
+> to get an app icon — and if your department has uploaded its logo, that icon
+> **is** your department's logo."
 
 **[SCREEN: Show adding The Logbook to the home screen on a mobile device.
 Show the app opening full-screen like a native app.]**
@@ -832,6 +833,10 @@ My Account > Notifications, showing the Push notifications toggle.]**
 > top-left corner, which is the hardest place on a big phone to reach one-handed."
 
 **[CALLOUT: "Add to Home Screen = full app experience on your phone"]**
+
+> "Already installed it and still seeing the old icon? That's the phone, not
+> us — it reads the icon once, the day you install. Delete it from the home
+> screen and add it again."
 
 ### WRAP-UP (23:30 – 24:00)
 

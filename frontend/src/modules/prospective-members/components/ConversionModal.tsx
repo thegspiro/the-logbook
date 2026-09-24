@@ -29,6 +29,7 @@ import type { Applicant, TargetMembershipType, EmergencyContact } from '../types
 import { StepProgressStatus } from '../types';
 import { applicantService } from '../services/api';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
+import TargetRolePicker from './TargetRolePicker';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -53,6 +54,10 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
   const [membershipType, setMembershipType] = useState<TargetMembershipType>('regular');
   const [rank, setRank] = useState('');
   const [station, setStation] = useState('');
+  // Seeded from the application's own target role. The conversion is the last
+  // moment anyone can correct it, so this is a control rather than the
+  // read-only summary line it used to be.
+  const [targetRoleId, setTargetRoleId] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [hireDate, setHireDate] = useState('');
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
@@ -77,6 +82,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
       setMembershipType(applicant.target_membership_type || 'regular');
       setRank('');
       setStation('');
+      setTargetRoleId(applicant.target_role_id || '');
       setMiddleName('');
       setHireDate(getTodayLocalDate(tz));
       setSendWelcomeEmail(true);
@@ -107,7 +113,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
 
       const result = await applicantService.convertToMember(applicant.id, {
         target_membership_type: membershipType,
-        target_role_id: applicant.target_role_id,
+        target_role_id: targetRoleId || undefined,
         send_welcome_email: sendWelcomeEmail,
         notes: notes || undefined,
         middle_name: middleName || undefined,
@@ -370,6 +376,12 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
                       className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                     />
                   </div>
+                  <TargetRolePicker
+                    id="conv-target-role"
+                    value={targetRoleId}
+                    onChange={setTargetRoleId}
+                    hint="Granted to the new member in addition to the default member position."
+                  />
                 </div>
 
                 {/* Middle Name & Hire Date */}

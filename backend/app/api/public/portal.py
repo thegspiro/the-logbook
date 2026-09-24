@@ -19,9 +19,12 @@ from fastapi import (
     status,
 )
 from loguru import logger
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.public.responses import CONFLICT
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.public_portal_security import (
     authenticate_api_key,
@@ -30,6 +33,7 @@ from app.core.public_portal_security import (
     validate_ip_rate_limit,
 )
 from app.core.security_middleware import get_client_ip
+from app.core.utils import safe_error_detail
 from app.models.apparatus import Apparatus
 from app.models.event import Event, EventType
 from app.models.public_portal import (
@@ -602,6 +606,91 @@ async def get_application_status(
         )
 
     return result
+
+
+class WithdrawApplicationRequest(BaseModel):
+    reason: str | None = Field(
+        None,
+        max_length=1000,
+        description="Optional note from the applicant, recorded in the "
+        "application's activity log for the membership coordinator.",
+    )
+
+
+class WithdrawApplicationResponse(BaseModel):
+    status: str
+    message: str
+
+
+@router.post(
+    "/application-status/{token}/withdraw",
+    response_model=WithdrawApplicationResponse,
+    responses=CONFLICT,
+)
+async def withdraw_application(
+    request: Request,
+    response: Response,
+    body: WithdrawApplicationRequest,
+    # Same declared contract as the status read: the two routes are unlocked
+    # by the same credential and must accept exactly the same values.
+    token: str = Path(
+        ...,
+        min_length=10,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="Unique application-status token emailed to the prospect.",
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Public endpoint for a prospect to withdraw their own application.
+
+    Authenticated by the same emailed status token as the read, and honours
+    the same conditions: an unknown or expired token, or a pipeline without
+    public status pages, answers 404. Only an application that is still open
+    (in progress or on hold) can be withdrawn; anything else answers 409.
+
+    Rate limit: the shared per-IP public default, as for the read.
+    """
+    from app.services.membership_pipeline_service import MembershipPipelineService
+
+    await validate_ip_rate_limit(request)
+
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+
+    service = MembershipPipelineService(db)
+    try:
+        prospect = await service.withdraw_prospect_by_token(
+            token, (body.reason or "").strip() or None
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
+
+    if not prospect:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Application not found"
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.prospect_self_withdrawn",
+        event_category="membership",
+        severity="info",
+        event_data={"prospect_id": str(prospect.id), "via": "status_token"},
+        organization_id=str(prospect.organization_id),
+        ip_address=get_client_ip(request),
+    )
+    await db.commit()
+
+    return WithdrawApplicationResponse(
+        status="withdrawn",
+        message="Your application has been withdrawn.",
+    )
 
 
 @router.get("/health")

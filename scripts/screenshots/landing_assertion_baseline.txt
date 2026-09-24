@@ -18,7 +18,6 @@
 00-07-dashboard-panels
 00-14-confirm-dialog
 00-15-sidebar-member
-00-16-sidebar-admin
 00-17-account-settings
 00-18-rsvp-modal
 00-19-change-password

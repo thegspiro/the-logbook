@@ -556,7 +556,6 @@ export interface ApplicantListItem {
   phone?: string | undefined;
   current_stage_id: string;
   current_stage_name?: string | undefined;
-  current_stage_type?: StageType | undefined;
   stage_entered_at: string;
   target_membership_type: TargetMembershipType;
   target_role_name?: string | undefined;
@@ -609,7 +608,12 @@ export interface ApplicantUpdate {
       }
     | undefined;
   target_membership_type?: TargetMembershipType | undefined;
-  target_role_id?: string | undefined;
+  /**
+   * `null` clears the target role, `undefined` leaves it untouched. The
+   * backend dumps this payload with `exclude_unset`, so an omitted key is
+   * "no change" and only an explicit null persists a clear.
+   */
+  target_role_id?: string | null | undefined;
   status?: ApplicantStatus | undefined;
   notes?: string | undefined;
 }
@@ -960,6 +964,13 @@ export interface BackendStepProgressResponse {
 
 /** Backend prospect response (ProspectResponse schema). */
 export interface BackendProspectResponse {
+  target_role_id: string | null;
+  target_role_name: string | null;
+  deactivated_at: string | null;
+  deactivated_reason: string | null;
+  reactivated_at: string | null;
+  withdrawn_at: string | null;
+  withdrawal_reason: string | null;
   id: string;
   organization_id: string;
   pipeline_id: string | null;
@@ -993,6 +1004,10 @@ export interface BackendProspectResponse {
 
 /** Backend prospect list item response (ProspectListResponse schema). */
 export interface BackendProspectListResponse {
+  target_role_name: string | null;
+  deactivated_at: string | null;
+  withdrawn_at: string | null;
+  withdrawal_reason: string | null;
   id: string;
   first_name: string;
   last_name: string;
@@ -1021,6 +1036,9 @@ export interface BackendElectionPackageResponse {
   pipeline_id: string | null;
   step_id: string | null;
   election_id: string | null;
+  election_title: string | null;
+  election_end_date: string | null;
+  election_status: string | null;
   status: ElectionPackageStatus;
   applicant_snapshot: {
     first_name?: string;

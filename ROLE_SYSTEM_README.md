@@ -161,11 +161,25 @@ The following roles are automatically created for each organization:
     - Manages member records, applications, and onboarding/offboarding
     - Can create, edit, and view users and members
     - Can assign roles to members
+    - Receives the email when an applicant withdraws from their status page
     - Cannot be deleted
+
+13a. **Assistant Membership Coordinator** (`assistant_membership_coordinator`, Priority: 50) _(new 2026-09-24)_
+
+- Helps run the applicant pipeline alongside the Membership Coordinator
+- Holds `prospective_members.manage`, with read-only access to the roster
+  (`users.view`, `members.view`, `positions.view`) and the member baseline
+  (events, notifications, storefront)
+- Deliberately narrower than the coordinator: no member-record edits, no
+  position assignment, no training-disclosure settings
+- Copied, with the coordinator, on applicant-withdrawal emails
+- Created on existing departments by migration `43e9df281412`
+- Cannot be deleted
 
 14. **Communications Officer** (Priority: 55)
     - Website, social media, newsletters, and notification management
     - Can create and manage events
+    - Can set up suggestion boxes (`suggestions.manage`, 2026-09-23) — but not read them unless named a reviewer
     - View access to members and organization info
     - Cannot be deleted
 
@@ -246,6 +260,7 @@ Each module has view and manage permissions:
 **Communication Modules:**
 
 - Notifications (`notifications.view`, `notifications.manage`)
+- Suggestions (`suggestions.manage`) _(2026-09-23)_ — creates and configures suggestion boxes and chooses their reviewers. **Deliberately reads nothing**: only a box's own reviewers read its submissions, which is decided per box rather than by a permission. Seeded on the three chief ranks, President and Communications Officer
 - Mobile (`mobile.view`, `mobile.manage`)
 
 **Advanced Modules:**

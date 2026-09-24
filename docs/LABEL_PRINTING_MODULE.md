@@ -36,15 +36,32 @@ that registers no printer simply never sees the direct-print controls.
 
 ## What prints
 
-**Labels** — five modules generate them, each gated on its own permission:
+**Labels** — six modules generate them, each gated on its own permission:
 
 | Module key            | Permissions (any-of)                                     | Label carries                    |
 | --------------------- | -------------------------------------------------------- | -------------------------------- |
-| `inventory`           | `inventory.view`, `inventory.manage`                     | item name, asset tag             |
+| `inventory`           | `inventory.manage`                                       | item name, asset tag             |
+| `storage_areas`       | `inventory.manage`                                       | area name, parent/location trail |
 | `apparatus`           | `apparatus.view`, `apparatus.manage`                     | unit name, identifier            |
 | `facilities`          | `facilities.view`, `facilities.manage`                   | facility name                    |
 | `membership`          | `members.view`, `members.manage`                         | member name, membership number   |
 | `prospective_members` | `prospective_members.view`, `prospective_members.manage` | applicant name, **status token** |
+
+> **Inventory has its own print page, and it tracks what was printed**
+> _(2026-09-23)_. `/inventory/print-labels` is not built on the shared
+> `LabelPrintPage` — it predates it and prints by **PDF**
+> (`/inventory/labels/generate`) or the browser dialog, so it does **not** offer
+> **Send to Printer**. It is also the only module that records a print:
+> `POST /inventory/labels/mark-printed` (`inventory.manage`, 1–500 ids, org-scoped,
+> skips items with no printable value) sets `inventory_items.label_printed_at` /
+> `label_printed_by` after the user confirms the run came out. A
+> `before_update` listener on `InventoryItem` clears both when the printed value
+> changes — barcode, else asset tag, else serial, via the shared
+> `printable_label_value` in `app/utils/label_renderer.py` — which covers the
+> edit form, CSV import, variant generation and the PDF's barcode auto-fill.
+> Raw Core `update()` statements bypass the listener; none writes these columns.
+> Migration `5a70c5dcd138` adds the columns with no backfill, so every existing
+> item starts as needing a label.
 
 > **An applicant label's barcode is a bearer token.** `_build_prospect_specs`
 > encodes `ProspectiveMember.status_token`, which is what
@@ -53,8 +70,10 @@ that registers no printer simply never sees the direct-print controls.
 > the point (it is the applicant's own label), but it means these labels should
 > be handled like the token they carry: not left on a noticeboard, not
 > photographed into a group chat. `facilities` labels carry a facility record
-> only — there is no storage-area label builder, so a storage-area id produces
-> no label.
+> only; shelves, racks and compartments print through `storage_areas`, whose
+> builder encodes the area's `SA-` barcode and assigns the next one in that
+> series to an area created before barcodes were mandatory, so the label always
+> carries a value the area stores.
 
 **Station documents** — built from live records on request and printed at the
 watch desk. Nothing is stored; these are separate from `/documents`, which is
@@ -414,11 +433,12 @@ the apparatus team's are independent and follow whoever holds the role.
 
 ## Migrations
 
-| Revision       | Adds                                                   |
-| -------------- | ------------------------------------------------------ |
-| `b3e7f1a92c40` | `label_printers`                                       |
-| `c7d1f4a83e29` | `label_printers.language`                              |
-| `e4b91c7d2a58` | Merge — rejoins the label-printer and event-RSVP heads |
+| Revision       | Adds                                                                                    |
+| -------------- | --------------------------------------------------------------------------------------- |
+| `b3e7f1a92c40` | `label_printers`                                                                        |
+| `c7d1f4a83e29` | `label_printers.language`                                                               |
+| `e4b91c7d2a58` | Merge — rejoins the label-printer and event-RSVP heads                                  |
+| `5a70c5dcd138` | `inventory_items.label_printed_at` / `label_printed_by` (inventory only) _(2026-09-23)_ |
 
 **Why `language` is a separate revision, not a column in the first.** The
 column was deliberately withheld until ESC/POS made it a real switch. A stored
@@ -475,19 +495,20 @@ field and prints garbage.
 
 ## Edge cases
 
-| Situation                                                   | Behaviour                                                                                                                                                   |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sheet layout (`letter`) selected with a **ZPL** printer     | **Send to Printer** disabled — an Avery sheet of 30 has no meaning on a roll, so the button says so rather than offering a failure the backend would reject |
-| Sheet layout selected with an **ESC/POS** printer           | Not blocked — a receipt printer's stock is the roll loaded in it, so the page's size selection never reaches it                                             |
-| Page label size differs from the printer's registered stock | Panel says so and offers **Match printer**; the printer cannot tell its labels are the wrong size                                                           |
-| Die-cut size sent to a receipt printer                      | Ignored, not rejected — the loaded roll wins, and the panel says so                                                                                         |
-| Long value on a small label                                 | Rejected with the reason, rather than printing an unscannable code. 58mm holds ~12 Code 128 characters, 80mm ~21 — use QR                                   |
-| Printer out of stock                                        | Print reports the fault; the post-print status check is what catches it                                                                                     |
-| Printer answers the connection but not the status query     | Reported as unidentified; older firmware says fault reporting is unavailable                                                                                |
-| Shift pass-down notes                                       | Printed only for `scheduling.manage`, the shift officer, or an assigned/confirmed crew member — not everyone with `scheduling.view`                         |
-| Roster crew list                                            | Declined and cancelled members are **not** printed; assigned-but-unconfirmed is printed and marked `(unconfirmed)`                                          |
-| Check sheet items                                           | Read through `EquipmentCheckService.get_template` so `visible_positions` narrowing applies exactly as on screen                                             |
-| Times on any document                                       | The department's configured timezone, never UTC                                                                                                             |
+| Situation                                                   | Behaviour                                                                                                                                                                                     |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sheet layout (`letter`) selected with a **ZPL** printer     | **Send to Printer** disabled — an Avery sheet of 30 has no meaning on a roll, so the button says so rather than offering a failure the backend would reject                                   |
+| Partly used Avery sheet                                     | `start_position` (1–30) on `POST /inventory/labels/generate` leaves the positions before it blank on the first sheet; the inventory page's **Start at label** sets it. Roll formats ignore it |
+| Sheet layout selected with an **ESC/POS** printer           | Not blocked — a receipt printer's stock is the roll loaded in it, so the page's size selection never reaches it                                                                               |
+| Page label size differs from the printer's registered stock | Panel says so and offers **Match printer**; the printer cannot tell its labels are the wrong size                                                                                             |
+| Die-cut size sent to a receipt printer                      | Ignored, not rejected — the loaded roll wins, and the panel says so                                                                                                                           |
+| Long value on a small label                                 | Rejected with the reason, rather than printing an unscannable code. 58mm holds ~12 Code 128 characters, 80mm ~21 — use QR                                                                     |
+| Printer out of stock                                        | Print reports the fault; the post-print status check is what catches it                                                                                                                       |
+| Printer answers the connection but not the status query     | Reported as unidentified; older firmware says fault reporting is unavailable                                                                                                                  |
+| Shift pass-down notes                                       | Printed only for `scheduling.manage`, the shift officer, or an assigned/confirmed crew member — not everyone with `scheduling.view`                                                           |
+| Roster crew list                                            | Declined and cancelled members are **not** printed; assigned-but-unconfirmed is printed and marked `(unconfirmed)`                                                                            |
+| Check sheet items                                           | Read through `EquipmentCheckService.get_template` so `visible_positions` narrowing applies exactly as on screen                                                                               |
+| Times on any document                                       | The department's configured timezone, never UTC                                                                                                                                               |
 
 ---
 

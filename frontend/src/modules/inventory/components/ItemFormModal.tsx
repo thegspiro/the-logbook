@@ -121,7 +121,9 @@ function statusForUnsafeCondition(currentStatus: string, condition: string): { s
 export interface ItemFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  /** Called after a save. A create passes the new items' ids (several for
+   *  size variants) so the caller can offer to print their labels. */
+  onSaved: (createdIds?: string[]) => void;
   categories: InventoryCategory[];
   locations: Location[];
   storageAreas: StorageAreaResponse[];
@@ -337,7 +339,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         };
         const result = await inventoryService.createSizeVariants(data);
         toast.success(`Created ${result.created_count} variant item${result.created_count !== 1 ? 's' : ''}`);
-        onSaved();
+        onSaved(result.items.map((item) => item.id));
         onClose();
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to create variants'));
@@ -422,11 +424,12 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       if (editItem) {
         await inventoryService.updateItem(editItem.id, p);
         toast.success('Item updated');
+        onSaved();
       } else {
-        await inventoryService.createItem(p);
+        const created = await inventoryService.createItem(p);
         toast.success('Item created');
+        onSaved([created.id]);
       }
-      onSaved();
       onClose();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save item'));

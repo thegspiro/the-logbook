@@ -1,5 +1,149 @@
 # Screenshot currency
 
+## Disposition for September 15-23, 2026 - two new screens, and a new line on three old ones
+
+Audit: [`CHANGE_AUDIT_2026-09-15_TO_09-23.md`](../CHANGE_AUDIT_2026-09-15_TO_09-23.md).
+
+**Two screens are new** — **Suggestions** (`/suggestions`) and **Suggestion
+Box Management** (`/communications/suggestion-boxes`) — and the inventory label
+page gained a picker and a post-print prompt. Everything else is an existing
+address carrying one more control or one more line.
+
+**Eleven placeholders were written into the guides** by this pass. **All
+eleven are shot** (2026-09-24), so the library moves from 533/589 to
+**544/589**. Item 9, the installed-app icon, is an illustration rather than a
+device capture; its row says why:
+
+| #  | Image area                                                    | Disposition | Guide                                   | Notes                                                                                                              |
+| -- | ------------------------------------------------------------- | ----------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 1  | Sidebar with **Suggestions** + Suggestions **Submit** tab       | **NEW**     | 20 (release)                            | **Shot** 09-24 as `20-15-suggestions-sidebar-submit`, as `auth: "member"`                                        |
+| 2  | **New suggestion box** dialog, filled in                      | **NEW**     | 07 (documents & forms)                  | **Shot** 09-24 as `07-14-suggestion-box-dialog`. Named "Officer development", never saved                         |
+| 3  | Suggestions → **Submit** with **Submit anonymously** ticked    | **NEW**     | 07                                      | **Shot** 09-24 as `07-15-suggestion-submit-anonymous`. Attachment drawn in-page; never submitted                   |
+| 4  | **Save your follow-up key** receipt                           | **NEW**     | 07                                      | **Shot** 09-24 as `07-16-suggestion-follow-up-key`. The POST is answered by a route mock with a `DEMO-KEY-…` value |
+| 5  | Suggestions → **Review**, one submission open                 | **NEW**     | 07                                      | **Shot** 09-24 as `07-17-suggestion-review`, as `auth: "secretary"` on the seeded anonymous submission           |
+| 6  | Items list: **Needs a Label** + **All N matching selected**    | **NEW**     | 05 (inventory)                          | **Shot** 09-24 as `05-83-items-select-all-matching` — Structural PPE, 11 items |
+| 7  | Label page **Print barcode labels** picker                    | **NEW**     | 05                                      | **Shot** 09-24 as `05-84-label-scope-picker`, clipped to the picker card |
+| 8  | "Did the labels print correctly?" prompt                      | **NEW**     | 05                                      | **Shot** 09-24 as `05-85-label-print-confirm`, full page so the preview is in frame. Mark never pressed |
+| 9  | Phone home screen with the department-logo icon               | **NEW**     | 10 (mobile)                             | **Shot** 09-24 as `10-22-installed-app-icon`, **an illustration**: no device or emulator here (no KVM). A DEMO-marked crest is uploaded for the shot only and removed by `cleanup`; both icons are fetched from `/api/public/v1/branding/icon/`, and only the home screens around them are drawn |
+| 10 | Medical Screening **Add Record** with the amber notice        | **NEW**     | 13 (medical screening)                  | **Shot** 09-24 as `13-07-add-record-linkage-notice`. Dialog opened, never saved |
+| 11 | Applicant drawer on an event-naming **Meeting** stage          | **NEW**     | 20                                      | **Shot** 09-24 as `20-14-applicant-meeting-stage-hint`, on the seeded Associate Member Pipeline |
+
+**Existing images this window made stale — REPLACE, no placeholder written.**
+None of these was wrong about anything a reader would act on; each was missing
+one new element. **All re-shot 2026-09-24**, after the NEW items:
+
+| Image                                                                  | Guide | Why                                                                                                                  | Done |
+| ---------------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------- | ---- |
+| `00-15-sidebar-member.png`                                             | 00    | No **Suggestions** item under Messages                                                                               | **Re-shot** — Suggestions under Messages |
+| `00-16-sidebar-admin.png`                                              | 00    | Administration → Forms & Comms has no **Suggestion Boxes** link                                                      | **Re-shot**, and the shot fixed: see below |
+| `05-47-items-filter-bar.png`                                           | 05    | The filter bar gained the label-status dropdown (**Any Label Status / Needs a Label / Label Printed**)                | **Re-shot** |
+| `05-01-inventory-items.png`, `05-02-items-pinned.png`, `05-03-items-grouped.png` | 05 | Same filter bar, incidentally                                                                                         | **Re-shot** |
+| `05-06-item-detail.png`, `05-56-item-barcode-value.png`, `05-61-item-barcode-fields.png`, `05-67-empty-asset-tag.png` | 05 | **Basic Info** gained a **Label Printed** line (date, or **Needs a label**) beneath Asset Tag              | **Re-shot** — each reads **Needs a label** |
+| `10-16-mobile-item-detail.png`                                         | 10    | Same new Basic Info line                                                                                            | **Re-shot** |
+| `15-14-applicant-drawer-overview.png`, `15-05-applicant-actions.png`    | 15    | **Check, do not assume.** If the pictured applicant is on a meeting stage that names an event, the drawer now shows the requirement hint | **Re-shot.** Tyrell James (Application Received) and Rosa Delgado (Background & Medical): neither stage names an event, so no hint is correct. `20-14` pictures the hint |
+| Stage builder → **Meeting** config (queued 09-15, no image yet)         | 15    | The checkbox is now **"Auto-advance when the event's attendance is finalized"**, and the Auto-Link Event Type help text says naming an event makes attendance required | **Shot** as `15-15-meeting-stage-config`, placed under guide 15's stage-settings table; opened unsaved on the seeded Associate Member Pipeline |
+
+**`00-16` had been failing silently.** Its prepare step set the sidebar's
+`scrollTop` inside a swallowed `.catch`. After the sidebar's scrolling element
+changed, that did nothing, so a fresh capture showed the top of the admin list
+with the Members group open and nothing from this window. It now expands
+**Forms & Comms**, centres **Suggestion Boxes**, and asserts that link is in
+frame.
+
+**Take prospective-member shots without the filler.** The first attempt at
+`15-14` and `15-05` ran with the 236 `--bulk-prospects` applicants still in the
+demo database. `15-14` opened "Applicant 0237" under a "Showing 200 of 247"
+banner. `15-05` found nobody at Background & Medical on page one and timed
+out. Today's `15-11` re-shoot after the bulk-bar fix had the same problem. The
+filler was removed by email prefix, as `scripts/screenshots/README.md` says to
+once `15-02` and `15-09` are taken. All three were then re-shot against the
+twelve named applicants.
+
+**No shot needed** for: the pipeline stat-card fix (a wrong number corrected,
+not a new layout — `15-12-pipeline-stats.png` stays), hidden form answers (the
+fix is the _absence_ of an error), and the dependency bumps.
+
+**Suggestion boxes are seeded** _(2026-09-24)_. `seed_demo_data.py`'s
+`suggestion boxes` step creates three boxes and four submissions, one per state
+the guides describe:
+
+| Box                     | Anonymity         | Follow-up | Reviewers                     |
+| ----------------------- | ----------------- | --------- | ----------------------------- |
+| **Training ideas**      | Submitter chooses | On        | Secretary, Training Officer   |
+| **Station concerns**    | Always anonymous  | On        | Secretary                     |
+| **Apparatus wish list** | Always named      | Off       | Secretary                     |
+
+| Submission (all by Nadia Belhaj, `nbelhaj`)          | State                                                                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Night-time vehicle extrication drill                 | Named, **Accepted**, internal note, a reviewer reply and her answer, one screenshot                    |
+| More hands-on SCBA time for probationary members     | **Anonymous**, **Under review**, internal note, a reviewer question and the **Anonymous submitter**'s reply, **forwarded to Training Officer** |
+| Station 2 bay door sensor keeps sticking             | Always-anonymous box, **New**, untouched                                                                |
+| A second thermal imaging camera for Ladder 1         | One-way box, named, **New**                                                                             |
+
+**Which account to shoot from.** The reviewer is the **Secretary** position, held
+by `okittredge` — the manifest's existing `auth: "secretary"` account — so item
+5's review frame signs in as that. Item 1 is `auth: "member"`
+(`nbelhaj`, who sees no Review tab). The administrator deliberately reviews no
+box: `suggestions.manage` configures boxes and reads nothing, and a demo in which
+the chief could open the concerns box would picture the opposite of the rule.
+Item 2's dialog is shot as the administrator.
+
+**Nothing the five suggestion shots do is written.** The box dialog is filled
+and never saved; the anonymous submission (item 3) is filled and never sent;
+and the follow-up-key receipt (item 4) sends its submission into a route mock
+(`beforeNavigate` in `07-16`) that answers with the endpoint's exact response
+shape and a visibly fake `DEMO-KEY-…`. That was chosen over the plan this
+paragraph used to carry — submitting for real during capture — because a real
+submission adds a suggestion to the demo department on every capture run and
+puts a real follow-up key, the submitter's only credential, into a public
+image. Verified after the run: still three boxes and four submissions.
+
+**Two framings the first capture got wrong, both fixed in the manifest.**
+`20-15` landed with the Suggestions item below the fold of the member's menu —
+only its active marker's top edge showed — so the entry now scrolls the item
+into view and refuses to shoot if it is still off screen. `07-14` clipped to
+`[role="dialog"]`, which `Modal` puts on the full-screen backdrop, and so
+photographed the whole dimmed page; it now clips to `modal-panel`.
+
+**Item 11 needed a second pipeline** _(2026-09-24)_. The default **Volunteer
+Membership Pipeline** has no Meeting stage, so `seed_demo_data.py` now also
+seeds a non-default **Associate Member Pipeline** — Interest Form Received →
+**Attend a Business Meeting** (Auto-Link Event Type: Business Meeting) →
+Committee Approval — with one applicant, **Priya Deshmukh**, parked on the
+meeting stage. A separate pipeline rather than a seventh stage on the default,
+so the kanban shots built on "seven applicants across six stages" stay true.
+
+**It left one cosmetic drift, now re-shot** _(2026-09-24)_. The board shows its
+pipeline dropdown **only when a department has more than one pipeline**, so the
+full-page board captures taken before this lacked it, and the pipeline settings
+shot listed one pipeline. All seven were re-shot from the same seeded
+department: `01-10-prospective-pipeline`, `15-01-pipeline-board`,
+`15-02-board-truncated`, `15-04-kanban-board`, `15-10-pipeline-settings`,
+`15-11-table-bulk-actions` and `15-12-pipeline-stats`. Drawer-, dialog- and
+panel-clipped shots were unaffected and were not touched.
+
+**`15-02` needs `--bulk-prospects`, and that flag was broken.** The filler
+advanced every fourth applicant with a bare advance, and the Interview stage
+refuses one until an interview exists, so the step 409'd nine applicants into
+236 and the board never passed its 200-card ceiling. It now goes through the
+same interview-recording helper as the create path and the spread. Run it
+**last** and on its own: 236 filler applicants bury the named ones every other
+prospective-member shot is built around, so the six other board shots above
+were taken first.
+
+**`15-11` showed two bulk bars, and that was the application, not the capture.**
+Selecting rows in the table view rendered both the page's bar (Print Badges /
+Advance All / Reject All) and the table's own (Advance / Hold / Reject), each
+reading "3 selected". Fixed on 2026-09-24: the table no longer draws a bar, and
+**Hold All** moved onto the page's bar. `15-11` was re-shot afterwards and
+shows one bar with four actions. Both `KNOWN_LIMITATIONS.md` entries for it are
+removed.
+
+**Remaining seed gap.** **Every seeded inventory
+item reads "Needs a label"**, which is correct for item 6 but means the
+**Label Printed** state on the detail page needs one item confirmed by hand.
+Do that on a throwaway item, not one another shot depends on.
+
 ## Disposition for September 12-15, 2026 - the screens stayed put, their contents did not
 
 Audit: [`CHANGE_AUDIT_2026-09-12_TO_09-15.md`](../CHANGE_AUDIT_2026-09-12_TO_09-15.md).
@@ -14,19 +158,20 @@ exists does not announce itself the way a 404 does.
 one in [`03-scheduling.md`](./03-scheduling.md) and one in
 [`08-admin-reports.md`](./08-admin-reports.md).
 
-**Three of the six are now shot** (2026-09-16), by two images: the library moves
-from 530/572 to **533/578**. The other three are blocked or need a second
-account — see the notes under the table.
+**Four of the six are now shot** — three on 2026-09-16 and the not-elected
+drawer on 2026-09-24, by three images; the library stands at **534/578**. Of
+the two left, one needs a second signed-in account and one has no placeholder
+written yet — see the notes under the table.
 
 | Image area                                     | Disposition | Guide                              | State                                                                                                  |
 | ---------------------------------------------- | ----------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Settings -> **Email**, SMTP preset applied      | **REPLACE** | 20 (release), 08 (admin)           | **Shot** 09-16 as `20-11-settings-email-smtp-preset`. One image, placed in both guides                   |
 | Stage picker with **Election / Vote** selected  | **NEW**     | 20 (release)                       | **Shot** 09-16 as `20-12-stage-picker-election-vote`                                                    |
 | Scheduling -> **Open Shifts**, member vs admin  | **NEW**     | 20 (release), 03 (scheduling)      | **Queued** — needs a second signed-in session and a narrower member; see below                          |
-| Applicant drawer, **not elected** state         | **NEW**     | 20 (release)                       | **Unblocked** 09-22 — the seeder now carries an applicant through a losing vote; ready to shoot          |
+| Applicant drawer, **not elected** state         | **NEW**     | 20 (release)                       | **Shot** 09-24 as `20-13-applicant-drawer-not-elected`                                                  |
 | Settings -> **Email**, inline refusal           | **NEW**     | no placeholder written yet         | The refusal for an enabled-but-empty Cloudflare section, or for **Not configured** with email enabled   |
 | Shift signup **position picker**                | **REPLACE** | no placeholder written yet         | Offers only seats the server will grant                                                                 |
-| Stage builder -> **Meeting** config             | **REPLACE** | no placeholder written yet         | Carries the Auto-Link Event Type warning beside the auto-advance checkbox                                |
+| Stage builder -> **Meeting** config             | **REPLACE** | 15                                 | **Shot** 09-24 as `15-15-meeting-stage-config`                                                          |
 | Inventory item -> maintenance history           | **NO SHOT** | n/a                                | The rule changed, the screen did not                                                                     |
 
 ### What the two shot images actually show, and why not what was asked for
@@ -91,6 +236,23 @@ applicant, and `_spread_prospects_across_stages` moves applicants back as well
 as forward — which had already dragged the *elected* package onto an applicant
 at Background & Medical, quietly making guide 01's Elected badge unreproducible.
 `SCENARIO_STAGES` pins both. Do not remove it to "simplify the spread".
+
+**The ballot link was missing, and framing this shot is what found it.** The
+backend had been sending `election_title`, `election_status` and
+`election_end_date` on `GET /prospective-members/prospects/{id}/election-package`
+all along, and `ElectionPackageSection` renders them as a link beneath the
+banner — but `mapElectionPackageResponse` in the module's `services/api.ts`
+copied `election_id` and dropped the other three, so the component's
+`election_id && election_title` guard was permanently false. No package named
+the ballot that decided it, in any outcome state, and nothing failed: a guard
+that renders nothing has no error to report. The first capture pictured exactly
+that absence.
+
+The mapper now carries all four, and the shot was re-taken against the fixed
+build — the frame includes _Membership Vote — September Business Meeting —
+Closed_ under the banner. The manifest entry waits for that link before it
+shoots, so the capture fails rather than quietly losing it if the mapping
+regresses.
 
 ### The Open Shifts pair needs two sessions, not two clips
 

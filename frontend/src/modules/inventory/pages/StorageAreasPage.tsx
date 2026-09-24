@@ -4,7 +4,7 @@
  * Manages hierarchical storage locations within rooms. Storage areas belong to
  * rooms (locations) and can nest inside each other (e.g., Room > Rack > Shelf > Box).
  */
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ArrowLeft,
   Plus,
@@ -21,8 +21,11 @@ import {
   Search,
   ExternalLink,
   Nfc,
+  Printer,
+  ScanLine,
+  PackageCheck,
 } from 'lucide-react';
-import { Link } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { facilitiesService, inventoryService, locationsService } from '../../../services/api';
 import type { StorageAreaResponse, StorageAreaCreate, Location, InventoryItem } from '../types';
 import { STORAGE_TYPES, getStatusStyle, getStatusLabel, getConditionColor } from '../types';
@@ -34,6 +37,8 @@ import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { Breadcrumbs } from '../../../components/ux';
 import { NfcTagsCard } from '../components/NfcTagsCard';
 import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
+import { ScanCodeField } from '../components/ScanCodeField';
+import { PutAwayPanel } from '../components/PutAwayPanel';
 
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
@@ -193,11 +198,14 @@ interface TreeRowProps {
   onToggle: (id: string) => void;
   onEdit: (a: StorageAreaResponse) => void;
   onDelete: (a: StorageAreaResponse) => void;
+  onPrint: (a: StorageAreaResponse) => void;
   itemsVisible: Set<string>;
   onToggleItems: (id: string) => void;
   path: TreeNode[];
   isDesktop: boolean;
   onNavigate: (node: TreeNode) => void;
+  /** The area a scan or `?area=` link brought the member to. */
+  focusedId: string | null;
 }
 /**
  * The flexible middle of a tree row: a button when it navigates, a plain
@@ -228,13 +236,16 @@ const TreeRow: React.FC<TreeRowProps> = ({
   onToggle,
   onEdit,
   onDelete,
+  onPrint,
   itemsVisible,
   onToggleItems,
   path,
   isDesktop,
   onNavigate,
+  focusedId,
 }) => {
   const has = node.treeChildren.length > 0;
+  const focused = node.id === focusedId;
   const open = expanded.has(node.id);
   const showItems = itemsVisible.has(node.id);
   const indent = isDesktop ? depth * 16 + 12 : 12;
@@ -244,9 +255,10 @@ const TreeRow: React.FC<TreeRowProps> = ({
       <div
         data-storage-area-row={node.id}
         data-testid="storage-area-row"
+        aria-current={focused ? 'true' : undefined}
         className={`hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex w-full items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${
           isDesktop ? '' : 'border-theme-surface-border border-l-2'
-        }`}
+        } ${focused ? 'bg-blue-500/10 ring-2 ring-blue-500' : ''}`}
         style={{ paddingLeft: `${indent}px` }}
       >
         {/* Desktop expands in place, so the chevron is its own control. On a
@@ -330,6 +342,13 @@ const TreeRow: React.FC<TreeRowProps> = ({
         )}
         <div className="flex shrink-0 items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
           <button
+            onClick={() => onPrint(node)}
+            aria-label={`Print label for ${node.name}`}
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-2"
+          >
+            <Printer className="h-4 w-4" />
+          </button>
+          <button
             onClick={() => onEdit(node)}
             aria-label={`Edit ${node.name}`}
             className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-2"
@@ -358,11 +377,13 @@ const TreeRow: React.FC<TreeRowProps> = ({
             onToggle={onToggle}
             onEdit={onEdit}
             onDelete={onDelete}
+            onPrint={onPrint}
             itemsVisible={itemsVisible}
             onToggleItems={onToggleItems}
             path={[...path, c]}
             isDesktop={isDesktop}
             onNavigate={onNavigate}
+            focusedId={focusedId}
           />
         ))}
     </>
@@ -371,6 +392,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
 
 /* ---------- Main page ---------- */
 const StorageAreasPage: React.FC = () => {
+  const navigate = useNavigate();
   const isDesktopTree = useMediaQuery('(min-width: 768px)');
   const { enabled: nfcEnabled } = useInventoryNfcEnabled();
   const [locations, setLocations] = useState<Location[]>([]);
@@ -390,6 +412,11 @@ const StorageAreasPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [itemsVisible, setItemsVisible] = useState<Set<string>>(new Set());
   const [mobileParentId, setMobileParentId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [putAwayOpen, setPutAwayOpen] = useState(false);
+  const [scanMiss, setScanMiss] = useState<string | null>(null);
 
   const toggleItemsPanel = (id: string) => {
     setItemsVisible((prev) => {
@@ -461,6 +488,12 @@ const StorageAreasPage: React.FC = () => {
   }, [storageAreas, searchQuery]);
 
   const tree = useMemo(() => buildTree(scopedAreas), [scopedAreas]);
+  // "Print labels" covers what the member is looking at: the search results
+  // while searching, otherwise the facility/room scope chosen above.
+  const areasInView = isShowingSearch ? searchResults : scopedAreas;
+  const printLabels = (ids: string[]) => {
+    if (ids.length > 0) void navigate(`/inventory/storage-areas/print-labels?ids=${ids.join(',')}`);
+  };
   const searchTree = useMemo(() => buildTree(searchResults), [searchResults]);
   const displayTree = isShowingSearch ? searchTree : tree;
   const areaById = useMemo(() => new Map(storageAreas.map((area) => [area.id, area])), [storageAreas]);
@@ -551,6 +584,101 @@ const StorageAreasPage: React.FC = () => {
       return n;
     });
   };
+  /**
+   * Bring one area into view: clear whatever scope or search would hide it,
+   * open every ancestor (or, on a phone, drill into its parent), open its item
+   * list and mark it. The URL carries it as `?area=` so the view can be linked
+   * to and survives a refresh.
+   */
+  const focusArea = useCallback(
+    (area: StorageAreaResponse) => {
+      setSearchQuery('');
+      setSelectedFacilityId('');
+      setSelectedRoomId('');
+      const ancestors: string[] = [];
+      const seen = new Set([area.id]);
+      let parentId = area.parent_id;
+      while (parentId && !seen.has(parentId)) {
+        seen.add(parentId);
+        ancestors.push(parentId);
+        parentId = areaById.get(parentId)?.parent_id;
+      }
+      setExpanded((prev) => new Set([...prev, ...ancestors]));
+      setMobileParentId(area.parent_id ?? null);
+      if (area.item_count > 0) setItemsVisible((prev) => new Set(prev).add(area.id));
+      setFocusedId(area.id);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('area', area.id);
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [areaById, setSearchParams]
+  );
+
+  // "Station 1 › Rack A › Shelf 2" style label for an area, for the put-away
+  // panel's target line; the same parent walk the tree rows use.
+  const areaPathLabel = useCallback(
+    (area: StorageAreaResponse): string => {
+      const names = [area.name];
+      const seen = new Set([area.id]);
+      let parentId = area.parent_id;
+      while (parentId && !seen.has(parentId)) {
+        seen.add(parentId);
+        const parent = areaById.get(parentId);
+        if (!parent) break;
+        names.unshift(parent.name);
+        parentId = parent.parent_id;
+      }
+      return names.join(' › ');
+    },
+    [areaById]
+  );
+
+  // A shelf label carries the area's barcode verbatim. Case-insensitive so a
+  // scanner configured to emit lower case still finds `SA-000123`.
+  const handleScannedCode = (code: string): boolean => {
+    const wanted = code.trim().toUpperCase();
+    const area = storageAreas.find((a) => (a.barcode ?? '').trim().toUpperCase() === wanted);
+    if (!area) {
+      setScanMiss(code.trim());
+      return false;
+    }
+    setScanMiss(null);
+    setScanOpen(false);
+    focusArea(area);
+    return true;
+  };
+
+  // Honour `?area=` once the areas it could name have loaded — a link from
+  // another page, or a refresh after a scan.
+  const requestedAreaId = searchParams.get('area');
+  const appliedAreaRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!requestedAreaId || appliedAreaRef.current === requestedAreaId) return;
+    const area = areaById.get(requestedAreaId);
+    if (!area) return;
+    appliedAreaRef.current = requestedAreaId;
+    focusArea(area);
+  }, [requestedAreaId, areaById, focusArea]);
+
+  // Scroll after the tree has re-rendered with the ancestors open. The id is
+  // always one read from the loaded areas, never raw URL input, so it is safe
+  // inside the attribute selector.
+  useEffect(() => {
+    if (!focusedId) return;
+    const frame = requestAnimationFrame(() => {
+      document.querySelector(`[data-storage-area-row="${focusedId}"]`)?.scrollIntoView?.({
+        block: 'center',
+        behavior: 'smooth',
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusedId]);
+
   const handleFacilityChange = (id: string) => {
     setSelectedFacilityId(id);
     setSelectedRoomId('');
@@ -659,6 +787,37 @@ const StorageAreasPage: React.FC = () => {
           <p className="text-theme-text-secondary mt-1">Manage hierarchical storage locations within rooms.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => {
+              setPutAwayOpen((open) => !open);
+              setScanOpen(false);
+            }}
+            aria-expanded={putAwayOpen}
+            className="btn-secondary btn-md flex items-center gap-2"
+          >
+            <PackageCheck className="h-4 w-4" /> Put away
+          </button>
+          <button
+            onClick={() => {
+              setScanOpen((open) => !open);
+              setPutAwayOpen(false);
+              setScanMiss(null);
+            }}
+            aria-expanded={scanOpen}
+            className="btn-secondary btn-md flex items-center gap-2"
+          >
+            <ScanLine className="h-4 w-4" /> Scan shelf label
+          </button>
+          <button
+            onClick={() => printLabels(areasInView.map((area) => area.id))}
+            disabled={areasInView.length === 0}
+            className="btn-secondary btn-md flex items-center gap-2"
+          >
+            <Printer className="h-4 w-4" />
+            {areasInView.length > 0
+              ? `Print ${areasInView.length} ${areasInView.length === 1 ? 'label' : 'labels'}`
+              : 'Print labels'}
+          </button>
           {nfcEnabled && (
             <Link to="/inventory/put-away" className="btn-secondary btn-md flex items-center gap-2">
               <Nfc className="h-4 w-4" aria-hidden="true" /> Put Away by NFC
@@ -669,6 +828,34 @@ const StorageAreasPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {putAwayOpen && (
+        <PutAwayPanel
+          areas={storageAreas}
+          initialArea={focusedId ? (areaById.get(focusedId) ?? null) : null}
+          pathOf={areaPathLabel}
+          onFiled={(area) => {
+            void loadStorageAreas();
+            focusArea(area);
+          }}
+          onClose={() => setPutAwayOpen(false)}
+        />
+      )}
+
+      {scanOpen && (
+        <div className="card-secondary space-y-2 p-3">
+          <ScanCodeField
+            viewportId="storage-area-scanner-viewport"
+            label="Scan or type a shelf label's barcode"
+            onCode={handleScannedCode}
+          />
+          {scanMiss && (
+            <p role="status" className="text-sm text-red-700 dark:text-red-400">
+              No storage area has the barcode {scanMiss}.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative">
@@ -796,10 +983,12 @@ const StorageAreasPage: React.FC = () => {
               onToggle={toggleExpand}
               onEdit={openEditModal}
               onDelete={setDeleteTarget}
+              onPrint={(area) => printLabels([area.id])}
               itemsVisible={itemsVisible}
               onToggleItems={toggleItemsPanel}
               path={pathFor(n)}
               isDesktop={isDesktopTree}
+              focusedId={focusedId}
               onNavigate={(node) => {
                 if (node.treeChildren.length > 0) setMobileParentId(node.id);
               }}

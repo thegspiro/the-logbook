@@ -24,24 +24,13 @@ from app.models.inventory import (
     InventoryNfcScanAction,
     InventoryNfcTag,
     InventoryNfcTagStatus,
-    ItemStatus,
     StorageArea,
 )
 from app.models.nfc_tag import NfcCredentialType
 from app.models.user import User
+from app.services.inventory_service import InventoryService
 from app.services.nfc_tag_service import hash_tag_uid, uid_preview
 from app.utils.model_updates import apply_updates
-
-# An item in one of these states is somewhere a shelf tap cannot speak for: in
-# a member's hands, or officially missing. Putting it away would leave the
-# record claiming both at once, so the quartermaster is sent to the flow that
-# changes the state first (return, check-in, or recording it found).
-_PUT_AWAY_BLOCKED = {
-    ItemStatus.ASSIGNED: "is issued to a member. Return it before putting it away.",
-    ItemStatus.CHECKED_OUT: "is checked out. Check it in before putting it away.",
-    ItemStatus.LOST: "is marked lost. Record it found before putting it away.",
-    ItemStatus.STOLEN: "is marked stolen. Record it found before putting it away.",
-}
 
 _MAX_SCANS_LISTED = 100
 
@@ -270,35 +259,31 @@ class InventoryNfcService:
         scanned_by: Optional[str],
         item_tag_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Move an item onto a storage area and log the move.
+        """Move one tapped item onto a storage area and log the tap.
 
-        The item's room follows the area's when the area belongs to one: the
-        item form only offers areas inside the item's room, so a shelf in
-        another room with the old room left behind is a record no screen would
-        have produced.
+        The move itself is ``InventoryService.put_away_items`` — the barcode
+        put-away's own rule for which items may be shelved and which room they
+        then list under. NFC is a second way of *reading* the shelf and the
+        item, not a second rule for moving one (Pitfall #29), so the two paths
+        cannot disagree about what a shelf tap is allowed to do.
 
         Raises ``LookupError`` (→ 404) for an item or area outside the
-        organization, ``ValueError`` (→ 400) for one that cannot be put away.
+        organization, ``ValueError`` (→ 400) for an item the shared rule skips.
         """
         item = await self._get_item(item_id, organization_id)
-        area = await self._get_storage_area(storage_area_id, organization_id)
-
-        if not item.active:
-            raise ValueError(f'"{item.name}" is no longer active.')
-        if not area.is_active:
-            raise ValueError(f'"{area.name}" is no longer an active storage area.')
-        status_value = ItemStatus(item.status) if item.status else None
-        if status_value in _PUT_AWAY_BLOCKED:
-            raise ValueError(f'"{item.name}" {_PUT_AWAY_BLOCKED[status_value]}')
-        if item.assigned_to_user_id:
-            raise ValueError(f'"{item.name}" {_PUT_AWAY_BLOCKED[ItemStatus.ASSIGNED]}')
-
         from_area_id = item.storage_area_id
-        moved = from_area_id != area.id
-        if moved:
-            item.storage_area_id = area.id
-            if area.location_id:
-                item.location_id = area.location_id
+
+        result = await InventoryService(self.db).put_away_items(
+            area_id=storage_area_id,
+            item_ids=[item.id],
+            organization_id=organization_id,
+        )
+        if result is None:
+            raise LookupError("Storage area not found")
+        if result["skipped"]:
+            skip = result["skipped"][0]
+            raise ValueError(f'"{skip["name"]}" is {skip["reason"]}.')
+        moved = item.id in result["moved"]
 
         await self.record_scan(
             organization_id=organization_id,
@@ -306,16 +291,18 @@ class InventoryNfcService:
             action=InventoryNfcScanAction.PUT_AWAY,
             scanned_by=scanned_by,
             tag_id=await self._tag_on_item(item_tag_id, str(item.id), organization_id),
-            storage_area_id=str(area.id),
+            storage_area_id=str(storage_area_id),
             from_storage_area_id=from_area_id,
         )
 
-        areas = await self._area_name_map(organization_id, {area.id, from_area_id})
+        areas = await self._area_name_map(
+            organization_id, {storage_area_id, from_area_id}
+        )
         return {
             "item_id": str(item.id),
             "item_name": item.name,
-            "storage_area_id": str(area.id),
-            "storage_area_name": area.name,
+            "storage_area_id": str(storage_area_id),
+            "storage_area_name": areas.get(str(storage_area_id), ""),
             "from_storage_area_id": from_area_id,
             "from_storage_area_name": areas.get(from_area_id) if from_area_id else None,
             "moved": moved,
