@@ -471,6 +471,46 @@ against the plain one will find the masked version noticeably smaller. Fitting
 it larger means some launchers cut the corners off the crest, which is worse and
 is not visible to whoever chooses the setting.
 
+## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
+
+**Accepted.** An anonymous suggestion is stored with no record of its author:
+`suggestions.submitted_by` and every submitter-side `suggestion_messages.author_id`
+stay NULL, no audit entry is written for it, screenshots are re-encoded (EXIF
+and the original filename are dropped), and the submission, its screenshots'
+file mtimes and the submitter's own replies are stored at 12:00 UTC of the day
+rather than the moment. An anonymous submitter follows up with a random key of
+which only a SHA-256 digest is stored. `tests/test_suggestion_boxes.py` pins
+each of these against what is actually in the database and on disk.
+
+What the application cannot promise, and why each is left as it is:
+
+- **Someone with server access can still correlate by time.** The access log
+  records `POST /api/v1/suggestions/boxes/{id}/submissions` with a timestamp
+  (and the client IP at debug level), the reviewers' notification email is
+  sent — and logged to `message_history` — at submission time, and session
+  activity is recorded on the member's row. None of these names the submitter
+  on its own, but together they can narrow one down for whoever can read the
+  server's logs and database. Closing it would mean batching notifications
+  into a delayed digest and scrubbing request logging for these routes; both
+  cost the reviewers timely notice and are a policy choice, not a fix. The
+  in-app guarantee — no reviewer, officer or administrator can find the author
+  through the application — holds.
+- **A lost follow-up key cannot be recovered.** Nothing links the key to the
+  member, which is the point. The submission itself survives; the member's
+  ability to read replies and respond does not.
+- **The content of a screenshot is not inspected.** Metadata is removed, but a
+  screenshot that shows the submitter's own name on screen still shows it. The
+  form warns the member when the submission is anonymous.
+- **The creation time of a screenshot file (`ctime`) is exact.** `mtime` is
+  reset to the day stamp; POSIX offers no call to set `ctime`.
+
+**Also a decision, not an omission:** the `/api/v1/suggestions` router is not
+gated on the `communications` module flag, for the same reason as
+`/api/v1/messages` — the flag defaults off and none of the module's screens
+honour it, so gating only this router would hide suggestion boxes on almost
+every installation. It is recorded in `DELIBERATELY_UNGATED` in
+`tests/test_module_api_gating.py`.
+
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
 A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported

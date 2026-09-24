@@ -69,6 +69,7 @@ from app.api.v1.endpoints import (
     skills_testing,
     station_documents,
     storefront,
+    suggestions,
     testing_checklist,
     training,
     training_enhancements,
@@ -331,6 +332,12 @@ api_router.include_router(
 # message_history above, which is email-delivery diagnostics rather than a
 # module screen.
 api_router.include_router(messages.router, prefix="/messages", tags=["messages"])
+# Ungated for the same reason as messages: the communications flag defaults to
+# False and none of this module's screens honour it, so gating only this
+# router would hide the suggestion boxes on almost every installation.
+api_router.include_router(
+    suggestions.router, prefix="/suggestions", tags=["suggestions"]
+)
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(
     platform_analytics.router, prefix="/platform-analytics", tags=["platform-analytics"]

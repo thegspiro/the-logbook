@@ -840,6 +840,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         label: 'Photo use consent',
         anyPermission: ['users.view_consents', 'notifications.manage', 'members.manage', 'users.edit'],
       },
+      { path: '/suggestions', label: 'Suggestions' },
+      {
+        path: '/communications/suggestion-boxes',
+        label: 'Suggestion box administration',
+        permission: 'suggestions.manage',
+      },
     ],
   },
   {

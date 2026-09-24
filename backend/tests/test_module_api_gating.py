@@ -224,6 +224,7 @@ EXPECTED_GATES = {
 DELIBERATELY_UNGATED = {
     "/api/v1/messages": "department messages render on every member's dashboard, and communications defaults off",
     "/api/v1/message-history": "email delivery diagnostics, not a module screen",
+    "/api/v1/suggestions": "communications defaults off and none of its screens honour the flag; gating only this would hide suggestion boxes on almost every installation",
     "/api/v1/locations": "the stand-in the app serves when Facilities is off",
     "/api/v1/forms": "cross-module form builder; a core module in onboarding",
     "/api/v1/labels": "label printing for apparatus, facilities, prospects and members alike",
