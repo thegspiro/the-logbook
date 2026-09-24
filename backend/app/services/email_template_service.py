@@ -504,6 +504,13 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Date the original application was received",
         },
     ],
+    "application_withdrawn": [
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {
+            "name": "withdrawal_date",
+            "description": "Date the applicant withdrew, in the department's timezone",
+        },
+    ],
     "ballot_eligibility_summary": [
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "election_title", "description": "Title of the election"},
@@ -1039,6 +1046,12 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         {
             "applicant_name": "Alex Johnson",
             "original_date": "February 15, 2026",
+        }
+    ),
+    "application_withdrawn": _sample(
+        {
+            "applicant_name": "Alex Johnson",
+            "withdrawal_date": "March 3, 2026",
         }
     ),
     "ballot_eligibility_summary": _sample(
@@ -1699,6 +1712,38 @@ status of your application, please contact us directly.
 
 DEFAULT_DUPLICATE_APPLICATION_SUBJECT = (
     "Application Already on File — {{organization_name}}"
+)
+
+# Default application-withdrawn confirmation email
+DEFAULT_APPLICATION_WITHDRAWN_HTML = build_shell(
+    "Application Withdrawn",
+    """        <p>Hello {{applicant_name}},</p>
+        <p>This confirms that you withdrew your application to join
+        {{organization_name}} on <strong>{{withdrawal_date}}</strong>. Our
+        membership coordinators have been told, and your application is now
+        closed.</p>
+        <p>Thank you for your interest in the department. If you withdrew by
+        mistake, or would like to apply again in the future, please contact us
+        directly.</p>""",
+    accent=ACCENT_SLATE,
+    chip="Withdrawn",
+)
+
+DEFAULT_APPLICATION_WITHDRAWN_TEXT = """Application Withdrawn
+
+Hello {{applicant_name}},
+
+This confirms that you withdrew your application to join
+{{organization_name}} on {{withdrawal_date}}. Our membership coordinators
+have been told, and your application is now closed.
+
+Thank you for your interest in the department. If you withdrew by mistake,
+or would like to apply again in the future, please contact us directly.
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_WITHDRAWN_SUBJECT = (
+    "Your application has been withdrawn — {{organization_name}}"
 )
 
 # Default ballot notification email
@@ -3160,6 +3205,18 @@ class EmailTemplateService:
                 "Sent to the applicant when a duplicate membership application "
                 "is detected for the same email address. The department is "
                 "BCC'd automatically."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_WITHDRAWN,
+            "footer": "public",
+            "name": "Application Withdrawn",
+            "subject": DEFAULT_APPLICATION_WITHDRAWN_SUBJECT,
+            "html": DEFAULT_APPLICATION_WITHDRAWN_HTML,
+            "text": DEFAULT_APPLICATION_WITHDRAWN_TEXT,
+            "description": (
+                "Sent to an applicant who withdraws their own application "
+                "from their application status page, confirming it is closed."
             ),
         },
         {
