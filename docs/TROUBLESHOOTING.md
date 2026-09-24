@@ -2413,6 +2413,9 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 # Monthly 1st at 8:00 AM — membership tier auto-advance
 0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
 
+# Daily 7:45 AM — 30/90-day property return reminders to dropped members
+45 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=property_return_reminders
+
 # Every 15 minutes — publish & escalate scheduled department messages
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=publish_scheduled_messages
 ```
@@ -2710,14 +2713,16 @@ Only explicitly named users can evaluate.
 
 **Causes**:
 
-1. The process endpoint hasn't been called (reminders require a trigger)
+1. The daily `property_return_reminders` task has not run since the member crossed the threshold. It runs once a day, and once at server start, in the built-in scheduler. Before 2026-09-24 nothing ran it at all, and reminders went out only when the process endpoint was called
 2. The member has no outstanding items (all were returned)
 3. The reminder was already sent previously (duplicate prevention)
-4. The member was dropped before `status_changed_at` was tracked (legacy drops)
+4. The 30-day reminder was **superseded**: each run sends a member only the latest threshold they have passed, so a member first picked up after day 90 gets the 90-day reminder and never the 30-day one
+5. The member was dropped before `status_changed_at` was tracked (legacy drops)
+6. The member is no longer dropped — archived and reactivated members are not reminded
 
 **Solutions**:
 
-- Call `POST /api/v1/users/property-return-reminders/process` manually or set up a daily scheduler
+- Check the scheduler ran: look for `Scheduled task 'property_return_reminders' completed` in the backend log. To send now, call `POST /api/v1/users/property-return-reminders/process`
 - Check the overdue list: `GET /api/v1/users/property-return-reminders/overdue`
 - Verify the member still has active assignments/checkouts in the inventory system
 - For legacy drops: update the member's `status_changed_at` to their actual drop date
