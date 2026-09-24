@@ -605,10 +605,11 @@ describe('ImportMembers', () => {
       renderWithRouter(<ImportMembers />);
       await uploadCsv('firstName,lastName,email\nMary,Smith,mary@example.com');
 
-      const option = (await screen.findByRole('checkbox', { name: /Send welcome emails now/ })).closest('label');
-      expect(option).toHaveTextContent(/emailed a temporary password/);
-      expect(option).toHaveTextContent(/Reset Password in Member Management/);
-      expect(option).not.toHaveTextContent(/link/);
+      // The label wraps the description, so it is part of the checkbox's name.
+      const option = await screen.findByRole('checkbox', { name: /Send welcome emails now/ });
+      expect(option).toHaveAccessibleName(/emailed a temporary password/);
+      expect(option).toHaveAccessibleName(/Reset Password in Member Management/);
+      expect(option).not.toHaveAccessibleName(/link/);
     });
   });
 
