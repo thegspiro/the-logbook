@@ -830,6 +830,13 @@ The 30- and 90-day reminder emails are sent only when
 `POST /users/property-return-reminders/process` is called; nothing runs it on a
 schedule.
 
+**Reminders.** A daily scheduled task emails the member when they pass **30
+days** and again at **90 days** since the drop with property still out, and
+copies the department's administrative officers. Each run sends a member at
+most one reminder — the latest mark they have passed — so a member first
+picked up at day 100 receives the 90-day reminder only, never a late 30-day
+one. A reminder already sent is never repeated.
+
 > **Hint:** Overdue property returns are tracked by the API
 > (`GET /users/property-return-reminders/overdue`) but **have no screen** as of
 > 2026-09-24. The Inventory module's members page shows an "Overdue Returns"
