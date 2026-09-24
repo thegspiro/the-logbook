@@ -360,14 +360,14 @@ async def _db_boxes(db, org_id: str):
 
 @pytest.mark.integration
 class TestSeedComplianceBox:
-    async def test_creates_an_inactive_box_reviewed_by_the_position(self, db_session):
+    async def test_creates_an_active_box_reviewed_by_the_position(self, db_session):
         org_id = await _org(db_session)
         officer = await _db_position(db_session, org_id, "compliance_officer")
 
         box = await SuggestionService(db_session).seed_compliance_box(org_id)
 
         assert box is not None
-        assert box.is_active is False
+        assert box.is_active is True
         assert box.follow_up_enabled is True
         reviewers = (
             (
@@ -392,8 +392,8 @@ class TestSeedComplianceBox:
         assert len(await _db_boxes(db_session, org_id)) == 1
 
     async def test_without_the_position_the_box_has_no_reviewer(self, db_session):
-        # Still created, and inactive, so it cannot take reports into a void;
-        # activating it requires a reviewer (_validate_box_write).
+        # Still created, but inactive: a live box with no reviewer is the void
+        # _validate_box_write refuses, and activating it requires one.
         org_id = await _org(db_session)
 
         box = await SuggestionService(db_session).seed_compliance_box(org_id)
