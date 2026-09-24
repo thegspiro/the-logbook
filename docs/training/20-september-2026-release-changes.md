@@ -1624,8 +1624,10 @@ commands.
 
 Every link the system emails — password resets, ballots, approvals, reminders,
 applicant status — is built from the server's `FRONTEND_URL` setting. It ships
-as `http://localhost:3000`, and neither installer sets it, so an installation
-that never changed it has been mailing links that open for nobody.
+as `http://localhost:3000`, and until September 24 neither installer set it,
+so an installation that never changed it has been mailing links that open for
+nobody. New installs now set it: the Unraid setup script uses the HTTPS address
+it asks for, and the universal installer takes `--public-url`.
 
 As of September 24, a production backend logs this at startup, and the
 preflight check lists it under "Advisory":

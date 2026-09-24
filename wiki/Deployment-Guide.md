@@ -101,7 +101,14 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/u
 
 # Custom directory
 curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --dir /opt/the-logbook
+
+# Address members use — written to FRONTEND_URL, which every emailed link is built from
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
+
+Without `--public-url`, `FRONTEND_URL` stays at `http://localhost:3000` and the
+installer says so when it finishes: password resets, ballots and reminders will
+link to that machine only until you set it in `.env`.
 
 ### Manual Installation
 
