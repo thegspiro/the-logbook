@@ -713,6 +713,16 @@ export const EventDetailPage: React.FC = () => {
   // Seats taken, which is what max_attendees caps. Falls back to the member
   // count for payloads predating the aggregate.
   const occupiedSeats = event.occupied_seats ?? event.going_count ?? 0;
+  // Capacity belongs wherever there is a cap, not only on RSVP-required
+  // events: the RSVP path waitlists anyone past max_attendees either way, so a
+  // member waitlisted on a capped event needs to see why. The Statistics card
+  // already draws it for those who can load stats, so it is not drawn twice.
+  const statsShowCapacity = stats?.capacity_percentage !== null && stats?.capacity_percentage !== undefined;
+  const showCapacity = Boolean(event.max_attendees) && !statsShowCapacity;
+  // Each row of the Event Information card is conditional, and an event that
+  // needs no RSVP, has no cap and allows no guests used to leave an empty card
+  // with only its heading.
+  const hasEventInformation = event.requires_rsvp || showCapacity || event.allow_guests;
   // No requires_rsvp here, deliberately. That flag means "a response is
   // expected" — it drives the Required row in the sidebar, the deadline
   // countdown and the non-respondent reminder audience — not "responses are
@@ -1659,66 +1669,69 @@ export const EventDetailPage: React.FC = () => {
             )}
 
             {/* Event Info */}
-            <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
-              <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Event Information</h2>
-              <div className="space-y-3">
-                {event.requires_rsvp && (
-                  <>
+            {hasEventInformation && (
+              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+                <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Event Information</h2>
+                <div className="space-y-3">
+                  {event.requires_rsvp && (
+                    <>
+                      <div>
+                        <p className="text-theme-text-secondary text-sm">RSVP Required</p>
+                        <p className="text-theme-text-primary text-sm font-medium">Yes</p>
+                      </div>
+                      {event.rsvp_deadline && (
+                        <div>
+                          <p className="text-theme-text-secondary text-sm">RSVP Deadline</p>
+                          <p className="text-theme-text-primary text-sm font-medium">
+                            {formatShortDateTime(event.rsvp_deadline, tz)}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {showCapacity &&
+                    event.max_attendees &&
+                    (() => {
+                      // Seats, not members: max_attendees caps seats, so a
+                      // bar drawn from the member count promises room the
+                      // RSVP path will refuse.
+                      const pct = Math.min(Math.round((occupiedSeats / event.max_attendees) * 100), 100);
+                      const isFull = occupiedSeats >= event.max_attendees;
+                      const barColor = pct >= 90 ? 'bg-red-800' : pct >= 75 ? 'bg-amber-500' : 'bg-green-500';
+                      return (
+                        <div>
+                          <div className="mb-1 flex justify-between">
+                            <p className="text-theme-text-secondary text-sm">Capacity</p>
+                            <p className="text-theme-text-primary text-sm font-medium">
+                              {occupiedSeats} / {event.max_attendees}
+                            </p>
+                          </div>
+                          <div className="bg-theme-surface h-2 w-full rounded-full">
+                            <div
+                              className={`h-2 rounded-full transition-all ${barColor}`}
+                              style={{ width: `${pct}%` }}
+                            ></div>
+                          </div>
+                          <p className="text-theme-text-muted mt-1 text-xs">
+                            {occupiedSeats} / {event.max_attendees} spots filled
+                          </p>
+                          {isFull && (
+                            <span className="mt-2 inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                              Event Full
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  {event.allow_guests && (
                     <div>
-                      <p className="text-theme-text-secondary text-sm">RSVP Required</p>
+                      <p className="text-theme-text-secondary text-sm">Guests Allowed</p>
                       <p className="text-theme-text-primary text-sm font-medium">Yes</p>
                     </div>
-                    {event.rsvp_deadline && (
-                      <div>
-                        <p className="text-theme-text-secondary text-sm">RSVP Deadline</p>
-                        <p className="text-theme-text-primary text-sm font-medium">
-                          {formatShortDateTime(event.rsvp_deadline, tz)}
-                        </p>
-                      </div>
-                    )}
-                    {event.max_attendees &&
-                      (() => {
-                        // Seats, not members: max_attendees caps seats, so a
-                        // bar drawn from the member count promises room the
-                        // RSVP path will refuse.
-                        const pct = Math.min(Math.round((occupiedSeats / event.max_attendees) * 100), 100);
-                        const isFull = occupiedSeats >= event.max_attendees;
-                        const barColor = pct >= 90 ? 'bg-red-800' : pct >= 75 ? 'bg-amber-500' : 'bg-green-500';
-                        return (
-                          <div>
-                            <div className="mb-1 flex justify-between">
-                              <p className="text-theme-text-secondary text-sm">Capacity</p>
-                              <p className="text-theme-text-primary text-sm font-medium">
-                                {occupiedSeats} / {event.max_attendees}
-                              </p>
-                            </div>
-                            <div className="bg-theme-surface h-2 w-full rounded-full">
-                              <div
-                                className={`h-2 rounded-full transition-all ${barColor}`}
-                                style={{ width: `${pct}%` }}
-                              ></div>
-                            </div>
-                            <p className="text-theme-text-muted mt-1 text-xs">
-                              {occupiedSeats} / {event.max_attendees} spots filled
-                            </p>
-                            {isFull && (
-                              <span className="mt-2 inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-300">
-                                Event Full
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })()}
-                  </>
-                )}
-                {event.allow_guests && (
-                  <div>
-                    <p className="text-theme-text-secondary text-sm">Guests Allowed</p>
-                    <p className="text-theme-text-primary text-sm font-medium">Yes</p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
