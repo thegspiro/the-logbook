@@ -66,7 +66,7 @@ def _service(prospect, signer):
     service = MembershipPipelineService(db)
     service.get_prospect = AsyncMock(return_value=prospect)
     service._log_activity = AsyncMock()
-    service._advance_current_step = AsyncMock()
+    service._advance_current_step = AsyncMock(return_value=None)
     service._send_step_completion_notification = AsyncMock()
     service._do_transfer = AsyncMock()
     return service

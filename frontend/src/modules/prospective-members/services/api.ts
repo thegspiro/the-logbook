@@ -199,6 +199,7 @@ function mapPipelineResponse(data: BackendPipelineResponse): Pipeline {
     is_default: data.is_default ?? false,
     inactivity_config: inactivityConfig,
     public_status_enabled: data.public_status_enabled ?? false,
+    public_show_future_stages: data.public_show_future_stages ?? true,
     report_stage_groups: data.report_stage_groups ?? undefined,
     stages: (data.steps || []).map(mapStepToStage),
     applicant_count: data.prospect_count ?? 0,
@@ -515,6 +516,8 @@ export const pipelineService = {
     if (data.is_template !== undefined) payload.is_template = data.is_template;
     if (data.inactivity_config !== undefined) payload.inactivity_config = data.inactivity_config;
     if (data.public_status_enabled !== undefined) payload.public_status_enabled = data.public_status_enabled;
+    if (data.public_show_future_stages !== undefined)
+      payload.public_show_future_stages = data.public_show_future_stages;
 
     const response = await api.put<BackendPipelineResponse>(`/prospective-members/pipelines/${pipelineId}`, payload);
     return mapPipelineResponse(response.data);
@@ -1133,7 +1136,7 @@ export const publicStatusService = {
     status: string;
     current_stage_name?: string | undefined;
     pipeline_name?: string | undefined;
-    total_stages: number;
+    total_stages: number | null;
     stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
     applied_at?: string | undefined;
     current_stage_action?: CurrentStageAction | undefined;
@@ -1144,7 +1147,7 @@ export const publicStatusService = {
       status: string;
       current_stage_name?: string | undefined;
       pipeline_name?: string | undefined;
-      total_stages: number;
+      total_stages: number | null;
       stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
       applied_at?: string | undefined;
       current_stage_action?: CurrentStageAction | undefined;

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**271 tables · 4540 columns · 876 foreign keys**
+**271 tables · 4541 columns · 876 foreign keys**
 
 ---
 
@@ -407,7 +407,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`membership_pipeline_steps`](#membership_pipeline_steps) | `MembershipPipelineStep` | 17 | A single step within a membership pipeline. |
-| [`membership_pipelines`](#membership_pipelines) | `MembershipPipeline` | 14 | Pipeline definition for prospective member onboarding. |
+| [`membership_pipelines`](#membership_pipelines) | `MembershipPipeline` | 15 | Pipeline definition for prospective member onboarding. |
 | [`prospect_activity_log`](#prospect_activity_log) | `ProspectActivityLog` | 6 | Audit trail for prospect-related actions. |
 | [`prospect_documents`](#prospect_documents) | `ProspectDocument` | 10 | Document uploaded for a prospective member. |
 | [`prospect_election_packages`](#prospect_election_packages) | `ProspectElectionPackage` | 11 | Election package for a prospective member. |
@@ -5971,6 +5971,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `auto_transfer_on_approval` | BOOL | yes |  | `False` |  |
 | `inactivity_config` | JSON | yes |  | `dict()` |  |
 | `public_status_enabled` | BOOL | yes |  | `False` |  |
+| `public_show_future_stages` | BOOL | no |  | `1` |  |
 | `report_stage_groups` | JSON | yes |  | `list()` |  |
 | `created_by` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` |
 | `created_at` | DATETIME | yes |  | `now()` |  |

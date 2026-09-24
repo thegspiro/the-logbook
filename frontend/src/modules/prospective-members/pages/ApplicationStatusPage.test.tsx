@@ -101,3 +101,34 @@ describe('ApplicationStatusPage current-stage action', () => {
     expect(screen.queryByRole('link', { name: /Schedule/i })).not.toBeInTheDocument();
   });
 });
+
+describe('ApplicationStatusPage progress count', () => {
+  beforeEach(() => {
+    mockGetApplicationStatus.mockReset();
+  });
+
+  it('shows completed out of total when the department shows upcoming stages', async () => {
+    mockGetApplicationStatus.mockResolvedValue({
+      ...baseStatus,
+      total_stages: 3,
+      stage_timeline: [{ stage_name: 'Interest Form', status: 'completed', completed_at: '2026-01-02T00:00:00Z' }],
+    });
+
+    renderPage();
+
+    expect(await screen.findByText('1 / 3')).toBeInTheDocument();
+  });
+
+  it('shows only the completed count when upcoming stages are hidden', async () => {
+    mockGetApplicationStatus.mockResolvedValue({
+      ...baseStatus,
+      total_stages: null,
+      stage_timeline: [{ stage_name: 'Interest Form', status: 'completed', completed_at: '2026-01-02T00:00:00Z' }],
+    });
+
+    renderPage();
+
+    expect(await screen.findByText('1 completed')).toBeInTheDocument();
+    expect(screen.queryByText(/\/ /)).not.toBeInTheDocument();
+  });
+});

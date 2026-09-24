@@ -422,6 +422,7 @@ export interface Pipeline {
   is_default: boolean;
   inactivity_config: InactivityConfig;
   public_status_enabled: boolean;
+  public_show_future_stages: boolean;
   report_stage_groups?: ReportStageGroup[] | undefined;
   stages: PipelineStage[];
   applicant_count?: number | undefined;
@@ -445,6 +446,7 @@ export interface PipelineUpdate {
   is_template?: boolean | undefined;
   inactivity_config?: InactivityConfig | undefined;
   public_status_enabled?: boolean | undefined;
+  public_show_future_stages?: boolean | undefined;
 }
 
 export interface PipelineListItem {
@@ -918,6 +920,7 @@ export interface BackendPipelineResponse {
   auto_transfer_on_approval: boolean;
   inactivity_config: Record<string, unknown> | null;
   public_status_enabled: boolean;
+  public_show_future_stages: boolean;
   report_stage_groups: ReportStageGroup[] | null;
   created_by: string | null;
   created_at: string;

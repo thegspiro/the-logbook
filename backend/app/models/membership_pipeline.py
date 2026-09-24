@@ -119,6 +119,11 @@ class MembershipPipeline(Base):
     auto_transfer_on_approval = Column(Boolean, default=False)
     inactivity_config = Column(JSON, default=dict)
     public_status_enabled = Column(Boolean, default=False)
+    # Off: the public status page lists only completed stages, and withholds
+    # the stage total — a count alone tells the applicant how much is left.
+    public_show_future_stages = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     report_stage_groups = Column(JSON, default=list)
 
     created_by = Column(String(36), ForeignKey("users.id"), index=True)

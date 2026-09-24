@@ -488,7 +488,9 @@ class TestCompleteStepActionResult:
                 svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
             ),
             patch.object(svc, "_log_activity", new_callable=AsyncMock),
-            patch.object(svc, "_advance_current_step", new_callable=AsyncMock),
+            patch.object(
+                svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
+            ),
             patch.object(svc, "_do_transfer", new_callable=AsyncMock),
         ]
         return svc, patches
@@ -602,7 +604,7 @@ class TestSkipNeverTransfers:
         with patch.object(
             svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
         ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
-            svc, "_advance_current_step", new_callable=AsyncMock
+            svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
         ) as mock_advance, patch.object(
             svc, "_do_transfer", new_callable=AsyncMock
         ) as mock_transfer:
@@ -625,7 +627,7 @@ class TestSkipNeverTransfers:
         with patch.object(
             svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
         ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
-            svc, "_advance_current_step", new_callable=AsyncMock
+            svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
         ) as mock_advance, patch.object(
             svc, "_do_transfer", new_callable=AsyncMock
         ) as mock_transfer:
@@ -736,7 +738,7 @@ class TestStatusStopsProgression:
         with patch.object(
             svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
         ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
-            svc, "_advance_current_step", new_callable=AsyncMock
+            svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
         ) as mock_advance, patch.object(
             svc, "_do_transfer", new_callable=AsyncMock
         ) as mock_transfer:
@@ -764,7 +766,7 @@ class TestStatusStopsProgression:
         with patch.object(
             svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
         ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
-            svc, "_advance_current_step", new_callable=AsyncMock
+            svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
         ) as mock_advance, patch.object(
             svc, "_do_transfer", new_callable=AsyncMock
         ):
@@ -881,7 +883,7 @@ class TestElectionVoteGate:
         with patch.object(
             svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
         ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
-            svc, "_advance_current_step", new_callable=AsyncMock
+            svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
         ) as mock_advance, patch.object(
             svc, "_do_transfer", new_callable=AsyncMock
         ) as mock_transfer:
