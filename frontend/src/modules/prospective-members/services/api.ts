@@ -363,6 +363,16 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
     form_submission_id: data.form_submission_id || undefined,
     status: extractStatus(data.status) as Applicant['status'],
     notes: data.notes || undefined,
+    // The target role the transfer applies, and the lifecycle stamps the
+    // drawer's banners and Details block read. Every one of these had a
+    // reader and no producer until the columns landed.
+    target_role_id: data.target_role_id || undefined,
+    target_role_name: data.target_role_name || undefined,
+    deactivated_at: data.deactivated_at || undefined,
+    deactivated_reason: data.deactivated_reason || undefined,
+    reactivated_at: data.reactivated_at || undefined,
+    withdrawn_at: data.withdrawn_at || undefined,
+    withdrawal_reason: data.withdrawal_reason || undefined,
     last_activity_at: data.updated_at,
     created_at: data.created_at,
     updated_at: data.updated_at,
@@ -389,6 +399,10 @@ function mapProspectListToApplicantList(data: BackendProspectListResponse): Appl
     days_since_activity: data.days_since_activity,
     inactivity_alert_level: (data.inactivity_alert_level ?? 'normal') as InactivityAlertLevel,
     inactivity_timeout_days: data.inactivity_timeout_days ?? undefined,
+    target_role_name: data.target_role_name || undefined,
+    deactivated_at: data.deactivated_at || undefined,
+    withdrawn_at: data.withdrawn_at || undefined,
+    withdrawal_reason: data.withdrawal_reason || undefined,
     created_at: data.created_at,
   };
 }
@@ -734,6 +748,10 @@ export const applicantService = {
     if (data.phone !== undefined) payload.phone = data.phone;
     if (data.date_of_birth !== undefined) payload.date_of_birth = data.date_of_birth;
     if (data.target_membership_type !== undefined) payload.desired_membership_type = data.target_membership_type;
+    // `!== undefined` rather than a truthiness test: null is the clear, and a
+    // truthy check would drop it and leave the old role in place behind a
+    // success toast.
+    if (data.target_role_id !== undefined) payload.target_role_id = data.target_role_id;
     if (data.notes !== undefined) payload.notes = data.notes;
     if (data.status !== undefined) payload.status = data.status;
     if (data.address) {

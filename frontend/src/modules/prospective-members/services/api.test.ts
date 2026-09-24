@@ -357,3 +357,58 @@ describe('mapElectionPackageResponse', () => {
     expect(result.election_status).toBeUndefined();
   });
 });
+
+describe('mapProspectToApplicant — target role and lifecycle stamps', () => {
+  // Seven fields the drawer and the conversion dialog read. Before the
+  // columns landed there was nothing to carry: no schema sent them and no
+  // table stored them, so the banners rendered nothing and ConversionModal
+  // sent an always-undefined target_role_id, dropping the role silently.
+  const withLifecycle = (overrides: Partial<BackendProspectResponse> = {}): BackendProspectResponse => ({
+    ...makeProspectResponse([]),
+    target_role_id: 'role-1',
+    target_role_name: 'Safety Officer',
+    deactivated_at: '2026-06-01T08:00:00Z',
+    deactivated_reason: 'Lapsed',
+    reactivated_at: '2026-07-04T14:15:00Z',
+    withdrawn_at: null,
+    withdrawal_reason: null,
+    ...overrides,
+  });
+
+  it('carries the target role and every lifecycle stamp', () => {
+    const result = mapProspectToApplicant(withLifecycle());
+
+    expect(result.target_role_id).toBe('role-1');
+    expect(result.target_role_name).toBe('Safety Officer');
+    expect(result.deactivated_at).toBe('2026-06-01T08:00:00Z');
+    expect(result.deactivated_reason).toBe('Lapsed');
+    expect(result.reactivated_at).toBe('2026-07-04T14:15:00Z');
+  });
+
+  it('leaves an application with no role or history undefined', () => {
+    const result = mapProspectToApplicant(
+      withLifecycle({
+        target_role_id: null,
+        target_role_name: null,
+        deactivated_at: null,
+        deactivated_reason: null,
+        reactivated_at: null,
+      })
+    );
+
+    expect(result.target_role_id).toBeUndefined();
+    expect(result.target_role_name).toBeUndefined();
+    expect(result.deactivated_at).toBeUndefined();
+    expect(result.deactivated_reason).toBeUndefined();
+    expect(result.reactivated_at).toBeUndefined();
+  });
+
+  it('keeps a deactivation alongside a later reactivation', () => {
+    // The drawer's Details block renders them as a history pair, so the
+    // reactivation must not read as having replaced the deactivation.
+    const result = mapProspectToApplicant(withLifecycle());
+
+    expect(result.deactivated_at).toBe('2026-06-01T08:00:00Z');
+    expect(result.reactivated_at).toBe('2026-07-04T14:15:00Z');
+  });
+});
