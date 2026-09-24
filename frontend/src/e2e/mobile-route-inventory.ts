@@ -1160,6 +1160,19 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
+    path: '/inventory/admin/nfc',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/inventory/tag/:code',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'parameterized redirect: resolves an NFC tag code and replaces itself with /inventory/items/:id, which is the page a member actually sees',
+  },
+  {
     path: '/inventory/admin/checklists/settings',
     source: 'src/modules/inventory/routes.tsx',
     coverage: 'ratchet',

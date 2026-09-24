@@ -514,6 +514,20 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'inventory',
       },
       {
+        path: '/inventory/admin/nfc',
+        label: 'NFC tag settings',
+        // Written through the organization settings endpoint, like the
+        // checklist settings below.
+        anyPermission: ['settings.manage', 'organization.update_settings'],
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/tag/:code',
+        label: 'NFC tag link (resolves to the item)',
+        permission: 'inventory.view',
+        module: 'inventory',
+      },
+      {
         path: '/inventory/admin/checklists/settings',
         label: 'Checklist settings',
         // The department-settings grant, not the checklist one: these values

@@ -17,8 +17,20 @@ export const NfcTagTarget = {
   EVENT_CHECK_IN: 'event-check-in',
   ADMIN_HOURS_CLOCK_IN: 'admin-hours-clock-in',
   SHIFT_CHECK_IN: 'shift-check-in',
+  INVENTORY_ITEM: 'inventory-item',
 } as const;
 export type NfcTagTarget = (typeof NfcTagTarget)[keyof typeof NfcTagTarget];
+
+/**
+ * State of an NFC tag stuck to an inventory item. Unlike a member's card,
+ * `LOST` is not terminal: the tag names a thing and grants nothing, so one
+ * that turns up again can go back into service.
+ */
+export const InventoryNfcTagStatus = {
+  ACTIVE: 'active',
+  LOST: 'lost',
+} as const;
+export type InventoryNfcTagStatus = (typeof InventoryNfcTagStatus)[keyof typeof InventoryNfcTagStatus];
 
 // ============================================
 // NFC ID Cards (member credentials)

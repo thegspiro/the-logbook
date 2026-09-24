@@ -36,6 +36,7 @@ import {
   Layers,
   type LucideIcon,
   MapPin,
+  Nfc,
   Package,
   Ruler,
   ShoppingBag,
@@ -462,6 +463,19 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
     section: 'Setup & Tools',
     tone: 'slate',
     permission: 'inventory.manage',
+    requiresModule: 'inventory',
+  },
+  {
+    // The settings grant, like the route: the switch is written through the
+    // organization-settings endpoint, which inventory.manage cannot reach.
+    id: 'nfc-settings',
+    label: 'NFC Tags',
+    description: 'Turn on NFC tags for identifying items by tap',
+    path: '/inventory/admin/nfc',
+    icon: Nfc,
+    section: 'Setup & Tools',
+    tone: 'indigo',
+    anyPermission: ['settings.manage', 'organization.update_settings'],
     requiresModule: 'inventory',
   },
 ];

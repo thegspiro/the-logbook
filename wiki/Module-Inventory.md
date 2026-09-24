@@ -232,6 +232,7 @@ wildcard, exactly as `view_medical` / `manage_medical` already were.
 | `maintenance_records`       | Maintenance history (inspection, repair, calibration, etc.)                                                                                                                          |
 | `inventory_vendors`         | Suppliers: name (unique per organization), account number, phone/email/fax/website, address, payment terms, preferred and active flags _(2026-08-16)_                                |
 | `inventory_vendor_contacts` | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag _(2026-08-16)_                                                         |
+| `inventory_nfc_tags`        | NFC tags on items: hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization _(2026-09-24)_                                               |
 
 ### Workflow Tables
 
@@ -339,6 +340,39 @@ GET    /api/v1/inventory/lookup                          # Search by code/name
 POST   /api/v1/inventory/distribute-items                  # Item distribution
 POST   /api/v1/inventory/batch-return                    # Batch return
 ```
+
+### NFC Tags _(2026-09-24)_
+
+Off until an administrator turns it on at **Inventory → Administration → NFC
+Tags** (`/inventory/admin/nfc`, which needs `settings.manage` or
+`organization.update_settings`). The switch is stored as
+`inventory.nfc_tracking_enabled` in the organization settings. While it is off,
+every endpoint below except `GET /nfc/settings` answers 403.
+
+```
+GET    /api/v1/inventory/nfc/settings                    # Is it on? (inventory.view)
+POST   /api/v1/inventory/nfc/resolve                     # Tapped tag -> item, exact match (inventory.view)
+GET    /api/v1/inventory/items/{id}/nfc-tags             # Tags on an item (inventory.manage)
+POST   /api/v1/inventory/items/{id}/nfc-tags             # Link a tag (inventory.manage)
+PATCH  /api/v1/inventory/nfc-tags/{tag_id}               # Relabel, mark lost/found (inventory.manage)
+DELETE /api/v1/inventory/nfc-tags/{tag_id}               # Unlink (inventory.manage)
+```
+
+- **Two ways to link a tag.** _Write a link_: the phone writes
+  `/inventory/tag/<code>` onto a blank tag, and any phone that taps it,
+  iPhones included, opens the item. _Read the serial_: for tags that cannot be
+  written; only the app on Android can use these. A USB reader or a typed
+  serial works from a desktop.
+- **Where a tap is used.** In the distribute and return scanner (**Tap NFC**,
+  next to the camera), and from a phone's home screen for written tags.
+- **Identifiers are stored hashed** (`inventory_nfc_tags.uid_hash`), using the
+  same peppered hash as member ID cards. The phone that links equipment tags
+  also reads ID cards, and a card tapped here by mistake must not leave its
+  serial on record.
+- **A lost tag resolves to nothing** until it is marked found, and a tag on a
+  retired item resolves to nothing.
+- **Browser support.** Web NFC exists only in Chrome on Android, over HTTPS. That
+  is the browser's limit, not the app's.
 
 ### Label Generation
 
