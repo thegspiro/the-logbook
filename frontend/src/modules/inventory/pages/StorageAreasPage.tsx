@@ -20,6 +20,7 @@ import {
   Layers,
   Search,
   ExternalLink,
+  Nfc,
   Printer,
   ScanLine,
   PackageCheck,
@@ -34,6 +35,8 @@ import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { Breadcrumbs } from '../../../components/ux';
+import { NfcTagsCard } from '../components/NfcTagsCard';
+import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
 import { ScanCodeField } from '../components/ScanCodeField';
 import { PutAwayPanel } from '../components/PutAwayPanel';
 
@@ -391,6 +394,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
 const StorageAreasPage: React.FC = () => {
   const navigate = useNavigate();
   const isDesktopTree = useMediaQuery('(min-width: 768px)');
+  const { enabled: nfcEnabled } = useInventoryNfcEnabled();
   const [locations, setLocations] = useState<Location[]>([]);
   const [facilityNames, setFacilityNames] = useState<Map<string, string>>(new Map());
   const [storageAreas, setStorageAreas] = useState<StorageAreaResponse[]>([]);
@@ -814,6 +818,11 @@ const StorageAreasPage: React.FC = () => {
               ? `Print ${areasInView.length} ${areasInView.length === 1 ? 'label' : 'labels'}`
               : 'Print labels'}
           </button>
+          {nfcEnabled && (
+            <Link to="/inventory/put-away" className="btn-secondary btn-md flex items-center gap-2">
+              <Nfc className="h-4 w-4" aria-hidden="true" /> Put Away by NFC
+            </Link>
+          )}
           <button onClick={openCreateModal} className="btn-info btn-md flex items-center gap-2">
             <Plus className="h-4 w-4" /> Add Storage Area
           </button>
@@ -1143,6 +1152,13 @@ const StorageAreasPage: React.FC = () => {
             </p>
           </div>
         </form>
+        {/* Outside the form: the card has a form of its own, and forms do not
+            nest. Only for an existing area — a tag needs an id to link to. */}
+        {editingArea && nfcEnabled && (
+          <div className="mt-4">
+            <NfcTagsCard targetKind="storage_area" targetId={editingArea.id} targetName={editingArea.name} />
+          </div>
+        )}
       </Modal>
 
       {/* Delete confirmation */}

@@ -58,6 +58,7 @@
 - [Member ID Card — troubleshooting](../docs/TROUBLESHOOTING.md#member-id-card-issues)
 - [Apparatus](Module-Apparatus)
 - [Inventory](Module-Inventory)
+- [Inventory NFC Tags — setup](Inventory-NFC-Tags)
 - [Grants & Fundraising](Module-Grants-Fundraising)
 - [Finance](../docs/FINANCE_MODULE.md)
 - [Meeting Minutes](../docs/MEETING_MINUTES_MODULE.md)
