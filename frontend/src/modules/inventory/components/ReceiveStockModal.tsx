@@ -25,7 +25,8 @@ import { useTimezone } from '@/hooks/useTimezone';
 interface ReceiveStockModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onReceived?: () => void;
+  /** Receives the ids of the items stock was received against. */
+  onReceived?: (itemIds: string[]) => void;
 }
 
 interface LineState {
@@ -96,7 +97,7 @@ const ReceiveStockModal: React.FC<ReceiveStockModalProps> = ({ isOpen, onClose, 
       const created = await inventoryService.addLotsBulk(entries);
       toast.success(`Received ${String(created.length)} lot${created.length === 1 ? '' : 's'}`);
       reset();
-      onReceived?.();
+      onReceived?.(Array.from(new Set(entries.map((e) => e.inventory_item_id))));
       onClose();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to receive stock'));

@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   RotateCw,
   TestTube2,
+  Send,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { InventoryItem } from '../types';
@@ -34,6 +35,8 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { prefersPdfOverBrowserPrint } from '../../../utils/printEnvironment';
 import toast from 'react-hot-toast';
 import { LabelScopePicker } from '../components/LabelScopePicker';
+import { PrinterLanguage, labelPrinterService } from '../../../services/labelService';
+import type { LabelPrinterConfig, PrintLabelsResult } from '../../../services/labelService';
 import { buildLabelFilterPath, MAX_LABEL_BATCH, parseLabelPrintQuery } from '../utils/labelPrintQuery';
 
 // ── Label size presets ──────────────────────────────────────────
@@ -212,6 +215,17 @@ const CUSTOM_PRESET_ID = 'custom';
 // re-select it every time they print.
 const PRESET_STORAGE_KEY = 'inventory:labelPreset';
 const CUSTOM_DIMS_STORAGE_KEY = 'inventory:labelCustomDims';
+// The network printer last used from this page, on this browser. Per-viewer: a
+// quartermaster at the station and one at the warehouse want different rolls.
+const PRINTER_STORAGE_KEY = 'inventory:labelPrinterId';
+
+function loadStoredPrinterId(): string | null {
+  try {
+    return localStorage.getItem(PRINTER_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
 
 function loadStoredPresetId(): string {
   try {
@@ -490,6 +504,10 @@ const InventoryBarcodePrintPage: React.FC = () => {
   // dialog or a jammed roll looks identical to success from in here.
   const [labelConfirm, setLabelConfirm] = useState<'idle' | 'asking' | 'saving' | 'done'>('idle');
   const [markedCount, setMarkedCount] = useState(0);
+  const [printers, setPrinters] = useState<LabelPrinterConfig[]>([]);
+  const [selectedPrinterId, setSelectedPrinterId] = useState('');
+  const [sendingToPrinter, setSendingToPrinter] = useState(false);
+  const [printResult, setPrintResult] = useState<PrintLabelsResult | null>(null);
   const [autoRotateOverride, setAutoRotateOverride] = useState<boolean | null>(null);
   const [extraLines, setExtraLines] = useState<string[]>([]);
   const [{ width: initialCustomWidth, height: initialCustomHeight }] = useState(loadStoredCustomDims);
@@ -531,6 +549,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const fetchItems = useCallback(async () => {
     // A new batch has not been printed yet, whatever the last one was.
     setLabelConfirm('idle');
+    setPrintResult(null);
     if (printRequest.kind === 'none') {
       // Nothing addressed: the picker renders instead of the labels.
       setLoading(false);
@@ -709,6 +728,82 @@ const InventoryBarcodePrintPage: React.FC = () => {
   }, []);
 
   const itemsWithoutBarcodes = items.filter((item) => !getBarcodeValue(item));
+
+  // Registered network printers. Best-effort: an organization with none keeps
+  // the browser-print and PDF paths, which is all this page offered before.
+  useEffect(() => {
+    let cancelled = false;
+    labelPrinterService
+      .list()
+      .then((list) => {
+        if (cancelled) return;
+        setPrinters(list);
+        const stored = loadStoredPrinterId();
+        const initial = list.find((p) => p.id === stored) ?? list.find((p) => p.is_default) ?? list[0];
+        if (initial) setSelectedPrinterId(initial.id);
+      })
+      .catch(() => {
+        /* no printers, or no access to the list: the other print paths still work */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedPrinter = printers.find((p) => p.id === selectedPrinterId) ?? null;
+  // A receipt printer's roll decides the size, so this page's choice is not
+  // sent and cannot mismatch. A die-cut label printer must be loaded with the
+  // stock chosen here; an Avery sheet layout means nothing on a roll.
+  const isReceiptPrinter = selectedPrinter?.language === PrinterLanguage.ESCPOS;
+  const printerStockMismatch =
+    selectedPrinter !== null && !isReceiptPrinter && !isCustom && selectedPrinter.label_format !== preset.id;
+  // The network path renders labels read-only and never assigns a missing
+  // barcode (the PDF path does), so a batch with an unlabelable item would be
+  // refused by the server. Say so up front instead.
+  const networkPrintBlocker =
+    selectedPrinter === null
+      ? 'Choose a printer'
+      : !isReceiptPrinter && !isThermal
+        ? 'Choose a thermal label size to print to a label printer'
+        : printerStockMismatch
+          ? `${selectedPrinter.name} is set up for different label stock — match the label size to it first`
+          : itemsWithoutBarcodes.length > 0
+            ? 'Some items have no barcode yet — download the PDF once to assign them'
+            : isCustom && !customValid
+              ? 'Enter a valid custom size'
+              : null;
+
+  const sendToPrinter = async () => {
+    if (!selectedPrinter || items.length === 0) return;
+    setSendingToPrinter(true);
+    setPrintResult(null);
+    try {
+      const result = await labelPrinterService.print(
+        'inventory',
+        items.map((item) => item.id),
+        {
+          printer_id: selectedPrinter.id,
+          ...(isReceiptPrinter
+            ? {}
+            : {
+                label_format: isCustom ? CUSTOM_PRESET_ID : preset.id,
+                ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
+              }),
+          copies,
+          ...(extraLines.length > 0 ? { extra_lines: extraLines } : {}),
+        }
+      );
+      setPrintResult(result);
+      toast.success(`Sent ${result.labels_sent} label${result.labels_sent !== 1 ? 's' : ''} to ${result.printer_name}`);
+      // A printer that is out of stock accepts the job and prints nothing, so
+      // the confirmation below still asks rather than assuming success.
+      setLabelConfirm('asking');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to send labels to the printer'));
+    } finally {
+      setSendingToPrinter(false);
+    }
+  };
 
   const handlePrint = () => {
     if (!barcodesReady) {
@@ -1101,6 +1196,80 @@ const InventoryBarcodePrintPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {printers.length > 0 && (
+            <div className="card-secondary mb-4 flex flex-col gap-3 p-3 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <label htmlFor="inventory-label-printer" className="form-label">
+                  Label printer
+                </label>
+                <select
+                  id="inventory-label-printer"
+                  className="form-input"
+                  value={selectedPrinterId}
+                  onChange={(e) => {
+                    setSelectedPrinterId(e.target.value);
+                    setPrintResult(null);
+                    try {
+                      localStorage.setItem(PRINTER_STORAGE_KEY, e.target.value);
+                    } catch {
+                      // Unavailable storage only costs remembering the choice.
+                    }
+                  }}
+                >
+                  {printers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.location ? ` — ${p.location}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {networkPrintBlocker && selectedPrinter && (
+                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">{networkPrintBlocker}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void sendToPrinter()}
+                disabled={sendingToPrinter || items.length === 0 || networkPrintBlocker !== null}
+                className="flex items-center justify-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
+              >
+                {sendingToPrinter ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {selectedPrinter ? `Print to ${selectedPrinter.name}` : 'Print to label printer'}
+              </button>
+            </div>
+          )}
+
+          {printResult && (
+            <div
+              className={`mb-4 rounded-lg border p-3 ${
+                printResult.printer_errors.length > 0
+                  ? 'border-red-500/30 bg-red-500/10'
+                  : 'border-emerald-500/30 bg-emerald-500/10'
+              }`}
+              role="status"
+            >
+              <p className="text-theme-text-primary text-sm font-medium">
+                {formatNumber(printResult.labels_sent)} label{printResult.labels_sent === 1 ? '' : 's'} sent to{' '}
+                {printResult.printer_name}
+              </p>
+              {printResult.printer_errors.length > 0 ? (
+                <p className="mt-1 text-sm text-red-700 dark:text-red-400">
+                  Printer fault: {printResult.printer_errors.join(', ')}
+                </p>
+              ) : printResult.printer_warnings.length > 0 ? (
+                <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+                  Printer warning: {printResult.printer_warnings.join(', ')}
+                </p>
+              ) : !printResult.status_known ? (
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  This printer does not report its status, so delivery could not be confirmed. Check the labels.
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-300">The printer reported no faults.</p>
+              )}
+            </div>
+          )}
 
           {labelConfirm !== 'idle' && (
             <div

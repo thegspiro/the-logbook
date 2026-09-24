@@ -14,6 +14,8 @@ const mockGetCategories = vi.fn();
 const mockGetStorageAreas = vi.fn();
 const mockGetLocations = vi.fn();
 const mockMarkLabelsPrinted = vi.fn();
+const mockListPrinters = vi.fn();
+const mockPrintToPrinter = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -28,6 +30,14 @@ vi.mock('../../../services/api', () => ({
   },
   locationsService: {
     getLocations: (...a: unknown[]) => mockGetLocations(...a) as unknown,
+  },
+}));
+
+vi.mock('../../../services/labelService', () => ({
+  PrinterLanguage: { ZPL: 'zpl', ESCPOS: 'escpos' },
+  labelPrinterService: {
+    list: (...a: unknown[]) => mockListPrinters(...a) as unknown,
+    print: (...a: unknown[]) => mockPrintToPrinter(...a) as unknown,
   },
 }));
 
@@ -74,6 +84,10 @@ describe('InventoryBarcodePrintPage', () => {
     for (const m of [mockGetItems, mockGetCategories, mockGetStorageAreas, mockGetLocations, mockMarkLabelsPrinted])
       m.mockReset();
     mockMarkLabelsPrinted.mockResolvedValue({ marked: 1 });
+    mockListPrinters.mockReset();
+    mockPrintToPrinter.mockReset();
+    // No network printer by default: the page must look exactly as it did.
+    mockListPrinters.mockResolvedValue([]);
     mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1, skip: 0, limit: 500 });
     mockGetCategories.mockResolvedValue([{ id: 'cat-1', name: 'Radios' }]);
     mockGetStorageAreas.mockResolvedValue([]);
@@ -400,6 +414,87 @@ describe('InventoryBarcodePrintPage', () => {
       await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
 
       expect(screen.queryByText(/Did the labels print correctly/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('printing to a network label printer', () => {
+    const zebra = {
+      id: 'pr-1',
+      name: 'Station Zebra',
+      location: 'Supply room',
+      host: '10.0.0.5',
+      port: 9100,
+      language: 'zpl',
+      dpi: 203,
+      // Matches the page's default preset, so nothing blocks the send.
+      label_format: 'dymo_30252',
+      custom_width: null,
+      custom_height: null,
+      darkness: null,
+      is_default: true,
+      is_active: true,
+    };
+    const sent = {
+      printer_id: 'pr-1',
+      printer_name: 'Station Zebra',
+      labels_sent: 1,
+      auto_populated: 0,
+      printer_errors: [] as string[],
+      printer_warnings: [] as string[],
+      status_known: true,
+    };
+
+    beforeEach(() => {
+      mockListPrinters.mockResolvedValue([zebra]);
+      mockPrintToPrinter.mockResolvedValue(sent);
+    });
+
+    it('offers nothing new when no printer is registered', async () => {
+      mockListPrinters.mockResolvedValue([]);
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+      await waitFor(() => expect(mockListPrinters).toHaveBeenCalledTimes(1));
+      expect(screen.queryByLabelText('Label printer')).not.toBeInTheDocument();
+    });
+
+    it('sends the batch to the printer and then asks whether it printed', async () => {
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await user.click(await screen.findByRole('button', { name: 'Print to Station Zebra' }));
+
+      expect(mockPrintToPrinter).toHaveBeenCalledWith('inventory', ['it-1'], {
+        printer_id: 'pr-1',
+        label_format: 'dymo_30252',
+        copies: 1,
+      });
+      expect(await screen.findByText('The printer reported no faults.')).toBeInTheDocument();
+      expect(screen.getByText(/Did the labels print correctly/)).toBeInTheDocument();
+      expect(mockMarkLabelsPrinted).not.toHaveBeenCalled();
+    });
+
+    it('reports a fault the printer raised after accepting the job', async () => {
+      mockPrintToPrinter.mockResolvedValue({ ...sent, printer_errors: ['Media out'] });
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await user.click(await screen.findByRole('button', { name: 'Print to Station Zebra' }));
+
+      expect(await screen.findByText('Printer fault: Media out')).toBeInTheDocument();
+    });
+
+    it('refuses to send when the printer holds different stock', async () => {
+      mockListPrinters.mockResolvedValue([{ ...zebra, label_format: 'rollo_4x6' }]);
+      renderPage('?ids=it-1');
+
+      expect(await screen.findByText(/set up for different label stock/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Print to Station Zebra' })).toBeDisabled();
+    });
+
+    it('sends an item without a barcode to the PDF path first', async () => {
+      mockGetItem.mockResolvedValue(makeItem({ barcode: undefined, asset_tag: undefined, serial_number: undefined }));
+      renderPage('?ids=it-1');
+
+      expect(await screen.findByText(/download the PDF once to assign them/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Print to Station Zebra' })).toBeDisabled();
     });
   });
 });
