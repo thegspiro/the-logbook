@@ -1318,14 +1318,7 @@ If your department holds its vote at a meeting and records the outcome by hand,
 **nothing changes**: a stage with no package, or one still _Draft_ or _Ready_,
 advances exactly as before.
 
-> **Screenshot needed:**
-> _[The applicant detail drawer for an applicant whose election package reads
-> **not elected** — the red status pill and the "This applicant was not elected
-> by the membership vote" banner, with the Membership Vote stage above them.
-> This is the state a coordinator needs to recognise. **The action row shows
-> Advance, not Convert**: the ELECTION PACKAGE panel renders only while the
-> applicant is on the vote stage, and Convert appears only on the pipeline's
-> final stage, so the two cannot share a frame. Both carry the same gate.]_
+![An applicant's drawer after a losing vote — the Membership Vote stage, the red not elected package status, the banner and a link to the closed ballot, and an action row that offers Advance](./images/20-13-applicant-drawer-not-elected.png)
 
 **A Meeting stage that names no event now advances on nothing.** The stage
 builder's **Auto-Link Event Type** is what tells a meeting stage which event

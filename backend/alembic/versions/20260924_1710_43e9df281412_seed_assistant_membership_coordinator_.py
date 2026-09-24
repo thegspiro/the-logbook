@@ -14,7 +14,7 @@ position under the same slug keeps its own — the ``(organization_id, slug)``
 unique index would refuse a second, and theirs is the one their members hold.
 
 Revision ID: 43e9df281412
-Revises: 1b52ea3a079e
+Revises: 77d4aa7798dd
 Create Date: 2026-09-24 17:10:57.227987
 
 """
@@ -28,7 +28,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "43e9df281412"
-down_revision: Union[str, None] = "1b52ea3a079e"
+down_revision: Union[str, None] = "77d4aa7798dd"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
