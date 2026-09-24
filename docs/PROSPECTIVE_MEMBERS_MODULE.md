@@ -320,6 +320,16 @@ When an applicant (or their coordinator) decides to withdraw from the process:
 
 The Withdrawn tab on the main page shows all withdrawn applications with name, last stage, withdrawal date, and reason.
 
+#### Applicant self-withdrawal _(2026-09-24)_
+
+An applicant can also withdraw from their own public **Application Status** page (`/application-status/:token`). A **Withdraw Application** button opens a confirmation dialog with an optional reason, and calls `POST /api/public/v1/application-status/{token}/withdraw`.
+
+- **Same credential, same conditions as the read.** The emailed status token authenticates it; an unknown or expired token, or a pipeline with public status pages turned off, answers 404 exactly as `GET /application-status/{token}` does.
+- **Only an open application.** `active` and `on_hold` can be withdrawn; anything else answers 409. `approved` is excluded deliberately — it is the department's decision awaiting conversion, so an applicant declining at that point contacts the coordinator. The status response carries `can_withdraw`, and the page shows the button only when it is true.
+- **Attribution.** The activity-log entry has no `performed_by` user and carries `"by_applicant": true`; an audit event `membership_pipeline.prospect_self_withdrawn` records the organization and client IP. The row is locked for the status check, as coordinator status changes are.
+- A coordinator can reactivate a self-withdrawn application exactly like any other.
+- **The coordinators are emailed.** After the withdrawal commits, every active member holding the **Membership Coordinator** or **Assistant Membership Coordinator** position receives an email naming the applicant, the pipeline, the stage they were at and any reason they gave. If nobody holds either position, it goes instead to every member who can manage prospective members (`prospective_members.manage`), so a withdrawal is never announced to no one. The send is best-effort: a mail failure is logged and never undoes the withdrawal or errors on the applicant's page. A `withdrawal_notice_sent` activity entry records how many were emailed. Email only — no SMS (CLAUDE.md pitfall #18).
+
 ### Desired Membership Type
 
 Each applicant has an optional `desired_membership_type` field (`'regular'` or `'administrative'`) indicating what kind of membership they are seeking. The options are presented as **Regular Member** (starts as probationary) and **Administrative Member** (non-operational role). "Probationary" is not offered as a direct choice since it is a transitional status that all regular members pass through, not a membership type applicants select.

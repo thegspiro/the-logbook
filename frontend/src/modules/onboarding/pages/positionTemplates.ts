@@ -412,6 +412,14 @@ const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
         permissions: generateRolePermissions(modules, 'specialist', ['members', 'prospective_members']),
       },
       {
+        id: 'assistant_membership_coordinator',
+        name: 'Assistant Membership Coordinator',
+        description: 'Helps run the applicant pipeline alongside the Membership Coordinator',
+        icon: UserPlus,
+        priority: 50,
+        permissions: generateRolePermissions(modules, 'specialist', ['prospective_members']),
+      },
+      {
         id: 'fundraising_chair',
         name: 'Fundraising Chair',
         description: 'Coordinates fundraising activities and campaigns',

@@ -325,6 +325,11 @@ class LabelSpec:
     meta: Dict[str, Any] = field(default_factory=dict)
 
 
+# Avery 5160: the only sheet format, and the one the print pages lay out.
+SHEET_COLUMNS = 3
+SHEET_LABELS_PER_PAGE = 30
+
+
 def render_labels(
     specs: list,
     label_format: str = "letter",
@@ -332,14 +337,23 @@ def render_labels(
     custom_height: Optional[float] = None,
     auto_rotate: Optional[bool] = None,
     symbology: str = SYMBOLOGY_CODE128,
+    start_position: int = 1,
 ) -> BytesIO:
     """Render label specs to a PDF for the given format.
+
+    ``start_position`` (1-based) is where the first label lands on a sheet
+    format, so a partly used sheet can be fed back in rather than thrown
+    away. A roll has no positions, so thermal formats ignore it.
 
     Raises ValueError on an unknown format or missing custom dimensions.
     """
     if not specs:
         raise ValueError("At least one label is required")
     validate_symbology(symbology)
+    if not 1 <= start_position <= SHEET_LABELS_PER_PAGE:
+        raise ValueError(
+            f"start_position must be between 1 and {SHEET_LABELS_PER_PAGE}"
+        )
     for spec in specs:
         if not sanitize_barcode_value(str(spec.barcode_value).strip()):
             raise ValueError(
@@ -367,13 +381,18 @@ def render_labels(
         )
 
     if fmt["type"] == "sheet":
-        return _render_sheet(specs, symbology)
+        return _render_sheet(specs, symbology, start_position - 1)
     rotate = auto_rotate if auto_rotate is not None else fmt.get("auto_rotate", False)
     return _render_thermal(specs, fmt["width"], fmt["height"], rotate, symbology)
 
 
-def _render_sheet(specs: list, symbology: str = SYMBOLOGY_CODE128) -> BytesIO:
-    """Avery 5160 layout: 3 columns x 10 rows, each label 2.625" x 1"."""
+def _render_sheet(
+    specs: list, symbology: str = SYMBOLOGY_CODE128, skip: int = 0
+) -> BytesIO:
+    """Avery 5160 layout: 3 columns x 10 rows, each label 2.625" x 1".
+
+    ``skip`` leaves that many positions blank at the top of the first sheet.
+    """
     from reportlab.graphics.barcode import code128
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.units import inch
@@ -383,8 +402,8 @@ def _render_sheet(specs: list, symbology: str = SYMBOLOGY_CODE128) -> BytesIO:
     c = canvas.Canvas(buf, pagesize=letter)
     page_w, page_h = letter
 
-    cols = 3
-    rows = 10
+    cols = SHEET_COLUMNS
+    rows = SHEET_LABELS_PER_PAGE // SHEET_COLUMNS
     label_w = 2.625 * inch
     label_h = 1.0 * inch
     margin_x = (page_w - cols * label_w) / 2
@@ -392,8 +411,8 @@ def _render_sheet(specs: list, symbology: str = SYMBOLOGY_CODE128) -> BytesIO:
     labels_per_page = cols * rows
     padding = 0.06 * inch
 
-    for idx, spec in enumerate(specs):
-        if idx > 0 and idx % labels_per_page == 0:
+    for idx, spec in enumerate(specs, start=skip):
+        if idx > skip and idx % labels_per_page == 0:
             c.showPage()
 
         pos = idx % labels_per_page

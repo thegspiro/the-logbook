@@ -115,13 +115,15 @@ describe('ItemFormModal', () => {
     const user = userEvent.setup();
     render(<ItemFormModal {...baseProps} isOpen onSaved={onSaved} onClose={onClose} />);
 
+    mockCreateItem.mockResolvedValue({ id: 'new-1' });
     await user.type(nameInput(), 'New Drill');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(() => expect(mockCreateItem).toHaveBeenCalledTimes(1));
     expect(mockCreateItem.mock.calls[0]?.[0]).toMatchObject({ name: 'New Drill' });
     expect(mockToastSuccess).toHaveBeenCalledWith('Item created');
-    expect(onSaved).toHaveBeenCalledTimes(1);
+    // The new id goes back so the list can offer to print its label.
+    expect(onSaved).toHaveBeenCalledWith(['new-1']);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

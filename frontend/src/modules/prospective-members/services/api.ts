@@ -1165,6 +1165,7 @@ export const publicStatusService = {
     stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
     applied_at?: string | undefined;
     current_stage_action?: CurrentStageAction | undefined;
+    can_withdraw?: boolean | undefined;
   }> {
     const response = await axios.get<{
       first_name: string;
@@ -1176,7 +1177,16 @@ export const publicStatusService = {
       stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
       applied_at?: string | undefined;
       current_stage_action?: CurrentStageAction | undefined;
+      can_withdraw?: boolean | undefined;
     }>(`/api/public/v1/application-status/${token}`);
+    return response.data;
+  },
+
+  async withdrawApplication(token: string, reason?: string): Promise<{ status: string; message: string }> {
+    const response = await axios.post<{ status: string; message: string }>(
+      `/api/public/v1/application-status/${token}/withdraw`,
+      { reason: reason || undefined }
+    );
     return response.data;
   },
 };

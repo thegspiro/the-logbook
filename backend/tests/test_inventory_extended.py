@@ -13,7 +13,7 @@ Covers previously untested areas:
 
 import uuid
 from io import BytesIO
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy import text
@@ -1368,6 +1368,39 @@ class TestBarcodeLabels:
         content = pdf_buf.read()
         assert len(content) > 0
         assert content[:5] == b"%PDF-"
+
+    @pytest.mark.asyncio
+    async def test_generate_qr_labels_from_a_later_sheet_position(
+        self, db_session, setup_org_and_user
+    ):
+        """Symbology and start position reach the renderer unchanged."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "QR Label Test",
+                "barcode": "QRL-0001",
+                "condition": "good",
+                "status": "available",
+            },
+            created_by=uuid.UUID(user_id),
+        )
+
+        with patch(
+            "app.services.inventory_service.render_labels",
+            return_value=BytesIO(b"%PDF-stub"),
+        ) as render:
+            await svc.generate_barcode_labels(
+                item_ids=[uuid.UUID(item.id)],
+                organization_id=uuid.UUID(org_id),
+                label_format="letter",
+                symbology="qr",
+                start_position=7,
+            )
+
+        assert render.call_args.kwargs["symbology"] == "qr"
+        assert render.call_args.kwargs["start_position"] == 7
 
     @pytest.mark.asyncio
     async def test_generate_thermal_labels(self, db_session, setup_org_and_user):

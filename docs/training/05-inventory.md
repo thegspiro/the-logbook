@@ -779,6 +779,8 @@ Generate barcode labels for inventory items to attach to equipment.
 
 Labels include the barcode (Code 128 with the required quiet-zone margins, or a QR), the item name, and the asset tag or serial number. A QR has no built-in human-readable line, so the value is printed underneath it.
 
+> **Reusing a partly used Avery sheet.** With **Letter Paper (Grid)** selected, a **Start at label** box (1–30) appears above the printer controls. Set it to the first label still on the sheet — counting left to right along each row — and the positions before it are left blank in the preview, the browser print and the PDF, so the sheet can go back in the printer instead of the bin. It applies to the sheet in the printer now: it goes back to 1 when you move to the next part of a large run. Roll printers have no positions, so the box is not shown for them.
+
 ![Label print settings with the size presets and content options](./images/05-51-label-print-settings.png)
 
 ### Choosing which items to label _(2026-09-23)_

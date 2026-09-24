@@ -28,7 +28,8 @@ interface BulkAddItemsModalProps {
   onClose: () => void;
   categories: InventoryCategory[];
   /** Fired after a successful write so the list behind can refresh. */
-  onCreated: () => void;
+  /** Receives the ids of the items actually created (not the skipped ones). */
+  onCreated: (createdIds: string[]) => void;
 }
 
 const BulkAddItemsModal: React.FC<BulkAddItemsModalProps> = ({ isOpen, onClose, categories, onCreated }) => {
@@ -73,7 +74,7 @@ const BulkAddItemsModal: React.FC<BulkAddItemsModalProps> = ({ isOpen, onClose, 
           { icon: 'ℹ️' }
         );
       }
-      onCreated();
+      onCreated(result.item_ids.map(String));
       reset();
       onClose();
     } catch (err: unknown) {

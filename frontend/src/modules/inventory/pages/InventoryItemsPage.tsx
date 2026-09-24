@@ -74,7 +74,7 @@ import {
 } from '../types';
 import { onHandQuantity } from '../utils/onHand';
 import { asArray } from '../../../utils/asArray';
-import { buildLabelFilterPath, MAX_LABEL_BATCH } from '../utils/labelPrintQuery';
+import { buildLabelFilterPath, MAX_LABEL_BATCH, MAX_LABEL_ITEMS_TOTAL } from '../utils/labelPrintQuery';
 import type { LabelFilterParams } from '../utils/labelPrintQuery';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { Breadcrumbs } from '../../../components/ux';
@@ -1020,6 +1020,9 @@ const InventoryItemsPage: React.FC = () => {
   // filter instead of by a URL carrying hundreds of ids.
   const [allMatching, setAllMatching] = useState<{ filters: LabelFilterParams; ids: string[] } | null>(null);
   const [selectingAll, setSelectingAll] = useState(false);
+  // Items just added or received, offered for labelling while they are still
+  // in hand — the moment a new item most needs one.
+  const [justAdded, setJustAdded] = useState<{ ids: string[]; verb: 'added' | 'received' } | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
@@ -1551,7 +1554,11 @@ const InventoryItemsPage: React.FC = () => {
     setEditItem(it);
     setModalOpen(true);
   };
-  const onSaved = () => {
+  const offerLabels = (ids: string[] | undefined, verb: 'added' | 'received') => {
+    if (canManage && ids && ids.length > 0) setJustAdded({ ids, verb });
+  };
+  const onSaved = (createdIds?: string[]) => {
+    offerLabels(createdIds, 'added');
     void loadItems(true);
     void loadSummary();
   };
@@ -1959,6 +1966,32 @@ const InventoryItemsPage: React.FC = () => {
         </div>
       </div>
 
+      {justAdded && (
+        <div
+          className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3"
+          role="status"
+        >
+          <span className="text-sm text-emerald-800 dark:text-emerald-300">
+            {formatNumber(justAdded.ids.length)} {justAdded.ids.length === 1 ? 'item' : 'items'} {justAdded.verb}. Label{' '}
+            {justAdded.ids.length === 1 ? 'it' : 'them'} now?
+          </span>
+          <button
+            type="button"
+            onClick={() => void navigate(`/inventory/print-labels?ids=${justAdded.ids.join(',')}`)}
+            className="btn-success btn-sm inline-flex items-center gap-1.5"
+          >
+            <Printer className="h-3.5 w-3.5" /> Print {justAdded.ids.length === 1 ? 'label' : 'labels'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setJustAdded(null)}
+            className="text-theme-text-muted hover:text-theme-text-primary ml-auto text-xs"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Bulk bar */}
       {selIds.size > 0 && (
         <div className="card-secondary mb-4 flex flex-wrap items-center gap-3 p-3">
@@ -1976,10 +2009,25 @@ const InventoryItemsPage: React.FC = () => {
                 {selectingAll ? 'Selecting…' : `Select all ${formatNumber(total)} matching`}
               </button>
             ) : (
-              <span className="text-theme-text-muted text-xs">
-                {formatNumber(total)} match — narrow the filters to {formatNumber(MAX_LABEL_BATCH)} or fewer to select
-                them all
-              </span>
+              <>
+                {/* Selection stays capped because it also feeds bulk status
+                    changes and retirement; printing alone goes by filter,
+                    and the print page splits a large run into parts. */}
+                <span className="text-theme-text-muted text-xs">
+                  {formatNumber(total)} match — select-all is limited to {formatNumber(MAX_LABEL_BATCH)}
+                </span>
+                {total <= MAX_LABEL_ITEMS_TOTAL && loadedParams && (
+                  <button
+                    onClick={() => {
+                      const { group_by: _groupBy, ...filters } = loadedParams;
+                      void navigate(buildLabelFilterPath(filters));
+                    }}
+                    className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300"
+                  >
+                    Print labels for all {formatNumber(total)} matching
+                  </button>
+                )}
+              </>
             ))}
           <button onClick={printLabels} className="btn-secondary btn-sm inline-flex items-center gap-1.5">
             <Printer className="h-3.5 w-3.5" /> Print Labels
@@ -2242,12 +2290,22 @@ const InventoryItemsPage: React.FC = () => {
         editItem={editItem}
       />
 
-      <ReceiveStockModal isOpen={receiveOpen} onClose={() => setReceiveOpen(false)} onReceived={refresh} />
+      <ReceiveStockModal
+        isOpen={receiveOpen}
+        onClose={() => setReceiveOpen(false)}
+        onReceived={(ids) => {
+          offerLabels(ids, 'received');
+          refresh();
+        }}
+      />
       <BulkAddItemsModal
         isOpen={bulkAddOpen}
         onClose={() => setBulkAddOpen(false)}
         categories={categories}
-        onCreated={refresh}
+        onCreated={(ids) => {
+          offerLabels(ids, 'added');
+          refresh();
+        }}
       />
 
       {/* Quick-assign: pick a member, then assign items to them */}

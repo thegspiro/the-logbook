@@ -159,6 +159,8 @@ from app.schemas.inventory import (
     NFPAExposureRecordCreate,
     NFPAExposureRecordResponse,
     NFPASummaryResponse,
+    PutAwayRequest,
+    PutAwayResponse,
     ReorderCorrectionRequest,
     ReorderReceiptCreate,
     ReorderRequestCreate,
@@ -3492,7 +3494,7 @@ async def generate_barcode_labels(
     """
     Generate a PDF of barcode labels for the specified inventory items.
 
-    Returns a PDF file with printable Code128 barcode labels.
+    Returns a PDF file with printable Code128 or QR labels.
 
     Manage-gated, not view-gated: the caller names arbitrary item ids and gets
     back a document describing them, so on `inventory.view` — which every
@@ -3515,6 +3517,8 @@ async def generate_barcode_labels(
             custom_height=request.custom_height,
             auto_rotate=request.auto_rotate,
             extra_lines=request.extra_lines,
+            symbology=request.symbology,
+            start_position=request.start_position,
         )
     except ValueError as e:
         raise HTTPException(
@@ -4587,6 +4591,50 @@ async def update_storage_area(
     )
 
     return _build_storage_area_response(area)
+
+
+@router.post("/storage-areas/{area_id}/put-away", response_model=PutAwayResponse)
+async def put_away_items(
+    area_id: UUID,
+    request: PutAwayRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    File scanned items under a storage area (put-away).
+
+    The quartermaster scans a shelf label, then the items going onto it. Items
+    a member holds, or whose record says lost, stolen or retired, are skipped
+    with a reason rather than moved, so a shelf scan never rewrites a custody
+    or loss record. Ids outside the organization are counted, never touched.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    result = await service.put_away_items(
+        area_id=area_id,
+        item_ids=request.item_ids,
+        organization_id=current_user.organization_id,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Storage area not found")
+
+    if result["moved"]:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_items_put_away",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "storage_area_id": str(area_id),
+                "item_ids": [str(i) for i in result["moved"]],
+                "skipped": len(result["skipped"]),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return result
 
 
 @router.delete("/storage-areas/{area_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -7071,6 +7119,7 @@ async def set_label_preset(
             preset=data.preset,
             custom_width=data.custom_width,
             custom_height=data.custom_height,
+            symbology=data.symbology,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

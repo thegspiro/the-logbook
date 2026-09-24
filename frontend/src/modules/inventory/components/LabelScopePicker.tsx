@@ -16,7 +16,7 @@ import type { Location } from '../../../services/api';
 import type { InventoryCategory, StorageAreaResponse } from '../types';
 import { formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { MAX_LABEL_BATCH } from '../utils/labelPrintQuery';
+import { MAX_LABEL_BATCH, MAX_LABEL_ITEMS_TOTAL } from '../utils/labelPrintQuery';
 import type { LabelFilterParams } from '../utils/labelPrintQuery';
 
 /** Mirrors the items list's own sentinel for "filed under no location". */
@@ -114,7 +114,9 @@ export const LabelScopePicker: React.FC<LabelScopePickerProps> = ({ onChoose }) 
     return [...scoped].sort((x, y) => (paths.get(x.id) ?? '').localeCompare(paths.get(y.id) ?? ''));
   }, [areas, locationId, paths]);
 
-  const tooMany = matchCount !== null && matchCount > MAX_LABEL_BATCH;
+  const tooMany = matchCount !== null && matchCount > MAX_LABEL_ITEMS_TOTAL;
+  // At one copy each; the print page re-cuts the parts if copies go up.
+  const parts = matchCount !== null ? Math.ceil(matchCount / MAX_LABEL_BATCH) : 0;
   const canContinue = matchCount !== null && matchCount > 0 && !tooMany;
 
   return (
@@ -222,12 +224,14 @@ export const LabelScopePicker: React.FC<LabelScopePickerProps> = ({ onChoose }) 
             <p className="text-theme-text-secondary">No active items match.</p>
           ) : tooMany ? (
             <p className="text-amber-800 dark:text-amber-300">
-              {formatNumber(matchCount)} items match. One batch holds at most {formatNumber(MAX_LABEL_BATCH)} — narrow
-              it by category, location or storage area.
+              {formatNumber(matchCount)} items match. One print run holds at most {formatNumber(MAX_LABEL_ITEMS_TOTAL)}{' '}
+              — narrow it by category, location or storage area.
             </p>
           ) : (
             <p className="text-theme-text-secondary">
               {formatNumber(matchCount)} {matchCount === 1 ? 'item matches' : 'items match'}.
+              {parts > 1 &&
+                ` They print in ${parts} parts of up to ${formatNumber(MAX_LABEL_BATCH)} labels, one after another.`}
             </p>
           )}
         </div>

@@ -85,7 +85,8 @@ describe('ReceiveStockModal', () => {
         }),
       ]);
     });
-    expect(onReceived).toHaveBeenCalledTimes(1);
+    // The received item's id goes back so the list can offer its label.
+    expect(onReceived).toHaveBeenCalledWith(['i-1']);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

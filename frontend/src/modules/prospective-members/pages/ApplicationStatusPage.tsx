@@ -16,12 +16,16 @@ import {
   FileText,
   CalendarClock,
   FileSignature,
+  XCircle,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { publicStatusService } from '../services/api';
 import type { CurrentStageAction } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { isSafeExternalUrl } from '../../../utils/safeUrl';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { PromptDialog } from '../../../components/ux';
 
 interface StatusData {
   first_name: string;
@@ -34,6 +38,8 @@ interface StatusData {
   stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
   applied_at?: string | undefined;
   current_stage_action?: CurrentStageAction | undefined;
+  /** Set by the backend: only an application still open may be withdrawn. */
+  can_withdraw?: boolean | undefined;
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -58,6 +64,8 @@ export const ApplicationStatusPage: React.FC = () => {
   const [data, setData] = useState<StatusData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -72,6 +80,23 @@ export const ApplicationStatusPage: React.FC = () => {
       .catch(() => setError('Application not found. Please check your link or contact the department.'))
       .finally(() => setLoading(false));
   }, [token]);
+
+  const handleWithdraw = async (reason: string) => {
+    if (!token) return;
+    setWithdrawing(true);
+    try {
+      await publicStatusService.withdrawApplication(token, reason);
+      // Re-read rather than patching local state, so the page shows exactly
+      // what the department now sees — status, and whether any action remains.
+      setData(await publicStatusService.getApplicationStatus(token));
+      setShowWithdraw(false);
+      toast.success('Your application has been withdrawn.');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Unable to withdraw your application. Please contact the department.'));
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -232,6 +257,41 @@ export const ApplicationStatusPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {data.can_withdraw && (
+          <div className="card mt-4 p-5 shadow-xs">
+            <h2 className="text-theme-text-primary text-sm font-semibold">No longer interested?</h2>
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Withdrawing closes your application with the department. If you change your mind later, contact the
+              department.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowWithdraw(true)}
+              className="btn-warning mt-3 inline-flex items-center gap-1.5"
+            >
+              <XCircle className="h-4 w-4" aria-hidden="true" />
+              Withdraw Application
+            </button>
+          </div>
+        )}
+
+        <PromptDialog
+          isOpen={showWithdraw}
+          onClose={() => setShowWithdraw(false)}
+          onSubmit={(reason) => void handleWithdraw(reason)}
+          title="Withdraw your application?"
+          message="This closes your application with the department. It cannot be undone from this page."
+          label="Reason (optional)"
+          placeholder="Let the department know why, if you like"
+          hint="Shared with the department's membership coordinator."
+          required={false}
+          multiline
+          confirmLabel="Withdraw Application"
+          cancelLabel="Keep My Application"
+          confirmVariant="warning"
+          loading={withdrawing}
+        />
 
         {/* Footer */}
         <p className="text-theme-text-muted mt-6 text-center text-xs">
