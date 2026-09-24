@@ -113,7 +113,7 @@ REDIS_PASSWORD=<strong password>
 # the HTTPS origin named here.
 ALLOWED_ORIGINS=https://logbook.example.com
 # Every link in outgoing email is built from this — use the same HTTPS origin.
-# The setup script does not write it; left unset, links point at localhost.
+# The setup script writes it from the HTTPS URL you give it.
 FRONTEND_URL=https://logbook.example.com
 TZ=America/New_York  # Your timezone
 ```

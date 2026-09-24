@@ -8,6 +8,7 @@ Shared httpx.AsyncClient with security-hardened defaults:
 - Response body size cap, enforced centrally via a wrapping transport
 """
 
+import ssl
 import typing
 
 import httpx
@@ -139,13 +140,41 @@ class _SizeLimitedTransport(httpx.AsyncBaseTransport):
         await self._transport.aclose()
 
 
+ClientCert = str | tuple[str, str] | tuple[str, str, str]
+
+
+def _tls_verify(
+    cert: ClientCert | None, trust_env: bool
+) -> ssl.SSLContext | typing.Literal[True]:
+    """The `verify=` value for every transport this module builds.
+
+    Pinned httpx 0.28.1 deprecates `AsyncHTTPTransport(cert=...)` in favour of
+    a prebuilt SSL context with the chain already loaded. With no client
+    certificate this stays `True`, exactly what was passed before, so httpx
+    keeps building its own default context. With one, the context is built by
+    the same `httpx.create_ssl_context(verify=True, trust_env=...)` the
+    transport would have called — so SSL_CERT_FILE/SSL_CERT_DIR are honoured
+    only when `trust_env` is True, as before — and the chain is loaded onto
+    it here instead of through the deprecated argument. An unreadable cert
+    file therefore still raises at client construction, not at first request.
+    """
+    if not cert:
+        return True
+    ctx: ssl.SSLContext = httpx.create_ssl_context(verify=True, trust_env=trust_env)
+    if isinstance(cert, str):
+        ctx.load_cert_chain(cert)
+    else:
+        ctx.load_cert_chain(*cert)
+    return ctx
+
+
 def _environment_proxy_mounts(
     max_bytes: int,
     *,
     trust_env: bool = True,
     http1: bool = True,
     http2: bool = False,
-    cert: str | tuple[str, str] | tuple[str, str, str] | None = None,
+    cert: ClientCert | None = None,
 ) -> dict[str, httpx.AsyncBaseTransport | None]:
     """Rebuild the proxy mounts httpx.AsyncClient would have built itself.
 
@@ -178,11 +207,12 @@ def _environment_proxy_mounts(
     to work around the *other* half of that expression.
 
     `http1`/`http2`/`cert` are forwarded to each proxy `AsyncHTTPTransport`
-    for the same reason `create_integration_client()` now forwards them to
+    (`cert` as the `verify=` context from `_tls_verify`) for the same reason `create_integration_client()` now forwards them to
     its own transports — see that function's docstring (Codex, 2026-09-06).
     """
     if not trust_env:
         return {}
+    verify = _tls_verify(cert, trust_env)
     mounts: dict[str, httpx.AsyncBaseTransport | None] = {}
     for pattern, proxy_url in get_environment_proxies().items():
         if proxy_url is None:
@@ -190,8 +220,7 @@ def _environment_proxy_mounts(
             continue
         mounts[pattern] = _SizeLimitedTransport(
             httpx.AsyncHTTPTransport(
-                verify=True,
-                cert=cert,
+                verify=verify,
                 limits=INTEGRATION_LIMITS,
                 proxy=httpx.Proxy(url=proxy_url),
                 # trust_env is always True here (the `if not trust_env`
@@ -217,7 +246,7 @@ def create_integration_client(
     headers: typing.Mapping[str, str] | None = None,
     http1: bool = True,
     http2: bool = False,
-    cert: str | tuple[str, str] | tuple[str, str, str] | None = None,
+    cert: ClientCert | None = None,
     **kwargs: object,
 ) -> httpx.AsyncClient:
     """Create a security-hardened httpx client for external API calls.
@@ -329,12 +358,16 @@ def create_integration_client(
     transport for HTTP/2 or mTLS. Passing all three into every
     `AsyncHTTPTransport(...)` this function constructs is what makes the
     option actually take effect, matching what stock `httpx.AsyncClient`
-    would have done had it built its own transport.
+    would have done had it built its own transport. `cert` reaches them as
+    the `verify=` SSL context `_tls_verify` builds, since httpx deprecates
+    the transport's own `cert=` argument; it is not passed to
+    `httpx.AsyncClient`, which would only route it into a transport of its
+    own that this function never lets it build.
     """
+    verify = _tls_verify(cert, trust_env)
     transport = _SizeLimitedTransport(
         httpx.AsyncHTTPTransport(
-            verify=True,
-            cert=cert,
+            verify=verify,
             trust_env=trust_env,
             http1=http1,
             http2=http2,
@@ -349,8 +382,7 @@ def create_integration_client(
         mounts: dict[str, httpx.AsyncBaseTransport | None] = {
             "all://": _SizeLimitedTransport(
                 httpx.AsyncHTTPTransport(
-                    verify=True,
-                    cert=cert,
+                    verify=verify,
                     limits=INTEGRATION_LIMITS,
                     proxy=proxy_obj,
                     trust_env=trust_env,
@@ -381,6 +413,5 @@ def create_integration_client(
         trust_env=trust_env,
         http1=http1,
         http2=http2,
-        cert=cert,
         **kwargs,
     )

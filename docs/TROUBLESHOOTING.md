@@ -598,7 +598,9 @@ cannot reach). The send itself reports success.
 
 **Cause**: Every emailed link is built from the server's `FRONTEND_URL` setting,
 never from the address the request arrived on. The shipped default is
-`http://localhost:3000`, and neither installer sets it.
+`http://localhost:3000`. Installs made before 2026-09-24 never had it set by
+either installer; `unraid-setup.sh` now writes the HTTPS address it asks for,
+and `universal-install.sh` writes it only when given `--public-url`.
 
 **Check**: In production the backend logs this at startup, and
 `python -m app.preflight` lists it under "Advisory":
