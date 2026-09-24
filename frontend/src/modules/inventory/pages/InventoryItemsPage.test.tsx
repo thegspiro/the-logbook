@@ -251,6 +251,26 @@ describe('InventoryItemsPage', () => {
     await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'assigned' })));
   });
 
+  it('filters to items that still need a label, and back', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('No items found');
+
+    const labelSelect = screen.getByLabelText('Filter by label status');
+    await user.selectOptions(labelSelect, 'needed');
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ label_printed: false }))
+    );
+    await user.selectOptions(labelSelect, 'printed');
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ label_printed: true }))
+    );
+    await user.selectOptions(labelSelect, '');
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ label_printed: undefined }))
+    );
+  });
+
   it('hides the add-item action without the manage permission', async () => {
     mockCheckPermission.mockReturnValue(false);
     mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1 });
@@ -394,6 +414,8 @@ describe('InventoryItemsPage — a bulk change that only half applies', () => {
     mockGetCategories.mockResolvedValue([]);
     mockGetStorageAreas.mockResolvedValue([]);
     mockGetLocations.mockResolvedValue([]);
+    mockGetItemColors.mockReset();
+    mockGetItemColors.mockResolvedValue([]);
     mockCheckPermission.mockReturnValue(true);
     mockUpdateItem.mockResolvedValue({});
   });
@@ -494,6 +516,8 @@ describe('InventoryItemsPage — the location panel', () => {
     mockGetStorageAreas.mockResolvedValue([]);
     mockGetLocations.mockReset();
     mockGetLocations.mockResolvedValue([]);
+    mockGetItemColors.mockReset();
+    mockGetItemColors.mockResolvedValue([]);
     mockCheckPermission.mockReset();
     mockCheckPermission.mockReturnValue(true);
   });
@@ -1612,5 +1636,99 @@ describe('InventoryItemsPage — CSV export', () => {
       expect(row).toBeDefined();
       expect(within(row as HTMLElement).queryByText('Mixed')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('InventoryItemsPage — selecting every matching item for labels', () => {
+  const firstPage = [makeItem({ id: 'it-1', name: 'Drill' }), makeItem({ id: 'it-2', name: 'Saw' })];
+  const everyMatch = Array.from({ length: 120 }, (_, i) => makeItem({ id: `it-${i + 1}`, name: `Tool ${i + 1}` }));
+
+  // Page loads ask for PAGE_SIZE; the select-all request asks for the batch cap.
+  const listing = (matchTotal: number) => (params: { limit?: number }) =>
+    Promise.resolve(
+      params.limit === 500 ? { items: everyMatch, total: matchTotal } : { items: firstPage, total: matchTotal }
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetItems.mockReset();
+    mockGetItems.mockImplementation(listing(120));
+    mockGetSummary.mockResolvedValue({
+      total_items: 120,
+      non_medical_items: 120,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockGetItemColors.mockReset();
+    mockGetItemColors.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(true);
+    window.history.pushState({}, '', '/inventory/items');
+  });
+
+  const selectLoaded = async (user: ReturnType<typeof userEvent.setup>) => {
+    await screen.findByText('Drill');
+    await user.click(screen.getAllByRole('checkbox', { name: /^Select all/ })[0] as HTMLElement);
+  };
+
+  it('extends the selection past the loaded page and prints it by filter, not by id', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await selectLoaded(user);
+
+    await user.click(await screen.findByRole('button', { name: 'Select all 120 matching' }));
+
+    expect(await screen.findByText('All 120 matching selected')).toBeInTheDocument();
+    expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 0, limit: 500 }));
+    expect(mockGetItems.mock.lastCall?.[0]).not.toHaveProperty('group_by');
+
+    await user.click(screen.getByRole('button', { name: /Print Labels/ }));
+    expect(window.location.pathname).toBe('/inventory/print-labels');
+    const qs = new URLSearchParams(window.location.search);
+    expect(qs.get('all')).toBe('1');
+    expect(qs.has('ids')).toBe(false);
+  });
+
+  it('falls back to ids once the member unticks part of the full selection', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await selectLoaded(user);
+    await user.click(await screen.findByRole('button', { name: 'Select all 120 matching' }));
+    await screen.findByText('All 120 matching selected');
+
+    await user.click(screen.getByRole('checkbox', { name: /Saw/ }));
+    expect(screen.getByText('119 selected')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Print Labels/ }));
+    const qs = new URLSearchParams(window.location.search);
+    expect(qs.has('all')).toBe(false);
+    expect(qs.get('ids')?.split(',')).toHaveLength(119);
+  });
+
+  it('does not offer select-all when more items match than one batch holds', async () => {
+    mockGetItems.mockImplementation(listing(600));
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await selectLoaded(user);
+
+    expect(await screen.findByText(/600 match — narrow the filters to 500 or fewer/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Select all 600/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the existing selection when the set grew past the cap before the request landed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await selectLoaded(user);
+    mockGetItems.mockImplementation(listing(501));
+
+    await user.click(await screen.findByRole('button', { name: 'Select all 120 matching' }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+    expect(String(mockToastError.mock.calls[0]?.[0])).toContain('501 items now match');
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
   });
 });

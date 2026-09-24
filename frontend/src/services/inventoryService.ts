@@ -226,6 +226,8 @@ export const inventoryService = {
     style?: string | undefined;
     search?: string | undefined;
     active_only?: boolean | undefined;
+    /** false = still needs a label; true = label confirmed printed. */
+    label_printed?: boolean | undefined;
     sort_by?: string | undefined;
     sort_order?: 'asc' | 'desc' | undefined;
     /** Groups the list by a dimension. Changes row ORDER and fills
@@ -648,6 +650,12 @@ export const inventoryService = {
     return { blob: response.data, autoPopulated: isNaN(autoPopulated) ? 0 : autoPopulated };
   },
 
+  /** Record that labels printed correctly for these items (after the user confirms). */
+  async markLabelsPrinted(itemIds: string[]): Promise<{ marked: number }> {
+    const response = await api.post<{ marked: number }>('/inventory/labels/mark-printed', { item_ids: itemIds });
+    return response.data;
+  },
+
   // Label-printer preset remembered per the user's highest-priority position
   // (so a role's printer choice follows whoever fills it, on any computer).
   async getLabelPreset(): Promise<{
@@ -699,6 +707,7 @@ export const inventoryService = {
     color?: string | undefined;
     style?: string | undefined;
     active_only?: boolean | undefined;
+    label_printed?: boolean | undefined;
     sort_by?: string | undefined;
     sort_order?: string | undefined;
   }): Promise<Blob> {

@@ -142,6 +142,8 @@ from app.schemas.inventory import (
     ItemVariantGroupResponse,
     ItemVariantGroupUpdate,
     LabelGenerateRequest,
+    LabelMarkPrintedRequest,
+    LabelMarkPrintedResponse,
     LabelPresetUpdate,
     LocationInventorySummary,
     LowStockItem,
@@ -611,6 +613,7 @@ async def list_items(
     color: str | None = None,
     style: str | None = None,
     active_only: bool = True,
+    label_printed: bool | None = None,
     sort_by: str | None = None,
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
     group_by: str | None = None,
@@ -690,6 +693,7 @@ async def list_items(
         color=color,
         style=style,
         active_only=active_only,
+        label_printed=label_printed,
         sort_by=sort_by,
         sort_order=sort_order,
         # The caller's own shortlist, never a query parameter: pins are
@@ -721,6 +725,7 @@ async def list_items(
             color=color,
             style=style,
             active_only=active_only,
+            label_printed=label_printed,
         )
         if grouping
         else []
@@ -1014,6 +1019,7 @@ async def export_items_csv(
     color: str | None = None,
     style: str | None = None,
     active_only: bool = True,
+    label_printed: bool | None = None,
     sort_by: str | None = None,
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
     current_user: User = Depends(require_permission("inventory.manage")),
@@ -1112,6 +1118,7 @@ async def export_items_csv(
                     color=color,
                     style=style,
                     active_only=active_only,
+                    label_printed=label_printed,
                     sort_by=sort_by,
                     sort_order=sort_order,
                     skip=skip,
@@ -3529,6 +3536,31 @@ async def generate_barcode_labels(
         media_type="application/pdf",
         headers=headers,
     )
+
+
+@router.post("/labels/mark-printed", response_model=LabelMarkPrintedResponse)
+async def mark_labels_printed(
+    request: LabelMarkPrintedRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Record that barcode labels printed correctly for the given items.
+
+    The print page calls this only after the quartermaster confirms the batch
+    came out, so an item leaves the "needs a label" list only when a label
+    exists. Same gate as ``/labels/generate``, the step it follows.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    marked = await service.mark_labels_printed(
+        item_ids=request.item_ids,
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+    )
+    return LabelMarkPrintedResponse(marked=marked)
 
 
 # ============================================

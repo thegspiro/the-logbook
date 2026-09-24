@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**271 tables · 4538 columns · 875 foreign keys**
+**271 tables · 4540 columns · 876 foreign keys**
 
 ---
 
@@ -317,7 +317,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_categories`](#inventory_categories) | `InventoryCategory` | 16 | Inventory Category model |
 | [`inventory_impact_plans`](#inventory_impact_plans) | `InventoryImpactPlan` | 8 | A saved, named impact-planner scenario. |
 | [`inventory_item_pins`](#inventory_item_pins) | `InventoryItemPin` | 7 | A member's own shortlist of items, hoisted to the top of the items list. |
-| [`inventory_items`](#inventory_items) | `InventoryItem` | 52 | Inventory Item model |
+| [`inventory_items`](#inventory_items) | `InventoryItem` | 54 | Inventory Item model |
 | [`inventory_lots`](#inventory_lots) | `InventoryLot` | 13 | A batch/lot of a consumable inventory item held as ready stock. |
 | [`inventory_notification_queue`](#inventory_notification_queue) | `InventoryNotificationQueue` | 15 | Queues inventory change events for delayed, consolidated email |
 | [`inventory_vendor_contacts`](#inventory_vendor_contacts) | `InventoryVendorContact` | 12 | A named person at a vendor — sales rep, service desk, accounts receivable. |
@@ -4850,6 +4850,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `custom_fields` | JSON | yes |  |  |  |
 | `attachments` | JSON | yes |  |  |  |
 | `active` | BOOL | yes | IDX | `True` |  |
+| `label_printed_at` | DATETIME | yes | IDX |  |  |
+| `label_printed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
@@ -4868,6 +4870,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_inventory_items_barcode` (`barcode`)
 - `ix_inventory_items_category_id` (`category_id`)
 - `ix_inventory_items_condition` (`condition`)
+- `ix_inventory_items_label_printed_at` (`label_printed_at`)
 - `ix_inventory_items_location_id` (`location_id`)
 - `ix_inventory_items_name` (`name`)
 - `ix_inventory_items_serial_number` (`serial_number`)
@@ -9522,7 +9525,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (325 references)
+### → `users` (326 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9673,6 +9676,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_item_pins` | `user_id` | CASCADE | no |
 | `inventory_items` | `assigned_to_user_id` | SET NULL | yes |
 | `inventory_items` | `created_by` | NO ACTION | yes |
+| `inventory_items` | `label_printed_by` | SET NULL | yes |
 | `inventory_lots` | `created_by` | SET NULL | yes |
 | `inventory_notification_queue` | `performed_by` | NO ACTION | yes |
 | `inventory_notification_queue` | `user_id` | CASCADE | no |

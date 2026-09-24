@@ -22,12 +22,15 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
 )
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+from app.utils.label_renderer import printable_label_value
 
 
 def _enum_values(enum_cls):
@@ -626,6 +629,15 @@ class InventoryItem(Base):
     # Status
     active = Column(Boolean, default=True, index=True)
 
+    # When a quartermaster confirmed a barcode label was printed for this item,
+    # and who. Null means the item still needs one. Cleared automatically when
+    # the value a label encodes changes (see _clear_stale_label_mark below),
+    # because the label on the shelf then no longer scans to this item.
+    label_printed_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    label_printed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -675,6 +687,55 @@ class InventoryItem(Base):
             "organization_id", "serial_number", name="uq_item_org_serial_number"
         ),
     )
+
+
+_LABEL_VALUE_FIELDS = ("barcode", "asset_tag", "serial_number")
+
+
+def _clear_stale_label_mark(_mapper, _connection, target: "InventoryItem") -> None:
+    """Put an item back on the "needs a label" list when its label value moves.
+
+    A mapper listener rather than a check in each writer: the value can change
+    through the edit form, CSV import, variant generation, or the label PDF's
+    own barcode auto-fill, and a writer that forgot the check would leave an
+    item marked as labelled while its label scans to nothing.
+
+    The printed value is compared, not the raw columns, so editing an asset tag
+    on an item whose label carries its barcode keeps the mark. Core
+    ``update()`` statements bypass this listener; none writes these columns.
+    """
+    if target.label_printed_at is None:
+        return
+    state = sa_inspect(target)
+    changed = [f for f in _LABEL_VALUE_FIELDS if state.attrs[f].history.added]
+    if not changed:
+        return
+
+    old_values = []
+    for field in _LABEL_VALUE_FIELDS:
+        history = state.attrs[field].history
+        if field not in changed:
+            old_values.append(getattr(target, field))
+        elif history.deleted:
+            old_values.append(history.deleted[0])
+        else:
+            # The old value was never loaded (an expired attribute written
+            # blind), so the label's value cannot be proven unchanged. Clearing
+            # only returns the item to the worklist; keeping the mark could
+            # hide an item whose label no longer scans.
+            old_values = None
+            break
+
+    new_value = printable_label_value(
+        target.barcode, target.asset_tag, target.serial_number
+    )
+    if old_values is not None and printable_label_value(*old_values) == new_value:
+        return
+    target.label_printed_at = None
+    target.label_printed_by = None
+
+
+event.listen(InventoryItem, "before_update", _clear_stale_label_mark)
 
 
 class InventoryLot(Base):

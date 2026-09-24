@@ -136,6 +136,24 @@ def sanitize_barcode_value(raw: str) -> str:
     return value if value and all(ord(ch) < 128 for ch in value) else ""
 
 
+def printable_label_value(
+    barcode: Optional[str], asset_tag: Optional[str], serial_number: Optional[str]
+) -> str:
+    """The value an inventory label encodes: the first Code128-safe identifier.
+
+    One definition, because two callers must agree on it: the label PDF prints
+    this value, and ``InventoryItem``'s update listener clears the item's
+    printed-label mark when it changes — the physical label then no longer
+    scans to the item. Returns ``""`` when none of the three is printable.
+    """
+    for candidate in (barcode, asset_tag, serial_number):
+        if candidate:
+            value = sanitize_barcode_value(str(candidate))
+            if value:
+                return value
+    return ""
+
+
 def _fit_code128(
     code128, value: str, initial_width: float, max_width: float, bar_height: float
 ):

@@ -97,7 +97,12 @@ from app.utils.garment_styles import (
     style_combinations,
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
-from app.utils.label_renderer import LabelSpec, render_labels, sanitize_barcode_value
+from app.utils.label_renderer import (
+    LabelSpec,
+    printable_label_value,
+    render_labels,
+    sanitize_barcode_value,
+)
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
@@ -1869,6 +1874,7 @@ class InventoryService:
         color: Optional[str] = None,
         style: Optional[str] = None,
         active_only: bool = True,
+        label_printed: Optional[bool] = None,
     ) -> "Select":
         """The filtered item select, with no ordering, joins or pagination.
 
@@ -2004,6 +2010,12 @@ class InventoryService:
         if active_only:
             query = query.where(InventoryItem.active.is_(True))
 
+        # None means "either"; False is the "needs a label" worklist.
+        if label_printed is True:
+            query = query.where(InventoryItem.label_printed_at.is_not(None))
+        elif label_printed is False:
+            query = query.where(InventoryItem.label_printed_at.is_(None))
+
         return query
 
     async def get_items(
@@ -2025,6 +2037,7 @@ class InventoryService:
         color: Optional[str] = None,
         style: Optional[str] = None,
         active_only: bool = True,
+        label_printed: Optional[bool] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
         pinned_for_user_id: Optional[UUID] = None,
@@ -2081,6 +2094,7 @@ class InventoryService:
             color=color,
             style=style,
             active_only=active_only,
+            label_printed=label_printed,
         )
 
         # Get total count
@@ -5608,13 +5622,12 @@ class InventoryService:
 
         def printable_value(item) -> str:
             """Resolve the first non-empty Code128-compatible identifier."""
-            candidates = (item.barcode, item.asset_tag, item.serial_number)
-            for candidate in candidates:
-                if candidate:
-                    value = sanitize_barcode_value(str(candidate))
-                    if value:
-                        return value
-            raise ValueError(f"Item {item.id} has no printable barcode identifier")
+            value = printable_label_value(
+                item.barcode, item.asset_tag, item.serial_number
+            )
+            if not value:
+                raise ValueError(f"Item {item.id} has no printable barcode identifier")
+            return value
 
         specs = [
             LabelSpec(
@@ -5627,6 +5640,48 @@ class InventoryService:
             for item in items
         ]
         return specs, auto_populated
+
+    async def mark_labels_printed(
+        self,
+        item_ids: List[UUID],
+        organization_id: UUID,
+        user_id: UUID,
+    ) -> int:
+        """Record that labels printed correctly for these items.
+
+        Called when a quartermaster confirms the batch came off the printer,
+        never on generation: a cancelled print dialog or a jammed roll would
+        otherwise take items off the "needs a label" list with no label on
+        them. Ids outside the caller's organization are ignored, as is an item
+        with no printable identifier — it cannot be carrying a label.
+
+        Returns how many items were marked.
+        """
+        unique_ids = list(dict.fromkeys(str(i) for i in item_ids))
+        result = await self.db.execute(
+            select(InventoryItem).where(
+                InventoryItem.id.in_(unique_ids),
+                InventoryItem.organization_id == str(organization_id),
+            )
+        )
+        now = datetime.now(timezone.utc)
+        marked = 0
+        for item in result.scalars().all():
+            if not printable_label_value(
+                item.barcode, item.asset_tag, item.serial_number
+            ):
+                continue
+            item.label_printed_at = now
+            item.label_printed_by = str(user_id)
+            marked += 1
+        await self.db.commit()
+        logger.info(
+            "Marked {} of {} inventory items as labelled (org {})",
+            marked,
+            len(unique_ids),
+            organization_id,
+        )
+        return marked
 
     async def generate_barcode_labels(
         self,

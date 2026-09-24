@@ -52,6 +52,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import ItemDetailPage from './ItemDetailPage';
+import { formatDate } from '../../../utils/dateFormatting';
 
 const makeItem = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
   id: 'it-1',
@@ -95,6 +96,19 @@ describe('ItemDetailPage', () => {
     renderPage();
     expect((await screen.findAllByText('Thermal Camera')).length).toBeGreaterThan(0);
     expect(mockGetItem).toHaveBeenCalledWith('it-1');
+  });
+
+  it('says whether a label has been printed for the item', async () => {
+    renderPage();
+    expect(await screen.findByText('Needs a label')).toBeInTheDocument();
+  });
+
+  it('shows the date the label was confirmed printed', async () => {
+    mockGetItem.mockResolvedValue(makeItem({ label_printed_at: '2026-09-20T15:00:00Z' }));
+    renderPage();
+    await screen.findAllByText('Thermal Camera');
+    expect(screen.queryByText('Needs a label')).not.toBeInTheDocument();
+    expect(screen.getByText(formatDate('2026-09-20T15:00:00Z', 'UTC'))).toBeInTheDocument();
   });
 
   it('shows the lot ledger total, not the stale quantity column, for a lot-stocked uniform pool item', async () => {
