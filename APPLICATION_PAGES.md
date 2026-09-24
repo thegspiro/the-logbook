@@ -538,8 +538,11 @@ Compliance, Department Store, and Setup & Tools.
 | `/inventory/print-labels`         | Barcode Label Printing    | `inventory.manage`                                                            |
 | `/inventory/admin/nfc`            | NFC Tag Settings          | any of `settings.manage`, `organization.update_settings`                      |
 | `/inventory/tag/:code`            | NFC Tag Link (redirect)   | `inventory.view`                                                              |
+| `/inventory/put-away`             | Put Away by NFC           | `inventory.manage`                                                            |
 
 > **NFC tags on items are opt-in** _(2026-09-24)_. `/inventory/admin/nfc` turns on `inventory.nfc_tracking_enabled` in the organization settings; until then every `/inventory/nfc*` and `/inventory/items/{id}/nfc-tags` endpoint answers 403. Once on, item detail shows an **NFC Tags** card to `inventory.manage` holders (link by writing a URL onto a blank tag, by reading the chip serial, or by typing the serial), and the distribute/return scanner gains **Tap NFC**. A written tag carries `/inventory/tag/<code>`: the code names the tag, not the item, so unlinking a tag stops its URL resolving, and any phone — an iPhone included — opens the item by tapping it. Only Chrome on Android can link tags or read them inside the app.
+>
+> **Phase 2** _(2026-09-24)_: storage areas carry tags too (linked from the storage area editor), and `/inventory/put-away` records where items are by tap — shelf first opens the shelf for every item tapped after it; item first moves that one item onto the next shelf tapped. Put-away refuses an item that is issued, checked out, lost or stolen. Every tap by an `inventory.manage` holder is logged in `inventory_nfc_scans` and shown on the item as **Last Seen (NFC)**; a member opening a written tag from their own phone is not logged. A shelf's written tag opens put-away with that shelf chosen for an inventory manager.
 
 > **Receiving a delivery and stocking the catalog are both one-pass jobs now** _(2026-08-10)_. Two modals open from the items list (`/inventory`, and the same screen at `/inventory/admin/items`):
 >

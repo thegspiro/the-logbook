@@ -41,6 +41,7 @@ const ImpactPlannerPage = lazyWithRetry(() => import('./pages/ImpactPlannerPage'
 const InventorySetupPage = lazyWithRetry(() => import('./pages/InventorySetupPage'));
 const InventoryNfcSettingsPage = lazyWithRetry(() => import('./pages/InventoryNfcSettingsPage'));
 const InventoryNfcTagPage = lazyWithRetry(() => import('./pages/InventoryNfcTagPage'));
+const InventoryPutAwayPage = lazyWithRetry(() => import('./pages/InventoryPutAwayPage'));
 
 // Equipment checklists — the whole feature, authoring through performing.
 // Scheduling links in from a shift; it hosts none of this.
@@ -390,9 +391,10 @@ export const getInventoryRoutes = () => {
 
       {/* NFC tags. The settings page takes the department-settings grant,
           not inventory.manage: the switch is written through the
-          organization-settings endpoint. The tag page is where a tag's
-          written link lands, so it asks for the same grant as the barcode
-          lookup it stands in for. */}
+          organization-settings endpoint. Put-away moves items, so it is
+          inventory.manage. The tag page is where a tag's written link lands,
+          so it asks for the same grant as the barcode lookup it stands in
+          for. */}
       <Route
         path="/inventory/admin/nfc"
         element={
@@ -403,6 +405,16 @@ export const getInventoryRoutes = () => {
           >
             <Suspense fallback={null}>
               <InventoryNfcSettingsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/put-away"
+        element={
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <InventoryPutAwayPage />
             </Suspense>
           </ProtectedRoute>
         }

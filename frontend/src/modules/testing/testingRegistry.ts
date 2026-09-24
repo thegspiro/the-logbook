@@ -522,6 +522,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'inventory',
       },
       {
+        path: '/inventory/put-away',
+        label: 'Put away by NFC',
+        permission: 'inventory.manage',
+        module: 'inventory',
+      },
+      {
         path: '/inventory/tag/:code',
         label: 'NFC tag link (resolves to the item)',
         permission: 'inventory.view',

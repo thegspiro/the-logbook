@@ -126,6 +126,10 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // them: both are Inventory Administration cards sitting outside the hub's URL
   // space, and "checkouts" is not what either the card or the page calls this.
   '/inventory/checkouts': { label: 'Temporary Loans', permissions: ['inventory.manage'] },
+  // Labels only: the segments are "nfc" and "put-away", and the pages call
+  // themselves "NFC Tags" and "Put Away by NFC". Gates match the routes.
+  '/inventory/admin/nfc': { label: 'NFC Tags', permissions: ['settings.manage', 'organization.update_settings'] },
+  '/inventory/put-away': { label: 'Put Away by NFC', permissions: ['inventory.manage'] },
   '/inventory/items': { permissions: ['inventory.manage'] },
   '/inventory/storage-areas': { label: 'Storage Areas', permissions: ['inventory.manage'] },
   '/onboarding/modules': {},

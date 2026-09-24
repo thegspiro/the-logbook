@@ -20,6 +20,7 @@ import {
   Layers,
   Search,
   ExternalLink,
+  Nfc,
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { facilitiesService, inventoryService, locationsService } from '../../../services/api';
@@ -31,6 +32,8 @@ import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { Breadcrumbs } from '../../../components/ux';
+import { NfcTagsCard } from '../components/NfcTagsCard';
+import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
 
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
@@ -369,6 +372,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
 /* ---------- Main page ---------- */
 const StorageAreasPage: React.FC = () => {
   const isDesktopTree = useMediaQuery('(min-width: 768px)');
+  const { enabled: nfcEnabled } = useInventoryNfcEnabled();
   const [locations, setLocations] = useState<Location[]>([]);
   const [facilityNames, setFacilityNames] = useState<Map<string, string>>(new Map());
   const [storageAreas, setStorageAreas] = useState<StorageAreaResponse[]>([]);
@@ -654,9 +658,16 @@ const StorageAreasPage: React.FC = () => {
           <h1 className="text-theme-text-primary text-2xl font-bold">Storage Areas</h1>
           <p className="text-theme-text-secondary mt-1">Manage hierarchical storage locations within rooms.</p>
         </div>
-        <button onClick={openCreateModal} className="btn-info btn-md flex items-center gap-2">
-          <Plus className="h-4 w-4" /> Add Storage Area
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {nfcEnabled && (
+            <Link to="/inventory/put-away" className="btn-secondary btn-md flex items-center gap-2">
+              <Nfc className="h-4 w-4" aria-hidden="true" /> Put Away by NFC
+            </Link>
+          )}
+          <button onClick={openCreateModal} className="btn-info btn-md flex items-center gap-2">
+            <Plus className="h-4 w-4" /> Add Storage Area
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -952,6 +963,13 @@ const StorageAreasPage: React.FC = () => {
             </p>
           </div>
         </form>
+        {/* Outside the form: the card has a form of its own, and forms do not
+            nest. Only for an existing area — a tag needs an id to link to. */}
+        {editingArea && nfcEnabled && (
+          <div className="mt-4">
+            <NfcTagsCard targetKind="storage_area" targetId={editingArea.id} targetName={editingArea.name} />
+          </div>
+        )}
       </Modal>
 
       {/* Delete confirmation */}

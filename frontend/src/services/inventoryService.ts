@@ -89,7 +89,12 @@ import type {
   RequestableCatalogResponse,
 } from './eventServices';
 import type {
+  InventoryNfcPutAwayRequest,
+  InventoryNfcPutAwayResponse,
+  InventoryNfcResolveAnyRequest,
+  InventoryNfcResolveAnyResponse,
   InventoryNfcResolveRequest,
+  InventoryNfcScanListResponse,
   InventoryNfcSettings,
   InventoryNfcTag,
   InventoryNfcTagCreate,
@@ -623,6 +628,33 @@ export const inventoryService = {
 
   async resolveNfcTag(data: InventoryNfcResolveRequest): Promise<ScanLookupResult> {
     const response = await api.post<ScanLookupResult>('/inventory/nfc/resolve', data);
+    return response.data;
+  },
+
+  async resolveAnyNfcTag(data: InventoryNfcResolveAnyRequest): Promise<InventoryNfcResolveAnyResponse> {
+    const response = await api.post<InventoryNfcResolveAnyResponse>('/inventory/nfc/resolve-any', data);
+    return response.data;
+  },
+
+  async putAwayItem(data: InventoryNfcPutAwayRequest): Promise<InventoryNfcPutAwayResponse> {
+    const response = await api.post<InventoryNfcPutAwayResponse>('/inventory/nfc/put-away', data);
+    return response.data;
+  },
+
+  async getItemNfcScans(itemId: string, limit?: number): Promise<InventoryNfcScanListResponse> {
+    const response = await api.get<InventoryNfcScanListResponse>(`/inventory/items/${itemId}/nfc-scans`, {
+      params: { limit },
+    });
+    return response.data;
+  },
+
+  async getStorageAreaNfcTags(storageAreaId: string): Promise<InventoryNfcTagListResponse> {
+    const response = await api.get<InventoryNfcTagListResponse>(`/inventory/storage-areas/${storageAreaId}/nfc-tags`);
+    return response.data;
+  },
+
+  async linkStorageAreaNfcTag(storageAreaId: string, data: InventoryNfcTagCreate): Promise<InventoryNfcTag> {
+    const response = await api.post<InventoryNfcTag>(`/inventory/storage-areas/${storageAreaId}/nfc-tags`, data);
     return response.data;
   },
 
