@@ -1,9 +1,10 @@
-# August 31 – September 15, 2026 workflow updates
+# August 31 – September 23, 2026 workflow updates
 
-This lesson is the operator-facing companion to three change audits:
+This lesson is the operator-facing companion to four change audits:
 [August 31 – September 6](../CHANGE_AUDIT_2026-08-31_TO_09-06.md),
-[September 6–12](../CHANGE_AUDIT_2026-09-06_TO_09-12.md) and
-[September 12–15](../CHANGE_AUDIT_2026-09-12_TO_09-15.md). It explains what
+[September 6–12](../CHANGE_AUDIT_2026-09-06_TO_09-12.md),
+[September 12–15](../CHANGE_AUDIT_2026-09-12_TO_09-15.md) and
+[September 15–23](../CHANGE_AUDIT_2026-09-15_TO_09-23.md). It explains what
 members and administrators now do differently. Permission names are included
 because a control that is absent is usually a permission or module-state issue,
 not a rendering failure.
@@ -11,12 +12,14 @@ not a rendering failure.
 Its predecessor is
 [19 — August 12–31 release changes](./19-august-2026-release-changes.md).
 
-**It covers three windows.** The first runs from the top of this file; the
+**It covers four windows.** The first runs from the top of this file; the
 second starts at [September 6–12, 2026
-changes](#september-612-2026-changes) and the third at [September 12–15, 2026
-changes](#september-1215-2026-changes). The warning immediately below applies to
-the **first** window only — **nothing in the second or third window changed
-address, and no bookmark breaks there.**
+changes](#september-612-2026-changes), the third at [September 12–15, 2026
+changes](#september-1215-2026-changes) and the fourth at [September 15–23, 2026
+changes](#september-1523-2026-changes). The warning immediately below applies to
+the **first** window only — **nothing in the later windows changed address, and
+no bookmark breaks there.** The fourth window _adds_ two addresses (suggestion
+boxes) and retires none.
 
 > **Two features changed address in this window, and fourteen addresses stop
 > working with no redirect.** Thirteen are retired paths and land on the
@@ -1481,3 +1484,216 @@ Unchanged from the previous three windows:
   builder's preview.
 - The equipment-check **lap** — built, not wired.
 - **Qualification entry** — still only through a course's _Certifies_ field.
+
+---
+
+# September 15–23, 2026 changes
+
+**Two new screens, nothing moved.** The fourth window adds **suggestion boxes**
+— a new **Suggestions** item in every member's sidebar and a **Suggestion
+Boxes** screen under Administration — and retires no address. Four
+migrations; head is `5a70c5dcd138`.
+
+Everything else happens on a screen your members already use. The theme is
+**records that say what really happened**: an applicant moves on when the
+department has settled who attended, not when they signed in at the door; the
+inventory list knows which items are labelled; a form no longer keeps an answer
+to a question the submitter could not see; and the pipeline header counts the
+applicants the table is showing.
+
+## For members: what is new
+
+### Suggestion boxes
+
+**Suggestions** now sits in the sidebar, just after **Messages**. If your
+department has opened any boxes, you can send a suggestion — with your name or,
+where the box allows it, anonymously — and attach up to five screenshots. Named
+submissions are listed under **My submissions**, where you can follow the
+outcome and reply if the box allows follow-up.
+
+**Anonymous means anonymous inside the application.** No name is stored, nothing
+is written to the audit log, times are kept to the day only, and screenshots are
+cleaned of their hidden location and device data. Reviewers cannot find out who
+you are, and neither can an administrator. **Two things it does not do:** it
+does not blur what is _visible_ in a screenshot — if your name is on the screen
+you captured, it is in the picture — and it is not a promise against whoever
+runs the server itself, who could line up the time a submission arrived with
+other logs.
+
+In a box that allows follow-up, an anonymous submission gives you a **follow-up
+key**. It is shown **once**. Copy it and keep it somewhere private; paste it
+into **Follow up with a key** later to read replies and answer them. **A lost
+key cannot be replaced.**
+
+![An ordinary member's view: the Suggestions item in the sidebar just below Messages, and the Suggestions page open on its Submit tab with the Training ideas box chosen and its description showing — no Review tab](./images/20-15-suggestions-sidebar-submit.png)
+
+Full walkthrough: [Documents, Forms & Communications →
+Suggestion Boxes](./07-documents-forms.md#suggestion-boxes-2026-09-23).
+
+### The installed app wears your department's logo
+
+Install The Logbook on a phone or desktop now and its icon is the department's
+own logo — on iPhones the launch screen carries it too. **Members who installed
+before keep the old icon**: a phone reads it once, at install. Remove the app
+from the home screen and add it again to pick up the logo. See
+[Mobile & PWA](./10-mobile-pwa.md#your-departments-logo-as-the-app-icon-2026-09-17).
+
+### A form will not refuse you over a question you cannot see
+
+A required question that only appears for some answers — "Previous EMT
+experience" when Membership Type is EMT — used to stop everyone else from
+submitting, with an error about a field they had never been shown. That is
+fixed, and an answer typed into a question that was later hidden is no longer
+saved. See [Documents, Forms &
+Communications](./07-documents-forms.md#adding-fields).
+
+## For officers: what is new to work with
+
+### Meeting stages move on when the event is finalized, not at the door
+
+Two changes to the membership pipeline's **Meeting** stages, and together they
+replace what the September 12–15 window said about them.
+
+**A stage that names its event is now a real requirement — including for your
+own Advance button.** A meeting stage with an **Auto-Link Event Type** (or one
+pinned to a specific event) refuses **Advance**, a drag across the board,
+**Bulk Advance** and every automatic advance until the applicant is checked in
+at that event. Before, a coordinator's single Advance was exempt, so the way
+past an unattended meeting was to click the cards one at a time instead of in
+bulk — which nobody decided on purpose. A stage that names **no** event is
+unchanged: it takes the coordinator's word on every path.
+
+**Attendance only counts once the event is finalized.** A sign-in at the door
+is not the department's final word on who was there. The applicant now moves
+when the organizer closes the event out — **End Event**, recording an **actual
+end time**, or **Finalize Attendance** — along with everyone else who attended.
+An event nobody finalizes releases them on its own **seven days** after it ends.
+
+**And the meeting that created an applicant counts once.** When a kiosk sign-in
+at a business meeting is what opened the applicant's record, a later "attend a
+business meeting" stage needs a _second_ meeting. It used to be satisfied by the
+sign-in that created them.
+
+The applicant drawer says all this before you click, on any stage that names an
+event:
+
+> _"The applicant must be checked in at this stage's event, and that event's
+> attendance must be finalized, before they can advance. A check-in recorded
+> before their application was opened does not count."_
+
+![The applicant drawer for an applicant on the Attend a Business Meeting stage, whose Auto-Link Event Type is set: the hint above the action row says they must be checked in at the stage's event and that event's attendance must be finalized before they can advance](./images/20-14-applicant-meeting-stage-hint.png)
+
+If you are refused, the message tells you what to do, in order: **record the
+attendance** that happened (add them to the event and check them in — you can
+do that after the fact); or **un-tick Required** on the stage and skip it; or
+**clear the stage's Auto-Link Event Type**. If they were checked in and the
+event just has not been finalized, it names the event — ask the organizer to
+close it out.
+
+**Tell your event organizers.** Closing an event out is now what moves
+applicants along. An organizer who never finalizes open houses is, after this,
+the reason applicants wait a week.
+
+Full detail: [Prospective Members → Stage
+Types](./15-prospective-members.md#stage-types).
+
+### The pipeline header matches the table
+
+The stat cards above the applicant list and the list itself used to drift apart.
+Converting the last two active applicants left **Total Active: 2** over an empty
+table; a search that matched nobody still showed a non-zero count. The cards now
+refresh with every action and count through the same search and event filter the
+table uses. **If the header and the table ever disagreed before, the table was
+right.**
+
+### Label every item in a category at once, and see which still need one
+
+For quartermasters. Filter the inventory list, tick one row, and **Select all N
+matching** takes every item the filters match — up to 500 — to the label page in
+one go. Opening the label page with nothing selected now offers a **Category /
+Location / Storage area** picker instead of an error.
+
+Every item also records **when its label was printed**. After printing, the page
+asks **"Did the labels print correctly?"** — confirming takes those items off the
+**Needs a Label** list, which is a new filter on the items list and a new line on
+each item's page. Change an item's barcode and it goes back on the list.
+
+**On the day you upgrade, every item reads "Needs a label"** — there was no
+history to carry over. The [upgrade note](../UPGRADING.md) and the
+[inventory guide](./05-inventory.md#knowing-which-items-still-need-a-label-2026-09-23)
+show how to catch up stock that is already labelled without printing a thing.
+
+### Medical screening: the Add Record dialog now admits what it cannot do
+
+Unchanged underneath — **Add Record** still has no way to choose the member, so a
+record created there counts toward nobody. The dialog now says so in an amber
+notice at the top rather than letting the success message imply otherwise. See
+[Medical Screening](./13-medical-screening.md#recording-a-screening).
+
+## For administrators: read this before you upgrade
+
+### Five seeded positions gain a permission
+
+`suggestions.manage` is written onto the system **Fire Chief, Deputy Chief,
+Assistant Chief, President** and **Communications Officer** positions. It lets
+them set up suggestion boxes and choose reviewers. **It does not let them read
+any submission** — only a box's named reviewers can — which is what makes a
+complaints box possible. Positions your department created are not touched.
+
+### Decide who reviews before anybody submits
+
+A box's reviewers are the only people who will ever read it. Pick them with the
+box's purpose in mind: a complaints box reviewed by the people most likely to be
+complained about will not be used. Reviewers are emailed a link when something
+arrives; **the email never carries the content**, so nothing sensitive sits in an
+inbox.
+
+### Old form submissions may hold hidden answers
+
+Optional, and safe to skip. A dry-run-by-default script clears answers to
+questions that were hidden when the form was submitted, and skips anything whose
+question has been edited since. See the [upgrade note](../UPGRADING.md) for the
+commands.
+
+## Upgrade notes for administrators (September 15–23)
+
+**Four migrations. Head is `5a70c5dcd138`.** Back up, confirm `alembic heads`
+returns exactly one, then `alembic upgrade head`.
+
+| Revision       | What                                                       | Reverses?                                               |
+| -------------- | ---------------------------------------------------------- | ------------------------------------------------------- |
+| `80e2004cd691` | Suggestion box tables                                      | Yes — **and drops every suggestion** with them          |
+| `394600cbfae2` | Grants `suggestions.manage` to five seeded positions       | Yes — also removes a grant you added by hand afterwards |
+| `9cb132ad83dc` | Suggestion forwards                                        | Yes — drops every forward                               |
+| `5a70c5dcd138` | `label_printed_at` / `label_printed_by` on inventory items | Yes — loses only the print history                      |
+
+One setting is new and optional: **`PIPELINE_ATTENDANCE_SETTLE_DAYS`** (default
+`7`) — how long after an event ends an unfinalized check-in counts as settled.
+`0` settles at the event's end.
+
+Then, in order:
+
+1. **Tell event organizers to finalize** events that applicants attend — End
+   Event, record the actual end time, or Finalize Attendance. It is now what
+   advances them.
+2. **Look at who is parked on a meeting stage** that names an event. Anyone who
+   attended without being checked in will now be refused on **Advance** until
+   you record it.
+3. **Decide whether you want suggestion boxes**, and if so who reviews each one,
+   before announcing the sidebar item to members.
+4. **Catch up your label records** if your stock is already labelled, or leave
+   every item on **Needs a Label** and let it clear as you print.
+5. **Tell members who installed the app** that reinstalling gives them the
+   department logo — only if you have uploaded one.
+6. **Optionally** run the hidden-form-answer cleanup, dry run first.
+
+## Not yet available — do not teach these
+
+Unchanged from the previous four windows:
+
+- The crew **Sweep** for equipment checks — built, visible only in the template
+  builder's preview.
+- The equipment-check **lap** — built, not wired.
+- **Qualification entry** — still only through a course's _Certifies_ field.
+- **Choosing the member on a medical screening record** — the Add Record dialog
+  still cannot link one; it now says so.

@@ -20,6 +20,7 @@ import {
   Clock,
   CheckCircle2,
   Printer,
+  Pause,
   XCircle,
   Loader2,
   Settings,
@@ -161,6 +162,7 @@ export const ProspectiveMembersPage: React.FC = () => {
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [selectedApplicants, setSelectedApplicants] = useState<Set<string>>(new Set());
   const [isBulkAdvancing, setIsBulkAdvancing] = useState(false);
+  const [isBulkHolding, setIsBulkHolding] = useState(false);
   const [isBulkRejecting, setIsBulkRejecting] = useState(false);
   const [showBulkRejectConfirm, setShowBulkRejectConfirm] = useState(false);
   // A rejection reason belongs to the applicants it is written about. The old
@@ -338,6 +340,23 @@ export const ProspectiveMembersPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Failed to reactivate applications'));
     } finally {
       setIsBulkReactivating(false);
+    }
+  };
+
+  const handleBulkHold = async () => {
+    const ids = Array.from(selectedApplicants);
+    setIsBulkHolding(true);
+    try {
+      const result = await applicantService.bulkSetStatus(ids, 'on_hold');
+      reportBulkResult(result, 'Held');
+      if (result.succeeded_count > 0) {
+        void refreshPipelineView();
+      }
+      setSelectedApplicants(new Set());
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to put applicants on hold'));
+    } finally {
+      setIsBulkHolding(false);
     }
   };
 
@@ -827,6 +846,20 @@ export const ProspectiveMembersPage: React.FC = () => {
                           <CheckCircle2 className="h-3.5 w-3.5" />
                         )}
                         Advance All
+                      </button>
+                      <button
+                        onClick={() => {
+                          void handleBulkHold();
+                        }}
+                        disabled={isBulkHolding}
+                        className="flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-amber-800 disabled:opacity-50"
+                      >
+                        {isBulkHolding ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Pause className="h-3.5 w-3.5" />
+                        )}
+                        Hold All
                       </button>
                       {showBulkRejectConfirm ? (
                         <div className="flex items-center gap-2">

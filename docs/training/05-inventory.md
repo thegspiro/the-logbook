@@ -571,6 +571,7 @@ Each inventory item has a dedicated detail page at `/inventory/items/:id` with a
 ### Left Sidebar
 
 - **Barcode**: Visual barcode (Code128) with print button
+- **Label Printed** _(2026-09-23)_: in the **Basic Info** card — the date a label was confirmed printed, or **Needs a label**
 - **Quick Info**: Status, condition, category, tracking type, location
 - **Assignment/Issuance History**: Who has/had this item and when
 
@@ -737,7 +738,16 @@ Generate barcode labels for inventory items to attach to equipment.
 
 **Required Permission:** `inventory.manage`
 
-1. Select one or more items from the inventory list (or open a single item and use **Print Labels**) to reach the barcode print page.
+1. Reach the barcode print page one of four ways (see
+   [Choosing which items to label](#choosing-which-items-to-label-2026-09-23)
+   below):
+   - tick items on the inventory list and press **Print Labels** in the bar
+     that appears — or tick one, then **Select all N matching** to take every
+     item your filters match;
+   - open a single item and press **Print Barcode**;
+   - the **Barcode labels** card at the end of the inventory setup workflow;
+   - or open the print page with nothing selected and choose a category,
+     location or storage area.
 2. Click **Settings** and choose a **Label Size**:
    - **Dymo 30252 / 30256 / 30334 / 30336** — the four common Dymo label stocks
    - **Rollo 4×6** and **Rollo / Thermal 2×1** — roll-fed thermal printers
@@ -753,15 +763,98 @@ Generate barcode labels for inventory items to attach to equipment.
 
 4. Optionally set **Copies per item**, add **Additional Info on Label** (location / category / condition), and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below).
 5. Print one of three ways:
-   - **Send to Printer** (best, when a network label printer is configured) — sends the labels straight to the printer. No print dialog, no PDF, and nothing that can rescale the barcode. See [Direct printing to a network label printer](#direct-printing-to-a-network-label-printer) below.
-   - **PDF** (recommended for sticker/thermal printers without a network connection) — downloads a PDF sized to the exact label; open it and print with your label printer selected.
+   - **PDF** (recommended for sticker/thermal printers) — downloads a PDF sized to the exact label; open it and print with your label printer selected.
    - **Print Labels** — prints directly through the browser print dialog.
+
+   > **Corrected 2026-09-24.** This step used to list **Send to Printer** first.
+   > The inventory barcode page does not have that button: direct printing to a
+   > network label printer is offered on the shared label pages — members,
+   > applicants, apparatus and facilities — but the inventory page prints by PDF
+   > or browser dialog only. The section on
+   > [direct printing](#direct-printing-to-a-network-label-printer) below
+   > applies to those other pages.
+
+6. **Answer "Did the labels print correctly?"** — see
+   [Knowing which items still need a label](#knowing-which-items-still-need-a-label-2026-09-23).
 
 Labels include the barcode (Code 128 with the required quiet-zone margins, or a QR), the item name, and the asset tag or serial number. A QR has no built-in human-readable line, so the value is printed underneath it.
 
 > **Reusing a partly used Avery sheet.** With **Letter Paper (Grid)** selected, a **Start at label** box (1–30) appears above the printer controls. Set it to the first label still on the sheet — counting left to right along each row — and the positions before it are left blank in the preview, the browser print and the PDF, so the sheet can go back in the printer instead of the bin. It applies to the sheet in the printer now: it goes back to 1 when you move to the next part of a large run. Roll printers have no positions, so the box is not shown for them.
 
 ![Label print settings with the size presets and content options](./images/05-51-label-print-settings.png)
+
+### Choosing which items to label _(2026-09-23)_
+
+Labelling a whole category or a whole storage room used to mean paging through
+the list fifty rows at a time and ticking every one. Two things fix that.
+
+**Select every matching item from the list.** Filter the items list the way you
+want — a category, a location, **Needs a Label** — tick any one row, and the
+bar that appears offers **Select all N matching**. That takes every item the
+filters match, not just the rows loaded on screen, and the bar then reads
+**All N matching selected**. Press **Print Labels**. Unticking any row turns the
+selection back into an ordinary hand-picked set.
+
+- **One batch holds at most 500 labels.** Above that the link is replaced by
+  _"N match — narrow the filters to 500 or fewer to select them all"_. Narrow by
+  category, location or storage area and print in several runs.
+- A selection made this way is carried to the print page **as the filters, not
+  as a list of item ids**, so the print page's address stays short and survives
+  a refresh.
+
+![The inventory items list filtered to Structural PPE and Needs a Label, one row ticked, and the bulk bar reading All 11 matching selected beside the Print Labels button](./images/05-83-items-select-all-matching.png)
+
+**Or open the print page with nothing selected.** The **Barcode labels** card in
+the setup workflow, or a bookmark to the print page, used to land on "No items
+specified". It now opens **Print barcode labels**: pick a **Category**, a
+**Location** (including **Unassigned**) and a **Storage area**, optionally tick
+**Only items that still need a label**, and the page counts the match live —
+"_N items match._" — before you press **Prepare N labels**. Over 500 it says so
+and the button stays disabled until you narrow it.
+
+![The label print page opened with nothing selected: the Print barcode labels picker with Category set to Structural PPE, Location and Storage area left on All, Only items that still need a label ticked, the live count reading 11 items match, and the Prepare 11 labels button](./images/05-84-label-scope-picker.png)
+
+### Knowing which items still need a label _(2026-09-23)_
+
+A quartermaster had no way to see which items had been labelled. Every item now
+records **when its label was printed**, and the list can filter on it.
+
+**How an item gets marked.** After you press **Print Labels** or download the
+**PDF**, the page asks:
+
+> **Did the labels print correctly?** Confirming takes these items off the
+> "needs a label" list.
+> [ **Mark N items as labelled** ] [ **Not yet** ]
+
+Nothing is recorded until you confirm — a print dialog you cancelled, a jam, or
+a PDF you never opened should not mark anything. **Not yet** just dismisses the
+question. It is never asked after **Download Test Label**.
+
+**Where it shows.**
+
+- The item's **Basic Info** card has a **Label Printed** line: the date the
+  label was confirmed, or **Needs a label**.
+- The items list has a label-status filter: **Any Label Status**, **Needs a
+  Label**, **Label Printed**. The same filter carries into **Export**.
+- The print page's picker has **Only items that still need a label**.
+
+**The mark clears itself when the label goes out of date.** A label encodes one
+value — the item's **barcode**, or its **asset tag** if it has no barcode, or
+its **serial number** if it has neither. When that value changes, by an edit,
+an import, or the barcode the PDF fills in for an item that had none, the item
+goes back to **Needs a label**. Changing a field the label does not carry (the
+asset tag on an item whose label shows its barcode) leaves the mark alone.
+
+**Every existing item starts as "Needs a label".** There is no record of which
+items were labelled before this, so none is assumed. If your stock is already
+labelled, you can catch the records up without wasting label stock: filter to
+**Needs a Label**, select all matching (or use the picker), press **Print
+Labels**, **cancel** the browser's print dialog, and answer **Mark N items as
+labelled**. The question is asked as soon as the print dialog opens, whether or
+not anything came out — which is also why you should only confirm it when the
+labels really are on the gear. Up to 500 items per pass.
+
+![The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark 11 items as labelled and Not yet, above the label preview](./images/05-85-label-print-confirm.png)
 
 ### Connecting a Sticker / Label Printer
 
@@ -1730,11 +1823,15 @@ These edge cases cover automatic behaviors during item creation, assignment, ret
 
 ### Label Generation
 
-| Scenario                               | Behavior                                                                                                                                                       |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No valid items selected for labels     | Returns "No valid items found for label generation." Items must have a barcode or asset tag.                                                                   |
-| Non-ASCII characters in barcode values | Silently stripped before Code128 encoding. Items imported with accented characters in serial numbers will have those characters removed on labels.             |
-| Extremely small custom label size      | Minimum bar width of 0.0075 inches is enforced for 203 DPI thermal printers. Labels below this threshold may produce barcodes that cannot be reliably scanned. |
+| Scenario                                   | Behavior                                                                                                                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No valid items selected for labels         | Returns "No valid items found for label generation." Items must have a barcode or asset tag.                                                                      |
+| Non-ASCII characters in barcode values     | Silently stripped before Code128 encoding. Items imported with accented characters in serial numbers will have those characters removed on labels.                |
+| Extremely small custom label size          | Minimum bar width of 0.0075 inches is enforced for 203 DPI thermal printers. Labels below this threshold may produce barcodes that cannot be reliably scanned.    |
+| More than 500 items selected or matched    | Refused before anything renders: "N items match. A maximum of 500 inventory items can be printed in one batch — narrow the filters and try again." _(2026-09-23)_ |
+| Filters match no active items              | "No active items match these filters.", with a **Choose different items** link back to the picker _(2026-09-23)_                                                  |
+| Marked as labelled, then barcode edited    | The mark clears and the item reads **Needs a label** again — the label on the gear no longer matches the record _(2026-09-23)_                                    |
+| Marked as labelled, item has no identifier | Skipped: an item with no barcode, asset tag or serial number has no printable value, so it is never marked _(2026-09-23)_                                         |
 
 ### Notification Behavior
 
@@ -1747,48 +1844,49 @@ These edge cases cover automatic behaviors during item creation, assignment, ret
 
 ## Troubleshooting
 
-| Issue                                                | Solution                                                                                                                                                                                                                                               |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| CSV import fails                                     | Download the sample template and verify your CSV matches the format. Check that category names match existing categories. Serial numbers must be unique.                                                                                               |
-| Item not found when scanning                         | Verify the barcode/QR code matches the item's serial number or asset tag. The item must exist in the system. A "not found" message means no match; a "network error" message means connectivity issues.                                                |
-| Camera not showing in scan modal (Firefox/Safari)    | The inventory scanner now supports all modern browsers. If the camera button is missing, ensure browser camera permissions are granted. On desktop, the scanner falls back to the front-facing webcam if no rear camera is available.                  |
-| Scan modal opening on desktop but camera failing     | Desktop computers typically only have a front-facing webcam. The scanner tries the rear camera first, then automatically falls back to the front-facing camera. If both fail, check that the camera is not in use by another application.              |
-| Duplicate scan detected                              | The scanner ignores the same barcode scanned within 3 seconds to prevent double-processing. Wait 3 seconds or scan a different item.                                                                                                                   |
-| Cannot assign item - "already assigned"              | An item can only be assigned to one member at a time. Return or unassign it from the current member first.                                                                                                                                             |
-| Checkout button not available                        | The item may already be checked out or in maintenance status. Check the item's current status.                                                                                                                                                         |
-| Batch return fails for one item                      | Each item in a batch is processed independently. If one fails (e.g., "Item is not assigned to the expected user"), the others still succeed. Check if the item was concurrently reassigned.                                                            |
-| Departure clearance not generating items             | The member must have active assignments or checkouts. If all items were already returned, the clearance will be empty.                                                                                                                                 |
-| Cannot resolve clearance line item                   | The line item must belong to the specified clearance. If it returns an error, verify you are resolving items within the correct clearance record.                                                                                                      |
-| Duplicate barcode error                              | Barcodes and asset tags must be unique within your organization. Different organizations can reuse the same codes.                                                                                                                                     |
-| Pool item quantity below zero                        | Pool item quantity cannot go below zero. If a return fails, check that the issuance record exists and hasn't already been returned.                                                                                                                    |
-| Cannot see Inventory module                          | Inventory is a recommended module but can be disabled. Contact your administrator to enable it in Settings.                                                                                                                                            |
-| Label PDF not generating                             | Ensure you have selected at least one item. Labels require the item to have a barcode or asset tag assigned.                                                                                                                                           |
-| Thermal label blank or no barcode                    | Use Chrome/Edge (Safari has limited iframe print support). Verify Dymo (2.25×1.25″) or Rollo (4×6″) paper size in printer dialog. Check that inline SVG is not blocked by your Content Security Policy. Batch print ≤30 labels to avoid browser hangs. |
-| Organization logo missing on labels                  | Logo is loaded from organization profile URL. If the URL returns 404 or CORS error, the label prints without logo silently. Verify the logo URL in Settings > Organization.                                                                            |
-| Form field cleared but value not resetting           | The nullish coalescing operator (`??`) treats empty strings as truthy. This was fixed; pull latest code. If you see this in custom code, use `\|\|` instead of `??` when empty string should fall back to a default.                                   |
-| 422 error on item create/update                      | Optional fields (notes, description) must be omitted from the payload when empty, not sent as `""`. Pull latest frontend code.                                                                                                                         |
-| WebSocket 403 on inventory page                      | The WebSocket connection needs the auth cookie. Pull latest; `withCredentials` is now set on the WebSocket connection.                                                                                                                                 |
-| Charges not appearing on returned items              | Verify `inventory.manage` permission. Charges are tied to return/write-off events. Quarantine items cannot have charges until inspection completes.                                                                                                    |
-| Pool item cost recovery amount wrong                 | Check the item's `replacement_cost_per_unit` field. Cost recovery = (units not returned) × replacement cost per unit.                                                                                                                                  |
-| Return request stuck in pending                      | Admin must approve return requests in Inventory Admin > Items. Check that the admin has `inventory.manage` permission.                                                                                                                                 |
-| Quarantine item cannot be re-issued                  | Items in quarantine status must be inspected and cleared before re-issue. Change status from quarantine to available after inspection.                                                                                                                 |
-| Size variant stock not matching total                | Each size variant tracks its own stock independently. The total shown is the sum of all variants. Verify per-size quantities in the item detail modal.                                                                                                 |
-| Reorder request not triggering alerts                | Verify the item's `reorder_point` is set (pool items only). Stock must drop to or below the threshold. Email alerts require `EMAIL_ENABLED=True`; SMS alerts require `TWILIO_ENABLED=True`.                                                            |
-| SMS alerts not sending                               | Verify `TWILIO_ENABLED=True`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` are configured. Check that SMS recipients are configured in Settings > Notifications.                                                                |
-| Kit issuance partially failed                        | If some kit components are out of stock, available items are still issued. Check the issuance result for per-component success/failure status. Reorder the missing components.                                                                         |
-| Member size preferences not showing during issuance  | The member must have size preferences recorded in their profile. If blank, the variant picker shows all sizes without pre-selection.                                                                                                                   |
-| Item detail page shows "Item not found"              | Verify the item ID in the URL. The item may have been retired or deleted. Check that you are in the correct organization context.                                                                                                                      |
-| Barcode not printing on labels                       | Ensure the item has a barcode, serial number, or asset tag assigned. SVG barcodes require a modern browser (Chrome/Edge recommended). Wait for the "Ready to print" indicator before printing.                                                         |
-| Location filter shows no results                     | Verify that storage areas are linked to facility rooms. The cascading filter requires Facility → Room → Storage Area hierarchy to be configured.                                                                                                       |
-| Size/style variant generation creates too many items | The count is `sizes × colors × styles`. Remove unnecessary sizes or styles before generating. Preview shows the exact count before creation.                                                                                                           |
-| Variant group not created after generation           | Verify that `create_variant_group` is enabled (toggled on by default). Check that at least one size and one style are selected.                                                                                                                        |
-| Admin hub layout changed                             | Fixed 2026-03-22 — admin hub redesigned with grouped card sections. Pull latest.                                                                                                                                                                       |
-| Barcode labels not ISO compliant                     | Fixed 2026-03-22 — labels now follow ISO/IEC 15417 with correct quiet zones and bar widths.                                                                                                                                                            |
-| Labels printing sideways on thermal printer          | Fixed 2026-03-22 — auto-rotation detects roll-fed printers and rotates labels to maximize print area.                                                                                                                                                  |
-| Label format mismatch between preview and PDF        | Fixed 2026-03-22 — frontend and backend now share unified label format definitions.                                                                                                                                                                    |
-| Non-admin sees all equipment on dashboard            | Fixed 2026-03-22 — non-admins now see only their own assigned equipment.                                                                                                                                                                               |
-| Mobile FAB shows Export CSV for non-admin            | Fixed 2026-03-22 — FAB now shows "Assign Items" for non-admin users.                                                                                                                                                                                   |
-| Barcode scan not working on desktop                  | Fixed 2026-03-22 — scanning now falls back to user-facing camera on desktop browsers.                                                                                                                                                                  |
+| Issue                                                | Solution                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CSV import fails                                     | Download the sample template and verify your CSV matches the format. Check that category names match existing categories. Serial numbers must be unique.                                                                                                                                                                                           |
+| Item not found when scanning                         | Verify the barcode/QR code matches the item's serial number or asset tag. The item must exist in the system. A "not found" message means no match; a "network error" message means connectivity issues.                                                                                                                                            |
+| Camera not showing in scan modal (Firefox/Safari)    | The inventory scanner now supports all modern browsers. If the camera button is missing, ensure browser camera permissions are granted. On desktop, the scanner falls back to the front-facing webcam if no rear camera is available.                                                                                                              |
+| Scan modal opening on desktop but camera failing     | Desktop computers typically only have a front-facing webcam. The scanner tries the rear camera first, then automatically falls back to the front-facing camera. If both fail, check that the camera is not in use by another application.                                                                                                          |
+| Duplicate scan detected                              | The scanner ignores the same barcode scanned within 3 seconds to prevent double-processing. Wait 3 seconds or scan a different item.                                                                                                                                                                                                               |
+| Cannot assign item - "already assigned"              | An item can only be assigned to one member at a time. Return or unassign it from the current member first.                                                                                                                                                                                                                                         |
+| Checkout button not available                        | The item may already be checked out or in maintenance status. Check the item's current status.                                                                                                                                                                                                                                                     |
+| Batch return fails for one item                      | Each item in a batch is processed independently. If one fails (e.g., "Item is not assigned to the expected user"), the others still succeed. Check if the item was concurrently reassigned.                                                                                                                                                        |
+| Departure clearance not generating items             | The member must have active assignments or checkouts. If all items were already returned, the clearance will be empty.                                                                                                                                                                                                                             |
+| Cannot resolve clearance line item                   | The line item must belong to the specified clearance. If it returns an error, verify you are resolving items within the correct clearance record.                                                                                                                                                                                                  |
+| Duplicate barcode error                              | Barcodes and asset tags must be unique within your organization. Different organizations can reuse the same codes.                                                                                                                                                                                                                                 |
+| Pool item quantity below zero                        | Pool item quantity cannot go below zero. If a return fails, check that the issuance record exists and hasn't already been returned.                                                                                                                                                                                                                |
+| Cannot see Inventory module                          | Inventory is a recommended module but can be disabled. Contact your administrator to enable it in Settings.                                                                                                                                                                                                                                        |
+| Label PDF not generating                             | Ensure the print page has items loaded — tick items on the list, use **Select all N matching**, or choose a category/location in the picker. Labels require the item to have a barcode or asset tag assigned.                                                                                                                                      |
+| Thermal label blank or no barcode                    | Use Chrome/Edge (Safari has limited iframe print support). Verify Dymo (2.25×1.25″) or Rollo (4×6″) paper size in printer dialog. Check that inline SVG is not blocked by your Content Security Policy. For the browser **Print Labels** path, very large batches can be slow to render — the **PDF** is more reliable for a full 500-label batch. |
+| Item still shows "Needs a label" after printing      | The print is only recorded when you answer **Mark N items as labelled**. If you pressed **Not yet** or left the page, open the items again and confirm. An edit to the barcode (or asset tag / serial, when that is what the label carries) also clears the mark on purpose.                                                                       |
+| Organization logo missing on labels                  | Logo is loaded from organization profile URL. If the URL returns 404 or CORS error, the label prints without logo silently. Verify the logo URL in Settings > Organization.                                                                                                                                                                        |
+| Form field cleared but value not resetting           | The nullish coalescing operator (`??`) treats empty strings as truthy. This was fixed; pull latest code. If you see this in custom code, use `\|\|` instead of `??` when empty string should fall back to a default.                                                                                                                               |
+| 422 error on item create/update                      | Optional fields (notes, description) must be omitted from the payload when empty, not sent as `""`. Pull latest frontend code.                                                                                                                                                                                                                     |
+| WebSocket 403 on inventory page                      | The WebSocket connection needs the auth cookie. Pull latest; `withCredentials` is now set on the WebSocket connection.                                                                                                                                                                                                                             |
+| Charges not appearing on returned items              | Verify `inventory.manage` permission. Charges are tied to return/write-off events. Quarantine items cannot have charges until inspection completes.                                                                                                                                                                                                |
+| Pool item cost recovery amount wrong                 | Check the item's `replacement_cost_per_unit` field. Cost recovery = (units not returned) × replacement cost per unit.                                                                                                                                                                                                                              |
+| Return request stuck in pending                      | Admin must approve return requests in Inventory Admin > Items. Check that the admin has `inventory.manage` permission.                                                                                                                                                                                                                             |
+| Quarantine item cannot be re-issued                  | Items in quarantine status must be inspected and cleared before re-issue. Change status from quarantine to available after inspection.                                                                                                                                                                                                             |
+| Size variant stock not matching total                | Each size variant tracks its own stock independently. The total shown is the sum of all variants. Verify per-size quantities in the item detail modal.                                                                                                                                                                                             |
+| Reorder request not triggering alerts                | Verify the item's `reorder_point` is set (pool items only). Stock must drop to or below the threshold. Email alerts require `EMAIL_ENABLED=True`; SMS alerts require `TWILIO_ENABLED=True`.                                                                                                                                                        |
+| SMS alerts not sending                               | Verify `TWILIO_ENABLED=True`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` are configured. Check that SMS recipients are configured in Settings > Notifications.                                                                                                                                                            |
+| Kit issuance partially failed                        | If some kit components are out of stock, available items are still issued. Check the issuance result for per-component success/failure status. Reorder the missing components.                                                                                                                                                                     |
+| Member size preferences not showing during issuance  | The member must have size preferences recorded in their profile. If blank, the variant picker shows all sizes without pre-selection.                                                                                                                                                                                                               |
+| Item detail page shows "Item not found"              | Verify the item ID in the URL. The item may have been retired or deleted. Check that you are in the correct organization context.                                                                                                                                                                                                                  |
+| Barcode not printing on labels                       | Ensure the item has a barcode, serial number, or asset tag assigned. SVG barcodes require a modern browser (Chrome/Edge recommended). Wait for the "Ready to print" indicator before printing.                                                                                                                                                     |
+| Location filter shows no results                     | Verify that storage areas are linked to facility rooms. The cascading filter requires Facility → Room → Storage Area hierarchy to be configured.                                                                                                                                                                                                   |
+| Size/style variant generation creates too many items | The count is `sizes × colors × styles`. Remove unnecessary sizes or styles before generating. Preview shows the exact count before creation.                                                                                                                                                                                                       |
+| Variant group not created after generation           | Verify that `create_variant_group` is enabled (toggled on by default). Check that at least one size and one style are selected.                                                                                                                                                                                                                    |
+| Admin hub layout changed                             | Fixed 2026-03-22 — admin hub redesigned with grouped card sections. Pull latest.                                                                                                                                                                                                                                                                   |
+| Barcode labels not ISO compliant                     | Fixed 2026-03-22 — labels now follow ISO/IEC 15417 with correct quiet zones and bar widths.                                                                                                                                                                                                                                                        |
+| Labels printing sideways on thermal printer          | Fixed 2026-03-22 — auto-rotation detects roll-fed printers and rotates labels to maximize print area.                                                                                                                                                                                                                                              |
+| Label format mismatch between preview and PDF        | Fixed 2026-03-22 — frontend and backend now share unified label format definitions.                                                                                                                                                                                                                                                                |
+| Non-admin sees all equipment on dashboard            | Fixed 2026-03-22 — non-admins now see only their own assigned equipment.                                                                                                                                                                                                                                                                           |
+| Mobile FAB shows Export CSV for non-admin            | Fixed 2026-03-22 — FAB now shows "Assign Items" for non-admin users.                                                                                                                                                                                                                                                                               |
+| Barcode scan not working on desktop                  | Fixed 2026-03-22 — scanning now falls back to user-facing camera on desktop browsers.                                                                                                                                                                                                                                                              |
 
 ---
 

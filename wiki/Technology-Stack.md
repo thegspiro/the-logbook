@@ -21,16 +21,16 @@ Complete technology reference for The Logbook.
 
 | Technology          | Version | Purpose                                                                                          |
 | ------------------- | ------- | ------------------------------------------------------------------------------------------------ |
-| **React**           | 18.3    | UI framework                                                                                     |
+| **React**           | 19.3    | UI framework                                                                                     |
 | **TypeScript**      | 5.9     | Type-safe JavaScript                                                                             |
-| **Vite**            | 7.3     | Build tool and dev server                                                                        |
-| **Tailwind CSS**    | 3.x     | Utility-first CSS framework                                                                      |
-| **React Router**    | 8.3     | Client-side routing (core `react-router` package; `react-router-dom` was retired upstream at v7) |
-| **Vitest**          | 3.2     | Unit/integration testing                                                                         |
+| **Vite**            | 8.3     | Build tool and dev server                                                                        |
+| **Tailwind CSS**    | 4.2     | Utility-first CSS framework                                                                      |
+| **React Router**    | 8.4     | Client-side routing (core `react-router` package; `react-router-dom` was retired upstream at v7) |
+| **Vitest**          | 5.0     | Unit/integration testing                                                                         |
 | **React Hot Toast** | —       | Toast notifications                                                                              |
-| **Lucide React**    | 0.575+  | Icon library                                                                                     |
+| **Lucide React**    | 1.x     | Icon library                                                                                     |
 | **DOMPurify**       | —       | XSS sanitization                                                                                 |
-| **React Hook Form** | 7.71    | Form management                                                                                  |
+| **React Hook Form** | 7.88    | Form management                                                                                  |
 
 ### Frontend Capabilities
 
