@@ -174,7 +174,14 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create courses, record completions, manage requirements',
       view: ['View personal training records', 'See available courses', 'Track certification status'],
       manage: ['Create training courses', 'Record completions', 'Set requirements', 'Approve certifications'],
-      defaultManagePositions: ['it_manager', 'fire_chief', 'president', 'training_officer', 'safety_officer'],
+      defaultManagePositions: [
+        'it_manager',
+        'fire_chief',
+        'president',
+        'training_officer',
+        'safety_officer',
+        'compliance_officer',
+      ],
     },
   },
   {
@@ -345,7 +352,14 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create custom reports, export data, configure analytics',
       view: ['View dashboards', 'See personal statistics', 'Access standard reports'],
       manage: ['Create custom reports', 'Export data', 'Configure analytics', 'Share reports'],
-      defaultManagePositions: ['it_manager', 'safety_officer', 'training_officer', 'president', 'fire_chief'],
+      defaultManagePositions: [
+        'it_manager',
+        'safety_officer',
+        'compliance_officer',
+        'training_officer',
+        'president',
+        'fire_chief',
+      ],
     },
   },
 

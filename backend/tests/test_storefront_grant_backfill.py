@@ -149,8 +149,9 @@ def _granted_later() -> set[str]:
 #: ``assistant_membership_coordinator`` (2026-09-24) is that case: revision
 #: ``43e9df281412`` creates it on existing departments with the storefront
 #: grants already in place, so there is no stored row missing them.
+#: ``compliance_officer`` (2026-09-24) likewise, by revision ``3c918c06466d``.
 _REGISTERED_AFTER_THIS_MIGRATION = frozenset(
-    {"emt", "assistant_membership_coordinator"}
+    {"emt", "assistant_membership_coordinator", "compliance_officer"}
 )
 
 

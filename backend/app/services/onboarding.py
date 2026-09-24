@@ -30,6 +30,7 @@ from app.schemas.organization import MembershipTierSettings
 from app.services.auth_service import AuthService
 from app.services.operational_rank_service import OperationalRankService
 from app.services.organization_service import OrganizationService
+from app.services.suggestion_service import SuggestionService
 from app.utils.positions import normalize_stored_positions
 
 # ── Modules the setup wizard offers ───────────────────────────────────────
@@ -694,6 +695,9 @@ class OnboardingService:
 
         # Create default roles for organization, narrowed to this agency type
         await self._create_default_roles(org.id, org_type_enum.value)
+
+        # After the positions: its reviewer is the seeded Compliance Officer.
+        await SuggestionService(self.db).seed_compliance_box(org.id)
 
         # Create headquarters facility from station address
         await self._create_headquarters_facility(org)

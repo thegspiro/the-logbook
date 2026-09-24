@@ -143,6 +143,21 @@ The following roles are automatically created for each organization:
     - View access to compliance records
     - Cannot be deleted
 
+10a. **Compliance Officer** (`compliance_officer`, Priority: 60) _(new 2026-09-24)_
+
+- Compliance records, attestations and annual compliance reporting
+  (`compliance.view` / `compliance.manage`, `reports.view` / `reports.manage`,
+  `documents.view` / `documents.manage`, `forms.view`)
+- Holds `training.manage` (with `training.view_all` and `training.configure`)
+  because the Compliance Officer dashboard is gated on it
+- Read-only roster (`users.view`, `members.view`, `positions.view`) and the
+  member baseline (events, notifications, storefront)
+- Deliberately not `suggestions.manage`: it reviews the default **Compliance**
+  suggestion box through that box's reviewer row, and cannot reconfigure boxes
+- CC'd on urgent certification-expiry alerts (`DEFAULT_COMPLIANCE_OFFICER_ROLES`)
+- Created on existing departments by migration `3c918c06466d`
+- Cannot be deleted
+
 11. **Public Outreach Coordinator** (Priority: 65)
     - Manages public education and outreach events
     - Can create and manage events and locations

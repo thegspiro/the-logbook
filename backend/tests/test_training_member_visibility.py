@@ -130,6 +130,16 @@ def test_every_training_manage_holder_also_configures():
             assert "training.configure" in rank["default_permissions"], slug
 
 
+#: Positions registered after the training.configure backfill, by a revision
+#: that creates them on existing departments with the grant already in place,
+#: so there is no stored row for the backfill to repair. Adding a slug to that
+#: frozen migration instead would not reach a department that already ran it
+#: (CLAUDE.md pitfall #20).
+_REGISTERED_WITH_THE_GRANT = {
+    "compliance_officer": "3c918c06466d",
+}
+
+
 def test_every_seeded_training_configure_grant_is_covered_by_the_migration():
     """Pitfall #23: a registry change alone leaves existing departments behind.
 
@@ -145,6 +155,7 @@ def test_every_seeded_training_configure_grant_is_covered_by_the_migration():
         slug
         for slug, position in DEFAULT_POSITIONS.items()
         if "training.configure" in position["permissions"]
+        and slug not in _REGISTERED_WITH_THE_GRANT
     }
     assert seeded, "registry carries no training.configure grant to migrate"
     assert seeded == set(mirror) | set(new_grant)
