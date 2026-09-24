@@ -23,6 +23,7 @@ import {
   Printer,
   ScanLine,
   PackageCheck,
+  ClipboardCheck,
 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { facilitiesService, inventoryService, locationsService } from '../../../services/api';
@@ -36,6 +37,7 @@ import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { Breadcrumbs } from '../../../components/ux';
 import { ScanCodeField } from '../components/ScanCodeField';
 import { PutAwayPanel } from '../components/PutAwayPanel';
+import { ContentsCheckPanel } from '../components/ContentsCheckPanel';
 
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
@@ -412,6 +414,7 @@ const StorageAreasPage: React.FC = () => {
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [putAwayOpen, setPutAwayOpen] = useState(false);
+  const [checkOpen, setCheckOpen] = useState(false);
   const [scanMiss, setScanMiss] = useState<string | null>(null);
 
   const toggleItemsPanel = (id: string) => {
@@ -787,6 +790,7 @@ const StorageAreasPage: React.FC = () => {
             onClick={() => {
               setPutAwayOpen((open) => !open);
               setScanOpen(false);
+              setCheckOpen(false);
             }}
             aria-expanded={putAwayOpen}
             className="btn-secondary btn-md flex items-center gap-2"
@@ -797,12 +801,24 @@ const StorageAreasPage: React.FC = () => {
             onClick={() => {
               setScanOpen((open) => !open);
               setPutAwayOpen(false);
+              setCheckOpen(false);
               setScanMiss(null);
             }}
             aria-expanded={scanOpen}
             className="btn-secondary btn-md flex items-center gap-2"
           >
             <ScanLine className="h-4 w-4" /> Scan shelf label
+          </button>
+          <button
+            onClick={() => {
+              setCheckOpen((open) => !open);
+              setPutAwayOpen(false);
+              setScanOpen(false);
+            }}
+            aria-expanded={checkOpen}
+            className="btn-secondary btn-md flex items-center gap-2"
+          >
+            <ClipboardCheck className="h-4 w-4" /> Check contents
           </button>
           <button
             onClick={() => printLabels(areasInView.map((area) => area.id))}
@@ -830,6 +846,16 @@ const StorageAreasPage: React.FC = () => {
             focusArea(area);
           }}
           onClose={() => setPutAwayOpen(false)}
+        />
+      )}
+
+      {checkOpen && (
+        <ContentsCheckPanel
+          areas={storageAreas}
+          initialArea={focusedId ? (areaById.get(focusedId) ?? null) : null}
+          pathOf={areaPathLabel}
+          onFiled={() => void loadStorageAreas()}
+          onClose={() => setCheckOpen(false)}
         />
       )}
 

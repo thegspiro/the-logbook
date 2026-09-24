@@ -779,6 +779,18 @@ The shelf cannot be changed while items are waiting to be filed — file or clea
 
 If the shelf was picked on screen rather than scanned, the result offers **Print shelf label**, so the next put-away can start with a scan. A shelf with no barcode yet is given one when its label prints.
 
+### Checking a bag, box or bin
+
+**Required Permission:** `inventory.manage`
+
+A bag, box or bin is a storage area, so its label is a storage-area label. **Check contents** on **Storage Areas** compares what is physically inside with what the records say:
+
+1. Scan the container's label (or open it first, and it is already chosen). Everything filed on it — and on areas nested inside it, such as a bag's pockets — is loaded.
+2. Scan everything inside. The panel counts **N of M found** and lists what has **not been scanned yet**, with the pocket each one should be in.
+3. An item that is recorded elsewhere is listed under **Doesn't belong here** with where it is recorded; **File it here** moves it into this container, with the same rules as Put away.
+
+Items assigned or checked out to a member, or otherwise recorded as away, are not counted as missing. If one is scanned inside the container anyway, it is listed under **Here, but the record disagrees** so the record can be corrected. Nothing is changed by checking alone.
+
 ### Connecting a Sticker / Label Printer
 
 Both paths produce **actual-size** barcodes — the key to making them scannable is to avoid any scaling:
