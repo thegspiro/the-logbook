@@ -15,6 +15,7 @@ from uuid import uuid4
 import pytest
 
 from app.models.user import UserStatus
+from app.schemas.organization import RejoinServiceCredit
 from app.services import member_archive_service as svc
 
 
@@ -127,6 +128,23 @@ class TestAutoArchiveTransition:
         db.commit.assert_awaited()
 
 
+class _FakeHistory:
+    """Stands in for MemberServiceHistoryService; stints are tested on their own."""
+
+    instances: list = []
+
+    def __init__(self, db):
+        self.get_rejoin_default = AsyncMock(return_value=RejoinServiceCredit.CONTINUE)
+        self.record_rejoin = AsyncMock()
+        _FakeHistory.instances.append(self)
+
+
+@pytest.fixture(autouse=True)
+def _fake_history(monkeypatch):
+    _FakeHistory.instances = []
+    monkeypatch.setattr(svc, "MemberServiceHistoryService", _FakeHistory)
+
+
 class TestReactivate:
     async def test_member_not_found(self):
         db = _db(_result(scalar_one=None))
@@ -182,3 +200,73 @@ class TestReactivate:
         await svc.reactivate_member(db, member.id, "org", "admin", reason="Returned")
         assert member.membership_number == "M-007"
         assert member.status_change_reason == "Returned"
+
+    async def test_opens_a_stint_before_the_status_changes(self):
+        # A member with no recorded stints has their earlier service inferred
+        # from the status they are leaving, so the stint must be written while
+        # they are still archived.
+        member = _member(UserStatus.ARCHIVED, membership_number="M-007")
+        db = _db(_result(scalar_one=member), _result(scalar_one=None))
+        seen = []
+
+        async def _record(m, *_args, **_kwargs):
+            seen.append(m.status)
+
+        class _Recording(_FakeHistory):
+            def __init__(self, db):
+                super().__init__(db)
+                self.record_rejoin = AsyncMock(side_effect=_record)
+
+        import app.services.member_archive_service as module
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(module, "MemberServiceHistoryService", _Recording)
+            await svc.reactivate_member(db, member.id, "org", "admin")
+
+        assert seen == [UserStatus.ARCHIVED]
+        assert member.status == UserStatus.ACTIVE
+        history = _FakeHistory.instances[-1]
+        history.get_rejoin_default.assert_awaited_once_with("org")
+        assert history.record_rejoin.await_args.args[2] == RejoinServiceCredit.CONTINUE
+
+    async def test_an_explicit_restart_skips_the_department_default(self):
+        from datetime import date
+
+        member = _member(UserStatus.ARCHIVED, membership_number="M-007")
+        db = _db(_result(scalar_one=member), _result(scalar_one=None))
+
+        info = await svc.reactivate_member(
+            db,
+            member.id,
+            "org",
+            "admin",
+            service_credit=RejoinServiceCredit.RESTART,
+            rejoin_date=date(2026, 9, 1),
+            previous_service_end=date(2021, 5, 31),
+        )
+
+        history = _FakeHistory.instances[-1]
+        history.get_rejoin_default.assert_not_awaited()
+        call = history.record_rejoin.await_args
+        assert call.args[1] == date(2026, 9, 1)
+        assert call.args[2] == RejoinServiceCredit.RESTART
+        assert call.kwargs["previous_service_end"] == date(2021, 5, 31)
+        assert info["service_credit"] == "restart"
+
+    async def test_a_refused_stint_leaves_the_member_archived(self):
+        member = _member(UserStatus.ARCHIVED, membership_number="M-007")
+        db = _db(_result(scalar_one=member))
+
+        class _Refusing(_FakeHistory):
+            def __init__(self, db):
+                super().__init__(db)
+                self.record_rejoin = AsyncMock(side_effect=ValueError("bad date"))
+
+        import app.services.member_archive_service as module
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(module, "MemberServiceHistoryService", _Refusing)
+            with pytest.raises(ValueError, match="bad date"):
+                await svc.reactivate_member(db, member.id, "org", "admin")
+        assert member.status == UserStatus.ARCHIVED
+        db.commit.assert_not_awaited()

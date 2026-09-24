@@ -1,7 +1,7 @@
 """NFC phase 3: shelf audits.
 
 Revision ID: 7ad83f52735c
-Revises: 5e1c0b9f7a42
+Revises: c3a7e19d5b20
 
 Three changes, all additive for existing rows:
 
@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "7ad83f52735c"
-down_revision = "5e1c0b9f7a42"
+down_revision = "c3a7e19d5b20"
 branch_labels = None
 depends_on = None
 

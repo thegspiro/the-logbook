@@ -2,7 +2,13 @@
  * User type definitions
  */
 
-import type { ConsentStatus, MicrosoftAuthMethod, UserStatus } from '../constants/enums';
+import type {
+  ConsentStatus,
+  MicrosoftAuthMethod,
+  RejoinServiceCredit,
+  SeparationStatus,
+  UserStatus,
+} from '../constants/enums';
 
 export interface User {
   id: string;
@@ -246,6 +252,7 @@ export interface MemberReactivationResponse {
   new_status: string;
   reactivated_at: string;
   reason: string;
+  service_credit: RejoinServiceCredit;
 }
 
 export interface OverdueMember {
@@ -289,6 +296,12 @@ export interface MembershipTier {
 
 export interface MembershipTierConfig {
   auto_advance: boolean;
+  /**
+   * What a former member's earlier service counts for when they rejoin, unless
+   * the officer reinstating them chooses otherwise. Absent on a config saved
+   * before the setting existed, which the backend reads as `continue`.
+   */
+  rejoin_service_credit?: RejoinServiceCredit | undefined;
   tiers: MembershipTier[];
   /**
    * Whether the ladder above is stored, or synthesized from the shipped
@@ -323,12 +336,66 @@ export interface PropertyReturnReport {
   items: unknown[];
 }
 
-export interface MemberStatusChangeRequest {
+/**
+ * How a reinstated member's earlier service counts. Sent on reactivation, and
+ * on a status change that brings a dropped or retired member back; every field
+ * falls back to a server default (the department setting, today, and the
+ * member's last status change respectively).
+ */
+export interface RejoinServiceOptions {
+  service_credit?: RejoinServiceCredit | undefined;
+  rejoin_date?: string | undefined;
+  previous_service_end?: string | undefined;
+}
+
+export interface MemberStatusChangeRequest extends RejoinServiceOptions {
   new_status: string;
   reason?: string | undefined;
   send_property_return_email?: boolean | undefined;
   return_deadline_days?: number | undefined;
   custom_instructions?: string | undefined;
+}
+
+/** One continuous stint of membership, as `GET /users/{id}/service-history` reports it. */
+export interface ServicePeriod {
+  /** Absent for the stint implied by the hire date when nothing is recorded. */
+  id: string | null;
+  start_date: string | null;
+  /** The start follows the member's hire date rather than a stored date. */
+  start_is_hire_date: boolean;
+  /** Null while the member is still serving this stint. */
+  end_date: string | null;
+  separation_status: SeparationStatus | null;
+  counts_toward_service: boolean;
+  notes: string | null;
+  days: number;
+}
+
+export interface ServiceHistory {
+  user_id: string;
+  hire_date: string | null;
+  periods: ServicePeriod[];
+  credited_days: number;
+  credited_years: number;
+  /** Service from earlier stints that no longer counts (a restarted clock). */
+  prior_days: number;
+  effective_service_start: string | null;
+  /** False when service is inferred from the hire date alone. */
+  is_recorded: boolean;
+  /** Separated with nothing recorded: the end of service is inferred. */
+  is_estimated: boolean;
+  default_rejoin_credit: RejoinServiceCredit;
+}
+
+/** One stint in a full replacement (`PUT /users/{id}/service-periods`). */
+export interface ServicePeriodInput {
+  id?: string | undefined;
+  /** Null means "the member's hire date". */
+  start_date: string | null;
+  end_date: string | null;
+  counts_toward_service: boolean;
+  separation_status: SeparationStatus | null;
+  notes: string | null;
 }
 
 export interface MemberStatusChangeResponse {

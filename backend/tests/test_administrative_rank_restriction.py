@@ -634,6 +634,9 @@ class TestAutomaticTierAdvancement:
         db.execute.side_effect = [
             _Result(org),
             SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [member])),
+            # The candidates' service stints: none recorded, so service runs
+            # unbroken from hire_date.
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
             # The per-member locked re-select advance_all takes before
             # mutating (Codex, USR-07 pass 2): returns the same object, as
             # if nothing else changed it between the batch read and the lock.

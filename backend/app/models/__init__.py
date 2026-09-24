@@ -377,6 +377,7 @@ from app.models.training import (
 from app.models.user import (
     LeaveType,
     MemberLeaveOfAbsence,
+    MemberServicePeriod,
     Organization,
     Role,
     Session,
@@ -402,6 +403,7 @@ __all__ = [
     "UserStatus",
     "user_roles",
     "MemberLeaveOfAbsence",
+    "MemberServicePeriod",
     "LeaveType",
     # Audit models
     "AuditLog",

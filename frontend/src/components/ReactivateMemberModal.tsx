@@ -13,6 +13,9 @@ import toast from 'react-hot-toast';
 import { Modal } from './Modal';
 import { memberStatusService } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { RejoinServiceFields } from './RejoinServiceFields';
+import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 
 interface ReactivateMemberModalProps {
   isOpen: boolean;
@@ -31,6 +34,8 @@ export const ReactivateMemberModal: React.FC<ReactivateMemberModalProps> = ({
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const tz = useTimezone();
+  const rejoin = useRejoinServiceOptions(member?.id ?? null, isOpen, tz);
 
   // Reset on each open: the list keeps this mounted across members, and a
   // reason typed for one must not be filed against the next.
@@ -47,7 +52,10 @@ export const ReactivateMemberModal: React.FC<ReactivateMemberModalProps> = ({
     setSubmitting(true);
     setError(null);
     try {
-      await memberStatusService.reactivateMember(member.id, { reason: reason.trim() || undefined });
+      await memberStatusService.reactivateMember(member.id, {
+        reason: reason.trim() || undefined,
+        ...rejoin.options,
+      });
       toast.success(`${member.name} has been reactivated`);
       await onReactivated();
       onClose();
@@ -72,7 +80,7 @@ export const ReactivateMemberModal: React.FC<ReactivateMemberModalProps> = ({
           <button
             type="button"
             onClick={() => void handleReactivate()}
-            disabled={submitting || !member}
+            disabled={submitting || !member || rejoin.loading}
             className="btn-primary inline-flex items-center justify-center gap-2 font-medium"
           >
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
@@ -87,6 +95,7 @@ export const ReactivateMemberModal: React.FC<ReactivateMemberModalProps> = ({
           <span className="font-medium">Active</span> status. Their profile, training and history are kept as they were.
           Their previous membership number is restored unless another member now holds it.
         </p>
+        <RejoinServiceFields state={rejoin} disabled={submitting} />
         <div>
           <label htmlFor="reactivate-member-reason" className="form-label">
             Reason <span className="text-theme-text-muted font-normal">(optional)</span>

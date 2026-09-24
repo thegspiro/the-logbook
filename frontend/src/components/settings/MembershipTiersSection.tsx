@@ -1,15 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Users } from 'lucide-react';
 import type { MembershipTier } from '../../types/user';
+import { RejoinServiceCredit } from '../../constants/enums';
 
 interface MembershipTiersSectionProps {
   tiers: MembershipTier[];
   autoAdvance: boolean;
+  /** Default for how a returning member's earlier service counts. */
+  rejoinServiceCredit: RejoinServiceCredit;
   loading: boolean;
   saving: boolean;
   dirty: boolean;
   memberCount: (tierId: string) => number;
   onSetAutoAdvance: (value: boolean) => void;
+  onSetRejoinServiceCredit: (value: RejoinServiceCredit) => void;
   onUpdateTier: (tierId: string, changes: Partial<MembershipTier>) => void;
   onUpdateBenefits: (tierId: string, changes: Record<string, unknown>) => void;
   onAddTier: (name: string) => void;
@@ -53,11 +57,13 @@ interface MembershipTiersSectionProps {
 const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
   tiers,
   autoAdvance,
+  rejoinServiceCredit,
   loading,
   saving,
   dirty,
   memberCount,
   onSetAutoAdvance,
+  onSetRejoinServiceCredit,
   onUpdateTier,
   onUpdateBenefits,
   onAddTier,
@@ -133,6 +139,45 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
             </span>
           </span>
         </label>
+
+        <fieldset className="border-theme-surface-border m-0 min-w-0 space-y-2 rounded-lg border p-4">
+          <legend className="text-theme-text-primary px-1 text-sm font-medium">When a former member rejoins</legend>
+          <p className="text-theme-text-muted text-sm">
+            Years of service count only the time a member was in the department. This sets what happens to a returning
+            member&apos;s earlier service by default. The officer reinstating them can still choose the other option.
+          </p>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="rejoin-service-credit-default"
+              className="mt-1"
+              checked={rejoinServiceCredit === RejoinServiceCredit.CONTINUE}
+              onChange={() => onSetRejoinServiceCredit(RejoinServiceCredit.CONTINUE)}
+            />
+            <span>
+              <span className="text-theme-text-primary block font-medium">Continue prior service</span>
+              <span className="text-theme-text-muted block">
+                Earlier service keeps counting toward tiers. Only the time away is left out.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="rejoin-service-credit-default"
+              className="mt-1"
+              checked={rejoinServiceCredit === RejoinServiceCredit.RESTART}
+              onChange={() => onSetRejoinServiceCredit(RejoinServiceCredit.RESTART)}
+            />
+            <span>
+              <span className="text-theme-text-primary block font-medium">Restart at zero</span>
+              <span className="text-theme-text-muted block">
+                Service counts from the return date. Earlier service is kept on record as prior service but does not
+                count toward tiers.
+              </span>
+            </span>
+          </label>
+        </fieldset>
 
         {tiers.length === 0 ? (
           <p className="text-theme-text-muted py-8 text-center text-sm">
