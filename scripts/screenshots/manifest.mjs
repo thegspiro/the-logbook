@@ -4588,6 +4588,36 @@ export const SHOTS = [
     },
   },
   {
+    id: "20-14-applicant-meeting-stage-hint",
+    doc: "20-september-2026-release-changes.md",
+    line: 1591,
+    anchor:
+      "the applicant detail drawer for an applicant on a **meeting** stage whose",
+    alt: "The applicant drawer for an applicant on the Attend a Business Meeting stage, whose Auto-Link Event Type is set: the hint above the action row says they must be checked in at the stage's event and that event's attendance must be finalized before they can advance",
+    route: "/prospective-members",
+    // The hint's own words. It renders only on a Meeting stage that names its
+    // event, so it cannot be satisfied by any other stage or drawer state.
+    expect: "attendance must be finalized, before they can advance",
+    viewport: { width: 1280, height: 1600 },
+    selector: '[aria-label="Applicant details"]',
+    // A new applicant has uploaded nothing, so the drawer honestly reads "No
+    // documents yet" -- as 15-14 allows for the same reason. The subject is
+    // the hint, which `expect` already proves is in frame.
+    allowEmptyState: true,
+    prepare: async (page) => {
+      // The default pipeline has no Meeting stage; seed_meeting_stage_applicant
+      // parks one applicant on a second, non-default pipeline for this shot.
+      await page
+        .locator("select", {
+          has: page.locator("option", { hasText: "Associate Member Pipeline" }),
+        })
+        .first()
+        .selectOption({ label: "Associate Member Pipeline" });
+      await page.getByText("Priya Deshmukh").first().click();
+      await page.locator('[aria-label="Applicant details"]').waitFor();
+    },
+  },
+  {
     id: "20-04-org-profile-navigation-layout",
     doc: "20-september-2026-release-changes.md",
     line: 940,

@@ -9,11 +9,9 @@ Box Management** (`/communications/suggestion-boxes`) — and the inventory labe
 page gained a picker and a post-print prompt. Everything else is an existing
 address carrying one more control or one more line.
 
-**Eleven placeholders were written into the guides** by this pass. **Nine are
-shot** (2026-09-24) — the five suggestion-box items, the three inventory label
-items and the medical-screening notice — so the library moves from 533/589 to
-**542/589**. The two left are item 9 (needs a real device) and item 11 (the
-seeded pipeline has no Meeting stage — see below):
+**Eleven placeholders were written into the guides** by this pass. **Ten are
+shot** (2026-09-24), so the library moves from 533/589 to **543/589**. The one
+left is item 9, the installed-app icon, which needs a real or emulated device:
 
 | #  | Image area                                                    | Disposition | Guide                                   | Notes                                                                                                              |
 | -- | ------------------------------------------------------------- | ----------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -27,7 +25,7 @@ seeded pipeline has no Meeting stage — see below):
 | 8  | "Did the labels print correctly?" prompt                      | **NEW**     | 05                                      | **Shot** 09-24 as `05-85-label-print-confirm`, full page so the preview is in frame. Mark never pressed |
 | 9  | Phone home screen with the department-logo icon               | **NEW**     | 10 (mobile)                             | Needs a real device or emulator install; the seeded demo logo only. The harness cannot produce this               |
 | 10 | Medical Screening **Add Record** with the amber notice        | **NEW**     | 13 (medical screening)                  | **Shot** 09-24 as `13-07-add-record-linkage-notice`. Dialog opened, never saved |
-| 11 | Applicant drawer on an event-naming **Meeting** stage          | **NEW**     | 20                                      | The requirement hint above the action row; a second frame with the Advance refusal is optional                    |
+| 11 | Applicant drawer on an event-naming **Meeting** stage          | **NEW**     | 20                                      | **Shot** 09-24 as `20-14-applicant-meeting-stage-hint`, on the seeded Associate Member Pipeline |
 
 **Existing images this window makes stale — REPLACE, no placeholder written.**
 None of these is wrong about anything a reader would act on; each is missing one
@@ -90,13 +88,23 @@ into view and refuses to shoot if it is still off screen. `07-14` clipped to
 `[role="dialog"]`, which `Modal` puts on the full-screen backdrop, and so
 photographed the whole dimmed page; it now clips to `modal-panel`.
 
-**Item 11 is blocked on the seed, not on the harness.** The only seeded
-pipeline, **Volunteer Membership Pipeline**, has six stages — form, review,
-interview, documents, vote, onboarding — and **no Meeting stage at all**, so the
-requirement hint has nowhere to appear. Adding one is not free: a seventh stage
-on that pipeline would stale every kanban and pipeline shot that states "seven
-applicants across six stages", and a second pipeline would change what
-`seed_demo_data.py` means by `pipelines[0]`. Waiting on a decision about which.
+**Item 11 needed a second pipeline** _(2026-09-24)_. The default **Volunteer
+Membership Pipeline** has no Meeting stage, so `seed_demo_data.py` now also
+seeds a non-default **Associate Member Pipeline** — Interest Form Received →
+**Attend a Business Meeting** (Auto-Link Event Type: Business Meeting) →
+Committee Approval — with one applicant, **Priya Deshmukh**, parked on the
+meeting stage. A separate pipeline rather than a seventh stage on the default,
+so the kanban shots built on "seven applicants across six stages" stay true.
+
+**It does leave one cosmetic drift, and it is worth knowing why.** The board
+shows its pipeline dropdown **only when a department has more than one
+pipeline**, so full-page captures of the active board taken before this now
+lack a small dropdown at the left of the controls bar. Nothing they say is
+wrong. Re-shoot when convenient: `01-10-prospective-pipeline`,
+`15-01-pipeline-board`, `15-02-board-truncated`, `15-04-kanban-board`,
+`15-11-table-bulk-actions`, `15-12-pipeline-stats`, and `15-10-pipeline-settings`,
+which now lists two pipelines. Drawer-, dialog- and panel-clipped shots are
+unaffected.
 
 **Remaining seed gap.** **Every seeded inventory
 item reads "Needs a label"**, which is correct for item 6 but means the

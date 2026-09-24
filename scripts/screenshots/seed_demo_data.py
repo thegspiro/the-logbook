@@ -12978,9 +12978,11 @@ class Seeder:
         "devon.marsh@example.org": "Membership Vote",
     }
 
+    DEFAULT_PIPELINE_NAME = "Volunteer Membership Pipeline"
+
     def seed_prospective_members(self) -> dict[str, list[dict]]:
         pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
-        if not any(p.get("name") == "Volunteer Membership Pipeline" for p in pipelines):
+        if not any(p.get("name") == self.DEFAULT_PIPELINE_NAME for p in pipelines):
             pipelines.append(
                 self.api.post(
                     "/prospective-members/pipelines",
@@ -13010,12 +13012,26 @@ class Seeder:
                     },
                 )
             )
+        # By name, not by position: the department also has the meeting-stage
+        # pipeline (seed_meeting_stage_applicant), and list order is not a
+        # promise about which one is the default.
+        pipelines = [
+            p for p in pipelines if p.get("name") == self.DEFAULT_PIPELINE_NAME
+        ]
         pipeline_id = pick(pipelines[0], "id") if pipelines else None
         self._backfill_pipeline_stages(pipeline_id)
 
-        prospects = items(
-            self.api.get("/prospective-members/prospects?limit=100"), "prospects"
-        )
+        # Only this pipeline's applicants. Every helper below picks applicants
+        # by stage name or position, and one sitting on the other pipeline's
+        # Meeting stage would otherwise be handed an election package or this
+        # pipeline's documents.
+        prospects = [
+            p
+            for p in items(
+                self.api.get("/prospective-members/prospects?limit=100"), "prospects"
+            )
+            if not pipeline_id or p.get("pipeline_id") in (None, pipeline_id)
+        ]
         emails = {p.get("email") for p in prospects}
 
         def already_exists(email: str) -> bool:
@@ -13070,6 +13086,104 @@ class Seeder:
         self._link_prospect_events(prospects)
         self._upload_prospect_documents(prospects)
         return {"pipelines": pipelines, "prospects": prospects}
+
+    # A second, non-default pipeline whose middle stage is a Meeting that names
+    # its event, and one applicant parked on it. The default pipeline has no
+    # Meeting stage, so without this the applicant drawer's attendance
+    # requirement (2026-09-16) had nothing to appear on. A separate pipeline
+    # rather than a seventh stage on the default: every kanban shot is built on
+    # "seven applicants across six stages", and this leaves them true.
+    MEETING_PIPELINE_NAME = "Associate Member Pipeline"
+    MEETING_STAGE_NAME = "Attend a Business Meeting"
+    MEETING_APPLICANT = ("Priya", "Deshmukh", "priya.deshmukh@example.org")
+
+    def seed_meeting_stage_applicant(self) -> None:
+        pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
+        pipeline = next(
+            (p for p in pipelines if p.get("name") == self.MEETING_PIPELINE_NAME),
+            None,
+        )
+        if pipeline is None:
+            steps = [
+                ("Interest Form Received", "manual_approval", {}),
+                (
+                    self.MEETING_STAGE_NAME,
+                    "meeting",
+                    # Naming the event type is what makes attendance required
+                    # on every path, a coordinator's Advance included.
+                    {"linked_event_type": "business_meeting", "auto_advance": True},
+                ),
+                ("Committee Approval", "manual_approval", {}),
+            ]
+            pipeline = self.api.post(
+                "/prospective-members/pipelines",
+                {
+                    "name": self.MEETING_PIPELINE_NAME,
+                    "description": (
+                        "Associate (non-operational) members: an interest form, "
+                        "one business meeting, then committee approval."
+                    ),
+                    "is_default": False,
+                    "is_active": True,
+                    "steps": [
+                        {
+                            "name": name,
+                            "description": f"{name} stage.",
+                            "step_type": step_type,
+                            "is_first_step": order == 0,
+                            "is_final_step": order == len(steps) - 1,
+                            "sort_order": order,
+                            "required": True,
+                            "config": config,
+                        }
+                        for order, (name, step_type, config) in enumerate(steps)
+                    ],
+                },
+            )
+        pipeline_id = str(pick(pipeline, "id"))
+
+        first, last, email = self.MEETING_APPLICANT
+        found = items(
+            self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+            "prospects",
+        )
+        prospect = next((p for p in found if p.get("email") == email), None)
+        if prospect is None:
+            prospect = self.api.post(
+                "/prospective-members/prospects",
+                {
+                    "first_name": first,
+                    "last_name": last,
+                    "email": email,
+                    "address_city": "Oakville",
+                    "address_state": "VA",
+                    "address_zip": "22046",
+                    "interest_reason": "Wants to help with fundraising and outreach.",
+                    "referral_source": "Word of mouth",
+                    "desired_membership_type": "administrative",
+                    "pipeline_id": pipeline_id,
+                },
+            )
+        # The interest-form stage is a manual approval, so a coordinator's
+        # Advance moves them onto the meeting stage -- and there they stay,
+        # because nothing records them at a finalized business meeting.
+        if prospect.get("current_step_name") != self.MEETING_STAGE_NAME:
+            self.api.post(
+                f"/prospective-members/prospects/{pick(prospect, 'id')}/advance",
+                {},
+            )
+            # Re-read from the list: neither the create nor the advance
+            # response carries the stage's name, which the list rows do.
+            found = items(
+                self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+                "prospects",
+            )
+            prospect = next((p for p in found if p.get("email") == email), prospect)
+        if prospect.get("current_step_name") != self.MEETING_STAGE_NAME:
+            self.blocked.append(
+                f"meeting-stage applicant: on {prospect.get('current_step_name')!r}, "
+                f"not {self.MEETING_STAGE_NAME!r}"
+            )
 
     # Consolidated reporting buckets, in pipeline order. Named by what the
     # stages have in common rather than by stage count, because the Pipeline
@@ -13598,7 +13712,12 @@ class Seeder:
         if target <= 0:
             return 0
 
-        existing = self.api.get("/prospective-members/prospects?limit=1&status=active")
+        # Scoped to this pipeline: the meeting-stage pipeline's applicant is
+        # also active, and counting it would leave the board one short.
+        existing = self.api.get(
+            "/prospective-members/prospects?limit=1&status=active"
+            + (f"&pipeline_id={pipeline_id}" if pipeline_id else "")
+        )
         current = (
             existing.get("total", 0) if isinstance(existing, dict) else len(existing)
         )
@@ -15279,6 +15398,10 @@ class Seeder:
         # that step creates.
         self.step("membership vote outcome", self.seed_membership_vote_outcome)
         self.step("declined vote outcome", self.seed_declined_vote_outcome)
+        # Last of the pipeline steps: seed_prospective_members scopes itself to
+        # the default pipeline by name, so order is not load-bearing, but the
+        # vote outcomes above are the steps that assume one pipeline.
+        self.step("meeting-stage applicant", self.seed_meeting_stage_applicant)
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("compliance profiles", self.seed_compliance_profiles)

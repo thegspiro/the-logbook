@@ -1588,11 +1588,7 @@ event:
 > attendance must be finalized, before they can advance. A check-in recorded
 > before their application was opened does not count."_
 
-> **Screenshot needed:**
-> _[The applicant detail drawer for an applicant on a **Meeting** stage whose
-> Auto-Link Event Type is set, showing the requirement hint above the action
-> row. The same frame with the refusal toast after pressing **Advance** is a
-> useful second shot — it names the three ways out.]_
+![The applicant drawer for an applicant on the Attend a Business Meeting stage, whose Auto-Link Event Type is set: the hint above the action row says they must be checked in at the stage's event and that event's attendance must be finalized before they can advance](./images/20-14-applicant-meeting-stage-hint.png)
 
 If you are refused, the message tells you what to do, in order: **record the
 attendance** that happened (add them to the event and check them in — you can
