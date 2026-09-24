@@ -15,7 +15,7 @@ department clears it by confirming its next print run.
 history is lost; nothing else references it.
 
 Revision ID: 5a70c5dcd138
-Revises: 6ab7d903fae5
+Revises: 9cb132ad83dc
 Create Date: 2026-09-24 00:02:14.384943
 """
 
@@ -24,7 +24,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "5a70c5dcd138"
-down_revision = "6ab7d903fae5"
+down_revision = "9cb132ad83dc"
 branch_labels = None
 depends_on = None
 

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**265 tables · 4486 columns · 856 foreign keys**
+**271 tables · 4540 columns · 876 foreign keys**
 
 ---
 
@@ -533,6 +533,19 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`store_products`](#store_products) | `StoreProduct` | 28 | A sellable item in the department catalog |
 | [`store_settings`](#store_settings) | `StoreSettings` | 43 | Per-organization storefront configuration (one row per org). |
 | [`store_window_products`](#store_window_products) | `StoreWindowProduct` | 9 | Which catalog products a window offers, with per-window overrides |
+
+### Suggestion
+
+<sub>`app/models/suggestion.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`suggestion_attachments`](#suggestion_attachments) | `SuggestionAttachment` | 9 | A screenshot, re-encoded to WebP on upload. The display name is |
+| [`suggestion_box_reviewers`](#suggestion_box_reviewers) | `SuggestionBoxReviewer` | 6 | One reviewer grant on a box: either a position or a single member. |
+| [`suggestion_boxes`](#suggestion_boxes) | `SuggestionBox` | 10 | A configurable intake box. Archived via ``is_active``, never deleted, |
+| [`suggestion_forwards`](#suggestion_forwards) | `SuggestionForward` | 7 | One suggestion forwarded to a member or a position. |
+| [`suggestion_messages`](#suggestion_messages) | `SuggestionMessage` | 8 | One entry in a follow-up thread. |
+| [`suggestions`](#suggestions) | `Suggestion` | 14 |  |
 
 ### Testing_Checklist
 
@@ -7242,6 +7255,162 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_store_window_products_window_product` (`window_id`, `product_id`)
 
+## Suggestion
+
+### `suggestion_attachments`
+
+**SuggestionAttachment** · `app/models/suggestion.py`
+
+> A screenshot, re-encoded to WebP on upload. The display name is server-generated because a client filename can identify its author.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `suggestion_id` | VARCHAR(36) | no | FK, IDX |  | → `suggestions.id` ON DELETE CASCADE |
+| `position` | INTEGER | no |  | `0` |  |
+| `file_name` | VARCHAR(100) | no |  |  |  |
+| `file_path` | VARCHAR(500) | no |  |  |  |
+| `content_type` | VARCHAR(50) | no |  |  |  |
+| `file_size` | INTEGER | no |  |  |  |
+| `created_at` | DATETIME | no |  |  |  |
+
+**Indexes**
+
+- `idx_suggestion_attachments_org_suggestion` (`organization_id`, `suggestion_id`)
+- `idx_suggestion_attachments_suggestion` (`suggestion_id`)
+
+### `suggestion_box_reviewers`
+
+**SuggestionBoxReviewer** · `app/models/suggestion.py`
+
+> One reviewer grant on a box: either a position or a single member. Reviewers are the only people who can read a box's submissions (a ``SuggestionForward`` extends one suggestion, never the box). Holding ``suggestions.manage`` configures boxes but does not confer read access, so a complaint about an officer is not visible to that officer merely because they administer the boxes.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `box_id` | VARCHAR(36) | no | FK |  | → `suggestion_boxes.id` ON DELETE CASCADE |
+| `position_id` | VARCHAR(36) | yes | FK |  | → `positions.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE CASCADE |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_suggestion_reviewers_org_box` (`organization_id`, `box_id`)
+
+**Constraints**
+
+- UNIQUE `uq_suggestion_reviewer_pos` (`box_id`, `position_id`)
+- UNIQUE `uq_suggestion_reviewer_user` (`box_id`, `user_id`)
+
+### `suggestion_boxes`
+
+**SuggestionBox** · `app/models/suggestion.py`
+
+> A configurable intake box. Archived via ``is_active``, never deleted, because deleting one would cascade away every submission it received.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(100) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `anonymity_mode` | VARCHAR(16) | no |  | `allowed` |  |
+| `follow_up_enabled` | BOOL | no |  | `0` |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_suggestion_boxes_org_active` (`organization_id`, `is_active`)
+
+**Constraints**
+
+- UNIQUE `uq_suggestion_box_org_name` (`organization_id`, `name`)
+
+### `suggestion_forwards`
+
+**SuggestionForward** · `app/models/suggestion.py`
+
+> One suggestion forwarded to a member or a position. A forward makes its recipients reviewers of that single suggestion — they can read it, set its disposition and reply — without opening the rest of the box to them. Only the box's own reviewers can forward or withdraw one; a recipient cannot pass it on, so access never spreads further without a box reviewer's decision.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `suggestion_id` | VARCHAR(36) | no | FK |  | → `suggestions.id` ON DELETE CASCADE |
+| `position_id` | VARCHAR(36) | yes | FK |  | → `positions.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE CASCADE |
+| `forwarded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_suggestion_forwards_org_suggestion` (`organization_id`, `suggestion_id`)
+
+**Constraints**
+
+- UNIQUE `uq_suggestion_forward_pos` (`suggestion_id`, `position_id`)
+- UNIQUE `uq_suggestion_forward_user` (`suggestion_id`, `user_id`)
+
+### `suggestion_messages`
+
+**SuggestionMessage** · `app/models/suggestion.py`
+
+> One entry in a follow-up thread. Ordered by ``sequence`` rather than ``created_at``: the submitter side of an anonymous thread is stored at day precision, so timestamps cannot order it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `suggestion_id` | VARCHAR(36) | no | FK |  | → `suggestions.id` ON DELETE CASCADE |
+| `sequence` | INTEGER | no |  |  |  |
+| `author_role` | VARCHAR(16) | no |  |  |  |
+| `author_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `body` | TEXT | no |  |  |  |
+| `created_at` | DATETIME | no |  |  |  |
+
+**Indexes**
+
+- `idx_suggestion_messages_org_suggestion` (`organization_id`, `suggestion_id`)
+
+**Constraints**
+
+- UNIQUE `uq_suggestion_msg_seq` (`suggestion_id`, `sequence`)
+
+### `suggestions`
+
+**Suggestion** · `app/models/suggestion.py`
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `box_id` | VARCHAR(36) | no | FK |  | → `suggestion_boxes.id` ON DELETE CASCADE |
+| `is_anonymous` | BOOL | no |  | `False` |  |
+| `submitted_by` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
+| `follow_up_key_hash` | VARCHAR(64) | yes | UQ |  |  |
+| `title` | VARCHAR(200) | no |  |  |  |
+| `details` | TEXT | no |  |  |  |
+| `disposition` | VARCHAR(32) | no |  | `new` |  |
+| `internal_note` | TEXT | yes |  |  |  |
+| `disposition_updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `disposition_updated_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  |  |  |
+| `updated_at` | DATETIME | no |  |  |  |
+
+**Indexes**
+
+- `idx_suggestions_org_box` (`organization_id`, `box_id`)
+- `idx_suggestions_submitter` (`submitted_by`)
+
+**Constraints**
+
+- UNIQUE `uq_suggestions_follow_up_key_hash` (`follow_up_key_hash`)
+
 ## Testing_Checklist
 
 ### `testing_checklist_entries`
@@ -9356,7 +9525,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (319 references)
+### → `users` (326 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9651,6 +9820,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_payment_events` | `resolved_by` | SET NULL | yes |
 | `store_product_images` | `uploaded_by` | SET NULL | yes |
 | `store_products` | `created_by` | SET NULL | yes |
+| `suggestion_box_reviewers` | `user_id` | CASCADE | yes |
+| `suggestion_boxes` | `created_by` | SET NULL | yes |
+| `suggestion_forwards` | `forwarded_by` | SET NULL | yes |
+| `suggestion_forwards` | `user_id` | CASCADE | yes |
+| `suggestion_messages` | `author_id` | SET NULL | yes |
+| `suggestions` | `disposition_updated_by` | SET NULL | yes |
+| `suggestions` | `submitted_by` | SET NULL | yes |
 | `template_change_logs` | `user_id` | SET NULL | yes |
 | `testing_checklist_entries` | `user_id` | SET NULL | yes |
 | `testing_runs` | `started_by_id` | SET NULL | yes |
@@ -9680,7 +9856,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (211 references)
+### → `organizations` (217 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9877,6 +10053,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_products` | `organization_id` | CASCADE | no |
 | `store_settings` | `organization_id` | CASCADE | no |
 | `store_window_products` | `organization_id` | CASCADE | no |
+| `suggestion_attachments` | `organization_id` | CASCADE | no |
+| `suggestion_box_reviewers` | `organization_id` | CASCADE | no |
+| `suggestion_boxes` | `organization_id` | CASCADE | no |
+| `suggestion_forwards` | `organization_id` | CASCADE | no |
+| `suggestion_messages` | `organization_id` | CASCADE | no |
+| `suggestions` | `organization_id` | CASCADE | no |
 | `template_change_logs` | `organization_id` | CASCADE | no |
 | `testing_checklist_entries` | `organization_id` | CASCADE | no |
 | `testing_runs` | `organization_id` | CASCADE | no |
@@ -10168,6 +10350,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_step_progress` | `step_id` | CASCADE | no |
 | `prospective_members` | `current_step_id` | SET NULL | yes |
 
+### → `positions` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `issuance_allowances` | `role_id` | CASCADE | yes |
+| `org_chart_nodes` | `position_id` | SET NULL | yes |
+| `suggestion_box_reviewers` | `position_id` | CASCADE | yes |
+| `suggestion_forwards` | `position_id` | CASCADE | yes |
+| `user_positions` | `position_id` | CASCADE | no |
+
 ### → `training_sessions` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -10282,14 +10474,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_vendor_contacts` | `vendor_id` | CASCADE | no |
 | `reorder_requests` | `vendor_id` | SET NULL | yes |
 
-### → `positions` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `issuance_allowances` | `role_id` | CASCADE | yes |
-| `org_chart_nodes` | `position_id` | SET NULL | yes |
-| `user_positions` | `position_id` | CASCADE | no |
-
 ### → `program_enrollments` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -10329,6 +10513,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_order_events` | `order_id` | CASCADE | no |
 | `store_order_items` | `order_id` | CASCADE | no |
 | `store_payment_events` | `matched_order_id` | SET NULL | yes |
+
+### → `suggestions` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `suggestion_attachments` | `suggestion_id` | CASCADE | no |
+| `suggestion_forwards` | `suggestion_id` | CASCADE | no |
+| `suggestion_messages` | `suggestion_id` | CASCADE | no |
 
 ### → `admin_hours_categories` (2 references)
 
@@ -10469,6 +10661,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `store_orders` | `window_id` | SET NULL | yes |
 | `store_window_products` | `window_id` | CASCADE | no |
+
+### → `suggestion_boxes` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `suggestion_box_reviewers` | `box_id` | CASCADE | no |
+| `suggestions` | `box_id` | CASCADE | no |
 
 ### → `apparatus_equipment` (1 references)
 

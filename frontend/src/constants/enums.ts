@@ -796,3 +796,52 @@ export const MicrosoftAuthMethod = {
   OAUTH: 'oauth',
 } as const;
 export type MicrosoftAuthMethod = (typeof MicrosoftAuthMethod)[keyof typeof MicrosoftAuthMethod];
+
+// ============================================
+// Suggestion boxes
+// ============================================
+/** Mirrors `SuggestionDisposition` in `app/models/suggestion.py`. */
+export const SuggestionDisposition = {
+  NEW: 'new',
+  UNDER_REVIEW: 'under_review',
+  ACCEPTED: 'accepted',
+  IMPLEMENTED: 'implemented',
+  DECLINED: 'declined',
+  DUPLICATE: 'duplicate',
+} as const;
+export type SuggestionDisposition = (typeof SuggestionDisposition)[keyof typeof SuggestionDisposition];
+
+export const SUGGESTION_DISPOSITION_LABELS: Record<string, string> = {
+  new: 'New',
+  under_review: 'Under review',
+  accepted: 'Accepted',
+  implemented: 'Implemented',
+  declined: 'Declined',
+  duplicate: 'Duplicate',
+};
+
+export const SUGGESTION_DISPOSITION_COLORS: Record<string, string> = {
+  new: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+  under_review: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+  accepted: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+  implemented: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+  declined: 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100',
+  duplicate: 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100',
+};
+
+/**
+ * Whether a box accepts, requires or refuses anonymous submissions. Mirrors
+ * `SuggestionAnonymityMode` in `app/models/suggestion.py`.
+ */
+export const SuggestionAnonymityMode = {
+  ALLOWED: 'allowed',
+  REQUIRED: 'required',
+  DISABLED: 'disabled',
+} as const;
+export type SuggestionAnonymityMode = (typeof SuggestionAnonymityMode)[keyof typeof SuggestionAnonymityMode];
+
+export const SUGGESTION_ANONYMITY_LABELS: Record<string, string> = {
+  allowed: 'Submitter chooses',
+  required: 'Always anonymous',
+  disabled: 'Always named',
+};

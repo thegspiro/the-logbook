@@ -19,6 +19,10 @@ const MessageDetailPage = lazyWithRetry(() => import('./pages/MessageDetailPage'
 
 const PhotoUseConsentPage = lazyWithRetry(() => import('./pages/PhotoUseConsentPage'));
 
+const SuggestionBoxesAdminPage = lazyWithRetry(() => import('./pages/SuggestionBoxesAdminPage'));
+
+const SuggestionsPage = lazyWithRetry(() => import('./pages/SuggestionsPage'));
+
 export const getCommunicationsRoutes = () => {
   return (
     <React.Fragment>
@@ -50,6 +54,28 @@ export const getCommunicationsRoutes = () => {
           >
             <Suspense fallback={null}>
               <PhotoUseConsentPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/communications/suggestion-boxes"
+        element={
+          <ProtectedRoute requiredPermission="suggestions.manage">
+            <Suspense fallback={null}>
+              <SuggestionBoxesAdminPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* Sign-in only: every member may submit, and who may review is decided
+          per box by the backend, not by a permission this route could check. */}
+      <Route
+        path="/suggestions"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={null}>
+              <SuggestionsPage />
             </Suspense>
           </ProtectedRoute>
         }

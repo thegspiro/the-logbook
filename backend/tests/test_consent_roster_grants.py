@@ -127,14 +127,21 @@ def test_migration_snapshot_matches_the_registry_it_was_written_against():
     # migration's frozen snapshot is right not to have: subtract them rather
     # than editing the snapshot, which must keep matching the pristine rows
     # this migration actually meets.
+    versions = Path(__file__).resolve().parents[1] / "alembic" / "versions"
     later_grants = set(
         _load_module(
-            Path(__file__).resolve().parents[1]
-            / "alembic"
-            / "versions"
+            versions
             / "20260826_0345_b3e8d1f45a27_grant_corporate_storefront_access.py",
             "_corp_storefront",
         )._GRANTS
+    )
+    # suggestions.manage reached the communications officer later still, with
+    # its own backfill revision — the same case as the storefront grants.
+    later_grants.add(
+        _load_module(
+            versions / "20260923_2219_394600cbfae2_grant_suggestions_manage.py",
+            "_suggestions_manage",
+        )._PERMISSION
     )
     for slug, expected in migration._PRIOR_DEFAULTS.items():
         current = set(DEFAULT_POSITIONS[slug]["permissions"]) - later_grants
