@@ -338,6 +338,8 @@ class LabelService:
             # Absent on presets saved before symbology was a choice, which must
             # read as Code 128 — the symbology every existing label carries.
             "symbology": pref.get("symbology") or SYMBOLOGY_CODE128,
+            # What prints on the label besides the code; null when never saved.
+            "extra_lines": pref.get("extra_lines"),
             "position_id": position_id,
             "module": module,
         }
@@ -352,6 +354,7 @@ class LabelService:
         custom_width: Optional[float] = None,
         custom_height: Optional[float] = None,
         symbology: str = SYMBOLOGY_CODE128,
+        extra_lines: Any = UNSET,
     ) -> Dict[str, Any]:
         """Store the label preset for the caller's position.
 
@@ -362,6 +365,8 @@ class LabelService:
         preset never sends one at all, and the print page sends none while its
         printer list is still in flight. Nobody had to touch a control; opening
         the page on a slow link was enough to lose the position's destination.
+        ``extra_lines`` follows the same contract, for the same reason: only
+        the inventory page sends it, and every other save must keep it.
         """
         from app.models.user import Position
 
@@ -390,12 +395,14 @@ class LabelService:
             presets = {}
         stored = presets.get(module)
         stored_printer = stored.get("printer_id") if isinstance(stored, dict) else None
+        stored_lines = stored.get("extra_lines") if isinstance(stored, dict) else None
         presets[module] = {
             "preset": preset,
             "printer_id": stored_printer if printer_id is UNSET else printer_id,
             "custom_width": custom_width,
             "custom_height": custom_height,
             "symbology": symbology,
+            "extra_lines": stored_lines if extra_lines is UNSET else extra_lines,
         }
         settings["label_presets"] = presets
         position.settings = settings

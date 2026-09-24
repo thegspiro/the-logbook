@@ -55,6 +55,8 @@ import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { formatDate, formatCurrency as fmtCurrencyUtil, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formatHistoryDetails } from './itemHistoryDetails';
 import { onHandQuantity } from '../utils/onHand';
+import { labelChangeAfterEdit } from '../utils/labelStaleness';
+import type { LabelChange } from '../utils/labelStaleness';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
 
@@ -91,6 +93,12 @@ function typeIcon(itemType: string) {
 function fmtCurrency(val: number | undefined | null): string {
   if (val == null) return '--';
   return fmtCurrencyUtil(val);
+}
+
+/** "name", "name and serial number", "name, asset tag and serial number". */
+function joinFields(fields: string[]): string {
+  if (fields.length <= 1) return fields[0] ?? '';
+  return `${fields.slice(0, -1).join(', ')} and ${fields[fields.length - 1] ?? ''}`;
 }
 
 function labelFor(condition: string): string {
@@ -191,8 +199,10 @@ const ItemDetailPage: React.FC = () => {
   const hasMaintenance = category?.requires_maintenance === true;
 
   /* ---------- load item + category -------------------------------- */
-  const loadItem = useCallback(async () => {
-    if (!id) return;
+  // Resolves to the item as loaded, so a caller can compare it with the one
+  // it had before; null when there is nothing to load or loading failed.
+  const loadItem = useCallback(async (): Promise<InventoryItem | null> => {
+    if (!id) return null;
     setLoading(true);
     setError(null);
     try {
@@ -221,12 +231,23 @@ const ItemDetailPage: React.FC = () => {
       } else {
         setStorageAreaName(null);
       }
+      return fetched;
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load item'));
+      return null;
     } finally {
       setLoading(false);
     }
   }, [id]);
+
+  // Set after an edit that left the printed label out of step with the item.
+  const [labelChange, setLabelChange] = useState<LabelChange | null>(null);
+  const handleItemSaved = () => {
+    const before = item;
+    void loadItem().then((after) => {
+      setLabelChange(before && after ? labelChangeAfterEdit(before, after) : null);
+    });
+  };
 
   useEffect(() => {
     void loadItem();
@@ -385,6 +406,31 @@ const ItemDetailPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {canManage && labelChange && (
+        <div
+          role="status"
+          className="flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 sm:flex-row sm:items-center"
+        >
+          <Printer className="h-5 w-5 shrink-0 text-amber-800 dark:text-amber-300" aria-hidden="true" />
+          <p className="text-theme-text-primary flex-1 text-sm">
+            {labelChange.kind === 'code'
+              ? 'The code on this item’s label changed, so the label on it no longer scans to it. Print a new one and replace it.'
+              : `The label on this item still shows its old ${joinFields(labelChange.fields)}. It still scans, but print a new one to keep it in step.`}
+          </p>
+          <div className="flex gap-2">
+            <Link
+              to={`/inventory/print-labels?ids=${id ?? ''}`}
+              className="btn-primary btn-sm inline-flex items-center gap-1"
+            >
+              <Printer className="h-4 w-4" aria-hidden="true" /> Print label
+            </Link>
+            <button type="button" onClick={() => setLabelChange(null)} className="btn-secondary btn-sm">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Detail cards grid */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -575,7 +621,7 @@ const ItemDetailPage: React.FC = () => {
       <ItemFormModal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
-        onSaved={() => void loadItem()}
+        onSaved={handleItemSaved}
         categories={categories}
         locations={locations}
         storageAreas={storageAreas}

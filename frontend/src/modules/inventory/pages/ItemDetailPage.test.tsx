@@ -43,7 +43,15 @@ vi.mock('../../../stores/authStore', () => ({
 
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../components/ItemFormModal', () => ({
-  ItemFormModal: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>item-form-modal</div> : null),
+  ItemFormModal: ({ isOpen, onSaved }: { isOpen: boolean; onSaved: () => void }) =>
+    isOpen ? (
+      <div>
+        item-form-modal
+        <button type="button" onClick={onSaved}>
+          mock-save
+        </button>
+      </div>
+    ) : null,
 }));
 vi.mock('../../../components/MemberPickerModal', () => ({ MemberPickerModal: () => null }));
 
@@ -109,6 +117,62 @@ describe('ItemDetailPage', () => {
     await screen.findAllByText('Thermal Camera');
     expect(screen.queryByText('Needs a label')).not.toBeInTheDocument();
     expect(screen.getByText(formatDate('2026-09-20T15:00:00Z', 'UTC'))).toBeInTheDocument();
+  });
+
+  describe('after an edit changes what the label shows', () => {
+    const labelled = makeItem({ barcode: 'INV-1', serial_number: 'SN-1', label_printed_at: '2026-09-20T15:00:00Z' });
+
+    const editAndSave = async (after: InventoryItem) => {
+      const user = userEvent.setup();
+      mockGetItem.mockReset();
+      mockGetItem.mockResolvedValueOnce(labelled).mockResolvedValue(after);
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: /Edit/ }));
+      await user.click(screen.getByRole('button', { name: 'mock-save' }));
+      return user;
+    };
+
+    it('says the old label no longer scans when the backend cleared the mark', async () => {
+      await editAndSave({ ...labelled, barcode: 'INV-2', label_printed_at: undefined });
+
+      expect(await screen.findByText(/no longer scans to it/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Print label' })).toHaveAttribute(
+        'href',
+        '/inventory/print-labels?ids=it-1'
+      );
+    });
+
+    it('names the printed text that changed when the code did not', async () => {
+      await editAndSave({ ...labelled, name: 'Thermal Imager', serial_number: 'SN-2' });
+
+      expect(await screen.findByText(/still shows its old name and serial number/)).toBeInTheDocument();
+    });
+
+    it('stays quiet for an edit that touches nothing printed', async () => {
+      await editAndSave({ ...labelled, notes: 'Charger in the bag' });
+
+      await waitFor(() => expect(mockGetItem).toHaveBeenCalledTimes(2));
+      expect(screen.queryByRole('link', { name: 'Print label' })).not.toBeInTheDocument();
+    });
+
+    it('stays quiet for an item that never had a label', async () => {
+      const user = userEvent.setup();
+      mockGetItem.mockReset();
+      mockGetItem.mockResolvedValueOnce(makeItem()).mockResolvedValue(makeItem({ name: 'Renamed' }));
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: /Edit/ }));
+      await user.click(screen.getByRole('button', { name: 'mock-save' }));
+
+      await waitFor(() => expect(mockGetItem).toHaveBeenCalledTimes(2));
+      expect(screen.queryByRole('link', { name: 'Print label' })).not.toBeInTheDocument();
+    });
+
+    it('can be dismissed', async () => {
+      const user = await editAndSave({ ...labelled, serial_number: 'SN-2' });
+
+      await user.click(await screen.findByRole('button', { name: 'Dismiss' }));
+      expect(screen.queryByText(/still shows its old/)).not.toBeInTheDocument();
+    });
   });
 
   it('shows the lot ledger total, not the stale quantity column, for a lot-stocked uniform pool item', async () => {

@@ -422,7 +422,8 @@ describe('InventoryBarcodePrintPage', () => {
 
     // The change is debounced (~500ms) then saved to the position.
     await waitFor(
-      () => expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'rollo_4x6', symbology: 'code128' }),
+      () =>
+        expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'rollo_4x6', symbology: 'code128', extra_lines: [] }),
       { timeout: 2000 }
     );
   });
@@ -475,9 +476,13 @@ describe('InventoryBarcodePrintPage', () => {
       await user.click(screen.getByRole('button', { name: 'PDF' }));
       await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
       expect(mockGenerateLabels.mock.calls[0]?.[6]).toEqual({ symbology: 'qr' });
-      await waitFor(() => expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'dymo_30252', symbology: 'qr' }), {
-        timeout: 2000,
-      });
+      await waitFor(
+        () =>
+          expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'dymo_30252', symbology: 'qr', extra_lines: [] }),
+        {
+          timeout: 2000,
+        }
+      );
     });
 
     it('takes the barcode style saved for the position', async () => {
@@ -568,6 +573,83 @@ describe('InventoryBarcodePrintPage', () => {
       await user.click(screen.getByRole('button', { name: 'PDF' }));
       await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
       expect(mockGenerateLabels.mock.calls[0]?.[6]).toEqual({ symbology: 'code128' });
+    });
+  });
+
+  describe('choosing what prints on the label', () => {
+    const detailed = makeItem({
+      barcode: 'INV-0001',
+      asset_tag: 'AT-77',
+      serial_number: 'SN-123',
+      size: 'Large',
+      category_id: 'cat-1',
+      storage_area_id: 'shelf-2',
+    });
+
+    beforeEach(() => {
+      mockGetLabelPreset.mockReset();
+      mockGetLabelPreset.mockResolvedValue({ preset: null });
+      mockGetItem.mockReset();
+      mockGetItem.mockResolvedValue(detailed);
+      mockGetStorageAreas.mockReset();
+      mockGetStorageAreas.mockResolvedValue([
+        { id: 'rack-a', name: 'Rack A', parent_id: null },
+        { id: 'shelf-2', name: 'Shelf 2', parent_id: 'rack-a' },
+      ]);
+    });
+
+    it('previews both identifiers by default, as the PDF prints them', async () => {
+      renderPage('?ids=it-1');
+
+      expect(await screen.findByText('Asset: AT-77 | S/N: SN-123')).toBeInTheDocument();
+    });
+
+    it('adds the chosen details in order, drops an identifier, and sends the same to the PDF', async () => {
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findByText('Asset: AT-77 | S/N: SN-123');
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      await user.click(screen.getByRole('button', { name: 'Serial number' }));
+      await user.click(screen.getByRole('button', { name: 'Storage area' }));
+      await user.click(screen.getByRole('button', { name: 'Size' }));
+      await user.click(screen.getByRole('button', { name: 'Category' }));
+
+      expect(screen.getByRole('button', { name: 'Serial number' })).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.getByText('Asset: AT-77')).toBeInTheDocument();
+      expect(screen.getByText('Rack A > Shelf 2 | Large | Radios')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+      expect(mockGenerateLabels.mock.calls[0]?.[5]).toEqual(['no_serial_number', 'storage_area', 'size', 'category']);
+    });
+
+    it('remembers the choice here and on the position', async () => {
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findByText('Asset: AT-77 | S/N: SN-123');
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      await user.click(screen.getByRole('button', { name: 'Size' }));
+
+      expect(JSON.parse(localStorage.getItem('inventory:labelLines') ?? '[]')).toEqual(['size']);
+      await waitFor(
+        () =>
+          expect(mockSetLabelPreset).toHaveBeenCalledWith({
+            preset: 'dymo_30252',
+            symbology: 'code128',
+            extra_lines: ['size'],
+          }),
+        { timeout: 2000 }
+      );
+    });
+
+    it('takes the lines saved for the position, ignoring keys it does not know', async () => {
+      mockGetLabelPreset.mockResolvedValue({ preset: 'dymo_30252', extra_lines: ['size', 'no_asset_tag', 'bogus'] });
+      renderPage('?ids=it-1');
+
+      expect(await screen.findByText('Large')).toBeInTheDocument();
+      expect(screen.getByText('S/N: SN-123')).toBeInTheDocument();
     });
   });
 

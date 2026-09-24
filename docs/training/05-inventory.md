@@ -751,13 +751,15 @@ Generate barcode labels for inventory items to attach to equipment.
 
    Your choice is remembered per position and per module, exactly like the label size.
 
-4. Optionally set **Copies per item**, add **Additional Info on Label** (location / category / condition), and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below).
+4. Optionally set **Copies per item**, choose **What Prints on the Label**, and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below). The item name and its code always print. The **Asset tag** and **Serial number** print unless you switch them off (either is left off anyway when it repeats the code). **Location**, **Storage area** (the shelf's full path, e.g. `Supply Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print on one extra line in the order you pick them. The choice is remembered per position, like the label size.
 5. Print one of three ways:
    - **Send to Printer** (best, when a network label printer is configured) — sends the labels straight to the printer. No print dialog, no PDF, and nothing that can rescale the barcode. See [Direct printing to a network label printer](#direct-printing-to-a-network-label-printer) below.
    - **PDF** (recommended for sticker/thermal printers without a network connection) — downloads a PDF sized to the exact label; open it and print with your label printer selected.
    - **Print Labels** — prints directly through the browser print dialog.
 
 Labels include the barcode (Code 128 with the required quiet-zone margins, or a QR), the item name, and the asset tag or serial number. A QR has no built-in human-readable line, so the value is printed underneath it.
+
+> **When an edit makes a label out of date.** Editing an item that has a confirmed label shows a banner on the item page with a **Print label** button. If the edit changed the code the label encodes, the old label no longer scans to the item and should be replaced — the item also goes back on the _needs a label_ list. If it changed only printed text (name, asset tag or serial number), the old label still scans but reads wrong.
 
 > **Reusing a partly used Avery sheet.** With **Letter Paper (Grid)** selected, a **Start at label** box (1–30) appears above the printer controls. Set it to the first label still on the sheet — counting left to right along each row — and the positions before it are left blank in the preview, the browser print and the PDF, so the sheet can go back in the printer instead of the bin. It applies to the sheet in the printer now: it goes back to 1 when you move to the next part of a large run. Roll printers have no positions, so the box is not shown for them.
 

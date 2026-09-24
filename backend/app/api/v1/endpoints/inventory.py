@@ -192,7 +192,7 @@ from app.schemas.inventory import (
 )
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService, is_pool_without_stock
-from app.services.label_service import LabelService
+from app.services.label_service import UNSET, LabelService
 from app.services.organization_service import OrganizationService
 from app.utils import label_renderer
 from app.utils.org_scoping import assert_in_org
@@ -7120,6 +7120,9 @@ async def set_label_preset(
             custom_width=data.custom_width,
             custom_height=data.custom_height,
             symbology=data.symbology,
+            extra_lines=(
+                data.extra_lines if "extra_lines" in data.model_fields_set else UNSET
+            ),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

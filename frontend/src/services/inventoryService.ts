@@ -678,6 +678,7 @@ export const inventoryService = {
     custom_width?: number | null;
     custom_height?: number | null;
     symbology?: Symbology | null;
+    extra_lines?: string[] | null;
     position_id?: string | null;
   }> {
     const response = await api.get<{
@@ -685,6 +686,7 @@ export const inventoryService = {
       custom_width?: number | null;
       custom_height?: number | null;
       symbology?: Symbology | null;
+      extra_lines?: string[] | null;
       position_id?: string | null;
     }>('/inventory/label-preset');
     return response.data;
@@ -695,6 +697,8 @@ export const inventoryService = {
     custom_width?: number;
     custom_height?: number;
     symbology?: Symbology;
+    // Omitted leaves the position's saved lines alone.
+    extra_lines?: string[];
   }): Promise<{ preset: string | null; position_id?: string | null }> {
     const response = await api.put<{ preset: string | null; position_id?: string | null }>(
       '/inventory/label-preset',

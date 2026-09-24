@@ -2605,6 +2605,11 @@ class LabelPresetUpdate(BaseModel):
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
     symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
+    # What prints besides the code. Omitted leaves the saved choice alone;
+    # null clears it. Bounded like the shared label print request.
+    extra_lines: Optional[List[Annotated[str, StringConstraints(max_length=100)]]] = (
+        Field(None, max_length=20)
+    )
 
 
 # ============================================

@@ -158,6 +158,52 @@ class TestSetPreset:
 
         assert position.settings["label_presets"]["inventory"]["printer_id"] is None
 
+    async def test_a_save_that_omits_the_label_lines_keeps_the_stored_ones(self):
+        """Only the inventory page sends them; every other save must keep them."""
+        position = SimpleNamespace(
+            settings={
+                "label_presets": {
+                    "inventory": {
+                        "preset": "rollo_2x1",
+                        "extra_lines": ["size", "no_serial_number"],
+                    }
+                }
+            }
+        )
+        svc, _ = _service("p", position)
+
+        r = await svc.set_preset(uuid4(), uuid4(), "inventory", "dymo_30334")
+
+        assert r["extra_lines"] == ["size", "no_serial_number"]
+
+    async def test_label_lines_are_stored_and_read_back(self):
+        position = SimpleNamespace(settings=None)
+        svc, _ = _service("p", position)
+
+        await svc.set_preset(
+            uuid4(), uuid4(), "inventory", "rollo_2x1", extra_lines=["storage_area"]
+        )
+
+        assert (await svc.get_preset(uuid4(), uuid4(), "inventory"))["extra_lines"] == [
+            "storage_area"
+        ]
+
+    async def test_an_explicit_none_clears_the_label_lines(self):
+        position = SimpleNamespace(
+            settings={
+                "label_presets": {
+                    "inventory": {"preset": "rollo_2x1", "extra_lines": ["size"]}
+                }
+            }
+        )
+        svc, _ = _service("p", position)
+
+        await svc.set_preset(
+            uuid4(), uuid4(), "inventory", "rollo_2x1", extra_lines=None
+        )
+
+        assert position.settings["label_presets"]["inventory"]["extra_lines"] is None
+
     async def test_rejects_unknown_preset(self):
         position = SimpleNamespace(settings={})
         svc, _ = _service("p", position)
