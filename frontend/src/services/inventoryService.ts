@@ -4,6 +4,7 @@
 
 import api from './apiClient';
 import type { Symbology } from './labelService';
+import type { InventoryAuditFrequency } from '../constants/enums';
 import type {
   ItemPin,
   UserCheckoutItem,
@@ -91,6 +92,8 @@ import type {
   RequestableCatalogResponse,
 } from './eventServices';
 import type {
+  InventoryAuditScheduleListResponse,
+  InventoryAuditScheduleRow,
   InventoryNfcAuditCreate,
   InventoryNfcAuditDetail,
   InventoryNfcAuditListResponse,
@@ -728,6 +731,26 @@ export const inventoryService = {
     // An empty list here is a claim ("every item is tagged"), so a bad body fails.
     const items = expectArray(response.data?.items, 'untagged items');
     return { items, total: items.length };
+  },
+
+  async getAuditSchedule(params?: { due_only?: boolean | undefined }): Promise<InventoryAuditScheduleListResponse> {
+    const response = await api.get<InventoryAuditScheduleListResponse>('/inventory/nfc/audit-schedule', { params });
+    // The schedule list is a view of what is due, not a claim that nothing
+    // is: a bad body shows no rows rather than taking the page down.
+    const items = asArray(response.data?.items);
+    return { items, total: items.length };
+  },
+
+  /** `null` takes the area off the schedule. */
+  async setAuditSchedule(
+    storageAreaId: string,
+    auditFrequency: InventoryAuditFrequency | null
+  ): Promise<InventoryAuditScheduleRow> {
+    const response = await api.put<InventoryAuditScheduleRow>(
+      `/inventory/storage-areas/${storageAreaId}/audit-schedule`,
+      { audit_frequency: auditFrequency }
+    );
+    return response.data;
   },
 
   // Not-seen report — not gated by the NFC switch.

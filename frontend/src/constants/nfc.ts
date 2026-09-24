@@ -1,4 +1,4 @@
-import { NfcTagTarget } from './enums';
+import { InventoryAuditFrequency, NfcTagTarget } from './enums';
 
 /**
  * Web NFC support detection, payload decoding, and error messaging.
@@ -300,3 +300,11 @@ export function describeNfcError(error: unknown, fallback: string): string {
       return fallback;
   }
 }
+
+/** Display labels for a storage area's shelf-audit schedule. */
+export const AUDIT_FREQUENCY_LABELS: Record<InventoryAuditFrequency, string> = {
+  [InventoryAuditFrequency.WEEKLY]: 'Weekly',
+  [InventoryAuditFrequency.MONTHLY]: 'Monthly',
+  [InventoryAuditFrequency.QUARTERLY]: 'Quarterly',
+  [InventoryAuditFrequency.YEARLY]: 'Yearly',
+};

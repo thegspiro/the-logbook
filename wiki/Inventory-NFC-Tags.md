@@ -69,7 +69,7 @@ settings page.
 | Link, relabel, mark lost/found, unlink | `inventory.manage`                                    |
 | Put items away by tap                  | `inventory.manage`                                    |
 | See an item's tap log (Last Seen)      | `inventory.manage`                                    |
-| Shelf audits, bulk tagging             | `inventory.manage`                                    |
+| Shelf audits, schedules, bulk tagging  | `inventory.manage`                                    |
 | Identify a member by ID card tap       | `inventory.manage`, plus the NFC ID Cards integration |
 | Items Not Seen report                  | `inventory.manage` (works with NFC off)               |
 | Tap a tag to open an item              | `inventory.view` (held by the seeded member roles)    |
@@ -208,6 +208,27 @@ A move uses the **same rule as the barcode Put away panel** on Storage Areas:
 - Every tapped item is logged in its **Last Seen** trail as found on that
   shelf. **Recent audits** keeps the last ten; **View** reopens one.
 
+### Scheduling shelf audits
+
+Give a storage area an audit schedule and the app tracks when it is due.
+
+1. **Inventory → Storage Areas**, open the area with its edit button.
+2. Under **Shelf audit schedule**, pick **Weekly**, **Monthly**, **Quarterly**
+   or **Yearly**. It saves immediately. **Not scheduled** takes it off.
+
+Due dates count from the area's **latest saved audit**, in calendar periods: a
+monthly shelf audited on 31 January is next due on 28 February. An area that
+has never been audited is due now.
+
+**Shelf Audit** lists every scheduled area under **Audit schedule**, due ones
+first. **Audit now** chooses that shelf and starts an audit.
+
+**Weekly reminder email.** Once a week, while any scheduled shelf is overdue,
+everyone with `inventory.manage` gets one email listing them. Nothing is sent
+in a week when nothing is overdue, or while NFC is turned off. The check runs
+daily but counts the week from the last email actually sent, so restarting the
+server does not send it twice.
+
 ### Identifying a member by ID card
 
 Where the department issues [Member ID Cards](Member-ID-Cards) (**Settings →
@@ -278,7 +299,8 @@ record**: the log tracks equipment, not where members were.
 
 - Endpoints and data model: [Inventory → NFC Tags](Module-Inventory#nfc-tags-2026-09-24).
 - Tables: `inventory_nfc_tags`, `inventory_nfc_scans`, `inventory_nfc_audits`,
-  `inventory_nfc_audit_items`. See
+  `inventory_nfc_audit_items`, `inventory_nfc_audit_digests`, and
+  `storage_areas.audit_frequency`. See
   [Database Schema](Database-Schema).
 - Tag identifiers are stored as a **peppered SHA-256 hash** plus the last four
   characters, the same scheme as member ID cards. The phone that links

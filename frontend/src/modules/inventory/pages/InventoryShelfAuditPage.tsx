@@ -29,8 +29,8 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { ScanSuccessFlash } from '../../../components/ux/ScanSuccessFlash';
 import { Breadcrumbs } from '../../../components/ux';
 import { InventoryNfcAuditResult } from '../../../constants/enums';
-import { parseInventoryTagCode } from '../../../constants/nfc';
-import { formatDateTime } from '../../../utils/dateFormatting';
+import { AUDIT_FREQUENCY_LABELS, parseInventoryTagCode } from '../../../constants/nfc';
+import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
 import type { StorageAreaResponse } from '../types';
@@ -38,6 +38,7 @@ import {
   MAX_AUDIT_TAPS,
   type InventoryNfcAuditDetail,
   type InventoryNfcAuditLine,
+  type InventoryAuditScheduleRow,
   type InventoryNfcAuditSummary,
 } from '../types/nfc';
 
@@ -68,6 +69,7 @@ export const InventoryShelfAuditPage: React.FC = () => {
   const [tapped, setTappedState] = useState<TappedItem[]>([]);
   const [audit, setAudit] = useState<InventoryNfcAuditDetail | null>(null);
   const [recent, setRecent] = useState<InventoryNfcAuditSummary[]>([]);
+  const [schedule, setSchedule] = useState<InventoryAuditScheduleRow[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -87,10 +89,16 @@ export const InventoryShelfAuditPage: React.FC = () => {
     setTappedState(next);
   };
 
-  const loadRecent = useCallback(async () => {
+  // Recent audits and the schedule, reloaded together: finishing an audit
+  // changes both.
+  const loadLists = useCallback(async () => {
     try {
-      const response = await inventoryService.getNfcAudits({ limit: RECENT_AUDITS_SHOWN });
-      setRecent(response.items);
+      const [audits, scheduled] = await Promise.all([
+        inventoryService.getNfcAudits({ limit: RECENT_AUDITS_SHOWN }),
+        inventoryService.getAuditSchedule(),
+      ]);
+      setRecent(audits.items);
+      setSchedule(scheduled.items);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Could not load recent audits.'));
     }
@@ -107,8 +115,8 @@ export const InventoryShelfAuditPage: React.FC = () => {
       }
     };
     void load();
-    void loadRecent();
-  }, [enabled, loadRecent]);
+    void loadLists();
+  }, [enabled, loadLists]);
 
   const preselectId = searchParams.get('area');
   useEffect(() => {
@@ -229,7 +237,7 @@ export const InventoryShelfAuditPage: React.FC = () => {
       setSelected(new Set());
       setTapped([]);
       setShelf(null);
-      void loadRecent();
+      void loadLists();
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Could not save the audit.'));
     } finally {
@@ -272,7 +280,7 @@ export const InventoryShelfAuditPage: React.FC = () => {
       setSelected(new Set());
       const moved = result.moved_item_ids?.length ?? 0;
       if (moved > 0) toast.success(`${moved} item(s) moved onto ${result.storage_area_name}`);
-      void loadRecent();
+      void loadLists();
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Could not move those items.'));
     } finally {
@@ -456,6 +464,47 @@ export const InventoryShelfAuditPage: React.FC = () => {
               onApply={() => void applySelected()}
               applying={submitting}
             />
+          )}
+
+          {schedule.length > 0 && (
+            <section className="card p-4" aria-labelledby="audit-schedule-heading">
+              <h2 id="audit-schedule-heading" className="text-theme-text-primary mb-2 text-sm font-semibold">
+                Audit schedule ({schedule.filter((r) => r.overdue).length} due)
+              </h2>
+              <ul className="divide-theme-surface-border divide-y">
+                {schedule.map((row) => (
+                  <li
+                    key={row.storage_area_id}
+                    className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+                  >
+                    <span className="text-theme-text-primary">
+                      <strong>{row.storage_area_name}</strong>
+                      {row.location_name ? ` (${row.location_name})` : ''}
+                      <span className="text-theme-text-secondary block text-xs">
+                        {row.audit_frequency ? AUDIT_FREQUENCY_LABELS[row.audit_frequency] : ''} ·{' '}
+                        {row.last_audited_at ? `last audited ${formatDate(row.last_audited_at, tz)}` : 'never audited'}
+                        {' · '}
+                        {row.overdue ? (
+                          <span className="font-semibold text-red-700 dark:text-red-400">due now</span>
+                        ) : (
+                          `next due ${formatDate(row.next_due_at ?? '', tz)}`
+                        )}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className={row.overdue ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
+                      disabled={shelf !== null}
+                      onClick={() =>
+                        enqueue({ kind: 'shelf', shelf: { id: row.storage_area_id, name: row.storage_area_name } })
+                      }
+                    >
+                      Audit now
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
 
           <section className="card p-4" aria-labelledby="recent-audits-heading">

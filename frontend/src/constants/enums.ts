@@ -43,6 +43,15 @@ export const InventoryNfcScanAction = {
 } as const;
 export type InventoryNfcScanAction = (typeof InventoryNfcScanAction)[keyof typeof InventoryNfcScanAction];
 
+/** How often a storage area should be audited by NFC tap. */
+export const InventoryAuditFrequency = {
+  WEEKLY: 'weekly',
+  MONTHLY: 'monthly',
+  QUARTERLY: 'quarterly',
+  YEARLY: 'yearly',
+} as const;
+export type InventoryAuditFrequency = (typeof InventoryAuditFrequency)[keyof typeof InventoryAuditFrequency];
+
 /** What a shelf audit found for one item. Missing items are only ever listed. */
 export const InventoryNfcAuditResult = {
   FOUND: 'found',

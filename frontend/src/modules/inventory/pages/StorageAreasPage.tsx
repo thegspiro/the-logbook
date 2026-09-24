@@ -36,6 +36,7 @@ import { formCoercions } from '../../../utils/formValues';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { Breadcrumbs } from '../../../components/ux';
 import { NfcTagsCard } from '../components/NfcTagsCard';
+import { AuditScheduleField } from '../components/AuditScheduleField';
 import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
 import { ScanCodeField } from '../components/ScanCodeField';
 import { PutAwayPanel } from '../components/PutAwayPanel';
@@ -1157,6 +1158,11 @@ const StorageAreasPage: React.FC = () => {
         {editingArea && nfcEnabled && (
           <div className="mt-4">
             <NfcTagsCard targetKind="storage_area" targetId={editingArea.id} targetName={editingArea.name} />
+            {editingArea.is_active && (
+              <div className="mt-4">
+                <AuditScheduleField storageAreaId={editingArea.id} />
+              </div>
+            )}
           </div>
         )}
       </Modal>
