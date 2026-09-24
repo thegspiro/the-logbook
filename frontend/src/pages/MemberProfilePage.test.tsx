@@ -7,7 +7,7 @@
  * either: every member holds it as part of the baseline Member position.
  */
 
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithRouter } from '../test/utils';
@@ -51,6 +51,7 @@ const getEnabledModules = vi.fn();
 const getUserWithRoles = vi.fn();
 const setMyProfileVisibility = vi.fn();
 const checkContactInfoEnabled = vi.fn();
+const reactivateMember = vi.fn();
 let nfcIdCardsConnected = false;
 
 vi.mock('../hooks/useConnectedIntegrations', () => ({
@@ -92,6 +93,7 @@ vi.mock('../services/api', () => ({
   },
   memberStatusService: {
     getMemberLeaves: () => Promise.resolve([]),
+    reactivateMember: (...args: unknown[]) => reactivateMember(...args) as unknown,
   },
 }));
 
@@ -311,6 +313,38 @@ describe('MemberProfilePage membership and privacy', () => {
     expect(screen.getByText('Visible to members')).toBeInTheDocument();
     expect(screen.getByText('Only you and leadership')).toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  it('does not offer Archived as an ordinary status change', async () => {
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    await userEvent.click(await screen.findByTitle('Change member status'));
+
+    const select = await screen.findByRole('combobox');
+    expect(within(select).getByRole('option', { name: 'Dropped Voluntary' })).toBeInTheDocument();
+    expect(within(select).queryByRole('option', { name: 'Archived' })).not.toBeInTheDocument();
+  });
+
+  it('turns the status control into Reactivate for an archived member', async () => {
+    grantedPermissions = ['members.manage'];
+    reactivateMember.mockReset();
+    reactivateMember.mockResolvedValue({ user_id: TARGET_ID, new_status: UserStatus.ACTIVE });
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.ARCHIVED });
+    renderWithRouter(<MemberProfilePage />);
+
+    // Both status controls -- the header pill and the Membership card's pencil -- lead here.
+    const controls = await screen.findAllByTitle('Reactivate member');
+    expect(controls).toHaveLength(2);
+    await userEvent.click(controls[0] ?? document.body);
+    expect(await screen.findByRole('heading', { name: 'Reactivate Member' })).toBeInTheDocument();
+    expect(screen.queryByText('Change Member Status')).not.toBeInTheDocument();
+
+    const fetchesBefore = getUserWithRoles.mock.calls.length;
+    await userEvent.click(screen.getByRole('button', { name: 'Reactivate' }));
+
+    await waitFor(() => expect(reactivateMember).toHaveBeenCalledWith(TARGET_ID, { reason: undefined }));
+    await waitFor(() => expect(getUserWithRoles.mock.calls.length).toBeGreaterThan(fetchesBefore));
   });
 
   it('does not claim "no address on file" when only the personal email was shared', async () => {
