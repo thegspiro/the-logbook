@@ -9,10 +9,11 @@ Box Management** (`/communications/suggestion-boxes`) — and the inventory labe
 page gained a picker and a post-print prompt. Everything else is an existing
 address carrying one more control or one more line.
 
-**Eleven placeholders were written into the guides** by this pass. **Eight are
-shot** (2026-09-24) — the five suggestion-box items and the three inventory
-label items — so the library moves from 533/589 to **541/589**. The three left
-are items 9 (needs a real device), 10 and 11:
+**Eleven placeholders were written into the guides** by this pass. **Nine are
+shot** (2026-09-24) — the five suggestion-box items, the three inventory label
+items and the medical-screening notice — so the library moves from 533/589 to
+**542/589**. The two left are item 9 (needs a real device) and item 11 (the
+seeded pipeline has no Meeting stage — see below):
 
 | #  | Image area                                                    | Disposition | Guide                                   | Notes                                                                                                              |
 | -- | ------------------------------------------------------------- | ----------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -25,7 +26,7 @@ are items 9 (needs a real device), 10 and 11:
 | 7  | Label page **Print barcode labels** picker                    | **NEW**     | 05                                      | **Shot** 09-24 as `05-84-label-scope-picker`, clipped to the picker card |
 | 8  | "Did the labels print correctly?" prompt                      | **NEW**     | 05                                      | **Shot** 09-24 as `05-85-label-print-confirm`, full page so the preview is in frame. Mark never pressed |
 | 9  | Phone home screen with the department-logo icon               | **NEW**     | 10 (mobile)                             | Needs a real device or emulator install; the seeded demo logo only. The harness cannot produce this               |
-| 10 | Medical Screening **Add Record** with the amber notice        | **NEW**     | 13 (medical screening)                  | Create dialog only — the Edit dialog deliberately has no notice                                                   |
+| 10 | Medical Screening **Add Record** with the amber notice        | **NEW**     | 13 (medical screening)                  | **Shot** 09-24 as `13-07-add-record-linkage-notice`. Dialog opened, never saved |
 | 11 | Applicant drawer on an event-naming **Meeting** stage          | **NEW**     | 20                                      | The requirement hint above the action row; a second frame with the Advance refusal is optional                    |
 
 **Existing images this window makes stale — REPLACE, no placeholder written.**
@@ -88,6 +89,14 @@ only its active marker's top edge showed — so the entry now scrolls the item
 into view and refuses to shoot if it is still off screen. `07-14` clipped to
 `[role="dialog"]`, which `Modal` puts on the full-screen backdrop, and so
 photographed the whole dimmed page; it now clips to `modal-panel`.
+
+**Item 11 is blocked on the seed, not on the harness.** The only seeded
+pipeline, **Volunteer Membership Pipeline**, has six stages — form, review,
+interview, documents, vote, onboarding — and **no Meeting stage at all**, so the
+requirement hint has nowhere to appear. Adding one is not free: a seventh stage
+on that pipeline would stale every kanban and pipeline shot that states "seven
+applicants across six stages", and a second pipeline would change what
+`seed_demo_data.py` means by `pipelines[0]`. Waiting on a decision about which.
 
 **Remaining seed gap.** **Every seeded inventory
 item reads "Needs a label"**, which is correct for item 6 but means the

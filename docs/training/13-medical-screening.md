@@ -236,9 +236,7 @@ Navigate to **Medical Screening > Records** tab to view all records.
 > nobody. The **Edit** dialog does not show the notice, because editing never
 > changes who a record belongs to.
 
-> **Screenshot needed:**
-> _[Medical Screening → Records → **Add Record** dialog, showing the amber "Not
-> linked to a member or prospect" notice above the Requirement field.]_
+![The Add Screening Record dialog with the amber notice at the top: not linked to a member or prospect, so the record will not count toward anyone's compliance](./images/13-07-add-record-linkage-notice.png)
 
 ### Status Workflow
 

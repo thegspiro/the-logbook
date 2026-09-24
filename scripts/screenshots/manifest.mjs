@@ -11259,6 +11259,28 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "13-07-add-record-linkage-notice",
+    doc: "13-medical-screening.md",
+    line: 239,
+    anchor: "dialog, showing the amber",
+    alt: "The Add Screening Record dialog with the amber notice at the top: not linked to a member or prospect, so the record will not count toward anyone's compliance",
+    route: "/medical-screening",
+    // The notice's own words, not the dialog title: the Edit dialog shares the
+    // title shape and deliberately has no notice, so only this proves the
+    // create dialog is the one in frame.
+    expect: "Not linked to a member or prospect",
+    selector: '[aria-labelledby="screening-record-dialog-title"] .modal-panel',
+    prepare: async (page) => {
+      await clickByName(/records/i)(page);
+      await page
+        .getByRole("button", { name: /Add Record/ })
+        .first()
+        .click();
+      await page.locator("#screening-record-dialog-title").waitFor();
+      // Nothing is saved: the dialog is closed by the next shot's navigation.
+    },
+  },
+  {
     id: "04-08-calendar-view",
     doc: "04-events-meetings.md",
     line: 218,
