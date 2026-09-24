@@ -786,12 +786,20 @@ happen automatically — the dialog has no per-change options for them.
 When a member is dropped, the system automatically:
 
 1. Generates a **property return report** listing all assigned equipment
-2. Sends a reminder email (if configured)
-3. Tracks outstanding items
+2. Emails that report to the member (the status dialog has no option to skip
+   it; only the API's `send_property_return_email: false` does)
+3. Tracks outstanding items, and sends reminders while any remain (below)
 4. Auto-archives the member once all property is returned
 
+**Reminders.** A daily scheduled task emails the member when they pass **30
+days** and again at **90 days** since the drop with property still out, and
+copies the department's administrative officers. Each run sends a member at
+most one reminder — the latest mark they have passed — so a member first
+picked up at day 100 receives the 90-day reminder only, never a late 30-day
+one. A reminder already sent is never repeated.
+
 > **Hint:** Overdue property returns are tracked by the API
-> (`GET /users/overdue-property-returns`) but **have no screen** as of
+> (`GET /users/property-return-reminders/overdue`) but **have no screen** as of
 > 2026-08-08. The Inventory module's members page shows an "Overdue Returns"
 > figure, which counts inventory checkouts rather than offboarding property, so
 > it is not a substitute. See
