@@ -158,6 +158,26 @@ Going — and Where You Stand on the Waitlist"**, is in
 officer always sees the full roster. The demo department's **"Station Open
 House — Setup Crew"** event is already full, with `nbelhaj` on the waitlist.
 
+**Three script beats changed with it** (#2667):
+
+- **Script 06, RSVPing to an Event — new beat for a full event.** A Yes lands
+  on the waitlist. The Event Information card shows how full the event is, Your
+  RSVP shows the member's place in line, and a freed spot promotes the first
+  person waiting automatically. It adds about 15 seconds to the segment.
+- **Script 06, the segment's opening line — corrected.** It promised the
+  member would see "who's attending". It now says "if your department shares
+  it, who's going".
+- **Script 08A, the RSVP confirmation shot — corrected.** It promised "your
+  name appears in the Attending list". It now shows Your RSVP reading
+  **Going**, or **Waitlisted** with a place in line on a full event.
+
+**The two corrections fix old mistakes; the Event Information change did not
+cause them.** Attendee visibility ships set to managers only, so on a default
+install a member never sees a going list, and neither line could be filmed as
+written. Script 04's organizer beat is unchanged: it uses the Statistics card,
+which did not change. `docs/youtube-scripts/SCRIPT_CURRENCY.md` has the
+before-and-after wording.
+
 ## Upgrade notes
 
 **Four migrations. Head is `5a70c5dcd138`.** Back up, confirm `alembic heads`
