@@ -121,10 +121,10 @@ library, a member gets Available Tests and My Results. A placeholder describing
 what a member sees therefore cannot be filled from the administrator's session,
 and a shot that looks fine can quietly picture the wrong screen.
 
-| Field   | Values                                   | Notes                                                              |
-| ------- | ---------------------------------------- | ------------------------------------------------------------------ |
-| `auth`  | `admin` (default), `member`, `anonymous` | `member` signs in as `DEMO_MEMBER_CREDENTIALS` — no officer rights |
-| `theme` | light (default), `dark`                  | Drives the context's `colorScheme`; the app's theme follows system |
+| Field   | Values                                                             | Notes                                                                                                                                                                                  |
+| ------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`  | `admin` (default), `member`, `secretary`, `forwardee`, `anonymous` | `member` signs in as `DEMO_MEMBER_CREDENTIALS` — no officer rights. `secretary` reviews every seeded suggestion box. `forwardee` reviews none and has one suggestion forwarded to them |
+| `theme` | light (default), `dark`                                            | Drives the context's `colorScheme`; the app's theme follows system                                                                                                                     |
 
 Each `auth` + `theme` combination gets its own browser context, built on first
 use — cookies are per-context, so swapping users by clearing them mid-run would

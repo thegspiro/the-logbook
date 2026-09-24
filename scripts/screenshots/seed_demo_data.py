@@ -5560,9 +5560,7 @@ class Seeder:
         revision, so it is safe to repeat and safe to run after the last edit.
         """
         published: list[str] = []
-        for template in items(
-            self.api.get("/equipment-checks/templates"), "templates"
-        ):
+        for template in items(self.api.get("/equipment-checks/templates"), "templates"):
             if pick(template, "is_active", "isActive"):
                 continue
             template_id = pick(template, "id")
@@ -5578,9 +5576,7 @@ class Seeder:
                 # the API says so. That is a template problem, not a publish
                 # problem, so name it and carry on rather than aborting every
                 # later template.
-                self.blocked.append(
-                    f"publish template {pick(template, 'name')}: {exc}"
-                )
+                self.blocked.append(f"publish template {pick(template, 'name')}: {exc}")
                 continue
             published.append(str(pick(template, "name") or template_id))
         return published
@@ -7772,6 +7768,11 @@ class Seeder:
     SUGGESTION_REVIEWER_USERNAME = "okittredge"
     SUGGESTION_REVIEWER_POSITION = "Secretary"
     SUGGESTION_FORWARD_POSITION = "Training Officer"
+    # The capture harness's `auth: "forwardee"` account. An ordinary firefighter
+    # no shot names and no box lists as a reviewer, so the forward is their only
+    # way to the Review tab — and giving it to them cannot change another image.
+    SUGGESTION_FORWARD_MEMBER_USERNAME = "cfrazier"
+    SUGGESTION_MEMBER_FORWARD_TITLE = "More hands-on SCBA time for probationary members"
 
     SUGGESTION_BOXES = [
         {
@@ -8053,6 +8054,55 @@ class Seeder:
                     {"position_ids": [position_ids[entry["forward_to"]]]},
                 )
             follow_up_key = None
+
+        self._seed_suggestion_member_forward(reviewer)
+
+    def _seed_suggestion_member_forward(self, reviewer: Api) -> None:
+        """Forward one submission to a member who reviews no box.
+
+        The Training Officer forward above cannot picture what a forward looks
+        like to the person receiving it: that position already reviews the
+        Training ideas box, so its holders see the item as ordinary review work,
+        with no "Forwarded to you" badge. Only someone who reaches the item
+        through the forward alone sees that screen, and `07-18` photographs it.
+
+        Runs on every seed rather than only when the submission is created, so a
+        database seeded before this step existed gains the forward too. The
+        endpoint skips a member already forwarded to, so a re-run adds nothing.
+        """
+        title = self.SUGGESTION_MEMBER_FORWARD_TITLE
+        username = self.SUGGESTION_FORWARD_MEMBER_USERNAME
+        suggestion_id = next(
+            (
+                str(pick(s, "id"))
+                for s in items(reviewer.get("/suggestions/review?limit=200"), "items")
+                if pick(s, "title") == title
+            ),
+            "",
+        )
+        member_id = self._user_id(username)
+        if not suggestion_id or not member_id:
+            self.blocked.append(
+                f"suggestion boxes: could not forward {title!r} to {username}"
+            )
+            return
+        reviewer.post(
+            f"/suggestions/review/{suggestion_id}/forwards",
+            {"member_ids": [member_id]},
+        )
+        # Signing in once through member_session clears the must-change-password
+        # flag, without which the capture harness's login as this member would
+        # land on the forced password change instead of the Review tab.
+        recipient = self.member_session(self.base_url, member_id, username)
+        forwarded = [
+            s
+            for s in items(recipient.get("/suggestions/review?limit=200"), "items")
+            if pick(s, "title") == title and pick(s, "via_forward", "viaForward")
+        ]
+        if not forwarded:
+            self.blocked.append(
+                f"suggestion boxes: {username} does not see {title!r} as forwarded"
+            )
 
     def seed_legal_documents(self) -> list[dict]:
         """One published notice and one draft, so the two states differ on screen.
@@ -12863,9 +12913,7 @@ class Seeder:
             "prospects",
         )
         # Stage name -> position, for the scenario overrides below.
-        position_by_name = {
-            pick(step, "name"): slot for slot, step in enumerate(steps)
-        }
+        position_by_name = {pick(step, "name"): slot for slot, step in enumerate(steps)}
 
         for index, prospect in enumerate(prospects):
             prospect_id = pick(prospect, "id")
@@ -13502,11 +13550,7 @@ class Seeder:
         """
         elections = items(self.api.get("/elections?limit=100"), "elections")
         election_id = next(
-            (
-                pick(e, "id")
-                for e in elections
-                if pick(e, "title") == election_title
-            ),
+            (pick(e, "id") for e in elections if pick(e, "title") == election_title),
             None,
         )
         if not election_id:
@@ -13669,9 +13713,7 @@ class Seeder:
                 "vote-to-package sync did not run"
             )
 
-    def _package_for(
-        self, packages: list[dict], applicant_email: str
-    ) -> dict | None:
+    def _package_for(self, packages: list[dict], applicant_email: str) -> dict | None:
         """The election package belonging to one named applicant.
 
         The package list carries an applicant snapshot rather than a joinable
@@ -13689,9 +13731,7 @@ class Seeder:
             if not prospect_id:
                 continue
             try:
-                prospect = self.api.get(
-                    f"/prospective-members/prospects/{prospect_id}"
-                )
+                prospect = self.api.get(f"/prospective-members/prospects/{prospect_id}")
             except ApiError:
                 continue
             if str(pick(prospect, "email") or "").lower() == applicant_email:
@@ -14932,9 +14972,7 @@ class Seeder:
         # requirement, so leaving them pending would show the progress section
         # with every bar at zero under hours the page also reports as logged.
         wanted = {description for _, _, description in self.MEMBER_HOURS}
-        for entry in items(
-            self.api.get("/admin-hours/entries?limit=300"), "entries"
-        ):
+        for entry in items(self.api.get("/admin-hours/entries?limit=300"), "entries"):
             if str(pick(entry, "description") or "") not in wanted:
                 continue
             if str(pick(entry, "status")) != "pending":
@@ -14971,9 +15009,7 @@ class Seeder:
                 )
                 if pick(pr, "is_active", "isActive")
                 and membership
-                in (
-                    pick(pr, "membership_types", "membershipTypes") or [membership]
-                )
+                in (pick(pr, "membership_types", "membershipTypes") or [membership])
             ),
             None,
         )
@@ -15024,9 +15060,7 @@ class Seeder:
         template = next(
             (
                 t
-                for t in items(
-                    self.api.get("/equipment-checks/templates"), "templates"
-                )
+                for t in items(self.api.get("/equipment-checks/templates"), "templates")
                 if pick(t, "name") == self.SEALED_TEMPLATE_NAME
             ),
             None,
@@ -15061,9 +15095,7 @@ class Seeder:
         # /last-seals answers, and a completed check that recorded no seals
         # (one filed before the compartments were marked) would satisfy a
         # check-count guard while leaving the panel with nothing to compare.
-        apparatus_id = pick(template, "apparatus_id") or pick(
-            template, "apparatusId"
-        )
+        apparatus_id = pick(template, "apparatus_id") or pick(template, "apparatusId")
         last = self.api.get(
             f"/equipment-checks/templates/{template_id}/last-seals"
             + (f"?apparatus_id={apparatus_id}" if apparatus_id else "")
