@@ -32,8 +32,8 @@ No intros, no outros — straight to the point.
 
 > "Click RSVP. Choose Yes, No, or Maybe."
 
-**[SCREEN: Show the confirmation — your RSVP is recorded, your name appears in
-the "Attending" list]**
+**[SCREEN: Show the confirmation — Your RSVP reads Going. (On a full event it
+reads Waitlisted, with your place in line.)]**
 
 > "Done. Your officers can see you're coming. No group texts, no phone calls."
 

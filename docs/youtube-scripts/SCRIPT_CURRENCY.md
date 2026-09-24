@@ -1,5 +1,33 @@
 # Script currency
 
+## Flagged by the 2026-09-24 Event Information fix
+
+The event page's **Event Information** card now shows **Capacity** and **Event
+Full** on every capped event, not only on events that require an RSVP. It is
+left out when it has nothing to show. Managers see capacity once, in
+**Statistics** ([#2667](https://github.com/thegspiro/the-logbook/pull/2667)).
+Script 04's organizer beat uses the Statistics card, which did not change.
+
+| Script  | Beat                              | Was                                                                   | Now                                                                                                                                                                                | Class          |
+| ------- | --------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **06**  | RSVPing to an Event               | No account of a full event                                            | New beat: a Yes on a full event lands on the waitlist; the Event Information card shows how full it is, Your RSVP shows the place in line, and a freed spot promotes automatically | **Incomplete** |
+| **06**  | RSVPing to an Event, opening line | "…you'll see the full description, location, and **who's attending**" | "…and — **if your department shares it** — who's going"                                                                                                                            | **Wrong**      |
+| **08A** | RSVP confirmation `[SCREEN]`      | "your name appears in the **Attending** list"                         | Your RSVP reads **Going** (or **Waitlisted** with a place in line on a full event)                                                                                                 | **Wrong**      |
+
+**The two Wrong beats were found while making this change; the fix did not
+cause them.** Attendee visibility ships **managers-only**. Only a department
+that opts in shows members a going list, so on a default install neither
+promise could be filmed as written.
+
+**Production:** the waitlist beat needs a capped event that is already full,
+seen from a member who has a Going RSVP on it. The screenshot demo department
+seeds exactly this: **"Station Open House — Setup Crew"**, three places, with
+`nbelhaj` waitlisted.
+
+The suggested short **"Who's going to this event — and where you stand on the
+waitlist"** (listed under the 2026-08-31 → 09-06 changes) is still unwritten.
+Its capacity line can now be filmed on any capped event.
+
 ## Flagged by the 2026-09-15 → 09-23 changes
 
 Full reason/data-path context in
