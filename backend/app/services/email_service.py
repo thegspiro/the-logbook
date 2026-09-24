@@ -2057,6 +2057,49 @@ class EmailService:
 
         return success_count > 0
 
+    async def send_application_withdrawn_email(
+        self,
+        to_email: str,
+        applicant_name: str,
+        organization_name: str,
+        withdrawal_date: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Confirm to an applicant that their self-withdrawal went through."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_WITHDRAWN_HTML,
+            DEFAULT_APPLICATION_WITHDRAWN_SUBJECT,
+            DEFAULT_APPLICATION_WITHDRAWN_TEXT,
+        )
+
+        context = {
+            "applicant_name": applicant_name,
+            "organization_name": organization_name,
+            "withdrawal_date": withdrawal_date,
+        }
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.APPLICATION_WITHDRAWN,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_WITHDRAWN_SUBJECT,
+            default_html=DEFAULT_APPLICATION_WITHDRAWN_HTML,
+            default_text=DEFAULT_APPLICATION_WITHDRAWN_TEXT,
+        )
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_WITHDRAWN.value,
+        )
+
+        return success_count > 0
+
     async def send_duplicate_application_email(
         self,
         to_email: str,
