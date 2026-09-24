@@ -17,10 +17,15 @@ from app.api.dependencies import get_current_user
 from app.api.v1.endpoints.inventory_nfc import router
 from app.core.database import get_db
 from app.schemas.inventory_nfc import (
+    MAX_AUDIT_TAPS,
+    InventoryNfcAuditApply,
+    InventoryNfcAuditCreate,
+    InventoryNfcMemberResponse,
     InventoryNfcResolveRequest,
     InventoryNfcTagCreate,
     InventoryNfcTagResponse,
 )
+from app.schemas.nfc_tag import NfcCheckInStatus
 from app.schemas.organization import OrganizationSettingsUpdate
 from app.utils.inventory_nfc import (
     inventory_nfc_enabled,
@@ -97,6 +102,12 @@ GUARDED_CALLS = [
     ("GET", "/inventory/items/item-1/nfc-scans", None),
     ("GET", "/inventory/storage-areas/area-1/nfc-tags", None),
     ("POST", "/inventory/storage-areas/area-1/nfc-tags", LINK_BODY),
+    ("POST", "/inventory/nfc/audits", {"storage_area_id": "a-1", "tapped": []}),
+    ("GET", "/inventory/nfc/audits", None),
+    ("GET", "/inventory/nfc/audits/audit-1", None),
+    ("POST", "/inventory/nfc/audits/audit-1/apply", {"item_ids": ["i-1"]}),
+    ("POST", "/inventory/nfc/resolve-member", RESOLVE_BODY),
+    ("GET", "/inventory/nfc/untagged", None),
 ]
 
 
@@ -359,3 +370,195 @@ class TestOnlyStaffTapsAreLogged:
             {**RESOLVE_BODY, "record": False},
         )
         service.record_scan.assert_not_awaited()
+
+
+class TestPhase3Gates:
+    @pytest.mark.parametrize(
+        ("path", "method"),
+        [
+            ("/nfc/audits", "POST"),
+            ("/nfc/audits", "GET"),
+            ("/nfc/audits/{audit_id}", "GET"),
+            ("/nfc/audits/{audit_id}/apply", "POST"),
+            ("/nfc/resolve-member", "POST"),
+            ("/nfc/untagged", "GET"),
+        ],
+    )
+    def test_quartermaster_tools_need_manage(self, path, method):
+        assert _permission_set(path, method) == {"inventory.manage"}
+
+    async def test_a_viewer_cannot_look_up_a_member_card(self):
+        with _switch(on=True):
+            response = await _request(
+                _app_for(_user(permissions=("inventory.view",))),
+                "POST",
+                "/inventory/nfc/resolve-member",
+                RESOLVE_BODY,
+            )
+        assert response.status_code == 403
+
+
+class TestAuditSchemas:
+    def test_a_submission_is_capped(self):
+        taps = [{"item_id": f"i-{n}"} for n in range(MAX_AUDIT_TAPS + 1)]
+        with pytest.raises(ValidationError):
+            InventoryNfcAuditCreate(storage_area_id="a-1", tapped=taps)
+
+    def test_an_empty_audit_is_allowed(self):
+        """A shelf that should be empty, audited and found empty, is a result."""
+        assert InventoryNfcAuditCreate(storage_area_id="a-1").tapped == []
+
+    def test_applying_needs_at_least_one_item(self):
+        with pytest.raises(ValidationError):
+            InventoryNfcAuditApply(item_ids=[])
+
+    def test_applying_rejects_a_malformed_id(self):
+        with pytest.raises(ValidationError):
+            InventoryNfcAuditApply(item_ids=["x" * 37])
+
+
+class TestAuditRoutes:
+    async def test_submitting_passes_the_taps_through_and_is_audited(self):
+        detail = {
+            "id": "audit-1",
+            "storage_area_id": "a-1",
+            "storage_area_name": "Shelf A",
+            "expected_count": 1,
+            "found_count": 1,
+            "missing_count": 0,
+            "unexpected_count": 0,
+            "audited_at": "2026-09-24T12:00:00Z",
+            "items": [],
+        }
+        service = MagicMock()
+        service.create_audit = AsyncMock(return_value=detail)
+        audit_log = AsyncMock()
+        with _switch(on=True), patch(
+            f"{MODULE}.InventoryNfcService", return_value=service
+        ), patch(f"{MODULE}.log_audit_event", audit_log):
+            response = await _request(
+                _app_for(_user()),
+                "POST",
+                "/inventory/nfc/audits",
+                {
+                    "storage_area_id": "a-1",
+                    "tapped": [{"item_id": "i-1", "tag_id": "t-1"}, {"item_id": "i-2"}],
+                },
+            )
+        assert response.status_code == 201
+        kwargs = service.create_audit.await_args.kwargs
+        assert kwargs["tapped"] == [("i-1", "t-1"), ("i-2", None)]
+        assert kwargs["organization_id"] == "org-1"
+        assert (
+            audit_log.await_args.kwargs["event_type"] == "inventory_nfc_shelf_audited"
+        )
+
+    async def test_an_invalid_apply_is_a_400_with_the_reason(self):
+        service = MagicMock()
+        service.apply_audit = AsyncMock(
+            side_effect=ValueError("Only items this audit found unexpectedly")
+        )
+        with _switch(on=True), patch(
+            f"{MODULE}.InventoryNfcService", return_value=service
+        ):
+            response = await _request(
+                _app_for(_user()),
+                "POST",
+                "/inventory/nfc/audits/audit-1/apply",
+                {"item_ids": ["i-1"]},
+            )
+        assert response.status_code == 400
+        assert "Only items" in response.json()["detail"]
+
+    async def test_an_unknown_audit_is_a_404(self):
+        service = MagicMock()
+        service.get_audit = AsyncMock(side_effect=LookupError("Audit not found"))
+        with _switch(on=True), patch(
+            f"{MODULE}.InventoryNfcService", return_value=service
+        ):
+            response = await _request(
+                _app_for(_user()), "GET", "/inventory/nfc/audits/nope"
+            )
+        assert response.status_code == 404
+
+
+class TestResolveMember:
+    def _patches(self, *, cards_on: bool, resolved):
+        async def _cards_off(*_a, **_k):
+            raise HTTPException(status_code=403, detail="NFC ID cards are not enabled")
+
+        card_service = MagicMock()
+        card_service.resolve_tag = AsyncMock(return_value=resolved)
+        return (
+            patch(
+                f"{MODULE}.require_nfc_id_cards",
+                AsyncMock() if cards_on else AsyncMock(side_effect=_cards_off),
+            ),
+            patch(f"{MODULE}.NfcTagService", return_value=card_service),
+            card_service,
+        )
+
+    async def test_needs_the_id_card_integration(self):
+        gate, svc, card_service = self._patches(cards_on=False, resolved=None)
+        with _switch(on=True), gate, svc:
+            response = await _request(
+                _app_for(_user()),
+                "POST",
+                "/inventory/nfc/resolve-member",
+                RESOLVE_BODY,
+            )
+        assert response.status_code == 403
+        card_service.resolve_tag.assert_not_awaited()
+
+    async def test_returns_the_member_and_never_the_identifier(self):
+        member = SimpleNamespace(
+            id=uuid.uuid4(),
+            first_name="Dana",
+            last_name="Reyes",
+            username="dreyes",
+            membership_number="117",
+        )
+        gate, svc, card_service = self._patches(
+            cards_on=True, resolved=(MagicMock(), member, None)
+        )
+        with _switch(on=True), gate, svc:
+            response = await _request(
+                _app_for(_user()),
+                "POST",
+                "/inventory/nfc/resolve-member",
+                {"code": "NFCABCD1234", "serial_number": "04A2245B"},
+            )
+        assert response.status_code == 200
+        assert response.json() == {
+            "user_id": str(member.id),
+            "member_name": "Dana Reyes",
+            "membership_number": "117",
+        }
+        assert set(InventoryNfcMemberResponse.model_fields) == {
+            "user_id",
+            "member_name",
+            "membership_number",
+        }
+        card_service.resolve_tag.assert_awaited_once_with(
+            "org-1", ("NFCABCD1234", "04A2245B")
+        )
+
+    @pytest.mark.parametrize(
+        ("refusal", "fragment"),
+        [
+            (NfcCheckInStatus.UNKNOWN_CARD, "not registered"),
+            (NfcCheckInStatus.CARD_INACTIVE, "no longer works"),
+            (NfcCheckInStatus.MEMBER_INACTIVE, "not currently active"),
+        ],
+    )
+    async def test_a_refused_card_is_a_404_saying_why(self, refusal, fragment):
+        gate, svc, _ = self._patches(cards_on=True, resolved=(None, None, refusal))
+        with _switch(on=True), gate, svc:
+            response = await _request(
+                _app_for(_user()),
+                "POST",
+                "/inventory/nfc/resolve-member",
+                RESOLVE_BODY,
+            )
+        assert response.status_code == 404
+        assert fragment in response.json()["detail"]

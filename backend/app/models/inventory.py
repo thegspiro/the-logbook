@@ -2680,6 +2680,9 @@ class InventoryNfcScanAction(str, enum.Enum):
     LOOKUP = "lookup"
     # An item was moved onto a storage area by tapping.
     PUT_AWAY = "put_away"
+    # An item was tapped during a shelf audit (found there, or found there
+    # unexpectedly). ``storage_area_id`` is the audited shelf.
+    AUDIT = "audit"
 
 
 class InventoryNfcScan(Base):
@@ -2743,4 +2746,120 @@ class InventoryNfcScan(Base):
             "item_id",
             "scanned_at",
         ),
+    )
+
+
+class InventoryNfcAuditResult(str, enum.Enum):
+    """What a shelf audit found for one item."""
+
+    # Recorded on the shelf and tapped there.
+    FOUND = "found"
+    # Recorded on the shelf, not tapped. Only ever listed: an audit never marks
+    # an item lost, because "not tapped today" is not "gone".
+    MISSING = "missing"
+    # Tapped on the shelf, recorded somewhere else (or nowhere).
+    UNEXPECTED = "unexpected"
+
+
+class InventoryNfcAudit(Base):
+    """One shelf audit: the items tapped on a storage area, compared with the
+    items the system says are there.
+
+    Stored so a quartermaster can see when a shelf was last checked and what
+    was off. Names are snapshotted because an audit is a record of a moment:
+    the shelf or an item may be renamed or deleted later, and the audit must
+    still say what it said.
+    """
+
+    __tablename__ = "inventory_nfc_audits"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    storage_area_id = Column(
+        String(36), ForeignKey("storage_areas.id", ondelete="SET NULL"), nullable=True
+    )
+    storage_area_name = Column(String(255), nullable=False)
+
+    expected_count = Column(Integer, nullable=False, default=0, server_default="0")
+    found_count = Column(Integer, nullable=False, default=0, server_default="0")
+    missing_count = Column(Integer, nullable=False, default=0, server_default="0")
+    unexpected_count = Column(Integer, nullable=False, default=0, server_default="0")
+
+    audited_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    audited_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # Set when the quartermaster confirmed moving the unexpected items.
+    applied_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    applied_at = Column(DateTime(timezone=True), nullable=True)
+
+    items = relationship(
+        "InventoryNfcAuditItem",
+        back_populates="audit",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_inventory_nfc_audit_org_area_time",
+            "organization_id",
+            "storage_area_id",
+            "audited_at",
+        ),
+    )
+
+
+class InventoryNfcAuditItem(Base):
+    """One item's line in a shelf audit."""
+
+    __tablename__ = "inventory_nfc_audit_items"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    audit_id = Column(
+        String(36),
+        ForeignKey("inventory_nfc_audits.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Denormalized from the audit so every read is org-scoped without a join
+    # (CLAUDE.md pitfall #14).
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    item_name = Column(String(255), nullable=False)
+    result = Column(
+        Enum(InventoryNfcAuditResult, values_callable=_enum_values),
+        nullable=False,
+    )
+    # For an unexpected item: where the system had it when the audit ran.
+    recorded_storage_area_id = Column(
+        String(36), ForeignKey("storage_areas.id", ondelete="SET NULL"), nullable=True
+    )
+    recorded_storage_area_name = Column(String(255), nullable=True)
+    # True once the confirm step moved this unexpected item onto the shelf.
+    moved = Column(Boolean, nullable=False, default=False, server_default="0")
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    audit = relationship("InventoryNfcAudit", back_populates="items")
+
+    __table_args__ = (
+        # An item's audit history: every shelf it was found on, or missing from.
+        Index("idx_inventory_nfc_audit_item_org_item", "organization_id", "item_id"),
     )
