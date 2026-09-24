@@ -195,6 +195,8 @@ from app.models.inventory import (
     InventoryItem,
     InventoryLabelPrint,
     InventoryLot,
+    InventoryNfcScan,
+    InventoryNfcScanAction,
     InventoryNfcTag,
     InventoryNfcTagStatus,
     InventoryNotificationQueue,
@@ -373,6 +375,7 @@ from app.models.training import (
 from app.models.user import (
     LeaveType,
     MemberLeaveOfAbsence,
+    MemberServicePeriod,
     Organization,
     Role,
     Session,
@@ -398,6 +401,7 @@ __all__ = [
     "UserStatus",
     "user_roles",
     "MemberLeaveOfAbsence",
+    "MemberServicePeriod",
     "LeaveType",
     # Audit models
     "AuditLog",
@@ -582,6 +586,8 @@ __all__ = [
     "InventoryItem",
     "InventoryLabelPrint",
     "InventoryLot",
+    "InventoryNfcScan",
+    "InventoryNfcScanAction",
     "InventoryNfcTag",
     "InventoryNfcTagStatus",
     "ItemAssignment",

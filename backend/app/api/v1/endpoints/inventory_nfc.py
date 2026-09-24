@@ -1,8 +1,9 @@
 """
 Inventory NFC Tag API Endpoints
 
-NFC tags attached to inventory items: linking them, and resolving a tap back
-to the item. Mounted under ``/inventory`` behind the Inventory module gate, in
+NFC tags attached to inventory items and storage areas: linking them,
+resolving a tap back to what it names, putting items away on a shelf by tap,
+and the staff tap log. Mounted under ``/inventory`` behind the Inventory module gate, in
 a file of its own so the NFC surface can be read (and its gates tested) in one
 place rather than inside the 7,000-line inventory router.
 
@@ -12,20 +13,31 @@ Every route also requires the organization to have switched NFC tracking on
 
 Permissions follow the barcode flow they sit beside: resolving a tag is
 ``inventory.view``, like ``GET /inventory/lookup``; changing which tags an item
-carries is ``inventory.manage``.
+carries, moving an item, and reading the tap log are ``inventory.manage``.
+
+Only taps by ``inventory.manage`` holders are written to the tap log. A member
+opening a written tag from their own phone is resolved but not recorded —
+logging everyone would turn an equipment trail into a record of where each
+member was.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import require_permission, user_has_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.models.inventory import InventoryNfcScanAction
 from app.models.user import User
 from app.schemas.inventory import ScanLookupResponse
 from app.schemas.inventory_nfc import (
+    InventoryNfcPutAwayRequest,
+    InventoryNfcPutAwayResponse,
+    InventoryNfcResolveAnyRequest,
+    InventoryNfcResolveAnyResponse,
     InventoryNfcResolveRequest,
+    InventoryNfcScanListResponse,
     InventoryNfcSettingsResponse,
     InventoryNfcTagCreate,
     InventoryNfcTagListResponse,
@@ -39,6 +51,11 @@ from app.services.inventory_nfc_service import (
 from app.utils.inventory_nfc import inventory_nfc_enabled, require_inventory_nfc
 
 router = APIRouter()
+
+
+def _is_staff(user: User) -> bool:
+    """Whether this caller's taps belong in the tap log."""
+    return user_has_permission(user, "inventory.manage")
 
 
 @router.get("/nfc/settings", response_model=InventoryNfcSettingsResponse)
@@ -72,11 +89,185 @@ async def resolve_inventory_nfc_tag(
     except InventoryNfcTagNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
+    if _is_staff(current_user):
+        await service.record_scan(
+            organization_id=org_id,
+            item_id=str(item.id),
+            action=InventoryNfcScanAction.LOOKUP,
+            scanned_by=str(current_user.id),
+            tag_id=str(tag.id),
+        )
+
     return ScanLookupResponse(
         item=item,
         matched_field="nfc_tag",
         matched_value=f"NFC tag …{tag.uid_preview}",
     )
+
+
+@router.post("/nfc/resolve-any", response_model=InventoryNfcResolveAnyResponse)
+async def resolve_any_inventory_nfc_tag(
+    data: InventoryNfcResolveAnyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """Find the item *or storage area* a tapped tag is linked to.
+
+    Separate from ``/nfc/resolve`` so that endpoint keeps the barcode lookup's
+    response shape for the scanner, which only ever wants an item.
+    """
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    service = InventoryNfcService(db)
+    try:
+        resolved = await service.resolve_any(org_id, (data.code, data.serial_number))
+    except InventoryNfcTagNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+    if resolved.item is not None and data.record and _is_staff(current_user):
+        await service.record_scan(
+            organization_id=org_id,
+            item_id=str(resolved.item.id),
+            action=InventoryNfcScanAction.LOOKUP,
+            scanned_by=str(current_user.id),
+            tag_id=str(resolved.tag.id),
+        )
+
+    return InventoryNfcResolveAnyResponse(
+        kind="item" if resolved.item is not None else "storage_area",
+        tag_id=str(resolved.tag.id),
+        tag_uid_preview=resolved.tag.uid_preview,
+        item=resolved.item,
+        storage_area=resolved.storage_area,
+    )
+
+
+@router.post("/nfc/put-away", response_model=InventoryNfcPutAwayResponse)
+async def put_away_inventory_item(
+    data: InventoryNfcPutAwayRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Move an item onto a storage area, as recorded by tapping both."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    service = InventoryNfcService(db)
+    try:
+        result = await service.put_away(
+            organization_id=org_id,
+            item_id=data.item_id,
+            storage_area_id=data.storage_area_id,
+            scanned_by=str(current_user.id),
+            item_tag_id=data.item_tag_id,
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+    if result["moved"]:
+        # The barcode put-away's event type and shape, so an auditor searching
+        # for put-aways finds both ways of doing one.
+        await log_audit_event(
+            db=db,
+            event_type="inventory_items_put_away",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "storage_area_id": result["storage_area_id"],
+                "item_ids": [result["item_id"]],
+                "skipped": 0,
+                "from_storage_area_id": result["from_storage_area_id"],
+                "method": "nfc",
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return result
+
+
+@router.get("/items/{item_id}/nfc-scans", response_model=InventoryNfcScanListResponse)
+async def list_item_nfc_scans(
+    item_id: str,
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """An item's tap log, newest first — its "last seen" trail."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    service = InventoryNfcService(db)
+    try:
+        items = await service.list_item_scans(item_id, org_id, limit=limit)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"items": items, "total": len(items)}
+
+
+@router.get(
+    "/storage-areas/{storage_area_id}/nfc-tags",
+    response_model=InventoryNfcTagListResponse,
+)
+async def list_storage_area_nfc_tags(
+    storage_area_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """List the tags linked to one storage area."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    service = InventoryNfcService(db)
+    try:
+        items = await service.list_storage_area_tags(storage_area_id, org_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"items": items, "total": len(items)}
+
+
+@router.post(
+    "/storage-areas/{storage_area_id}/nfc-tags",
+    response_model=InventoryNfcTagResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_storage_area_nfc_tag(
+    storage_area_id: str,
+    data: InventoryNfcTagCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Link a tag to a storage area (a shelf, bin or cabinet)."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    service = InventoryNfcService(db)
+    try:
+        tag = await service.link_tag(
+            organization_id=org_id,
+            storage_area_id=storage_area_id,
+            tag_uid=data.tag_uid,
+            credential_type=data.credential_type,
+            label=data.label,
+            linked_by=str(current_user.id),
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_nfc_tag_linked",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "tag_id": tag["id"],
+            "storage_area_id": storage_area_id,
+            "uid_preview": tag["uid_preview"],
+            "credential_type": data.credential_type.value,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return tag
 
 
 @router.get("/items/{item_id}/nfc-tags", response_model=InventoryNfcTagListResponse)
@@ -170,6 +361,7 @@ async def update_inventory_nfc_tag(
             event_data={
                 "tag_id": tag_id,
                 "item_id": tag["item_id"],
+                "storage_area_id": tag["storage_area_id"],
                 "new_status": tag["status"].value,
             },
             user_id=str(current_user.id),
@@ -201,6 +393,7 @@ async def unlink_inventory_nfc_tag(
         event_data={
             "tag_id": tag_id,
             "item_id": removed["item_id"],
+            "storage_area_id": removed["storage_area_id"],
             "uid_preview": removed["uid_preview"],
         },
         user_id=str(current_user.id),

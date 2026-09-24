@@ -1,10 +1,13 @@
 /**
  * Where an equipment NFC tag's written link lands: `/inventory/tag/:code`.
  *
- * Resolves the code to its item and replaces this page with the item's own,
- * so the back button skips it. The URL names the tag rather than the item on
- * purpose: unlinking the tag in the app stops the link working, which a URL
- * holding an item id never could.
+ * Resolves the code and replaces this page with where it points, so the back
+ * button skips it: an item's own page, or — for a shelf's tag, tapped by an
+ * inventory manager — put-away with that shelf already open. Anyone else
+ * tapping a shelf is told which shelf it is.
+ *
+ * The URL names the tag rather than the item on purpose: unlinking the tag in
+ * the app stops the link working, which a URL holding an item id never could.
  *
  * A tag is writable by anyone with a phone, so the code is treated as
  * untrusted: it is shape-checked here, looked up by exact match on the
@@ -15,6 +18,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
+import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 
 // The same bound `parseNfcTagPath` applies to every id read off a tag.
@@ -24,6 +28,8 @@ export const InventoryNfcTagPage: React.FC = () => {
   const { code = '' } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
+  const [shelfName, setShelfName] = useState<string | null>(null);
+  const canManage = useAuthStore((s) => s.checkPermission('inventory.manage'));
 
   useEffect(() => {
     if (!TAG_CODE_PATTERN.test(code)) {
@@ -33,8 +39,15 @@ export const InventoryNfcTagPage: React.FC = () => {
     let cancelled = false;
     const resolve = async () => {
       try {
-        const match = await inventoryService.resolveNfcTag({ code });
-        if (!cancelled) void navigate(`/inventory/items/${encodeURIComponent(match.item.id)}`, { replace: true });
+        const match = await inventoryService.resolveAnyNfcTag({ code });
+        if (cancelled) return;
+        if (match.item) {
+          void navigate(`/inventory/items/${encodeURIComponent(match.item.id)}`, { replace: true });
+        } else if (match.storage_area && canManage) {
+          void navigate(`/inventory/put-away?area=${encodeURIComponent(match.storage_area.id)}`, { replace: true });
+        } else if (match.storage_area) {
+          setShelfName(match.storage_area.name);
+        }
       } catch (err: unknown) {
         if (!cancelled) setError(getErrorMessage(err, 'Could not look up this tag.'));
       }
@@ -43,7 +56,20 @@ export const InventoryNfcTagPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [code, navigate]);
+  }, [code, navigate, canManage]);
+
+  if (shelfName) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-10">
+        <div className="alert-info" role="status">
+          This tag marks the storage area <strong>{shelfName}</strong>.
+        </div>
+        <Link to="/inventory/my-equipment" className="btn-secondary mt-4 inline-flex">
+          Go to Inventory
+        </Link>
+      </div>
+    );
+  }
 
   if (!error) {
     return (

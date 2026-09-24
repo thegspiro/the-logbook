@@ -837,6 +837,64 @@ class MemberLeaveOfAbsence(Base):
         return f"<MemberLeaveOfAbsence(user_id={self.user_id}, {self.start_date} - {self.end_date})>"
 
 
+class MemberServicePeriod(Base):
+    """
+    One continuous stint of membership, for calculating length of service.
+
+    A member who leaves (dropped or retired) and later rejoins has two or more
+    rows here. Credited service is the sum of the rows with
+    ``counts_toward_service`` set, so the time away between stints is never
+    counted. When a department restarts a returning member's clock, the
+    earlier stints stay on record with ``counts_toward_service`` false: they
+    are shown as prior service rather than deleted.
+
+    A member with no rows at all has never separated, and their service is
+    derived from ``users.hire_date`` exactly as it was before this table
+    existed -- which is why no backfill was needed.
+
+    ``start_date`` NULL means "the member's hire date". The stint written when
+    a member first separates is the one that began at hire, and pointing at
+    the column rather than copying it keeps a later correction of
+    ``hire_date`` flowing through instead of leaving a stale copy behind.
+    Rows written through the API always carry an explicit date.
+    """
+
+    __tablename__ = "member_service_periods"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)  # None = still serving
+    # The status the member separated into (dropped_voluntary,
+    # dropped_involuntary, retired); None while the stint is open.
+    separation_status = Column(String(32), nullable=True)
+    counts_toward_service = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    notes = Column(Text, nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_member_service_periods_org_user", "organization_id", "user_id"),
+    )
+
+
 class Session(Base):
     """
     User session model for tracking active sessions

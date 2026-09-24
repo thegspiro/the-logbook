@@ -190,8 +190,9 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
 
               {/* Explanation */}
               <p className="text-theme-text-secondary text-sm">
-                This member will be deactivated. Their records will be preserved but hidden from regular views. You can
-                reactivate their account later from the archived members section.
+                This member will be deactivated and removed from the member list. Their records are preserved, but a
+                deactivated member cannot be restored from the app. If they may return, change their status on their
+                profile instead &mdash; a dropped or archived member can be reactivated later.
               </p>
 
               {/* Action Button */}

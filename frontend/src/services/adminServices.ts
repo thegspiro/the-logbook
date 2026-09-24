@@ -641,8 +641,30 @@ export const memberStatusService = {
     return response.data;
   },
 
-  async reactivateMember(userId: string, data: { reason: string }): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>(`/users/${userId}/reactivate`, data);
+  async reactivateMember(
+    userId: string,
+    data: { reason?: string | undefined } & import('../types/user').RejoinServiceOptions
+  ): Promise<import('../types/user').MemberReactivationResponse> {
+    const response = await api.post<import('../types/user').MemberReactivationResponse>(
+      `/users/${userId}/reactivate`,
+      data
+    );
+    return response.data;
+  },
+
+  async getServiceHistory(userId: string): Promise<import('../types/user').ServiceHistory> {
+    const response = await api.get<import('../types/user').ServiceHistory>(`/users/${userId}/service-history`);
+    return response.data;
+  },
+
+  /** Replaces the member's whole stint list; the backend validates it as a set. */
+  async replaceServicePeriods(
+    userId: string,
+    periods: import('../types/user').ServicePeriodInput[]
+  ): Promise<import('../types/user').ServiceHistory> {
+    const response = await api.put<import('../types/user').ServiceHistory>(`/users/${userId}/service-periods`, {
+      periods,
+    });
     return response.data;
   },
 

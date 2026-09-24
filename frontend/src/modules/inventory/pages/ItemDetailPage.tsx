@@ -47,7 +47,8 @@ import { Modal } from '../../../components/Modal';
 import { ItemFormModal } from '../components/ItemFormModal';
 import { VendorName } from '../components/VendorName';
 import StockLotsPanel from '../components/StockLotsPanel';
-import { ItemNfcTagsCard } from '../components/ItemNfcTagsCard';
+import { NfcTagsCard } from '../components/NfcTagsCard';
+import { ItemNfcLastSeen } from '../components/ItemNfcLastSeen';
 import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
@@ -566,7 +567,12 @@ const ItemDetailPage: React.FC = () => {
           </Card>
         )}
 
-        {canManage && nfcEnabled && id && <ItemNfcTagsCard itemId={id} itemName={item.name} />}
+        {canManage && nfcEnabled && id && (
+          <>
+            <NfcTagsCard targetKind="item" targetId={id} targetName={item.name} />
+            <ItemNfcLastSeen itemId={id} />
+          </>
+        )}
       </div>
 
       {/* ============================================================ */}

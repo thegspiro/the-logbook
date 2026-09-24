@@ -147,6 +147,26 @@ describe('useTierEditor editing', () => {
     expect(result.current.autoAdvance).toBe(false);
     expect(result.current.dirty).toBe(true);
   });
+
+  it('reads a config saved before the rejoin setting existed as continue', async () => {
+    const result = await loaded();
+
+    expect(result.current.rejoinServiceCredit).toBe('continue');
+  });
+
+  it('changes the rejoin default and saves it with the ladder', async () => {
+    const result = await loaded();
+
+    act(() => result.current.setRejoinServiceCredit('restart'));
+    expect(result.current.rejoinServiceCredit).toBe('restart');
+    expect(result.current.dirty).toBe(true);
+
+    await act(async () => {
+      await result.current.save();
+    });
+    const sent = updateTierConfig.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(sent['rejoin_service_credit']).toBe('restart');
+  });
 });
 
 describe('useTierEditor removal', () => {

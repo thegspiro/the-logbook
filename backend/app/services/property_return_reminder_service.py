@@ -4,8 +4,10 @@ Property Return Reminder Service
 Checks for dropped members who still have outstanding inventory items
 past the 30-day and 90-day marks, and sends reminder notifications.
 
-Designed to be called periodically (e.g., daily via cron, scheduler, or
-manual API call).
+Runs daily as the ``property_return_reminders`` scheduled task, and on demand
+through ``POST /users/property-return-reminders/process``. Each run sends a
+member at most one reminder: the latest threshold they have passed, if it has
+not been sent already.
 """
 
 from datetime import datetime, timezone
@@ -28,6 +30,13 @@ REMINDER_THRESHOLDS = [
     {"days": 30, "type": "30_day", "label": "30-Day"},
     {"days": 90, "type": "90_day", "label": "90-Day"},
 ]
+
+
+def latest_due_threshold(days_since_drop: int) -> Optional[Dict[str, Any]]:
+    """The last reminder threshold a member ``days_since_drop`` days out has
+    reached, or None before the first one."""
+    due = [t for t in REMINDER_THRESHOLDS if days_since_drop >= t["days"]]
+    return max(due, key=lambda t: t["days"]) if due else None
 
 
 class PropertyReturnReminderService:
@@ -90,41 +99,47 @@ class PropertyReturnReminderService:
                 status_changed_utc = status_changed_utc.replace(tzinfo=timezone.utc)
             days_since_drop = (now - status_changed_utc).days
 
-            # Check each threshold
-            for threshold in REMINDER_THRESHOLDS:
-                if days_since_drop < threshold["days"]:
-                    continue
+            # Only the latest threshold the member has passed is considered. A
+            # threshold the member has already gone past is superseded, never
+            # sent late: this runs daily, and a member dropped 200 days ago
+            # (the backlog when the schedule was first switched on) must get
+            # one 90-day reminder, not a 30-day and a 90-day on the same
+            # morning. Nothing needs recording for the superseded one -- once a
+            # later threshold is due, an earlier one is never looked at again.
+            threshold = latest_due_threshold(days_since_drop)
+            if threshold is None:
+                continue
 
-                # Check if this reminder was already sent
-                existing = await self.db.execute(
-                    select(PropertyReturnReminder).where(
-                        PropertyReturnReminder.user_id == str(member.id),
-                        PropertyReturnReminder.organization_id == organization_id,
-                        PropertyReturnReminder.reminder_type == threshold["type"],
-                    )
+            # Check if this reminder was already sent
+            existing = await self.db.execute(
+                select(PropertyReturnReminder).where(
+                    PropertyReturnReminder.user_id == str(member.id),
+                    PropertyReturnReminder.organization_id == organization_id,
+                    PropertyReturnReminder.reminder_type == threshold["type"],
                 )
-                if existing.scalar_one_or_none():
-                    continue  # Already sent
+            )
+            if existing.scalar_one_or_none():
+                continue  # Already sent
 
-                # Check if member still has outstanding items
-                items_info = await self._get_outstanding_items(
-                    str(member.id), organization_id
-                )
-                if items_info["count"] == 0:
-                    continue  # Nothing to remind about
+            # Check if member still has outstanding items
+            items_info = await self._get_outstanding_items(
+                str(member.id), organization_id
+            )
+            if items_info["count"] == 0:
+                continue  # Nothing to remind about
 
-                # Generate and send the reminder
-                reminder_result = await self._send_reminder(
-                    member=member,
-                    org=org,
-                    org_name=org_name,
-                    org_tz=org_tz,
-                    organization_id=organization_id,
-                    threshold=threshold,
-                    days_since_drop=days_since_drop,
-                    items_info=items_info,
-                )
-                results.append(reminder_result)
+            # Generate and send the reminder
+            reminder_result = await self._send_reminder(
+                member=member,
+                org=org,
+                org_name=org_name,
+                org_tz=org_tz,
+                organization_id=organization_id,
+                threshold=threshold,
+                days_since_drop=days_since_drop,
+                items_info=items_info,
+            )
+            results.append(reminder_result)
 
         return {
             "organization_id": organization_id,

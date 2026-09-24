@@ -36,18 +36,19 @@ The Inventory module tracks department equipment, supplies, and gear. It support
 14. [Checkout and Return](#checkout-and-return)
 15. [Item Distribution and Batch Return](#item-distribution-and-batch-return)
 16. [Barcode and QR Scanning](#barcode-and-qr-scanning)
-17. [Label Printing](#label-printing)
-18. [Maintenance Tracking](#maintenance-tracking)
-19. [Low Stock Alerts](#low-stock-alerts)
-20. [Dated Stock Lots and Receiving](#dated-stock-lots-and-receiving-2026-08-10)
-21. [Departure Clearance](#departure-clearance)
-22. [Members Inventory View (Admin)](#members-inventory-view-admin)
-23. [Inventory Admin Hub](#inventory-admin-hub)
-24. [Gear Kits Admin Page](#gear-kits-admin-page)
-25. [Variant Groups Admin Page](#variant-groups-admin-page)
-26. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
-27. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
-28. [Troubleshooting](#troubleshooting)
+17. [NFC Tags](#nfc-tags-2026-09-24)
+18. [Label Printing](#label-printing)
+19. [Maintenance Tracking](#maintenance-tracking)
+20. [Low Stock Alerts](#low-stock-alerts)
+21. [Dated Stock Lots and Receiving](#dated-stock-lots-and-receiving-2026-08-10)
+22. [Departure Clearance](#departure-clearance)
+23. [Members Inventory View (Admin)](#members-inventory-view-admin)
+24. [Inventory Admin Hub](#inventory-admin-hub)
+25. [Gear Kits Admin Page](#gear-kits-admin-page)
+26. [Variant Groups Admin Page](#variant-groups-admin-page)
+27. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
+28. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
+29. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -727,6 +728,86 @@ If a code matches multiple items (e.g., the same serial number in different cate
 > **No screenshot — the harness has no camera _(2026-08-12)_.** These shots need a live viewfinder with a code actually being recognised; the capture automation runs headless with no camera device, and a synthetic video stream produces a test pattern rather than a scannable code. The feature works — only the automated screenshot is impossible. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12).
 
 > **Hint:** Barcode scanning works best with a device that has a camera. On desktop, you can use a USB barcode scanner, which types the code into the search field — as does typing a name, serial or asset tag by hand, which is the same path. If scanning fails, check that the barcode is clean and well-lit; a specific error message will indicate whether the item was not found or a network error occurred.
+
+---
+
+## NFC Tags _(2026-09-24)_
+
+NFC tags are small stickers or fobs that a phone reads by touch. Linked to an
+item or a shelf, a tap finds exactly that item, with no camera, no lighting and
+no lining up a barcode. **They are off until an administrator turns them on.**
+
+The full setup guide covers which tags to buy, which phones can do what,
+tagging shelves, and troubleshooting:
+[Inventory NFC Tags](../../wiki/Inventory-NFC-Tags.md).
+
+> **Which phones:** linking tags and tapping inside the app need **Chrome on
+> Android**, with the site opened over **HTTPS**. An iPhone cannot read tags
+> inside the app, but tapping a tag that has a written link opens the item
+> straight from the home screen.
+
+### Turning NFC tags on
+
+Needs the department-settings permission (`settings.manage` or
+`organization.update_settings`).
+
+1. Go to **Inventory Admin > NFC Tags**.
+2. Tick **Use NFC tags for inventory items**. It saves immediately.
+
+Turning it off hides the NFC buttons and stops tags working, but keeps every
+link. Turning it back on restores them.
+
+### Linking a tag to an item
+
+1. Open the item. The **NFC Tags** card is on the item page, shown to
+   quartermasters (`inventory.manage`) while NFC is on.
+2. Optionally type **where the tag is on the item** (for example "Inside left
+   cuff").
+3. Tap **Write a link to a blank tag**, then hold a blank tag flat against the
+   back of the phone until it confirms.
+   - For a tag that cannot be written, tap **Read a tag's serial** instead.
+   - At a desk, type the serial, or tap the tag on a USB reader with the cursor
+     in the box, then press **Link serial**.
+
+An item can carry several tags; a tag belongs to one item or shelf. **Mark
+lost** takes a missing tag out of service until you **Mark found**; **Unlink**
+frees a tag for reuse.
+
+> **Hint:** Prefer **Write a link**. A written tag works on any phone,
+> iPhones included, and stops working the moment you unlink it, because the
+> link names the tag, not the item.
+
+### Tapping items in the scanner
+
+In **Distribute** or **Return** for a member, tap **Tap NFC** next to **Start
+Camera**, then tap each item's tag. Each tap adds that item to the list, the
+same as a scanned barcode. Tap **Stop NFC** when done; closing the dialog also
+stops it.
+
+### Putting items away by tap
+
+Tag your shelves first: **Inventory > Storage Areas**, edit a shelf, and link
+a tag in its **NFC Tags** card, the same way as an item.
+
+1. Go to **Inventory Admin > Put Away by NFC** (or **Put Away by NFC** on
+   Storage Areas) and tap **Start tapping tags**.
+2. Work in either order:
+   - **Shelf first:** tap the shelf, then every item going onto it. The shelf
+     stays open until you tap another shelf or **Close shelf**.
+   - **Item first:** tap one item, then its shelf. That one item moves, and
+     the next item waits for its own shelf.
+3. Each move is listed under **Put away this session**.
+
+Put-away follows the same rules as the barcode **Put away** panel. An item
+that is assigned to a member, checked out, lost, stolen or retired is refused,
+and the message says why. Without an Android phone, choose the shelf from
+**Or pick a shelf** and enter item serials in the box.
+
+### Last Seen
+
+The item page lists the item's recent NFC taps under **Last Seen (NFC)**: who
+tapped it, and where it was put away. Only quartermaster taps are recorded. A
+member opening a tag from their own phone leaves no record.
 
 ---
 

@@ -49,7 +49,7 @@ import type {
 import type { TrainingRecord, ComplianceSummary } from '../types/training';
 import { AVAILABLE_MODULES } from '../types/modules';
 import { MAX_AVATAR_SIZE } from '../constants/config';
-import { UserStatus } from '../constants/enums';
+import { SEPARATED_STATUSES, UserStatus } from '../constants/enums';
 import TrainingSection from '../components/member-profile/TrainingSection';
 import AdminHoursSection from '../components/member-profile/AdminHoursSection';
 import ContactInfoSection from '../components/member-profile/ContactInfoSection';
@@ -57,6 +57,10 @@ import EmergencyContactsSection from '../components/member-profile/EmergencyCont
 import { VisibilityControl } from '../components/member-profile/VisibilityControl';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
+import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
+import { RejoinServiceFields } from '../components/RejoinServiceFields';
+import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
+import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
 
 // Types for inventory data
 interface InventoryItem {
@@ -149,6 +153,7 @@ export const MemberProfilePage: React.FC = () => {
 
   // Status change modal state
   const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [reactivateModalOpen, setReactivateModalOpen] = useState(false);
 
   // Takes the fixed mobile bottom bar off this overlay while it is open.
   useOverlaySurface(statusModalOpen);
@@ -347,10 +352,25 @@ export const MemberProfilePage: React.FC = () => {
 
   const handleOpenStatusModal = () => {
     if (!user) return;
+    // No ordinary status change leads out of `archived` -- the backend
+    // refuses every one -- so the only useful control is reactivation.
+    if (user.status === UserStatus.ARCHIVED) {
+      setReactivateModalOpen(true);
+      return;
+    }
     setNewStatus(user.status);
     setStatusReason('');
     setStatusModalOpen(true);
   };
+
+  // A dropped or retired member brought back opens a new service stint, so the
+  // dialog asks how their earlier service counts. Loaded whenever the dialog
+  // opens on such a member, and shown once the chosen status is a rejoin.
+  const isSeparatedStatus = (s: string | undefined) =>
+    s !== undefined && (SEPARATED_STATUSES as readonly string[]).includes(s);
+  const statusDialogMayRejoin = statusModalOpen && isSeparatedStatus(user?.status);
+  const rejoin = useRejoinServiceOptions(userId ?? null, statusDialogMayRejoin, tz);
+  const isRejoining = statusDialogMayRejoin && newStatus !== '' && !isSeparatedStatus(newStatus);
 
   const handleStatusChange = async () => {
     if (!userId || !newStatus || !user) return;
@@ -362,6 +382,7 @@ export const MemberProfilePage: React.FC = () => {
       await memberStatusService.changeStatus(userId, {
         new_status: newStatus,
         reason: statusReason.trim() || undefined,
+        ...(isRejoining ? rejoin.options : {}),
       });
       // Re-fetch user to get the updated status
       await fetchUserData(userId);
@@ -805,7 +826,7 @@ export const MemberProfilePage: React.FC = () => {
                         ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
                         : 'bg-theme-surface-secondary text-theme-text-secondary'
                     }`}
-                    title="Change member status"
+                    title={user.status === UserStatus.ARCHIVED ? 'Reactivate member' : 'Change member status'}
                   >
                     {user.status.replace(/_/g, ' ')}
                     <Pencil className="h-3 w-3" />
@@ -1225,8 +1246,8 @@ export const MemberProfilePage: React.FC = () => {
                         type="button"
                         onClick={handleOpenStatusModal}
                         className="text-theme-text-muted transition hover:text-blue-500"
-                        title="Change status"
-                        aria-label="Change status"
+                        title={user.status === UserStatus.ARCHIVED ? 'Reactivate member' : 'Change status'}
+                        aria-label={user.status === UserStatus.ARCHIVED ? 'Reactivate member' : 'Change status'}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
@@ -1240,6 +1261,12 @@ export const MemberProfilePage: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Length of service for the member and for leadership only: a
+                stint records how the member left, including an involuntary drop. */}
+            {userId && (isSelf || canManageMembers) && (
+              <ServiceHistorySection userId={userId} canEdit={canManageMembers} tz={tz} refreshKey={user.status} />
+            )}
 
             {/* Quick Stats — only when the viewer can see at least one of the
                 numbers; an empty card reads as "nothing to report". */}
@@ -1339,11 +1366,15 @@ export const MemberProfilePage: React.FC = () => {
                     onChange={(e) => setNewStatus(e.target.value)}
                     className="form-input px-3 text-sm focus:ring-blue-500"
                   >
-                    {Object.values(UserStatus).map((s) => (
-                      <option key={s} value={s}>
-                        {s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                      </option>
-                    ))}
+                    {/* Archiving has its own endpoint and preconditions; the status
+                        change rejects it, so offering it here only produces an error. */}
+                    {Object.values(UserStatus)
+                      .filter((s) => s !== UserStatus.ARCHIVED)
+                      .map((s) => (
+                        <option key={s} value={s}>
+                          {s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                        </option>
+                      ))}
                   </select>
                 </div>
                 <div>
@@ -1356,6 +1387,7 @@ export const MemberProfilePage: React.FC = () => {
                     className="form-input px-3 text-sm focus:ring-blue-500"
                   />
                 </div>
+                {isRejoining && <RejoinServiceFields state={rejoin} disabled={statusChanging} />}
                 {(newStatus === UserStatus.DROPPED_VOLUNTARY || newStatus === UserStatus.DROPPED_INVOLUNTARY) && (
                   <p className="rounded-md border border-yellow-500/20 bg-yellow-500/10 p-2 text-xs text-yellow-600 dark:text-yellow-400">
                     Dropping a member will generate a property return report and may send an email notification.
@@ -1367,7 +1399,7 @@ export const MemberProfilePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void handleStatusChange()}
-                  disabled={statusChanging || newStatus === user?.status}
+                  disabled={statusChanging || newStatus === user?.status || (isRejoining && rejoin.loading)}
                   className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {statusChanging ? 'Saving...' : 'Update Status'}
@@ -1383,6 +1415,18 @@ export const MemberProfilePage: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {canManageMembers && user && userId && (
+          <ReactivateMemberModal
+            isOpen={reactivateModalOpen}
+            onClose={() => setReactivateModalOpen(false)}
+            member={{
+              id: userId,
+              name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username,
+            }}
+            onReactivated={() => fetchUserData(userId)}
+          />
         )}
       </div>
     </div>

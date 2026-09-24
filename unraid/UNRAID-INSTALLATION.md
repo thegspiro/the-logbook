@@ -369,10 +369,15 @@ Set `FRONTEND_URL` to your real, externally reachable site URL. Emailed links
 than from the incoming request URL, so leaving it unset or wrong produces
 broken links in emails.
 
-`unraid-setup.sh` does **not** write `FRONTEND_URL`, so after running it add the
-same HTTPS origin you gave for `ALLOWED_ORIGINS`:
+`unraid-setup.sh` writes `FRONTEND_URL` from the HTTPS URL it asks for, the
+same origin it writes to `ALLOWED_ORIGINS`. On an update (option 2) it keeps
+your `.env`, but fills `FRONTEND_URL` in when it is missing or still points at
+`localhost`, and replaces a plain `http://` value when it migrates the install
+to HTTPS. A public value you set yourself is never rewritten. If you change your
+public address later, update both lines:
 
 ```bash
+ALLOWED_ORIGINS=https://logbook.yourdomain.com
 FRONTEND_URL=https://logbook.yourdomain.com
 ```
 

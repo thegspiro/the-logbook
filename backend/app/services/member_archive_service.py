@@ -13,7 +13,7 @@ Workflow:
 """
 
 import html
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, Optional
 
 from loguru import logger
@@ -29,6 +29,8 @@ from app.models.inventory import (
     ItemIssuance,
 )
 from app.models.user import Organization, User, UserStatus
+from app.schemas.organization import RejoinServiceCredit
+from app.services.member_service_history_service import MemberServiceHistoryService
 
 
 async def check_and_auto_archive(
@@ -231,9 +233,16 @@ async def reactivate_member(
     organization_id: str,
     reactivated_by: str,
     reason: Optional[str] = None,
+    service_credit: Optional[RejoinServiceCredit] = None,
+    rejoin_date: Optional[date] = None,
+    previous_service_end: Optional[date] = None,
 ) -> Dict[str, Any]:
     """
     Reactivate an archived member, restoring them to ACTIVE status.
+
+    A new service stint opens on ``rejoin_date`` (default today), and
+    ``service_credit`` (default: the department's setting) decides whether
+    their earlier stints keep counting toward length of service.
 
     Returns a dict with reactivation details.
     Raises ValueError if the member cannot be reactivated.
@@ -254,6 +263,18 @@ async def reactivate_member(
             f"Only archived members can be reactivated. "
             f"Current status: {member.status.value}"
         )
+
+    # Before the status changes: unrecorded earlier service ends where the
+    # member's last status change says it did.
+    history = MemberServiceHistoryService(db)
+    service_credit = service_credit or await history.get_rejoin_default(organization_id)
+    await history.record_rejoin(
+        member,
+        rejoin_date or date.today(),
+        service_credit,
+        reactivated_by,
+        previous_service_end=previous_service_end,
+    )
 
     now = datetime.now(timezone.utc)
     previous_status = member.status.value
@@ -305,6 +326,7 @@ async def reactivate_member(
                 "new_status": UserStatus.ACTIVE.value,
                 "reason": reason or "Reactivated by leadership",
                 "reactivated_by": reactivated_by,
+                "service_credit": service_credit.value,
             },
             user_id=reactivated_by,
             username=performer.username if performer else "unknown",
@@ -319,4 +341,5 @@ async def reactivate_member(
         "new_status": UserStatus.ACTIVE.value,
         "reactivated_at": now.isoformat(),
         "reason": reason or "Reactivated by leadership",
+        "service_credit": service_credit.value,
     }

@@ -55,7 +55,10 @@ Click on any event to view its detail page. The detail page shows:
 - Event title, type, date, time, and location
 - Description and any attached files
 - RSVP counts (Going, Maybe, Not Going)
-- Attendee list — officers can add/remove attendees directly from the detail page
+- Attendee list — officers see the full list and can add/remove attendees
+  directly from the detail page. A member sees a **Who's going** list of names
+  only if the department shares it, which is off by default (see
+  [Who's going, RSVP and the waitlist](#whos-going-rsvp-and-the-waitlist-2026-09-01))
 - Attendance list (for past events)
 - Your current RSVP status
 - An **Event Information** card with whether an RSVP is required and its
@@ -65,7 +68,9 @@ Click on any event to view its detail page. The detail page shows:
 **To RSVP:**
 
 1. Click one of the RSVP buttons: **Going**, **Maybe**, or **Not Going**.
-2. Your response is recorded immediately.
+2. Your response is recorded immediately, and **Your RSVP** shows it. On a
+   full event, a **Going** response puts you on the waitlist instead: Your RSVP
+   reads **Waitlisted**, with your place in line.
 3. You can change your RSVP at any time before the event.
 
 > **When RSVP is available.** You can only RSVP to a **published** event that
@@ -1801,7 +1806,7 @@ check-in times stay in the organizer view and are never included.
 
 | Setting | Where | Default |
 | --- | --- | --- |
-| Attendee visibility | Organization settings → Events | **Managers only** |
+| Attendee visibility | **Manage Events → Settings → Attendance** | **Managers only** |
 | Per-event override | On the event itself, in either direction | Inherits the organization default |
 
 **The default ships as managers-only**, so nothing changes for an existing

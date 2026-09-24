@@ -23,12 +23,18 @@ import { UserStatus } from '../constants/enums';
 
 const mockGetUsers = vi.fn();
 const mockCheckContactInfoEnabled = vi.fn();
+const mockReactivateMember = vi.fn();
+const mockGetServiceHistory = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: {
     getUsers: (...args: unknown[]) => mockGetUsers(...args) as unknown,
     checkContactInfoEnabled: (...args: unknown[]) => mockCheckContactInfoEnabled(...args) as unknown,
     deleteUserWithMode: vi.fn(),
+  },
+  memberStatusService: {
+    reactivateMember: (...args: unknown[]) => mockReactivateMember(...args) as unknown,
+    getServiceHistory: (...args: unknown[]) => mockGetServiceHistory(...args) as unknown,
   },
 }));
 
@@ -126,6 +132,21 @@ function installDefaults(held: string[]): void {
   mockCheckContactInfoEnabled.mockReset();
   mockCheckPermission.mockReset();
   mockNavigate.mockReset();
+  mockReactivateMember.mockReset();
+  mockReactivateMember.mockResolvedValue({ user_id: 'u3', new_status: UserStatus.ACTIVE });
+  mockGetServiceHistory.mockReset();
+  mockGetServiceHistory.mockResolvedValue({
+    user_id: 'u3',
+    hire_date: '2015-09-24',
+    periods: [],
+    credited_days: 0,
+    credited_years: 0,
+    prior_days: 0,
+    effective_service_start: null,
+    is_recorded: true,
+    is_estimated: false,
+    default_rejoin_credit: 'continue',
+  });
   mockGetUsers.mockResolvedValue(ROSTER);
   mockCheckContactInfoEnabled.mockResolvedValue({
     enabled: true,
@@ -356,5 +377,74 @@ describe('Members roster — membership coordinator (members.manage)', () => {
 
     expect(within(table()).getByLabelText('View or edit Me Myself')).toBeInTheDocument();
     expect(screen.queryByLabelText('Delete Me Myself')).not.toBeInTheDocument();
+  });
+});
+
+describe('Members roster — archived members', () => {
+  const ARCHIVED = makeMember({
+    id: 'u3',
+    username: 'cformer',
+    email: 'c.former@example.org',
+    first_name: 'Casey',
+    last_name: 'Former',
+    membership_number: '007',
+    status: UserStatus.ARCHIVED,
+  });
+
+  describe('as a membership coordinator (members.manage)', () => {
+    beforeEach(() => {
+      installDefaults(['members.manage', 'users.create']);
+      mockGetUsers.mockResolvedValue([...ROSTER, ARCHIVED]);
+    });
+
+    it('offers an Archived filter that narrows the list to archived members', async () => {
+      const user = userEvent.setup();
+      await renderRoster();
+
+      await user.selectOptions(screen.getByLabelText('Filter by status'), 'archived');
+
+      expect(await within(table()).findByText('Casey Former')).toBeInTheDocument();
+      expect(within(table()).queryByText('Laura Adams')).not.toBeInTheDocument();
+    });
+
+    it('offers Reactivate only on archived rows, in both layouts', async () => {
+      await renderRoster();
+
+      expect(within(table()).getByLabelText('Reactivate Casey Former')).toBeInTheDocument();
+      expect(within(cards()).getByLabelText('Reactivate Casey Former')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Reactivate Laura Adams')).not.toBeInTheDocument();
+    });
+
+    it('reactivates through the dialog and reloads the roster', async () => {
+      const user = userEvent.setup();
+      await renderRoster();
+      expect(mockGetUsers).toHaveBeenCalledTimes(1);
+
+      await user.click(within(table()).getByLabelText('Reactivate Casey Former'));
+      await screen.findByRole('group', { name: /Earlier service/ });
+      await user.type(screen.getByLabelText(/Reason/), 'Moved back to the district');
+      await user.click(screen.getByRole('button', { name: 'Reactivate' }));
+
+      await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(2));
+      expect(mockReactivateMember).toHaveBeenCalledWith(
+        'u3',
+        expect.objectContaining({ reason: 'Moved back to the district', service_credit: 'continue' })
+      );
+    });
+  });
+
+  describe('as a regular member (no members.manage)', () => {
+    beforeEach(() => {
+      installDefaults([]);
+      mockGetUsers.mockResolvedValue([...ROSTER, ARCHIVED]);
+    });
+
+    it('neither offers the Archived filter nor the Reactivate action', async () => {
+      await renderRoster();
+
+      const filter = screen.getByLabelText('Filter by status');
+      expect(within(filter).queryByRole('option', { name: 'Archived' })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Reactivate Casey Former')).not.toBeInTheDocument();
+    });
   });
 });

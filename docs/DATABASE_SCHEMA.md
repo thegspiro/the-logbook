@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**273 tables · 4565 columns · 883 foreign keys**
+**274 tables · 4580 columns · 890 foreign keys**
 
 ---
 
@@ -320,7 +320,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_items`](#inventory_items) | `InventoryItem` | 54 | Inventory Item model |
 | [`inventory_label_prints`](#inventory_label_prints) | `InventoryLabelPrint` | 6 | One confirmed label print for an item: who confirmed it, and when. |
 | [`inventory_lots`](#inventory_lots) | `InventoryLot` | 13 | A batch/lot of a consumable inventory item held as ready stock. |
-| [`inventory_nfc_tags`](#inventory_nfc_tags) | `InventoryNfcTag` | 12 | An NFC tag physically attached to an inventory item. |
+| [`inventory_nfc_scans`](#inventory_nfc_scans) | `InventoryNfcScan` | 9 | One staff tap of an NFC tag on an item — the "last seen" trail. |
+| [`inventory_nfc_tags`](#inventory_nfc_tags) | `InventoryNfcTag` | 13 | An NFC tag physically attached to an inventory item or a storage area. |
 | [`inventory_notification_queue`](#inventory_notification_queue) | `InventoryNotificationQueue` | 15 | Queues inventory change events for delayed, consolidated email |
 | [`inventory_vendor_contacts`](#inventory_vendor_contacts) | `InventoryVendorContact` | 12 | A named person at a vendor — sales rep, service desk, accounts receivable. |
 | [`inventory_vendors`](#inventory_vendors) | `InventoryVendor` | 21 | Vendor model |
@@ -623,6 +624,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`member_leaves_of_absence`](#member_leaves_of_absence) | `MemberLeaveOfAbsence` | 14 | Records periods where a member is on leave from the department. |
+| [`member_service_periods`](#member_service_periods) | `MemberServicePeriod` | 11 | One continuous stint of membership, for calculating length of service. |
 | [`organizations`](#organizations) | `Organization` | 38 | Organization/Department model |
 | [`password_history`](#password_history) | `PasswordHistory` | 4 | Password history for HIPAA compliance (§164.312(d)) |
 | [`positions`](#positions) | `Position` | 11 | Corporate Position model for permission-based access control. |
@@ -4933,17 +4935,40 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_inventory_lots_org_exp` (`organization_id`, `expiration_date`)
 - `ix_inventory_lots_inventory_item_id` (`inventory_item_id`)
 
-### `inventory_nfc_tags`
+### `inventory_nfc_scans`
 
-**InventoryNfcTag** · `app/models/inventory.py`
+**InventoryNfcScan** · `app/models/inventory.py`
 
-> An NFC tag physically attached to an inventory item. Only in use when the organization has switched NFC tracking on (see ``app/utils/inventory_nfc.py``); the table exists regardless. An item may carry several tags — one on the item, one on its case, a replacement for one that is wearing out — but a tag names exactly one item within an organization. The identifier is stored **hashed**, as it is for member ID cards (``models/nfc_tag.py``), even though an inventory tag grants nothing. The reason is the reader, not the tag: the quartermaster linking a tag holds the same phone that reads ID cards, and a member's card tapped here by mistake would otherwise leave that card's serial — which is the whole of its credential — in clear text in this table. Hashing with the same helper means that mistake leaks nothing.
+> One staff tap of an NFC tag on an item — the "last seen" trail. Only taps by ``inventory.manage`` holders are written (see ``InventoryNfcService.record_scan``'s callers). A member opening a written tag from their own phone leaves no row: a tap log of everybody would be a record of where each member was, which is not what the quartermaster asked for. The foreign keys other than the organization's are ``SET NULL`` so the trail outlives an unlinked tag, a deleted storage area, or a departed member; only deleting the item itself takes its trail with it.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `item_id` | VARCHAR(36) | no | FK, IDX |  | → `inventory_items.id` ON DELETE CASCADE |
+| `item_id` | VARCHAR(36) | no | FK |  | → `inventory_items.id` ON DELETE CASCADE |
+| `tag_id` | VARCHAR(36) | yes | FK |  | → `inventory_nfc_tags.id` ON DELETE SET NULL |
+| `action` | ENUM(`lookup`, `put_away`) | no |  |  |  |
+| `storage_area_id` | VARCHAR(36) | yes | FK |  | → `storage_areas.id` ON DELETE SET NULL |
+| `from_storage_area_id` | VARCHAR(36) | yes | FK |  | → `storage_areas.id` ON DELETE SET NULL |
+| `scanned_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `scanned_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `idx_inventory_nfc_scan_org_item_time` (`organization_id`, `item_id`, `scanned_at`)
+
+### `inventory_nfc_tags`
+
+**InventoryNfcTag** · `app/models/inventory.py`
+
+> An NFC tag physically attached to an inventory item or a storage area. Exactly one of ``item_id`` / ``storage_area_id`` is set (enforced by ``ck_inventory_nfc_tags_one_target``). An item tag names a thing; a storage-area tag names a place, and tapping one during put-away is what moves items onto that shelf. Only in use when the organization has switched NFC tracking on (see ``app/utils/inventory_nfc.py``); the table exists regardless. An item may carry several tags — one on the item, one on its case, a replacement for one that is wearing out — but a tag names exactly one item within an organization. The identifier is stored **hashed**, as it is for member ID cards (``models/nfc_tag.py``), even though an inventory tag grants nothing. The reason is the reader, not the tag: the quartermaster linking a tag holds the same phone that reads ID cards, and a member's card tapped here by mistake would otherwise leave that card's serial — which is the whole of its credential — in clear text in this table. Hashing with the same helper means that mistake leaks nothing.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `item_id` | VARCHAR(36) | yes | FK, IDX |  | → `inventory_items.id` ON DELETE CASCADE |
+| `storage_area_id` | VARCHAR(36) | yes | FK, IDX |  | → `storage_areas.id` ON DELETE CASCADE |
 | `uid_hash` | VARCHAR(64) | no |  |  |  |
 | `uid_preview` | VARCHAR(8) | no |  |  |  |
 | `credential_type` | ENUM(`serial`, `written`) | no |  | `serial` |  |
@@ -4959,9 +4984,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_inventory_nfc_tag_org_item` (`organization_id`, `item_id`)
 - `ix_inventory_nfc_tags_item_id` (`item_id`)
 - `ix_inventory_nfc_tags_organization_id` (`organization_id`)
+- `ix_inventory_nfc_tags_storage_area_id` (`storage_area_id`)
 
 **Constraints**
 
+- CHECK `ck_inventory_nfc_tags_one_target`: `(item_id IS NOT NULL AND storage_area_id IS NULL) OR (item_id IS NULL AND storage_area_id IS NOT NULL)`
 - UNIQUE `uq_inventory_nfc_tag_org_uid` (`organization_id`, `uid_hash`)
 
 ### `inventory_notification_queue`
@@ -9324,6 +9351,31 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_member_leave_org_user` (`organization_id`, `user_id`)
 - `ix_member_leaves_of_absence_user_id` (`user_id`)
 
+### `member_service_periods`
+
+**MemberServicePeriod** · `app/models/user.py`
+
+> One continuous stint of membership, for calculating length of service. A member who leaves (dropped or retired) and later rejoins has two or more rows here. Credited service is the sum of the rows with ``counts_toward_service`` set, so the time away between stints is never counted. When a department restarts a returning member's clock, the earlier stints stay on record with ``counts_toward_service`` false: they are shown as prior service rather than deleted. A member with no rows at all has never separated, and their service is derived from ``users.hire_date`` exactly as it was before this table existed -- which is why no backfill was needed. ``start_date`` NULL means "the member's hire date". The stint written when a member first separates is the one that began at hire, and pointing at the column rather than copying it keeps a later correction of ``hire_date`` flowing through instead of leaving a stale copy behind. Rows written through the API always carry an explicit date.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `start_date` | DATE | yes |  |  |  |
+| `end_date` | DATE | yes |  |  |  |
+| `separation_status` | VARCHAR(32) | yes |  |  |  |
+| `counts_toward_service` | BOOL | no |  | `1` |  |
+| `notes` | TEXT | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_member_service_periods_org_user` (`organization_id`, `user_id`)
+- `ix_member_service_periods_user_id` (`user_id`)
+
 ### `organizations`
 
 **Organization** · `app/models/user.py`
@@ -9585,7 +9637,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (328 references)
+### → `users` (330 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9739,6 +9791,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_items` | `label_printed_by` | SET NULL | yes |
 | `inventory_label_prints` | `printed_by` | SET NULL | yes |
 | `inventory_lots` | `created_by` | SET NULL | yes |
+| `inventory_nfc_scans` | `scanned_by` | SET NULL | yes |
 | `inventory_nfc_tags` | `linked_by` | SET NULL | yes |
 | `inventory_notification_queue` | `performed_by` | NO ACTION | yes |
 | `inventory_notification_queue` | `user_id` | CASCADE | no |
@@ -9786,6 +9839,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_leaves_of_absence` | `granted_by` | NO ACTION | yes |
 | `member_leaves_of_absence` | `user_id` | CASCADE | no |
 | `member_qualifications` | `user_id` | CASCADE | no |
+| `member_service_periods` | `created_by` | SET NULL | yes |
+| `member_service_periods` | `user_id` | CASCADE | no |
 | `member_size_preferences` | `user_id` | CASCADE | no |
 | `membership_pipelines` | `created_by` | NO ACTION | yes |
 | `message_history` | `sent_by` | SET NULL | yes |
@@ -9918,7 +9973,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (219 references)
+### → `organizations` (220 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10026,6 +10081,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_items` | `organization_id` | CASCADE | no |
 | `inventory_label_prints` | `organization_id` | CASCADE | no |
 | `inventory_lots` | `organization_id` | CASCADE | no |
+| `inventory_nfc_scans` | `organization_id` | CASCADE | no |
 | `inventory_nfc_tags` | `organization_id` | CASCADE | no |
 | `inventory_notification_queue` | `organization_id` | CASCADE | no |
 | `inventory_vendor_contacts` | `organization_id` | CASCADE | no |
@@ -10051,6 +10107,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_dues` | `organization_id` | CASCADE | no |
 | `member_leaves_of_absence` | `organization_id` | CASCADE | no |
 | `member_qualifications` | `organization_id` | CASCADE | no |
+| `member_service_periods` | `organization_id` | CASCADE | no |
 | `member_size_preferences` | `organization_id` | CASCADE | no |
 | `membership_pipelines` | `organization_id` | CASCADE | no |
 | `message_history` | `organization_id` | CASCADE | yes |
@@ -10154,7 +10211,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_item_pins` | `item_id` | CASCADE | no |
 | `inventory_label_prints` | `item_id` | CASCADE | no |
 | `inventory_lots` | `inventory_item_id` | CASCADE | no |
-| `inventory_nfc_tags` | `item_id` | CASCADE | no |
+| `inventory_nfc_scans` | `item_id` | CASCADE | no |
+| `inventory_nfc_tags` | `item_id` | CASCADE | yes |
 | `inventory_notification_queue` | `item_id` | SET NULL | yes |
 | `inventory_write_offs` | `item_id` | SET NULL | yes |
 | `item_assignments` | `item_id` | CASCADE | no |
@@ -10426,6 +10484,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_interviews` | `step_id` | SET NULL | yes |
 | `prospect_step_progress` | `step_id` | CASCADE | no |
 | `prospective_members` | `current_step_id` | SET NULL | yes |
+
+### → `storage_areas` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `inventory_items` | `storage_area_id` | SET NULL | yes |
+| `inventory_nfc_scans` | `from_storage_area_id` | SET NULL | yes |
+| `inventory_nfc_scans` | `storage_area_id` | SET NULL | yes |
+| `inventory_nfc_tags` | `storage_area_id` | CASCADE | yes |
+| `storage_areas` | `parent_id` | CASCADE | yes |
 
 ### → `training_sessions` (5 references)
 
@@ -10715,13 +10783,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_equipment_check_items` | `check_id` | CASCADE | no |
 | `shift_equipment_check_seals` | `check_id` | CASCADE | no |
 
-### → `storage_areas` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `inventory_items` | `storage_area_id` | SET NULL | yes |
-| `storage_areas` | `parent_id` | CASCADE | yes |
-
 ### → `store_order_windows` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -10867,6 +10928,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `grant_applications` | `opportunity_id` | SET NULL | yes |
+
+### → `inventory_nfc_tags` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `inventory_nfc_scans` | `tag_id` | SET NULL | yes |
 
 ### → `ip_exceptions` (1 references)
 

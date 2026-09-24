@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { memberStatusService } from '../services/api';
+import { RejoinServiceCredit } from '../constants/enums';
 import type { MembershipTier, MembershipTierBenefits, MembershipTierConfig } from '../types/user';
 
 /** A tier as the editor holds it while being edited. */
@@ -118,6 +119,11 @@ export function useTierEditor() {
 
   const setAutoAdvance = useCallback((autoAdvance: boolean) => {
     setConfig((prev) => (prev ? { ...prev, auto_advance: autoAdvance } : prev));
+    setDirty(true);
+  }, []);
+
+  const setRejoinServiceCredit = useCallback((credit: RejoinServiceCredit) => {
+    setConfig((prev) => (prev ? { ...prev, rejoin_service_credit: credit } : prev));
     setDirty(true);
   }, []);
 
@@ -258,6 +264,9 @@ export function useTierEditor() {
     config,
     tiers: config?.tiers ?? [],
     autoAdvance: config?.auto_advance ?? true,
+    // Absent on a config saved before the setting existed; the backend reads
+    // that as `continue`, so the editor shows the same.
+    rejoinServiceCredit: config?.rejoin_service_credit ?? RejoinServiceCredit.CONTINUE,
     loading,
     failed,
     refreshFailed,
@@ -268,6 +277,7 @@ export function useTierEditor() {
     dirty,
     memberCount,
     setAutoAdvance,
+    setRejoinServiceCredit,
     updateTier,
     updateBenefits,
     addTier,
