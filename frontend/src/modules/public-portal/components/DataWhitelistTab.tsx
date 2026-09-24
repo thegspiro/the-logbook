@@ -279,7 +279,7 @@ export const DataWhitelistTab: React.FC = () => {
               <p className="text-theme-text-primary text-2xl font-semibold">
                 {enabledFields}
                 <span className="text-theme-text-muted ml-2 text-sm">
-                  ({Math.round((enabledFields / totalFields) * 100)}%)
+                  ({totalFields > 0 ? Math.round((enabledFields / totalFields) * 100) : 0}%)
                 </span>
               </p>
             </div>
