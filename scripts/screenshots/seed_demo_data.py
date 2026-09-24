@@ -136,6 +136,20 @@ GUEST_EMAIL = "rosa.delgado@example.com"
 # non-empty. `rduarte` is a firefighter, which does not.
 DEMO_PEER_EXAMINER_USERNAME = "rduarte"
 
+# The member appointed Compliance Officer. The position is seeded by onboarding
+# and reviews the default Compliance suggestion box, so without a holder the box
+# takes reports nobody can read and the Officers tab shows the office vacant.
+#
+# Three constraints decided who:
+#
+#   * No capture names them. No shot in `manifest.mjs` mentions `lnakamura` or
+#     "Nakamura", so appointing her cannot change an image already verified.
+#   * Not a capture account (`nbelhaj`, `okittredge`, `cfrazier`). The position
+#     grants training.manage, and those accounts are chosen for what they lack.
+#   * Not `DEMO_PEER_EXAMINER_USERNAME`. An examiner holding training.manage
+#     validates their own result and empties the validation queue.
+COMPLIANCE_OFFICER_USERNAME = "lnakamura"
+
 # The one member enrolled in TOTP, so the login page's authentication-code step
 # and the members admin page's Reset MFA action have something to picture.
 #
@@ -7621,6 +7635,9 @@ class Seeder:
         signature title differs from the default.
         """
         by_username = {m.get("username"): m for m in members}
+        # The office auto-detects its holder from this position, but linking it
+        # below as well pictures the office the way the others are: assigned.
+        self._ensure_role(COMPLIANCE_OFFICER_USERNAME, "Compliance Officer")
         assignments = [
             ("chief", "chief", None),
             ("deputy_chief", "mbell", None),
@@ -7632,6 +7649,7 @@ class Seeder:
             ("secretary", "aosei", None),
             ("treasurer", "tlindqvist", None),
             ("quartermaster", "whalloway", None),
+            ("compliance_officer", COMPLIANCE_OFFICER_USERNAME, None),
         ]
         directory = items(self.api.get("/officers"), "offices")
         filled = {
