@@ -235,7 +235,23 @@ class PublicPortalDataWhitelistBulkUpdate(BaseModel):
 
 
 class PublicPortalUsageStats(BaseModel):
-    """Schema for usage statistics"""
+    """Schema for usage statistics
+
+    **The rolling-window fields are what the dashboard renders**, and until
+    2026-09-24 none of them existed: the screen read thirteen names this
+    schema never declared, so every tile showed ``0`` or ``undefined``, the
+    response-time tile printed the string ``undefinedms``, and — the reason
+    this mattered — the "Attention Required" banner could not fire. Its three
+    conditions read ``error_rate_percentage``, ``flagged_suspicious_24h`` and
+    ``rate_limit_hits_24h``, each coalesced to ``0`` by ``?? 0``, so an
+    operator watching an unauthenticated API surface was shown a permanently
+    quiet dashboard whatever the traffic did.
+
+    The calendar-period counts (``requests_today`` / ``_this_week`` /
+    ``_this_month``) are the mirror image — computed all along and rendered
+    nowhere. They are kept because they are a legitimate view and removing
+    them would break a response contract for no gain.
+    """
 
     total_requests: int
     requests_today: int
@@ -246,6 +262,25 @@ class PublicPortalUsageStats(BaseModel):
     top_endpoints: List[Dict[str, Any]]
     requests_by_status: Dict[int, int]
     flagged_requests: int
+
+    # Rolling windows, measured back from "now" rather than from a calendar
+    # boundary: an operator asking "what happened overnight" is not asking
+    # about the period since midnight.
+    total_requests_24h: int
+    total_requests_7d: int
+    total_requests_30d: int
+    unique_ips_24h: int
+    active_api_keys: int
+    rate_limit_hits_24h: int
+    flagged_suspicious_24h: int
+    status_2xx_24h: int
+    status_4xx_24h: int
+    status_5xx_24h: int
+    # (4xx + 5xx) / total over the last 24 hours, or None when there was no
+    # traffic to measure. Null rather than 0.0: a denominator of nothing is
+    # not a clean bill of health (CLAUDE.md #29), and the screen renders it
+    # as "—" instead of a reassuring green 0.00%.
+    error_rate_percentage: Optional[float]
 
 
 # ==============================================================================

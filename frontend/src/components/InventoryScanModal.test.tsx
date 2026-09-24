@@ -3,12 +3,36 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InventoryScanModal } from './InventoryScanModal';
 
-const { lookupByCode, distributeItems, transferItem } = vi.hoisted(() => ({
+const { lookupByCode, distributeItems, transferItem, getNfcSettings, resolveNfcTag, nfcScanner } = vi.hoisted(() => ({
   lookupByCode: vi.fn(),
   distributeItems: vi.fn(),
   transferItem: vi.fn(),
+  getNfcSettings: vi.fn(),
+  resolveNfcTag: vi.fn(),
+  // What the modal handed useNfcScanner, so a test can play a tap through it.
+  nfcScanner: {
+    onTag: null as ((tag: { serialNumber: string; payload: string | null }) => void) | null,
+    supported: true,
+    start: vi.fn(),
+    stop: vi.fn(),
+  },
 }));
-vi.mock('../services/api', () => ({ inventoryService: { lookupByCode, distributeItems, transferItem } }));
+vi.mock('../services/api', () => ({
+  inventoryService: { lookupByCode, distributeItems, transferItem, getNfcSettings, resolveNfcTag },
+}));
+vi.mock('../hooks/useNfcScanner', () => ({
+  useNfcScanner: (options: { onTag?: (tag: { serialNumber: string; payload: string | null }) => void }) => {
+    nfcScanner.onTag = options.onTag ?? null;
+    return {
+      supported: nfcScanner.supported,
+      unavailableReason: null,
+      scanning: false,
+      error: null,
+      start: nfcScanner.start,
+      stop: nfcScanner.stop,
+    };
+  },
+}));
 vi.mock('../stores/authStore', () => ({
   useAuthStore: (selector: (s: object) => unknown) => selector({ checkPermission: () => true }),
 }));
@@ -23,7 +47,11 @@ function firstOf(elements: HTMLElement[]): HTMLElement {
 }
 
 describe('InventoryScanModal custody conflicts', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getNfcSettings.mockReset();
+    getNfcSettings.mockResolvedValue({ enabled: false });
+  });
 
   it('blocks silent reassignment and requires explicit transfer confirmation', async () => {
     lookupByCode.mockResolvedValue({
@@ -151,5 +179,91 @@ describe('InventoryScanModal custody conflicts', () => {
     expect(screen.getByRole('checkbox', { name: /Chris Baker/ })).not.toBeChecked();
     expect(screen.getByRole('textbox', { name: /Transfer reason/ })).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Confirm transfer' })).toBeDisabled();
+  });
+});
+
+describe('InventoryScanModal NFC tags', () => {
+  const helmet = {
+    matched_field: 'nfc_tag',
+    matched_value: 'NFC tag …1180',
+    item: { id: 'item-1', name: 'Helmet', status: 'available', tracking_type: 'individual' },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getNfcSettings.mockReset();
+    getNfcSettings.mockResolvedValue({ enabled: true });
+    resolveNfcTag.mockReset();
+    resolveNfcTag.mockResolvedValue(helmet);
+    nfcScanner.supported = true;
+    nfcScanner.onTag = null;
+  });
+
+  const renderModal = () =>
+    render(<InventoryScanModal isOpen onClose={vi.fn()} mode="distribute" userId="m-1" memberName="Member One" />);
+
+  it('offers Tap NFC only once the organization has it switched on', async () => {
+    getNfcSettings.mockResolvedValue({ enabled: false });
+    renderModal();
+    await waitFor(() => expect(getNfcSettings).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /Tap NFC/ })).not.toBeInTheDocument();
+  });
+
+  it('hides Tap NFC on a browser without Web NFC even when switched on', async () => {
+    nfcScanner.supported = false;
+    renderModal();
+    await waitFor(() => expect(getNfcSettings).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /Tap NFC/ })).not.toBeInTheDocument();
+  });
+
+  it('starts the reader from the click', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(await screen.findByRole('button', { name: /Tap NFC/ }));
+    expect(nfcScanner.start).toHaveBeenCalled();
+  });
+
+  it('adds the tapped item, resolving the written code before the serial', async () => {
+    renderModal();
+    await screen.findByRole('button', { name: /Tap NFC/ });
+    nfcScanner.onTag?.({
+      serialNumber: '04:a2:24:5b:7c:11:80',
+      payload: `${window.location.origin}/inventory/tag/INVTABC123`,
+    });
+    expect(await screen.findByText('Helmet')).toBeInTheDocument();
+    // Separators stripped; case is left to the server, which normalizes it.
+    expect(resolveNfcTag).toHaveBeenCalledWith({ code: 'INVTABC123', serial_number: '04a2245b7c1180' });
+    // Exact match only — never the partial barcode search.
+    expect(lookupByCode).not.toHaveBeenCalled();
+  });
+
+  it("sends only the serial for a tag carrying someone else's link", async () => {
+    renderModal();
+    await screen.findByRole('button', { name: /Tap NFC/ });
+    nfcScanner.onTag?.({ serialNumber: '04a2245b', payload: 'https://evil.example.com/inventory/tag/INVTABC123' });
+    await waitFor(() => expect(resolveNfcTag).toHaveBeenCalledWith({ code: undefined, serial_number: '04a2245b' }));
+  });
+
+  it('shows why a tag found nothing', async () => {
+    resolveNfcTag.mockRejectedValue(
+      Object.assign(new Error('Request failed'), {
+        isAxiosError: true,
+        response: { status: 404, data: { detail: 'This tag is not linked to any item.' } },
+      })
+    );
+    renderModal();
+    await screen.findByRole('button', { name: /Tap NFC/ });
+    nfcScanner.onTag?.({ serialNumber: '04a2245b', payload: null });
+    expect(await screen.findByText('This tag is not linked to any item.')).toBeInTheDocument();
+  });
+
+  it('disarms the reader when the dialog closes', async () => {
+    const { rerender } = renderModal();
+    await screen.findByRole('button', { name: /Tap NFC/ });
+    nfcScanner.stop.mockClear();
+    rerender(
+      <InventoryScanModal isOpen={false} onClose={vi.fn()} mode="distribute" userId="m-1" memberName="Member One" />
+    );
+    expect(nfcScanner.stop).toHaveBeenCalled();
   });
 });

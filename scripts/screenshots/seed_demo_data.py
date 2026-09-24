@@ -5560,9 +5560,7 @@ class Seeder:
         revision, so it is safe to repeat and safe to run after the last edit.
         """
         published: list[str] = []
-        for template in items(
-            self.api.get("/equipment-checks/templates"), "templates"
-        ):
+        for template in items(self.api.get("/equipment-checks/templates"), "templates"):
             if pick(template, "is_active", "isActive"):
                 continue
             template_id = pick(template, "id")
@@ -5578,9 +5576,7 @@ class Seeder:
                 # the API says so. That is a template problem, not a publish
                 # problem, so name it and carry on rather than aborting every
                 # later template.
-                self.blocked.append(
-                    f"publish template {pick(template, 'name')}: {exc}"
-                )
+                self.blocked.append(f"publish template {pick(template, 'name')}: {exc}")
                 continue
             published.append(str(pick(template, "name") or template_id))
         return published
@@ -7772,6 +7768,11 @@ class Seeder:
     SUGGESTION_REVIEWER_USERNAME = "okittredge"
     SUGGESTION_REVIEWER_POSITION = "Secretary"
     SUGGESTION_FORWARD_POSITION = "Training Officer"
+    # The capture harness's `auth: "forwardee"` account. An ordinary firefighter
+    # no shot names and no box lists as a reviewer, so the forward is their only
+    # way to the Review tab — and giving it to them cannot change another image.
+    SUGGESTION_FORWARD_MEMBER_USERNAME = "cfrazier"
+    SUGGESTION_MEMBER_FORWARD_TITLE = "More hands-on SCBA time for probationary members"
 
     SUGGESTION_BOXES = [
         {
@@ -8053,6 +8054,55 @@ class Seeder:
                     {"position_ids": [position_ids[entry["forward_to"]]]},
                 )
             follow_up_key = None
+
+        self._seed_suggestion_member_forward(reviewer)
+
+    def _seed_suggestion_member_forward(self, reviewer: Api) -> None:
+        """Forward one submission to a member who reviews no box.
+
+        The Training Officer forward above cannot picture what a forward looks
+        like to the person receiving it: that position already reviews the
+        Training ideas box, so its holders see the item as ordinary review work,
+        with no "Forwarded to you" badge. Only someone who reaches the item
+        through the forward alone sees that screen, and `07-18` photographs it.
+
+        Runs on every seed rather than only when the submission is created, so a
+        database seeded before this step existed gains the forward too. The
+        endpoint skips a member already forwarded to, so a re-run adds nothing.
+        """
+        title = self.SUGGESTION_MEMBER_FORWARD_TITLE
+        username = self.SUGGESTION_FORWARD_MEMBER_USERNAME
+        suggestion_id = next(
+            (
+                str(pick(s, "id"))
+                for s in items(reviewer.get("/suggestions/review?limit=200"), "items")
+                if pick(s, "title") == title
+            ),
+            "",
+        )
+        member_id = self._user_id(username)
+        if not suggestion_id or not member_id:
+            self.blocked.append(
+                f"suggestion boxes: could not forward {title!r} to {username}"
+            )
+            return
+        reviewer.post(
+            f"/suggestions/review/{suggestion_id}/forwards",
+            {"member_ids": [member_id]},
+        )
+        # Signing in once through member_session clears the must-change-password
+        # flag, without which the capture harness's login as this member would
+        # land on the forced password change instead of the Review tab.
+        recipient = self.member_session(self.base_url, member_id, username)
+        forwarded = [
+            s
+            for s in items(recipient.get("/suggestions/review?limit=200"), "items")
+            if pick(s, "title") == title and pick(s, "via_forward", "viaForward")
+        ]
+        if not forwarded:
+            self.blocked.append(
+                f"suggestion boxes: {username} does not see {title!r} as forwarded"
+            )
 
     def seed_legal_documents(self) -> list[dict]:
         """One published notice and one draft, so the two states differ on screen.
@@ -12863,9 +12913,7 @@ class Seeder:
             "prospects",
         )
         # Stage name -> position, for the scenario overrides below.
-        position_by_name = {
-            pick(step, "name"): slot for slot, step in enumerate(steps)
-        }
+        position_by_name = {pick(step, "name"): slot for slot, step in enumerate(steps)}
 
         for index, prospect in enumerate(prospects):
             prospect_id = pick(prospect, "id")
@@ -13109,6 +13157,412 @@ class Seeder:
     MEETING_PIPELINE_NAME = "Associate Member Pipeline"
     MEETING_STAGE_NAME = "Attend a Business Meeting"
     MEETING_APPLICANT = ("Priya", "Deshmukh", "priya.deshmukh@example.org")
+
+    # ── Remaining-placeholder fixtures, 2026-09-24 ──────────────────────
+    #
+    # Each of these exists for one training-guide capture that had nothing to
+    # photograph. They are idempotent: every one looks for its own marker
+    # before writing, so a second run adds nothing.
+
+    PRIVACY_MIX = {
+        "email": True,
+        "personal_email": False,
+        "phone": False,
+        "mobile": True,
+        "address": True,
+    }
+
+    def seed_profile_visibility_mix(self) -> None:
+        """Give the demo member a mix of shown and hidden contact fields.
+
+        The privacy screen's subject is the switches, and the defaults are
+        three on and two off in a fixed pattern that reads as untouched. Phone
+        is turned off here so the frame shows a choice a member actually made.
+        The endpoint takes all five keys every time — it replaces the object.
+        """
+        member = self.member_session(self.base_url, self._user_id("nbelhaj"), "nbelhaj")
+        member.put("/users/me/profile-visibility", dict(self.PRIVACY_MIX))
+
+    RETIRED_CALL_TYPE = "service"
+
+    def seed_retired_call_type(self) -> None:
+        """Turn one call type off so the editor shows a retired row.
+
+        Turned off, not removed: "Service Call" has calls filed under it, and
+        the settings endpoint refuses to drop a slug that history refers to —
+        which is the other half of what the call-types capture pictures.
+        """
+        settings = self.api.get("/scheduling/settings")
+        tracking = dict(settings.get("call_tracking") or {})
+        types = [dict(t) for t in tracking.get("call_types") or []]
+        target = next(
+            (t for t in types if t.get("slug") == self.RETIRED_CALL_TYPE), None
+        )
+        if target is None or target.get("active") is False:
+            return
+        target["active"] = False
+        self.api.put(
+            "/scheduling/settings",
+            {
+                "call_tracking": {
+                    "mode": tracking.get("mode") or "detailed",
+                    "call_types": [
+                        {
+                            "slug": t["slug"],
+                            "label": t["label"],
+                            "active": t.get("active", True),
+                        }
+                        for t in types
+                    ],
+                }
+            },
+        )
+
+    LONG_MESSAGE_TITLE = "Fall Hose Testing and Station Cleanup — What to Expect"
+
+    def seed_long_department_message(self) -> None:
+        """A department message long enough to need its own page.
+
+        `/messages/:id` replaced a modal, and a two-line message fits in either,
+        so the capture cannot show the difference. This one runs to several
+        paragraphs.
+        """
+        inbox = items(self.api.get("/messages/inbox?limit=100"), "messages", "items")
+        if any(pick(m, "title") == self.LONG_MESSAGE_TITLE for m in inbox):
+            return
+        body = "\n\n".join(
+            [
+                "Annual hose testing runs the week of October 5. Every length on "
+                "Engine 1, Engine 2 and Ladder 1 comes off the apparatus and is "
+                "tested to service pressure at the drill ground behind Station 1. "
+                "Plan on the rigs being out of service for about two hours each, "
+                "one at a time, so we keep two engines in quarters throughout.",
+                "Crews on shift that week: expect to help pull, test, drain and "
+                "reload. A length that fails is tagged red and bagged for the "
+                "quartermaster; do not put it back in a bed, even if the failure "
+                "looks minor. Record every length on the hose test sheet as you "
+                "go — the NFPA 1962 record is what the insurance audit asks for.",
+                "The following Saturday is station cleanup. We are clearing the "
+                "mezzanine at Station 1, re-labelling the SCBA cabinet and "
+                "repainting the bay floor lines at Station 2. Coffee and lunch "
+                "are on the department. Sign up on the event so we can plan "
+                "food, and bring work gloves.",
+                "Questions about either day go to the Training Officer or to me.",
+            ]
+        )
+        self.api.post(
+            "/messages",
+            {
+                "title": self.LONG_MESSAGE_TITLE,
+                "body": body,
+                "priority": "normal",
+                "target_type": "all",
+            },
+        )
+
+    HOURS_HISTORY_NOTE = "Seeded hours history"
+    # Shifts per month for the six months before this one, oldest first. The
+    # uneven counts are what give the "vs. busiest month" bars a shape.
+    HOURS_HISTORY_PATTERN = (2, 1, 3, 1, 2, 1)
+
+    def seed_hours_history(self) -> None:
+        """Closed-out shifts for the administrator across the last six months.
+
+        The My Shifts Hours view credits only attendance on finalized shifts,
+        and the demo had one finalized shift, for somebody else — so the view
+        read zero in every month. These shifts are old enough that no other
+        capture reaches for them (they all look for the newest shifts), carry
+        no apparatus so they claim no crew seats, and are marked in their notes
+        so a re-run finds them.
+        """
+        shifts = items(self.api.get("/scheduling/shifts?limit=500"), "shifts")
+        if any(self.HOURS_HISTORY_NOTE in str(pick(s, "notes") or "") for s in shifts):
+            return
+        admin_id = str(pick(self.api.get("/auth/me"), "id"))
+        first_of_month = TODAY.replace(day=1)
+        for months_back, count in zip(range(6, 0, -1), self.HOURS_HISTORY_PATTERN):
+            year = first_of_month.year
+            month = first_of_month.month - months_back
+            while month < 1:
+                month += 12
+                year -= 1
+            for index in range(count):
+                day = date(year, month, 6 + index * 7)
+                start = datetime.combine(day, time(7, 0), tzinfo=ORG_TIMEZONE)
+                end = start + timedelta(hours=12)
+                shift = self.api.post(
+                    "/scheduling/shifts",
+                    {
+                        "shift_date": day.isoformat(),
+                        "start_time": iso(start.astimezone(timezone.utc)),
+                        "end_time": iso(end.astimezone(timezone.utc)),
+                        "notes": f"{self.HOURS_HISTORY_NOTE}: day shift.",
+                    },
+                )
+                shift_id = str(pick(shift, "id"))
+                self.api.post(
+                    f"/scheduling/shifts/{shift_id}/attendance",
+                    {
+                        "user_id": admin_id,
+                        "checked_in_at": iso(start.astimezone(timezone.utc)),
+                        "checked_out_at": iso(end.astimezone(timezone.utc)),
+                    },
+                )
+                for call_index in range(1 + (index + months_back) % 3):
+                    self.api.post(
+                        f"/scheduling/shifts/{shift_id}/calls",
+                        {
+                            "incident_type": ("fire", "ems", "mva")[call_index % 3],
+                            "incident_number": (
+                                f"H{day:%y%m%d}-{index + 1}{call_index + 1}"
+                            ),
+                            "responding_members": [admin_id],
+                        },
+                    )
+                self.api.post(
+                    f"/scheduling/shifts/{shift_id}/finalize",
+                    {"override_incomplete_checks": True},
+                )
+
+    def _node_id(self, chart: dict, title: str) -> str:
+        return next(
+            (
+                str(pick(n, "id"))
+                for n in items(chart, "nodes")
+                if pick(n, "title") == title
+            ),
+            "",
+        )
+
+    def seed_org_chart(self) -> None:
+        """A four-level chart with a shared seat and non-member holders.
+
+        What the three org-chart captures need: a seat two members share
+        (Deputy Chief), a seat held by someone who is not a member (a mutual-aid
+        captain), and one seat that carries all three kinds of holder at once —
+        linked through a position, added by hand, and a name with no account —
+        with its responsibility filled in, for the node modal.
+
+        The endpoint returns the whole chart rather than the new node, so each
+        id is looked up by title afterwards.
+        """
+        chart = self.api.get("/org-chart")
+        if items(chart, "nodes"):
+            return
+        roles = items(chart, "roles")
+        secretary = next(
+            (
+                str(pick(r, "value")).split(":", 1)[1]
+                for r in roles
+                if pick(r, "label") == "Secretary"
+                and str(pick(r, "value")).startswith("position:")
+            ),
+            "",
+        )
+        member = self._user_id
+
+        def add(title: str, parent: str | None, **fields: Any) -> str:
+            payload: dict[str, Any] = {"title": title, **fields}
+            if parent:
+                payload["parent_id"] = parent
+            return self._node_id(self.api.post("/org-chart/nodes", payload), title)
+
+        chief = add(
+            "Fire Chief",
+            None,
+            responsibility="Overall command of the department and its budget.",
+            holders=[{"user_id": member("chief")}],
+        )
+        deputy = add(
+            "Deputy Chief",
+            chief,
+            responsibility=(
+                "Operations and staffing. Shared between two deputies, who "
+                "alternate the on-call week."
+            ),
+            holders=[{"user_id": member("mbell")}, {"user_id": member("praman")}],
+        )
+        add(
+            "Administration & Records",
+            chief,
+            responsibility=(
+                "Minutes, membership records, public records requests and "
+                "retention. The county liaison handles records the county holds "
+                "on the department's behalf."
+            ),
+            **({"position_id": secretary} if secretary else {}),
+            holders=[
+                {"user_id": member("ecaldwell")},
+                {"display_name": "Margaret Hale (county records liaison)"},
+            ],
+        )
+        station_one = add(
+            "Captain — Station 1",
+            deputy,
+            holders=[{"user_id": member("smarchetti")}],
+        )
+        add("Captain — Station 2", deputy, holders=[{"user_id": member("okittredge")}])
+        add(
+            "Captain — Station 3 (mutual aid)",
+            deputy,
+            responsibility="Covers Station 3 under the Brookfield mutual-aid agreement.",
+            holders=[{"display_name": "Capt. Luis Ortega (Brookfield FD)"}],
+        )
+        add(
+            "Lieutenant — Station 1",
+            station_one,
+            holders=[{"user_id": member("cfrazier")}],
+        )
+
+    TESTING_RUNS = ("August release check", "September release check")
+
+    def _set_testing_module(self, enabled: bool) -> None:
+        self.api.patch("/organization/modules", {"testing": enabled})
+
+    def seed_testing_runs(self) -> None:
+        """Two named testing runs, the older archived, with mixed marks.
+
+        The module stays **off** afterwards: it is off in the demo so the
+        Settings → Modules capture can show it off, and the sidebar captures
+        were taken without its entry. The testing captures turn it on in
+        their own prepare step and off again in cleanup. Marks survive the
+        module being off — the gate hides the routes, it deletes nothing.
+
+        The gate mismatch is recorded by the ordinary member: a pass on a
+        route the registry expects to refuse them is exactly the finding the
+        report exists to surface.
+        """
+        self._set_testing_module(True)
+        try:
+            listing = self.api.get("/testing-checklist")
+            if len(items(listing, "runs")) >= len(self.TESTING_RUNS):
+                return
+            member = self.member_session(
+                self.base_url, self._user_id("nbelhaj"), "nbelhaj"
+            )
+
+            def mark(session: Api, route: str, status: str, **extra: Any) -> None:
+                session.put(
+                    "/testing-checklist/entries",
+                    {"route_path": route, "status": status, **extra},
+                )
+
+            self.api.post("/testing-checklist/runs", {"label": self.TESTING_RUNS[0]})
+            for route in ("/dashboard", "/events", "/documents", "/account"):
+                mark(self.api, route, "pass", expected_access="allowed")
+
+            self.api.post("/testing-checklist/runs", {"label": self.TESTING_RUNS[1]})
+            mark(self.api, "/dashboard", "pass", expected_access="allowed")
+            mark(self.api, "/events", "pass", expected_access="allowed")
+            mark(
+                self.api,
+                "/documents",
+                "fail",
+                expected_access="allowed",
+                note=(
+                    "Upload spinner never clears on a 40 MB PDF; the file does "
+                    "arrive. Reproduced twice on Chrome."
+                ),
+            )
+            mark(
+                self.api,
+                "/governance/org-chart",
+                "blocked",
+                expected_access="allowed",
+                note="Waiting on the org chart import before this can be checked.",
+            )
+            mark(member, "/dashboard", "pass", expected_access="allowed")
+            mark(
+                member,
+                "/finance",
+                "pass",
+                expected_access="denied",
+                note="Opened the finance dashboard as a firefighter.",
+            )
+        finally:
+            self._set_testing_module(False)
+
+    PHOTO_CONSENT = {"snolan": True, "ytanaka": False}
+
+    def seed_photo_consent(self) -> None:
+        """One member consents, one refuses, everyone else has not answered.
+
+        Consent is only ever recorded by the member themselves, so each is
+        written from that member's own session.
+        """
+        for username, granted in self.PHOTO_CONSENT.items():
+            session = self.member_session(
+                self.base_url, self._user_id(username), username
+            )
+            session.put(
+                f"/users/me/consents/photo_use?granted={'true' if granted else 'false'}",
+                None,
+            )
+
+    WAITLIST_EVENT_TITLE = "Station Open House — Setup Crew"
+    WAITLIST_GOING = ("snolan", "rduarte", "isolberg")
+
+    def seed_waitlisted_event(self) -> None:
+        """A capped event members can see the roster of, with the demo member
+        waitlisted.
+
+        Three members fill the three places; the demo member's `going` RSVP
+        then lands on the waitlist, which the service decides rather than the
+        caller — so the waitlist line she sees is the real one.
+        """
+        events = items(self.api.get("/events?limit=200"), "events")
+        if any(pick(e, "title") == self.WAITLIST_EVENT_TITLE for e in events):
+            return
+        start = (
+            (NOW + timedelta(days=12))
+            .astimezone(ORG_TIMEZONE)
+            .replace(hour=9, minute=0, second=0, microsecond=0)
+        )
+        event = self.api.post(
+            "/events",
+            {
+                "title": self.WAITLIST_EVENT_TITLE,
+                "description": (
+                    "Three volunteers to set up tables, the smoke trailer and "
+                    "the apparatus display before the open house opens at noon."
+                ),
+                "event_type": "public_education",
+                "location": "Station 1 - Headquarters",
+                "start_datetime": iso(start.astimezone(timezone.utc)),
+                "end_datetime": iso(
+                    (start + timedelta(hours=3)).astimezone(timezone.utc)
+                ),
+                "max_attendees": len(self.WAITLIST_GOING),
+                "attendee_visibility": "members",
+                "requires_rsvp": False,
+                "is_draft": False,
+            },
+        )
+        event_id = str(pick(event, "id"))
+        for username in (*self.WAITLIST_GOING, "nbelhaj"):
+            session = self.member_session(
+                self.base_url, self._user_id(username), username
+            )
+            session.post(
+                f"/events/{event_id}/rsvp", {"status": "going", "guest_count": 0}
+            )
+
+    OUT_OF_STOCK_ITEM = "Structural Coat — XXL"
+
+    def seed_out_of_stock_size(self) -> None:
+        """Run one coat size out of stock for the gear request's size step.
+
+        The demo member's recorded jacket size is L, which stays stocked and is
+        preselected; XXL at zero is the size the form must still offer and
+        label as out of stock.
+        """
+        listing = items(self.api.get("/inventory/items?limit=500"), "items")
+        coat = next(
+            (i for i in listing if pick(i, "name") == self.OUT_OF_STOCK_ITEM), None
+        )
+        if coat is None or pick(coat, "quantity") == 0:
+            return
+        self.api.patch(f"/inventory/items/{pick(coat, 'id')}", {"quantity": 0})
 
     def seed_meeting_stage_applicant(self) -> None:
         pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
@@ -13502,11 +13956,7 @@ class Seeder:
         """
         elections = items(self.api.get("/elections?limit=100"), "elections")
         election_id = next(
-            (
-                pick(e, "id")
-                for e in elections
-                if pick(e, "title") == election_title
-            ),
+            (pick(e, "id") for e in elections if pick(e, "title") == election_title),
             None,
         )
         if not election_id:
@@ -13669,9 +14119,7 @@ class Seeder:
                 "vote-to-package sync did not run"
             )
 
-    def _package_for(
-        self, packages: list[dict], applicant_email: str
-    ) -> dict | None:
+    def _package_for(self, packages: list[dict], applicant_email: str) -> dict | None:
         """The election package belonging to one named applicant.
 
         The package list carries an applicant snapshot rather than a joinable
@@ -13689,9 +14137,7 @@ class Seeder:
             if not prospect_id:
                 continue
             try:
-                prospect = self.api.get(
-                    f"/prospective-members/prospects/{prospect_id}"
-                )
+                prospect = self.api.get(f"/prospective-members/prospects/{prospect_id}")
             except ApiError:
                 continue
             if str(pick(prospect, "email") or "").lower() == applicant_email:
@@ -14932,9 +15378,7 @@ class Seeder:
         # requirement, so leaving them pending would show the progress section
         # with every bar at zero under hours the page also reports as logged.
         wanted = {description for _, _, description in self.MEMBER_HOURS}
-        for entry in items(
-            self.api.get("/admin-hours/entries?limit=300"), "entries"
-        ):
+        for entry in items(self.api.get("/admin-hours/entries?limit=300"), "entries"):
             if str(pick(entry, "description") or "") not in wanted:
                 continue
             if str(pick(entry, "status")) != "pending":
@@ -14971,9 +15415,7 @@ class Seeder:
                 )
                 if pick(pr, "is_active", "isActive")
                 and membership
-                in (
-                    pick(pr, "membership_types", "membershipTypes") or [membership]
-                )
+                in (pick(pr, "membership_types", "membershipTypes") or [membership])
             ),
             None,
         )
@@ -15024,9 +15466,7 @@ class Seeder:
         template = next(
             (
                 t
-                for t in items(
-                    self.api.get("/equipment-checks/templates"), "templates"
-                )
+                for t in items(self.api.get("/equipment-checks/templates"), "templates")
                 if pick(t, "name") == self.SEALED_TEMPLATE_NAME
             ),
             None,
@@ -15061,9 +15501,7 @@ class Seeder:
         # /last-seals answers, and a completed check that recorded no seals
         # (one filed before the compartments were marked) would satisfy a
         # check-count guard while leaving the panel with nothing to compare.
-        apparatus_id = pick(template, "apparatus_id") or pick(
-            template, "apparatusId"
-        )
+        apparatus_id = pick(template, "apparatus_id") or pick(template, "apparatusId")
         last = self.api.get(
             f"/equipment-checks/templates/{template_id}/last-seals"
             + (f"?apparatus_id={apparatus_id}" if apparatus_id else "")
@@ -15454,6 +15892,15 @@ class Seeder:
         self.step("unsized shift", self.seed_unsized_shift)
         self.step("sealed compartments", self.seed_sealed_compartments)
         self.step("member admin hours", self.seed_member_admin_hours)
+        self.step("profile visibility mix", self.seed_profile_visibility_mix)
+        self.step("retired call type", self.seed_retired_call_type)
+        self.step("long department message", self.seed_long_department_message)
+        self.step("hours history", self.seed_hours_history)
+        self.step("org chart", self.seed_org_chart)
+        self.step("testing runs", self.seed_testing_runs)
+        self.step("photo consent", self.seed_photo_consent)
+        self.step("waitlisted event", self.seed_waitlisted_event)
+        self.step("out-of-stock size", self.seed_out_of_stock_size)
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

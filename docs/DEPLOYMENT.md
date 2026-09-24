@@ -338,6 +338,7 @@ DEBUG=false             # MUST be false in production
 
 # Domain/URLs
 ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+FRONTEND_URL=https://yourdomain.com  # builds every link in outgoing email
 
 # Database Passwords (CHANGE THESE!)
 DB_PASSWORD=your-secure-password-here
@@ -489,7 +490,7 @@ docker compose exec backend alembic upgrade head
 
 ### Traditional Deployment
 
-Note the ordering below: `alembic upgrade head` runs while the *old* backend is
+Note the ordering below: `alembic upgrade head` runs while the _old_ backend is
 still serving. That is fine for ordinary migrations, but a revision that adds a
 uniqueness constraint can be beaten to it by a write from the still-running old
 code. Migrations here are written so that such a failure is safe — nothing is

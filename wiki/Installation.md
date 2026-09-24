@@ -182,6 +182,9 @@ DB_USER=logbook_user
 # CORS Configuration (update with your IP/domain)
 ALLOWED_ORIGINS=http://localhost:3000
 
+# Public site URL — every link in outgoing email is built from it
+FRONTEND_URL=http://localhost:3000
+
 # Application Settings
 ENVIRONMENT=production
 DEBUG=false
@@ -401,6 +404,7 @@ Production `.env` checklist:
 - [ ] Set `ENVIRONMENT=production`
 - [ ] Set `DEBUG=false`
 - [ ] Configured `ALLOWED_ORIGINS` with actual domain
+- [ ] Set `FRONTEND_URL` to the public site URL (otherwise emailed links point at localhost)
 - [ ] Configured SMTP for email (optional)
 - [ ] Set correct timezone in `TZ`
 - [ ] Configured backup schedule

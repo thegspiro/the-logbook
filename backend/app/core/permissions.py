@@ -2297,6 +2297,44 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             NOTIFICATIONS_VIEW.name,
         ],
     },
+    "compliance_officer": {
+        "name": "Compliance Officer",
+        "slug": "compliance_officer",
+        "description": "Compliance records, attestations, annual compliance reporting, and compliance concerns",
+        "is_system": True,
+        "priority": 60,
+        # training.manage is here because the Compliance Officer dashboard
+        # (ISO readiness, attestations, annual report, record completeness)
+        # is gated on it; without it the position could not open the screen
+        # named for it. training.configure rides along because the training
+        # settings endpoints already accept training.manage, and every
+        # training.manage holder carries it so the UI agrees with the API
+        # (tests/test_training_member_visibility.py). This slug is also what
+        # DEFAULT_COMPLIANCE_OFFICER_ROLES names for the certification-expiry
+        # CC, and what the default Compliance suggestion box names as its
+        # reviewer.
+        "permissions": [
+            USERS_VIEW.name,
+            MEMBERS_VIEW.name,
+            POSITIONS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
+            TRAINING_VIEW.name,
+            TRAINING_VIEW_ALL.name,
+            TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
+            COMPLIANCE_VIEW.name,
+            COMPLIANCE_MANAGE.name,
+            REPORTS_VIEW.name,
+            REPORTS_MANAGE.name,
+            DOCUMENTS_VIEW.name,
+            DOCUMENTS_MANAGE.name,
+            FORMS_VIEW.name,
+            EVENTS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
+        ],
+    },
     "training_officer": {
         "name": "Training Officer",
         "slug": "training_officer",

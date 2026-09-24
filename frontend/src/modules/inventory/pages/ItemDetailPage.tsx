@@ -47,6 +47,8 @@ import { Modal } from '../../../components/Modal';
 import { ItemFormModal } from '../components/ItemFormModal';
 import { VendorName } from '../components/VendorName';
 import StockLotsPanel from '../components/StockLotsPanel';
+import { ItemNfcTagsCard } from '../components/ItemNfcTagsCard';
+import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -147,6 +149,7 @@ const ItemDetailPage: React.FC = () => {
   // permission here as defense-in-depth (the backend enforces them too).
   const checkPermission = useAuthStore((s) => s.checkPermission);
   const canManage = checkPermission('inventory.manage');
+  const { enabled: nfcEnabled } = useInventoryNfcEnabled(canManage);
   // A member reaches this page from their own issued gear, and the catalogue
   // above it is manager-only — so every way out of here (breadcrumb, header
   // Back, and the error state's link) has to lead somewhere they can open.
@@ -562,6 +565,8 @@ const ItemDetailPage: React.FC = () => {
             )}
           </Card>
         )}
+
+        {canManage && nfcEnabled && id && <ItemNfcTagsCard itemId={id} itemName={item.name} />}
       </div>
 
       {/* ============================================================ */}

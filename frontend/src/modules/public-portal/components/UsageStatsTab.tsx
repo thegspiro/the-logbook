@@ -89,16 +89,22 @@ export const UsageStatsTab: React.FC = () => {
     );
   }
 
-  // Calculate endpoint usage percentages
-  const totalEndpointRequests = Object.values(stats.endpoint_usage || {}).reduce((sum, count) => sum + count, 0);
-  const endpointStats = Object.entries(stats.endpoint_usage || {})
-    .map(([endpoint, count]) => ({
-      endpoint,
-      count,
-      percentage: totalEndpointRequests > 0 ? (count / totalEndpointRequests) * 100 : 0,
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10); // Top 10 endpoints
+  // `top_endpoints` arrives sorted and already capped at 10, over the same
+  // 7-day window as `total_requests_7d` — so each bar is that endpoint's
+  // share of the week's traffic, not its share of the ten shown. The latter
+  // always sums to 100% and tells an operator nothing.
+  const weekTotal = stats.total_requests_7d;
+  const endpointStats = stats.top_endpoints.map(({ endpoint, count }) => ({
+    endpoint,
+    count,
+    percentage: weekTotal > 0 ? (count / weekTotal) * 100 : 0,
+  }));
+
+  // null is the backend saying there was no traffic in the window. Rendering
+  // that as a green 0.00% would report a clean bill of health for a portal
+  // nobody called (CLAUDE.md #29: an empty set is not a passing set).
+  const errorRate = stats.error_rate_percentage;
+  const errorRateMeasured = errorRate !== null;
 
   return (
     <div className="space-y-6">
@@ -132,8 +138,8 @@ export const UsageStatsTab: React.FC = () => {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <StatCard
             title="Last 24 Hours"
-            value={formatNumber(stats.total_requests_24h ?? 0)}
-            subtitle={`Avg: ${Math.round((stats.total_requests_24h ?? 0) / 24)}/hour`}
+            value={formatNumber(stats.total_requests_24h)}
+            subtitle={`Avg: ${Math.round(stats.total_requests_24h / 24)}/hour`}
             color="blue"
             icon={
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -143,8 +149,8 @@ export const UsageStatsTab: React.FC = () => {
           />
           <StatCard
             title="Last 7 Days"
-            value={formatNumber(stats.total_requests_7d ?? 0)}
-            subtitle={`Avg: ${Math.round((stats.total_requests_7d ?? 0) / 7)}/day`}
+            value={formatNumber(stats.total_requests_7d)}
+            subtitle={`Avg: ${Math.round(stats.total_requests_7d / 7)}/day`}
             color="green"
             icon={
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -159,8 +165,8 @@ export const UsageStatsTab: React.FC = () => {
           />
           <StatCard
             title="Last 30 Days"
-            value={formatNumber(stats.total_requests_30d ?? 0)}
-            subtitle={`Avg: ${Math.round((stats.total_requests_30d ?? 0) / 30)}/day`}
+            value={formatNumber(stats.total_requests_30d)}
+            subtitle={`Avg: ${Math.round(stats.total_requests_30d / 30)}/day`}
             color="purple"
             icon={
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -247,7 +253,7 @@ export const UsageStatsTab: React.FC = () => {
 
       {/* Response Status Distribution */}
       <div>
-        <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Response Status Distribution (24h)</h4>
+        <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Responses &amp; Errors (last 24h)</h4>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
           <StatCard
             title="2xx Success"
@@ -296,7 +302,8 @@ export const UsageStatsTab: React.FC = () => {
           />
           <StatCard
             title="Avg Response Time"
-            value={`${stats.avg_response_time_ms}ms`}
+            value={`${Math.round(stats.average_response_time_ms)}ms`}
+            subtitle="All time"
             color="blue"
             icon={
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -311,15 +318,9 @@ export const UsageStatsTab: React.FC = () => {
           />
           <StatCard
             title="Error Rate"
-            value={`${(stats.error_rate_percentage ?? 0).toFixed(2)}%`}
-            subtitle="4xx + 5xx errors"
-            color={
-              (stats.error_rate_percentage ?? 0) > 5
-                ? 'red'
-                : (stats.error_rate_percentage ?? 0) > 2
-                  ? 'yellow'
-                  : 'green'
-            }
+            value={errorRateMeasured ? `${errorRate.toFixed(2)}%` : '—'}
+            subtitle={errorRateMeasured ? '4xx + 5xx errors' : 'No requests in 24h'}
+            color={errorRateMeasured ? (errorRate > 5 ? 'red' : errorRate > 2 ? 'yellow' : 'green') : 'blue'}
             icon={
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -337,7 +338,7 @@ export const UsageStatsTab: React.FC = () => {
       {/* Endpoint Usage */}
       {endpointStats.length > 0 && (
         <div>
-          <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Top Endpoints (All Time)</h4>
+          <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Top Endpoints (last 7 days)</h4>
           <div className="card space-y-4 p-6">
             {endpointStats.map((stat) => (
               <EndpointBar
@@ -347,19 +348,17 @@ export const UsageStatsTab: React.FC = () => {
                 percentage={stat.percentage}
               />
             ))}
-            {Object.keys(stats.endpoint_usage || {}).length > 10 && (
-              <p className="text-theme-text-muted pt-2 text-center text-xs">
-                Showing top 10 of {Object.keys(stats.endpoint_usage || {}).length} endpoints
-              </p>
+            {endpointStats.length === 10 && (
+              <p className="text-theme-text-muted pt-2 text-center text-xs">Showing the 10 busiest endpoints</p>
             )}
           </div>
         </div>
       )}
 
       {/* Alerts */}
-      {((stats.error_rate_percentage ?? 0) > 5 ||
-        (stats.flagged_suspicious_24h ?? 0) > 10 ||
-        (stats.rate_limit_hits_24h ?? 0) > 50) && (
+      {((errorRateMeasured && errorRate > 5) ||
+        stats.flagged_suspicious_24h > 10 ||
+        stats.rate_limit_hits_24h > 50) && (
         <div className="border-l-4 border-yellow-400 bg-yellow-50 p-4 dark:bg-yellow-500/10">
           <div className="flex">
             <div className="shrink-0">
@@ -375,14 +374,12 @@ export const UsageStatsTab: React.FC = () => {
               <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-400">Attention Required</h3>
               <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-400">
                 <ul className="list-inside list-disc space-y-1">
-                  {(stats.error_rate_percentage ?? 0) > 5 && (
-                    <li>High error rate detected ({(stats.error_rate_percentage ?? 0).toFixed(2)}%)</li>
+                  {errorRateMeasured && errorRate > 5 && <li>High error rate detected ({errorRate.toFixed(2)}%)</li>}
+                  {stats.flagged_suspicious_24h > 10 && (
+                    <li>Elevated suspicious activity ({stats.flagged_suspicious_24h} incidents in 24h)</li>
                   )}
-                  {(stats.flagged_suspicious_24h ?? 0) > 10 && (
-                    <li>Elevated suspicious activity ({stats.flagged_suspicious_24h ?? 0} incidents in 24h)</li>
-                  )}
-                  {(stats.rate_limit_hits_24h ?? 0) > 50 && (
-                    <li>Frequent rate limiting ({stats.rate_limit_hits_24h ?? 0} hits in 24h)</li>
+                  {stats.rate_limit_hits_24h > 50 && (
+                    <li>Frequent rate limiting ({stats.rate_limit_hits_24h} hits in 24h)</li>
                   )}
                 </ul>
               </div>

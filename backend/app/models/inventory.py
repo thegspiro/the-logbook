@@ -30,6 +30,7 @@ from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+from app.models.nfc_tag import NfcCredentialType
 from app.utils.label_renderer import printable_label_value
 
 
@@ -2594,3 +2595,104 @@ class InventoryImpactPlan(Base):
     )
 
     __table_args__ = (Index("idx_impact_plans_org", "organization_id"),)
+
+
+class InventoryNfcTagStatus(str, enum.Enum):
+    """Lifecycle state of a tag stuck to a piece of equipment.
+
+    Unlike a member ID card, a tag here is not a credential: it names a thing,
+    it does not grant anything. So ``LOST`` is not terminal — a tag that
+    peeled off a helmet and turned up in the bay can go back to ``ACTIVE``.
+    While ``LOST`` it resolves to nothing, because whoever found it may have
+    stuck it on something else, and a tap that confidently names the wrong
+    item is worse than one that names none.
+    """
+
+    ACTIVE = "active"
+    LOST = "lost"
+
+
+class InventoryNfcTag(Base):
+    """An NFC tag physically attached to an inventory item.
+
+    Only in use when the organization has switched NFC tracking on (see
+    ``app/utils/inventory_nfc.py``); the table exists regardless.
+
+    An item may carry several tags — one on the item, one on its case, a
+    replacement for one that is wearing out — but a tag names exactly one
+    item within an organization.
+
+    The identifier is stored **hashed**, as it is for member ID cards
+    (``models/nfc_tag.py``), even though an inventory tag grants nothing. The
+    reason is the reader, not the tag: the quartermaster linking a tag holds
+    the same phone that reads ID cards, and a member's card tapped here by
+    mistake would otherwise leave that card's serial — which is the whole of
+    its credential — in clear text in this table. Hashing with the same helper
+    means that mistake leaks nothing.
+    """
+
+    __tablename__ = "inventory_nfc_tags"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Peppered SHA-256 of the normalized identifier (the chip serial, or the
+    # code written onto the tag). See services/nfc_tag_service.hash_tag_uid.
+    uid_hash = Column(String(64), nullable=False)
+    # Last four characters, so two tags on one item can be told apart.
+    uid_preview = Column(String(8), nullable=False)
+
+    credential_type = Column(
+        Enum(NfcCredentialType, values_callable=_enum_values),
+        nullable=False,
+        default=NfcCredentialType.SERIAL,
+        server_default=NfcCredentialType.SERIAL.value,
+    )
+
+    # Where on the item the tag is ("Inside left cuff", "Case lid").
+    label = Column(String(100), nullable=True)
+
+    status = Column(
+        Enum(InventoryNfcTagStatus, values_callable=_enum_values),
+        nullable=False,
+        default=InventoryNfcTagStatus.ACTIVE,
+        server_default=InventoryNfcTagStatus.ACTIVE.value,
+    )
+
+    linked_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    linked_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+
+    __table_args__ = (
+        # Per organization: a tag registered in one department must not be
+        # discoverable by linking it in another.
+        UniqueConstraint(
+            "organization_id", "uid_hash", name="uq_inventory_nfc_tag_org_uid"
+        ),
+        Index("idx_inventory_nfc_tag_org_item", "organization_id", "item_id"),
+    )

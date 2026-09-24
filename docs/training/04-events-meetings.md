@@ -58,6 +58,9 @@ Click on any event to view its detail page. The detail page shows:
 - Attendee list — officers can add/remove attendees directly from the detail page
 - Attendance list (for past events)
 - Your current RSVP status
+- An **Event Information** card with whether an RSVP is required and its
+  deadline, the **capacity** if the event has a cap, and whether guests are
+  allowed. If none of these apply, the card is left out.
 
 **To RSVP:**
 
@@ -526,6 +529,16 @@ When an event reaches its capacity limit:
 4. The waitlist position is visible on the event detail page
 
 > **Edge case:** Waitlisted attendees are promoted in the order they RSVP'd. If multiple spots open simultaneously, multiple waitlisted members are promoted in order.
+
+> **Capacity is shown on every capped event** _(2026-09-24)_. The event page's
+> **Event Information** card shows **Capacity** (for example "3 / 3 spots
+> filled") and an **Event Full** badge whenever the event has a cap. It used to
+> appear only on events that **require** an RSVP. A capped event puts people on
+> the waitlist either way, so a member waitlisted on one that did not require an
+> RSVP saw their waitlist position but not the full event that caused it.
+> Managers see capacity once, in the **Statistics** card, where it was already
+> shown. An event with no cap, no RSVP requirement and no guests used to show an
+> empty Event Information card; now the card is left out.
 
 ### Additional RSVP Features
 
@@ -1795,11 +1808,7 @@ check-in times stay in the organizer view and are never included.
 department until an administrator opts in. Inheriting is a real third state, not
 a missing value — no existing event was changed by the upgrade.
 
-> **Screenshot needed:**
-> _[An event detail page as a member with attendee visibility switched on: the
-> going list showing names and status only, and the waitlist position line
-> beneath it. Capture the member view, not the organizer view — the point of
-> the shot is what a member can now see.]_
+![An event as an ordinary member with attendee visibility on: her RSVP reads Waitlisted, You're #1 of 1 on the waitlist, Who's going lists the three members by name only, and Event Information shows capacity 3 / 3 with Event Full](./images/04-50-event-attendees-member.png)
 
 ### Responding to an event that does not require a response
 

@@ -115,6 +115,14 @@ const TAG_TARGETS: readonly NfcTargetSpec[] = [
     idQueryParams: ['shift', 'apparatus'],
     toPath: (_ids, query) => `/scheduling/checkin?${query?.name}=${encodeURIComponent(query?.value ?? '')}`,
   },
+  {
+    target: NfcTagTarget.INVENTORY_ITEM,
+    // The id here is the tag's own code, not the item's: unlinking the tag in
+    // the app then stops it resolving, which an item id baked into the URL
+    // could never do.
+    pathPattern: /^\/inventory\/tag\/([^/]+)\/?$/,
+    toPath: (ids) => `/inventory/tag/${ids[0]}`,
+  },
 ];
 
 export interface NfcTagMatch {
@@ -196,6 +204,7 @@ const TARGET_ACTION_NOUNS: Record<NfcTagTarget, string> = {
   [NfcTagTarget.EVENT_CHECK_IN]: 'check-in',
   [NfcTagTarget.ADMIN_HOURS_CLOCK_IN]: 'clock-in',
   [NfcTagTarget.SHIFT_CHECK_IN]: 'shift check-in',
+  [NfcTagTarget.INVENTORY_ITEM]: 'item record',
 };
 
 export function nfcActionNoun(target: NfcTagTarget): string {
@@ -227,6 +236,46 @@ export function buildAdminHoursClockInUrl(categoryId: string, origin?: string): 
 export function buildShiftCheckInUrl(ref: { apparatusId: string } | { shiftId: string }, origin?: string): string {
   const query = 'apparatusId' in ref ? `apparatus=${ref.apparatusId}` : `shift=${ref.shiftId}`;
   return withOrigin(origin, `/scheduling/checkin?${query}`);
+}
+
+/** Prefix on codes this app writes onto equipment tags; the backend only
+ * ever sees the code, so this exists for people reading a tag with a generic
+ * NFC app. */
+const INVENTORY_TAG_CODE_PREFIX = 'INVT';
+
+/**
+ * A fresh code for a blank equipment tag: 128 random bits, hex. Minted on the
+ * phone and linked only once the write has succeeded, the same order a member
+ * ID card is issued in, so a failed write never leaves a link to a blank tag.
+ */
+export function generateInventoryTagCode(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${INVENTORY_TAG_CODE_PREFIX}${hex.toUpperCase()}`;
+}
+
+/**
+ * Absolute URL to encode onto an equipment tag.
+ *
+ * A URL rather than a bare code so that any phone can use the tag: an iPhone
+ * cannot read NFC from inside a web page, but it opens a URL tag natively and
+ * lands on the item. Android does the same with the app closed.
+ */
+export function buildInventoryTagUrl(code: string, origin?: string): string {
+  return withOrigin(origin, `/inventory/tag/${code}`);
+}
+
+/**
+ * The equipment tag code carried by a payload, or null when the payload is
+ * not one of this app's equipment tags. Goes through `parseNfcTagPath`, so the
+ * same origin and id checks apply.
+ */
+export function parseInventoryTagCode(rawPayload: string | null, origin?: string): string | null {
+  if (!rawPayload) return null;
+  const match = parseNfcTagPath(rawPayload, origin);
+  if (match?.target !== NfcTagTarget.INVENTORY_ITEM) return null;
+  return match.path.slice('/inventory/tag/'.length) || null;
 }
 
 /**

@@ -191,10 +191,9 @@ would have refused. Two things follow from the same fix:
 this tab is also where a scheduling admin looks for staffing gaps. If an officer
 and a member compare boards and see different lists, that is why.
 
-> **Screenshot needed:**
-> _[Scheduling → Open Shifts as an ordinary member beside the same board as a
-> scheduling admin, so the difference is visible in one frame. Caption which is
-> which.]_
+![Open Shifts as an ordinary member (a firefighter): only the shifts with a seat her rank can fill](./images/03-100-open-shifts-member.png)
+
+![The same Open Shifts tab as the scheduling administrator: every short-staffed shift in the department, including the officer and driver seats the firefighter's list leaves out](./images/03-105-open-shifts-admin.png)
 
 ---
 
@@ -3372,10 +3371,7 @@ rather than "Alarm / Good Intent", had no way to say so.
 **Administration → Scheduling Admin → General → Call types** renames, reorders,
 adds, retires and deletes them.
 
-> **Screenshot needed:**
-> _[The Call types editor in Scheduling Admin → General: the department's list
-> with rename and reorder controls, one type shown as retired, and the delete
-> control visibly unavailable on a type that has calls behind it.]_
+![The Call types editor: each type with rename field and up and down controls, Service Call switched off as retired, and the delete control greyed out on every type with calls on record while Other, with none, can be deleted](./images/03-101-call-types-editor.png)
 
 **Retire, don't delete, anything with history behind it.** The stored value on
 every call ever filed is the type's permanent slug, so deleting a type in use
@@ -3416,11 +3412,9 @@ bleed on phones and capped at 32rem above that. It is now a **centred dialog**:
 The wider desktop box gives the crew board and the close-out checklist's
 per-member hours inputs room they did not have at 512px.
 
-> **Screenshot needed:**
-> _[The Shift Details modal at laptop width with the crew board visible, and a
-> second capture at 390px phone width. Every existing capture of this surface
-> shows a right-edge drawer, which no longer exists — these are replacements,
-> not additions.]_
+![The Shift Details modal at laptop width, centred over the schedule, with the shift's time and apparatus at the top and the crew board of seats below](./images/03-102-shift-details-modal.png)
+
+![The same Shift Details modal at 390px phone width, filling the screen with the crew board stacked beneath the shift's details](./images/03-103-shift-details-modal-phone.png)
 
 **Escape inside the driver-blocked dialog no longer closes the shift behind
 it.** Shift Details hand-rolled Escape on a listener that could not see the
@@ -3439,10 +3433,7 @@ Until now a member could see the hours on each past shift but had no total for a
 month or a year, so *"how many hours do I have this year?"* was a question only
 an officer with the department-wide report could answer.
 
-> **Screenshot needed:**
-> _[The Hours view in My Shifts: the three cards reading this month, this year
-> and all time, above the month-by-month table with its "vs. busiest month" bar
-> column.]_
+![My Shifts on its Hours view: cards for this month, this year and all time, above the month-by-month table with its vs. busiest month bar column](./images/03-104-my-shifts-hours.png)
 
 - **It needs no permission beyond being signed in.** It reports the caller's own
   attendance; the department-wide member-hours report, which names every member,

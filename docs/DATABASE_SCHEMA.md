@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**272 tables · 4553 columns · 880 foreign keys**
+**273 tables · 4565 columns · 883 foreign keys**
 
 ---
 
@@ -320,6 +320,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_items`](#inventory_items) | `InventoryItem` | 54 | Inventory Item model |
 | [`inventory_label_prints`](#inventory_label_prints) | `InventoryLabelPrint` | 6 | One confirmed label print for an item: who confirmed it, and when. |
 | [`inventory_lots`](#inventory_lots) | `InventoryLot` | 13 | A batch/lot of a consumable inventory item held as ready stock. |
+| [`inventory_nfc_tags`](#inventory_nfc_tags) | `InventoryNfcTag` | 12 | An NFC tag physically attached to an inventory item. |
 | [`inventory_notification_queue`](#inventory_notification_queue) | `InventoryNotificationQueue` | 15 | Queues inventory change events for delayed, consolidated email |
 | [`inventory_vendor_contacts`](#inventory_vendor_contacts) | `InventoryVendorContact` | 12 | A named person at a vendor — sales rep, service desk, accounts receivable. |
 | [`inventory_vendors`](#inventory_vendors) | `InventoryVendor` | 21 | Vendor model |
@@ -4931,6 +4932,37 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_inventory_lots_org_exp` (`organization_id`, `expiration_date`)
 - `ix_inventory_lots_inventory_item_id` (`inventory_item_id`)
+
+### `inventory_nfc_tags`
+
+**InventoryNfcTag** · `app/models/inventory.py`
+
+> An NFC tag physically attached to an inventory item. Only in use when the organization has switched NFC tracking on (see ``app/utils/inventory_nfc.py``); the table exists regardless. An item may carry several tags — one on the item, one on its case, a replacement for one that is wearing out — but a tag names exactly one item within an organization. The identifier is stored **hashed**, as it is for member ID cards (``models/nfc_tag.py``), even though an inventory tag grants nothing. The reason is the reader, not the tag: the quartermaster linking a tag holds the same phone that reads ID cards, and a member's card tapped here by mistake would otherwise leave that card's serial — which is the whole of its credential — in clear text in this table. Hashing with the same helper means that mistake leaks nothing.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `item_id` | VARCHAR(36) | no | FK, IDX |  | → `inventory_items.id` ON DELETE CASCADE |
+| `uid_hash` | VARCHAR(64) | no |  |  |  |
+| `uid_preview` | VARCHAR(8) | no |  |  |  |
+| `credential_type` | ENUM(`serial`, `written`) | no |  | `serial` |  |
+| `label` | VARCHAR(100) | yes |  |  |  |
+| `status` | ENUM(`active`, `lost`) | no |  | `active` |  |
+| `linked_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `linked_at` | DATETIME | no |  | `now()` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `idx_inventory_nfc_tag_org_item` (`organization_id`, `item_id`)
+- `ix_inventory_nfc_tags_item_id` (`item_id`)
+- `ix_inventory_nfc_tags_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_inventory_nfc_tag_org_uid` (`organization_id`, `uid_hash`)
 
 ### `inventory_notification_queue`
 
@@ -9553,7 +9585,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (327 references)
+### → `users` (328 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9707,6 +9739,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_items` | `label_printed_by` | SET NULL | yes |
 | `inventory_label_prints` | `printed_by` | SET NULL | yes |
 | `inventory_lots` | `created_by` | SET NULL | yes |
+| `inventory_nfc_tags` | `linked_by` | SET NULL | yes |
 | `inventory_notification_queue` | `performed_by` | NO ACTION | yes |
 | `inventory_notification_queue` | `user_id` | CASCADE | no |
 | `inventory_vendors` | `created_by` | SET NULL | yes |
@@ -9885,7 +9918,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (218 references)
+### → `organizations` (219 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9993,6 +10026,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_items` | `organization_id` | CASCADE | no |
 | `inventory_label_prints` | `organization_id` | CASCADE | no |
 | `inventory_lots` | `organization_id` | CASCADE | no |
+| `inventory_nfc_tags` | `organization_id` | CASCADE | no |
 | `inventory_notification_queue` | `organization_id` | CASCADE | no |
 | `inventory_vendor_contacts` | `organization_id` | CASCADE | no |
 | `inventory_vendors` | `organization_id` | CASCADE | no |
@@ -10108,7 +10142,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `organization_id` | CASCADE | no |
 | `xapi_statements` | `organization_id` | CASCADE | no |
 
-### → `inventory_items` (18 references)
+### → `inventory_items` (19 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10120,6 +10154,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_item_pins` | `item_id` | CASCADE | no |
 | `inventory_label_prints` | `item_id` | CASCADE | no |
 | `inventory_lots` | `inventory_item_id` | CASCADE | no |
+| `inventory_nfc_tags` | `item_id` | CASCADE | no |
 | `inventory_notification_queue` | `item_id` | SET NULL | yes |
 | `inventory_write_offs` | `item_id` | SET NULL | yes |
 | `item_assignments` | `item_id` | CASCADE | no |

@@ -31,6 +31,7 @@ import type {
   CategoryPresetApplyResponse,
   InventoryCategoryCreate,
   ScanLookupResponse,
+  ScanLookupResult,
   DistributeItemsRequest,
   DistributeItemsResponse,
   InventoryTransferRequest,
@@ -90,6 +91,14 @@ import type {
   FulfillmentOptionsResponse,
   RequestableCatalogResponse,
 } from './eventServices';
+import type {
+  InventoryNfcResolveRequest,
+  InventoryNfcSettings,
+  InventoryNfcTag,
+  InventoryNfcTagCreate,
+  InventoryNfcTagListResponse,
+  InventoryNfcTagUpdate,
+} from '../modules/inventory/types/nfc';
 import { asArray } from '../utils/asArray';
 
 export const inventoryService = {
@@ -606,6 +615,37 @@ export const inventoryService = {
       params: { code },
     });
     return response.data;
+  },
+
+  // NFC tag tracking — every call but getNfcSettings is refused with 403
+  // while the organization has the setting off.
+  async getNfcSettings(): Promise<InventoryNfcSettings> {
+    const response = await api.get<InventoryNfcSettings>('/inventory/nfc/settings');
+    return response.data;
+  },
+
+  async resolveNfcTag(data: InventoryNfcResolveRequest): Promise<ScanLookupResult> {
+    const response = await api.post<ScanLookupResult>('/inventory/nfc/resolve', data);
+    return response.data;
+  },
+
+  async getItemNfcTags(itemId: string): Promise<InventoryNfcTagListResponse> {
+    const response = await api.get<InventoryNfcTagListResponse>(`/inventory/items/${itemId}/nfc-tags`);
+    return response.data;
+  },
+
+  async linkItemNfcTag(itemId: string, data: InventoryNfcTagCreate): Promise<InventoryNfcTag> {
+    const response = await api.post<InventoryNfcTag>(`/inventory/items/${itemId}/nfc-tags`, data);
+    return response.data;
+  },
+
+  async updateNfcTag(tagId: string, data: InventoryNfcTagUpdate): Promise<InventoryNfcTag> {
+    const response = await api.patch<InventoryNfcTag>(`/inventory/nfc-tags/${tagId}`, data);
+    return response.data;
+  },
+
+  async unlinkNfcTag(tagId: string): Promise<void> {
+    await api.delete(`/inventory/nfc-tags/${tagId}`);
   },
 
   async distributeItems(data: DistributeItemsRequest): Promise<DistributeItemsResponse> {
