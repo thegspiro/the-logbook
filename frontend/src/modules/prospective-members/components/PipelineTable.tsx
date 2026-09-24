@@ -1,19 +1,22 @@
 /**
  * Pipeline Table View
  *
- * Table-based view for prospective members with sorting,
- * server-side pagination, and bulk actions.
+ * Table-based view for prospective members with sorting and
+ * server-side pagination.
+ *
+ * Selection is owned by the page, and so are the bulk actions: the page's bar
+ * serves both the table and the kanban views. This component used to draw a
+ * second bar of its own, so selecting rows stacked two "N selected" bars
+ * offering overlapping actions through different code paths.
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
   CheckSquare,
   Square,
-  Forward,
-  Pause,
-  XCircle,
+  SquareMinus,
   MoreHorizontal,
   AlertTriangle,
   Loader2,
@@ -36,9 +39,9 @@ interface PipelineTableProps {
   totalPages: number;
   onPageChange: (page: number) => void;
   onApplicantClick: (applicant: ApplicantListItem) => void;
-  selectedApplicants?: Set<string> | undefined;
-  onToggleSelect?: ((id: string) => void) | undefined;
-  onToggleAll?: (() => void) | undefined;
+  selectedApplicants: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onToggleAll: () => void;
 }
 
 type SortField =
@@ -51,9 +54,9 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
   totalPages,
   onPageChange,
   onApplicantClick,
-  selectedApplicants: externalSelected,
-  onToggleSelect: externalToggle,
-  onToggleAll: externalToggleAll,
+  selectedApplicants: selected,
+  onToggleSelect: toggleOne,
+  onToggleAll: toggleAll,
 }) => {
   const tz = useTimezone();
   const {
@@ -65,12 +68,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     isRejecting,
     isWithdrawing,
   } = useProspectiveMembersStore();
-  const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
-  const selected = externalSelected ?? internalSelected;
-  const noop = useCallback(() => {}, []);
-  const setSelected = externalSelected ? noop : setInternalSelected;
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
-  const [showBulkRejectConfirm, setShowBulkRejectConfirm] = useState(false);
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
   const [withdrawConfirmId, setWithdrawConfirmId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<string | null>(null);
@@ -123,65 +121,12 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     return sorted;
   }, [applicants, sortField, sortDirection]);
 
-  // Clear selection when page changes
   useEffect(() => {
-    setSelected(new Set());
     setActionMenuId(null);
-  }, [currentPage, setSelected]);
+  }, [currentPage]);
 
   const allSelected = applicants.length > 0 && selected.size === applicants.length;
   const someSelected = selected.size > 0 && !allSelected;
-
-  const toggleAll =
-    externalToggleAll ??
-    (() => {
-      if (allSelected) {
-        setSelected(new Set());
-      } else {
-        setSelected(new Set(applicants.map((a) => a.id)));
-      }
-    });
-
-  const toggleOne =
-    externalToggle ??
-    ((id: string) => {
-      const next = new Set(selected);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      setSelected(next);
-    });
-
-  const handleBulkAction = async (action: 'advance' | 'hold' | 'reject') => {
-    const ids = Array.from(selected);
-    const actionFn =
-      action === 'advance'
-        ? advanceApplicant
-        : action === 'hold'
-          ? (id: string) => holdApplicant(id)
-          : (id: string) => rejectApplicant(id);
-
-    let successCount = 0;
-    for (const id of ids) {
-      try {
-        await actionFn(id);
-        successCount++;
-      } catch {
-        // Continue with remaining
-      }
-    }
-
-    const actionLabel = `${action.charAt(0).toUpperCase() + action.slice(1)}d`;
-    if (successCount > 0) {
-      toast.success(`${actionLabel} ${successCount} of ${ids.length} applicants`);
-    }
-    if (successCount < ids.length) {
-      toast.error(`${ids.length - successCount} applicant action${ids.length - successCount === 1 ? '' : 's'} failed`);
-    }
-    setSelected(new Set());
-  };
 
   const runRowAction = async (action: () => Promise<void>, successMessage: string, failureMessage: string) => {
     try {
@@ -207,70 +152,6 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
 
   return (
     <div>
-      {/* Bulk Actions Bar */}
-      {selected.size > 0 && (
-        <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
-          <span className="text-theme-text-secondary text-sm">{selected.size} selected</span>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => {
-                void handleBulkAction('advance');
-              }}
-              aria-label={`Advance ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-800"
-            >
-              <Forward className="h-3.5 w-3.5" />
-              Advance
-            </button>
-            <button
-              onClick={() => {
-                void handleBulkAction('hold');
-              }}
-              aria-label={`Hold ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
-              className="flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-amber-800"
-            >
-              <Pause className="h-3.5 w-3.5" />
-              Hold
-            </button>
-            <button
-              onClick={() => setShowBulkRejectConfirm(true)}
-              aria-label={`Reject ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
-              className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm"
-            >
-              <XCircle className="h-3.5 w-3.5" />
-              Reject
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Reject Confirmation */}
-      {showBulkRejectConfirm && (
-        <div className="mb-3 rounded-lg border border-red-500/20 bg-red-500/10 p-4">
-          <p className="mb-3 text-sm text-red-700 dark:text-red-300">
-            Are you sure you want to reject <strong className="text-theme-text-primary">{selected.size}</strong>{' '}
-            applicant(s)? This action cannot be easily undone.
-          </p>
-          <div className="flex items-center justify-end gap-2">
-            <button
-              onClick={() => setShowBulkRejectConfirm(false)}
-              className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                void handleBulkAction('reject');
-                setShowBulkRejectConfirm(false);
-              }}
-              className="btn-primary flex items-center gap-1 py-1.5 text-sm"
-            >
-              Confirm Reject All
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Table */}
       <div className="card bg-theme-input-bg overflow-hidden">
         <div className="overflow-x-auto">
@@ -280,12 +161,14 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                 <th scope="col" className="w-14 p-3">
                   <button
                     onClick={toggleAll}
+                    aria-label="Select all applicants on this page"
+                    aria-pressed={allSelected ? true : someSelected ? 'mixed' : false}
                     className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-[44px] min-w-[44px] items-center justify-center"
                   >
                     {allSelected ? (
                       <CheckSquare className="h-5 w-5 text-red-700 dark:text-red-400" />
                     ) : someSelected ? (
-                      <CheckSquare className="h-5 w-5 text-red-700 dark:text-red-400/50" />
+                      <SquareMinus className="h-5 w-5 text-red-700 dark:text-red-400" />
                     ) : (
                       <Square className="h-5 w-5" />
                     )}
@@ -385,6 +268,8 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => toggleOne(applicant.id)}
+                          aria-label={`Select ${applicant.first_name} ${applicant.last_name}`}
+                          aria-pressed={isSelected}
                           className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-[44px] min-w-[44px] items-center justify-center"
                         >
                           {isSelected ? (

@@ -672,6 +672,21 @@ and a partial failure surfaced as a bare count naming nobody.
 **One failure never aborts the rest** — the outcome is itemized so the caller
 can name who was skipped and why.
 
+#### One bulk bar for both views _(2026-09-24)_
+
+The page (`ProspectiveMembersPage`) owns the selection and draws the only bulk
+bar: **Print Badges**, **Advance All**, **Hold All** and **Reject All**. It
+serves the kanban board and the table alike.
+
+`PipelineTable` used to draw a second bar of its own whenever rows were
+selected, so Table view stacked two "N selected" bars. Its **Advance** matched
+the page's **Advance All** but reached it by a different path: one
+`advance` request per applicant, reporting only a count of failures. Its
+**Hold** existed nowhere else. The table's bar has been removed. **Hold All**
+is now on the page's bar and goes through `bulk-status` with `on_hold`. The
+table's selection props are now required, so it cannot draw a bar of its own
+again unnoticed.
+
 #### Edge cases
 
 | Situation                                           | Behavior                                                                                                                                                                                                                                                 |

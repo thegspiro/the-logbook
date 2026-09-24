@@ -1111,31 +1111,6 @@ branch, and a date-stamped sequence collides the moment two people work on the
 same day. Before merging a migration, re-check `revision` against the current
 main rather than against your merge-base.
 
-## Prospective Members — Two Bulk-Action Bars at Once (2026-08-09)
-
-Selecting applicants in the pipeline **table** view renders two selection bars
-stacked on top of each other, both reading "N selected":
-
-| Bar   | Rendered by                          | Actions                               |
-| ----- | ------------------------------------ | ------------------------------------- |
-| upper | `ProspectiveMembersPage` (line ~646) | Print Badges, Advance All, Reject All |
-| lower | `PipelineTable` (line ~188)          | Advance, Hold, Reject                 |
-
-`PipelineTable` supports both controlled and uncontrolled selection —
-`selected = externalSelected ?? internalSelected` — but it renders its own bar
-whenever anything is selected, including when the parent is driving the
-selection and has already drawn one. The page passes `selectedApplicants` and
-`onToggleSelect`, so both fire.
-
-The overlap is not clean, which is why this is recorded rather than fixed here:
-"Advance All" and "Advance" do the same thing on the same selection, **Hold**
-exists only on the lower bar, and **Print Badges** only on the upper. Suppressing
-either one silently drops an action, so which bar survives — or what a merged
-bar should offer — is a product call.
-
-The guide screenshot (`15-11-table-bulk-actions.png`) shows both bars, because
-that is what the page does today.
-
 ## Skills Testing — No Summary Dashboard (2026-08-09)
 
 `docs/training/09-skills-testing.md` pictures a **Skills Testing Summary
@@ -2800,30 +2775,6 @@ placeholder is retired until a screen exists to photograph.
 
 Needs an owner decision: whether to build the settings section or drop the
 feature. This loop does not make that call.
-
-## Prospective Members — Two Bulk-Action Bars Render At Once (2026-08-13)
-
-Selecting applicants in **Table** view puts two independent bulk-action bars on
-the screen, stacked, each reading "N selected". They come from different
-components and neither is a superset of the other:
-
-| Bar                                  | Offers                                |
-| ------------------------------------ | ------------------------------------- |
-| `ProspectiveMembersPage.tsx` (upper) | Print Badges, Advance All, Reject All |
-| `PipelineTable.tsx` (lower)          | Advance, Hold, Reject                 |
-
-The two "advance" buttons run different code paths — `handleBulkAdvance` and
-`handleBulkAction('advance')` — and reach the same endpoint, so pressing either
-does the same thing. Hold is only on the lower bar; Print Badges only on the
-upper. A coordinator has no way to tell that from looking at them.
-
-Found while verifying `15-11-table-bulk-actions`, which pictures both bars. The
-guide now describes them as two bars rather than one, because that is what the
-screen does.
-
-Needs an owner decision: which bar survives, and where Hold and Print Badges
-live afterwards. Merging them changes the documented action list, so this loop
-does not make that call.
 
 ## Prospective Members — The Progress Track Still Draws Stages Not Yet Reached (2026-08-13)
 

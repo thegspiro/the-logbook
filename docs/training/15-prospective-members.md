@@ -649,13 +649,12 @@ Select multiple applicants on the pipeline dashboard to perform bulk actions:
 
 1. Check the boxes next to applicant names — in **Table** view, the checkbox in
    the header row selects everything on the current page
-2. **Two action bars appear**, one above the other, and they offer different
-   actions. This is a known rough edge, not a difference in meaning — the
-   buttons that share a name do the same thing:
-   - The upper bar: **Print Badges** (opens the label sheet for the selected
-     applicants), **Advance All**, **Reject All** (with a reason)
-   - The lower bar: **Advance**, **Hold** (puts all selected on hold),
-     **Reject** (with a reason)
+2. **One action bar appears** above the board or table, reading "N selected":
+   - **Print Badges** opens the label sheet for the selected applicants
+   - **Advance All** moves each one to their next stage
+   - **Hold All** puts all selected on hold
+   - **Reject All** asks for an optional reason first
+   - The **×** clears the selection without doing anything
    - On the **Inactive Applications** tab the bar offers **Reactivate**
 3. Confirm the bulk action
 
@@ -663,7 +662,18 @@ Select multiple applicants on the pipeline dashboard to perform bulk actions:
 > the inactivity policy, not deleted in bulk — this list previously named a
 > **Delete** button that does not exist.
 
-![Pipeline table with applicants selected and the bulk action bar](./images/15-11-table-bulk-actions.png)
+![Pipeline table with applicants selected and the one bulk action bar](./images/15-11-table-bulk-actions.png)
+
+> **Table view used to show two bars** _(fixed 2026-09-24)_. Selecting rows in
+> Table view stacked a second bar under the first, with **Advance** / **Hold** /
+> **Reject**. The second bar is gone and **Hold All** has moved onto the one
+> that remains, so nothing was lost. It also now runs as a single request that
+> names anyone it skipped, like the other bulk actions; the old **Hold** sent
+> one request per applicant and could only report a count of failures.
+>
+> The header checkbox now shows a **minus** when only some rows are selected.
+> It used to show the same tick as a full selection, so in light mode the two
+> looked identical.
 
 ### Bulk actions now tell you who was skipped _(2026-08-08)_
 

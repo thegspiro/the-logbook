@@ -10812,6 +10812,17 @@ export const SHOTS = [
       for (let index = 0; index < count; index += 1) {
         await boxes.nth(index).click({ timeout: 10_000 });
       }
+      // The table once drew a second bar under the page's, and this shot
+      // pictured both for weeks. One "N selected" is the whole claim.
+      const bars = await page
+        .getByText(`${count} selected`, { exact: true })
+        .count();
+      if (bars !== 1) {
+        throw new Error(`expected one bulk bar, found ${bars}`);
+      }
+      await page
+        .getByRole("button", { name: /hold all/i })
+        .waitFor({ timeout: 10_000 });
     },
     fullPage: true,
   },

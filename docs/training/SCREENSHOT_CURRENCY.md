@@ -114,12 +114,13 @@ same interview-recording helper as the create path and the spread. Run it
 prospective-member shot is built around, so the six other board shots above
 were taken first.
 
-**`15-11` shows two bulk bars, and that is the application, not the capture.**
-Selecting rows in the table view renders both the page's bar (Print Badges /
+**`15-11` showed two bulk bars, and that was the application, not the capture.**
+Selecting rows in the table view rendered both the page's bar (Print Badges /
 Advance All / Reject All) and the table's own (Advance / Hold / Reject), each
-reading "3 selected". The previous capture shows the same two bars, so it
-predates this pass; it is recorded here rather than fixed, since it is a UI
-change outside a documentation PR.
+reading "3 selected". Fixed on 2026-09-24: the table no longer draws a bar, and
+**Hold All** moved onto the page's bar. `15-11` was re-shot afterwards and
+shows one bar with four actions. Both `KNOWN_LIMITATIONS.md` entries for it are
+removed.
 
 **Remaining seed gap.** **Every seeded inventory
 item reads "Needs a label"**, which is correct for item 6 but means the
