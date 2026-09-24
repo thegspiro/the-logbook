@@ -1,5 +1,6 @@
 """
-Seed 50 test users with varied ranks, positions, and membership types.
+Seed 50 test users with varied ranks, positions, and membership types, plus
+the default Compliance suggestion box that onboarding would create.
 
 Usage:
     cd backend
@@ -27,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.utils import generate_uuid
+from app.services.suggestion_service import SuggestionService
 
 _hasher = PasswordHasher(
     time_cost=3,
@@ -67,8 +69,8 @@ TEST_USERS = [
     ("rjackson",    "Rachel",    "Jackson",    "emt",             "Headquarters", "active",        "active",       ["emt", "member", "facilities_manager"]),
     ("dthomas",     "Daniel",    "Thomas",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "meeting_hall_coordinator"]),
     ("elewis",      "Emily",     "Lewis",      "emt",             "Headquarters", "active",        "active",       ["emt", "member", "assistant_secretary"]),
+    ("mrobinson",   "Matthew",   "Robinson",   "emt",             "Headquarters", "active",        "active",       ["emt", "member", "compliance_officer"]),
     # --- EMTs (rank and file, active) ---
-    ("mrobinson",   "Matthew",   "Robinson",   "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
     ("aclark",      "Ashley",    "Clark",      "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
     ("jwalker",     "Joshua",    "Walker",     "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
     ("shernandez",  "Stephanie", "Hernandez",  "emt",             "Headquarters", "active",        "active",       ["emt", "member", "it_manager"]),
@@ -219,6 +221,7 @@ async def get_or_create_positions(session: AsyncSession, org_id: str) -> dict[st
         # Appointed officer positions
         ("Training Officer", "training_officer", 58),
         ("Safety Officer", "safety_officer", 57),
+        ("Compliance Officer", "compliance_officer", 56),
         ("Quartermaster", "quartermaster", 52),
         ("Communications Officer / PIO", "communications_officer", 48),
         ("Apparatus Officer", "apparatus_officer", 47),
@@ -336,6 +339,22 @@ async def seed_users(session: AsyncSession, org_id: str) -> None:
     print(f"  Created {created} users, skipped {skipped} (already exist)")
 
 
+async def seed_compliance_box(session: AsyncSession, org_id: str) -> None:
+    """Create the default Compliance suggestion box, as onboarding does.
+
+    Delegates to the same service call onboarding makes, so the box matches a
+    real install: reviewed by the Compliance Officer position, active because
+    that position exists. An org that already has a box named Compliance is
+    left alone.
+    """
+    box = await SuggestionService(session).seed_compliance_box(org_id)
+    if box is None:
+        print("  Compliance suggestion box already exists, skipped")
+    else:
+        state = "active" if box.is_active else "inactive"
+        print(f"  Created Compliance suggestion box ({state})")
+
+
 async def main() -> None:
     # Build the database URL from env vars (same as the app)
     db_user = os.getenv("DB_USER", "intranet_user")
@@ -358,6 +377,7 @@ async def main() -> None:
             org_id = await get_or_create_org(session)
             print(f"  Using organization: {org_id}\n")
             await seed_users(session, org_id)
+            await seed_compliance_box(session, org_id)
 
     await engine.dispose()
     print("\nDone!")
