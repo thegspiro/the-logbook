@@ -30,18 +30,19 @@ All configurable values should be referenced by constant, never by raw string.
 # Default training officer roles for cert alert config fallback.
 #
 # ``assistant_training_officer`` is not a seeded position and resolves to
-# nobody; ``training_officer`` carries the list. Left as written because these
-# two are fallbacks behind ``cert_alert_config``, which a department fills in
+# nobody; ``training_officer`` carries the list. Left as written because this
+# is a fallback behind ``cert_alert_config``, which a department fills in
 # with its own position slugs — naming a position a department may reasonably
-# have invented is the point. ``tests/test_role_group_slugs.py`` allows them
+# have invented is the point. ``tests/test_role_group_slugs.py`` allows it
 # explicitly so the exception is recorded rather than assumed.
 DEFAULT_TRAINING_OFFICER_ROLES: list[str] = [
     "training_officer",
     "assistant_training_officer",
 ]
 
-# Same, and worth knowing: no position is seeded with this slug, so on a stock
-# install this list resolves to the empty set rather than to a smaller one.
+# The seeded Compliance Officer position (2026-09-24). Before that no position
+# carried this slug and the compliance CC on the urgent certification tier
+# went to nobody on a stock install.
 DEFAULT_COMPLIANCE_OFFICER_ROLES: list[str] = [
     "compliance_officer",
 ]

@@ -216,6 +216,21 @@ President and Communications Officer positions; migration `394600cbfae2`
 carries it to existing installations' `is_system` position rows (see
 [Migrations](#suggestion-box-migrations)).
 
+### The default Compliance box _(2026-09-24)_
+
+Every department gets a box named **Compliance** whose reviewer is the seeded
+**Compliance Officer** position (`compliance_officer`): onboarding creates it
+(`SuggestionService.seed_compliance_box`) and migration `3c918c06466d` adds it
+to existing departments. Anonymous submissions are allowed and follow-up is on,
+so an anonymous reporter can still be asked questions.
+
+**It is created inactive.** The position starts with no holder, and a live box
+whose only reviewer is an empty position would accept reports nobody can read.
+Assign the officer on the positions screen, then switch the box on under
+**Suggestion Boxes**. A department that already had a box named `Compliance`
+keeps its own; one that had created its own `compliance_officer` position gets
+that position as the reviewer.
+
 ### Anonymity is structural
 
 | What        | Anonymous submission                                                                                                                                                                                                                                                |
