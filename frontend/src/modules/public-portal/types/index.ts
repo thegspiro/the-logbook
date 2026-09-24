@@ -52,9 +52,11 @@ export interface PublicPortalAccessLog {
 
 export interface PublicPortalUsageStats {
   total_requests: number;
+  /** Rolling windows, measured back from now — not calendar periods. */
   total_requests_24h: number;
   total_requests_7d: number;
   total_requests_30d: number;
+  /** Calendar periods. Served, but nothing renders them today. */
   requests_today: number;
   requests_this_week: number;
   requests_this_month: number;
@@ -66,10 +68,11 @@ export interface PublicPortalUsageStats {
   status_2xx_24h: number;
   status_4xx_24h: number;
   status_5xx_24h: number;
+  /** All-time mean, in milliseconds. */
   average_response_time_ms: number;
-  avg_response_time_ms: number; // Alias
-  error_rate_percentage: number;
-  endpoint_usage: Record<string, number>;
+  /** (4xx + 5xx) / total over 24h, or `null` when there was no traffic to measure. */
+  error_rate_percentage: number | null;
+  /** Busiest endpoints over the last 7 days, already sorted and capped at 10. */
   top_endpoints: Array<{ endpoint: string; count: number }>;
   requests_by_status: Record<number, number>;
   flagged_requests: number;

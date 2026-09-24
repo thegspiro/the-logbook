@@ -356,6 +356,46 @@ async def detect_anomalies(
     return False, None
 
 
+async def _log_refusal(
+    request: Request,
+    api_key_obj: PublicPortalAPIKey,
+    status_code: int,
+    reason: str,
+    db: AsyncSession,
+) -> None:
+    """Write one access-log row for a request refused by this dependency.
+
+    Committed rather than flushed, for the reason PUB-8 documents: the caller
+    raises immediately after, and ``get_db`` rolls the request transaction
+    back on the way out, so a flushed row would be discarded exactly when it
+    matters. The only pending write at this point is this row.
+
+    Best-effort throughout. An audit write must never replace the answer the
+    caller was about to receive — here, the 429 that protects the service.
+    """
+    try:
+        await log_access(
+            request=request,
+            organization_id=str(api_key_obj.organization_id),
+            config_id=str(api_key_obj.config_id),
+            api_key_id=str(api_key_obj.id),
+            status_code=status_code,
+            response_time_ms=None,
+            db=db,
+            flagged_suspicious=False,
+            flag_reason=reason,
+        )
+        await db.commit()
+    except Exception as exc:
+        logger.warning("Public portal refusal could not be logged: {}", exc)
+        try:
+            await db.rollback()
+        except Exception:
+            # The session is already unusable; the warning above is the
+            # record. Re-raising here would replace the 429 with a 500.
+            pass
+
+
 async def authenticate_api_key(
     request: Request,
     api_key: str | None = Depends(api_key_header),
@@ -432,6 +472,24 @@ async def authenticate_api_key(
     )
 
     if not is_allowed:
+        # Record the refusal before raising it. The handler bodies in
+        # portal.py are the only other caller of log_access, and none of them
+        # runs when a *dependency* raises — so without this, no 429 was ever
+        # written and the admin dashboard's "Rate Limits Hit" tile, and the
+        # alert condition that reads it, were structurally stuck at zero.
+        #
+        # This is the attributable half of PUB-8's flagged 401 problem, and it
+        # needs none of what that one is blocked on: an unknown key cannot be
+        # attributed to an organization, but a rate-limited key is one we have
+        # just resolved, so organization_id and config_id are both in hand and
+        # no nullability migration is required.
+        await _log_refusal(
+            request,
+            api_key_obj,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"Rate limit exceeded: {current_count}/{limit} this hour",
+            db,
+        )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Rate limit exceeded. {current_count}/{limit} requests used this hour.",
