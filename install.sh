@@ -10,6 +10,8 @@
 #   ./install.sh                 # Interactive installation
 #   ./install.sh --docker        # Docker-based installation
 #   ./install.sh --traditional   # Traditional server installation
+#   ./install.sh --docker --public-url https://logbook.example.org
+#                                # Address used in emailed links
 #   ./install.sh --help          # Show help
 #
 # Requirements:
@@ -29,6 +31,12 @@ NC='\033[0m' # No Color
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# The address members open the site at. Every link the app emails is built
+# from it (FRONTEND_URL). Also asked for interactively when the installer has a
+# terminal. The variable is prefixed because a bare PUBLIC_URL is already used
+# by other tooling (Create React App among them).
+PUBLIC_URL="${LOGBOOK_PUBLIC_URL:-}"
 
 # ============================================
 # Helper Functions
@@ -54,6 +62,109 @@ print_warning() {
 
 print_info() {
     echo -e "${BLUE}ℹ $1${NC}"
+}
+
+# Mirrors the backend's startup check (_is_loopback_url in
+# backend/app/core/config.py): a host only this machine can reach, or none at
+# all. Kept in sync by hand because this script runs before the backend image
+# exists.
+frontend_url_is_loopback() {
+    local host="${1#*://}"
+    host="${host%%/*}"
+    host="${host##*@}"
+    case "$host" in
+        \[*\]*) host="${host%%]*}]" ;;
+        *) host="${host%%:*}" ;;
+    esac
+    host=$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')
+    case "$host" in
+        ""|localhost|*.localhost|127.*|0.0.0.0|"[::1]"|"[::]") return 0 ;;
+    esac
+    return 1
+}
+
+# The value lands verbatim in .env, where Docker Compose interpolates `$` and
+# treats `#` as a comment, so anything beyond a plain URL is refused rather
+# than written into a file that would then mean something else.
+validate_public_url() {
+    local url="$1"
+    case "$url" in
+        http://?*|https://?*) ;;
+        *)
+            print_error "The public URL must start with http:// or https:// (got: $url)"
+            return 1
+            ;;
+    esac
+    case "$url" in
+        *[[:space:]\"\'\$\`\\#]*)
+            print_error "The public URL must not contain spaces, quotes, \$, backticks, backslashes or #"
+            return 1
+            ;;
+    esac
+    if frontend_url_is_loopback "$url"; then
+        print_warning "$url points at this machine; emailed links will not open elsewhere"
+    fi
+    return 0
+}
+
+# Asked only when nobody supplied one and there is a terminal to answer from;
+# an empty answer keeps the localhost default, which is reported at the end.
+prompt_public_url() {
+    local answer
+    if [[ -n "$PUBLIC_URL" || ! -t 0 ]]; then
+        return 0
+    fi
+    while :; do
+        read -r -p "Public URL members will use (e.g. https://logbook.example.org), or Enter to set it later: " answer
+        answer="${answer%/}"
+        if [[ -z "$answer" ]]; then
+            return 0
+        fi
+        if validate_public_url "$answer"; then
+            PUBLIC_URL="$answer"
+            return 0
+        fi
+    done
+}
+
+# Replaces the line by filtering rather than with sed, whose replacement text
+# would misread a "|" or "&" in the URL.
+write_frontend_url() {
+    local env_file="$1" url="$2" tmp
+    tmp=$(mktemp)
+    grep -vE '^[[:space:]]*FRONTEND_URL=' "$env_file" > "$tmp" || true
+    printf 'FRONTEND_URL=%s\n' "$url" >> "$tmp"
+    cat "$tmp" > "$env_file"
+    rm -f "$tmp"
+}
+
+# A preserved .env is the operator's, so an existing public FRONTEND_URL is
+# never rewritten. One that is absent or still points at this machine is
+# replaced when a public URL was given, and reported otherwise.
+reconcile_frontend_url() {
+    local env_file="$1" current
+    current=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$env_file" | tail -n 1)
+    if [[ -n "$current" ]] && ! frontend_url_is_loopback "$current"; then
+        if [[ -n "$PUBLIC_URL" && "$current" != "$PUBLIC_URL" ]]; then
+            print_warning "Your .env already sets FRONTEND_URL=$current — keeping it"
+        fi
+        return 0
+    fi
+    if [[ -n "$PUBLIC_URL" ]]; then
+        write_frontend_url "$env_file" "$PUBLIC_URL"
+        print_info "Set FRONTEND_URL=$PUBLIC_URL in .env"
+    fi
+}
+
+# Printed with the closing instructions of both deployment paths.
+warn_if_frontend_url_is_loopback() {
+    local current
+    current=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$SCRIPT_DIR/.env" | tail -n 1)
+    if frontend_url_is_loopback "$current"; then
+        print_warning "FRONTEND_URL is '${current}', so password resets, ballots and reminders"
+        print_warning "will link to this machine only. Set FRONTEND_URL in .env to the address"
+        print_warning "members use, then restart the backend."
+    fi
 }
 
 check_root() {
@@ -192,6 +303,8 @@ EOF
                 print_warning "an explicit SECURITY_REQUIRE_TLS=false to .env for the bundled"
                 print_warning "plaintext services (traffic stays on the internal Docker network)."
             fi
+            prompt_public_url
+            reconcile_frontend_url "$SCRIPT_DIR/.env"
             return
         fi
     fi
@@ -271,6 +384,14 @@ EOF
         print_warning "DB_SSL/REDIS_SSL (+ CA certs) and set SECURITY_REQUIRE_TLS=true."
     fi
 
+    # Every link the app emails is built from FRONTEND_URL; .env.example ships
+    # it as localhost.
+    prompt_public_url
+    if [[ -n "$PUBLIC_URL" ]]; then
+        write_frontend_url "$SCRIPT_DIR/.env" "$PUBLIC_URL"
+        print_info "Set FRONTEND_URL=$PUBLIC_URL in .env"
+    fi
+
     print_success "Environment configured with secure secrets"
     print_warning "Please review and update .env file with your specific settings"
 }
@@ -319,6 +440,7 @@ docker_deployment() {
     print_info "2. Configure SSL/HTTPS for production (see docs/DEPLOYMENT.md)"
     print_info "3. Set up automated backups (see docs/BACKUP.md)"
     print_info "4. Review security settings in .env"
+    warn_if_frontend_url_is_loopback
 }
 
 traditional_deployment() {
@@ -400,6 +522,7 @@ EOF
     print_info "2. Set up SSL with: sudo certbot --nginx -d yourdomain.com"
     print_info "3. Configure firewall"
     print_info "4. Set up automated backups"
+    warn_if_frontend_url_is_loopback
 }
 
 show_help() {
@@ -410,9 +533,14 @@ Usage:
     ./install.sh [OPTIONS]
 
 Options:
-    --docker        Install using Docker (recommended for beginners)
-    --traditional   Install directly on server
-    --help          Show this help message
+    --docker            Install using Docker (recommended for beginners)
+    --traditional       Install directly on server
+    --public-url <url>  Address members open the site at (for example
+                        https://logbook.example.org). Written to FRONTEND_URL,
+                        which every link in outgoing email is built from.
+                        Also read from LOGBOOK_PUBLIC_URL; asked for
+                        interactively when neither is given.
+    --help              Show this help message
 
 Interactive Mode:
     Run without options for interactive installation
@@ -421,6 +549,7 @@ Examples:
     ./install.sh                    # Interactive mode
     ./install.sh --docker           # Docker installation
     ./install.sh --traditional      # Traditional installation
+    ./install.sh --docker --public-url https://logbook.example.org
 
 For more information, see docs/DEPLOYMENT.md
 EOF
@@ -430,7 +559,38 @@ EOF
 # Main Script
 # ============================================
 
+# --public-url may appear anywhere; everything else is passed on unchanged so
+# the mode handling below keeps its existing one-argument behaviour.
+MODE_ARGS=()
+extract_public_url_arg() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --public-url)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    print_error "--public-url needs a value, for example --public-url https://logbook.example.org"
+                    exit 1
+                fi
+                PUBLIC_URL="$2"
+                shift 2
+                ;;
+            *)
+                MODE_ARGS+=("$1")
+                shift
+                ;;
+        esac
+    done
+}
+
 main() {
+    extract_public_url_arg "$@"
+    set -- "${MODE_ARGS[@]}"
+
+    # Validated before anything is installed, so a mistyped address fails fast.
+    PUBLIC_URL="${PUBLIC_URL%/}"
+    if [[ -n "$PUBLIC_URL" ]]; then
+        validate_public_url "$PUBLIC_URL" || exit 1
+    fi
+
     print_header "THE LOGBOOK - INSTALLATION"
 
     check_root

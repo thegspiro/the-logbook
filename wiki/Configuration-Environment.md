@@ -89,9 +89,12 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
 > points at `localhost` and opens for nobody. In `production` the backend logs a
 > non-blocking `WARNING: FRONTEND_URL ...` at startup, and preflight lists it
 > as advisory, when the host is `localhost`, `*.localhost`, a loopback address
-> (`127.x.x.x`, `::1`), `0.0.0.0`, or cannot be parsed. Neither installer
-> (`scripts/universal-install.sh`, `unraid/unraid-setup.sh`) writes this value,
-> so set it by hand after installing.
+> (`127.x.x.x`, `::1`), `0.0.0.0`, or cannot be parsed.
+> `unraid/unraid-setup.sh` writes it from the HTTPS URL it asks for.
+> `scripts/universal-install.sh` writes it from `--public-url <url>` (or the
+> `LOGBOOK_PUBLIC_URL` environment variable) and otherwise leaves the localhost default
+> and says so at the end. Neither installer rewrites a public value already in
+> an existing `.env`.
 
 > **`COMPOSE_FILE`** _(2026-07)_: production installs (via `install.sh`) pin
 > `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so that

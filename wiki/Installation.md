@@ -46,7 +46,14 @@ curl -sSL .../universal-install.sh | bash
 
 # Full with all features (8GB+ RAM)
 curl -sSL .../universal-install.sh | bash -s -- --profile full
+
+# Set the address members use, for links in outgoing email
+curl -sSL .../universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
+
+`--public-url` sets `FRONTEND_URL`, which every emailed link (password resets,
+ballots, reminders) is built from. Without it the value stays at
+`http://localhost:3000` and the installer reminds you to change it.
 
 ---
 

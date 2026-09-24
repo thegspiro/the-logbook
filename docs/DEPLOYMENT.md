@@ -44,6 +44,9 @@ This guide provides step-by-step instructions for deploying The Logbook platform
    - The script will automatically:
      - Install Docker and Docker Compose
      - Generate secure passwords
+     - Ask for the public URL members will use, and write it to `FRONTEND_URL`
+       (every link in outgoing email is built from it; press Enter to set it
+       later)
      - Set up the database
      - Start all services
 
@@ -101,7 +104,15 @@ All software will be automatically installed by the installation script:
 
 ```bash
 ./install.sh --docker
+
+# Unattended: give the address members use, for links in outgoing email
+./install.sh --docker --public-url https://logbook.example.org
 ```
+
+`--public-url` (or `LOGBOOK_PUBLIC_URL`) sets `FRONTEND_URL`. Without it the
+script asks when run from a terminal; left blank, `FRONTEND_URL` stays at
+`http://localhost:3000` and the script says so when it finishes. On an existing
+`.env` it fills the value in only when it is missing or still `localhost`.
 
 > **Production hardening.** `./install.sh --docker` configures a production
 > deployment: it sets `ENVIRONMENT=production` and pins
