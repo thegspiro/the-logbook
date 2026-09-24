@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { renderWithRouter } from '../../../test/utils';
 
 const mockSummary = vi.fn();
@@ -43,7 +43,9 @@ describe('SuggestionsPage', () => {
 
     const reviewTab = await screen.findByRole('tab', { name: /Review/ });
     expect(reviewTab).toHaveAttribute('aria-selected', 'true');
-    expect(scrolled).toContain(reviewTab);
+    // The scroll runs in a passive effect, and the summary resolves outside
+    // act(), so the tab can reach the DOM before that effect has flushed.
+    await waitFor(() => expect(scrolled).toContain(reviewTab));
   });
 
   it('shows a reviewer the Review tab with the open count', async () => {
