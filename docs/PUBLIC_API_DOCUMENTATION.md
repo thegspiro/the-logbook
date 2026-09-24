@@ -211,20 +211,31 @@ curl -H "X-API-Key: your-api-key" \
     "id": "123e4567-e89b-12d3-a456-426614174000",
     "title": "Community Open House",
     "description": "Join us for a tour of the fire station",
-    "event_type": "community_event",
-    "start_time": "2026-03-15T14:00:00Z",
-    "end_time": "2026-03-15T17:00:00Z",
-    "location": "Station 1",
-    "is_public": true
+    "event_type": "public_education",
+    "start_datetime": "2026-03-15T14:00:00Z",
+    "end_datetime": "2026-03-15T17:00:00Z",
+    "location": "Station 1"
   }
 ]
 ```
 
 **Notes:**
 
-- Only events marked as public are returned
-- Events are ordered by start_time (ascending)
+- Only upcoming, published, non-cancelled `public_education` events are returned
+- Events are ordered by start_datetime (ascending)
 - Use pagination for large result sets
+- Only whitelisted fields are returned, and **a field that is not enabled is
+  absent from the object entirely** rather than present as `null`. Every field
+  above, `id` included, is controlled from Data Exposure Control, so write your
+  client to tolerate any of them being missing
+- An event whose every field is disabled is omitted from the list
+
+> **Corrected 2026-09-24.** Before this date the example above named
+> `start_time`, `end_time` and `is_public`, and gave an `event_type` of
+> `community_event`. None of the four was ever served: the field names did not
+> match what the endpoint produced, so it answered 500 for any non-empty
+> result, and `community_event` is not a value this API emits. A client
+> written against the old example was never able to receive a response.
 
 ---
 

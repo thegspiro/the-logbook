@@ -74,7 +74,7 @@ Tables:
 
 - **Whitelist-Only**: Only explicitly enabled data fields are returned
 - **Read-Only**: No write operations allowed on public API
-- **PII Protection**: Personal information is never exposed
+- **PII Protection**: Fields carrying personal information are marked and default to disabled; exposing one is an explicit, badged opt-in
 - **Sanitization**: All data is sanitized before returning
 
 ### 4. Traffic Scrutiny
@@ -234,6 +234,33 @@ GET /api/v1/public-portal/usage-stats
 - created_at: TIMESTAMP
 - updated_at: TIMESTAMP
 ```
+
+### Which fields exist, and which are marked PII
+
+The rows in `public_portal_data_whitelist` record one department's decisions.
+What the fields _are_ — their descriptions, and whether a value identifies a
+person — is held in code, in `backend/app/core/public_portal_fields.py`, and
+served on the whitelist response as `description` and `is_sensitive`.
+
+It is deliberately not a column. Whether `organization.email` identifies a
+person is a property of the field and not of a configuration: making it
+editable per organization would let an administrator clear the PII badge that
+exists to give them pause, and a field added by a later release has to arrive
+already classified rather than waiting for a data migration.
+
+A field is marked sensitive when its value routinely belongs to a person
+rather than to the organization — a volunteer department with no premises
+publishes an officer's mobile, a personal inbox and somebody's home address.
+Aggregate statistics and public-education event listings are not marked.
+`backend/tests/test_public_portal_whitelist_catalogue.py` holds the catalogue
+to the fields `api/public/portal.py` can actually serve, in both directions,
+and asserts the classification by name.
+
+`GET /api/v1/public-portal/whitelist` fills in any catalogue field the
+organization has no row for, **disabled**. Nothing seeded the table before, so
+the Data Exposure Control screen was empty on every installation. A disabled
+row and a missing one are identical to `filter_data_by_whitelist`, so this
+changes nothing about what the public API returns.
 
 ## Implementation Phases
 

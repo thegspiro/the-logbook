@@ -10,10 +10,12 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 from sqlalchemy import and_, desc, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
+from app.core.public_portal_fields import PUBLIC_PORTAL_FIELDS
 from app.core.public_portal_security import generate_api_key, hash_api_key
 from app.models.public_portal import (
     PublicPortalAccessLog,
@@ -557,6 +559,71 @@ async def get_usage_stats(
 # ============================================================================
 
 
+async def _ensure_catalogue_rows(db: AsyncSession, organization_id: str) -> None:
+    """Give every catalogue field a row for this organization, disabled.
+
+    Nothing seeded this table, so the Data Exposure Control screen listed
+    nothing on a fresh installation and an administrator had no way to reach
+    the fields the public API can actually serve. Filling it on read keeps
+    that self-healing: a release that adds a field to the catalogue needs no
+    migration, and an organization created by any route — onboarding, a
+    template clone, a manual insert — gets the same list the day it opens the
+    screen. ``GET /config`` above already creates its row the same way.
+
+    **This cannot change what the public API exposes.** Every row is created
+    disabled, and ``filter_data_by_whitelist`` treats a disabled row and an
+    absent one identically, so an organization's published surface before and
+    after this runs is the same. An existing row is never touched, so a field
+    an administrator has enabled stays enabled.
+    """
+    result = await db.execute(
+        select(PublicPortalConfig).where(
+            PublicPortalConfig.organization_id == organization_id
+        )
+    )
+    config = result.scalar_one_or_none()
+    if not config:
+        # config_id is NOT NULL. The screen's own config tab creates the
+        # configuration; until it exists there is nothing to attach rows to.
+        return
+
+    result = await db.execute(
+        select(
+            PublicPortalDataWhitelist.data_category,
+            PublicPortalDataWhitelist.field_name,
+        ).where(PublicPortalDataWhitelist.organization_id == organization_id)
+    )
+    present = {(row[0], row[1]) for row in result.all()}
+
+    missing = [
+        field
+        for field in PUBLIC_PORTAL_FIELDS
+        if (field.category, field.name) not in present
+    ]
+    if not missing:
+        return
+
+    for field in missing:
+        db.add(
+            PublicPortalDataWhitelist(
+                organization_id=organization_id,
+                config_id=str(config.id),
+                data_category=field.category,
+                field_name=field.name,
+                is_enabled=False,
+            )
+        )
+
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Two administrators opening the screen at once both find the same
+        # rows missing. idx_whitelist_unique rejects the second insert, which
+        # is the right outcome: the rows exist either way, so roll back and
+        # read them below.
+        await db.rollback()
+
+
 @router.get("/whitelist", response_model=list[PublicPortalDataWhitelistResponse])
 async def get_data_whitelist(
     current_user: User = Depends(get_current_user),
@@ -568,6 +635,8 @@ async def get_data_whitelist(
 
     Shows which data fields are enabled for public access.
     """
+    await _ensure_catalogue_rows(db, str(current_user.organization_id))
+
     query = select(PublicPortalDataWhitelist).where(
         PublicPortalDataWhitelist.organization_id == str(current_user.organization_id)
     )
@@ -578,7 +647,10 @@ async def get_data_whitelist(
     result = await db.execute(query)
     whitelist_entries = result.scalars().all()
 
-    return whitelist_entries
+    return [
+        PublicPortalDataWhitelistResponse.from_entry(entry)
+        for entry in whitelist_entries
+    ]
 
 
 @router.post("/whitelist", response_model=PublicPortalDataWhitelistResponse)
@@ -637,7 +709,7 @@ async def create_whitelist_entry(
     await db.commit()
     await db.refresh(whitelist_entry)
 
-    return whitelist_entry
+    return PublicPortalDataWhitelistResponse.from_entry(whitelist_entry)
 
 
 @router.patch(
@@ -674,7 +746,7 @@ async def update_whitelist_entry(
     await db.commit()
     await db.refresh(whitelist_entry)
 
-    return whitelist_entry
+    return PublicPortalDataWhitelistResponse.from_entry(whitelist_entry)
 
 
 @router.post("/whitelist/bulk-update")

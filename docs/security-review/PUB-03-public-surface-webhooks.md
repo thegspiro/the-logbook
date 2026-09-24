@@ -499,7 +499,7 @@ whitelist filter upstream is untouched, and an un-enabled field serialises as
 `docs/PUBLIC_API_DOCUMENTATION.md:145` already documents ("Only whitelisted
 fields are returned. Some fields may be null if not configured").
 
-#### PUB-7 — LOW — `GET /events/public` 500s whenever it is configured to return anything — 🚩 FLAGGED
+#### PUB-7 — LOW — `GET /events/public` 500s whenever it is configured to return anything — ✅ FIXED (2026-09-24, PR #2665)
 
 **What:** the handler emits `{title, description, start_datetime, end_datetime,
 location, event_type}` per event; `response_model=list[PublicEvent]` requires
@@ -522,9 +522,9 @@ real `PublicEvent` model and the handler's exact dictionary.
 administrator finishes configuring it. Availability only — fail-closed, generic
 500 body, no leak.
 
-**Why flagged rather than fixed:** unlike PUB-6, this cannot be repaired
-without deciding a public contract. `docs/PUBLIC_API_DOCUMENTATION.md:207-220`
-documents the **schema's** field names — `start_time`, `end_time`, plus `id`
+**Why it was flagged rather than fixed:** unlike PUB-6, it could not be
+repaired without deciding a public contract. `docs/PUBLIC_API_DOCUMENTATION.md`
+documented the **schema's** field names — `start_time`, `end_time`, plus `id`
 and `is_public` — so either
 (a) the handler is re-keyed to the documented names, which silently voids any
 `start_datetime`/`end_datetime` whitelist row an administrator has already
@@ -533,8 +533,49 @@ should become whitelistable at all (a data-exposure decision on an
 unauthenticated surface), or
 (b) `PublicEvent` is re-declared to match the handler and made all-optional,
 which contradicts the published documentation and any client written against
-it. They are not equivalent, and the wrong one is worse than the 500. Mirrored
-into `docs/KNOWN_LIMITATIONS.md`.
+it. They are not equivalent, and the wrong one is worse than the 500.
+
+**Decision (2026-09-24): (b), with the two open questions in (a) answered.**
+
+_Why the handler's names win._ `public_portal_data_whitelist` rows are keyed
+by `field_name`, so re-keying the handler to `start_time`/`end_time` orphans
+every row an administrator has enabled — and PR #2665 landed a field catalogue
+that now creates `events.start_datetime`/`end_datetime` rows for **every**
+organization on first load of the Data Exposure Control screen. (a) would have
+orphaned rows the same pull request creates.
+
+_Why the documentation loses._ The clause "and any client written against it"
+does not survive contact with the failure: the route answered 500 for every
+non-empty result, so the documented shape had **never once been served**. No
+working client can exist against it. The documentation described an intention,
+not a contract, and was corrected to the shape the endpoint serves, with a
+dated note saying so.
+
+_`id` — whitelistable, not always-on._ Making it unconditional would have
+broken this endpoint's stated invariant ("only whitelisted fields are
+returned") with a field no administrator could switch off. It is now a
+catalogue entry like any other, **disabled by default**, so the exposure
+decision belongs to the department rather than to this fix.
+
+_`is_public` — dropped, not renamed._ `Event` has no such column, so it was
+never readable; and the query already restricts the list to non-cancelled,
+non-draft, future `PUBLIC_EDUCATION` events, so the field could only ever have
+serialized as a constant `true`. A constant is not a contract worth keeping.
+
+_The route also gained `response_model_exclude_unset=True`_, which PUB-6
+established as mandatory for a whitelist-filtered model and which this route
+alone was missing — without it the `None` defaults that make an un-enabled
+field constructible serialize back out as explicit nulls.
+
+**Regression cover:** `tests/test_public_portal_whitelist_shape.py` adds
+`PublicEvent` to `WHITELIST_FILTERED_MODELS` (the PUB-6 guard that would have
+caught the required-fields half) and pins its field names to the field
+catalogue in both directions;
+`tests/test_public_portal_whitelist_catalogue.py` pins that catalogue to the
+dictionary `portal.py` hands to `filter_data_by_whitelist`, read out of the
+source by AST. A name that exists on only one of the three now fails a test
+rather than a public website. Reverting `PublicEvent` to its pre-fix
+declaration fails six of them. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 
 #### PUB-8 — LOW — The public portal access log recorded successes only — ✅ FIXED (in part) / 🚩 FLAGGED (in part)
 

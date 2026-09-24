@@ -10,6 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.public_portal_fields import catalogue_entry
 from app.schemas.base import UTCResponseBase
 
 # ==============================================================================
@@ -171,17 +172,53 @@ class PublicPortalDataWhitelistUpdate(BaseModel):
 
 
 class PublicPortalDataWhitelistResponse(UTCResponseBase):
-    """Schema for data whitelist entry response"""
+    """Schema for data whitelist entry response
+
+    ``category``, ``description`` and ``is_sensitive`` come from
+    :data:`app.core.public_portal_fields.PUBLIC_PORTAL_FIELDS` rather than from
+    the row, because they describe the field itself and not one department's
+    decision about it. They are **required and have no defaults**: this model
+    is built by :meth:`from_entry`, and a caller that reaches for
+    ``from_attributes`` instead fails loudly rather than quietly serving
+    ``is_sensitive=False`` for a field that carries a person's phone number.
+    """
 
     id: UUID
     organization_id: UUID
     data_category: str
+    # The same value as ``data_category``. The admin screen groups on
+    # ``category``; the name is duplicated rather than renamed so that a
+    # caller written against either spelling keeps working.
+    category: str
     field_name: str
+    description: Optional[str]
+    is_sensitive: bool
     is_enabled: bool
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @classmethod
+    def from_entry(cls, entry: Any) -> "PublicPortalDataWhitelistResponse":
+        """Build a response from a stored row plus its catalogue entry."""
+        known = catalogue_entry(entry.data_category, entry.field_name)
+        return cls(
+            id=entry.id,
+            organization_id=entry.organization_id,
+            data_category=entry.data_category,
+            category=entry.data_category,
+            field_name=entry.field_name,
+            description=known.description if known else None,
+            # A row the catalogue does not know is inert: no handler puts that
+            # key in a dictionary, so enabling it exposes nothing. Reporting
+            # it as not sensitive states that, rather than warning about a
+            # field the public API cannot serve.
+            is_sensitive=known.is_sensitive if known else False,
+            is_enabled=entry.is_enabled,
+            created_at=entry.created_at,
+            updated_at=entry.updated_at,
+        )
 
 
 class PublicPortalDataWhitelistBulkUpdate(BaseModel):
@@ -278,16 +315,45 @@ class PublicOrganizationStats(BaseModel):
 
 
 class PublicEvent(UTCResponseBase):
-    """Public event information"""
+    """Public event information
 
-    id: UUID
-    title: str
-    description: Optional[str]
-    event_type: str
-    start_time: datetime
-    end_time: Optional[datetime]
-    location: Optional[str]
-    is_public: bool
+    Every field defaults to ``None`` for the same reason as
+    :class:`PublicOrganizationInfo`, and the field *names* are the keys
+    ``portal.py`` actually puts in the dictionary this model is constructed
+    from. Both halves were wrong (security review PUB-7): all eight fields
+    were required, and three of the names — ``start_time``, ``end_time`` and
+    ``is_public`` — did not exist in what the handler produced. So any
+    non-empty filtered event raised ``ValidationError``, and the route could
+    only ever answer 200 by returning ``[]``. A department got a 500 on its
+    public website at the moment an administrator finished configuring it.
+
+    The names follow the handler rather than the other way round because the
+    whitelist stores them: a row in ``public_portal_data_whitelist`` is keyed
+    by ``field_name``, so re-keying the handler to the documented
+    ``start_time``/``end_time`` would silently orphan every row an
+    administrator has enabled. ``docs/PUBLIC_API_DOCUMENTATION.md`` described
+    a response that had never been served — no client can have been written
+    against a shape that 500s — so the documentation was corrected to the
+    shape this serves.
+
+    ``is_public`` is gone rather than renamed: ``Event`` has no such column,
+    and the query already restricts the list to non-cancelled, non-draft,
+    future ``PUBLIC_EDUCATION`` events, so the field could only ever have
+    been a constant ``true``.
+
+    Like the other two, its route must pass
+    ``response_model_exclude_unset=True``, or the defaults that make an
+    un-enabled field constructible serialize it back out as an explicit
+    ``null``.
+    """
+
+    id: Optional[UUID] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    event_type: Optional[str] = None
+    start_datetime: Optional[datetime] = None
+    end_datetime: Optional[datetime] = None
+    location: Optional[str] = None
 
 
 # ==============================================================================
