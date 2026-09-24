@@ -1524,6 +1524,15 @@ export interface InventorySummary {
   maintenance_due_count: number;
 }
 
+/** What a put-away changed; ids outside the organization are only counted. */
+export interface PutAwayResult {
+  storage_area_id: string;
+  moved: string[];
+  already_here: string[];
+  skipped: { item_id: string; name: string; reason: string }[];
+  not_found: number;
+}
+
 export interface LocationInventorySummary {
   location_id: string | null;
   location_name: string;

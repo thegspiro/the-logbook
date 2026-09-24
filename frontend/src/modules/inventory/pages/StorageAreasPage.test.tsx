@@ -473,6 +473,18 @@ describe('StorageAreasPage', () => {
       expect(screen.getByRole('textbox', { name: /Search storage areas/ })).toHaveValue('');
     });
 
+    it('opens put-away on the shelf in view', async () => {
+      window.history.pushState({}, '', '/inventory/storage-areas?area=shelf-1');
+      const user = userEvent.setup();
+      renderWithRouter(<StorageAreasPage />);
+      await waitFor(() => expect(focusedRow()?.getAttribute('data-storage-area-row')).toBe('shelf-1'));
+
+      await user.click(screen.getByRole('button', { name: 'Put away' }));
+
+      expect(screen.getByText('Rack A › Shelf 1')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Scan or type a shelf or item barcode/)).toBeInTheDocument();
+    });
+
     it.each([1024, 375])('opens straight to an area linked with ?area= at %ipx', async (width) => {
       setViewportWidth(width);
       window.history.pushState({}, '', '/inventory/storage-areas?area=shelf-1');
