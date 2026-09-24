@@ -800,11 +800,7 @@ selection back into an ordinary hand-picked set.
   as a list of item ids**, so the print page's address stays short and survives
   a refresh.
 
-> **Screenshot needed:**
-> _[The inventory items list filtered to one category with **Needs a Label**
-> chosen in the new label-status dropdown, one row ticked, and the bulk bar
-> reading **All N matching selected** beside the **Print Labels** button. Show
-> the filter bar so the label-status dropdown is visible.]_
+![The inventory items list filtered to Structural PPE and Needs a Label, one row ticked, and the bulk bar reading All 11 matching selected beside the Print Labels button](./images/05-83-items-select-all-matching.png)
 
 **Or open the print page with nothing selected.** The **Barcode labels** card in
 the setup workflow, or a bookmark to the print page, used to land on "No items
@@ -814,11 +810,7 @@ specified". It now opens **Print barcode labels**: pick a **Category**, a
 "_N items match._" — before you press **Prepare N labels**. Over 500 it says so
 and the button stays disabled until you narrow it.
 
-> **Screenshot needed:**
-> _[The label print page opened with no items selected, showing the **Print
-> barcode labels** picker: Category, Location and Storage area dropdowns, the
-> **Only items that still need a label** checkbox ticked, the live "N items
-> match." count, and the **Prepare N labels** button.]_
+![The label print page opened with nothing selected: the Print barcode labels picker with Category set to Structural PPE, Location and Storage area left on All, Only items that still need a label ticked, the live count reading 11 items match, and the Prepare 11 labels button](./images/05-84-label-scope-picker.png)
 
 ### Knowing which items still need a label _(2026-09-23)_
 
@@ -860,10 +852,7 @@ labelled**. The question is asked as soon as the print dialog opens, whether or
 not anything came out — which is also why you should only confirm it when the
 labels really are on the gear. Up to 500 items per pass.
 
-> **Screenshot needed:**
-> _[The label print page immediately after pressing **Print Labels**, with the
-> "Did the labels print correctly?" prompt and its **Mark N items as labelled**
-> / **Not yet** buttons visible above the label preview.]_
+![The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark 11 items as labelled and Not yet, above the label preview](./images/05-85-label-print-confirm.png)
 
 ### Connecting a Sticker / Label Printer
 

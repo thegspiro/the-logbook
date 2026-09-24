@@ -12368,6 +12368,101 @@ export const SHOTS = [
     prepare: openOverdueItem,
     fullPage: true,
   },
+  // ── 05 Label printing (2026-09-23): print by filter, and printed tracking ──
+  // Every seeded item reads "Needs a label" -- there is no print history on a
+  // fresh department -- which is exactly the state these three picture. None of
+  // them answers the "Did the labels print correctly?" question, so nothing is
+  // marked and a re-run finds the same state.
+  {
+    id: "05-83-items-select-all-matching",
+    doc: "05-inventory.md",
+    line: 803,
+    anchor: "chosen in the new label-status dropdown, one row ticked",
+    alt: "The inventory items list filtered to Structural PPE and Needs a Label, one row ticked, and the bulk bar reading All 11 matching selected beside the Print Labels button",
+    route: "/inventory",
+    expect: "matching selected",
+    prepare: async (page) => {
+      await page
+        .locator('select[aria-label="Filter by category"]')
+        .selectOption({ label: "Structural PPE" });
+      await page
+        .locator('select[aria-label="Filter by label status"]')
+        .selectOption("needed");
+      await page.waitForTimeout(1_200);
+      await page.locator('table tbody input[type="checkbox"]').first().check();
+      await page
+        .getByRole("button", { name: /^Select all \d+ matching$/ })
+        .click();
+      await page.getByText(/^All \d+ matching selected$/).waitFor();
+      await page.evaluate(() => window.scrollTo(0, 0));
+    },
+  },
+  {
+    id: "05-84-label-scope-picker",
+    doc: "05-inventory.md",
+    line: 817,
+    anchor: "the label print page opened with no items selected",
+    alt: "The label print page opened with nothing selected: the Print barcode labels picker with Category set to Structural PPE, Location and Storage area left on All, Only items that still need a label ticked, the live count reading 11 items match, and the Prepare 11 labels button",
+    route: "/inventory/print-labels",
+    expect: "items match",
+    selector: 'div.card:has(h1:text-is("Print barcode labels"))',
+    prepare: async (page) => {
+      await page.getByText("Print barcode labels").first().waitFor();
+      await page
+        .locator("#label-scope-category")
+        .selectOption({ label: "Structural PPE" });
+      await page
+        .locator("label", { hasText: "Only items that still need a label" })
+        .locator('input[type="checkbox"]')
+        .check();
+      await page
+        .getByText(/\d+ items? match\./)
+        .first()
+        .waitFor();
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+    },
+  },
+  {
+    id: "05-85-label-print-confirm",
+    doc: "05-inventory.md",
+    line: 863,
+    anchor: "immediately after pressing **print labels**",
+    alt: "The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark 11 items as labelled and Not yet, above the label preview",
+    route: "/inventory/print-labels",
+    expect: "Did the labels print correctly?",
+    // Full page, as 05-33 is: this page renders its label preview well below
+    // the fold, and a viewport shot shows the prompt with nothing it refers to.
+    fullPage: true,
+    // The print runs through a hidden iframe's print(). Headless Chromium
+    // returns from it at once, so the prompt appears as it would the moment a
+    // real print dialog closes. Mark is never pressed: nothing is recorded.
+    prepare: async (page) => {
+      await page
+        .locator("#label-scope-category")
+        .selectOption({ label: "Structural PPE" });
+      await page
+        .locator("label", { hasText: "Only items that still need a label" })
+        .locator('input[type="checkbox"]')
+        .check();
+      await page.getByRole("button", { name: /^Prepare \d+ labels?$/ }).click();
+      const print = page.getByRole("button", { name: /Print\s*Labels/ });
+      await print.waitFor();
+      await page.waitForFunction(
+        () =>
+          [...document.querySelectorAll("button")].some(
+            (b) => /Print\s*Labels/.test(b.textContent ?? "") && !b.disabled,
+          ),
+        null,
+        { timeout: 20_000 },
+      );
+      await print.click();
+      await page.getByText("Did the labels print correctly?").waitFor();
+      await page.evaluate(() => window.scrollTo(0, 0));
+    },
+  },
   {
     // Separation of duties is about people, not permissions: the chief holds
     // `scheduling.manage` and still cannot review the swap they raised. Shot as

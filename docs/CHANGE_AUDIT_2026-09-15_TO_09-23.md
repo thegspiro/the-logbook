@@ -306,7 +306,7 @@ Full per-image queue in
 [`training/SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md);
 counts regenerated into
 [`training/SCREENSHOT_STATUS.md`](./training/SCREENSHOT_STATUS.md)
-(**538 captured, 51 remaining** — this pass queued eleven, and the five suggestion-box shots were captured on 2026-09-24).
+(**541 captured, 48 remaining** — this pass queued eleven, and eight of them — the five suggestion-box shots and the three inventory label shots — were captured on 2026-09-24).
 
 | Image area                                                    | Disposition | Guide |
 | ------------------------------------------------------------- | ----------- | ----- |
@@ -374,6 +374,6 @@ Run against `da7d28479` plus this pass's documentation while writing this
 audit: migration head `5a70c5dcd138`, single head; 230 routes with 0 errors and
 0 warnings (17 redirects skipped); 1,498 documented route handlers with 0 errors
 and 0 warnings; 362 Markdown files with 0 broken links, anchors included; 533
-screenshots captured with 56 remaining after this pass's eleven placeholders (538 and 51 once the five suggestion-box shots were captured on 2026-09-24);
+screenshots captured with 56 remaining after this pass's eleven placeholders (541 and 48 once eight of them were captured on 2026-09-24);
 `DATABASE_SCHEMA.md` regenerated with no diff; the 141 documentation-tooling
 tests under `scripts/` pass.

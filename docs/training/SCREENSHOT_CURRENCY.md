@@ -9,9 +9,10 @@ Box Management** (`/communications/suggestion-boxes`) — and the inventory labe
 page gained a picker and a post-print prompt. Everything else is an existing
 address carrying one more control or one more line.
 
-**Eleven placeholders were written into the guides** by this pass. **Five are
-shot** (2026-09-24) — all five suggestion-box items — so the library moves from
-533/589 to **538/589**:
+**Eleven placeholders were written into the guides** by this pass. **Eight are
+shot** (2026-09-24) — the five suggestion-box items and the three inventory
+label items — so the library moves from 533/589 to **541/589**. The three left
+are items 9 (needs a real device), 10 and 11:
 
 | #  | Image area                                                    | Disposition | Guide                                   | Notes                                                                                                              |
 | -- | ------------------------------------------------------------- | ----------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -20,9 +21,9 @@ shot** (2026-09-24) — all five suggestion-box items — so the library moves f
 | 3  | Suggestions → **Submit** with **Submit anonymously** ticked    | **NEW**     | 07                                      | **Shot** 09-24 as `07-15-suggestion-submit-anonymous`. Attachment drawn in-page; never submitted                   |
 | 4  | **Save your follow-up key** receipt                           | **NEW**     | 07                                      | **Shot** 09-24 as `07-16-suggestion-follow-up-key`. The POST is answered by a route mock with a `DEMO-KEY-…` value |
 | 5  | Suggestions → **Review**, one submission open                 | **NEW**     | 07                                      | **Shot** 09-24 as `07-17-suggestion-review`, as `auth: "secretary"` on the seeded anonymous submission           |
-| 6  | Items list: **Needs a Label** + **All N matching selected**    | **NEW**     | 05 (inventory)                          | N must be ≤ 500 or the select-all link is replaced by a message                                                   |
-| 7  | Label page **Print barcode labels** picker                    | **NEW**     | 05                                      | Open `/inventory/print-labels` with no query string                                                               |
-| 8  | "Did the labels print correctly?" prompt                      | **NEW**     | 05                                      | Appears the moment the print dialog opens; cancel the dialog and capture. **Do not press Mark** in a shared seed   |
+| 6  | Items list: **Needs a Label** + **All N matching selected**    | **NEW**     | 05 (inventory)                          | **Shot** 09-24 as `05-83-items-select-all-matching` — Structural PPE, 11 items |
+| 7  | Label page **Print barcode labels** picker                    | **NEW**     | 05                                      | **Shot** 09-24 as `05-84-label-scope-picker`, clipped to the picker card |
+| 8  | "Did the labels print correctly?" prompt                      | **NEW**     | 05                                      | **Shot** 09-24 as `05-85-label-print-confirm`, full page so the preview is in frame. Mark never pressed |
 | 9  | Phone home screen with the department-logo icon               | **NEW**     | 10 (mobile)                             | Needs a real device or emulator install; the seeded demo logo only. The harness cannot produce this               |
 | 10 | Medical Screening **Add Record** with the amber notice        | **NEW**     | 13 (medical screening)                  | Create dialog only — the Edit dialog deliberately has no notice                                                   |
 | 11 | Applicant drawer on an event-naming **Meeting** stage          | **NEW**     | 20                                      | The requirement hint above the action row; a second frame with the Advance refusal is optional                    |
