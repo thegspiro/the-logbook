@@ -1,5 +1,69 @@
 # Script currency
 
+## Flagged by the 2026-09-15 → 09-23 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-09-15_TO_09-23.md`](../CHANGE_AUDIT_2026-09-15_TO_09-23.md#documentation-and-media-disposition).
+
+This window produced **two Wrong** — one a beat that became false, one a screen
+direction that was never shootable — **three Incomplete**, and **three new
+shorts**. Everything is written in-script. As in every window, determinations
+were made by **reading the script files**, not by inferring from the change
+list.
+
+**No script changed address.** The window adds two screens (suggestion boxes)
+and retires none, so no beat points at a dead path.
+
+### Rewritten in-script this window
+
+| Script | Beat                               | Was                                                                                | Now                                                                                                                                                                                                                          | Class          |
+| ------ | ---------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **04** | Daily checklist, "After Events"    | "Review attendance. The system automatically updates participation records."       | "Review attendance, then **finalize** it" — finalizing is now what advances applicants on a meeting stage                                                                                                                    | **Wrong**      |
+| **04** | Convert gate `[SCREEN]` direction  | "An applicant whose election package reads Not Elected, **with Convert refusing**" | Shows **Advance** refusing. Convert renders only on the final stage and the package panel only on the vote stage, so the two can never share a frame — found by the 09-22 screenshot capture, and never shootable as written | **Wrong**      |
+| **04** | Prospective Members Pipeline       | No account of meeting stages                                                       | New beat after bulk advance: a stage that names its event gates **every** path including a single Advance, and attendance counts once the event is **finalized** (or 7 days after it ends)                                   | **Incomplete** |
+| **06** | Mobile Access                      | "'Add to Home Screen' to get an app icon"                                          | The icon is the department's logo; members who installed earlier reinstall to get it                                                                                                                                         | **Incomplete** |
+| **07** | Forms Module                       | No mention of conditional questions                                                | Conditional questions are safe to mark required, and a hidden answer is discarded                                                                                                                                            | **Incomplete** |
+| **03** | Push notifications → installed app | —                                                                                  | Added, not corrected: the branded icon, the reinstall caveat, and the reverse-proxy requirement for the icon paths                                                                                                           | Addition       |
+
+### Three new shorts written in-script (8AR–8AT)
+
+A suggestion box nobody can trace · Label a whole storeroom in one go ·
+Applicants move when you close the event out.
+
+- **8AR** must show a **demo** follow-up key. A real key is the submitter's only
+  credential and the video is public.
+- **8AS** needs a filtered set **under 500**; above that the select-all link is
+  replaced by a message and the beat cannot be shot.
+- **8AT** needs two sessions (kiosk and board) so the card visibly does **not**
+  move at sign-in and **does** move at End Event.
+
+### Considered and left alone
+
+- **Suggestion boxes got a chapter in script 07** _(added 2026-09-24 at the
+  owner's request)_ — **Chapter 7: Suggestion Boxes (17:35 – 20:35)**, with the
+  weekly-workflow chapter renumbered to 8 and shifted to 20:35 – 23:05, and the
+  clip guide updated. It says plainly that the **Secretary position is not
+  seeded with `suggestions.manage`** — the chief grants it or sets boxes up and
+  names the secretary a reviewer — and that the permission **sets boxes up and
+  reads nothing**. **Production:** the seeded department has no boxes, so two
+  must be created and submitted to from a second account before recording, and
+  every follow-up key on screen must be a demo key. Script 06 still carries no
+  suggestion-box chapter by design; short **8AR** is the member-facing piece.
+- **04 — guest check-in → pipeline beat** ("Your open-house sign-in sheet
+  becomes your recruiting list, automatically") — **still true.** The guest
+  still becomes a prospect; what changed is when a _later meeting stage_
+  advances, which the new pipeline beat covers.
+- **04 — bulk advance beat** ("ten advanced, two named and skipped with
+  reasons") — **still true**, and now more likely to show a meeting-stage skip.
+- **05 / 16 — Training officer.** Nothing in this window touches training.
+- **03 — the hidden-form-answer cleanup script.** An optional one-off
+  maintenance command, documented in `UPGRADING.md` and
+  `backend/scripts/README.md`. Not worth screen time in a role guide.
+- **Medical screening's new Add Record notice.** No script walks the Add
+  Record dialog, so there is nothing to correct.
+- **The pipeline stat-card fix** is a correction of a wrong number, not a change
+  anyone narrates. No script quotes the header counts.
+
 ## Flagged by the 2026-09-12 → 09-15 changes
 
 Full reason/data-path context in

@@ -40,6 +40,8 @@ _rules_ and the member notification inbox are covered under
 | Department Messages (admin) | `/communications/messages`                    | Officers    | `notifications.manage`                                                                      |
 | Email Templates             | `/communications/email-templates`             | Admins      | `settings.manage`                                                                           |
 | ↳ **Footers** tab           | `/communications/email-templates?tab=footers` | Admins      | `settings.manage` **or** `organization.update_settings` _(2026-08-10; linkable 2026-08-11)_ |
+| Suggestions                 | `/suggestions`                                | All members | Authenticated — the **Review** tab appears only for a box's reviewers _(2026-09-23)_        |
+| Suggestion Box Management   | `/communications/suggestion-boxes`            | Admins      | `suggestions.manage` — configures boxes, **does not read them** _(2026-09-23)_              |
 
 Members also see messages needing their attention (unread, unacknowledged, or
 persistent) on the **dashboard** "Department Messages" card and in the
@@ -64,6 +66,38 @@ GET    /api/v1/messages/inbox/unread-count        # My unread/pending count
 POST   /api/v1/messages/{id}/read                # Mark read
 POST   /api/v1/messages/{id}/acknowledge         # Acknowledge (ack-required messages)
 ```
+
+## Suggestion Boxes _(2026-09-23)_
+
+A department can run any number of suggestion boxes, each with its own
+reviewers (positions and/or members), an **Anonymity** rule (**Submitter
+chooses**, **Always anonymous**, **Always named**) and an **Allow follow-up**
+switch. Members submit from **Suggestions** in the sidebar with a title,
+details and up to five screenshots; reviewers set a disposition (**New**,
+**Under review**, **Accepted**, **Implemented**, **Declined**, **Duplicate**),
+keep an internal note and — in a follow-up box — reply in a thread. A reviewer
+can **forward** one suggestion to other members or positions, who then review
+that suggestion only.
+
+- **`suggestions.manage` configures boxes and reads nothing.** Only a box's own
+  reviewers read its submissions, which is what makes a complaints box possible.
+  Seeded on the three chief ranks, President and Communications Officer, and
+  back-filled onto existing installations by migration `394600cbfae2`.
+- **Anonymity is structural:** no author id, no audit entry, day-precision
+  timestamps, screenshots re-encoded (EXIF and filenames dropped). An anonymous
+  submitter follows up with a one-time key whose SHA-256 digest alone is
+  stored; a lost key cannot be recovered. What it does **not** cover —
+  correlation by someone with access to the server's own logs — is in
+  `docs/KNOWN_LIMITATIONS.md`.
+- **Emails carry a link, never the content.** Anonymous submitters are never
+  emailed.
+- **Not gated by the Communications module switch**, which defaults off.
+
+API under `/api/v1/suggestions` (`/boxes`, `/mine`, `/follow-up/*`, `/review/*`,
+`/admin/*`). Engineering detail:
+[`docs/COMMUNICATIONS_MODULE.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/COMMUNICATIONS_MODULE.md#suggestion-boxes-2026-09-23).
+Walkthrough:
+[`docs/training/07-documents-forms.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/training/07-documents-forms.md#suggestion-boxes-2026-09-23).
 
 ## Delivery matrix
 

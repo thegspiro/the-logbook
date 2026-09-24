@@ -47,6 +47,22 @@ that registers no printer simply never sees the direct-print controls.
 | `membership`          | `members.view`, `members.manage`                         | member name, membership number   |
 | `prospective_members` | `prospective_members.view`, `prospective_members.manage` | applicant name, **status token** |
 
+> **Inventory has its own print page, and it tracks what was printed**
+> _(2026-09-23)_. `/inventory/print-labels` is not built on the shared
+> `LabelPrintPage` — it predates it and prints by **PDF**
+> (`/inventory/labels/generate`) or the browser dialog, so it does **not** offer
+> **Send to Printer**. It is also the only module that records a print:
+> `POST /inventory/labels/mark-printed` (`inventory.manage`, 1–500 ids, org-scoped,
+> skips items with no printable value) sets `inventory_items.label_printed_at` /
+> `label_printed_by` after the user confirms the run came out. A
+> `before_update` listener on `InventoryItem` clears both when the printed value
+> changes — barcode, else asset tag, else serial, via the shared
+> `printable_label_value` in `app/utils/label_renderer.py` — which covers the
+> edit form, CSV import, variant generation and the PDF's barcode auto-fill.
+> Raw Core `update()` statements bypass the listener; none writes these columns.
+> Migration `5a70c5dcd138` adds the columns with no backfill, so every existing
+> item starts as needing a label.
+
 > **An applicant label's barcode is a bearer token.** `_build_prospect_specs`
 > encodes `ProspectiveMember.status_token`, which is what
 > `GET /api/public/v1/application-status/{token}` accepts — unauthenticated. So
@@ -417,11 +433,12 @@ the apparatus team's are independent and follow whoever holds the role.
 
 ## Migrations
 
-| Revision       | Adds                                                   |
-| -------------- | ------------------------------------------------------ |
-| `b3e7f1a92c40` | `label_printers`                                       |
-| `c7d1f4a83e29` | `label_printers.language`                              |
-| `e4b91c7d2a58` | Merge — rejoins the label-printer and event-RSVP heads |
+| Revision       | Adds                                                                                    |
+| -------------- | --------------------------------------------------------------------------------------- |
+| `b3e7f1a92c40` | `label_printers`                                                                        |
+| `c7d1f4a83e29` | `label_printers.language`                                                               |
+| `e4b91c7d2a58` | Merge — rejoins the label-printer and event-RSVP heads                                  |
+| `5a70c5dcd138` | `inventory_items.label_printed_at` / `label_printed_by` (inventory only) _(2026-09-23)_ |
 
 **Why `language` is a separate revision, not a column in the first.** The
 column was deliberately withheld until ESC/POS made it a real switch. A stored

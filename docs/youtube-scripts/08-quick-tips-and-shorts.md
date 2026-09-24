@@ -1567,3 +1567,95 @@ selected — swatch gone.]**
 
 **Production:** two captures, one per method. A single capture cannot show the
 change.
+
+---
+
+## SHORT 8AR: A Suggestion Box Nobody Can Trace
+
+**Length:** 45 seconds
+**Extracted From:** none — new material; walkthrough in `training/07-documents-forms.md`
+**Added:** 2026-09-24
+
+**[0:00 — SCREEN: The sidebar, the new **Suggestions** item below Messages.
+Open it on the **Submit** tab.]**
+
+> "Your department can now run suggestion boxes — as many as it likes, each with
+> its own reviewers."
+
+**[0:10 — SCREEN: Choose a box, type a title and details, tick **Submit
+anonymously**. The screenshot warning appears.]**
+
+> "Tick anonymous and your name is never stored — not hidden, not stored. The
+> time is kept to the day, and screenshots lose their hidden location data. The
+> one thing it can't do: if your name is _on_ the screen you captured, it's in
+> the picture. Check before you send."
+
+**[0:28 — SCREEN: The **Save your follow-up key** panel. **Copy**.]**
+
+> "If the box allows replies, you get a key. It's shown once. Keep it — it's the
+> only way back to your conversation, and nobody can look it up for you."
+
+**[0:38 — CALLOUT: "Set up boxes ≠ read boxes"]**
+
+> "And the officers who set the boxes up can't read them. Only the reviewers
+> named on each box can."
+
+**Production:** capture the key panel with a **demo key** from the seeded
+department. Never show a real key — it is the submitter's only credential.
+
+---
+
+## SHORT 8AS: Label a Whole Storeroom in One Go
+
+**Length:** 40 seconds
+**Extracted From:** `training/05-inventory.md`, Label Printing
+**Added:** 2026-09-24
+
+**[0:00 — SCREEN: Items list filtered to one storage room, **Needs a Label**
+chosen. Tick one row; press **Select all 214 matching**.]**
+
+> "Labelling a whole room used to mean paging and ticking fifty at a time. Now:
+> filter, tick one, select all matching — up to five hundred."
+
+**[0:15 — SCREEN: **Print Labels** → the print page → **PDF**. The "Did the
+labels print correctly?" prompt appears.]**
+
+> "After it prints, it asks whether it worked. Say yes and those items come off
+> the 'needs a label' list."
+
+**[0:28 — SCREEN: An item's page — **Label Printed** with a date. Edit its
+barcode; it flips back to **Needs a label**.]**
+
+> "Change an item's barcode and it goes back on the list — because the label on
+> the gear doesn't match any more."
+
+**Production:** the item count on screen should be under 500 so the select-all
+link appears; above 500 it is replaced by a "narrow the filters" message.
+
+---
+
+## SHORT 8AT: Applicants Move When You Close the Event Out
+
+**Length:** 35 seconds
+**Extracted From:** Script 4, Prospective Members Pipeline
+**Added:** 2026-09-24
+
+**[0:00 — SCREEN: An open house in progress; an applicant signs in at the
+kiosk. Their pipeline card does **not** move.]**
+
+> "An applicant signing in at your open house doesn't jump to the next stage any
+> more. A sign-in isn't the final roster."
+
+**[0:12 — SCREEN: The organizer presses **End Event**. The applicant's card
+moves to the next column.]**
+
+> "They move when the event's closed out — End Event, the actual end time, or
+> Finalize Attendance."
+
+**[0:24 — CALLOUT: "Nobody finalized? It settles itself after 7 days"]**
+
+> "And if nobody ever closes it out, it settles on its own a week later. So:
+> organizers, finalize your events."
+
+**Production:** two sessions — the kiosk and the coordinator's board — so the
+card visibly does not move at sign-in and does move at End Event.

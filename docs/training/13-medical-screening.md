@@ -225,6 +225,18 @@ Navigate to **Medical Screening > Records** tab to view all records.
 > control for either, so a record entered here belongs to nobody and counts
 > toward nobody's compliance. Recorded in [Medical Screening — The Add Record Form Attaches to Nobody](../KNOWN_LIMITATIONS.md#medical-screening--the-add-record-form-attaches-to-nobody-2026-08-08), which is worth reading before
 > using this form.
+>
+> **The dialog now says so itself** _(2026-09-16)_. Opening **Add Record** shows
+> an amber notice at the top: _"Not linked to a member or prospect — this dialog
+> has no way to choose who the screening is for, so the record it creates will
+> not count toward any member's or prospect's compliance status, and won't
+> appear on their screening history."_ The success message after saving used to
+> imply the record was usable. **Nothing else about the dialog changed** — the
+> member picker is still missing, and a record created here still counts toward
+> nobody. The **Edit** dialog does not show the notice, because editing never
+> changes who a record belongs to.
+
+![The Add Screening Record dialog with the amber notice at the top: not linked to a member or prospect, so the record will not count toward anyone's compliance](./images/13-07-add-record-linkage-notice.png)
 
 ### Status Workflow
 

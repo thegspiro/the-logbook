@@ -132,7 +132,9 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
   }
 
   return (
-    <div className="space-y-6">
+    // A reading width, not the full content column: at desktop widths a
+    // full-width title field and a wide, short details box are hard to scan.
+    <div className="max-w-3xl space-y-6">
       {receipt?.followUpKey && (
         <div className="alert-warning space-y-2" role="status">
           <p className="text-theme-text-primary flex items-center gap-2 font-semibold">

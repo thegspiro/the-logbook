@@ -321,6 +321,30 @@ appears — ten advanced, two named and skipped with reasons.]**
 
 **[CALLOUT: "Bulk actions name who was skipped, and why"]**
 
+**[SCREEN: An applicant on a "Business Meeting" stage — the drawer's hint reads
+"The applicant must be checked in at this stage's event, and that event's
+attendance must be finalized…". Press Advance; the refusal names the event.]**
+
+> "Meeting stages changed in September 2026, and it's worth knowing how. If a
+> stage names the event an applicant has to attend — a business meeting, an
+> orientation night — then **nobody moves them past it until they were
+> actually there.** Not the automation, not a bulk advance, and not you clicking
+> Advance on one card. Before, a single click was exempt, which meant the way
+> past a meeting somebody skipped was just to click the cards one at a time."
+
+> "And 'there' means the department has settled it. Signing in at the door
+> isn't enough on its own — the applicant moves when the organizer closes the
+> event out. End Event, record the actual end time, or Finalize Attendance. If
+> nobody ever does, a week after the event it settles on its own."
+
+> "So the practical advice for a chief is one line: **tell your event organizers
+> to finalize.** That's now the thing that moves your recruits along."
+
+> "A stage that doesn't name an event — 'meet with the chief' — still takes your
+> word for it. Nothing records a one-on-one, so there's nothing to check."
+
+**[CALLOUT: "Meeting stages move when the event is finalized"]**
+
 > "One thing worth knowing if you're auditing past decisions: before August 2026,
 > pressing Advance on somebody already at the final stage reported success and
 > wrote an audit entry saying they'd been advanced, when nothing had happened.
@@ -333,7 +357,11 @@ appears — ten advanced, two named and skipped with reasons.]**
 
 **[CALLOUT: "Pipeline → Convert to Member = seamless onboarding"]**
 
-**[SCREEN: An applicant whose election package reads Not Elected, with Convert refusing]**
+**[SCREEN: An applicant on the Membership Vote stage whose election package
+reads Not Elected — the red pill and banner — with **Advance** refusing.
+Corrected 2026-09-24: Convert cannot be in this frame. It appears only on the
+pipeline's final stage, while the election-package panel shows only on the vote
+stage. Both buttons carry the same gate, so the refusal is the same.]**
 
 > "With one limit worth knowing, added in September 2026. If your pipeline ends
 > in a **membership vote**, Convert waits for the ballot. An applicant whose
@@ -812,8 +840,9 @@ and tables.]**
 > "**During Events:** If QR check-in is enabled, the attendance tracks itself.
 > If not, the event manager handles it."
 
-> "**After Events:** Review attendance. The system automatically updates
-> participation records."
+> "**After Events:** Review attendance, then **finalize** it. That locks the
+> roster, credits the hours — and, if any applicants were in the room, it's what
+> moves them to their next pipeline stage."
 
 > "**Weekly:** Review analytics for trends. Check prospective member pipeline
 > progress. Review any pending actions from the previous meeting minutes."

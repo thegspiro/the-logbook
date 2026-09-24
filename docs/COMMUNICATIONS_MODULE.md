@@ -4,6 +4,8 @@ Internal department messaging: leadership announcements with targeting,
 read/acknowledgment tracking, and multi-channel (in-app / email / SMS) delivery.
 This document covers the **Department Messages** feature. Email templates and the
 outbound message-history log are adjacent and documented separately.
+**Suggestion boxes** _(2026-09-23)_ live in the same frontend module and are
+documented in [their own section](#suggestion-boxes-2026-09-23) below.
 
 ## Overview
 
@@ -173,6 +175,104 @@ rather than here, because this page is scoped to Department Messages. In short:
 
 Full detail:
 [Communications module → Email Footer Library](../wiki/Module-Communications.md#email-footer-library-2026-08-10).
+
+## Suggestion Boxes _(2026-09-23)_
+
+Configurable, optionally anonymous suggestion boxes with per-box reviewers.
+Shipped in PR #2649. User-facing walkthrough:
+[`training/07-documents-forms.md`](./training/07-documents-forms.md#suggestion-boxes-2026-09-23).
+
+### Code map
+
+| Layer    | Where                                                                                                                                                 |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model    | `app/models/suggestion.py` — `SuggestionBox`, `SuggestionBoxReviewer`, `Suggestion`, `SuggestionAttachment`, `SuggestionMessage`, `SuggestionForward` |
+| Service  | `app/services/suggestion_service.py`                                                                                                                  |
+| API      | `app/api/v1/endpoints/suggestions.py`, mounted at `/api/v1/suggestions`                                                                               |
+| Frontend | `modules/communications/pages/SuggestionsPage.tsx`, `SuggestionBoxesAdminPage.tsx`, `components/Suggestion*.tsx`, `services/suggestionsService.ts`    |
+
+### Pages
+
+| Route                              | Gate                 | Purpose                                                                                                                                                                                                        |
+| ---------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/suggestions`                     | Signed in            | Tabs **Submit**, **My submissions**, **Follow up with a key**, and **Review** (only when `GET /review/summary` reports the caller a reviewer). Reads `?tab=` and `?id=`, which the notification emails link to |
+| `/communications/suggestion-boxes` | `suggestions.manage` | Box configuration. Sidebar: **Administration → Forms & Comms → Suggestion Boxes**                                                                                                                              |
+
+### Authorization model
+
+**Configuring a box and reading it are separate on purpose.** `suggestions.manage`
+(new category `suggestions`) creates and edits boxes and chooses reviewers; the
+admin response carries no submission fields, so the grant alone discloses
+nothing a complaints box receives. **Reading is decided per box in the service,
+not by a permission**: a caller reviews a box when they are a listed reviewer
+member or currently hold a listed reviewer position, and reviews a single
+suggestion when it was forwarded to them (by member or by a position they hold
+at the time of the request). Only a box's own reviewers may forward or withdraw
+a forward (403 otherwise). Holding `suggestions.manage` also surfaces the
+Administration section (`ADMIN_NAVIGATION_PERMISSIONS`).
+
+Seeded on the Fire Chief, Deputy Chief and Assistant Chief ranks and on the
+President and Communications Officer positions; migration `394600cbfae2`
+carries it to existing installations' `is_system` position rows (see
+[Migrations](#suggestion-box-migrations)).
+
+### Anonymity is structural
+
+| What        | Anonymous submission                                                                                                                                                                                                                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Author      | `submitted_by` NULL; submitter-side `suggestion_messages.author_id` NULL                                                                                                                                                                                            |
+| Audit       | No `suggestion_submitted` entry (named submissions only)                                                                                                                                                                                                            |
+| Timestamps  | `created_at` / `updated_at`, attachment `created_at` and the file's mtime pinned to 12:00:00 UTC of the day; an anonymous reply does not bump `updated_at`. The UI shows these as a date only                                                                       |
+| Screenshots | Magic-byte type check (PNG/JPEG/WebP/GIF), ≤5 files, ≤10 MB each; re-encoded to WebP (q85, ≤2560²), which drops EXIF; stored as `{uuid}.webp` with the original filename discarded                                                                                  |
+| Follow-up   | Only in a follow-up box: `secrets.token_urlsafe(32)` returned once in the receipt; only its SHA-256 digest is stored. Key routes take the key in the POST body and still require a session ("the key proves authorship, the session proves the caller is a member") |
+
+Accepted limits — server-side timing correlation (access log, the reviewer
+email's send time, session activity), unrecoverable keys, screenshot content,
+and exact file `ctime` — are recorded in
+[`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md) under "Suggestion Boxes — What
+Anonymity Does and Does Not Cover".
+
+### Dispositions and notifications
+
+Dispositions: `new`, `under_review`, `accepted`, `implemented`, `declined`,
+`duplicate`; "open" = `new` or `under_review`. The internal note is never in the
+submitter's response schema. In a one-way box (`allow_follow_up` false) the
+submitter sees neither disposition nor messages.
+
+Emails go through the background task `send_suggestion_notice` to active members
+only, template type `suggestion_box`, and **carry a link and never the content**:
+
+| Event              | Recipients                                 |
+| ------------------ | ------------------------------------------ |
+| New submission     | The box's reviewers                        |
+| Submitter reply    | The box's reviewers and forward recipients |
+| Disposition change | Named submitter, follow-up boxes only      |
+| Reviewer reply     | Named submitter                            |
+| Forward            | The new recipients                         |
+
+Anonymous submitters are never emailed. Audit events: `suggestion_box_created`,
+`suggestion_box_updated`, `suggestion_submitted` (named only),
+`suggestion_disposition_changed`, `suggestion_forwarded`,
+`suggestion_forward_withdrawn`.
+
+### Deliberate decisions
+
+- **Not gated by the `communications` module flag.** `communications` defaults
+  off and none of its screens honour the flag, so gating only this would hide
+  suggestion boxes on almost every installation. Listed in
+  `DELIBERATELY_UNGATED` in `tests/test_module_api_gating.py`.
+- **`/suggestions` is in `UNCACHEABLE_PREFIXES`** — a cached thread would hide a
+  reply, and the payload is sensitive.
+- **Boxes are never deleted**; `is_active` closes one. An active box must have at
+  least one reviewer.
+
+### Suggestion box migrations
+
+| Revision       | What it does                                                                                                                                          | Downgrade                                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `80e2004cd691` | Creates the five box/suggestion tables, each guarded on absence (no-op after `create_all`)                                                            | Drops them — **every suggestion, attachment record and message**; files under `uploads/suggestions` are left on disk |
+| `394600cbfae2` | Adds `suggestions.manage` to `is_system` rows for `fire_chief`, `deputy_chief`, `assistant_chief`, `president`, `communications_officer` where absent | Removes it from the same rows, including a deliberate post-upgrade grant                                             |
+| `9cb132ad83dc` | Creates `suggestion_forwards`                                                                                                                         | Drops it — every forward, suggestions intact                                                                         |
 
 ## User documentation
 

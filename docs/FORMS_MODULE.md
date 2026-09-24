@@ -303,6 +303,27 @@ Public form submission requires no permissions or authentication.
 - **Field duplication**: Duplicate existing fields with one click
 - **Incomplete field highlighting**: Fields with missing required configuration are visually highlighted
 - **Conditional visibility**: Fields can be shown/hidden based on other field values
+  - **Enforced on the server too** _(2026-09-23)_. `FormsService._is_field_visible`
+    mirrors the renderers' `isFieldVisible` (`pages/PublicFormPage.tsx`,
+    `components/forms/FormRenderer.tsx`) — operators `equals`, `not_equals`,
+    `contains`, `not_empty`, `is_empty`, judged against the raw submitted values.
+    `submit_form` and `submit_public_form` skip the **required** check for a
+    hidden field (a conditional required question used to make the form
+    unsubmittable, as LB-API-400), and `_sanitize_submission_data` **drops** any
+    answer to a hidden field, so a stale value typed before the controlling
+    answer changed is not stored. An unrecognised operator counts as visible, so
+    a bad rule fails closed (the field stays required). **Keep the three
+    implementations identical** — if they disagree, the browser accepts a form
+    the server rejects, or the reverse.
+  - **Older submissions** can still hold hidden answers.
+    `backend/scripts/clear_hidden_form_answers.py` removes them: dry run by
+    default; `--apply` requires a `--backup-file` (written owner-only, never
+    overwritten) before any row changes; `--restore` undoes without overwriting
+    answers re-added since. It removes an answer only when the rule, applied to
+    that submission's own answers, hides it **and** neither the field nor its
+    controlling field was edited after the submission — no rule history is
+    kept, so anything newer is skipped and listed for a person. Each change is
+    audited without the answer values. See `backend/scripts/README.md`.
 - **Calculated fields**: Fields that auto-compute values from other fields
 - **Hidden fields**: Metadata fields not shown to the form filler
 - **Novice UX**: Guided tooltips and simplified interface for first-time form builders
