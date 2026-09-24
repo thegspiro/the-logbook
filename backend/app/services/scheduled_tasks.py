@@ -64,6 +64,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:30 AM — overdue equipment checkout reminders
 30 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_overdue_alerts
 
+# Daily at 7:45 AM — 30/90-day property return reminders to dropped members
+45 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=property_return_reminders
+
 # Weekly on Mondays at 8:00 AM — NFPA PPE retirement alerts
 0 8 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=nfpa_retirement_alerts
 
@@ -189,6 +192,16 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "03:30",
         "cron": "30 3 * * *",
+    },
+    "property_return_reminders": {
+        "description": (
+            "Email dropped members who still hold department property a 30-day "
+            "and then a 90-day return reminder, copying the notify roles. One "
+            "reminder per member per run: the latest threshold passed"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:45",
+        "cron": "45 7 * * *",
     },
     "membership_tier_advance": {
         "description": "Auto-advance members to higher membership tiers based on years of service",
@@ -797,6 +810,20 @@ async def run_membership_tier_advance(db: AsyncSession) -> Dict[str, Any]:
         return result.get("advanced", 0)
 
     return await _for_each_org(db, "membership_tier_advance", _process)
+
+
+async def run_property_return_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Send due 30/90-day property return reminders to dropped members."""
+    from app.services.property_return_reminder_service import (
+        PropertyReturnReminderService,
+    )
+
+    async def _process(db_session, org):
+        service = PropertyReturnReminderService(db_session)
+        result = await service.process_reminders(organization_id=str(org.id))
+        return result.get("reminders_sent", 0)
+
+    return await _for_each_org(db, "property_return_reminders", _process)
 
 
 async def run_membership_inactivity_warnings(db: AsyncSession) -> Dict[str, Any]:
@@ -6090,6 +6117,7 @@ TASK_RUNNERS = {
     "enrollment_expiry": run_enrollment_expiry,
     "recert_resets": run_recert_resets,
     "membership_tier_advance": run_membership_tier_advance,
+    "property_return_reminders": run_property_return_reminders,
     "action_item_reminders": run_action_item_reminders,
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
@@ -6162,6 +6190,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "action_item_reminders": 86400,
     "inventory_low_stock_alerts": 86400,
     "inventory_overdue_alerts": 86400,
+    "property_return_reminders": 86400,
     "storefront_payment_reminders": 86400,
     "compliance_auto_reports": 86400,
     "message_history_cleanup": 86400,

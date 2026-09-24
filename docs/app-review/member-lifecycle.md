@@ -104,6 +104,9 @@ endpoint) are visibly applied here.
   `POST /property-return-reminders/process` and `POST /advance-membership-tiers`
   pass `current_user.organization_id`, and the services require it as a
   non-optional parameter, so neither can fan out across tenants by accident.
+  _(2026-09-24: `process_reminders` is now also run daily by the
+  `property_return_reminders` scheduled task, per organization through
+  `_for_each_org`; before that nothing called it.)_
 - **Org scoping verified mechanically across all six services**: every method
   taking `organization_id` uses it. All 12 `member_status` routes require
   `members.manage`.
