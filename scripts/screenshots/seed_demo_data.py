@@ -374,32 +374,58 @@ class Api:
             if body is not None
             else json.dumps(payload).encode() if payload is not None else None
         )
-        req = urllib.request.Request(url, data=data, method=method)
-        req.add_header("Content-Type", content_type)
-        # Double-submit CSRF: state-changing calls echo the cookie as a header.
-        if method != "GET":
-            token = self._csrf()
-            if token:
-                req.add_header("X-CSRF-Token", token)
-        # Seeding drives hundreds of writes in a burst, which trips the API's
-        # rate limiter on the auth and admin routes. That limiter is doing its
-        # job, so back off and retry rather than asking for it to be widened.
-        for attempt in range(6):
+        # A full seed runs for over an hour (the login limiter paces the
+        # member sign-ins), and an access token lives 30 minutes. Without a
+        # refresh the administrator's session lapsed partway through and every
+        # later step answered 401 -- so a 401 is answered the way the frontend
+        # answers it: one cookie-based refresh, then one retry.
+        refreshed = False
+        attempt = 0
+        while True:
+            req = urllib.request.Request(url, data=data, method=method)
+            req.add_header("Content-Type", content_type)
+            # Double-submit CSRF: state-changing calls echo the cookie as a
+            # header. Read per attempt -- a refresh rotates the cookie.
+            if method != "GET":
+                token = self._csrf()
+                if token:
+                    req.add_header("X-CSRF-Token", token)
             try:
                 with self.opener.open(req, timeout=120) as resp:
                     return json.loads(resp.read().decode() or "null")
             except urllib.error.HTTPError as exc:
+                # Seeding drives hundreds of writes in a burst, which trips the
+                # API's rate limiter on the auth and admin routes. That limiter
+                # is doing its job, so back off and retry rather than asking
+                # for it to be widened.
                 if exc.code == 429 and attempt < 5:
+                    attempt += 1
                     # Honour Retry-After where the server sends one: the admin
                     # password-reset limiter is 5 per 5 minutes, so a fixed
                     # few-second backoff would never clear it.
                     retry_after = exc.headers.get("Retry-After")
-                    sleep(int(retry_after) if retry_after else 5 * (attempt + 1))
+                    sleep(int(retry_after) if retry_after else 5 * attempt)
                     continue
+                if exc.code == 401 and not refreshed and not path.startswith("/auth/"):
+                    refreshed = True
+                    if self._refresh():
+                        continue
                 raise ApiError(
                     method, path, exc.code, exc.read().decode()[:600]
                 ) from exc
-        return None
+
+    def _refresh(self) -> bool:
+        """Renew an expired access token from the refresh-token cookie.
+
+        False when there is nothing to refresh (a session that never signed in)
+        or the refresh itself is refused; the caller then reports the original
+        401 rather than this one, since that is the call that failed.
+        """
+        try:
+            self.call("POST", "/auth/refresh", {})
+        except ApiError:
+            return False
+        return True
 
     def get(self, path: str) -> Any:
         return self.call("GET", path)
