@@ -17,7 +17,7 @@ members, their ``hire_date`` and their statuses are untouched, and service
 falls back to ``hire_date`` as before.
 
 Revision ID: 500a63596f66
-Revises: 43e9df281412
+Revises: 941e1251ad74
 Create Date: 2026-09-24 19:00:15.966431
 """
 
@@ -25,7 +25,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "500a63596f66"
-down_revision = "43e9df281412"
+down_revision = "941e1251ad74"
 branch_labels = None
 depends_on = None
 
