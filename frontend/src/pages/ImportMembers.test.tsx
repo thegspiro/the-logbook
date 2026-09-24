@@ -572,7 +572,7 @@ describe('ImportMembers', () => {
     expect(screen.getByText('Successfully imported 2 members')).toBeInTheDocument();
   });
 
-  // Creating a member emails a password-setup link immediately, and an import
+  // Creating a member emails a temporary password immediately, and an import
   // creates them by the dozen — so a bulk load does not send until asked.
   describe('welcome emails', () => {
     it('does not send them unless the box is ticked', async () => {
@@ -596,6 +596,19 @@ describe('ImportMembers', () => {
       await waitFor(() => {
         expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ send_welcome_email: true }));
       });
+    });
+
+    // The welcome email carries a temporary password in plain text (users.py
+    // create_member), not a link; the officer deciding whether to tick the box
+    // needs to know that is what every address on the roster will receive.
+    it('says the email carries a temporary password, not a link', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv('firstName,lastName,email\nMary,Smith,mary@example.com');
+
+      const option = (await screen.findByRole('checkbox', { name: /Send welcome emails now/ })).closest('label');
+      expect(option).toHaveTextContent(/emailed a temporary password/);
+      expect(option).toHaveTextContent(/Reset Password in Member Management/);
+      expect(option).not.toHaveTextContent(/link/);
     });
   });
 

@@ -6785,7 +6785,7 @@ import.
 ### Problem: An import sent welcome emails I did not want sent
 
 **Cause (Fixed 2026-08-07):** The importer hardcoded `send_welcome_email: true`,
-so every created member was emailed a password-setup link immediately. Loading a
+so every created member was emailed a temporary password immediately. Loading a
 roster for staging, or from a list with stale addresses, put mail in front of
 every one of them, and it cannot be recalled.
 
