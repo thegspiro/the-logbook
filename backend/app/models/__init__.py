@@ -193,6 +193,7 @@ from app.models.inventory import (
     InventoryActionType,
     InventoryCategory,
     InventoryItem,
+    InventoryLabelPrint,
     InventoryLot,
     InventoryNfcScan,
     InventoryNfcScanAction,
@@ -583,6 +584,7 @@ __all__ = [
     # Inventory models
     "InventoryCategory",
     "InventoryItem",
+    "InventoryLabelPrint",
     "InventoryLot",
     "InventoryNfcScan",
     "InventoryNfcScanAction",

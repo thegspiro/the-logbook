@@ -145,6 +145,8 @@ from app.schemas.inventory import (
     LabelMarkPrintedRequest,
     LabelMarkPrintedResponse,
     LabelPresetUpdate,
+    LabelSetupResponse,
+    LabelSetupSave,
     LocationInventorySummary,
     LowStockItem,
     MaintenanceRecordCreate,
@@ -192,7 +194,8 @@ from app.schemas.inventory import (
 )
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService, is_pool_without_stock
-from app.services.label_service import LabelService
+from app.services.label_printer_service import LabelPrinterService
+from app.services.label_service import UNSET, LabelService
 from app.services.organization_service import OrganizationService
 from app.utils import label_renderer
 from app.utils.org_scoping import assert_in_org
@@ -1808,7 +1811,17 @@ async def get_item(
         # The detail page's Assignment card prints who holds the item; without
         # a name it showed the raw user id.
         payload.assigned_to_name = item.assigned_to_user.full_name
-    return _redact_holder(payload, current_user, _is_quartermaster(current_user))
+    is_quartermaster = _is_quartermaster(current_user)
+    if is_quartermaster and item.label_printed_by:
+        # Org-scoped like every by-id read, though the id came from our row.
+        printer = await db.scalar(
+            select(User).where(
+                User.id == str(item.label_printed_by),
+                User.organization_id == str(current_user.organization_id),
+            )
+        )
+        payload.label_printed_by_name = printer.full_name if printer else None
+    return _redact_holder(payload, current_user, is_quartermaster)
 
 
 @router.get("/items/{item_id}/history")
@@ -7120,11 +7133,79 @@ async def set_label_preset(
             custom_width=data.custom_width,
             custom_height=data.custom_height,
             symbology=data.symbology,
+            extra_lines=(
+                data.extra_lines if "extra_lines" in data.model_fields_set else UNSET
+            ),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     await db.commit()
     return result
+
+
+@router.get("/label-setups", response_model=List[LabelSetupResponse])
+async def list_label_setups(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    List the organization's saved inventory label print setups.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    return await LabelService(db).list_setups(current_user.organization_id, "inventory")
+
+
+@router.post("/label-setups", response_model=List[LabelSetupResponse])
+async def save_label_setup(
+    data: LabelSetupSave,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Save a named inventory label print setup for the whole organization,
+    replacing one with the same name. Returns the organization's setups.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    try:
+        if data.printer_id is not None:
+            # A client-supplied foreign key stored in organization JSON:
+            # check it is this organization's printer first (pitfall 14c).
+            await LabelPrinterService(db).get_printer(
+                data.printer_id, current_user.organization_id
+            )
+        setups = await LabelService(db).save_setup(
+            current_user.organization_id, "inventory", data.model_dump()
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    await db.commit()
+    return setups
+
+
+@router.delete("/label-setups/{setup_id}", response_model=List[LabelSetupResponse])
+async def delete_label_setup(
+    setup_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Delete one of the organization's saved inventory label print setups.
+    Returns the setups that remain.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    setups = await LabelService(db).delete_setup(
+        current_user.organization_id, "inventory", setup_id
+    )
+    if setups is None:
+        raise HTTPException(status_code=404, detail="Setup not found")
+    await db.commit()
+    return setups
 
 
 # =====================================================================

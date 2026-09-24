@@ -158,6 +158,52 @@ class TestSetPreset:
 
         assert position.settings["label_presets"]["inventory"]["printer_id"] is None
 
+    async def test_a_save_that_omits_the_label_lines_keeps_the_stored_ones(self):
+        """Only the inventory page sends them; every other save must keep them."""
+        position = SimpleNamespace(
+            settings={
+                "label_presets": {
+                    "inventory": {
+                        "preset": "rollo_2x1",
+                        "extra_lines": ["size", "no_serial_number"],
+                    }
+                }
+            }
+        )
+        svc, _ = _service("p", position)
+
+        r = await svc.set_preset(uuid4(), uuid4(), "inventory", "dymo_30334")
+
+        assert r["extra_lines"] == ["size", "no_serial_number"]
+
+    async def test_label_lines_are_stored_and_read_back(self):
+        position = SimpleNamespace(settings=None)
+        svc, _ = _service("p", position)
+
+        await svc.set_preset(
+            uuid4(), uuid4(), "inventory", "rollo_2x1", extra_lines=["storage_area"]
+        )
+
+        assert (await svc.get_preset(uuid4(), uuid4(), "inventory"))["extra_lines"] == [
+            "storage_area"
+        ]
+
+    async def test_an_explicit_none_clears_the_label_lines(self):
+        position = SimpleNamespace(
+            settings={
+                "label_presets": {
+                    "inventory": {"preset": "rollo_2x1", "extra_lines": ["size"]}
+                }
+            }
+        )
+        svc, _ = _service("p", position)
+
+        await svc.set_preset(
+            uuid4(), uuid4(), "inventory", "rollo_2x1", extra_lines=None
+        )
+
+        assert position.settings["label_presets"]["inventory"]["extra_lines"] is None
+
     async def test_rejects_unknown_preset(self):
         position = SimpleNamespace(settings={})
         svc, _ = _service("p", position)
@@ -316,6 +362,20 @@ class TestGenerate:
         _, _, count = await svc.generate(uuid4(), "partial", ["1", "2", "3"], "letter")
         assert count == 2
 
+    async def test_passes_the_sheet_start_position_to_the_renderer(self, monkeypatch):
+        async def fake_builder(db, org_id, ids, extra_lines):
+            return [LabelSpec(name="Engine 5", barcode_value="E5")], 0
+
+        monkeypatch.setitem(ls.MODULE_LABELS, "fake", ("apparatus.view", fake_builder))
+        rendered = MagicMock(return_value="pdf")
+        monkeypatch.setattr(ls, "render_labels", rendered)
+
+        await LabelService(MagicMock()).generate(
+            uuid4(), "fake", ["1"], "letter", start_position=12
+        )
+
+        assert rendered.call_args.kwargs["start_position"] == 12
+
     async def test_empty_result_raises(self, monkeypatch):
         async def empty_builder(db, org_id, ids, extra_lines):
             return [], 0
@@ -381,6 +441,30 @@ class TestRenderer:
                 [LabelSpec(name="Long barcode", barcode_value="X" * 255)],
                 "thermal_1x1",
             )
+
+    @pytest.mark.parametrize("label_format", ["letter", "thermal_1x1"])
+    def test_a_hidden_name_is_not_drawn(self, label_format):
+        drawn = []
+        original = Canvas.drawString
+        original_centred = Canvas.drawCentredString
+
+        def record(canvas_obj, x, y, text, *args, **kwargs):
+            drawn.append(text)
+            return original(canvas_obj, x, y, text, *args, **kwargs)
+
+        def record_centred(canvas_obj, x, y, text, *args, **kwargs):
+            drawn.append(text)
+            return original_centred(canvas_obj, x, y, text, *args, **kwargs)
+
+        spec = LabelSpec(name="Thermal Camera", barcode_value="INV-1", show_name=False)
+        with (
+            patch.object(Canvas, "drawString", record),
+            patch.object(Canvas, "drawCentredString", record_centred),
+        ):
+            render_labels([spec], label_format)
+
+        assert "Thermal Camera" not in drawn
+        assert "INV-1" in drawn
 
     def test_unknown_format_raises(self):
         with pytest.raises(ValueError, match="Unknown label format"):

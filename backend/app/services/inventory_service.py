@@ -45,6 +45,7 @@ from app.models.inventory import (
     InventoryImpactPlan,
     InventoryItem,
     InventoryItemPin,
+    InventoryLabelPrint,
     InventoryLot,
     InventoryVendor,
     InventoryVendorContact,
@@ -398,16 +399,51 @@ CATEGORY_PRESETS: List[Dict[str, Any]] = [
 ]
 
 
-# Supported extra-line field keys that can be requested on labels.
-_EXTRA_LINE_FIELDS = {"location", "category", "condition", "custom"}
+# Keys in a label's ``extra_lines`` that take a line *off* rather than add one.
+# The asset tag and serial number print by default, so leaving them out needs
+# a signal of its own; carrying it in ``extra_lines`` lets it reach the network
+# print path, whose shared request has no other per-module field.
+LABEL_HIDE_ASSET_TAG = "no_asset_tag"
+LABEL_HIDE_SERIAL_NUMBER = "no_serial_number"
+# Leaves the item name off, for a tag too small to carry it and the code.
+LABEL_HIDE_NAME = "no_name"
+# Joins a storage area to its parents. ASCII, because the ZPL and ESC/POS
+# renderers drop anything a printer's font may not carry.
+_AREA_PATH_SEPARATOR = " > "
 
 
-def _build_extra_lines(item, extra_lines: Optional[List[str]]) -> str:
+def storage_area_paths(areas) -> Dict[str, str]:
+    """Map each area id to "Parent > Child", walking ``parent_id``.
+
+    ``areas`` is every area of one organization. The walk is bounded by the
+    ids it has seen, so a cycle in stored data cannot hang label printing.
+    """
+    by_id = {str(a.id): a for a in areas}
+    paths: Dict[str, str] = {}
+    for area in areas:
+        parts: List[str] = []
+        seen: set = set()
+        cur = area
+        while cur is not None and str(cur.id) not in seen:
+            seen.add(str(cur.id))
+            parts.insert(0, cur.name)
+            cur = by_id.get(str(cur.parent_id)) if cur.parent_id else None
+        paths[str(area.id)] = _AREA_PATH_SEPARATOR.join(parts)
+    return paths
+
+
+def _build_extra_lines(
+    item,
+    extra_lines: Optional[List[str]],
+    area_paths: Optional[Dict[str, str]] = None,
+) -> str:
     """Build a single extra info string from requested fields.
 
     *extra_lines* is a list of field keys the user wants printed below
     the identifier line (e.g. ``["location", "category"]``).
     Only fields that have a non-empty value on the item are included.
+    The inventory print page builds the same line for its preview; keep the
+    two in step when adding a field.
     """
     if not extra_lines:
         return ""
@@ -432,6 +468,15 @@ def _build_extra_lines(item, extra_lines: Optional[List[str]]) -> str:
             if cond:
                 val = cond.value if hasattr(cond, "value") else str(cond)
                 parts.append(val.replace("_", " ").title())
+        elif key == "size":
+            size = getattr(item, "size", None)
+            if size:
+                parts.append(str(size))
+        elif key == "storage_area":
+            area_id = getattr(item, "storage_area_id", None)
+            path = (area_paths or {}).get(str(area_id)) if area_id else None
+            if path:
+                parts.append(path)
         elif key.startswith("custom:"):
             parts.append(key.split(":", 1)[1])
     return " | ".join(parts)
@@ -5630,13 +5675,33 @@ class InventoryService:
                 raise ValueError(f"Item {item.id} has no printable barcode identifier")
             return value
 
+        lines = extra_lines or []
+        area_paths: Dict[str, str] = {}
+        if "storage_area" in lines:
+            areas = (
+                (
+                    await self.db.execute(
+                        select(StorageArea).where(
+                            StorageArea.organization_id == str(organization_id)
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            area_paths = storage_area_paths(areas)
+        show_asset_tag = LABEL_HIDE_ASSET_TAG not in lines
+        show_serial = LABEL_HIDE_SERIAL_NUMBER not in lines
+        show_name = LABEL_HIDE_NAME not in lines
+
         specs = [
             LabelSpec(
                 name=item.name,
                 barcode_value=printable_value(item),
-                asset_tag=item.asset_tag,
-                serial_number=item.serial_number,
-                extra=_build_extra_lines(item, extra_lines) or None,
+                asset_tag=item.asset_tag if show_asset_tag else None,
+                serial_number=item.serial_number if show_serial else None,
+                show_name=show_name,
+                extra=_build_extra_lines(item, extra_lines, area_paths) or None,
             )
             for item in items
         ]
@@ -5769,6 +5834,18 @@ class InventoryService:
                 continue
             item.label_printed_at = now
             item.label_printed_by = str(user_id)
+            # The item keeps only the latest print; this row is the history.
+            self.db.add(
+                InventoryLabelPrint(
+                    organization_id=item.organization_id,
+                    item_id=item.id,
+                    printed_by=str(user_id),
+                    printed_at=now,
+                    label_value=printable_label_value(
+                        item.barcode, item.asset_tag, item.serial_number
+                    ),
+                )
+            )
             marked += 1
         await self.db.commit()
         logger.info(
@@ -6410,6 +6487,34 @@ class InventoryService:
                         "passed": m.passed,
                         "condition_after": self._enum_value(m.condition_after),
                         "notes": m.notes,
+                    },
+                }
+            )
+
+        # --- Label prints ---
+        print_result = await self.db.execute(
+            select(InventoryLabelPrint)
+            .options(selectinload(InventoryLabelPrint.printer))
+            .where(
+                InventoryLabelPrint.item_id == str(item_id),
+                InventoryLabelPrint.organization_id == str(organization_id),
+            )
+        )
+        for p in print_result.scalars().all():
+            user_name = self._format_user_name(p.printer) if p.printer else None
+            events.append(
+                {
+                    "type": "label_printed",
+                    "id": p.id,
+                    "date": p.printed_at.isoformat(),
+                    "summary": (
+                        f"Label printed by {user_name}"
+                        if user_name
+                        else "Label printed"
+                    ),
+                    "details": {
+                        "user_name": user_name,
+                        "label_value": p.label_value,
                     },
                 }
             )

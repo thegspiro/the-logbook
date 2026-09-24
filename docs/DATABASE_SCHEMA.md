@@ -318,6 +318,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_impact_plans`](#inventory_impact_plans) | `InventoryImpactPlan` | 8 | A saved, named impact-planner scenario. |
 | [`inventory_item_pins`](#inventory_item_pins) | `InventoryItemPin` | 7 | A member's own shortlist of items, hoisted to the top of the items list. |
 | [`inventory_items`](#inventory_items) | `InventoryItem` | 54 | Inventory Item model |
+| [`inventory_label_prints`](#inventory_label_prints) | `InventoryLabelPrint` | 6 | One confirmed label print for an item: who confirmed it, and when. |
 | [`inventory_lots`](#inventory_lots) | `InventoryLot` | 13 | A batch/lot of a consumable inventory item held as ready stock. |
 | [`inventory_nfc_scans`](#inventory_nfc_scans) | `InventoryNfcScan` | 9 | One staff tap of an NFC tag on an item — the "last seen" trail. |
 | [`inventory_nfc_tags`](#inventory_nfc_tags) | `InventoryNfcTag` | 13 | An NFC tag physically attached to an inventory item or a storage area. |
@@ -4886,6 +4887,26 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - UNIQUE `uq_item_org_asset_tag` (`organization_id`, `asset_tag`)
 - UNIQUE `uq_item_org_barcode` (`organization_id`, `barcode`)
 - UNIQUE `uq_item_org_serial_number` (`organization_id`, `serial_number`)
+
+### `inventory_label_prints`
+
+**InventoryLabelPrint** · `app/models/inventory.py`
+
+> One confirmed label print for an item: who confirmed it, and when. ``inventory_items.label_printed_at`` / ``label_printed_by`` hold only the latest confirmation, and the label listener clears them when the encoded value changes. This is the history those two columns overwrite, written alongside them by ``mark_labels_printed`` and never cleared. ``organization_id`` is denormalized so every read is org-scoped without a join (CLAUDE.md pitfall #14).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `item_id` | VARCHAR(36) | no | FK, IDX |  | → `inventory_items.id` ON DELETE CASCADE |
+| `printed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `printed_at` | DATETIME | no |  | `now()` |  |
+| `label_value` | VARCHAR(255) | yes |  |  |  |
+
+**Indexes**
+
+- `idx_label_prints_item_printed` (`item_id`, `printed_at`)
+- `idx_label_prints_org` (`organization_id`)
 
 ### `inventory_lots`
 
@@ -9768,6 +9789,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_items` | `assigned_to_user_id` | SET NULL | yes |
 | `inventory_items` | `created_by` | NO ACTION | yes |
 | `inventory_items` | `label_printed_by` | SET NULL | yes |
+| `inventory_label_prints` | `printed_by` | SET NULL | yes |
 | `inventory_lots` | `created_by` | SET NULL | yes |
 | `inventory_nfc_scans` | `scanned_by` | SET NULL | yes |
 | `inventory_nfc_tags` | `linked_by` | SET NULL | yes |
@@ -10057,6 +10079,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_impact_plans` | `organization_id` | CASCADE | no |
 | `inventory_item_pins` | `organization_id` | CASCADE | no |
 | `inventory_items` | `organization_id` | CASCADE | no |
+| `inventory_label_prints` | `organization_id` | CASCADE | no |
 | `inventory_lots` | `organization_id` | CASCADE | no |
 | `inventory_nfc_scans` | `organization_id` | CASCADE | no |
 | `inventory_nfc_tags` | `organization_id` | CASCADE | no |
@@ -10186,6 +10209,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_kit_items` | `item_id` | SET NULL | yes |
 | `equipment_requests` | `item_id` | SET NULL | yes |
 | `inventory_item_pins` | `item_id` | CASCADE | no |
+| `inventory_label_prints` | `item_id` | CASCADE | no |
 | `inventory_lots` | `inventory_item_id` | CASCADE | no |
 | `inventory_nfc_scans` | `item_id` | CASCADE | no |
 | `inventory_nfc_tags` | `item_id` | CASCADE | yes |

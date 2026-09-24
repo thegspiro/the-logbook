@@ -842,7 +842,7 @@ Generate barcode labels for inventory items to attach to equipment.
 
    Your choice is remembered per position and per module, exactly like the label size.
 
-4. Optionally set **Copies per item**, add **Additional Info on Label** (location / category / condition), and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below).
+4. Optionally set **Copies per item**, choose **What Prints on the Label**, and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below). The code always prints. The **Item name**, **Asset tag** and **Serial number** print unless you switch them off — leaving the name off gives a small tag's height to the code, and the asset tag or serial number is left off anyway when it repeats the code. **Location**, **Storage area** (the shelf's full path, e.g. `Supply Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print on one extra line in the order you pick them. The choice is remembered per position, like the label size.
 5. Print one of three ways:
    - **PDF** (recommended for sticker/thermal printers) — downloads a PDF sized to the exact label; open it and print with your label printer selected.
    - **Print Labels** — prints directly through the browser print dialog.
@@ -860,9 +860,39 @@ Generate barcode labels for inventory items to attach to equipment.
 
 Labels include the barcode (Code 128 with the required quiet-zone margins, or a QR), the item name, and the asset tag or serial number. A QR has no built-in human-readable line, so the value is printed underneath it.
 
-> **Reusing a partly used Avery sheet.** With **Letter Paper (Grid)** selected, a **Start at label** box (1–30) appears above the printer controls. Set it to the first label still on the sheet — counting left to right along each row — and the positions before it are left blank in the preview, the browser print and the PDF, so the sheet can go back in the printer instead of the bin. It applies to the sheet in the printer now: it goes back to 1 when you move to the next part of a large run. Roll printers have no positions, so the box is not shown for them.
+> **Saved setups for the department.** Above the printer controls, **Save setup…** stores the current label size, barcode style, what prints on the label, copies per item and network printer under a name — e.g. _Rollo 2×1, QR_. Pick it from **Saved setup** to apply all of it at once. Setups are saved for the whole department, so anyone who prints inventory labels sees the same list on any computer; up to 20, saving under an existing name replaces it, and **Delete setup** removes it for everyone.
+
+> **When an edit makes a label out of date.** Editing an item that has a confirmed label shows a banner on the item page with a **Print label** button. If the edit changed the code the label encodes, the old label no longer scans to the item and should be replaced — the item also goes back on the _needs a label_ list. If it changed only printed text (name, asset tag or serial number), the old label still scans but reads wrong.
+
+> **Reusing a partly used Avery sheet.** With **Letter Paper (Grid)** selected, a **Start at label** box (1–30) appears above the printer controls. Set it to the first label still on the sheet — counting left to right along each row — and the positions before it are left blank in the preview, the browser print and the PDF, so the sheet can go back in the printer instead of the bin. It applies to the sheet in the printer now: it goes back to 1 when you move to the next part of a large run. Roll printers have no positions, so the box is not shown for them. The same box is on the label pages for apparatus, facilities, members and storage areas.
 
 ![Label print settings with the size presets and content options](./images/05-51-label-print-settings.png)
+
+### Putting items away by scanning
+
+**Required Permission:** `inventory.manage`
+
+On **Storage Areas**, **Put away** files a batch of items onto one shelf:
+
+1. Scan the shelf's label (or open the shelf first, and it is already chosen).
+2. Scan each item going onto it. Each one is looked up and added to the list; an unknown code or a repeat is refused with a reason.
+3. Click **File N items on …**. Items assigned or checked out to a member, or recorded as lost, stolen or retired, are left where they are and listed with the reason.
+
+The shelf cannot be changed while items are waiting to be filed — file or clear them first, so it is never unclear which shelf they were scanned for.
+
+If the shelf was picked on screen rather than scanned, the result offers **Print shelf label**, so the next put-away can start with a scan. A shelf with no barcode yet is given one when its label prints.
+
+### Checking a bag, box or bin
+
+**Required Permission:** `inventory.manage`
+
+A bag, box or bin is a storage area, so its label is a storage-area label. **Check contents** on **Storage Areas** compares what is physically inside with what the records say:
+
+1. Scan the container's label (or open it first, and it is already chosen). Everything filed on it — and on areas nested inside it, such as a bag's pockets — is loaded.
+2. Scan everything inside. The panel counts **N of M found** and lists what has **not been scanned yet**, with the pocket each one should be in.
+3. An item that is recorded elsewhere is listed under **Doesn't belong here** with where it is recorded; **File it here** moves it into this container, with the same rules as Put away.
+
+Items assigned or checked out to a member, or otherwise recorded as away, are not counted as missing. If one is scanned inside the container anyway, it is listed under **Here, but the record disagrees** so the record can be corrected. Nothing is changed by checking alone.
 
 ### Choosing which items to label _(2026-09-23)_
 
@@ -876,9 +906,10 @@ filters match, not just the rows loaded on screen, and the bar then reads
 **All N matching selected**. Press **Print Labels**. Unticking any row turns the
 selection back into an ordinary hand-picked set.
 
-- **One batch holds at most 500 labels.** Above that the link is replaced by
-  _"N match — narrow the filters to 500 or fewer to select them all"_. Narrow by
-  category, location or storage area and print in several runs.
+- **Selecting holds at most 500 items**, because the same selection also
+  drives bulk status changes. Above that the bar offers **Print labels for all
+  N matching** instead, which opens the print page by filter for up to 5,000
+  items and prints them in parts of 500 labels, one after another.
 - A selection made this way is carried to the print page **as the filters, not
   as a list of item ids**, so the print page's address stays short and survives
   a refresh.
@@ -890,8 +921,9 @@ the setup workflow, or a bookmark to the print page, used to land on "No items
 specified". It now opens **Print barcode labels**: pick a **Category**, a
 **Location** (including **Unassigned**) and a **Storage area**, optionally tick
 **Only items that still need a label**, and the page counts the match live —
-"_N items match._" — before you press **Prepare N labels**. Over 500 it says so
-and the button stays disabled until you narrow it.
+"_N items match._" — before you press **Prepare N labels**. Over 500 it says how
+many parts the run will print in; over 5,000 the button stays disabled until you
+narrow it.
 
 ![The label print page opened with nothing selected: the Print barcode labels picker with Category set to Structural PPE, Location and Storage area left on All, Only items that still need a label ticked, the live count reading 11 items match, and the Prepare 11 labels button](./images/05-84-label-scope-picker.png)
 
@@ -914,10 +946,19 @@ question. It is never asked after **Download Test Label**.
 **Where it shows.**
 
 - The item's **Basic Info** card has a **Label Printed** line: the date the
-  label was confirmed, or **Needs a label**.
+  label was confirmed and, for members who manage inventory, who confirmed it
+  ("_20 Sep 2026 by Jane Smith_") — or **Needs a label**. It shows the latest
+  confirmation.
+- The item's **History** tab lists every confirmed print — who confirmed it,
+  when, and the code that label carried — so a reprint after a barcode change
+  shows both labels.
 - The items list has a label-status filter: **Any Label Status**, **Needs a
   Label**, **Label Printed**. The same filter carries into **Export**.
 - The print page's picker has **Only items that still need a label**.
+- Above the items list, a line counts them — "_14 items need a label._" — with
+  **Show them** (applies the filter) and **Print their labels** (opens the print
+  page on that filter). **Not now** hides it until the page is reloaded; it is
+  gone on its own once every item is labelled.
 
 **The mark clears itself when the label goes out of date.** A label encodes one
 value — the item's **barcode**, or its **asset tag** if it has no barcode, or

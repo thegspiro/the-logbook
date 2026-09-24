@@ -1023,6 +1023,11 @@ const InventoryItemsPage: React.FC = () => {
   // Items just added or received, offered for labelling while they are still
   // in hand — the moment a new item most needs one.
   const [justAdded, setJustAdded] = useState<{ ids: string[]; verb: 'added' | 'received' } | null>(null);
+  // How many active items still need a label: never confirmed printed, or
+  // their barcode changed since. The count is the list endpoint's own total
+  // for the needs-a-label filter, so it cannot disagree with that filter.
+  const [needsLabelCount, setNeedsLabelCount] = useState<number | null>(null);
+  const [needsLabelDismissed, setNeedsLabelDismissed] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
@@ -1149,7 +1154,14 @@ const InventoryItemsPage: React.FC = () => {
     } catch {
       /* non-critical */
     }
-  }, []);
+    if (!canManage) return;
+    try {
+      const { total } = await inventoryService.getItems({ label_printed: false, skip: 0, limit: 1 });
+      setNeedsLabelCount(total ?? 0);
+    } catch {
+      setNeedsLabelCount(null);
+    }
+  }, [canManage]);
 
   const loadRef = useCallback(async () => {
     try {
@@ -1965,6 +1977,32 @@ const InventoryItemsPage: React.FC = () => {
           </select>
         </div>
       </div>
+
+      {canManage && !justAdded && !needsLabelDismissed && fLabel !== 'needed' && (needsLabelCount ?? 0) > 0 && (
+        <div className="card-secondary mb-4 flex flex-wrap items-center gap-3 p-3" role="status">
+          <Printer className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="text-theme-text-primary text-sm">
+            {formatNumber(needsLabelCount ?? 0)} {needsLabelCount === 1 ? 'item needs' : 'items need'} a label.
+          </span>
+          <button type="button" onClick={() => setFLabel('needed')} className="btn-secondary btn-sm">
+            Show {needsLabelCount === 1 ? 'it' : 'them'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void navigate(buildLabelFilterPath({ label_printed: false }))}
+            className="btn-secondary btn-sm inline-flex items-center gap-1.5"
+          >
+            <Printer className="h-3.5 w-3.5" /> Print {needsLabelCount === 1 ? 'its label' : 'their labels'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setNeedsLabelDismissed(true)}
+            className="text-theme-text-muted hover:text-theme-text-primary ml-auto text-xs"
+          >
+            Not now
+          </button>
+        </div>
+      )}
 
       {justAdded && (
         <div

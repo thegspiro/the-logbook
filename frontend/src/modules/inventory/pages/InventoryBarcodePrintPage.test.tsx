@@ -16,6 +16,9 @@ const mockGetLocations = vi.fn();
 const mockMarkLabelsPrinted = vi.fn();
 const mockListPrinters = vi.fn();
 const mockPrintToPrinter = vi.fn();
+const mockGetLabelSetups = vi.fn();
+const mockSaveLabelSetup = vi.fn();
+const mockDeleteLabelSetup = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -27,6 +30,9 @@ vi.mock('../../../services/api', () => ({
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
     getStorageAreas: (...a: unknown[]) => mockGetStorageAreas(...a) as unknown,
     markLabelsPrinted: (...a: unknown[]) => mockMarkLabelsPrinted(...a) as unknown,
+    getLabelSetups: (...a: unknown[]) => mockGetLabelSetups(...a) as unknown,
+    saveLabelSetup: (...a: unknown[]) => mockSaveLabelSetup(...a) as unknown,
+    deleteLabelSetup: (...a: unknown[]) => mockDeleteLabelSetup(...a) as unknown,
   },
   locationsService: {
     getLocations: (...a: unknown[]) => mockGetLocations(...a) as unknown,
@@ -92,6 +98,9 @@ describe('InventoryBarcodePrintPage', () => {
     mockPrintToPrinter.mockReset();
     // No network printer by default: the page must look exactly as it did.
     mockListPrinters.mockResolvedValue([]);
+    // No saved setups by default, and none saved or deleted.
+    for (const m of [mockGetLabelSetups, mockSaveLabelSetup, mockDeleteLabelSetup]) m.mockReset();
+    mockGetLabelSetups.mockResolvedValue([]);
     mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1, skip: 0, limit: 500 });
     mockGetCategories.mockResolvedValue([{ id: 'cat-1', name: 'Radios' }]);
     mockGetStorageAreas.mockResolvedValue([]);
@@ -422,7 +431,8 @@ describe('InventoryBarcodePrintPage', () => {
 
     // The change is debounced (~500ms) then saved to the position.
     await waitFor(
-      () => expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'rollo_4x6', symbology: 'code128' }),
+      () =>
+        expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'rollo_4x6', symbology: 'code128', extra_lines: [] }),
       { timeout: 2000 }
     );
   });
@@ -475,9 +485,13 @@ describe('InventoryBarcodePrintPage', () => {
       await user.click(screen.getByRole('button', { name: 'PDF' }));
       await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
       expect(mockGenerateLabels.mock.calls[0]?.[6]).toEqual({ symbology: 'qr' });
-      await waitFor(() => expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'dymo_30252', symbology: 'qr' }), {
-        timeout: 2000,
-      });
+      await waitFor(
+        () =>
+          expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'dymo_30252', symbology: 'qr', extra_lines: [] }),
+        {
+          timeout: 2000,
+        }
+      );
     });
 
     it('takes the barcode style saved for the position', async () => {
@@ -568,6 +582,219 @@ describe('InventoryBarcodePrintPage', () => {
       await user.click(screen.getByRole('button', { name: 'PDF' }));
       await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
       expect(mockGenerateLabels.mock.calls[0]?.[6]).toEqual({ symbology: 'code128' });
+    });
+  });
+
+  describe('choosing what prints on the label', () => {
+    const detailed = makeItem({
+      barcode: 'INV-0001',
+      asset_tag: 'AT-77',
+      serial_number: 'SN-123',
+      size: 'Large',
+      category_id: 'cat-1',
+      storage_area_id: 'shelf-2',
+    });
+
+    beforeEach(() => {
+      mockGetLabelPreset.mockReset();
+      mockGetLabelPreset.mockResolvedValue({ preset: null });
+      mockGetItem.mockReset();
+      mockGetItem.mockResolvedValue(detailed);
+      mockGetStorageAreas.mockReset();
+      mockGetStorageAreas.mockResolvedValue([
+        { id: 'rack-a', name: 'Rack A', parent_id: null },
+        { id: 'shelf-2', name: 'Shelf 2', parent_id: 'rack-a' },
+      ]);
+    });
+
+    it('previews both identifiers by default, as the PDF prints them', async () => {
+      renderPage('?ids=it-1');
+
+      expect(await screen.findByText('Asset: AT-77 | S/N: SN-123')).toBeInTheDocument();
+    });
+
+    it('adds the chosen details in order, drops an identifier, and sends the same to the PDF', async () => {
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findByText('Asset: AT-77 | S/N: SN-123');
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      await user.click(screen.getByRole('button', { name: 'Serial number' }));
+      await user.click(screen.getByRole('button', { name: 'Storage area' }));
+      await user.click(screen.getByRole('button', { name: 'Size' }));
+      await user.click(screen.getByRole('button', { name: 'Category' }));
+
+      expect(screen.getByRole('button', { name: 'Serial number' })).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.getByText('Asset: AT-77')).toBeInTheDocument();
+      expect(screen.getByText('Rack A > Shelf 2 | Large | Radios')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+      expect(mockGenerateLabels.mock.calls[0]?.[5]).toEqual(['no_serial_number', 'storage_area', 'size', 'category']);
+    });
+
+    it('can leave the item name off, in the preview and the PDF', async () => {
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      const before = (await screen.findAllByText('Thermal Camera')).length;
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      await user.click(screen.getByRole('button', { name: 'Item name' }));
+
+      // The label preview drops its name line; anything else naming the item stays.
+      expect(screen.queryAllByText('Thermal Camera')).toHaveLength(before - 1);
+
+      expect(screen.getByRole('button', { name: 'Item name' })).toHaveAttribute('aria-pressed', 'false');
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+      expect(mockGenerateLabels.mock.calls[0]?.[5]).toEqual(['no_name']);
+      expect(screen.getByText('Asset: AT-77 | S/N: SN-123')).toBeInTheDocument();
+    });
+
+    it('remembers the choice here and on the position', async () => {
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findByText('Asset: AT-77 | S/N: SN-123');
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      await user.click(screen.getByRole('button', { name: 'Size' }));
+
+      expect(JSON.parse(localStorage.getItem('inventory:labelLines') ?? '[]')).toEqual(['size']);
+      await waitFor(
+        () =>
+          expect(mockSetLabelPreset).toHaveBeenCalledWith({
+            preset: 'dymo_30252',
+            symbology: 'code128',
+            extra_lines: ['size'],
+          }),
+        { timeout: 2000 }
+      );
+    });
+
+    it('takes the lines saved for the position, ignoring keys it does not know', async () => {
+      mockGetLabelPreset.mockResolvedValue({ preset: 'dymo_30252', extra_lines: ['size', 'no_asset_tag', 'bogus'] });
+      renderPage('?ids=it-1');
+
+      expect(await screen.findByText('Large')).toBeInTheDocument();
+      expect(screen.getByText('S/N: SN-123')).toBeInTheDocument();
+    });
+  });
+
+  describe('saved print setups', () => {
+    const stationRollo = {
+      id: 'setup-1',
+      name: 'Station Rollo',
+      preset: 'rollo_2x1',
+      custom_width: null,
+      custom_height: null,
+      symbology: 'qr',
+      extra_lines: ['size', 'bogus'],
+      copies: 2,
+      printer_id: null,
+    };
+
+    beforeEach(() => {
+      mockGetLabelPreset.mockReset();
+      mockGetLabelPreset.mockResolvedValue({ preset: null });
+      for (const m of [mockGetLabelSetups, mockSaveLabelSetup, mockDeleteLabelSetup]) m.mockReset();
+      mockGetLabelSetups.mockResolvedValue([]);
+      mockSaveLabelSetup.mockImplementation((body: { name: string }) =>
+        Promise.resolve([{ ...stationRollo, ...body, id: 'setup-1' }])
+      );
+      mockDeleteLabelSetup.mockResolvedValue([]);
+    });
+
+    it('saves the current settings for the department', async () => {
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      await user.click(screen.getByRole('button', { name: /Rollo \/ Thermal 2/ }));
+      await user.click(screen.getByRole('button', { name: /QR code/ }));
+      fireEvent.change(screen.getByLabelText(/Copies per item/), { target: { value: '2' } });
+      await user.click(screen.getByRole('button', { name: 'Save setup…' }));
+      await user.type(screen.getByLabelText(/Setup name/), 'Station Rollo');
+      await user.click(screen.getByRole('button', { name: 'Save setup' }));
+
+      await waitFor(() =>
+        expect(mockSaveLabelSetup).toHaveBeenCalledWith({
+          name: 'Station Rollo',
+          preset: 'rollo_2x1',
+          symbology: 'qr',
+          extra_lines: [],
+          copies: 2,
+        })
+      );
+      expect(await screen.findByRole('option', { name: 'Station Rollo' })).toBeInTheDocument();
+    });
+
+    it('applies a department setup, dropping line keys this page does not offer', async () => {
+      mockGetLabelSetups.mockResolvedValue([stationRollo]);
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findByRole('option', { name: 'Station Rollo' });
+
+      await user.selectOptions(screen.getByLabelText('Saved setup'), 'setup-1');
+
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+      const call = mockGenerateLabels.mock.calls[0];
+      expect(call?.[0]).toEqual(['it-1', 'it-1']);
+      expect(call?.[1]).toBe('rollo_2x1');
+      expect(call?.[5]).toEqual(['size']);
+      expect(call?.[6]).toEqual({ symbology: 'qr' });
+    });
+
+    it('selects the saved network printer when the organization still has it', async () => {
+      mockListPrinters.mockResolvedValue([
+        {
+          id: 'pr-1',
+          name: 'Front Desk',
+          language: 'zpl',
+          label_format: 'rollo_2x1',
+          is_default: true,
+          is_active: true,
+        },
+        {
+          id: 'pr-2',
+          name: 'Supply Room',
+          language: 'zpl',
+          label_format: 'rollo_2x1',
+          is_default: false,
+          is_active: true,
+        },
+      ]);
+      mockGetLabelSetups.mockResolvedValue([{ ...stationRollo, name: 'Supply', printer_id: 'pr-2' }]);
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findByRole('option', { name: 'Supply Room' });
+      await screen.findByRole('option', { name: 'Supply' });
+
+      await user.selectOptions(screen.getByLabelText('Saved setup'), 'setup-1');
+
+      expect(screen.getByLabelText('Label printer')).toHaveValue('pr-2');
+    });
+
+    it('deletes a setup for everyone', async () => {
+      mockGetLabelSetups.mockResolvedValue([stationRollo]);
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findByRole('option', { name: 'Station Rollo' });
+
+      await user.selectOptions(screen.getByLabelText('Saved setup'), 'setup-1');
+      await user.click(screen.getByRole('button', { name: 'Delete setup' }));
+
+      expect(mockDeleteLabelSetup).toHaveBeenCalledWith('setup-1');
+      await waitFor(() => expect(screen.queryByLabelText('Saved setup')).not.toBeInTheDocument());
+    });
+
+    it('keeps the page working when setups cannot be loaded', async () => {
+      mockGetLabelSetups.mockRejectedValue(new Error('offline'));
+      renderPage('?ids=it-1');
+
+      expect((await screen.findAllByText('Thermal Camera')).length).toBeGreaterThan(0);
+      expect(screen.getByRole('button', { name: 'Save setup…' })).toBeInTheDocument();
     });
   });
 

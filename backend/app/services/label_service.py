@@ -292,6 +292,10 @@ class _Unset:
 
 UNSET = _Unset()
 
+# Saved setups per organization and module; enough for every printer and
+# stock combination a department runs, small enough to scan in a picker.
+MAX_LABEL_SETUPS = 20
+
 
 class LabelService:
     """Position-scoped label presets and cross-module label generation."""
@@ -338,6 +342,8 @@ class LabelService:
             # Absent on presets saved before symbology was a choice, which must
             # read as Code 128 — the symbology every existing label carries.
             "symbology": pref.get("symbology") or SYMBOLOGY_CODE128,
+            # What prints on the label besides the code; null when never saved.
+            "extra_lines": pref.get("extra_lines"),
             "position_id": position_id,
             "module": module,
         }
@@ -352,6 +358,7 @@ class LabelService:
         custom_width: Optional[float] = None,
         custom_height: Optional[float] = None,
         symbology: str = SYMBOLOGY_CODE128,
+        extra_lines: Any = UNSET,
     ) -> Dict[str, Any]:
         """Store the label preset for the caller's position.
 
@@ -362,6 +369,8 @@ class LabelService:
         preset never sends one at all, and the print page sends none while its
         printer list is still in flight. Nobody had to touch a control; opening
         the page on a slow link was enough to lose the position's destination.
+        ``extra_lines`` follows the same contract, for the same reason: only
+        the inventory page sends it, and every other save must keep it.
         """
         from app.models.user import Position
 
@@ -390,12 +399,14 @@ class LabelService:
             presets = {}
         stored = presets.get(module)
         stored_printer = stored.get("printer_id") if isinstance(stored, dict) else None
+        stored_lines = stored.get("extra_lines") if isinstance(stored, dict) else None
         presets[module] = {
             "preset": preset,
             "printer_id": stored_printer if printer_id is UNSET else printer_id,
             "custom_width": custom_width,
             "custom_height": custom_height,
             "symbology": symbology,
+            "extra_lines": stored_lines if extra_lines is UNSET else extra_lines,
         }
         settings["label_presets"] = presets
         position.settings = settings
@@ -405,6 +416,112 @@ class LabelService:
             "position_id": position_id,
             "module": module,
         }
+
+    # ------------------------------------------------------------------
+    # Named setups, shared across the organization
+    # ------------------------------------------------------------------
+    #
+    # A setup names a whole print configuration ("Rollo 2x1, QR") so any
+    # member at any station can apply it in one step. They live on the
+    # organization, not a position: the preset above follows a role, while a
+    # setup describes a printer and its stock, which the whole department
+    # shares.
+
+    async def list_setups(self, organization_id, module: str) -> List[Dict[str, Any]]:
+        from app.models.user import Organization
+
+        org = await self.db.scalar(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        setups = ((org.settings or {}).get("label_setups") or {}) if org else {}
+        found = setups.get(module) if isinstance(setups, dict) else None
+        return (
+            [s for s in found if isinstance(s, dict)] if isinstance(found, list) else []
+        )
+
+    async def save_setup(
+        self, organization_id, module: str, setup: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Add a setup, or replace the one with the same name (any case).
+
+        The caller validates the fields; this enforces the cap and the name
+        rule. The organization row is locked for the read-modify-write, so
+        two members saving at once cannot drop each other's setup.
+        """
+        from app.core.utils import generate_uuid
+        from app.models.user import Organization
+
+        validate_symbology(setup["symbology"])
+        if not is_known_label_format(setup["preset"]):
+            raise ValueError(f"Unknown label preset: {setup['preset']}")
+
+        org = await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        if org is None:
+            raise ValueError("Organization not found")
+        settings = copy.deepcopy(org.settings or {})
+        by_module = settings.get("label_setups")
+        if not isinstance(by_module, dict):
+            by_module = {}
+        current = by_module.get(module)
+        setups = (
+            [s for s in current if isinstance(s, dict)]
+            if isinstance(current, list)
+            else []
+        )
+
+        key = setup["name"].strip().lower()
+        at = next(
+            (i for i, s in enumerate(setups) if str(s.get("name", "")).lower() == key),
+            None,
+        )
+        if at is None:
+            if len(setups) >= MAX_LABEL_SETUPS:
+                raise ValueError(
+                    f"An organization holds up to {MAX_LABEL_SETUPS} saved setups. "
+                    "Delete one first."
+                )
+            setups.append({**setup, "id": generate_uuid()})
+        else:
+            setups[at] = {**setup, "id": setups[at].get("id") or generate_uuid()}
+
+        by_module[module] = setups
+        settings["label_setups"] = by_module
+        org.settings = settings
+        await self.db.flush()
+        return setups
+
+    async def delete_setup(
+        self, organization_id, module: str, setup_id: str
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Remove one setup. None when the organization has no such setup."""
+        from app.models.user import Organization
+
+        org = await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        if org is None:
+            return None
+        settings = copy.deepcopy(org.settings or {})
+        by_module = settings.get("label_setups")
+        current = by_module.get(module) if isinstance(by_module, dict) else None
+        if not isinstance(current, list):
+            return None
+        remaining = [
+            s for s in current if isinstance(s, dict) and s.get("id") != setup_id
+        ]
+        if len(remaining) == len(current):
+            return None
+        by_module[module] = remaining
+        settings["label_setups"] = by_module
+        org.settings = settings
+        await self.db.flush()
+        return remaining
 
     # ------------------------------------------------------------------
     # Generation
@@ -422,6 +539,7 @@ class LabelService:
         extra_lines: Optional[List[str]] = None,
         exclude_ids: Optional[Set[str]] = None,
         symbology: str = SYMBOLOGY_CODE128,
+        start_position: int = 1,
     ) -> Tuple[BytesIO, int, int]:
         entry = MODULE_LABELS.get(module)
         if entry is None:
@@ -435,7 +553,13 @@ class LabelService:
             raise ValueError("No records found for label generation")
 
         pdf = render_labels(
-            specs, label_format, custom_width, custom_height, auto_rotate, symbology
+            specs,
+            label_format,
+            custom_width,
+            custom_height,
+            auto_rotate,
+            symbology,
+            start_position=start_position,
         )
         return pdf, auto_populated, len(specs)
 

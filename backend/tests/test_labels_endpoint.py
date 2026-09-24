@@ -147,6 +147,22 @@ class TestExtraLinesLengthBound:
     ``custom:`` entry carry an unbounded string, so a caller could join up
     to 20 huge values per label spec across up to 2000 ids."""
 
+    def test_generate_body_takes_a_sheet_start_position_within_the_sheet(self):
+        from pydantic import ValidationError
+
+        from app.api.v1.endpoints.labels import LabelGenerateBody
+
+        assert LabelGenerateBody(module="apparatus", ids=["a"]).start_position == 1
+        assert (
+            LabelGenerateBody(
+                module="apparatus", ids=["a"], start_position=30
+            ).start_position
+            == 30
+        )
+        for bad in (0, 31):
+            with pytest.raises(ValidationError):
+                LabelGenerateBody(module="apparatus", ids=["a"], start_position=bad)
+
     def test_generate_body_rejects_an_overlong_custom_line(self):
         from pydantic import ValidationError
 

@@ -713,6 +713,9 @@ class InventoryItemResponse(InventoryItemBase):
     # means it needs one — including after its barcode value changed.
     label_printed_at: Optional[datetime] = None
     label_printed_by: Optional[UUID] = None
+    # Who confirmed that label, by name. Set only by the detail endpoint and
+    # only for callers who manage inventory, like assigned_to_name.
+    label_printed_by_name: Optional[str] = None
 
     # Ready units across the item's in-date stock lots, and whether it is
     # stocked that way at all. Lots and `quantity` are separate ledgers, so a
@@ -2605,6 +2608,41 @@ class LabelPresetUpdate(BaseModel):
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
     symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
+    # What prints besides the code. Omitted leaves the saved choice alone;
+    # null clears it. Bounded like the shared label print request.
+    extra_lines: Optional[List[Annotated[str, StringConstraints(max_length=100)]]] = (
+        Field(None, max_length=20)
+    )
+
+
+class LabelSetupSave(BaseModel):
+    """A named print setup to save for the whole organization.
+
+    Saving under a name that already exists (in any case) replaces that setup.
+    """
+
+    name: str = Field(min_length=1, max_length=40)
+    preset: str = Field(min_length=1, max_length=50)
+    custom_width: Optional[float] = Field(None, ge=0.5, le=8)
+    custom_height: Optional[float] = Field(None, ge=0.5, le=11)
+    symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
+    extra_lines: List[Annotated[str, StringConstraints(max_length=100)]] = Field(
+        default_factory=list, max_length=20
+    )
+    copies: int = Field(1, ge=1, le=50)
+    printer_id: Optional[str] = Field(None, min_length=1, max_length=36)
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("A setup needs a name")
+        return value
+
+
+class LabelSetupResponse(LabelSetupSave):
+    id: str
 
 
 # ============================================

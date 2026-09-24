@@ -4,6 +4,7 @@
 
 import api from './apiClient';
 import type { Symbology } from './labelService';
+import type { LabelSetup, LabelSetupSave } from '../modules/inventory/utils/labelSetups';
 import type {
   ItemPin,
   UserCheckoutItem,
@@ -729,6 +730,23 @@ export const inventoryService = {
     return { blob: response.data, autoPopulated: isNaN(autoPopulated) ? 0 : autoPopulated };
   },
 
+  /** The organization's saved label print setups. */
+  async getLabelSetups(): Promise<LabelSetup[]> {
+    const response = await api.get<LabelSetup[]>('/inventory/label-setups');
+    return response.data;
+  },
+
+  /** Save a setup for the whole organization, replacing one of the same name. */
+  async saveLabelSetup(setup: LabelSetupSave): Promise<LabelSetup[]> {
+    const response = await api.post<LabelSetup[]>('/inventory/label-setups', setup);
+    return response.data;
+  },
+
+  async deleteLabelSetup(setupId: string): Promise<LabelSetup[]> {
+    const response = await api.delete<LabelSetup[]>(`/inventory/label-setups/${setupId}`);
+    return response.data;
+  },
+
   /** File scanned items under a storage area (shelf put-away). At most 500 per call. */
   async putAwayItems(areaId: string, itemIds: string[]): Promise<PutAwayResult> {
     const response = await api.post<PutAwayResult>(`/inventory/storage-areas/${areaId}/put-away`, {
@@ -750,6 +768,7 @@ export const inventoryService = {
     custom_width?: number | null;
     custom_height?: number | null;
     symbology?: Symbology | null;
+    extra_lines?: string[] | null;
     position_id?: string | null;
   }> {
     const response = await api.get<{
@@ -757,6 +776,7 @@ export const inventoryService = {
       custom_width?: number | null;
       custom_height?: number | null;
       symbology?: Symbology | null;
+      extra_lines?: string[] | null;
       position_id?: string | null;
     }>('/inventory/label-preset');
     return response.data;
@@ -767,6 +787,8 @@ export const inventoryService = {
     custom_width?: number;
     custom_height?: number;
     symbology?: Symbology;
+    // Omitted leaves the position's saved lines alone.
+    extra_lines?: string[];
   }): Promise<{ preset: string | null; position_id?: string | null }> {
     const response = await api.put<{ preset: string | null; position_id?: string | null }>(
       '/inventory/label-preset',
