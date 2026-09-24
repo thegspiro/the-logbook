@@ -261,6 +261,64 @@ prompt_https_origin() {
     done
 }
 
+# Mirrors the backend's startup check (_is_loopback_url in
+# backend/app/core/config.py): a host only this machine can reach, or none at
+# all. Kept in sync by hand because this script runs before the backend image
+# exists.
+frontend_url_is_loopback() {
+    local host="${1#*://}"
+    host="${host%%/*}"
+    host="${host##*@}"
+    case "$host" in
+        \[*\]*) host="${host%%]*}]" ;;
+        *) host="${host%%:*}" ;;
+    esac
+    host=$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')
+    case "$host" in
+        ""|localhost|*.localhost|127.*|0.0.0.0|"[::1]"|"[::]") return 0 ;;
+    esac
+    return 1
+}
+
+# Every link the app emails is built from FRONTEND_URL, so it must name the
+# address members use. Written only when absent or still pointing at this
+# machine (and, when replace_http is "yes", when it is plain http:// during an
+# HTTPS migration) — an operator's own public value is never rewritten. The
+# line is replaced by filtering rather than with sed, whose replacement text
+# would misread a "|" or "&" in the URL.
+ensure_frontend_url() {
+    local origin="$1" replace_http="${2:-no}" current tmp
+    # ALLOWED_ORIGINS may be missing, or in the older JSON-array form, on a
+    # preserved .env; writing either would replace localhost with garbage.
+    case "$origin" in
+        http://?*|https://?*) ;;
+        *)
+            print_warning "Could not derive FRONTEND_URL from ALLOWED_ORIGINS — set it in .env"
+            print_warning "to the address members use, or links in outgoing email will not open."
+            return 0
+            ;;
+    esac
+    case "$origin" in
+        *[[:space:]\"\'\$\`\\#,]*)
+            print_warning "Could not derive FRONTEND_URL from ALLOWED_ORIGINS — set it in .env."
+            return 0
+            ;;
+    esac
+    current=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$ENV_FILE" | tail -n 1)
+    if [ -n "$current" ] && ! frontend_url_is_loopback "$current"; then
+        case "$current" in
+            http://*) [ "$replace_http" = "yes" ] || return 0 ;;
+            *) return 0 ;;
+        esac
+    fi
+    tmp=$(mktemp)
+    grep -vE '^[[:space:]]*FRONTEND_URL=' "$ENV_FILE" > "$tmp" || true
+    printf 'FRONTEND_URL=%s\n' "$origin" >> "$tmp"
+    cat "$tmp" > "$ENV_FILE"
+    rm -f "$tmp"
+    print_success "Set FRONTEND_URL=${origin} (links in outgoing email)"
+}
+
 # The update path (option 2) keeps the existing .env — but the installs that
 # most need the HTTPS migration are exactly the pre-existing plain-HTTP
 # configs, so validate rather than silently keeping a plaintext posture the
@@ -279,6 +337,7 @@ validate_existing_env() {
 
     if [ "$insecure" -eq 0 ]; then
         print_success "Existing .env uses an HTTPS origin — keeping configuration"
+        ensure_frontend_url "${origins%%,*}"
         return
     fi
 
@@ -290,6 +349,7 @@ validate_existing_env() {
         print_warning "ALLOW_INSECURE_HTTP=yes acknowledged — KEEPING the plaintext"
         print_warning "configuration. Front the app with an HTTPS reverse proxy as soon"
         print_warning "as possible."
+        ensure_frontend_url "${origins%%,*}"
         return
     fi
 
@@ -305,6 +365,7 @@ validate_existing_env() {
     fi
     # Drop any explicit Secure-cookie opt-out so auth cookies are Secure again.
     sed -i -E '/^[[:space:]]*COOKIE_SECURE=/d' "$ENV_FILE"
+    ensure_frontend_url "$HTTPS_ORIGIN" yes
     print_success "Migrated .env to HTTPS origin: ${HTTPS_ORIGIN}"
     print_info "Other settings (secrets, passwords, ports) were left untouched."
 }
@@ -355,6 +416,9 @@ DB_USER=logbook_user
 
 # Network Configuration
 ALLOWED_ORIGINS=${HTTPS_ORIGIN}
+# Every link in outgoing email (password resets, ballots, reminders) is built
+# from this, so it is the same public HTTPS origin members use.
+FRONTEND_URL=${HTTPS_ORIGIN}
 
 # Application Settings
 APP_NAME=The Logbook

@@ -110,9 +110,11 @@ security gate and marks auth cookies `Secure`:
 - **Leave `TRUSTED_PROXY_IPS` empty** unless you add a reverse proxy — the
   compose publishes the backend port directly, so the connecting peer is the
   real client.
-- **Set `FRONTEND_URL`** to the same `https://` origin as `ALLOWED_ORIGINS`.
-  Every link in outgoing email is built from it, the setup script does not
-  write it, and a `localhost` value logs a startup warning in production.
+- **`FRONTEND_URL`** must be the same `https://` origin as `ALLOWED_ORIGINS`.
+  Every link in outgoing email is built from it. The setup script writes it
+  from the HTTPS URL you give it (and fills it in on an update when it is
+  missing or still `localhost`); a `localhost` value logs a startup warning in
+  production.
 
 Reverse-proxy configuration examples are in the
 [full guide](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/unraid.md#https-with-reverse-proxy).
