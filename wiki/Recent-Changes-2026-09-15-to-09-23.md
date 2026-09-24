@@ -89,9 +89,24 @@ access to the server's own logs lining up times — is recorded in the repositor
 ## Added September 24, after the window
 
 These changes landed a day after the window closed, in
+[#2653](https://github.com/thegspiro/the-logbook/pull/2653) and
 [#2667](https://github.com/thegspiro/the-logbook/pull/2667).
 
-**Members and event organizers: the event page's Event Information card.**
+**Membership coordinators: one bulk-action bar in Table view** (#2653).
+
+- **Selecting applicants in Table view used to show two bars stacked**, both
+  reading "N selected". The page's bar offered Print Badges, Advance All and
+  Reject All; the table's own offered Advance, Hold and Reject.
+- **Now there is one bar**, the same in Kanban and Table: **Print Badges**,
+  **Advance All**, **Hold All** and **Reject All** (with an optional reason).
+  Nothing was lost: Hold moved onto this bar.
+- **Hold All now names anyone it skipped**, like the other bulk actions. The
+  old Hold sent one request per applicant and could only report how many
+  failed.
+- The header checkbox shows a **minus** when only some rows are selected, where
+  it used to look the same as all selected.
+
+**Members and event organizers: the event page's Event Information card** (#2667).
 
 - **Capacity shows on any event with a cap.** It used to show only on events
   that require an RSVP. A capped event puts people on a waitlist either way, so
@@ -102,8 +117,8 @@ These changes landed a day after the window closed, in
 - **Managers see capacity once.** It stays in the Statistics card and is no
   longer repeated in Event Information.
 
-**Nothing to do on upgrade.** The fix is on the web page only: no migration and
-no setting.
+**Nothing to do on upgrade** for either fix. Both are on the web page only: no
+migration and no setting.
 
 **If you maintain the training screenshots:**
 
