@@ -765,6 +765,20 @@ Labels include the barcode (Code 128 with the required quiet-zone margins, or a 
 
 ![Label print settings with the size presets and content options](./images/05-51-label-print-settings.png)
 
+### Putting items away by scanning
+
+**Required Permission:** `inventory.manage`
+
+On **Storage Areas**, **Put away** files a batch of items onto one shelf:
+
+1. Scan the shelf's label (or open the shelf first, and it is already chosen).
+2. Scan each item going onto it. Each one is looked up and added to the list; an unknown code or a repeat is refused with a reason.
+3. Click **File N items on …**. Items assigned or checked out to a member, or recorded as lost, stolen or retired, are left where they are and listed with the reason.
+
+The shelf cannot be changed while items are waiting to be filed — file or clear them first, so it is never unclear which shelf they were scanned for.
+
+If the shelf was picked on screen rather than scanned, the result offers **Print shelf label**, so the next put-away can start with a scan. A shelf with no barcode yet is given one when its label prints.
+
 ### Connecting a Sticker / Label Printer
 
 Both paths produce **actual-size** barcodes — the key to making them scannable is to avoid any scaling:
