@@ -530,6 +530,8 @@ class TestColumnConstraints:
             # department_message_deliveries records when the send was claimed;
             # the row is the attempt, so "attempted_at" is its creation stamp.
             "attempted_at",
+            # inventory_nfc_audits: the row is the audit, written when it ran.
+            "audited_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():

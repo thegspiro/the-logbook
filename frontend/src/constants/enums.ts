@@ -32,12 +32,24 @@ export const InventoryNfcTagStatus = {
 } as const;
 export type InventoryNfcTagStatus = (typeof InventoryNfcTagStatus)[keyof typeof InventoryNfcTagStatus];
 
-/** What a logged NFC tap did: identified an item, or moved it onto a shelf. */
+/**
+ * What a logged NFC tap did: identified an item, moved it onto a shelf, or
+ * found it during a shelf audit.
+ */
 export const InventoryNfcScanAction = {
   LOOKUP: 'lookup',
   PUT_AWAY: 'put_away',
+  AUDIT: 'audit',
 } as const;
 export type InventoryNfcScanAction = (typeof InventoryNfcScanAction)[keyof typeof InventoryNfcScanAction];
+
+/** What a shelf audit found for one item. Missing items are only ever listed. */
+export const InventoryNfcAuditResult = {
+  FOUND: 'found',
+  MISSING: 'missing',
+  UNEXPECTED: 'unexpected',
+} as const;
+export type InventoryNfcAuditResult = (typeof InventoryNfcAuditResult)[keyof typeof InventoryNfcAuditResult];
 
 // ============================================
 // NFC ID Cards (member credentials)

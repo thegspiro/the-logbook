@@ -235,6 +235,8 @@ wildcard, exactly as `view_medical` / `manage_medical` already were.
 | `inventory_vendor_contacts` | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag _(2026-08-16)_                                                                                                          |
 | `inventory_nfc_tags`        | NFC tags on items or storage areas: hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization _(2026-09-24)_                                                                               |
 | `inventory_nfc_scans`       | Staff NFC taps on items (lookups and put-aways): who, when, which tag, to and from which storage area _(2026-09-24)_                                                                                                                  |
+| `inventory_nfc_audits`      | Shelf audits: the storage area (name snapshotted), who ran it, expected / found / missing / unexpected counts, who confirmed moving items _(2026-09-24)_                                                                              |
+| `inventory_nfc_audit_items` | One line per item a shelf audit judged: found, missing or unexpected, where it was recorded, whether it was moved _(2026-09-24)_                                                                                                      |
 
 ### Workflow Tables
 
@@ -353,7 +355,9 @@ Off until an administrator turns it on at **Inventory → Administration → NFC
 Tags** (`/inventory/admin/nfc`, which needs `settings.manage` or
 `organization.update_settings`). The switch is stored as
 `inventory.nfc_tracking_enabled` in the organization settings. While it is off,
-every endpoint below except `GET /nfc/settings` answers 403.
+every endpoint below except `GET /nfc/settings` answers 403. The not-seen
+report is the exception: it lives outside the NFC router and works with the
+switch off.
 
 ```
 GET    /api/v1/inventory/nfc/settings                    # Is it on? (inventory.view)
@@ -367,6 +371,14 @@ POST   /api/v1/inventory/nfc/put-away                    # Move an item onto a s
 GET    /api/v1/inventory/items/{id}/nfc-scans            # Tap log, newest first (inventory.manage)
 GET    /api/v1/inventory/storage-areas/{id}/nfc-tags     # Tags on a storage area (inventory.manage)
 POST   /api/v1/inventory/storage-areas/{id}/nfc-tags     # Link a tag to a storage area (inventory.manage)
+POST   /api/v1/inventory/nfc/audits                      # Save a shelf audit: shelf + items tapped, <= 500 (inventory.manage)
+GET    /api/v1/inventory/nfc/audits                      # Audits, newest first; ?storage_area_id= (inventory.manage)
+GET    /api/v1/inventory/nfc/audits/{id}                 # One audit with its lines (inventory.manage)
+POST   /api/v1/inventory/nfc/audits/{id}/apply           # Move chosen unexpected items onto the shelf (inventory.manage)
+POST   /api/v1/inventory/nfc/resolve-member              # Tapped member ID card -> member; needs NFC ID Cards too (inventory.manage)
+GET    /api/v1/inventory/nfc/untagged                    # Active items with no working tag; ?search=&category_id= (inventory.manage)
+GET    /api/v1/inventory/not-seen                        # Items not seen in ?days= (default 180) (inventory.manage; not NFC-gated)
+GET    /api/v1/inventory/not-seen/export                 # The same as CSV, up to 5,000 rows (inventory.manage; not NFC-gated)
 ```
 
 - **Two ways to link a tag.** _Write a link_: the phone writes
@@ -399,6 +411,28 @@ POST   /api/v1/inventory/storage-areas/{id}/nfc-tags     # Link a tag to a stora
   put-away with where the item came from. A member opening a written tag from
   their own phone is not recorded. The item page shows the most recent taps as
   **Last Seen (NFC)**.
+- **Shelf audits** (`/inventory/shelf-audit`). The expected set is the active
+  items recorded on exactly that storage area (not its children) whose status
+  does not already place them elsewhere (assigned, checked out, lost, stolen,
+  retired). Saving an audit moves nothing. **Missing** items are only listed;
+  an audit never marks an item lost. **Unexpected** items move onto the shelf
+  only when ticked and confirmed (`/apply`), through `put_away_items`, so an
+  assigned item is skipped with the reason. Every tapped item is logged in the
+  tap log as `audit`, on the audited shelf.
+- **Member ID card lookup.** With the NFC ID Cards integration connected, the
+  member scanner on the inventory screens (distribute, return, member lookup)
+  shows **Or tap their ID card**. The card resolves through the same hash and
+  rules as the check-in station: a lost card or an inactive member is refused
+  with the reason. Card taps are not written to the equipment tap log.
+- **Bulk enrollment** (`/inventory/admin/nfc/enroll`) lists active items with
+  no working tag (an item whose only tag is lost counts as untagged) and links
+  one after another, by written link or by serial.
+- **Not seen** (`/inventory/admin/not-seen`). An item's last-seen time is the
+  latest of a staff tap (any action), an assignment or its return, a checkout
+  or check-in, and a pool issuance or its return. Editing the item record does
+  not count. A barcode put-away does not count either: it is recorded only as
+  an audit-log event, with no per-item row to read. Retired items are left out;
+  lost and stolen items are listed, since not seeing them is the point.
 
 ### Label Generation
 

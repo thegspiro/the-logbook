@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**274 tables · 4580 columns · 890 foreign keys**
+**276 tables · 4602 columns · 898 foreign keys**
 
 ---
 
@@ -319,6 +319,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_item_pins`](#inventory_item_pins) | `InventoryItemPin` | 7 | A member's own shortlist of items, hoisted to the top of the items list. |
 | [`inventory_items`](#inventory_items) | `InventoryItem` | 54 | Inventory Item model |
 | [`inventory_lots`](#inventory_lots) | `InventoryLot` | 13 | A batch/lot of a consumable inventory item held as ready stock. |
+| [`inventory_nfc_audit_items`](#inventory_nfc_audit_items) | `InventoryNfcAuditItem` | 10 | One item's line in a shelf audit. |
+| [`inventory_nfc_audits`](#inventory_nfc_audits) | `InventoryNfcAudit` | 12 | One shelf audit: the items tapped on a storage area, compared with the |
 | [`inventory_nfc_scans`](#inventory_nfc_scans) | `InventoryNfcScan` | 9 | One staff tap of an NFC tag on an item — the "last seen" trail. |
 | [`inventory_nfc_tags`](#inventory_nfc_tags) | `InventoryNfcTag` | 13 | An NFC tag physically attached to an inventory item or a storage area. |
 | [`inventory_notification_queue`](#inventory_notification_queue) | `InventoryNotificationQueue` | 15 | Queues inventory change events for delayed, consolidated email |
@@ -4914,6 +4916,55 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_inventory_lots_org_exp` (`organization_id`, `expiration_date`)
 - `ix_inventory_lots_inventory_item_id` (`inventory_item_id`)
 
+### `inventory_nfc_audit_items`
+
+**InventoryNfcAuditItem** · `app/models/inventory.py`
+
+> One item's line in a shelf audit.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `audit_id` | VARCHAR(36) | no | FK, IDX |  | → `inventory_nfc_audits.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `item_id` | VARCHAR(36) | yes | FK |  | → `inventory_items.id` ON DELETE SET NULL |
+| `item_name` | VARCHAR(255) | no |  |  |  |
+| `result` | ENUM(`found`, `missing`, `unexpected`) | no |  |  |  |
+| `recorded_storage_area_id` | VARCHAR(36) | yes | FK |  | → `storage_areas.id` ON DELETE SET NULL |
+| `recorded_storage_area_name` | VARCHAR(255) | yes |  |  |  |
+| `moved` | BOOL | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `idx_inventory_nfc_audit_item_org_item` (`organization_id`, `item_id`)
+- `ix_inventory_nfc_audit_items_audit_id` (`audit_id`)
+
+### `inventory_nfc_audits`
+
+**InventoryNfcAudit** · `app/models/inventory.py`
+
+> One shelf audit: the items tapped on a storage area, compared with the items the system says are there. Stored so a quartermaster can see when a shelf was last checked and what was off. Names are snapshotted because an audit is a record of a moment: the shelf or an item may be renamed or deleted later, and the audit must still say what it said.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `storage_area_id` | VARCHAR(36) | yes | FK |  | → `storage_areas.id` ON DELETE SET NULL |
+| `storage_area_name` | VARCHAR(255) | no |  |  |  |
+| `expected_count` | INTEGER | no |  | `0` |  |
+| `found_count` | INTEGER | no |  | `0` |  |
+| `missing_count` | INTEGER | no |  | `0` |  |
+| `unexpected_count` | INTEGER | no |  | `0` |  |
+| `audited_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `audited_at` | DATETIME | no |  | `now()` |  |
+| `applied_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `applied_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `idx_inventory_nfc_audit_org_area_time` (`organization_id`, `storage_area_id`, `audited_at`)
+
 ### `inventory_nfc_scans`
 
 **InventoryNfcScan** · `app/models/inventory.py`
@@ -4926,7 +4977,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `item_id` | VARCHAR(36) | no | FK |  | → `inventory_items.id` ON DELETE CASCADE |
 | `tag_id` | VARCHAR(36) | yes | FK |  | → `inventory_nfc_tags.id` ON DELETE SET NULL |
-| `action` | ENUM(`lookup`, `put_away`) | no |  |  |  |
+| `action` | ENUM(`lookup`, `put_away`, `audit`) | no |  |  |  |
 | `storage_area_id` | VARCHAR(36) | yes | FK |  | → `storage_areas.id` ON DELETE SET NULL |
 | `from_storage_area_id` | VARCHAR(36) | yes | FK |  | → `storage_areas.id` ON DELETE SET NULL |
 | `scanned_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -9616,7 +9667,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (330 references)
+### → `users` (332 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9769,6 +9820,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_items` | `created_by` | NO ACTION | yes |
 | `inventory_items` | `label_printed_by` | SET NULL | yes |
 | `inventory_lots` | `created_by` | SET NULL | yes |
+| `inventory_nfc_audits` | `applied_by` | SET NULL | yes |
+| `inventory_nfc_audits` | `audited_by` | SET NULL | yes |
 | `inventory_nfc_scans` | `scanned_by` | SET NULL | yes |
 | `inventory_nfc_tags` | `linked_by` | SET NULL | yes |
 | `inventory_notification_queue` | `performed_by` | NO ACTION | yes |
@@ -9951,7 +10004,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (220 references)
+### → `organizations` (222 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10058,6 +10111,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_item_pins` | `organization_id` | CASCADE | no |
 | `inventory_items` | `organization_id` | CASCADE | no |
 | `inventory_lots` | `organization_id` | CASCADE | no |
+| `inventory_nfc_audit_items` | `organization_id` | CASCADE | no |
+| `inventory_nfc_audits` | `organization_id` | CASCADE | no |
 | `inventory_nfc_scans` | `organization_id` | CASCADE | no |
 | `inventory_nfc_tags` | `organization_id` | CASCADE | no |
 | `inventory_notification_queue` | `organization_id` | CASCADE | no |
@@ -10176,7 +10231,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `organization_id` | CASCADE | no |
 | `xapi_statements` | `organization_id` | CASCADE | no |
 
-### → `inventory_items` (19 references)
+### → `inventory_items` (20 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10187,6 +10242,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_requests` | `item_id` | SET NULL | yes |
 | `inventory_item_pins` | `item_id` | CASCADE | no |
 | `inventory_lots` | `inventory_item_id` | CASCADE | no |
+| `inventory_nfc_audit_items` | `item_id` | SET NULL | yes |
 | `inventory_nfc_scans` | `item_id` | CASCADE | no |
 | `inventory_nfc_tags` | `item_id` | CASCADE | yes |
 | `inventory_notification_queue` | `item_id` | SET NULL | yes |
@@ -10375,6 +10431,18 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_variant_groups` | `category_id` | SET NULL | yes |
 | `reorder_requests` | `category_id` | SET NULL | yes |
 
+### → `storage_areas` (7 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `inventory_items` | `storage_area_id` | SET NULL | yes |
+| `inventory_nfc_audit_items` | `recorded_storage_area_id` | SET NULL | yes |
+| `inventory_nfc_audits` | `storage_area_id` | SET NULL | yes |
+| `inventory_nfc_scans` | `from_storage_area_id` | SET NULL | yes |
+| `inventory_nfc_scans` | `storage_area_id` | SET NULL | yes |
+| `inventory_nfc_tags` | `storage_area_id` | CASCADE | yes |
+| `storage_areas` | `parent_id` | CASCADE | yes |
+
 ### → `training_records` (7 references)
 
 | From table | Column | On delete | Nullable |
@@ -10460,16 +10528,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_interviews` | `step_id` | SET NULL | yes |
 | `prospect_step_progress` | `step_id` | CASCADE | no |
 | `prospective_members` | `current_step_id` | SET NULL | yes |
-
-### → `storage_areas` (5 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `inventory_items` | `storage_area_id` | SET NULL | yes |
-| `inventory_nfc_scans` | `from_storage_area_id` | SET NULL | yes |
-| `inventory_nfc_scans` | `storage_area_id` | SET NULL | yes |
-| `inventory_nfc_tags` | `storage_area_id` | CASCADE | yes |
-| `storage_areas` | `parent_id` | CASCADE | yes |
 
 ### → `training_sessions` (5 references)
 
@@ -10904,6 +10962,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `grant_applications` | `opportunity_id` | SET NULL | yes |
+
+### → `inventory_nfc_audits` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `inventory_nfc_audit_items` | `audit_id` | CASCADE | no |
 
 ### → `inventory_nfc_tags` (1 references)
 

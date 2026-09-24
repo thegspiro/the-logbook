@@ -9,6 +9,8 @@
  * Supported inputs:
  *   - QR code  — JSON payload `{ type: "member_id", id, membership_number?, org? }`
  *   - Code128 barcode — plain membership number string
+ *   - An NFC ID card tapped on the phone (`MemberCardTap`), where the
+ *     department has the cards and inventory NFC switched on
  *
  * Uses the `html5-qrcode` library for broad device/browser support
  * including iOS Safari.
@@ -24,6 +26,7 @@ import { ScanSuccessFlash } from './ux/ScanSuccessFlash';
 import { isMemberIdPayload } from '../types/scanner';
 import { describeCameraError, QR_SCAN_CONFIG } from '../constants/camera';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
+import { MemberCardTap } from './MemberCardTap';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -249,6 +252,13 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({ isOp
               </div>
             )}
           </div>
+
+          <MemberCardTap
+            onMemberIdentified={(member) => {
+              void stopScanner();
+              onMemberIdentified(member);
+            }}
+          />
 
           {/* Looking up */}
           {lookingUp && (

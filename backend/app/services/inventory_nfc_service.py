@@ -11,19 +11,24 @@ and one definition of "the same tag" is what guarantees that.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from datetime import datetime, timezone
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.inventory import (
     InventoryItem,
+    InventoryNfcAudit,
+    InventoryNfcAuditItem,
+    InventoryNfcAuditResult,
     InventoryNfcScan,
     InventoryNfcScanAction,
     InventoryNfcTag,
     InventoryNfcTagStatus,
+    ItemStatus,
     StorageArea,
 )
 from app.models.nfc_tag import NfcCredentialType
@@ -31,8 +36,25 @@ from app.models.user import User
 from app.services.inventory_service import InventoryService
 from app.services.nfc_tag_service import hash_tag_uid, uid_preview
 from app.utils.model_updates import apply_updates
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 _MAX_SCANS_LISTED = 100
+_MAX_AUDITS_LISTED = 100
+_MAX_UNTAGGED_LISTED = 200
+
+# Statuses that mean an item is, by the record, not on its shelf: somebody has
+# it, or nobody knows where it is. An audit does not expect to find these, so
+# they are never reported missing — and tapping one on a shelf is reported as
+# unexpected, which is exactly the discrepancy worth seeing.
+_NOT_ON_SHELF = frozenset(
+    {
+        ItemStatus.ASSIGNED,
+        ItemStatus.CHECKED_OUT,
+        ItemStatus.LOST,
+        ItemStatus.STOLEN,
+        ItemStatus.RETIRED,
+    }
+)
 
 
 class InventoryNfcTagNotFound(Exception):
@@ -382,6 +404,319 @@ class InventoryNfcService:
         ]
 
     # =========================================================================
+    # Shelf audits
+    # =========================================================================
+
+    async def create_audit(
+        self,
+        *,
+        organization_id: str,
+        storage_area_id: str,
+        tapped: Iterable[Tuple[str, Optional[str]]],
+        audited_by: Optional[str],
+    ) -> Dict[str, Any]:
+        """Compare the items tapped on a shelf with the items recorded there.
+
+        ``tapped`` is ``(item_id, tag_id)`` pairs, the tag being the one that
+        was read (optional, kept in the tap log only if it is on that item).
+
+        The audit only *reports*. Nothing moves until a quartermaster confirms
+        it through :meth:`apply_audit`, and a missing item is never marked lost:
+        "not tapped this afternoon" is not evidence that it is gone.
+
+        Expected items are the active items recorded on exactly this storage
+        area — not its children, which get audits of their own — minus those
+        whose status already says they are elsewhere.
+
+        Raises ``LookupError`` for an area outside the organization and
+        ``ValueError`` for an inactive one.
+        """
+        org_id = str(organization_id)
+        area = await self._get_storage_area(storage_area_id, org_id)
+        if not area.is_active:
+            raise ValueError("This storage area is no longer active.")
+
+        # Last pair wins for a repeated item; the order is otherwise irrelevant.
+        tag_for: Dict[str, Optional[str]] = {}
+        for item_id, tag_id in tapped:
+            tag_for[str(item_id)] = str(tag_id) if tag_id else None
+
+        tapped_items: Dict[str, InventoryItem] = {}
+        if tag_for:
+            result = await self.db.execute(
+                select(InventoryItem).where(
+                    InventoryItem.id.in_(list(tag_for)),
+                    InventoryItem.organization_id == org_id,
+                )
+            )
+            # Ids from another organization, or deleted since the tap, are
+            # dropped (Pitfall #14c) rather than failing a whole shelf's work.
+            tapped_items = {i.id: i for i in result.scalars().all()}
+
+        result = await self.db.execute(
+            select(InventoryItem).where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.storage_area_id == area.id,
+                InventoryItem.active.is_(True),
+                InventoryItem.status.notin_(list(_NOT_ON_SHELF)),
+            )
+        )
+        expected = {i.id: i for i in result.scalars().all()}
+
+        recorded_area_ids = {
+            i.storage_area_id
+            for i in tapped_items.values()
+            if i.id not in expected and i.storage_area_id
+        }
+        area_names = await self._area_name_map(org_id, recorded_area_ids)
+
+        audit = InventoryNfcAudit(
+            organization_id=org_id,
+            storage_area_id=area.id,
+            storage_area_name=area.name,
+            audited_by=str(audited_by) if audited_by else None,
+        )
+        lines: List[InventoryNfcAuditItem] = []
+        for item in expected.values():
+            lines.append(
+                InventoryNfcAuditItem(
+                    organization_id=org_id,
+                    item_id=item.id,
+                    item_name=item.name,
+                    result=(
+                        InventoryNfcAuditResult.FOUND
+                        if item.id in tapped_items
+                        else InventoryNfcAuditResult.MISSING
+                    ),
+                    recorded_storage_area_id=area.id,
+                    recorded_storage_area_name=area.name,
+                )
+            )
+        for item in tapped_items.values():
+            if item.id in expected:
+                continue
+            lines.append(
+                InventoryNfcAuditItem(
+                    organization_id=org_id,
+                    item_id=item.id,
+                    item_name=item.name,
+                    result=InventoryNfcAuditResult.UNEXPECTED,
+                    recorded_storage_area_id=item.storage_area_id,
+                    recorded_storage_area_name=area_names.get(item.storage_area_id),
+                )
+            )
+        audit.items = lines
+        audit.expected_count = len(expected)
+        audit.found_count = sum(
+            1 for ln in lines if ln.result == InventoryNfcAuditResult.FOUND
+        )
+        audit.missing_count = sum(
+            1 for ln in lines if ln.result == InventoryNfcAuditResult.MISSING
+        )
+        audit.unexpected_count = sum(
+            1 for ln in lines if ln.result == InventoryNfcAuditResult.UNEXPECTED
+        )
+        self.db.add(audit)
+
+        # Every tapped item was seen on this shelf, whatever the record said.
+        for item in tapped_items.values():
+            self.db.add(
+                InventoryNfcScan(
+                    organization_id=org_id,
+                    item_id=item.id,
+                    tag_id=await self._tag_on_item(
+                        tag_for.get(item.id), item.id, org_id
+                    ),
+                    action=InventoryNfcScanAction.AUDIT,
+                    storage_area_id=area.id,
+                    scanned_by=str(audited_by) if audited_by else None,
+                )
+            )
+        await self.db.flush()
+        return await self.get_audit(audit.id, org_id)
+
+    async def apply_audit(
+        self,
+        *,
+        audit_id: str,
+        organization_id: str,
+        item_ids: Sequence[str],
+        applied_by: Optional[str],
+    ) -> Dict[str, Any]:
+        """Move the chosen unexpected items onto the audited shelf.
+
+        The move is ``InventoryService.put_away_items``, the same rule the
+        barcode and tap put-aways use (Pitfall #29): an item assigned to a
+        member or checked out is skipped with the reason rather than silently
+        pulled back onto a shelf.
+
+        Returns the refreshed audit plus ``skipped`` (``item_id``, ``name``,
+        ``reason``). Raises ``LookupError`` for an audit outside the
+        organization and ``ValueError`` for an id that is not an unmoved,
+        unexpected line of this audit, or when the shelf no longer exists.
+        """
+        org_id = str(organization_id)
+        audit = await self._get_audit(audit_id, org_id)
+        if audit.storage_area_id is None:
+            raise ValueError("The audited storage area no longer exists.")
+
+        requested = list(dict.fromkeys(str(i) for i in item_ids))
+        if not requested:
+            raise ValueError("Choose at least one item to move.")
+        movable = {
+            ln.item_id: ln
+            for ln in audit.items
+            if ln.result == InventoryNfcAuditResult.UNEXPECTED
+            and ln.item_id is not None
+            and not ln.moved
+        }
+        invalid = [i for i in requested if i not in movable]
+        if invalid:
+            raise ValueError(
+                "Only items this audit found unexpectedly, and has not already "
+                "moved, can be moved onto the shelf."
+            )
+
+        area_id = audit.storage_area_id
+        result = await InventoryService(self.db).put_away_items(
+            area_id=area_id, item_ids=requested, organization_id=org_id
+        )
+        if result is None:
+            raise ValueError("The audited storage area no longer exists.")
+
+        placed = set(result["moved"]) | set(result["already_here"])
+        for item_id in placed:
+            movable[item_id].moved = True
+        if placed:
+            audit.applied_by = str(applied_by) if applied_by else None
+            audit.applied_at = datetime.now(timezone.utc)
+        await self.db.flush()
+
+        detail = await self.get_audit(audit.id, org_id)
+        detail["moved_item_ids"] = list(result["moved"])
+        detail["skipped"] = list(result["skipped"])
+        return detail
+
+    async def list_audits(
+        self,
+        organization_id: str,
+        *,
+        storage_area_id: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Audits newest first, optionally for one storage area."""
+        org_id = str(organization_id)
+        query = select(InventoryNfcAudit).where(
+            InventoryNfcAudit.organization_id == org_id
+        )
+        if storage_area_id:
+            query = query.where(
+                InventoryNfcAudit.storage_area_id == str(storage_area_id)
+            )
+        result = await self.db.execute(
+            query.order_by(
+                InventoryNfcAudit.audited_at.desc(), InventoryNfcAudit.id.desc()
+            ).limit(max(1, min(limit, _MAX_AUDITS_LISTED)))
+        )
+        audits = list(result.scalars().all())
+        names = await self._name_map(
+            org_id,
+            {a.audited_by for a in audits} | {a.applied_by for a in audits},
+        )
+        return [self._audit_summary(a, names) for a in audits]
+
+    async def get_audit(self, audit_id: str, organization_id: str) -> Dict[str, Any]:
+        """One audit with its lines. Raises ``LookupError``."""
+        org_id = str(organization_id)
+        audit = await self._get_audit(audit_id, org_id)
+        names = await self._name_map(org_id, {audit.audited_by, audit.applied_by})
+        order = {
+            InventoryNfcAuditResult.MISSING: 0,
+            InventoryNfcAuditResult.UNEXPECTED: 1,
+            InventoryNfcAuditResult.FOUND: 2,
+        }
+        lines = sorted(
+            audit.items, key=lambda ln: (order[ln.result], ln.item_name.lower(), ln.id)
+        )
+        detail = self._audit_summary(audit, names)
+        detail["items"] = [
+            {
+                "id": ln.id,
+                "item_id": ln.item_id,
+                "item_name": ln.item_name,
+                "result": ln.result,
+                "recorded_storage_area_id": ln.recorded_storage_area_id,
+                "recorded_storage_area_name": ln.recorded_storage_area_name,
+                "moved": bool(ln.moved),
+            }
+            for ln in lines
+        ]
+        return detail
+
+    # =========================================================================
+    # Bulk enrollment
+    # =========================================================================
+
+    async def list_untagged_items(
+        self,
+        organization_id: str,
+        *,
+        search: Optional[str] = None,
+        category_id: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Active items with no working tag, for tagging one after another.
+
+        An item whose only tag is marked lost counts as untagged: it needs a
+        new one.
+        """
+        org_id = str(organization_id)
+        tagged = select(InventoryNfcTag.item_id).where(
+            InventoryNfcTag.organization_id == org_id,
+            InventoryNfcTag.item_id.is_not(None),
+            InventoryNfcTag.status == InventoryNfcTagStatus.ACTIVE,
+        )
+        query = (
+            select(InventoryItem)
+            .where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.active.is_(True),
+                InventoryItem.status != ItemStatus.RETIRED,
+                InventoryItem.id.notin_(tagged),
+            )
+            .options(selectinload(InventoryItem.category))
+        )
+        if category_id:
+            query = query.where(InventoryItem.category_id == str(category_id))
+        if search and search.strip():
+            pattern = like_pattern(search.strip())
+            query = query.where(
+                or_(
+                    InventoryItem.name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.serial_number.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.asset_tag.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                )
+            )
+        result = await self.db.execute(
+            query.order_by(InventoryItem.name.asc(), InventoryItem.id.asc()).limit(
+                max(1, min(limit, _MAX_UNTAGGED_LISTED))
+            )
+        )
+        items = list(result.scalars().all())
+        areas = await self._area_name_map(org_id, {i.storage_area_id for i in items})
+        return [
+            {
+                "id": item.id,
+                "name": item.name,
+                "serial_number": item.serial_number,
+                "asset_tag": item.asset_tag,
+                "category_name": item.category.name if item.category else None,
+                "storage_area_name": areas.get(item.storage_area_id),
+            }
+            for item in items
+        ]
+
+    # =========================================================================
     # Helpers
     # =========================================================================
 
@@ -441,6 +776,47 @@ class InventoryNfcService:
         if tag is None:
             raise LookupError("NFC tag not found")
         return tag
+
+    async def _get_audit(
+        self, audit_id: str, organization_id: str
+    ) -> InventoryNfcAudit:
+        result = await self.db.execute(
+            select(InventoryNfcAudit)
+            .where(
+                InventoryNfcAudit.id == str(audit_id),
+                InventoryNfcAudit.organization_id == str(organization_id),
+            )
+            .options(selectinload(InventoryNfcAudit.items))
+            .execution_options(populate_existing=True)
+        )
+        audit = result.scalar_one_or_none()
+        if audit is None:
+            raise LookupError("Audit not found")
+        return audit
+
+    @staticmethod
+    def _audit_summary(
+        audit: InventoryNfcAudit, names: Dict[str, str]
+    ) -> Dict[str, Any]:
+        return {
+            "id": audit.id,
+            "storage_area_id": audit.storage_area_id,
+            "storage_area_name": audit.storage_area_name,
+            "expected_count": audit.expected_count,
+            "found_count": audit.found_count,
+            "missing_count": audit.missing_count,
+            "unexpected_count": audit.unexpected_count,
+            "audited_by": audit.audited_by,
+            "audited_by_name": (
+                names.get(audit.audited_by) if audit.audited_by else None
+            ),
+            "audited_at": audit.audited_at,
+            "applied_by": audit.applied_by,
+            "applied_by_name": (
+                names.get(audit.applied_by) if audit.applied_by else None
+            ),
+            "applied_at": audit.applied_at,
+        }
 
     async def _tag_on_item(
         self, tag_id: Optional[str], item_id: str, organization_id: str

@@ -15,11 +15,18 @@ Permissions follow the barcode flow they sit beside: resolving a tag is
 ``inventory.view``, like ``GET /inventory/lookup``; changing which tags an item
 carries, moving an item, and reading the tap log are ``inventory.manage``.
 
+Shelf audits, the member ID card lookup and the bulk-enrollment list are
+``inventory.manage`` too: each is a quartermaster's tool. The card lookup also
+requires the NFC ID Cards integration, because it reads that integration's
+credentials.
+
 Only taps by ``inventory.manage`` holders are written to the tap log. A member
 opening a written tag from their own phone is resolved but not recorded —
 logging everyone would turn an equipment trail into a record of where each
 member was.
 """
+
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +39,11 @@ from app.models.inventory import InventoryNfcScanAction
 from app.models.user import User
 from app.schemas.inventory import ScanLookupResponse
 from app.schemas.inventory_nfc import (
+    InventoryNfcAuditApply,
+    InventoryNfcAuditCreate,
+    InventoryNfcAuditDetail,
+    InventoryNfcAuditListResponse,
+    InventoryNfcMemberResponse,
     InventoryNfcPutAwayRequest,
     InventoryNfcPutAwayResponse,
     InventoryNfcResolveAnyRequest,
@@ -43,12 +55,16 @@ from app.schemas.inventory_nfc import (
     InventoryNfcTagListResponse,
     InventoryNfcTagResponse,
     InventoryNfcTagUpdate,
+    InventoryNfcUntaggedListResponse,
 )
+from app.schemas.nfc_tag import NfcCheckInStatus
 from app.services.inventory_nfc_service import (
     InventoryNfcService,
     InventoryNfcTagNotFound,
 )
+from app.services.nfc_tag_service import NfcTagService
 from app.utils.inventory_nfc import inventory_nfc_enabled, require_inventory_nfc
+from app.utils.nfc_integration import require_nfc_id_cards
 
 router = APIRouter()
 
@@ -399,3 +415,179 @@ async def unlink_inventory_nfc_tag(
         user_id=str(current_user.id),
         username=current_user.username,
     )
+
+
+@router.post(
+    "/nfc/audits",
+    response_model=InventoryNfcAuditDetail,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_inventory_nfc_audit(
+    data: InventoryNfcAuditCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Record a shelf audit: compare the items tapped with the items recorded
+    there. Reports only — nothing is moved and nothing is marked lost."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    service = InventoryNfcService(db)
+    try:
+        audit = await service.create_audit(
+            organization_id=org_id,
+            storage_area_id=data.storage_area_id,
+            tapped=[(t.item_id, t.tag_id) for t in data.tapped],
+            audited_by=str(current_user.id),
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_nfc_shelf_audited",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "audit_id": audit["id"],
+            "storage_area_id": audit["storage_area_id"],
+            "expected": audit["expected_count"],
+            "found": audit["found_count"],
+            "missing": audit["missing_count"],
+            "unexpected": audit["unexpected_count"],
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return audit
+
+
+@router.get("/nfc/audits", response_model=InventoryNfcAuditListResponse)
+async def list_inventory_nfc_audits(
+    storage_area_id: Optional[str] = Query(None, max_length=36),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Shelf audits, newest first."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    items = await InventoryNfcService(db).list_audits(
+        org_id, storage_area_id=storage_area_id, limit=limit
+    )
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/nfc/audits/{audit_id}", response_model=InventoryNfcAuditDetail)
+async def get_inventory_nfc_audit(
+    audit_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """One shelf audit with every line."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    try:
+        return await InventoryNfcService(db).get_audit(audit_id, org_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/nfc/audits/{audit_id}/apply", response_model=InventoryNfcAuditDetail)
+async def apply_inventory_nfc_audit(
+    audit_id: str,
+    data: InventoryNfcAuditApply,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Move the chosen unexpected items onto the audited shelf, by the same
+    rule as every other put-away."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    service = InventoryNfcService(db)
+    try:
+        audit = await service.apply_audit(
+            audit_id=audit_id,
+            organization_id=org_id,
+            item_ids=data.item_ids,
+            applied_by=str(current_user.id),
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+    if audit["moved_item_ids"]:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_items_put_away",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "storage_area_id": audit["storage_area_id"],
+                "item_ids": audit["moved_item_ids"],
+                "skipped": len(audit["skipped"]),
+                "method": "nfc_audit",
+                "audit_id": audit["id"],
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return audit
+
+
+@router.post("/nfc/resolve-member", response_model=InventoryNfcMemberResponse)
+async def resolve_inventory_nfc_member(
+    data: InventoryNfcResolveRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Find the member a tapped ID card belongs to, to hand them equipment.
+
+    Refusals are one 404 whatever the reason — unknown card, card marked lost,
+    member inactive — with a message saying which, as the check-in station
+    does. Card taps here are not logged: the tap log records equipment.
+    """
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    await require_nfc_id_cards(db, org_id)
+    _tag, user, refusal = await NfcTagService(db).resolve_tag(
+        org_id, (data.code, data.serial_number)
+    )
+    if refusal is not None or user is None:
+        messages = {
+            NfcCheckInStatus.UNKNOWN_CARD: "This card is not registered to a member.",
+            NfcCheckInStatus.CARD_INACTIVE: (
+                "This card has been marked lost or replaced and no longer works."
+            ),
+        }
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=messages.get(
+                refusal, "This card belongs to a member who is not currently active."
+            ),
+        )
+    name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+    return InventoryNfcMemberResponse(
+        user_id=str(user.id),
+        member_name=name or user.username,
+        membership_number=user.membership_number,
+    )
+
+
+@router.get("/nfc/untagged", response_model=InventoryNfcUntaggedListResponse)
+async def list_untagged_inventory_items(
+    search: Optional[str] = Query(None, max_length=100),
+    category_id: Optional[str] = Query(None, max_length=36),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Active items with no working tag, for tagging them one after another."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    items = await InventoryNfcService(db).list_untagged_items(
+        org_id, search=search, category_id=category_id, limit=limit
+    )
+    return {"items": items, "total": len(items)}

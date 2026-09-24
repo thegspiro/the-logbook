@@ -37,6 +37,7 @@ from app.api.v1.endpoints import (
     grants,
     integrations,
     inventory,
+    inventory_last_seen,
     inventory_nfc,
     ip_security,
     labels,
@@ -212,6 +213,12 @@ api_router.include_router(
 )
 api_router.include_router(
     inventory.router,
+    prefix="/inventory",
+    tags=["inventory"],
+    dependencies=module_gate("inventory", "Inventory"),
+)
+api_router.include_router(
+    inventory_last_seen.router,
     prefix="/inventory",
     tags=["inventory"],
     dependencies=module_gate("inventory", "Inventory"),
