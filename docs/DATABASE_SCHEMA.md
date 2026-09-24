@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**276 tables · 4602 columns · 898 foreign keys**
+**277 tables · 4608 columns · 899 foreign keys**
 
 ---
 
@@ -319,6 +319,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_item_pins`](#inventory_item_pins) | `InventoryItemPin` | 7 | A member's own shortlist of items, hoisted to the top of the items list. |
 | [`inventory_items`](#inventory_items) | `InventoryItem` | 54 | Inventory Item model |
 | [`inventory_lots`](#inventory_lots) | `InventoryLot` | 13 | A batch/lot of a consumable inventory item held as ready stock. |
+| [`inventory_nfc_audit_digests`](#inventory_nfc_audit_digests) | `InventoryNfcAuditDigest` | 5 | One "shelf audits overdue" digest sent to an organization. |
 | [`inventory_nfc_audit_items`](#inventory_nfc_audit_items) | `InventoryNfcAuditItem` | 10 | One item's line in a shelf audit. |
 | [`inventory_nfc_audits`](#inventory_nfc_audits) | `InventoryNfcAudit` | 12 | One shelf audit: the items tapped on a storage area, compared with the |
 | [`inventory_nfc_scans`](#inventory_nfc_scans) | `InventoryNfcScan` | 9 | One staff tap of an NFC tag on an item — the "last seen" trail. |
@@ -340,7 +341,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`reorder_receipts`](#reorder_receipts) | `ReorderReceipt` | 10 | Immutable receipt history; one client receipt key may affect stock once. |
 | [`reorder_requests`](#reorder_requests) | `ReorderRequest` | 25 | Tracks reorder requests for inventory items that have dropped below |
 | [`return_requests`](#return_requests) | `ReturnRequest` | 23 | Member-initiated return request. |
-| [`storage_areas`](#storage_areas) | `StorageArea` | 14 | Storage Area model |
+| [`storage_areas`](#storage_areas) | `StorageArea` | 15 | Storage Area model |
 
 ### Label_Printer
 
@@ -4916,6 +4917,24 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_inventory_lots_org_exp` (`organization_id`, `expiration_date`)
 - `ix_inventory_lots_inventory_item_id` (`inventory_item_id`)
 
+### `inventory_nfc_audit_digests`
+
+**InventoryNfcAuditDigest** · `app/models/inventory.py`
+
+> One "shelf audits overdue" digest sent to an organization. The scheduler keeps task run times in memory, so a weekly task would fire again after every restart. The digest runs daily instead and sends only when the organization's last row here is a week old, which makes "weekly" true across deploys.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `sent_at` | DATETIME | no |  | `now()` |  |
+| `overdue_count` | INTEGER | no |  | `0` |  |
+| `recipient_count` | INTEGER | no |  | `0` |  |
+
+**Indexes**
+
+- `idx_inventory_nfc_audit_digest_org_sent` (`organization_id`, `sent_at`)
+
 ### `inventory_nfc_audit_items`
 
 **InventoryNfcAuditItem** · `app/models/inventory.py`
@@ -5593,6 +5612,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `parent_id` | VARCHAR(36) | yes | FK, IDX |  | → `storage_areas.id` ON DELETE CASCADE |
 | `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE SET NULL |
 | `barcode` | VARCHAR(255) | yes |  |  |  |
+| `audit_frequency` | ENUM(`weekly`, `monthly`, `quarterly`, `yearly`) | yes |  |  |  |
 | `sort_order` | INTEGER | yes |  | `0` |  |
 | `is_active` | BOOL | yes | IDX | `True` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -10004,7 +10024,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (222 references)
+### → `organizations` (223 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10111,6 +10131,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_item_pins` | `organization_id` | CASCADE | no |
 | `inventory_items` | `organization_id` | CASCADE | no |
 | `inventory_lots` | `organization_id` | CASCADE | no |
+| `inventory_nfc_audit_digests` | `organization_id` | CASCADE | no |
 | `inventory_nfc_audit_items` | `organization_id` | CASCADE | no |
 | `inventory_nfc_audits` | `organization_id` | CASCADE | no |
 | `inventory_nfc_scans` | `organization_id` | CASCADE | no |
