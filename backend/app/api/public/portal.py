@@ -445,7 +445,11 @@ async def get_organization_stats(
         )
 
 
-@router.get("/events/public", response_model=list[PublicEvent])
+@router.get(
+    "/events/public",
+    response_model=list[PublicEvent],
+    response_model_exclude_unset=True,
+)
 async def get_public_events(
     request: Request,
     api_key: PublicPortalAPIKey = Depends(authenticate_api_key),
@@ -502,6 +506,11 @@ async def get_public_events(
         events = []
         for evt in event_rows:
             event_data = {
+                # Whitelistable like everything else: an identifier is not
+                # personal, but "only whitelisted fields are returned" is this
+                # endpoint's stated invariant, and a field no administrator
+                # can switch off would break it.
+                "id": str(evt.id),
                 "title": evt.title,
                 "description": evt.description,
                 "start_datetime": (

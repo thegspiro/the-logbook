@@ -42,6 +42,10 @@ const COLOUR_PREFIXES = [
   'bg',
   'text',
   'border',
+  // Side and axis borders: `border-l-theme-info` asks for the same token as
+  // `border-theme-info` and fails just as silently.
+  'border-[lrtbxyse]',
+  'ring-offset',
   'ring',
   'divide',
   'outline',
@@ -161,6 +165,16 @@ describe('theme token integrity', () => {
     expect(matches).toHaveLength(1);
     expect(matches[0]?.[2]).toBe('surface-hover');
     expect(definedTokens().has('surface-hover')).toBe(true);
+  });
+
+  it('reads a side border as a request for the same token', () => {
+    // `border-l-*` slipped past the scan while it only knew `border`, and three
+    // selected-row markers rendered in the card's own border colour.
+    const probe = 'border-l-' + 'theme-' + 'alert-info-icon';
+    const matches = [...probe.matchAll(UTILITY)];
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.[2]).toBe('alert-info-icon');
+    expect(definedTokens().has('alert-info-icon')).toBe(true);
   });
 
   it('strips a variant prefix and an opacity modifier', () => {

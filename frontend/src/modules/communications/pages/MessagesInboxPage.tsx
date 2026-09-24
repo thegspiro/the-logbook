@@ -106,7 +106,7 @@ const MessagesInboxPage: React.FC = () => {
       ) : (
         <ul className="space-y-3">
           {messages.map((msg) => (
-            <li key={msg.id} className={`card ${msg.is_read ? '' : 'border-l-theme-info border-l-4'}`}>
+            <li key={msg.id} className={`card ${msg.is_read ? '' : 'border-l-theme-alert-info-icon border-l-4'}`}>
               <Link
                 to={`/messages/${msg.id}`}
                 className="flex w-full items-start justify-between gap-3 p-4 text-left max-md:min-h-[44px]"

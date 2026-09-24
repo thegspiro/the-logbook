@@ -78,12 +78,19 @@ export interface PublicPortalUsageStats {
 export interface PublicPortalDataWhitelist {
   id: string;
   organization_id: string;
-  category: string; // Used in components
-  data_category: string; // Alias for compatibility
+  /** Same value as `data_category`; both are served so either spelling works. */
+  category: string;
+  data_category: string;
   field_name: string;
   is_enabled: boolean;
-  is_sensitive: boolean; // Whether field contains PII
-  description: string | null; // Field description
+  /**
+   * Whether the field's value identifies a person, so the screen can badge it
+   * PII before somebody publishes it. Decided by the backend catalogue
+   * (`app/core/public_portal_fields.py`), never per organization.
+   */
+  is_sensitive: boolean;
+  /** What the field holds, shown under its name and searchable. */
+  description: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -6258,6 +6258,7 @@ class MembershipPipelineService:
         )
         await self.db.commit()
         await self._notify_coordinators_of_withdrawal(prospect, reason)
+        await self._confirm_withdrawal_to_applicant(prospect)
         return prospect
 
     # The seeded positions whose holders run the applicant pipeline.
@@ -6303,6 +6304,55 @@ class MembershipPipelineService:
             if permission_matches_any(("prospective_members.manage",), granted):
                 managers.append(user)
         return managers
+
+    async def _confirm_withdrawal_to_applicant(
+        self, prospect: ProspectiveMember
+    ) -> None:
+        """Email the applicant that their withdrawal went through.
+
+        Best-effort and after the commit, like the coordinator notice, and
+        independent of it: either email failing must not stop the other, and
+        neither may undo a withdrawal the applicant has already made.
+        """
+        try:
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == prospect.organization_id)
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return
+
+            from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+            from app.services.email_service import EmailService
+
+            try:
+                tz = ZoneInfo(org.timezone or "UTC")
+            except (ZoneInfoNotFoundError, ValueError):
+                tz = ZoneInfo("UTC")
+            # _apply_status_change stamped this in the same transaction.
+            withdrawn_at = prospect.withdrawn_at or datetime.now(timezone.utc)
+            withdrawal_date = withdrawn_at.astimezone(tz).strftime("%B %d, %Y")
+
+            sent = await EmailService(org).send_application_withdrawn_email(
+                to_email=prospect.email,
+                applicant_name=f"{prospect.first_name} {prospect.last_name}".strip(),
+                organization_name=org.name or "the department",
+                withdrawal_date=withdrawal_date,
+                db=self.db,
+                organization_id=str(prospect.organization_id),
+            )
+
+            await self._log_activity(
+                prospect_id=str(prospect.id),
+                action="withdrawal_confirmation_sent",
+                details={"delivered": bool(sent)},
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.warning(
+                f"Failed to confirm withdrawal to prospect {prospect.id}: {e}"
+            )
 
     async def _notify_coordinators_of_withdrawal(
         self, prospect: ProspectiveMember, reason: Optional[str]
