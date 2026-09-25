@@ -110,6 +110,11 @@ import type {
   InventoryNfcTagListResponse,
   InventoryNfcTagUpdate,
   InventoryNfcUntaggedListResponse,
+  KioskActionResponse,
+  KioskIdentifyResponse,
+  KioskItemRequest,
+  KioskPreviewResponse,
+  KioskReturnRequest,
   NotSeenFilters,
   NotSeenReport,
 } from '../modules/inventory/types/nfc';
@@ -750,6 +755,28 @@ export const inventoryService = {
       `/inventory/storage-areas/${storageAreaId}/audit-schedule`,
       { audit_frequency: auditFrequency }
     );
+    return response.data;
+  },
+
+  // Self-service kiosk. Every call carries what was read off the member's
+  // card; the kiosk never names a member itself.
+  async kioskIdentify(card: InventoryNfcResolveRequest): Promise<KioskIdentifyResponse> {
+    const response = await api.post<KioskIdentifyResponse>('/inventory/kiosk/identify', { card });
+    return { ...response.data, loans: asArray(response.data?.loans) };
+  },
+
+  async kioskPreview(data: KioskItemRequest): Promise<KioskPreviewResponse> {
+    const response = await api.post<KioskPreviewResponse>('/inventory/kiosk/preview', data);
+    return response.data;
+  },
+
+  async kioskCheckout(data: KioskItemRequest): Promise<KioskActionResponse> {
+    const response = await api.post<KioskActionResponse>('/inventory/kiosk/checkout', data);
+    return response.data;
+  },
+
+  async kioskReturn(data: KioskReturnRequest): Promise<KioskActionResponse> {
+    const response = await api.post<KioskActionResponse>('/inventory/kiosk/return', data);
     return response.data;
   },
 

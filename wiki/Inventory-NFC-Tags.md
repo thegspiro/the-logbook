@@ -13,6 +13,8 @@ for these things:
   does not belong there.
 - **Identifying a member** by tapping their NFC ID card, where the department
   issues them.
+- **A self-service kiosk** where members check loaner gear out and back in
+  themselves by tapping their ID card, then the item.
 
 A **not-seen report** sits alongside: the items nobody has handled in months.
 It uses assignments and checkouts as well as taps, so it also works without
@@ -71,6 +73,8 @@ settings page.
 | See an item's tap log (Last Seen)      | `inventory.manage`                                    |
 | Shelf audits, schedules, bulk tagging  | `inventory.manage`                                    |
 | Identify a member by ID card tap       | `inventory.manage`, plus the NFC ID Cards integration |
+| Open the self-service kiosk            | `inventory.kiosk` (granted to no position by default) |
+| Allow a category at the kiosk          | `inventory.manage`                                    |
 | Items Not Seen report                  | `inventory.manage` (works with NFC off)               |
 | Tap a tag to open an item              | `inventory.view` (held by the seeded member roles)    |
 
@@ -228,6 +232,55 @@ everyone with `inventory.manage` gets one email listing them. Nothing is sent
 in a week when nothing is overdue, or while NFC is turned off. The check runs
 daily but counts the week from the last email actually sent, so restarting the
 server does not send it twice.
+
+### Self-service kiosk
+
+A shared Android tablet where members borrow and return loaner gear without a
+quartermaster present. It needs inventory NFC turned on **and** the NFC ID
+Cards integration connected, because members identify themselves by tapping
+their card.
+
+**Setting it up**
+
+1. Grant `inventory.kiosk` to the position(s) whose members will open the
+   kiosk. No position has it by default; the
+   `inventory.*` wildcard includes it.
+2. For each category of loaner gear, open **Inventory → Categories**, edit the
+   category, turn on **Allow self-checkout at the kiosk**, and optionally set a
+   **Kiosk loan period (days)**. Categories are off by default, so nothing can
+   be taken at the kiosk until you choose.
+3. Tag the items (see [Tagging many items at once](#tagging-many-items-at-once)).
+4. On the tablet, an officer with `inventory.kiosk` opens **Inventory →
+   Administration → Self-Service Kiosk** (`/inventory/kiosk`) and presses
+   **Start kiosk**.
+
+**Using it** (members)
+
+1. Tap your ID card. The kiosk greets you and lists what you have out.
+2. Tap an item's tag.
+   - If you don't have it, the kiosk offers **Borrow it**, with the date it is
+     due back.
+   - If you have it, the kiosk offers to take it back and asks whether it is
+     damaged. **Yes, it's damaged** asks what is wrong and marks the item
+     damaged, with your note, for the quartermaster.
+3. Tap **Done**, or just walk away: after a minute without a tap the kiosk
+   forgets you, so the next person cannot borrow in your name.
+
+**What it will refuse, and says so:** an item whose category doesn't allow
+self-checkout; stock issued from a pool; an item that is assigned, checked out,
+in maintenance, lost or retired; an item restricted to a rank or position the
+member doesn't hold (the same rule as equipment requests); a card that is
+unregistered, lost or belongs to an inactive member; and returning an item
+checked out to somebody else.
+
+A kiosk loan is an ordinary checkout. It appears under Active Checkouts, goes
+overdue after the loan period and triggers the usual overdue emails, and counts
+as the item being seen. The checkout records the member as the borrower and
+the officer who opened the kiosk as the one who checked it out.
+
+**The officer's session still times out.** Every tap counts as activity, so a
+busy kiosk stays signed in; an idle one signs out after the department's
+session timeout, and the officer signs in again.
 
 ### Identifying a member by ID card
 

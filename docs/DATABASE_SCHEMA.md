@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**277 tables · 4608 columns · 899 foreign keys**
+**277 tables · 4610 columns · 899 foreign keys**
 
 ---
 
@@ -314,7 +314,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`equipment_kit_items`](#equipment_kit_items) | `EquipmentKitItem` | 9 | One line item in a kit template — specifies what item/category |
 | [`equipment_kits`](#equipment_kits) | `EquipmentKit` | 10 | Kit/bundle template for issuing multiple items as a set. |
 | [`equipment_requests`](#equipment_requests) | `EquipmentRequest` | 22 | Equipment Request model |
-| [`inventory_categories`](#inventory_categories) | `InventoryCategory` | 16 | Inventory Category model |
+| [`inventory_categories`](#inventory_categories) | `InventoryCategory` | 18 | Inventory Category model |
 | [`inventory_impact_plans`](#inventory_impact_plans) | `InventoryImpactPlan` | 8 | A saved, named impact-planner scenario. |
 | [`inventory_item_pins`](#inventory_item_pins) | `InventoryItemPin` | 7 | A member's own shortlist of items, hoisted to the top of the items list. |
 | [`inventory_items`](#inventory_items) | `InventoryItem` | 54 | Inventory Item model |
@@ -4741,6 +4741,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `requires_serial_number` | BOOL | yes |  | `False` |  |
 | `requires_maintenance` | BOOL | yes |  | `False` |  |
 | `low_stock_threshold` | INTEGER | yes |  |  |  |
+| `allow_self_checkout` | BOOL | no |  | `0` |  |
+| `self_checkout_loan_days` | INTEGER | yes |  |  |  |
 | `nfpa_tracking_enabled` | BOOL | no |  | `0` |  |
 | `extra_data` | JSON | yes |  |  |  |
 | `active` | BOOL | yes | IDX | `True` |  |

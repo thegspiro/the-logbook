@@ -9443,6 +9443,15 @@ class InventoryService:
             item.min_rank_order, item.restricted_to_positions, organization_id, user
         )
 
+    async def member_clears_restrictions(
+        self, item: InventoryItem, organization_id: UUID, user: User
+    ) -> bool:
+        """Public form of the rank/position restriction rule, for callers
+        outside this service that hand an item to a member themselves (the
+        self-service kiosk). One rule, so the kiosk cannot let a member take
+        what the request catalog would refuse them."""
+        return await self._member_may_request(item, organization_id, user)
+
     async def _passes_restrictions(
         self,
         min_rank_order: Optional[int],

@@ -428,6 +428,14 @@ class InventoryCategory(Base):
     requires_serial_number = Column(Boolean, default=False)
     requires_maintenance = Column(Boolean, default=False)
     low_stock_threshold = Column(Integer)  # Alert when quantity falls below this
+    # Self-service kiosk (NFC phase 4b): members may check items in this
+    # category out themselves. Off unless a quartermaster turns it on.
+    allow_self_checkout = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    # Days a kiosk loan runs before it is due back (and so can go overdue).
+    # Null: kiosk loans from this category have no due date.
+    self_checkout_loan_days = Column(Integer, nullable=True)
     nfpa_tracking_enabled = Column(
         Boolean, default=False, nullable=False, server_default="0"
     )  # Enable NFPA 1851/1852 lifecycle tracking for this category

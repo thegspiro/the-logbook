@@ -256,6 +256,12 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['inventory.manage'],
   },
   {
+    path: '/inventory/kiosk',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.kiosk'],
+  },
+  {
     path: '/inventory/admin/not-seen',
     maxSmallTargets: 0,
     maxTinyText: 0,
