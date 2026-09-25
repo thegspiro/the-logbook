@@ -88,6 +88,12 @@ class SuggestionBox(Base):
         Boolean, nullable=False, default=False, server_default="0"
     )
     is_active = Column(Boolean, nullable=False, default=True, server_default="1")
+    # Lets reviewers publish a rewritten copy of a submission for members to
+    # see and vote on. Off by default: a box has always been private, and a
+    # department opts each one in.
+    public_board_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -227,6 +233,15 @@ class Suggestion(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     disposition_updated_at = Column(DateTime(timezone=True), nullable=True)
+    # The idea board shows a reviewer-written copy, never the submission: the
+    # original may name people or carry screenshots, and its wording can give
+    # away an anonymous author. NULL published_at means not on the board.
+    published_at = Column(DateTime(timezone=True), nullable=True)
+    published_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    published_title = Column(String(200), nullable=True)
+    published_summary = Column(Text, nullable=True)
     # Set explicitly by the service (day-truncated when anonymous), so no
     # server default here.
     created_at = Column(DateTime(timezone=True), nullable=False)
@@ -249,6 +264,83 @@ class Suggestion(Base):
     __table_args__ = (
         Index("idx_suggestions_org_box", "organization_id", "box_id"),
         Index("idx_suggestions_submitter", "submitted_by"),
+    )
+
+
+class SuggestionStatusEvent(Base):
+    """One step a reviewer took that the submitter can see: a disposition
+    change, a public response, or both at once.
+
+    Deliberately carries no reviewer id. The submitter sees "Reviewers", not a
+    name, and who acted is already in the audit log. Receipt is not stored as
+    an event: it is the suggestion's own ``created_at``, which for an
+    anonymous submission is already truncated to the day.
+    """
+
+    __tablename__ = "suggestion_status_events"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    suggestion_id = Column(
+        String(36),
+        ForeignKey("suggestions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # Orders the steps. Timestamps cannot: MySQL keeps whole seconds, and a
+    # status change and a response saved together share one.
+    sequence = Column(Integer, nullable=False)
+    # The disposition in force after this step, so a response given without
+    # a status change still reads in context.
+    disposition = Column(String(32), nullable=False)
+    public_response = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        Index(
+            "idx_suggestion_status_events_org_suggestion",
+            "organization_id",
+            "suggestion_id",
+        ),
+        UniqueConstraint(
+            "suggestion_id", "sequence", name="uq_suggestion_status_event_seq"
+        ),
+    )
+
+
+class SuggestionVote(Base):
+    """One member's support for a published suggestion.
+
+    Who voted is stored only so a member can take their vote back and cannot
+    vote twice; no endpoint returns another member's vote.
+    """
+
+    __tablename__ = "suggestion_votes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    suggestion_id = Column(
+        String(36),
+        ForeignKey("suggestions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index(
+            "idx_suggestion_votes_org_suggestion", "organization_id", "suggestion_id"
+        ),
+        UniqueConstraint("suggestion_id", "user_id", name="uq_suggestion_vote_user"),
     )
 
 

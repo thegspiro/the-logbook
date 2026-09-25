@@ -891,6 +891,31 @@ class Settings(BaseSettings):
             break
         return self
 
+    def describe_frontend_url(self) -> dict:
+        """Where the address emailed links are built from came from.
+
+        Shown to settings administrators on the Email settings screen, because
+        the substitution in resolve_frontend_url is otherwise reported only in
+        the startup log, and an IT admin looking at a wrong link in an email has
+        no way to tell whether FRONTEND_URL was set, picked from
+        ALLOWED_ORIGINS, or left at the shipped default.
+        """
+        effective = (self.FRONTEND_URL or "").strip()
+        if self._frontend_url_configured:
+            source = "allowed_origins"
+        elif _is_loopback_url(effective):
+            source = "unresolved_loopback"
+        else:
+            source = "frontend_url"
+        return {
+            "effective_url": effective,
+            "configured_url": self._frontend_url_configured or effective,
+            "source": source,
+            "is_loopback": _is_loopback_url(effective),
+            "is_https": effective.lower().startswith("https://"),
+            "email_enabled": bool(self.EMAIL_ENABLED),
+        }
+
     # SEC: Host-header allowlist for TrustedHostMiddleware. When left empty,
     # the effective allowlist is derived from ALLOWED_ORIGINS' hostnames (plus
     # localhost for health checks) — see get_trusted_hosts(). Set explicitly

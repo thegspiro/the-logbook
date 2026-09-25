@@ -27,6 +27,7 @@ _REQUEST_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 MAX_TITLE_LENGTH = 200
 MAX_DETAILS_LENGTH = 10000
 MAX_MESSAGE_LENGTH = 5000
+MAX_PUBLIC_RESPONSE_LENGTH = 2000
 # A follow-up key is secrets.token_urlsafe(32): 43 characters. The bounds
 # only keep an absurd body out of the hash; the lookup is what validates it.
 _KEY_MIN, _KEY_MAX = 20, 100
@@ -69,6 +70,8 @@ class SuggestionBoxWrite(BaseModel):
     # watchers existed can still PUT a box without clearing them.
     watcher_position_ids: Optional[List[str]] = Field(None, max_length=50)
     watcher_member_ids: Optional[List[str]] = Field(None, max_length=200)
+    # None leaves the setting alone, for the same reason as the watchers.
+    public_board_enabled: Optional[bool] = None
 
     @field_validator("name")
     @classmethod
@@ -114,6 +117,7 @@ class SuggestionBoxAdminResponse(UTCResponseBase):
     reviewer_members: List[ReviewerRef]
     watcher_positions: List[ReviewerRef] = Field(default_factory=list)
     watcher_members: List[ReviewerRef] = Field(default_factory=list)
+    public_board_enabled: bool = False
     # How much a permanent delete would destroy; the admin screen asks for
     # the box's name before deleting a box where this is above zero.
     submission_count: int = 0
@@ -144,6 +148,7 @@ class SuggestionBoxPublic(UTCResponseBase):
     description: Optional[str] = None
     anonymity_mode: str
     follow_up_enabled: bool
+    public_board_enabled: bool = False
 
 
 class SubmissionReceipt(UTCResponseBase):
@@ -193,6 +198,18 @@ class MySuggestionSummary(UTCResponseBase):
     created_at: datetime
 
 
+class TimelineEntry(UTCResponseBase):
+    """A step the submitter can see. The first entry is always receipt
+    (``disposition`` "new", no response), dated like the submission itself."""
+
+    model_config = _RESPONSE_CONFIG
+
+    disposition: str
+    public_response: Optional[str] = None
+    created_at: datetime
+    timestamp_precision: Literal["exact", "day"] = "exact"
+
+
 class SubmitterSuggestionDetail(UTCResponseBase):
     """The submitter's view — shared by named submitters and key holders."""
 
@@ -207,6 +224,8 @@ class SubmitterSuggestionDetail(UTCResponseBase):
     disposition: Optional[str] = None
     attachments: List[AttachmentResponse]
     messages: List[ThreadMessageResponse]
+    # Empty in a one-way box, where the submitter sees no status at all.
+    timeline: List[TimelineEntry] = Field(default_factory=list)
     created_at: datetime
     timestamp_precision: Literal["exact", "day"] = "exact"
 
@@ -321,6 +340,15 @@ class ReviewSuggestionDetail(UTCResponseBase):
     can_forward: bool = False
     via_forward: bool = False
     forwards: List[ForwardResponse] = Field(default_factory=list)
+    timeline: List[TimelineEntry] = Field(default_factory=list)
+    # The idea board. can_publish is true only for the box's own reviewers
+    # on a board-enabled box; a forward recipient never publishes.
+    board_enabled: bool = False
+    can_publish: bool = False
+    published_at: Optional[datetime] = None
+    published_title: Optional[str] = None
+    published_summary: Optional[str] = None
+    vote_count: int = 0
 
 
 class ReviewSummary(UTCResponseBase):
@@ -339,3 +367,60 @@ class DispositionUpdate(BaseModel):
 
     disposition: Optional[Disposition] = None
     internal_note: Optional[str] = Field(None, max_length=MAX_DETAILS_LENGTH)
+    # Shown to the submitter on their timeline. Not a stored field to clear:
+    # each one is a new step, so a blank value simply adds nothing.
+    public_response: Optional[str] = Field(None, max_length=MAX_PUBLIC_RESPONSE_LENGTH)
+
+    @field_validator("public_response")
+    @classmethod
+    def _public_response(cls, value: Optional[str]) -> Optional[str]:
+        value = (value or "").strip()
+        return value or None
+
+
+# ---------------------------------------------------------------------------
+# Idea board
+# ---------------------------------------------------------------------------
+
+MAX_BOARD_SUMMARY_LENGTH = 2000
+BoardSort = Literal["top", "new"]
+
+
+class PublishRequest(BaseModel):
+    """The public copy a reviewer writes. It is the only text of the
+    submission that reaches the board."""
+
+    model_config = _REQUEST_CONFIG
+
+    title: str = Field(..., min_length=1, max_length=MAX_TITLE_LENGTH)
+    summary: str = Field(..., min_length=1, max_length=MAX_BOARD_SUMMARY_LENGTH)
+
+    @field_validator("title", "summary")
+    @classmethod
+    def _required(cls, value: str) -> str:
+        return _strip_required(value)
+
+
+class BoardEntry(UTCResponseBase):
+    """A published suggestion as every member sees it. Carries nothing of
+    the original submission: no details, screenshots or submitter."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    box_id: str
+    box_name: str
+    title: str
+    summary: str
+    disposition: str
+    public_response: Optional[str] = None
+    vote_count: int = 0
+    has_voted: bool = False
+    published_at: datetime
+
+
+class BoardList(UTCResponseBase):
+    model_config = _RESPONSE_CONFIG
+
+    items: List[BoardEntry]
+    total: int

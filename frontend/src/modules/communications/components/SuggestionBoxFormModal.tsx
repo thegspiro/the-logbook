@@ -33,6 +33,7 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
   );
   const [followUpEnabled, setFollowUpEnabled] = useState(box?.followUpEnabled ?? false);
   const [isActive, setIsActive] = useState(box?.isActive ?? true);
+  const [publicBoardEnabled, setPublicBoardEnabled] = useState(box?.publicBoardEnabled ?? false);
   const [positionIds, setPositionIds] = useState<string[]>(box?.reviewerPositions.map((p) => p.id) ?? []);
   const [memberIds, setMemberIds] = useState<string[]>(box?.reviewerMembers.map((m) => m.id) ?? []);
   const [memberFilter, setMemberFilter] = useState('');
@@ -72,6 +73,7 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
       reviewerMemberIds: memberIds,
       watcherPositionIds,
       watcherMemberIds,
+      publicBoardEnabled,
     };
     try {
       const saved = box
@@ -161,6 +163,21 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
               onChange={(e) => setIsActive(e.target.checked)}
             />
             Accepting submissions
+          </label>
+          <label className="text-theme-text-primary flex items-start gap-2 text-sm max-md:min-h-[44px]">
+            <input
+              type="checkbox"
+              className="form-checkbox mt-0.5"
+              checked={publicBoardEnabled}
+              onChange={(e) => setPublicBoardEnabled(e.target.checked)}
+            />
+            <span>
+              Public idea board
+              <span className="text-theme-text-muted block text-xs">
+                Reviewers can publish a rewritten copy of a submission for every member to see and vote on. Nothing is
+                published automatically, and the original submission, its screenshots and its author are never shown.
+              </span>
+            </span>
           </label>
 
           <div className="alert-info text-sm">

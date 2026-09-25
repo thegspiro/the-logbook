@@ -359,6 +359,29 @@ class EmailConnectionTestResponse(BaseModel):
     details: Dict[str, Any] = Field(default_factory=dict)
 
 
+class EmailLinkDomainSource(str, Enum):
+    """Where the address emailed links are built from came from."""
+
+    FRONTEND_URL = "frontend_url"
+    ALLOWED_ORIGINS = "allowed_origins"
+    UNRESOLVED_LOOPBACK = "unresolved_loopback"
+
+
+class EmailLinkDomainResponse(BaseModel):
+    """The deployment-wide address every emailed link is built from.
+
+    Read-only: it comes from the FRONTEND_URL environment variable, not from
+    organization settings, so changing it means changing the deployment.
+    """
+
+    effective_url: str
+    configured_url: str
+    source: EmailLinkDomainSource
+    is_loopback: bool
+    is_https: bool
+    email_enabled: bool
+
+
 class FileStorageSettings(BaseModel):
     """Settings for organization file storage configuration"""
 

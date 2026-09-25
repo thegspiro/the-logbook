@@ -43,6 +43,7 @@ const SuggestionBoxDeleteDialog: React.FC<SuggestionBoxDeleteDialogProps> = ({
         reviewerMemberIds: box.reviewerMembers.map((m) => m.id),
         watcherPositionIds: box.watcherPositions.map((p) => p.id),
         watcherMemberIds: box.watcherMembers.map((m) => m.id),
+        publicBoardEnabled: box.publicBoardEnabled,
       });
       toast.success('Box archived. It no longer takes submissions.');
       onArchived(saved);

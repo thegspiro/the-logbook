@@ -31,6 +31,7 @@ const box = (overrides: Partial<SuggestionBoxAdmin> = {}): SuggestionBoxAdmin =>
   reviewerMembers: [],
   watcherPositions: [],
   watcherMembers: [],
+  publicBoardEnabled: false,
   submissionCount: 0,
   ...overrides,
 });
@@ -78,8 +79,9 @@ describe('SuggestionBoxesAdminPage deleting', () => {
   });
 
   it('offers archiving instead, sending the whole box', async () => {
-    mockListAdminBoxes.mockResolvedValue([box({ submissionCount: 1 })]);
-    mockUpdateBox.mockResolvedValue(box({ submissionCount: 1, isActive: false }));
+    // The board setting rides along untouched: archiving must not switch it off.
+    mockListAdminBoxes.mockResolvedValue([box({ submissionCount: 1, publicBoardEnabled: true })]);
+    mockUpdateBox.mockResolvedValue(box({ submissionCount: 1, publicBoardEnabled: true, isActive: false }));
     renderWithRouter(<SuggestionBoxesAdminPage />);
     const user = userEvent.setup();
 
@@ -96,6 +98,7 @@ describe('SuggestionBoxesAdminPage deleting', () => {
       reviewerMemberIds: [],
       watcherPositionIds: [],
       watcherMemberIds: [],
+      publicBoardEnabled: true,
     });
     expect(mockDeleteBox).not.toHaveBeenCalled();
     expect(await screen.findByText('Not accepting submissions')).toBeInTheDocument();

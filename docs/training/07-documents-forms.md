@@ -622,7 +622,10 @@ To remove a box you no longer need, press **Delete** on it:
 5. Press **Submit** (or **Submit anonymously**).
 
 Named submissions appear under **My submissions**, where you can follow the
-status and reply if the box allows follow-up.
+status and reply if the box allows follow-up. In a follow-up box, **Status
+history** shows when your submission was received, each status it has moved
+through, and any response the reviewers wrote for you. An anonymous submission
+shows the same history when you open it with its follow-up key.
 
 ![Suggestions → Submit with the Training ideas box chosen, its description and anonymity hint showing, a title and details filled in, one screenshot attached, and Submit anonymously ticked with the warning to check screenshots for your name](./images/07-15-suggestion-submit-anonymous.png)
 
@@ -663,6 +666,23 @@ reconnect you to it.
 > [Known Limitations](../KNOWN_LIMITATIONS.md). If that matters for what you
 > want to report, say so to your department's leadership through another route.
 
+### The idea board
+
+Some boxes have an **Idea board** tab on the Suggestions page. It shows ideas
+the box's reviewers chose to share with everyone, written up by them, never
+the original submission, its screenshots or who sent it. Press the arrow on
+an idea to vote for it; press it again to take your vote back. Sort by
+**Top** (most votes) or **New**, and filter by status. When reviewers have
+responded to an idea, their latest response is shown with it.
+
+Reviewers of a board-enabled box see an **Idea board** section when they open a
+submission. **Publish to the board** asks for a title and summary in your own
+words, so write it without names or anything that identifies the sender.
+**Edit published copy** changes it and **Take off the board** removes it. Its
+votes are kept if you publish it again. While an idea is published, your
+latest response to the submitter is shown on the board too. Administrators
+turn the board on per box with **Public idea board** in the box's settings.
+
 ### Reviewing submissions
 
 Reviewers see a **Review** tab on the Suggestions page, with a count of open
@@ -674,6 +694,10 @@ Open a submission to:
 - set its **Disposition** — **New**, **Under review**, **Accepted**,
   **Implemented**, **Declined** or **Duplicate**. In a follow-up box, a named
   submitter is emailed when it changes;
+- write a **Response to the submitter**, in a follow-up box. It appears on the
+  submitter's **Status history** under "Reviewers", never with your name, and
+  they are notified that you responded. Each response is added as a new step;
+  use it to explain a decision or what happens next;
 - keep an **Internal note (reviewers only)** — never shown to the submitter;
 - reply in the **Follow-up** thread, if the box allows follow-up. An anonymous
   author appears as **Anonymous submitter**.

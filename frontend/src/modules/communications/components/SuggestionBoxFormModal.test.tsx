@@ -35,6 +35,7 @@ const existing: SuggestionBoxAdmin = {
   reviewerMembers: [],
   watcherPositions: [],
   watcherMembers: [{ id: 'u-drew', name: 'Drew Member' }],
+  publicBoardEnabled: false,
   submissionCount: 0,
 };
 
@@ -63,6 +64,7 @@ describe('SuggestionBoxFormModal', () => {
       reviewerMemberIds: [],
       watcherPositionIds: ['p-chief'],
       watcherMemberIds: ['u-drew'],
+      publicBoardEnabled: false,
     });
   });
 

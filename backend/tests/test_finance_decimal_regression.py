@@ -119,9 +119,12 @@ async def test_csv_export_preserves_two_decimal_money_strings() -> None:
     db = AsyncMock()
     db.add = MagicMock()
     # Three counts (purchase requests, check requests, expense lines) precede
-    # the stream; the stream then pages purchases, then check requests.
+    # the stream; the stream then resolves the org's timezone, pages
+    # purchases, then check requests.
     db.scalar.side_effect = [1, 0, 0]
-    db.execute.side_effect = [purchases, empty]
+    org = MagicMock()
+    org.scalar_one_or_none.return_value = SimpleNamespace(timezone="UTC")
+    db.execute.side_effect = [org, purchases, empty]
 
     stream = await FinanceService(db).generate_export("org", "user", paid_at, paid_at)
     contents = "".join([chunk async for chunk in stream])

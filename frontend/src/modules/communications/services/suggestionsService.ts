@@ -13,6 +13,8 @@
 import api from '../../../services/apiClient';
 import { asArray } from '../../../utils/asArray';
 import type {
+  BoardEntry,
+  BoardSort,
   DispositionUpdate,
   MySuggestionSummary,
   ReviewerOptions,
@@ -119,6 +121,43 @@ export const suggestionsService = {
     const response = await api.post<ReviewSuggestionDetail>(`/suggestions/review/${id}/messages`, { body });
     return response.data;
   },
+  async publish(id: string, data: { title: string; summary: string }): Promise<ReviewSuggestionDetail> {
+    const response = await api.post<ReviewSuggestionDetail>(`/suggestions/review/${id}/publish`, data);
+    return response.data;
+  },
+  async unpublish(id: string): Promise<ReviewSuggestionDetail> {
+    const response = await api.delete<ReviewSuggestionDetail>(`/suggestions/review/${id}/publish`);
+    return response.data;
+  },
+
+  // The idea board
+  async listBoard(params: {
+    boxId?: string;
+    disposition?: ReviewFilter;
+    sort: BoardSort;
+    skip: number;
+    limit: number;
+  }): Promise<{ items: BoardEntry[]; total: number }> {
+    const response = await api.get<{ items: BoardEntry[]; total: number }>('/suggestions/board', {
+      params: {
+        box_id: params.boxId || undefined,
+        disposition: params.disposition || undefined,
+        sort: params.sort,
+        skip: params.skip,
+        limit: params.limit,
+      },
+    });
+    return { items: asArray(response.data.items), total: response.data.total };
+  },
+  async vote(id: string): Promise<BoardEntry> {
+    const response = await api.post<BoardEntry>(`/suggestions/board/${id}/vote`);
+    return response.data;
+  },
+  async withdrawVote(id: string): Promise<BoardEntry> {
+    const response = await api.delete<BoardEntry>(`/suggestions/board/${id}/vote`);
+    return response.data;
+  },
+
   async getForwardOptions(): Promise<ReviewerOptions> {
     const response = await api.get<ReviewerOptions>('/suggestions/review/forward-options');
     return { positions: asArray(response.data.positions), members: asArray(response.data.members) };

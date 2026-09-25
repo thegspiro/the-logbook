@@ -1,5 +1,6 @@
 import React from 'react';
 import { SettingsToggle as Toggle } from './SettingsToggle';
+import EmailLinkDomainCard from './EmailLinkDomainCard';
 import { Loader2, Mail, Server, Cloud, Info, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { MicrosoftAuthMethod } from '../../constants/enums';
 import { SMTP_PROVIDER_PRESETS, findSmtpProviderPreset } from '../../constants/smtpProviders';
@@ -110,6 +111,8 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
           email notifications, reminders, and alerts.
         </p>
       </div>
+
+      <EmailLinkDomainCard />
 
       {/* Enable toggle */}
       <div className="border-theme-surface-border flex items-center justify-between border-b py-3">

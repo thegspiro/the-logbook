@@ -225,5 +225,144 @@ class TestTemplatesCloseWithTheirOwnFooter:
             assert "Reworded by the department." in html
 
 
+def _load_revision(revision: str):
+    import importlib.util
+    import pathlib
+
+    versions = pathlib.Path(__file__).resolve().parent.parent / "alembic" / "versions"
+    matches = list(versions.glob(f"*_{revision}_*.py"))
+    assert len(matches) == 1, matches
+    spec = importlib.util.spec_from_file_location(f"rev_{revision}", matches[0])
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class TestTheNoReplyMigration:
+    """``3f3b315165ed``: saved libraries lose the seeded "do not reply" line.
+
+    SQLite in memory, so this stays in the no-database unit job; the rewrite
+    is plain Python over the JSON column and needs no MySQL behaviour.
+    """
+
+    migration = _load_revision("3f3b315165ed")
+
+    def _seeded_as_saved(self):
+        """The library exactly as the editor saved it before this release."""
+        library = email_footers.default_library()
+        library["footers"][0]["lines"] = [
+            self.migration.INTERNAL_FIRST_LINE,
+            self.migration.NO_REPLY_LINE,
+        ]
+        return library
+
+    def _engine(self, rows):
+        import sqlalchemy as sa
+
+        engine = sa.create_engine("sqlite://")
+        table = sa.Table(
+            "organizations",
+            sa.MetaData(),
+            sa.Column("id", sa.String, primary_key=True),
+            sa.Column("settings", sa.JSON, nullable=True),
+        )
+        table.create(engine)
+        with engine.begin() as conn:
+            for row_id, settings in rows.items():
+                conn.execute(table.insert().values(id=row_id, settings=settings))
+        return engine
+
+    def _run(self, engine, fn):
+        from alembic.migration import MigrationContext
+        from alembic.operations import Operations
+
+        with engine.begin() as conn:
+            with Operations.context(MigrationContext.configure(conn)):
+                fn()
+
+    def _settings(self, engine):
+        import sqlalchemy as sa
+
+        table = self.migration._organizations_table()
+        with engine.connect() as conn:
+            return dict(conn.execute(sa.select(table.c.id, table.c.settings)).all())
+
+    def test_the_frozen_first_line_is_still_the_seeded_one(self):
+        # Downgrade recognises an untouched footer by this line. If the seed
+        # is reworded, this revision still has to match what it stripped,
+        # so the constant stays; this only flags the divergence.
+        assert (
+            email_footers.DEFAULT_FOOTERS[0]["lines"][0]
+            == self.migration.INTERNAL_FIRST_LINE
+        )
+
+    def test_the_seeded_line_is_removed_and_nothing_else_moves(self):
+        edited = self._seeded_as_saved()
+        edited["footers"][0]["lines"].append("Call the station for anything urgent.")
+        edited["footers"][1]["lines"].append("  Please do not reply to this email.  ")
+        own_words = self._seeded_as_saved()
+        own_words["footers"][0]["lines"] = ["Replies to this address are not read."]
+        engine = self._engine(
+            {
+                "seeded": {"theme": "dark", "email_footers": self._seeded_as_saved()},
+                "edited": {"email_footers": edited},
+                "own-words": {"email_footers": own_words},
+                "never-saved": {"theme": "dark"},
+                "no-settings": None,
+                "malformed": {"email_footers": {"footers": "nonsense"}},
+            }
+        )
+        before = self._settings(engine)
+
+        self._run(engine, self.migration.upgrade)
+        after = self._settings(engine)
+
+        seeded = after["seeded"]["email_footers"]
+        assert seeded["footers"][0]["lines"] == [self.migration.INTERNAL_FIRST_LINE]
+        assert seeded["footers"][1:] == before["seeded"]["email_footers"]["footers"][1:]
+        assert after["seeded"]["theme"] == "dark"
+
+        assert after["edited"]["email_footers"]["footers"][0]["lines"] == [
+            self.migration.INTERNAL_FIRST_LINE,
+            "Call the station for anything urgent.",
+        ]
+        assert (
+            after["edited"]["email_footers"]["footers"][1]["lines"]
+            == email_footers.DEFAULT_FOOTERS[1]["lines"]
+        )
+
+        for untouched in ("own-words", "never-saved", "no-settings", "malformed"):
+            assert after[untouched] == before[untouched], untouched
+
+    def test_downgrade_restores_an_untouched_library(self):
+        engine = self._engine(
+            {"seeded": {"email_footers": self._seeded_as_saved()}},
+        )
+        before = self._settings(engine)
+
+        self._run(engine, self.migration.upgrade)
+        self._run(engine, self.migration.downgrade)
+
+        assert self._settings(engine) == before
+
+    def test_upgrade_is_idempotent(self):
+        engine = self._engine({"seeded": {"email_footers": self._seeded_as_saved()}})
+        self._run(engine, self.migration.upgrade)
+        once = self._settings(engine)
+        self._run(engine, self.migration.upgrade)
+        assert self._settings(engine) == once
+
+    def test_the_stripped_library_still_renders(self):
+        engine = self._engine({"seeded": {"email_footers": self._seeded_as_saved()}})
+        self._run(engine, self.migration.upgrade)
+        organization = _with_library(self._settings(engine)["seeded"]["email_footers"])
+        footer = email_footers.resolve(organization)
+        html = email_footers.render_html(footer, {"organization_name": "Station 9"})
+        assert "do not reply" not in html.lower()
+        assert "automated message from Station 9" in html
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

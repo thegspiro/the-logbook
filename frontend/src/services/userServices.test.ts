@@ -499,6 +499,26 @@ describe('organizationService', () => {
     });
   });
 
+  // ── getEmailLinkDomain ───────────────────────────────────────────────
+  describe('getEmailLinkDomain', () => {
+    it('should GET /organization/settings/email/link-domain', async () => {
+      const domain = {
+        effective_url: 'https://logbook.yourdept.org',
+        configured_url: 'http://localhost:3000',
+        source: 'allowed_origins',
+        is_loopback: false,
+        is_https: true,
+        email_enabled: true,
+      };
+      mockGet.mockResolvedValue({ data: domain });
+
+      const result = await organizationService.getEmailLinkDomain();
+
+      expect(mockGet).toHaveBeenCalledWith('/organization/settings/email/link-domain');
+      expect(result).toEqual(domain);
+    });
+  });
+
   // ── updateFileStorageSettings ────────────────────────────────────────
   describe('updateFileStorageSettings', () => {
     it('should PATCH to /organization/settings/file-storage', async () => {
