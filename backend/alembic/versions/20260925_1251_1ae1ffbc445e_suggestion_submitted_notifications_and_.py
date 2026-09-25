@@ -20,7 +20,7 @@ narrowing the enums, since such a row would violate the narrowed column, and
 drops the watchers table with every watcher configured on it.
 
 Revision ID: 1ae1ffbc445e
-Revises: 169772734c90, a0e4764c1b55
+Revises: 37d507943927
 Create Date: 2026-09-25 12:51:38.260748
 
 """
@@ -32,9 +32,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "1ae1ffbc445e"
-# Also merges main's two heads at the time of writing, so this revision leaves
-# the chain with a single head.
-down_revision: Union[str, Sequence[str], None] = ("169772734c90", "a0e4764c1b55")
+down_revision: Union[str, Sequence[str], None] = "37d507943927"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
