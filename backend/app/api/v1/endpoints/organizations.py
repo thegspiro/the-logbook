@@ -27,6 +27,7 @@ from app.api.v1.email_test_helper import (
     test_smtp_connection,
 )
 from app.core.audit import log_audit_event
+from app.core.config import settings as app_settings
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
@@ -36,6 +37,7 @@ from app.schemas.organization import (
     AuthSettings,
     ContactInfoSettings,
     EmailConnectionTestResponse,
+    EmailLinkDomainResponse,
     EmailServiceSettings,
     EnabledModulesResponse,
     FileStorageSettings,
@@ -299,6 +301,24 @@ async def update_email_settings(
         # secret whose connection identity changed, and the form must show
         # that rather than a marker for a password that no longer exists.
         return updated.email_service.redacted()
+
+
+@router.get("/settings/email/link-domain", response_model=EmailLinkDomainResponse)
+async def get_email_link_domain(
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """
+    Report the address that links in outgoing email are built from
+
+    It is the deployment's FRONTEND_URL (or the public ALLOWED_ORIGINS entry
+    substituted for a loopback one), not an organization setting, so it is
+    shown here for the administrator to check and changed in the deployment.
+
+    **Authentication and admin permission required**
+    """
+    return EmailLinkDomainResponse(**app_settings.describe_frontend_url())
 
 
 # A connection test opens a socket to whatever host the admin typed. The same
