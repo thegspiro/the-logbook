@@ -658,6 +658,23 @@ reconnect you to it.
 > [Known Limitations](../KNOWN_LIMITATIONS.md). If that matters for what you
 > want to report, say so to your department's leadership through another route.
 
+### The idea board
+
+Some boxes have an **Idea board** tab on the Suggestions page. It shows ideas
+the box's reviewers chose to share with everyone, written up by them, never
+the original submission, its screenshots or who sent it. Press the arrow on
+an idea to vote for it; press it again to take your vote back. Sort by
+**Top** (most votes) or **New**, and filter by status. When reviewers have
+responded to an idea, their latest response is shown with it.
+
+Reviewers of a board-enabled box see an **Idea board** section when they open a
+submission. **Publish to the board** asks for a title and summary in your own
+words, so write it without names or anything that identifies the sender.
+**Edit published copy** changes it and **Take off the board** removes it. Its
+votes are kept if you publish it again. While an idea is published, your
+latest response to the submitter is shown on the board too. Administrators
+turn the board on per box with **Public idea board** in the box's settings.
+
 ### Reviewing submissions
 
 Reviewers see a **Review** tab on the Suggestions page, with a count of open

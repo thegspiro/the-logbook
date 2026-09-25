@@ -84,6 +84,12 @@ class SuggestionBox(Base):
         Boolean, nullable=False, default=False, server_default="0"
     )
     is_active = Column(Boolean, nullable=False, default=True, server_default="1")
+    # Lets reviewers publish a rewritten copy of a submission for members to
+    # see and vote on. Off by default: a box has always been private, and a
+    # department opts each one in.
+    public_board_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -223,6 +229,15 @@ class Suggestion(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     disposition_updated_at = Column(DateTime(timezone=True), nullable=True)
+    # The idea board shows a reviewer-written copy, never the submission: the
+    # original may name people or carry screenshots, and its wording can give
+    # away an anonymous author. NULL published_at means not on the board.
+    published_at = Column(DateTime(timezone=True), nullable=True)
+    published_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    published_title = Column(String(200), nullable=True)
+    published_summary = Column(Text, nullable=True)
     # Set explicitly by the service (day-truncated when anonymous), so no
     # server default here.
     created_at = Column(DateTime(timezone=True), nullable=False)
@@ -289,6 +304,39 @@ class SuggestionStatusEvent(Base):
         UniqueConstraint(
             "suggestion_id", "sequence", name="uq_suggestion_status_event_seq"
         ),
+    )
+
+
+class SuggestionVote(Base):
+    """One member's support for a published suggestion.
+
+    Who voted is stored only so a member can take their vote back and cannot
+    vote twice; no endpoint returns another member's vote.
+    """
+
+    __tablename__ = "suggestion_votes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    suggestion_id = Column(
+        String(36),
+        ForeignKey("suggestions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index(
+            "idx_suggestion_votes_org_suggestion", "organization_id", "suggestion_id"
+        ),
+        UniqueConstraint("suggestion_id", "user_id", name="uq_suggestion_vote_user"),
     )
 
 

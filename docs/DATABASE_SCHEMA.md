@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**279 tables · 4625 columns · 906 foreign keys**
+**280 tables · 4635 columns · 910 foreign keys**
 
 ---
 
@@ -548,11 +548,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`suggestion_attachments`](#suggestion_attachments) | `SuggestionAttachment` | 9 | A screenshot, re-encoded to WebP on upload. The display name is |
 | [`suggestion_box_reviewers`](#suggestion_box_reviewers) | `SuggestionBoxReviewer` | 6 | One reviewer grant on a box: either a position or a single member. |
 | [`suggestion_box_watchers`](#suggestion_box_watchers) | `SuggestionBoxWatcher` | 6 | Someone told that a box received a submission, without being able to |
-| [`suggestion_boxes`](#suggestion_boxes) | `SuggestionBox` | 10 | A configurable intake box. Archived via ``is_active``, never deleted, |
+| [`suggestion_boxes`](#suggestion_boxes) | `SuggestionBox` | 11 | A configurable intake box. Archived via ``is_active``, never deleted, |
 | [`suggestion_forwards`](#suggestion_forwards) | `SuggestionForward` | 7 | One suggestion forwarded to a member or a position. |
 | [`suggestion_messages`](#suggestion_messages) | `SuggestionMessage` | 8 | One entry in a follow-up thread. |
 | [`suggestion_status_events`](#suggestion_status_events) | `SuggestionStatusEvent` | 7 | One step a reviewer took that the submitter can see: a disposition |
-| [`suggestions`](#suggestions) | `Suggestion` | 14 |  |
+| [`suggestion_votes`](#suggestion_votes) | `SuggestionVote` | 5 | One member's support for a published suggestion. |
+| [`suggestions`](#suggestions) | `Suggestion` | 18 |  |
 
 ### Testing_Checklist
 
@@ -7491,6 +7492,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `anonymity_mode` | VARCHAR(16) | no |  | `allowed` |  |
 | `follow_up_enabled` | BOOL | no |  | `0` |  |
 | `is_active` | BOOL | no |  | `1` |  |
+| `public_board_enabled` | BOOL | no |  | `0` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -7577,6 +7579,28 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_suggestion_status_event_seq` (`suggestion_id`, `sequence`)
 
+### `suggestion_votes`
+
+**SuggestionVote** · `app/models/suggestion.py`
+
+> One member's support for a published suggestion. Who voted is stored only so a member can take their vote back and cannot vote twice; no endpoint returns another member's vote.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `suggestion_id` | VARCHAR(36) | no | FK |  | → `suggestions.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_suggestion_votes_org_suggestion` (`organization_id`, `suggestion_id`)
+
+**Constraints**
+
+- UNIQUE `uq_suggestion_vote_user` (`suggestion_id`, `user_id`)
+
 ### `suggestions`
 
 **Suggestion** · `app/models/suggestion.py`
@@ -7595,6 +7619,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `internal_note` | TEXT | yes |  |  |  |
 | `disposition_updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `disposition_updated_at` | DATETIME | yes |  |  |  |
+| `published_at` | DATETIME | yes |  |  |  |
+| `published_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `published_title` | VARCHAR(200) | yes |  |  |  |
+| `published_summary` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | no |  |  |  |
 | `updated_at` | DATETIME | no |  |  |  |
 
@@ -9746,7 +9774,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (333 references)
+### → `users` (335 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10053,7 +10081,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_forwards` | `forwarded_by` | SET NULL | yes |
 | `suggestion_forwards` | `user_id` | CASCADE | yes |
 | `suggestion_messages` | `author_id` | SET NULL | yes |
+| `suggestion_votes` | `user_id` | CASCADE | no |
 | `suggestions` | `disposition_updated_by` | SET NULL | yes |
+| `suggestions` | `published_by` | SET NULL | yes |
 | `suggestions` | `submitted_by` | SET NULL | yes |
 | `template_change_logs` | `user_id` | SET NULL | yes |
 | `testing_checklist_entries` | `user_id` | SET NULL | yes |
@@ -10084,7 +10114,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (225 references)
+### → `organizations` (226 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10294,6 +10324,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_forwards` | `organization_id` | CASCADE | no |
 | `suggestion_messages` | `organization_id` | CASCADE | no |
 | `suggestion_status_events` | `organization_id` | CASCADE | no |
+| `suggestion_votes` | `organization_id` | CASCADE | no |
 | `suggestions` | `organization_id` | CASCADE | no |
 | `template_change_logs` | `organization_id` | CASCADE | no |
 | `testing_checklist_entries` | `organization_id` | CASCADE | no |
@@ -10614,6 +10645,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_step_progress` | `step_id` | CASCADE | no |
 | `prospective_members` | `current_step_id` | SET NULL | yes |
 
+### → `suggestions` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `suggestion_attachments` | `suggestion_id` | CASCADE | no |
+| `suggestion_forwards` | `suggestion_id` | CASCADE | no |
+| `suggestion_messages` | `suggestion_id` | CASCADE | no |
+| `suggestion_status_events` | `suggestion_id` | CASCADE | no |
+| `suggestion_votes` | `suggestion_id` | CASCADE | no |
+
 ### → `training_sessions` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -10695,15 +10736,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_product_images` | `product_id` | CASCADE | no |
 | `store_product_variants` | `product_id` | CASCADE | no |
 | `store_window_products` | `product_id` | CASCADE | no |
-
-### → `suggestions` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `suggestion_attachments` | `suggestion_id` | CASCADE | no |
-| `suggestion_forwards` | `suggestion_id` | CASCADE | no |
-| `suggestion_messages` | `suggestion_id` | CASCADE | no |
-| `suggestion_status_events` | `suggestion_id` | CASCADE | no |
 
 ### → `budget_categories` (3 references)
 

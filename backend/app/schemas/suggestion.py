@@ -70,6 +70,8 @@ class SuggestionBoxWrite(BaseModel):
     # watchers existed can still PUT a box without clearing them.
     watcher_position_ids: Optional[List[str]] = Field(None, max_length=50)
     watcher_member_ids: Optional[List[str]] = Field(None, max_length=200)
+    # None leaves the setting alone, for the same reason as the watchers.
+    public_board_enabled: Optional[bool] = None
 
     @field_validator("name")
     @classmethod
@@ -115,6 +117,7 @@ class SuggestionBoxAdminResponse(UTCResponseBase):
     reviewer_members: List[ReviewerRef]
     watcher_positions: List[ReviewerRef] = Field(default_factory=list)
     watcher_members: List[ReviewerRef] = Field(default_factory=list)
+    public_board_enabled: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -142,6 +145,7 @@ class SuggestionBoxPublic(UTCResponseBase):
     description: Optional[str] = None
     anonymity_mode: str
     follow_up_enabled: bool
+    public_board_enabled: bool = False
 
 
 class SubmissionReceipt(UTCResponseBase):
@@ -334,6 +338,14 @@ class ReviewSuggestionDetail(UTCResponseBase):
     via_forward: bool = False
     forwards: List[ForwardResponse] = Field(default_factory=list)
     timeline: List[TimelineEntry] = Field(default_factory=list)
+    # The idea board. can_publish is true only for the box's own reviewers
+    # on a board-enabled box; a forward recipient never publishes.
+    board_enabled: bool = False
+    can_publish: bool = False
+    published_at: Optional[datetime] = None
+    published_title: Optional[str] = None
+    published_summary: Optional[str] = None
+    vote_count: int = 0
 
 
 class ReviewSummary(UTCResponseBase):
@@ -361,3 +373,51 @@ class DispositionUpdate(BaseModel):
     def _public_response(cls, value: Optional[str]) -> Optional[str]:
         value = (value or "").strip()
         return value or None
+
+
+# ---------------------------------------------------------------------------
+# Idea board
+# ---------------------------------------------------------------------------
+
+MAX_BOARD_SUMMARY_LENGTH = 2000
+BoardSort = Literal["top", "new"]
+
+
+class PublishRequest(BaseModel):
+    """The public copy a reviewer writes. It is the only text of the
+    submission that reaches the board."""
+
+    model_config = _REQUEST_CONFIG
+
+    title: str = Field(..., min_length=1, max_length=MAX_TITLE_LENGTH)
+    summary: str = Field(..., min_length=1, max_length=MAX_BOARD_SUMMARY_LENGTH)
+
+    @field_validator("title", "summary")
+    @classmethod
+    def _required(cls, value: str) -> str:
+        return _strip_required(value)
+
+
+class BoardEntry(UTCResponseBase):
+    """A published suggestion as every member sees it. Carries nothing of
+    the original submission: no details, screenshots or submitter."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    box_id: str
+    box_name: str
+    title: str
+    summary: str
+    disposition: str
+    public_response: Optional[str] = None
+    vote_count: int = 0
+    has_voted: bool = False
+    published_at: datetime
+
+
+class BoardList(UTCResponseBase):
+    model_config = _RESPONSE_CONFIG
+
+    items: List[BoardEntry]
+    total: int
