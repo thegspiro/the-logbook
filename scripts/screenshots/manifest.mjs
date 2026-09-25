@@ -6837,7 +6837,7 @@ export const SHOTS = [
     line: 1600,
     anchor:
       "Screenshot of the email preview pane showing the new white-card-on-grey design",
-    alt: "The rendered preview: a white card on grey, its header band, details table and footer",
+    alt: "The rendered preview: a white card on grey, its centred masthead, fact panel and footer",
     route: "/communications/email-templates",
     // The Preview tab, not the editor: the two are alternate views of the same
     // panel and cannot both be on screen.

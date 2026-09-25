@@ -1,5 +1,27 @@
 # Screenshot currency
 
+## Email templates re-shot on the centred-masthead shell, 2026-09-25
+
+The ten email template screens held back from the full sweep below were
+re-captured after migration `f0d76814a9ab` was applied to the demo database.
+Nine are committed; `08-37-email-officers` came back identical and keeps its
+bytes.
+
+| Image | What changed |
+| ----- | ------------ |
+| `08-67-email-preview-design` | The preview is the new shell: organization name centred above a white card on a grey page, an accent-barred label in place of the header band, and the facts in a two-column panel rather than a details table. Its caption, the note under it and its manifest alt said "header band and details table" and now say "centred masthead and fact panel" |
+| `08-34`, `08-36`, `08-56`, `08-57`, `08-58`, `08-65`, `08-66` | The same shell in their preview panes, and the HTML body now opens with the hidden preheader. `08-34` and `08-36` also list eight Members & Accounts templates rather than seven |
+| `08-64-email-footers-tab` | The internal footer carries one line rather than two, and the public footer's count reads 3 templates |
+
+**A second harness leak, fixed in the same change.** The first pass of `08-34`
+came back with its **Officers** tab lit: `08-37` had just clicked that tab on the
+same reused page, and the pointer stayed over it. `capture.mjs` now moves the
+mouse to (0, 0), where a fresh page starts, beside the route reset that closed
+the first leak. Re-run in the same order, `08-34` renders with only
+**Templates** active. Shots in the 2026-09-25 sweep ran before this fix; any of
+them could carry a hover state from the shot before, and none was seen in
+review.
+
 ## Full sweep, 2026-09-25 — 479 images refreshed, 16 held back, 24 shots that did not run
 
 Every entry in the manifest was re-captured from a freshly seeded demo

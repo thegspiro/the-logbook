@@ -2066,10 +2066,10 @@ They now have real template rows with documented variables and sample data.
 > stylesheet**, so future improvements reach you automatically. Templates whose
 > CSS you _did_ edit are left exactly as they are.
 
-![The rendered preview: the white card on grey, its header band and details table](./images/08-67-email-preview-design.png)
+![The rendered preview: the white card on grey, its centred masthead and fact panel](./images/08-67-email-preview-design.png)
 
 Pictured with **Shift Assignment**, whose body carries `{{footer_html}}` — the
-closing block sits below the details table, off the bottom of this frame. The
+closing block sits below the fact panel, off the bottom of this frame. The
 **Sample data** selector above the message swaps in a real member's details, and
 the two small icons beside **Refresh** switch the preview between desktop and
 phone width.
