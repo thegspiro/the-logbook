@@ -487,7 +487,8 @@ What the application cannot promise, and why each is left as it is:
 - **Someone with server access can still correlate by time.** The access log
   records `POST /api/v1/suggestions/boxes/{id}/submissions` with a timestamp
   (and the client IP at debug level), the reviewers' notification email is
-  sent — and logged to `message_history` — at submission time, and session
+  sent — and logged to `message_history` — at submission time, their in-app
+  notification rows carry an exact `sent_at`, and session
   activity is recorded on the member's row. None of these names the submitter
   on its own, but together they can narrow one down for whoever can read the
   server's logs and database. Closing it would mean batching notifications

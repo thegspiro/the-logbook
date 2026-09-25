@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**277 tables · 4612 columns · 900 foreign keys**
+**278 tables · 4618 columns · 904 foreign keys**
 
 ---
 
@@ -547,6 +547,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`suggestion_attachments`](#suggestion_attachments) | `SuggestionAttachment` | 9 | A screenshot, re-encoded to WebP on upload. The display name is |
 | [`suggestion_box_reviewers`](#suggestion_box_reviewers) | `SuggestionBoxReviewer` | 6 | One reviewer grant on a box: either a position or a single member. |
+| [`suggestion_box_watchers`](#suggestion_box_watchers) | `SuggestionBoxWatcher` | 6 | Someone told that a box received a submission, without being able to |
 | [`suggestion_boxes`](#suggestion_boxes) | `SuggestionBox` | 10 | A configurable intake box. Archived via ``is_active``, never deleted, |
 | [`suggestion_forwards`](#suggestion_forwards) | `SuggestionForward` | 7 | One suggestion forwarded to a member or a position. |
 | [`suggestion_messages`](#suggestion_messages) | `SuggestionMessage` | 8 | One entry in a follow-up thread. |
@@ -2351,7 +2352,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2413,7 +2414,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `custom`) | no |  |  |  |
 | `to_emails` | JSON | no |  |  |  |
 | `cc_emails` | JSON | yes |  |  |  |
 | `bcc_emails` | JSON | yes |  |  |  |
@@ -6520,7 +6521,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `trigger` | ENUM(`event_reminder`, `training_expiry`, `schedule_change`, `new_member`, `member_dropped`, `maintenance_due`, `election_started`, `form_submitted`, `action_item_assigned`, `meeting_scheduled`, `document_uploaded`) | no |  |  |  |
+| `trigger` | ENUM(`event_reminder`, `training_expiry`, `schedule_change`, `new_member`, `member_dropped`, `maintenance_due`, `election_started`, `form_submitted`, `action_item_assigned`, `meeting_scheduled`, `document_uploaded`, `suggestion_submitted`) | no |  |  |  |
 | `category` | ENUM(`events`, `training`, `scheduling`, `members`, `maintenance`, `general`) | no |  | `general` |  |
 | `channel` | ENUM(`email`, `in_app`) | no |  | `in_app` |  |
 | `enabled` | BOOL | yes |  | `True` |  |
@@ -7449,6 +7450,30 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_suggestion_reviewer_pos` (`box_id`, `position_id`)
 - UNIQUE `uq_suggestion_reviewer_user` (`box_id`, `user_id`)
+
+### `suggestion_box_watchers`
+
+**SuggestionBoxWatcher** · `app/models/suggestion.py`
+
+> Someone told that a box received a submission, without being able to read it: either a position or a single member. Kept apart from ``SuggestionBoxReviewer`` because the two grant different things. A chief who wants to know the Compliance box is being used must not, by asking, become able to read a complaint about themselves.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `box_id` | VARCHAR(36) | no | FK |  | → `suggestion_boxes.id` ON DELETE CASCADE |
+| `position_id` | VARCHAR(36) | yes | FK |  | → `positions.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE CASCADE |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_suggestion_watchers_org_box` (`organization_id`, `box_id`)
+
+**Constraints**
+
+- UNIQUE `uq_suggestion_watcher_pos` (`box_id`, `position_id`)
+- UNIQUE `uq_suggestion_watcher_user` (`box_id`, `user_id`)
 
 ### `suggestion_boxes`
 
@@ -9696,7 +9721,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (332 references)
+### → `users` (333 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9998,6 +10023,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_product_images` | `uploaded_by` | SET NULL | yes |
 | `store_products` | `created_by` | SET NULL | yes |
 | `suggestion_box_reviewers` | `user_id` | CASCADE | yes |
+| `suggestion_box_watchers` | `user_id` | CASCADE | yes |
 | `suggestion_boxes` | `created_by` | SET NULL | yes |
 | `suggestion_forwards` | `forwarded_by` | SET NULL | yes |
 | `suggestion_forwards` | `user_id` | CASCADE | yes |
@@ -10033,7 +10059,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (223 references)
+### → `organizations` (224 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10238,6 +10264,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_window_products` | `organization_id` | CASCADE | no |
 | `suggestion_attachments` | `organization_id` | CASCADE | no |
 | `suggestion_box_reviewers` | `organization_id` | CASCADE | no |
+| `suggestion_box_watchers` | `organization_id` | CASCADE | no |
 | `suggestion_boxes` | `organization_id` | CASCADE | no |
 | `suggestion_forwards` | `organization_id` | CASCADE | no |
 | `suggestion_messages` | `organization_id` | CASCADE | no |
@@ -10461,6 +10488,18 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_variant_groups` | `category_id` | SET NULL | yes |
 | `reorder_requests` | `category_id` | SET NULL | yes |
 
+### → `positions` (7 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `issuance_allowances` | `role_id` | CASCADE | yes |
+| `org_chart_nodes` | `position_id` | SET NULL | yes |
+| `prospective_members` | `target_role_id` | SET NULL | yes |
+| `suggestion_box_reviewers` | `position_id` | CASCADE | yes |
+| `suggestion_box_watchers` | `position_id` | CASCADE | yes |
+| `suggestion_forwards` | `position_id` | CASCADE | yes |
+| `user_positions` | `position_id` | CASCADE | no |
+
 ### → `storage_areas` (7 references)
 
 | From table | Column | On delete | Nullable |
@@ -10517,17 +10556,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `external_user_mappings` | `provider_id` | CASCADE | no |
 | `training_records` | `external_provider_id` | SET NULL | yes |
 | `xapi_statements` | `source_provider_id` | SET NULL | yes |
-
-### → `positions` (6 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `issuance_allowances` | `role_id` | CASCADE | yes |
-| `org_chart_nodes` | `position_id` | SET NULL | yes |
-| `prospective_members` | `target_role_id` | SET NULL | yes |
-| `suggestion_box_reviewers` | `position_id` | CASCADE | yes |
-| `suggestion_forwards` | `position_id` | CASCADE | yes |
-| `user_positions` | `position_id` | CASCADE | no |
 
 ### → `program_phases` (6 references)
 
@@ -10714,6 +10742,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_order_items` | `order_id` | CASCADE | no |
 | `store_payment_events` | `matched_order_id` | SET NULL | yes |
 
+### → `suggestion_boxes` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `suggestion_box_reviewers` | `box_id` | CASCADE | no |
+| `suggestion_box_watchers` | `box_id` | CASCADE | no |
+| `suggestions` | `box_id` | CASCADE | no |
+
 ### → `suggestions` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -10854,13 +10890,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `store_orders` | `window_id` | SET NULL | yes |
 | `store_window_products` | `window_id` | CASCADE | no |
-
-### → `suggestion_boxes` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `suggestion_box_reviewers` | `box_id` | CASCADE | no |
-| `suggestions` | `box_id` | CASCADE | no |
 
 ### → `apparatus_equipment` (1 references)
 

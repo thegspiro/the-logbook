@@ -20,6 +20,7 @@ from sqlalchemy import func, select, text
 
 from app.api.v1.endpoints import suggestions as suggestion_endpoints
 from app.models.audit import AuditLog
+from app.models.notification import NotificationLog, NotificationRule
 from app.models.suggestion import Suggestion, SuggestionAttachment, SuggestionMessage
 from app.models.user import User
 from app.schemas.suggestion import SuggestionBoxWrite
@@ -30,7 +31,9 @@ from app.services.suggestion_service import (
     forward_notice,
     hash_follow_up_key,
     reviewer_notice,
+    send_suggestion_notice,
     submitter_notice,
+    watcher_notice,
 )
 
 
@@ -402,6 +405,92 @@ class TestBoxConfiguration:
         assert view["reviewer_positions"] == []
         assert [m["id"] for m in view["reviewer_members"]] == [dept["direct_reviewer"]]
 
+    async def test_watchers_are_stored_and_listed(self, db_session, dept):
+        box = await _box(
+            db_session,
+            dept,
+            watcher_member_ids=[dept["admin"]],
+            watcher_position_ids=[dept["training_pos"]],
+        )
+        (view,) = [
+            b
+            for b in await SuggestionService(db_session).list_boxes_for_admin(
+                dept["org"]
+            )
+            if b["id"] == box.id
+        ]
+        assert [m["id"] for m in view["watcher_members"]] == [dept["admin"]]
+        assert [p["id"] for p in view["watcher_positions"]] == [dept["training_pos"]]
+
+    async def test_an_update_that_omits_watchers_keeps_them(self, db_session, dept):
+        # A client written before watchers existed must not clear them by
+        # saving the box.
+        box = await _box(
+            db_session, dept, name="Ideas", watcher_member_ids=[dept["admin"]]
+        )
+        view = await SuggestionService(db_session).update_box(
+            dept["org"],
+            box.id,
+            SuggestionBoxWrite(
+                name="Ideas", reviewer_position_ids=[dept["training_pos"]]
+            ),
+        )
+        assert [m["id"] for m in view["watcher_members"]] == [dept["admin"]]
+
+        cleared = await SuggestionService(db_session).update_box(
+            dept["org"],
+            box.id,
+            SuggestionBoxWrite(
+                name="Ideas",
+                reviewer_position_ids=[dept["training_pos"]],
+                watcher_member_ids=[],
+            ),
+        )
+        assert cleared["watcher_members"] == []
+
+    async def test_foreign_watcher_ids_are_rejected(self, db_session, dept):
+        other_org = await _org(db_session)
+        foreign_pos = await _position(db_session, other_org, "Chief")
+        foreign_user = await _user(db_session, other_org, "Fred")
+        await db_session.flush()
+        service = SuggestionService(db_session)
+        for data in (
+            SuggestionBoxWrite(
+                name="A",
+                reviewer_position_ids=[dept["training_pos"]],
+                watcher_position_ids=[foreign_pos],
+            ),
+            SuggestionBoxWrite(
+                name="B",
+                reviewer_position_ids=[dept["training_pos"]],
+                watcher_member_ids=[foreign_user],
+            ),
+        ):
+            with pytest.raises(ValueError, match="Invalid notified"):
+                await service.create_box(dept["org"], data, dept["admin"])
+
+    async def test_a_watcher_cannot_read_the_box(self, db_session, dept):
+        box = await _box(db_session, dept, watcher_member_ids=[dept["admin"]])
+        suggestion, _ = await _submit(db_session, box, dept["member"])
+        service = SuggestionService(db_session)
+        assert (
+            await service.get_for_review(dept["org"], dept["admin"], suggestion.id)
+            is None
+        )
+        assert box.id not in await service.reviewer_box_ids(dept["org"], dept["admin"])
+
+    async def test_a_watcher_who_reviews_is_notified_once_as_reviewer(
+        self, db_session, dept
+    ):
+        box = await _box(
+            db_session,
+            dept,
+            watcher_member_ids=[dept["admin"], dept["training_officer"]],
+        )
+        assert await SuggestionService(db_session).watcher_recipient_ids(
+            dept["org"], box.id
+        ) == [dept["admin"]]
+
     async def test_archived_box_takes_no_submissions(self, db_session, dept):
         box = await _box(db_session, dept, is_active=False)
         service = SuggestionService(db_session)
@@ -720,6 +809,45 @@ class TestOverHttp:
         assert created.status_code == 201, created.text
         assert created.json()["reviewerMembers"][0]["id"] == dept["direct_reviewer"]
 
+    async def test_watchers_get_a_notice_with_no_link_to_the_submission(
+        self, db_session, dept, upload_dir, sent
+    ):
+        box = await _box(db_session, dept, watcher_member_ids=[dept["admin"]])
+        async with await _client(db_session, dept["member"]) as client:
+            resp = await client.post(
+                f"/suggestions/boxes/{box.id}/submissions",
+                data={"title": "Hose", "details": "Leaks", "anonymous": "true"},
+            )
+        assert resp.status_code == 201, resp.text
+        reviewers, watchers = sent
+        assert reviewers[1] == [dept["training_officer"]]
+        assert watchers[1] == [dept["admin"]]
+        assert watchers[2]["action_path"] == "/suggestions"
+        assert "tab=review" not in watchers[2]["body_html"]
+
+    async def test_a_disabled_rule_sends_no_submission_notice(
+        self, db_session, dept, upload_dir, sent
+    ):
+        db_session.add(
+            NotificationRule(
+                organization_id=dept["org"],
+                name="Suggestions",
+                trigger="suggestion_submitted",
+                category="general",
+                channel="in_app",
+                enabled=False,
+            )
+        )
+        await db_session.flush()
+        box = await _box(db_session, dept, watcher_member_ids=[dept["admin"]])
+        async with await _client(db_session, dept["member"]) as client:
+            resp = await client.post(
+                f"/suggestions/boxes/{box.id}/submissions",
+                data={"title": "Hose", "details": "Leaks"},
+            )
+        assert resp.status_code == 201, resp.text
+        assert sent == []
+
     async def test_disposition_change_notifies_named_submitter(
         self, db_session, dept, sent
     ):
@@ -739,6 +867,89 @@ class TestOverHttp:
         ((_, recipients, notice),) = sent
         assert recipients == [dept["member"]]
         assert "accepted" in notice["body_html"]
+
+
+@pytest.fixture
+def delivered(db_session, monkeypatch):
+    """Run ``send_suggestion_notice`` on the test's session and record every
+    email it hands to the transport."""
+    from app.core.database import database_manager
+    from app.services.email_service import EmailService
+
+    async def _session():
+        yield db_session
+
+    monkeypatch.setattr(database_manager, "get_session", _session)
+    emails = []
+
+    async def _send_email(self, to_emails, subject, html_body, **kwargs):
+        emails.append({"to": list(to_emails), "subject": subject, "html": html_body})
+        return len(to_emails), 0
+
+    monkeypatch.setattr(EmailService, "send_email", _send_email)
+    return emails
+
+
+@pytest.mark.integration
+class TestDelivery:
+    async def test_each_recipient_gets_a_bell_entry_and_their_own_email(
+        self, db_session, dept, upload_dir, delivered
+    ):
+        box = await _box(
+            db_session, dept, reviewer_member_ids=[dept["direct_reviewer"]]
+        )
+        suggestion, _ = await _submit(db_session, box, dept["member"], anonymous=True)
+        recipients = await SuggestionService(db_session).reviewer_recipient_ids(
+            dept["org"], box.id
+        )
+        await send_suggestion_notice(
+            dept["org"],
+            recipients,
+            reviewer_notice(box.name, suggestion.id, reply=False),
+        )
+
+        # One address per email: no reviewer sees another's.
+        assert sorted(len(e["to"]) for e in delivered) == [1, 1]
+        assert all("Details that must never" not in e["html"] for e in delivered)
+        assert all(f"id={suggestion.id}" in e["html"] for e in delivered)
+
+        logs = (
+            (
+                await db_session.execute(
+                    select(NotificationLog).where(
+                        NotificationLog.organization_id == dept["org"],
+                        NotificationLog.category == "suggestions",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert sorted(log.recipient_id for log in logs) == sorted(recipients)
+        for log in logs:
+            assert log.action_url == f"/suggestions?tab=review&id={suggestion.id}"
+            assert log.notification_metadata is None
+            assert "Details that must never" not in (log.message or "")
+            assert dept["member"] not in (log.message or "")
+
+    async def test_inactive_and_foreign_members_are_skipped(
+        self, db_session, dept, delivered
+    ):
+        other_org = await _org(db_session)
+        outsider = await _user(db_session, other_org, "Olga")
+        await db_session.flush()
+        await send_suggestion_notice(
+            dept["org"],
+            [dept["inactive_holder"], outsider, dept["admin"]],
+            watcher_notice("Ideas"),
+        )
+        assert [e["to"] for e in delivered] == [
+            [
+                await db_session.scalar(
+                    select(User.email).where(User.id == dept["admin"])
+                )
+            ]
+        ]
 
 
 # ---------------------------------------------------------------------------

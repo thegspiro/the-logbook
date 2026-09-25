@@ -48,6 +48,10 @@ _DEFAULT_CONFIG: Dict[NotificationTrigger, Dict[str, Any]] = {
     # that carries none, and [24] is the literal the task used before.
     NotificationTrigger.EVENT_REMINDER: {"default_reminder_schedule": [24]},
     NotificationTrigger.TRAINING_EXPIRY: {},
+    # Covers the new-submission notice only. Replies, forwards and status
+    # changes are the conversation itself, and switching them off would leave
+    # a submitter or a forward recipient waiting on a message nobody sends.
+    NotificationTrigger.SUGGESTION_SUBMITTED: {},
 }
 
 

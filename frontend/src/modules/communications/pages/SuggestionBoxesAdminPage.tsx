@@ -15,6 +15,10 @@ import SuggestionBoxFormModal from '../components/SuggestionBoxFormModal';
 import { suggestionsService } from '../services/suggestionsService';
 import type { ReviewerOptions, SuggestionBoxAdmin } from '../types/suggestions';
 
+/** The server's order: accepting boxes first, then by name. */
+const sortBoxes = (boxes: SuggestionBoxAdmin[]): SuggestionBoxAdmin[] =>
+  [...boxes].sort((a, b) => Number(b.isActive) - Number(a.isActive) || a.name.localeCompare(b.name));
+
 const SuggestionBoxesAdminPage: React.FC = () => {
   const [boxes, setBoxes] = useState<SuggestionBoxAdmin[]>([]);
   const [options, setOptions] = useState<ReviewerOptions>({ positions: [], members: [] });
@@ -50,7 +54,7 @@ const SuggestionBoxesAdminPage: React.FC = () => {
   const handleSaved = (saved: SuggestionBoxAdmin) => {
     setBoxes((current) => {
       const exists = current.some((b) => b.id === saved.id);
-      return exists ? current.map((b) => (b.id === saved.id ? saved : b)) : [...current, saved];
+      return sortBoxes(exists ? current.map((b) => (b.id === saved.id ? saved : b)) : [...current, saved]);
     });
     setIsFormOpen(false);
   };
@@ -85,7 +89,7 @@ const SuggestionBoxesAdminPage: React.FC = () => {
         </p>
       )}
 
-      {boxes.length === 0 ? (
+      {error && boxes.length === 0 ? null : boxes.length === 0 ? (
         <EmptyState
           icon={Lightbulb}
           title="No suggestion boxes"
@@ -113,6 +117,11 @@ const SuggestionBoxesAdminPage: React.FC = () => {
                   Reviewers:{' '}
                   {[...box.reviewerPositions, ...box.reviewerMembers].map((r) => r.name).join(', ') || 'none'}
                 </p>
+                {box.watcherPositions.length + box.watcherMembers.length > 0 && (
+                  <p className="text-theme-text-muted text-xs">
+                    Also notified: {[...box.watcherPositions, ...box.watcherMembers].map((r) => r.name).join(', ')}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
