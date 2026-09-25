@@ -7805,6 +7805,7 @@ class Seeder:
             "anonymity_mode": "allowed",
             "follow_up_enabled": True,
             "reviewer_positions": ["Secretary", "Training Officer"],
+            "public_board_enabled": True,
         },
         {
             "name": "Station concerns",
@@ -7852,6 +7853,10 @@ class Seeder:
             "submitter_reply": "Happy to. I'll bring the step chocks from Engine 2.",
             "disposition": "accepted",
             "internal_note": "Added to next month's drill calendar.",
+            "public_response": (
+                "Scheduled for the second Tuesday next month, with Engine 2 "
+                "lighting the scene. Thanks for suggesting it."
+            ),
         },
         {
             "box": "Training ideas",
@@ -7894,6 +7899,43 @@ class Seeder:
             "screenshot": False,
         },
     ]
+
+    # Published by the reviewer after the submissions exist. The copy is the
+    # reviewer's own words, as the guide tells reviewers to write it: no
+    # submitter, no details lifted from the original.
+    SUGGESTION_BOARD_ENTRIES = [
+        {
+            "title": "Night-time vehicle extrication drill",
+            "board_title": "Night-time extrication drill",
+            "summary": (
+                "Run one extrication drill after dark, lit by Engine 2, so crews "
+                "practise cribbing and tool placement the way most bypass calls "
+                "actually happen."
+            ),
+        },
+        {
+            "title": "More hands-on SCBA time for probationary members",
+            "board_title": "Regular hands-on SCBA sessions for probies",
+            "summary": (
+                "A recurring drill-night session on donning, emergency "
+                "procedures and air consumption for members past their air-pack "
+                "sign-off."
+            ),
+        },
+    ]
+    # Who has voted for which board entry, by username. The demo member votes
+    # for the first and not the second, so the board shot shows both button
+    # states; the uneven counts make Top ordering visible.
+    SUGGESTION_BOARD_VOTES = {
+        "Night-time vehicle extrication drill": [
+            DEMO_MEMBER_USERNAME,
+            SUGGESTION_REVIEWER_USERNAME,
+            SUGGESTION_FORWARD_MEMBER_USERNAME,
+        ],
+        "More hands-on SCBA time for probationary members": [
+            SUGGESTION_REVIEWER_USERNAME,
+        ],
+    }
 
     def _user_id(self, username: str) -> str:
         users = items(self.api.get("/users?limit=200"), "users")
@@ -7977,8 +8019,10 @@ class Seeder:
                     "is_active": True,
                     "reviewer_position_ids": reviewer_ids,
                     "reviewer_member_ids": [],
+                    "public_board_enabled": box.get("public_board_enabled", False),
                 },
             )
+        self._enable_suggestion_boards()
 
         # `member_session`, not a bare `login_as`: an account the administrator
         # created is flagged must-change-password, and every call after the
@@ -8066,6 +8110,7 @@ class Seeder:
                     {
                         "disposition": entry["disposition"],
                         "internal_note": entry.get("internal_note"),
+                        "public_response": entry.get("public_response"),
                     },
                 )
             if entry.get("forward_to") and entry["forward_to"] in position_ids:
@@ -8076,6 +8121,7 @@ class Seeder:
             follow_up_key = None
 
         self._seed_suggestion_member_forward(reviewer)
+        self._seed_suggestion_board(reviewer)
 
     def _seed_suggestion_member_forward(self, reviewer: Api) -> None:
         """Forward one submission to a member who reviews no box.
@@ -8123,6 +8169,74 @@ class Seeder:
             self.blocked.append(
                 f"suggestion boxes: {username} does not see {title!r} as forwarded"
             )
+
+    def _enable_suggestion_boards(self) -> None:
+        """Switch the idea board on for a box a previous seed created without it.
+
+        The create above skips an existing box, so without this a database
+        seeded before the board existed would never show the Idea board tab.
+        The write carries the box's current settings, because an update
+        replaces the reviewer set rather than merging into it.
+        """
+        wanted = {
+            b["name"] for b in self.SUGGESTION_BOXES if b.get("public_board_enabled")
+        }
+        for box in items(self.api.get("/suggestions/admin/boxes"), "boxes"):
+            if pick(box, "name") not in wanted:
+                continue
+            if pick(box, "public_board_enabled", "publicBoardEnabled"):
+                continue
+            positions = pick(box, "reviewer_positions", "reviewerPositions") or []
+            members = pick(box, "reviewer_members", "reviewerMembers") or []
+            self.api.put(
+                f"/suggestions/admin/boxes/{pick(box, 'id')}",
+                {
+                    "name": pick(box, "name"),
+                    "description": pick(box, "description"),
+                    "anonymity_mode": pick(box, "anonymity_mode", "anonymityMode"),
+                    "follow_up_enabled": pick(
+                        box, "follow_up_enabled", "followUpEnabled"
+                    ),
+                    "is_active": pick(box, "is_active", "isActive"),
+                    "reviewer_position_ids": [str(pick(p, "id")) for p in positions],
+                    "reviewer_member_ids": [str(pick(m, "id")) for m in members],
+                    "public_board_enabled": True,
+                },
+            )
+
+    def _seed_suggestion_board(self, reviewer: Api) -> None:
+        """Publish two Training ideas submissions and cast the demo votes.
+
+        Runs on every seed. Publishing again replaces the copy with the same
+        text, and a vote already cast is kept, so a re-run changes nothing.
+        """
+        by_title = {
+            pick(s, "title"): str(pick(s, "id"))
+            for s in items(reviewer.get("/suggestions/review?limit=200"), "items")
+        }
+        for entry in self.SUGGESTION_BOARD_ENTRIES:
+            suggestion_id = by_title.get(entry["title"])
+            if not suggestion_id:
+                self.blocked.append(
+                    f"suggestion board: {entry['title']!r} not visible to its reviewer"
+                )
+                continue
+            reviewer.post(
+                f"/suggestions/review/{suggestion_id}/publish",
+                {"title": entry["board_title"], "summary": entry["summary"]},
+            )
+
+        sessions: dict[str, Api] = {self.SUGGESTION_REVIEWER_USERNAME: reviewer}
+        for title, usernames in self.SUGGESTION_BOARD_VOTES.items():
+            suggestion_id = by_title.get(title)
+            if not suggestion_id:
+                continue
+            for username in usernames:
+                if username not in sessions:
+                    sessions[username] = self.member_session(
+                        self.base_url, self._user_id(username), username
+                    )
+                sessions[username].post(f"/suggestions/board/{suggestion_id}/vote", {})
 
     def seed_legal_documents(self) -> list[dict]:
         """One published notice and one draft, so the two states differ on screen.
