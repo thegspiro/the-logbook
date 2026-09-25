@@ -4,6 +4,7 @@ import csv
 import io
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -49,10 +50,20 @@ class _Result:
         return self._values
 
 
-def _db(counts, results):
+class _OrgResult:
+    """The organization lookup the stream makes to resolve its timezone."""
+
+    def __init__(self, tz="America/New_York"):
+        self._org = SimpleNamespace(timezone=tz)
+
+    def scalar_one_or_none(self):
+        return self._org
+
+
+def _db(counts, results, tz="America/New_York"):
     db = Mock()
     db.scalar = AsyncMock(side_effect=counts)
-    db.execute = AsyncMock(side_effect=[_Result(r) for r in results])
+    db.execute = AsyncMock(side_effect=[_OrgResult(tz)] + [_Result(r) for r in results])
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
     db.add = Mock()
@@ -107,7 +118,29 @@ async def test_stream_is_batched_stable_safe_and_logged_successfully():
     assert rows[1][4] == 'one, "quoted"'
     log = db.add.call_args.args[0]
     assert (log.status, log.record_count, log.error_message) == ("successful", 3, None)
-    assert db.execute.await_count == 5
+    # The timezone lookup, then PR batches and check batches.
+    assert db.execute.await_count == 6
+
+
+@pytest.mark.asyncio
+async def test_payment_dates_are_the_departments_calendar_day():
+    """03:00 UTC on Feb 1 is 10 PM on Jan 31 in New York: an evening payment
+    must book on the day the department made it."""
+    paid = datetime(2026, 2, 1, 3, 0, tzinfo=timezone.utc)
+    purchase = PurchaseRequest(
+        id="a",
+        paid_at=paid,
+        request_number="PR-1",
+        vendor="v",
+        title="t",
+        actual_amount=Decimal("1.00"),
+        estimated_amount=Decimal("1.00"),
+    )
+    db = _db([1, 0, 0], [[purchase], [], []])
+    stream = await FinanceService(db).generate_export("org", "user", paid, paid)
+    rows = list(csv.reader(io.StringIO(await _consume(stream))))
+
+    assert rows[1][0] == "01/31/2026"
 
 
 @pytest.mark.asyncio

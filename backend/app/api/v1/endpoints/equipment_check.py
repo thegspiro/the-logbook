@@ -6,8 +6,8 @@ equipment check submissions.
 """
 
 import base64
-from datetime import date
-from typing import List
+from datetime import date, datetime, timezone
+from typing import Any, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import select
@@ -74,6 +74,7 @@ from app.services.equipment_check_service import (
 )
 from app.services.equipment_readiness_service import EquipmentReadinessService
 from app.utils.image_processing import optimize_image
+from app.utils.org_timezone import resolve_scheduling_timezone
 
 router = APIRouter()
 
@@ -1432,6 +1433,16 @@ async def export_csv(
     from app.utils.csv_export import SafeCsvWriter
 
     service = EquipmentCheckService(db)
+    # Check times are UTC; the export reads in the department's zone, keeping
+    # the value's shape (a full timestamp with its offset).
+    org_tz = await resolve_scheduling_timezone(db, current_user.organization_id)
+
+    def local_ts(value: Any) -> Any:
+        if isinstance(value, datetime):
+            aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            return aware.astimezone(org_tz)
+        return value
+
     output = io.StringIO()
     # SafeCsvWriter neutralizes spreadsheet formula injection in free-text cells.
     writer = SafeCsvWriter(output)
@@ -1460,7 +1471,7 @@ async def export_csv(
                     a.get("checks_completed", 0),
                     a.get("pass_count", 0),
                     a.get("fail_count", 0),
-                    a.get("last_check_date", ""),
+                    local_ts(a.get("last_check_date", "")),
                     a.get("last_checked_by", ""),
                     a.get("has_deficiency", False),
                 ]
@@ -1489,7 +1500,7 @@ async def export_csv(
         for f in data.get("items", []):
             writer.writerow(
                 [
-                    f.get("checked_at", ""),
+                    local_ts(f.get("checked_at", "")),
                     f.get("apparatus_name", ""),
                     f.get("compartment_name", ""),
                     f.get("item_name", ""),

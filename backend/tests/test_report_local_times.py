@@ -1,5 +1,5 @@
 """
-Times printed on generated PDFs are the department's, not UTC.
+Times printed on generated PDFs and CSV exports are the department's, not UTC.
 
 A PDF is rendered on the server, so nothing localizes it for the reader. At
 02:30 UTC on October 7 it is 10:30 PM on October 6 in New York: a check done
@@ -129,3 +129,65 @@ class TestImpactPlanPdf:
         text = _text(buf)
         assert "2026-10-06 22:30 EDT" in text
         assert "UTC" not in text
+
+
+class TestAdminHoursExport:
+    async def test_clock_times_and_date_are_local(self):
+        from enum import Enum
+        from unittest.mock import AsyncMock, MagicMock
+
+        from app.services.admin_hours_service import AdminHoursService
+
+        class _Method(Enum):
+            CLOCK = "clock"
+
+        entry = SimpleNamespace(
+            duration_minutes=60,
+            clock_in_at=datetime(2026, 10, 7, 1, 30, tzinfo=timezone.utc),
+            clock_out_at=LATE_EVENING_UTC,
+            entry_method=_Method.CLOCK,
+            status=_Method.CLOCK,
+            description="",
+        )
+        rows = MagicMock()
+        rows.all.return_value = [(entry, "Admin", "Dana", "Reyes", None, None)]
+        org = MagicMock()
+        org.scalar_one_or_none.return_value = _org()
+        db = SimpleNamespace(execute=AsyncMock(side_effect=[rows, org]))
+
+        csv_text = await AdminHoursService(db).export_entries_csv("org-1")
+
+        line = csv_text.splitlines()[1]
+        assert "2026-10-06,2026-10-06 21:30,2026-10-06 22:30" in line
+
+
+class TestEquipmentCheckCsvExport:
+    async def test_check_times_are_local_with_their_offset(self, monkeypatch):
+        from unittest.mock import AsyncMock, MagicMock
+
+        from app.api.v1.endpoints import equipment_check as endpoint
+
+        service = MagicMock()
+        service.get_failure_log = AsyncMock(
+            return_value={
+                "items": [{"checked_at": LATE_EVENING_UTC, "apparatus_name": "E1"}]
+            }
+        )
+        monkeypatch.setattr(endpoint, "EquipmentCheckService", lambda _db: service)
+        org = MagicMock()
+        org.scalar_one_or_none.return_value = _org()
+        db = SimpleNamespace(execute=AsyncMock(return_value=org))
+
+        response = await endpoint.export_csv(
+            report_type="failures",
+            date_from=None,
+            date_to=None,
+            apparatus_id=None,
+            template_item_id=None,
+            db=db,
+            current_user=SimpleNamespace(organization_id="org-1"),
+        )
+        body = "".join([chunk async for chunk in response.body_iterator])
+
+        assert "2026-10-06 22:30:00-04:00" in body
+        assert "+00:00" not in body
