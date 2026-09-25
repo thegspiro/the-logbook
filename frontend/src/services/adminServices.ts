@@ -652,6 +652,11 @@ export const memberStatusService = {
     return response.data;
   },
 
+  async anonymizeMember(userId: string): Promise<import('../types/user').MemberAnonymizationResponse> {
+    const response = await api.post<import('../types/user').MemberAnonymizationResponse>(`/users/${userId}/anonymize`);
+    return response.data;
+  },
+
   async getServiceHistory(userId: string): Promise<import('../types/user').ServiceHistory> {
     const response = await api.get<import('../types/user').ServiceHistory>(`/users/${userId}/service-history`);
     return response.data;

@@ -428,6 +428,14 @@ class InventoryCategory(Base):
     requires_serial_number = Column(Boolean, default=False)
     requires_maintenance = Column(Boolean, default=False)
     low_stock_threshold = Column(Integer)  # Alert when quantity falls below this
+    # Self-service kiosk (NFC phase 4b): members may check items in this
+    # category out themselves. Off unless a quartermaster turns it on.
+    allow_self_checkout = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    # Days a kiosk loan runs before it is due back (and so can go overdue).
+    # Null: kiosk loans from this category have no due date.
+    self_checkout_loan_days = Column(Integer, nullable=True)
     nfpa_tracking_enabled = Column(
         Boolean, default=False, nullable=False, server_default="0"
     )  # Enable NFPA 1851/1852 lifecycle tracking for this category
@@ -443,7 +451,7 @@ class InventoryCategory(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     items = relationship(
@@ -645,7 +653,7 @@ class InventoryItem(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     category = relationship(
@@ -843,8 +851,8 @@ class ItemAssignment(Base):
     expected_return_date = Column(DateTime(timezone=True))
 
     # Assignment Info
-    assigned_by = Column(String(36), ForeignKey("users.id"))
-    returned_by = Column(String(36), ForeignKey("users.id"))
+    assigned_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    returned_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
     assignment_reason = Column(Text)
     return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
     return_notes = Column(Text)
@@ -915,8 +923,8 @@ class ItemIssuance(Base):
     returned_at = Column(DateTime(timezone=True))
 
     # Audit trail
-    issued_by = Column(String(36), ForeignKey("users.id"))
-    returned_by = Column(String(36), ForeignKey("users.id"))
+    issued_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    returned_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Context
     issue_reason = Column(Text)
@@ -1002,7 +1010,7 @@ class IssuanceAllowance(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     category = relationship("InventoryCategory", foreign_keys=[category_id])
@@ -1057,9 +1065,11 @@ class CheckOutRecord(Base):
 
     # Checkout Info
     checked_out_by = Column(
-        String(36), ForeignKey("users.id")
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
     )  # Who approved/logged the checkout
-    checked_in_by = Column(String(36), ForeignKey("users.id"))  # Who logged the return
+    checked_in_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )  # Who logged the return
     checkout_reason = Column(Text)
 
     # Return Condition
@@ -1130,7 +1140,7 @@ class MaintenanceRecord(Base):
     next_due_date = Column(Date, index=True)
 
     # Details
-    performed_by = Column(String(36), ForeignKey("users.id"))
+    performed_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
     vendor_name = Column(String(255))  # If serviced by external vendor
     cost = Column(Numeric(10, 2))
 
@@ -1158,7 +1168,7 @@ class MaintenanceRecord(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     item = relationship(
@@ -1242,8 +1252,8 @@ class DepartureClearance(Base):
     return_deadline = Column(DateTime(timezone=True))
 
     # Who initiated and who signed off
-    initiated_by = Column(String(36), ForeignKey("users.id"))
-    completed_by = Column(String(36), ForeignKey("users.id"))
+    initiated_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    completed_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Notes / context
     departure_type = Column(
@@ -1322,7 +1332,7 @@ class DepartureClearanceItem(Base):
     )
     return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
     resolved_at = Column(DateTime(timezone=True))
-    resolved_by = Column(String(36), ForeignKey("users.id"))
+    resolved_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
     resolution_notes = Column(Text)
 
     # Timestamps
@@ -1391,7 +1401,7 @@ class InventoryNotificationQueue(Base):
     quantity = Column(Integer, nullable=False, default=1, server_default="1")
 
     # Who performed the action
-    performed_by = Column(String(36), ForeignKey("users.id"))
+    performed_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Processing state
     processed = Column(Boolean, default=False, nullable=False, server_default="0")
@@ -1666,7 +1676,7 @@ class StorageArea(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     parent = relationship(
@@ -1842,7 +1852,7 @@ class NFPAItemCompliance(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     item = relationship("InventoryItem", foreign_keys=[item_id])
@@ -1980,7 +1990,7 @@ class NFPAExposureRecord(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     item = relationship("InventoryItem", foreign_keys=[item_id])
@@ -2304,7 +2314,7 @@ class ItemVariantGroup(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     items = relationship(
@@ -2409,7 +2419,7 @@ class EquipmentKit(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     line_items = relationship(

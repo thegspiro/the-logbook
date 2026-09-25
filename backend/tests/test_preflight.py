@@ -20,6 +20,7 @@ _PROD_ENV = {
     "REDIS_PASSWORD": "pw",
     "RATE_LIMIT_ENABLED": "true",
     "ALLOWED_ORIGINS": "https://example.org",
+    "FRONTEND_URL": "https://example.org",
 }
 
 
@@ -50,6 +51,17 @@ class TestExitStatus:
         prod_env.setenv("SECURITY_REQUIRE_TLS", "false")
         assert preflight_main([]) == 0
         assert "this configuration starts" in capsys.readouterr().out
+
+    def test_localhost_frontend_url_blocks_an_otherwise_fixed_configuration(
+        self, prod_env, capsys
+    ):
+        prod_env.setenv("SECURITY_ENFORCE_HTTPS", "true")
+        prod_env.setenv("SECURITY_REQUIRE_TLS", "false")
+        prod_env.setenv("FRONTEND_URL", "http://localhost:3000")
+        assert preflight_main([]) == 1
+        out = capsys.readouterr().out
+        assert "will NOT start" in out
+        assert "CRITICAL: FRONTEND_URL" in out
 
     def test_malformed_value_is_reported_not_raised(self, prod_env, capsys):
         # An empty string for a bool otherwise surfaces as a pydantic

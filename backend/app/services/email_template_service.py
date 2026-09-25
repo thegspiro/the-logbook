@@ -808,7 +808,7 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
                 "Total Outstanding Value: $2,450.00"
             ),
             "performed_by_name": "Chief Robert Johnson",
-            "performed_by_title": "Fire Chief",
+            "performed_by_title": "Chief",
         }
     ),
     "inventory_change": _sample(

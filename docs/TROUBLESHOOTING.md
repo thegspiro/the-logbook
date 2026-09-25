@@ -600,13 +600,14 @@ cannot reach). The send itself reports success.
 never from the address the request arrived on. The shipped default is
 `http://localhost:3000`. Installs made before 2026-09-24 never had it set by
 either installer; `unraid-setup.sh` now writes the HTTPS address it asks for,
-and `universal-install.sh` writes it only when given `--public-url`.
+and `install.sh` and `universal-install.sh` require one (`--public-url`).
 
-**Check**: In production the backend logs this at startup, and
-`python -m app.preflight` lists it under "Advisory":
+**Check**: Since 2026-09-25 a production backend refuses to start in this
+state, and `python -m app.preflight` lists it under "BLOCKING" (staging and
+development are not checked):
 
 ```
-WARNING: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...
+CRITICAL: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...
 ```
 
 **Solution**:
@@ -617,7 +618,9 @@ WARNING: FRONTEND_URL is 'http://localhost:3000', which points at this machine. 
    If nothing prints, add `FRONTEND_URL: ${FRONTEND_URL}` to the backend
    service's `environment:` block — a hand-maintained compose file (including
    Unraid Compose Manager) does not pick up variables it does not list.
-3. Restart the backend.
+3. Restart the backend. See
+   [UPGRADING.md](UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25)
+   if a production backend will not start with this message.
 4. Links already sent keep the old address. Re-send what is still needed —
    members request a new password reset, the secretary re-sends ballots.
 
@@ -8537,7 +8540,7 @@ Pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so bare 
 
 ### Problem: A departed member asks to be erased
 
-**Fix:** `POST /users/{id}/anonymize` scrubs names, contacts, address, DOB, photo, emergency contacts, credentials and MFA material, and the applicant-era prospect record — while keeping operational history (training completions, attendance, dues) as the department's record. `users.anonymized_at` records the event.
+**Fix:** On the member's profile, **Anonymize member** under **Status** (Dropped or Archived members only, `members.manage`; added 2026-09-25), or `POST /users/{id}/anonymize`. It scrubs names, contacts, address, DOB, photo, emergency contacts, credentials and MFA material, and the applicant-era prospect record — while keeping operational history (training completions, attendance, dues) as the department's record. `users.anonymized_at` records the event.
 
 **Edge Case:** Audit logs and election records are deliberately untouched — rewriting them would be tampering. Documents and meeting minutes are excluded from automatic retention deletion for the same reason: destroying official records stays a human decision.
 

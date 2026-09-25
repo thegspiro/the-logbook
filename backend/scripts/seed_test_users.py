@@ -203,7 +203,7 @@ async def get_or_create_positions(session: AsyncSession, org_id: str) -> dict[st
     # All positions from DEFAULT_POSITIONS in permissions.py
     defaults = [
         # Operational ranks
-        ("Fire Chief", "fire_chief", 95),
+        ("Chief", "fire_chief", 95),
         ("Deputy Chief", "deputy_chief", 90),
         ("Assistant Chief", "assistant_chief", 85),
         ("Captain", "captain", 70),

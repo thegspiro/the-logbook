@@ -879,6 +879,27 @@ Cards), the **Scan Member ID** window on the inventory screens also shows
 card marked lost, or one belonging to an inactive member, is refused with the
 reason.
 
+### Self-service kiosk
+
+**Required Permission:** `inventory.kiosk` to open it. Members need only their
+ID card.
+
+**For quartermasters:** edit each category of loaner gear in **Inventory >
+Categories**, turn on **Allow self-checkout at the kiosk**, and set a **Kiosk
+loan period (days)** if loans should be due back. Then open **Inventory Admin >
+Self-Service Kiosk** on a tablet and press **Start kiosk**.
+
+**For members:**
+
+1. Tap your ID card on the tablet.
+2. Tap the item's tag, then **Borrow it**, or, if you are bringing it back,
+   answer whether it is damaged.
+3. Tap **Done** when you are finished.
+
+The kiosk says why it will not lend something (for example, "Ask a
+quartermaster" for restricted gear). It forgets you after a minute without a
+tap.
+
 ### Items not seen
 
 **Required Permission:** `inventory.manage`

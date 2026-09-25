@@ -380,6 +380,10 @@ POST   /api/v1/inventory/nfc/resolve-member              # Tapped member ID card
 GET    /api/v1/inventory/nfc/untagged                    # Active items with no working tag; ?search=&category_id= (inventory.manage)
 GET    /api/v1/inventory/nfc/audit-schedule              # Scheduled areas, overdue first; ?due_only= (inventory.manage)
 PUT    /api/v1/inventory/storage-areas/{id}/audit-schedule # {"audit_frequency": "weekly"|...|null} (inventory.manage)
+POST   /api/v1/inventory/kiosk/identify                  # Card -> member + open loans (inventory.kiosk)
+POST   /api/v1/inventory/kiosk/preview                   # Card + item -> checkout or return, or 409 why not (inventory.kiosk)
+POST   /api/v1/inventory/kiosk/checkout                  # Borrow (inventory.kiosk)
+POST   /api/v1/inventory/kiosk/return                    # Return; damaged + note marks the item damaged (inventory.kiosk)
 GET    /api/v1/inventory/not-seen                        # Items not seen in ?days= (default 180) (inventory.manage; not NFC-gated)
 GET    /api/v1/inventory/not-seen/export                 # The same as CSV, up to 5,000 rows (inventory.manage; not NFC-gated)
 ```
@@ -432,6 +436,22 @@ GET    /api/v1/inventory/not-seen/export                 # The same as CSV, up t
   in-process scheduler forgets its run times on restart. It sends nothing
   when nothing is overdue or NFC is off, and a failed send is retried the
   next day.
+- **Self-service kiosk** (`/inventory/kiosk`, `inventory.kiosk`, seeded to
+  no position). Needs the NFC switch and the NFC ID Cards integration, checked
+  on every kiosk route. Every request carries the card read, and the server
+  re-reads it: the kiosk never sends a member id. Items qualify only when their
+  category has `allow_self_checkout` (default false); pool items, items not
+  `available`, and items failing the rank/position restriction
+  (`InventoryService.member_clears_restrictions`, the request catalog's rule)
+  are refused with a 409 and the reason. A checkout is
+  `InventoryService.checkout_item`, with the member as `user_id`, the kiosk
+  officer as `checked_out_by`, reason "Self-service kiosk", and
+  `expected_return_at` = now + the category's `self_checkout_loan_days` (none
+  when blank). A return is accepted only from the member the item is checked
+  out to. Damaged requires a note and sets the item's condition to `damaged`;
+  otherwise the condition is unchanged. Audit events:
+  `inventory_kiosk_checkout`, and `inventory_kiosk_return` (a warning when
+  damaged).
 - **Member ID card lookup.** With the NFC ID Cards integration connected, the
   member scanner on the inventory screens (distribute, return, member lookup)
   shows **Or tap their ID card**. The card resolves through the same hash and

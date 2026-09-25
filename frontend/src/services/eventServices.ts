@@ -838,6 +838,10 @@ export interface InventoryCategory {
   requires_maintenance: boolean;
   low_stock_threshold?: number;
   nfpa_tracking_enabled: boolean;
+  /** Members may check items in this category out at the self-service kiosk. */
+  allow_self_checkout: boolean;
+  /** Days a kiosk loan runs before it is due back; null = no due date. */
+  self_checkout_loan_days: number | null;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -1550,6 +1554,8 @@ export interface InventoryCategoryCreate {
   requires_maintenance?: boolean | undefined;
   low_stock_threshold?: number | null | undefined;
   nfpa_tracking_enabled?: boolean | undefined;
+  allow_self_checkout?: boolean | undefined;
+  self_checkout_loan_days?: number | null | undefined;
 }
 
 // Guided Setup Types

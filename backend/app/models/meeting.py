@@ -112,7 +112,7 @@ class Meeting(Base):
     motions = Column(Text)
 
     # Approval
-    approved_by = Column(String(36), ForeignKey("users.id"))
+    approved_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
     approved_at = Column(DateTime(timezone=True))
 
     # Timestamps
@@ -120,7 +120,7 @@ class Meeting(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     attendees = relationship(
@@ -176,7 +176,7 @@ class MeetingAttendee(Base):
 
     # Waiver — excuses the member from attendance % penalty (can't vote in this meeting)
     waiver_reason = Column(Text)
-    waiver_granted_by = Column(String(36), ForeignKey("users.id"))
+    waiver_granted_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
     waiver_granted_at = Column(DateTime(timezone=True))
 
     # Timestamps
@@ -222,7 +222,7 @@ class MeetingActionItem(Base):
 
     # Action Item Details
     description = Column(Text, nullable=False)
-    assigned_to = Column(String(36), ForeignKey("users.id"))
+    assigned_to = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
     due_date = Column(Date)
     status = Column(
         Enum(ActionItemStatus, values_callable=lambda x: [e.value for e in x]),

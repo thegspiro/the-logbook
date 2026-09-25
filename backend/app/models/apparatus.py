@@ -389,10 +389,16 @@ class Apparatus(Base):
     # Type and Status
     # ===========================================
     apparatus_type_id = Column(
-        String(36), ForeignKey("apparatus_types.id"), nullable=False, index=True
+        String(36),
+        ForeignKey("apparatus_types.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
     status_id = Column(
-        String(36), ForeignKey("apparatus_statuses.id"), nullable=False, index=True
+        String(36),
+        ForeignKey("apparatus_statuses.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
     status_reason = Column(
         Text, nullable=True
@@ -448,10 +454,13 @@ class Apparatus(Base):
     # Location Assignment
     # ===========================================
     primary_station_id = Column(
-        String(36), ForeignKey("locations.id"), nullable=True, index=True
+        String(36),
+        ForeignKey("locations.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
     )
     current_location_id = Column(
-        String(36), ForeignKey("locations.id"), nullable=True
+        String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
     )  # Can differ from primary
 
     # ===========================================
@@ -989,7 +998,7 @@ class ApparatusMaintenance(Base):
     )
     maintenance_type_id = Column(
         String(36),
-        ForeignKey("apparatus_maintenance_types.id"),
+        ForeignKey("apparatus_maintenance_types.id", ondelete="RESTRICT"),
         nullable=False,
     )
     component_id = Column(
@@ -1574,7 +1583,9 @@ class ApparatusLocationHistory(Base):
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
     )
-    location_id = Column(String(36), ForeignKey("locations.id"), nullable=False)
+    location_id = Column(
+        String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=False
+    )
 
     # Assignment Period
     assigned_date = Column(DateTime(timezone=True), nullable=False)
@@ -1627,7 +1638,11 @@ class ApparatusStatusHistory(Base):
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
     )
-    status_id = Column(String(36), ForeignKey("apparatus_statuses.id"), nullable=False)
+    status_id = Column(
+        String(36),
+        ForeignKey("apparatus_statuses.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
 
     # Status Change Details
     changed_at = Column(

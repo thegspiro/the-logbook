@@ -255,6 +255,15 @@ export interface MemberReactivationResponse {
   service_credit: RejoinServiceCredit;
 }
 
+/**
+ * `POST /users/{id}/anonymize`. Besides these, the backend returns one count
+ * per kind of related record it scrubbed; the profile reads none of them.
+ */
+export interface MemberAnonymizationResponse {
+  user_id: string;
+  anonymized_at: string;
+}
+
 export interface OverdueMember {
   user_id: string;
   name: string;

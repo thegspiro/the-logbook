@@ -432,6 +432,8 @@ class InventoryCategoryBase(BaseModel):
     requires_maintenance: bool = False
     low_stock_threshold: Optional[int] = Field(None, ge=0)
     nfpa_tracking_enabled: bool = False
+    allow_self_checkout: bool = False
+    self_checkout_loan_days: Optional[int] = Field(None, ge=1, le=365)
     metadata: Optional[Dict[str, Any]] = None
 
 
@@ -451,6 +453,8 @@ class InventoryCategoryUpdate(BaseModel):
     requires_maintenance: Optional[bool] = None
     low_stock_threshold: Optional[int] = Field(None, ge=0)
     nfpa_tracking_enabled: Optional[bool] = None
+    allow_self_checkout: Optional[bool] = None
+    self_checkout_loan_days: Optional[int] = Field(None, ge=1, le=365)
     metadata: Optional[Dict[str, Any]] = None
     active: Optional[bool] = None
 

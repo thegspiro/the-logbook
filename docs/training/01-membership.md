@@ -405,11 +405,34 @@ among them. If the member owns any of these, permanent deletion is **refused**
 with a message explaining why. It does not list the specific records.
 
 That is not a failure to work around. The correct route for a member with
-financial history is to **deactivate, then anonymize** them: it strips their
+financial history is to **archive, then anonymize** them: it strips their
 personal information while leaving those records owned, so the department's
-financial trail stays intelligible. **Anonymizing has no button in the app
-yet** — it is available only through the API (`POST /users/{id}/anonymize`,
-`members.manage`).
+financial trail stays intelligible. See
+[Anonymizing a Former Member](#anonymizing-a-former-member-2026-09-25).
+
+### Anonymizing a Former Member _(2026-09-25)_
+
+Anonymizing permanently removes a departed member's personal information while
+keeping the department's record of what they did.
+
+1. Open the member's profile. They must be **Dropped** (voluntary or
+   involuntary) or **Archived**; change their status first if not.
+2. In the **Membership** card, under **Status**, select **Anonymize member**.
+   It appears only to people with `members.manage`, never on your own profile,
+   and not for a Retired, Inactive or Active member — the server refuses those.
+3. Read what is removed and what is kept, type the member's name to confirm,
+   and select **Anonymize**.
+
+**Removed:** name, email, phone numbers, address, date of birth, photo,
+emergency contacts, sign-in credentials, medical screening details, leave and
+waiver reasons, and their original application.
+**Kept:** training, attendance, hours, equipment custody and dues history,
+linked to a placeholder named "Former Member". Audit logs and election records
+are never rewritten.
+
+> **Warning:** Anonymizing cannot be undone. The member also leaves the
+> roster — like a deactivated member, they no longer appear anywhere in the app
+> and cannot be reactivated.
 
 > **If you tried to permanently delete a member before 2026-08-07 and got
 > "Unable to permanently delete the member" with no detail, that was this — the

@@ -154,6 +154,18 @@ export const SEPARATED_STATUSES: readonly UserStatus[] = [
   UserStatus.ARCHIVED,
 ];
 
+/**
+ * Statuses the backend lets an officer anonymize a member from — mirrors
+ * `_DEPARTED_STATUSES` in `member_anonymization_service.py`, which refuses
+ * every other status, so offering the action for one would only fail. Unlike
+ * SEPARATED_STATUSES it excludes Retired.
+ */
+export const ANONYMIZABLE_STATUSES: readonly UserStatus[] = [
+  UserStatus.DROPPED_VOLUNTARY,
+  UserStatus.DROPPED_INVOLUNTARY,
+  UserStatus.ARCHIVED,
+];
+
 /** How a returning member's earlier stints count toward length of service. */
 export const RejoinServiceCredit = {
   CONTINUE: 'continue',

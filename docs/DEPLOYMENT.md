@@ -45,8 +45,8 @@ This guide provides step-by-step instructions for deploying The Logbook platform
      - Install Docker and Docker Compose
      - Generate secure passwords
      - Ask for the public URL members will use, and write it to `FRONTEND_URL`
-       (every link in outgoing email is built from it; press Enter to set it
-       later)
+       (every link in outgoing email is built from it; an answer is required,
+       and a `localhost` address is refused)
      - Set up the database
      - Start all services
 
@@ -110,9 +110,12 @@ All software will be automatically installed by the installation script:
 ```
 
 `--public-url` (or `LOGBOOK_PUBLIC_URL`) sets `FRONTEND_URL`. Without it the
-script asks when run from a terminal; left blank, `FRONTEND_URL` stays at
-`http://localhost:3000` and the script says so when it finishes. On an existing
-`.env` it fills the value in only when it is missing or still `localhost`.
+script asks when run from a terminal and will not accept a blank answer; with
+no terminal it stops before installing anything. A `localhost` or `127.0.0.1`
+URL is refused. On an existing `.env` it asks only when the value is missing or
+still `localhost` — a kept `.env` with a public `FRONTEND_URL` needs nothing.
+A production backend refuses to start with a loopback `FRONTEND_URL`; see
+[UPGRADING.md](UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
 
 > **Production hardening.** `./install.sh --docker` configures a production
 > deployment: it sets `ENVIRONMENT=production` and pins

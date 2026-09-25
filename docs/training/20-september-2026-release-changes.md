@@ -62,13 +62,13 @@
 
 # September 15–23, 2026 changes
 
-| Topic                                                 | Now in                                                                      |
-| ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| Suggestion boxes                                      | [07 — Documents & Forms](./07-documents-forms.md) (Suggestion Boxes)        |
-| The installed app wears your department's logo        | [10 — Mobile & PWA](./10-mobile-pwa.md)                                     |
-| A form will not demand an answer to a hidden question | [07 — Documents & Forms](./07-documents-forms.md) (Adding Fields)           |
-| Meeting stages advance on finalized attendance        | [15 — Prospective Members](./15-prospective-members.md) (Stage Types)       |
-| The pipeline header matches the table                 | [15 — Prospective Members](./15-prospective-members.md)                     |
-| Label printing and "Needs a label"                    | [05 — Inventory](./05-inventory.md) (Label Printing)                        |
-| Medical screening's Add Record dialog                 | [13 — Medical Screening](./13-medical-screening.md) (Recording a Screening) |
-| `FRONTEND_URL` and emailed links                      | [UPGRADING](../UPGRADING.md) (Advisory items)                               |
+| Topic                                                 | Now in                                                                        |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Suggestion boxes                                      | [07 — Documents & Forms](./07-documents-forms.md) (Suggestion Boxes)          |
+| The installed app wears your department's logo        | [10 — Mobile & PWA](./10-mobile-pwa.md)                                       |
+| A form will not demand an answer to a hidden question | [07 — Documents & Forms](./07-documents-forms.md) (Adding Fields)             |
+| Meeting stages advance on finalized attendance        | [15 — Prospective Members](./15-prospective-members.md) (Stage Types)         |
+| The pipeline header matches the table                 | [15 — Prospective Members](./15-prospective-members.md)                       |
+| Label printing and "Needs a label"                    | [05 — Inventory](./05-inventory.md) (Label Printing)                          |
+| Medical screening's Add Record dialog                 | [13 — Medical Screening](./13-medical-screening.md) (Recording a Screening)   |
+| `FRONTEND_URL` and emailed links                      | [UPGRADING](../UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25) |

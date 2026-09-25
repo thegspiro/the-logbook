@@ -175,11 +175,11 @@ const STAGE_PRESETS: StagePreset[] = [
   {
     label: 'Chief Interview',
     name: 'Meeting with Chief',
-    description: 'Schedule a one-on-one meeting with the fire chief.',
+    description: 'Schedule a one-on-one meeting with the chief.',
     stageType: 'meeting',
     config: () => ({
       meeting_type: 'chief_meeting' as MeetingType,
-      meeting_description: 'Interview with the fire chief to discuss expectations and commitment.',
+      meeting_description: 'Interview with the chief to discuss expectations and commitment.',
     }),
   },
   {
