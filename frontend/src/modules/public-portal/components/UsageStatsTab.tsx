@@ -4,7 +4,7 @@
  * Dashboard displaying public portal usage metrics and analytics.
  */
 
-import React from 'react';
+import React, { useId } from 'react';
 import { formatNumber } from '../../../utils/dateFormatting';
 import { useUsageStats } from '../hooks/usePublicPortal';
 
@@ -17,6 +17,7 @@ interface StatCardProps {
 }
 
 const StatCard: React.FC<StatCardProps> = ({ title, value, subtitle, icon, color }) => {
+  const titleId = useId();
   const colorClasses = {
     blue: 'bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400',
     green: 'bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400',
@@ -27,10 +28,12 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subtitle, icon, color
   };
 
   return (
-    <div className="card p-6">
+    <div className="card p-6" role="group" aria-labelledby={titleId}>
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <p className="text-theme-text-secondary text-sm font-medium">{title}</p>
+          <p id={titleId} className="text-theme-text-secondary text-sm font-medium">
+            {title}
+          </p>
           <p className="text-theme-text-primary mt-2 text-3xl font-semibold">{value}</p>
           {subtitle && <p className="text-theme-text-muted mt-1 text-sm">{subtitle}</p>}
         </div>
