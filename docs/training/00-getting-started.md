@@ -126,7 +126,9 @@ After your first login, you will be prompted to change your temporary password. 
 The Logbook uses a sidebar navigation layout by default. Your department can
 switch everyone to a top bar instead, under **Settings → General → Profile →
 Navigation Layout**; the choice applies to every member from their next page
-load. The main areas of the screen are:
+load. On a screen too narrow for every menu group, the top bar keeps the ones
+that fit and puts the rest under **More** at its right-hand end, in the same
+order. The main areas of the screen are:
 
 1. **Sidebar (Left)** - Navigation menu for all modules
 2. **Main Content Area (Center)** - The active page you are working on

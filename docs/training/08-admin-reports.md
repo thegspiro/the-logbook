@@ -200,7 +200,9 @@ Navigate to **Administration > Organization Settings > Organization** to manage 
 - **Logo** upload
 - **Navigation Layout** (under **Profile**) — **Left sidebar**, the default, or
   **Top bar**. It applies to every member from their next page load; nobody
-  chooses their own.
+  chooses their own. The top bar holds one entry per menu group, so the more
+  modules a department has on, the wider it needs to be; groups that do not fit
+  on a member's screen move under **More**.
 
 ![Organization Settings page with department name, timezone and contact details](./images/08-02-organization-settings.png)
 
