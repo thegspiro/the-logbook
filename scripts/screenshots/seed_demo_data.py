@@ -5385,18 +5385,18 @@ class Seeder:
             "Purchase Request Approval",
             [
                 (1, "Company officer review", "Captain"),
-                (2, "Chief approval", "Fire Chief"),
+                (2, "Chief approval", "Chief"),
             ],
         ),
         (
             "expense_report",
             "Expense Reimbursement Approval",
-            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Fire Chief")],
+            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Chief")],
         ),
         (
             "check_request",
             "Check Request Approval",
-            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Fire Chief")],
+            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Chief")],
         ),
     ]
 
