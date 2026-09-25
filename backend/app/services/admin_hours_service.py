@@ -27,6 +27,7 @@ from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.hours import hours_from_minutes
 from app.utils.model_updates import apply_updates
+from app.utils.org_timezone import resolve_scheduling_timezone
 
 # A single manual admin-hours entry cannot span more than a day — bounds the
 # absurd-duration self-credit vector on client-supplied times.
@@ -1181,6 +1182,14 @@ class AdminHoursService:
         result = await self.db.execute(query)
         rows = result.all()
 
+        # Clock times are stored UTC; the export is read as the department's
+        # wall clock, and an evening shift must not land on the next day.
+        org_tz = await resolve_scheduling_timezone(self.db, organization_id)
+
+        def local(value: datetime, fmt: str) -> str:
+            aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            return aware.astimezone(org_tz).strftime(fmt)
+
         output = io.StringIO()
         # SafeCsvWriter neutralizes spreadsheet formula injection in free-text
         # cells (member names, notes).
@@ -1217,18 +1226,14 @@ class AdminHoursService:
                 else ""
             )
             clock_in = (
-                entry.clock_in_at.strftime("%Y-%m-%d %H:%M")
-                if entry.clock_in_at
-                else ""
+                local(entry.clock_in_at, "%Y-%m-%d %H:%M") if entry.clock_in_at else ""
             )
             clock_out = (
-                entry.clock_out_at.strftime("%Y-%m-%d %H:%M")
+                local(entry.clock_out_at, "%Y-%m-%d %H:%M")
                 if entry.clock_out_at
                 else ""
             )
-            date_str = (
-                entry.clock_in_at.strftime("%Y-%m-%d") if entry.clock_in_at else ""
-            )
+            date_str = local(entry.clock_in_at, "%Y-%m-%d") if entry.clock_in_at else ""
             approver_name = (
                 f"{approver_first} {approver_last}"
                 if approver_first and approver_last
