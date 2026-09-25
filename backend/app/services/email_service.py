@@ -61,6 +61,14 @@ def _redact_email(address: str) -> str:
     return "***"
 
 
+# One address, nothing else: no display name, no list, no whitespace. Deliberately
+# narrow — this decides whether the department's stored contact address is fit
+# for a Reply-To header, and "not fit" costs only the header, never the send.
+_REPLY_TO_ADDRESS = re.compile(
+    r"[^@\s<>,;:\"()\[\]]+@[^@\s<>,;:\"()\[\]]+\.[A-Za-z]{2,}"
+)
+
+
 def inline_email_css(html: str) -> str:
     """Inline ``<style>`` CSS into HTML element ``style=""`` attributes.
 
@@ -1106,6 +1114,27 @@ class EmailService:
         )
         return list(results)
 
+    def default_reply_to(self) -> Optional[str]:
+        """Where a reply goes when the caller did not say: the department.
+
+        The sending address is often an unattended one (a relay account, a
+        ``noreply@``), and members reply to notices anyway — to ask about a
+        shift, to say they cannot make a drill. Without a Reply-To those
+        replies land in a mailbox nobody reads, or bounce, and a recipient
+        whose reply goes nowhere learns to mark the sender as spam. The
+        department's own contact address is the one somebody answers.
+
+        ``None`` when the organization has no usable address, which leaves the
+        message exactly as it was: replies go to the From address. The value
+        is checked here rather than trusted because it lands in a header —
+        ``_sanitize_header`` strips line breaks, but an address with a space
+        or a second ``@`` is still not one a mail client can reply to.
+        """
+        address = str(getattr(self.organization, "email", None) or "").strip()
+        if not address or not _REPLY_TO_ADDRESS.fullmatch(address):
+            return None
+        return address
+
     def build_message(
         self,
         to_email: str,
@@ -1161,6 +1190,7 @@ class EmailService:
         SMTP server it has not configured.
         """
         html_body = inline_email_css(html_body)
+        reply_to = reply_to or self.default_reply_to()
 
         msg = MIMEMultipart("alternative")
         if text_body:
@@ -1313,6 +1343,7 @@ class EmailService:
         # Inline CSS: convert <style> class rules to inline style=""
         # attributes so they survive Gmail's <style> stripping.
         html_body = inline_email_css(html_body)
+        reply_to = reply_to or self.default_reply_to()
 
         # --- Cloudflare Email Service path (REST API, no SMTP) ---
         if self._use_cloudflare:
