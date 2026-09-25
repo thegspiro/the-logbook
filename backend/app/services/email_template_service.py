@@ -26,6 +26,7 @@ from app.models.email_template import (
 )
 from app.services import email_footers as _footers
 from app.services import email_templates_storefront as _storefront_templates
+from app.services.branding_service import email_logo_src
 from app.services.email_theme import (  # noqa: F401  (re-exported: many services import DEFAULT_CSS from here)
     ACCENT_AMBER,
     ACCENT_BLUE,
@@ -40,11 +41,15 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     TD_STYLE,
     TFOOT_STYLE,
     TH_STYLE,
+    action,
     build_email_document,
+    build_logo_block,
     build_logo_cell,
     build_shell,
     colourway_context,
     colourway_for,
+    fact,
+    facts,
 )
 from app.utils.model_updates import apply_updates
 
@@ -196,12 +201,14 @@ RENDERER_INJECTED_VARIABLES: frozenset = frozenset(
     {
         "organization_logo_img",
         "organization_logo_cell",
+        "organization_logo_block",
         # The colourway. Filled from the template's own columns rather than
         # by a caller, which is the whole point of them being columns.
         "header_accent",
         "chip_tint",
         "status_chip",
         "status_chip_cell",
+        "status_line",
         "content_class",
         "footer_html",
         "footer_text",
@@ -1160,15 +1167,18 @@ DEFAULT_WELCOME_HTML = build_shell(
     "Your account is ready",
     """        <p>Hello {{first_name}},</p>
         <p>Your account has been created for <strong>{{organization_name}}</strong>. You can now log in and access the system.</p>
-        <div class="details" style="border-left-color: {accent};" role="region" aria-label="Account credentials">
-            <table>
-                <tr><th>Username</th><td>{{username}}</td></tr>
-                <tr><th>Temporary password</th><td>{{temp_password}}</td></tr>
-            </table>
-        </div>
-        <p>For security, please change your password after your first login.</p>
-        <p><a href="{{login_url}}" class="button" style="background-color: {accent};" role="link">Log In Now</a></p>
-        <p class="fineprint">If the button doesn't work, copy and paste this URL into your browser:<br/>{{login_url}}</p>""",
+"""
+    + facts(
+        [
+            [
+                fact("Username", "{{username}}", mono=True),
+                fact("Temporary password", "{{temp_password}}", mono=True),
+            ],
+        ]
+    )
+    + """        <p>For security, please change your password after your first login.</p>
+"""
+    + action("{{login_url}}", "Log In Now"),
     accent=ACCENT_RED,
     chip="Account ready",
 )
@@ -1195,9 +1205,9 @@ DEFAULT_PASSWORD_RESET_HTML = build_shell(
     "Reset your password",
     """        <p>Hello {{first_name}},</p>
         <p>We received a request to reset your password for <strong>{{organization_name}}</strong>. This link expires in <strong>{{expiry_minutes}} minutes</strong>.</p>
-        <p><a href="{{reset_url}}" class="button" style="background-color: {accent};" role="link">Reset Password</a></p>
-        <p class="fineprint">If the button doesn't work, copy and paste this URL into your browser:<br/>{{reset_url}}</p>
-        <p>If you did not request a password reset, you can safely ignore this email. Your password will not be changed.</p>""",
+"""
+    + action("{{reset_url}}", "Reset Password")
+    + """        <p>If you did not request a password reset, you can safely ignore this email. Your password will not be changed.</p>""",
     accent=ACCENT_SLATE,
     chip="Security",
 )
@@ -1228,14 +1238,17 @@ DEFAULT_MEMBER_DROPPED_HTML = build_shell(
             <strong>{{drop_type_display}}</strong> effective <strong>{{effective_date}}</strong>.
         </p>
         <p><strong>Reason:</strong> {{reason}}</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Outstanding items</th><td>{{item_count}} item(s)</td></tr>
-                <tr><th>Total assessed value</th><td>${{total_value}}</td></tr>
-                <tr><th>Return deadline</th><td>{{return_deadline}}</td></tr>
-            </table>
-        </div>
-        {{items_list_html}}
+"""
+    + facts(
+        [
+            [fact("Return deadline", "{{return_deadline}}")],
+            [
+                fact("Outstanding items", "{{item_count}} item(s)"),
+                fact("Total assessed value", "${{total_value}}"),
+            ],
+        ]
+    )
+    + """        {{items_list_html}}
         <p>
             In accordance with department policy, all department-issued property must be
             returned in its current condition by the deadline above. Please contact the
@@ -1336,17 +1349,21 @@ DEFAULT_INVENTORY_CHANGE_SUBJECT = "Inventory Update — {{organization_name}}"
 DEFAULT_CERT_EXPIRATION_HTML = build_shell(
     "{{cert_name}} expires in {{days_remaining}} days",
     """        <p>Hello {{recipient_name}}, this is a reminder that your certification is approaching its expiration date.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Certification</th><td>{{cert_name}}</td></tr>
-                <tr><th>Expiration date</th><td>{{expiration_date}}</td></tr>
-                <tr><th>Days remaining</th><td>{{days_remaining}}</td></tr>
-            </table>
-        </div>
-        <div class="alert">
+"""
+    + facts(
+        [
+            [
+                fact("Expiration date", "{{expiration_date}}"),
+                fact("Days remaining", "{{days_remaining}}"),
+            ],
+            [fact("Certification", "{{cert_name}}")],
+        ]
+    )
+    + """        <div class="alert">
             <p>Renew before it expires to stay compliant for calls and drills.</p>
         </div>
-        <p><a href="{{renewal_url}}" class="button" style="background-color: {accent};" role="link">View Certifications</a></p>""",
+"""
+    + action("{{renewal_url}}", "View Certifications"),
     accent=ACCENT_AMBER,
     chip="Action required",
 )
@@ -1375,15 +1392,19 @@ DEFAULT_CERT_EXPIRATION_SUBJECT = (
 DEFAULT_POST_EVENT_VALIDATION_HTML = build_shell(
     "Please Validate Attendance",
     """        <p>Hello {{recipient_name}}, the following event has ended and needs attendance validation.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Event</th><td>{{event_title}}</td></tr>
-                <tr><th>Date</th><td>{{event_date}}</td></tr>
-                <tr><th>Recorded attendees</th><td>{{attendee_count}}</td></tr>
-            </table>
-        </div>
-        <p>Please review and validate the attendance records at your earliest convenience.</p>
-        <p><a href="{{validation_url}}" class="button" style="background-color: {accent};" role="link">Validate Attendance</a></p>""",
+"""
+    + facts(
+        [
+            [fact("Event", "{{event_title}}")],
+            [
+                fact("Date", "{{event_date}}"),
+                fact("Recorded attendees", "{{attendee_count}}"),
+            ],
+        ]
+    )
+    + """        <p>Please review and validate the attendance records at your earliest convenience.</p>
+"""
+    + action("{{validation_url}}", "Validate Attendance"),
     accent=ACCENT_BLUE,
     chip="Action required",
 )
@@ -1410,15 +1431,19 @@ DEFAULT_POST_EVENT_VALIDATION_SUBJECT = "Attendance Validation Needed: {{event_t
 DEFAULT_POST_SHIFT_VALIDATION_HTML = build_shell(
     "Shift Attendance Validation",
     """        <p>Hello {{recipient_name}}, the following shift has ended and needs attendance validation.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Shift</th><td>{{shift_name}}</td></tr>
-                <tr><th>Date</th><td>{{shift_date}}</td></tr>
-                <tr><th>Members on shift</th><td>{{attendee_count}}</td></tr>
-            </table>
-        </div>
-        <p>Please review and confirm the shift attendance.</p>
-        <p><a href="{{validation_url}}" class="button" style="background-color: {accent};" role="link">Validate Shift</a></p>""",
+"""
+    + facts(
+        [
+            [fact("Shift", "{{shift_name}}")],
+            [
+                fact("Date", "{{shift_date}}"),
+                fact("Members on shift", "{{attendee_count}}"),
+            ],
+        ]
+    )
+    + """        <p>Please review and confirm the shift attendance.</p>
+"""
+    + action("{{validation_url}}", "Validate Shift"),
     accent=ACCENT_GREEN,
     chip="Action required",
 )
@@ -1448,15 +1473,20 @@ DEFAULT_PROPERTY_RETURN_REMINDER_HTML = build_shell(
     "Property Return Reminder",
     """        <p>Dear {{member_name}},</p>
         <p>This is a reminder that you still have outstanding department property that needs to be returned.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Outstanding items</th><td>{{item_count}} item(s)</td></tr>
-                <tr><th>Total assessed value</th><td>${{total_value}}</td></tr>
-                <tr><th>Days since separation</th><td>{{days_since_drop}}</td></tr>
-                <tr><th>Return deadline</th><td>{{return_deadline}}</td></tr>
-            </table>
-        </div>
-        {{items_list_html}}
+"""
+    + facts(
+        [
+            [
+                fact("Return deadline", "{{return_deadline}}"),
+                fact("Days since separation", "{{days_since_drop}}"),
+            ],
+            [
+                fact("Outstanding items", "{{item_count}} item(s)"),
+                fact("Total assessed value", "${{total_value}}"),
+            ],
+        ]
+    )
+    + """        {{items_list_html}}
         <p>Please contact the department administration to arrange return of these items as soon as possible.</p>""",
     accent=ACCENT_RED,
     chip="Reminder",
@@ -1487,16 +1517,20 @@ DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT = (
 DEFAULT_INACTIVITY_WARNING_HTML = build_shell(
     "Prospective Member Inactivity Alert",
     """        <p>Hello {{coordinator_name}}, a prospective member in your pipeline has been inactive and may need attention.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Prospect</th><td>{{prospect_name}}</td></tr>
-                <tr><th>Current stage</th><td>{{pipeline_stage}}</td></tr>
-                <tr><th>Days inactive</th><td>{{days_inactive}} days</td></tr>
-                <tr><th>Timeout threshold</th><td>{{timeout_days}} days</td></tr>
-            </table>
-        </div>
-        <p>Please review their progress and take appropriate action.</p>
-        <p><a href="{{prospect_url}}" class="button" style="background-color: {accent};" role="link">View Prospect</a></p>""",
+"""
+    + facts(
+        [
+            [fact("Prospect", "{{prospect_name}}")],
+            [fact("Current stage", "{{pipeline_stage}}")],
+            [
+                fact("Days inactive", "{{days_inactive}} days"),
+                fact("Timeout threshold", "{{timeout_days}} days"),
+            ],
+        ]
+    )
+    + """        <p>Please review their progress and take appropriate action.</p>
+"""
+    + action("{{prospect_url}}", "View Prospect"),
     accent=ACCENT_AMBER,
     chip="Needs attention",
 )
@@ -1526,14 +1560,15 @@ DEFAULT_INACTIVITY_WARNING_SUBJECT = (
 DEFAULT_ELECTION_ROLLBACK_HTML = build_shell(
     "Election Rolled Back",
     """        <p>Hello {{recipient_name}}, an election has been rolled back to a previous stage.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Election</th><td>{{election_title}}</td></tr>
-                <tr><th>Rolled back by</th><td>{{performer_name}}</td></tr>
-                <tr><th>Reason</th><td>{{reason}}</td></tr>
-            </table>
-        </div>
-        <div class="alert">
+"""
+    + facts(
+        [
+            [fact("Election", "{{election_title}}")],
+            [fact("Rolled back by", "{{performer_name}}")],
+            [fact("Reason", "{{reason}}")],
+        ]
+    )
+    + """        <div class="alert">
             <p>Votes recorded after the stage this election returned to are no longer counted.</p>
         </div>
         <p>Please review the election details and coordinate with your team as needed.</p>""",
@@ -1561,14 +1596,15 @@ DEFAULT_ELECTION_ROLLBACK_SUBJECT = "ALERT: Election Rolled Back — {{election_
 DEFAULT_ELECTION_DELETED_HTML = build_shell(
     "Election Deleted",
     """        <p>Hello {{recipient_name}}, an election has been permanently deleted.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Election</th><td>{{election_title}}</td></tr>
-                <tr><th>Deleted by</th><td>{{performer_name}}</td></tr>
-                <tr><th>Reason</th><td>{{reason}}</td></tr>
-            </table>
-        </div>
-        <div class="alert">
+"""
+    + facts(
+        [
+            [fact("Election", "{{election_title}}")],
+            [fact("Deleted by", "{{performer_name}}")],
+            [fact("Reason", "{{reason}}")],
+        ]
+    )
+    + """        <div class="alert">
             <p>All associated ballots and results have been removed. This cannot be undone.</p>
         </div>
         <p>If you have questions, please contact {{performer_name}}.</p>""",
@@ -1652,15 +1688,18 @@ DEFAULT_EVENT_REQUEST_STATUS_SUBJECT = "Event Request Update — {{status_label}
 DEFAULT_IT_PASSWORD_NOTIFICATION_HTML = build_shell(
     "IT Notice: Password Reset Requested",
     """        <p>A password reset has been requested for the following user.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>User</th><td>{{user_name}}</td></tr>
-                <tr><th>Email</th><td>{{user_email}}</td></tr>
-                <tr><th>Requested at</th><td>{{request_time}}</td></tr>
-                <tr><th>IP address</th><td>{{ip_address}}</td></tr>
-            </table>
-        </div>
-        <p>This is an informational notice. No action is required unless the request appears suspicious.</p>""",
+"""
+    + facts(
+        [
+            [fact("User", "{{user_name}}")],
+            [fact("Email", "{{user_email}}")],
+            [
+                fact("Requested at", "{{request_time}}"),
+                fact("IP address", "{{ip_address}}"),
+            ],
+        ]
+    )
+    + """        <p>This is an informational notice. No action is required unless the request appears suspicious.</p>""",
     accent=ACCENT_SLATE,
     chip="Security",
 )
@@ -1751,18 +1790,22 @@ DEFAULT_APPLICATION_WITHDRAWN_SUBJECT = (
 DEFAULT_BALLOT_NOTIFICATION_HTML = build_shell(
     "{{election_title}}",
     """        <p>Hello {{recipient_name}}, a ballot is now available for your review and vote.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Meeting date</th><td>{{meeting_date}}</td></tr>
-                <tr><th>Voting opens</th><td>{{voting_opens}}</td></tr>
-                <tr><th>Voting closes</th><td>{{voting_closes}}</td></tr>
-            </table>
-        </div>
-        <h2>Your ballot items</h2>
+"""
+    + facts(
+        [
+            [
+                fact("Voting opens", "{{voting_opens}}"),
+                fact("Voting closes", "{{voting_closes}}"),
+            ],
+            [fact("Meeting date", "{{meeting_date}}")],
+        ]
+    )
+    + """        <h2>Your ballot items</h2>
         {{ballot_items_html}}
         {{custom_message_html}}
-        <p><a href="{{ballot_url}}" class="button" style="background-color: {accent};" role="link">Vote Now</a></p>
-        <p class="fineprint">Clicking the link above will automatically log you in to vote.</p>
+"""
+    + action("{{ballot_url}}", "Vote Now")
+    + """        <p class="fineprint">Clicking the link above will automatically log you in to vote.</p>
         <p>If you have any questions, please contact your election administrator:<br/>
         <strong>{{admin_contact_name}}</strong> ({{admin_contact_email}})</p>""",
     accent=ACCENT_INDIGO,
@@ -1800,23 +1843,29 @@ DEFAULT_BALLOT_NOTIFICATION_SUBJECT = "Ballot Available: {{election_title}}"
 DEFAULT_ELECTION_REPORT_HTML = build_shell(
     "Election Report",
     """        <p>Hello {{recipient_name}}, the following election has been closed. Below is the official report.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Election</th><td>{{election_title}}</td></tr>
-                <tr><th>Type</th><td>{{election_type}}</td></tr>
-                <tr><th>Voting period</th><td>{{start_date}} &mdash; {{end_date}}</td></tr>
-            </table>
-        </div>
-        <h2>Turnout &amp; quorum</h2>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Eligible voters</th><td>{{total_eligible_voters}}</td></tr>
-                <tr><th>Votes cast</th><td>{{total_votes_cast}}</td></tr>
-                <tr><th>Turnout</th><td>{{voter_turnout_percentage}}%</td></tr>
-                <tr><th>Quorum</th><td>{{quorum_status}}</td></tr>
-            </table>
-            <p>{{quorum_detail}}</p>
-        </div>
+"""
+    + facts(
+        [
+            [fact("Election", "{{election_title}}")],
+            [fact("Type", "{{election_type}}")],
+            [fact("Voting period", "{{start_date}} &mdash; {{end_date}}")],
+        ]
+    )
+    + """        <h2>Turnout &amp; quorum</h2>
+"""
+    + facts(
+        [
+            [
+                fact("Eligible voters", "{{total_eligible_voters}}"),
+                fact("Votes cast", "{{total_votes_cast}}"),
+            ],
+            [
+                fact("Turnout", "{{voter_turnout_percentage}}%"),
+                fact("Quorum", "{{quorum_status}}"),
+            ],
+        ]
+    )
+    + """        <p>{{quorum_detail}}</p>
         <h2>Results</h2>
         {{results_html}}
         <h2>Ballot recipients ({{total_eligible_voters}})</h2>
@@ -1867,14 +1916,17 @@ DEFAULT_ELECTION_REPORT_SUBJECT = (
 DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML = build_shell(
     "Ballot Eligibility Summary",
     """        <p>Hello {{recipient_name}}, ballot emails for <strong>{{election_title}}</strong> have been sent. Below is a summary of member eligibility.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Ballots sent</th><td>{{sent_count}}</td></tr>
-                <tr><th>Members skipped</th><td>{{skipped_count}}</td></tr>
-                <tr><th>Total checked in</th><td>{{total_checked_in}}</td></tr>
-            </table>
-        </div>
-        <h2>Members who received ballots ({{sent_count}})</h2>
+"""
+    + facts(
+        [
+            [
+                fact("Ballots sent", "{{sent_count}}"),
+                fact("Members skipped", "{{skipped_count}}"),
+            ],
+            [fact("Total checked in", "{{total_checked_in}}")],
+        ]
+    )
+    + """        <h2>Members who received ballots ({{sent_count}})</h2>
         {{recipients_html}}
         <h2>Members who did not receive ballots ({{skipped_count}})</h2>
         <div class="alert">
@@ -1925,14 +1977,15 @@ DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT = (
 DEFAULT_EVENT_CANCELLATION_HTML = build_shell(
     "Event Cancelled",
     """        <p>Hello {{recipient_name}}, the following event has been cancelled.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Event</th><td>{{event_title}}</td></tr>
-                <tr><th>Original date</th><td>{{event_date}}</td></tr>
-                <tr><th>Reason</th><td>{{reason}}</td></tr>
-            </table>
-        </div>
-        <p>Please update your calendar accordingly. If you have questions, contact your department leadership.</p>""",
+"""
+    + facts(
+        [
+            [fact("Event", "{{event_title}}")],
+            [fact("Original date", "{{event_date}}")],
+            [fact("Reason", "{{reason}}")],
+        ]
+    )
+    + """        <p>Please update your calendar accordingly. If you have questions, contact your department leadership.</p>""",
     accent=ACCENT_BLUE,
     chip="Cancelled",
 )
@@ -1959,15 +2012,15 @@ DEFAULT_EVENT_CANCELLATION_SUBJECT = (
 DEFAULT_EVENT_REMINDER_HTML = build_shell(
     "{{event_title}}",
     """        <p>Hello {{recipient_name}}, this is a reminder about an upcoming event.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Type</th><td>{{event_type}}</td></tr>
-                <tr><th>Start</th><td>{{event_start}}</td></tr>
-                <tr><th>End</th><td>{{event_end}}</td></tr>
-                <tr><th>Location</th><td>{{location_name}}<br/>{{location_details}}</td></tr>
-            </table>
-        </div>
-        <p><a href="{{event_url}}" class="button" style="background-color: {accent};" role="link">View Event</a></p>""",
+"""
+    + facts(
+        [
+            [fact("Start", "{{event_start}}"), fact("End", "{{event_end}}")],
+            [fact("Location", "{{location_name}}<br/>{{location_details}}")],
+            [fact("Type", "{{event_type}}")],
+        ]
+    )
+    + action("{{event_url}}", "View Event"),
     accent=ACCENT_BLUE,
     chip="Reminder",
     subtitle="{{event_start}}",
@@ -1996,16 +2049,20 @@ DEFAULT_EVENT_REMINDER_SUBJECT = "Reminder: {{event_title}} — {{event_start}}"
 DEFAULT_SERIES_END_REMINDER_HTML = build_shell(
     "Recurring Series Ending Soon",
     """        <p>Hello {{recipient_name}}, this is a reminder that the following recurring event series is scheduled to end in approximately <strong>6 months</strong>.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Event</th><td>{{event_title}}</td></tr>
-                <tr><th>Pattern</th><td>{{recurrence_pattern}}</td></tr>
-                <tr><th>Series ends</th><td>{{series_end_date}}</td></tr>
-                <tr><th>Remaining occurrences</th><td>{{remaining_occurrences}}</td></tr>
-            </table>
-        </div>
-        <p>If you would like to extend or modify this series, please update the event before the series end date.</p>
-        <p><a href="{{event_url}}" class="button" style="background-color: {accent};" role="link">View Event</a></p>""",
+"""
+    + facts(
+        [
+            [
+                fact("Series ends", "{{series_end_date}}"),
+                fact("Remaining occurrences", "{{remaining_occurrences}}"),
+            ],
+            [fact("Event", "{{event_title}}")],
+            [fact("Pattern", "{{recurrence_pattern}}")],
+        ]
+    )
+    + """        <p>If you would like to extend or modify this series, please update the event before the series end date.</p>
+"""
+    + action("{{event_url}}", "View Event"),
     accent=ACCENT_BLUE,
     chip="Ending soon",
     subtitle="{{series_end_date}}",
@@ -2036,17 +2093,17 @@ DEFAULT_SERIES_END_REMINDER_SUBJECT = (
 DEFAULT_TRAINING_APPROVAL_HTML = build_shell(
     "Training Approval Needed",
     """        <p>Hello, a training event has been submitted and requires your approval.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Course</th><td>{{course_name}}</td></tr>
-                <tr><th>Event</th><td>{{event_title}}</td></tr>
-                <tr><th>Date</th><td>{{event_date}}</td></tr>
-                <tr><th>Attendees</th><td>{{attendee_count}}</td></tr>
-                <tr><th>Submitted by</th><td>{{submitter_name}}</td></tr>
-                <tr><th>Approval deadline</th><td>{{approval_deadline}}</td></tr>
-            </table>
-        </div>
-        <p><a href="{{approval_url}}" class="button" style="background-color: {accent};" role="link">Review &amp; Approve</a></p>""",
+"""
+    + facts(
+        [
+            [fact("Approval deadline", "{{approval_deadline}}")],
+            [fact("Course", "{{course_name}}")],
+            [fact("Event", "{{event_title}}")],
+            [fact("Date", "{{event_date}}"), fact("Attendees", "{{attendee_count}}")],
+            [fact("Submitted by", "{{submitter_name}}")],
+        ]
+    )
+    + action("{{approval_url}}", "Review &amp; Approve"),
     accent=ACCENT_AMBER,
     chip="Approval needed",
     subtitle="Due {{approval_deadline}}",
@@ -2084,17 +2141,18 @@ DEFAULT_TRAINING_APPROVAL_SUBJECT = (
 DEFAULT_SHIFT_ASSIGNMENT_HTML = build_shell(
     "New shift assignment",
     """        <p>Hello {{recipient_name}}, you have been assigned to an upcoming shift.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Position</th><td>{{position}}</td></tr>
-                <tr><th>Date</th><td>{{shift_date}}</td></tr>
-                <tr><th>Starts</th><td>{{shift_start}}</td></tr>
-            </table>
-        </div>
-        {{checklist_html}}
+"""
+    + facts(
+        [
+            [fact("Date", "{{shift_date}}"), fact("Starts", "{{shift_start}}")],
+            [fact("Position", "{{position}}")],
+        ]
+    )
+    + """        {{checklist_html}}
         <p>Please confirm or decline this assignment so the shift officer knows
         whether the position is covered.</p>
-        <p><a href="{{shift_url}}" class="button" style="background-color: {accent};" role="link">View Shift</a></p>""",
+"""
+    + action("{{shift_url}}", "View Shift"),
     accent=ACCENT_GREEN,
     chip="Assignment",
     subtitle="{{shift_date}}",
@@ -2124,14 +2182,15 @@ DEFAULT_SHIFT_ASSIGNMENT_SUBJECT = "Shift Assignment: {{position}} on {{shift_da
 DEFAULT_SHIFT_DECLINE_HTML = build_shell(
     "Shift Coverage Needed",
     """        <p><strong>{{member_name}}</strong> {{action}} the following position. It is now open.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Position</th><td>{{position}}</td></tr>
-                <tr><th>Date</th><td>{{shift_date}}</td></tr>
-            </table>
-        </div>
-        <p>Please assign a replacement so the shift is not left short.</p>
-        <p><a href="{{shift_url}}" class="button" style="background-color: {accent};" role="link">Open the Schedule</a></p>""",
+"""
+    + facts(
+        [
+            [fact("Date", "{{shift_date}}"), fact("Position", "{{position}}")],
+        ]
+    )
+    + """        <p>Please assign a replacement so the shift is not left short.</p>
+"""
+    + action("{{shift_url}}", "Open the Schedule"),
     accent=ACCENT_AMBER,
     chip="Coverage needed",
     subtitle="{{shift_date}}",
@@ -2156,17 +2215,18 @@ DEFAULT_SHIFT_REMINDER_HTML = build_shell(
     "Start-of-Shift Reminder",
     """        <p>Hello {{recipient_name}}, your upcoming shift briefing is below. Please arrive on time and mark
         your arrival when you get to the station.</p>
-        <div class="details" style="border-left-color: {accent};">
-            <table>
-                <tr><th>Date</th><td>{{shift_date}}</td></tr>
-                <tr><th>Time</th><td>{{time_range}}</td></tr>
-                <tr><th>Your position</th><td>{{position}}</td></tr>
-            </table>
-        </div>
-        {{apparatus_html}}
+"""
+    + facts(
+        [
+            [fact("Date", "{{shift_date}}"), fact("Time", "{{time_range}}")],
+            [fact("Your position", "{{position}}")],
+        ]
+    )
+    + """        {{apparatus_html}}
         {{roster_html}}
         {{checklist_html}}
-        <p><a href="{{arrival_url}}" class="button" style="background-color: {accent};" role="link">Mark Arrival</a></p>""",
+"""
+    + action("{{arrival_url}}", "Mark Arrival"),
     accent=ACCENT_GREEN,
     chip="Shift briefing",
     subtitle="{{shift_date}} at {{shift_start}}",
@@ -2777,10 +2837,12 @@ class EmailTemplateService:
         ctx.setdefault("login_url", f"{frontend_url}/login" if frontend_url else "")
 
         # Build a ready-to-use <img> tag so templates can just insert it.
-        # Skip base64 data URIs — they embed the full image payload in the
-        # HTML and easily exceed Gmail's 102 KB message-clipping threshold.
-        logo_val = ctx.get("organization_logo", "")
-        if logo_val and not str(logo_val).startswith("data:"):
+        # An uploaded logo is a base64 data URI, which would embed the whole
+        # image and push the message past Gmail's 102 KB clipping threshold;
+        # email_logo_src swaps it for the address this deployment serves it
+        # from, or empties it when there is no public address to use.
+        logo_val = email_logo_src(ctx.get("organization_logo", ""))
+        if logo_val:
             import html as _h
 
             org_name = ctx.get("organization_name", "Organization")
@@ -2803,6 +2865,15 @@ class EmailTemplateService:
         ctx.setdefault(
             "organization_logo_cell",
             build_logo_cell(str(logo_val or ""), str(ctx.get("organization_name", ""))),
+        )
+        # The current shell's centred masthead logo. The cell above stays for
+        # bodies written against the previous shell, which carry
+        # {{organization_logo_cell}} in their stored markup.
+        ctx.setdefault(
+            "organization_logo_block",
+            build_logo_block(
+                str(logo_val or ""), str(ctx.get("organization_name", ""))
+            ),
         )
 
         # The colourway, for the {{header_accent}} / {{chip_tint}} /
@@ -2896,13 +2967,16 @@ class EmailTemplateService:
         "items_removed_html",
         "organization_logo_img",
         "organization_logo_cell",
+        "organization_logo_block",
         # Hexes going into style attributes. Escaping a "#" is a no-op, but
         # listing them keeps the set honest about what is markup-bearing.
         "header_accent",
         "chip_tint",
         # The chip cell is markup, not text — it is built by
-        # colourway_context, which escapes the chip's own wording.
+        # colourway_context, which escapes the chip's own wording. The
+        # status line is built the same way.
         "status_chip_cell",
+        "status_line",
         "content_class",
         "ballot_items_html",
         "results_html",

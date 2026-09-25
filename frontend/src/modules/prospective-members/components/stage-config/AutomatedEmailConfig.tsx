@@ -62,16 +62,17 @@ const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder }) => 
 
   return (
     <div
-      className="overflow-hidden rounded-lg border border-gray-200 bg-white text-left text-sm shadow-sm"
+      className="overflow-hidden rounded-lg border border-gray-200 bg-slate-100 p-3 text-left text-sm shadow-sm"
       style={{ maxWidth: 480 }}
     >
-      {/* red-700 to match `.header` in backend/app/services/email_theme.py.
-          This block is a picture of the email that actually goes out, so it
-          tracks that stylesheet rather than the app's own primary fill. */}
-      <div className="bg-red-700 px-5 py-4 text-center">
-        <span className="text-lg font-bold text-white">Organization Name</span>
+      {/* A picture of the email that actually goes out, so it tracks the
+          shell in backend/app/services/email_theme.py (a centred masthead
+          over a white card on a light grey page) rather than the app's own
+          theme. */}
+      <div className="px-5 pt-2 pb-3 text-center">
+        <span className="font-bold text-slate-900">Organization Name</span>
       </div>
-      <div className="space-y-4 bg-gray-50 p-5 text-gray-700" style={{ lineHeight: 1.6 }}>
+      <div className="space-y-4 rounded-md bg-white p-5 text-slate-700" style={{ lineHeight: 1.6 }}>
         <p className="m-0">Hi Prospect,</p>
         {enabledSections.length === 0 && (
           <p className="m-0 text-gray-400 italic">Your membership application has been updated.</p>
@@ -134,7 +135,7 @@ const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder }) => 
           );
         })}
       </div>
-      <div className="px-5 py-3 text-center text-xs text-gray-400">This email was sent by Organization Name.</div>
+      <div className="px-2 pt-3 pb-1 text-xs text-gray-600">This email was sent by Organization Name.</div>
     </div>
   );
 };

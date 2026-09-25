@@ -183,7 +183,15 @@ def downgrade() -> None:
     from app.services.email_template_service import EmailTemplateService
 
     connection = op.get_bind()
-    table = _templates_table()
+    table = sa.table(
+        "email_templates",
+        sa.column("id", sa.String),
+        sa.column("template_type", sa.String),
+        sa.column("html_body", sa.Text),
+        sa.column("header_accent", sa.String),
+        sa.column("status_chip", sa.String),
+        sa.column("layout", sa.String),
+    )
 
     # Put the colours back into the bodies before the columns that hold them
     # go away, or a converted body would mail a literal "{{header_accent}}"
@@ -195,26 +203,49 @@ def downgrade() -> None:
     # shipped accent back into it would silently discard their choice at the
     # moment the column that recorded it is dropped — an unrecoverable loss
     # in the one direction that is supposed to be the safe way out.
-    for defn in EmailTemplateService._DEFAULT_TEMPLATE_DEFS:
-        if not defn.get("accent"):
-            continue
-        rows = connection.execute(
-            sa.select(
-                table.c.id,
-                table.c.header_accent,
-                table.c.status_chip,
-                table.c.layout,
-            ).where(table.c.html_body == defn["html"])
-        ).fetchall()
-        for row_id, accent, chip, layout in rows:
-            accent = accent or defn["accent"]
-            chip = defn.get("chip", "") if chip is None else chip
-            layout = layout or defn.get("layout", "notice")
-            connection.execute(
-                table.update()
-                .where(table.c.id == row_id)
-                .values(html_body=_materialise(defn["html"], accent, chip, layout))
+    #
+    # Every row carrying a token, not only rows byte-identical to a shipped
+    # default (changed 2026-09-25). This originally matched on the live
+    # service's bodies, so the first release to change a default body left
+    # every row still holding the previous one — and every row an admin had
+    # edited since — with tokens that nothing would fill once the columns
+    # were gone. A token is what needs materialising; which body it sits in
+    # does not matter. The type's shipped colourway is the fallback for a
+    # NULL column, as it is at render time. autoescape because "_" in the
+    # token names is a LIKE wildcard.
+    token_rows = connection.execute(
+        sa.select(
+            table.c.id,
+            table.c.template_type,
+            table.c.html_body,
+            table.c.header_accent,
+            table.c.status_chip,
+            table.c.layout,
+        ).where(
+            sa.or_(
+                *(
+                    table.c.html_body.contains(token, autoescape=True)
+                    for token in (
+                        "{{header_accent}}",
+                        "{{chip_tint}}",
+                        "{{status_chip}}",
+                        "{{status_chip_cell}}",
+                        "{{content_class}}",
+                    )
+                )
             )
+        )
+    ).fetchall()
+    for row_id, template_type, body, accent, chip, layout in token_rows:
+        shipped = EmailTemplateService._colourway_defaults(template_type)
+        accent = accent or shipped.get("accent") or "#334155"
+        chip = (shipped.get("chip") or "") if chip is None else chip
+        layout = layout or shipped.get("layout") or "notice"
+        connection.execute(
+            table.update()
+            .where(table.c.id == row_id)
+            .values(html_body=_materialise(body, accent, chip, layout))
+        )
 
     op.drop_column("email_templates", "layout")
     op.drop_column("email_templates", "status_chip")

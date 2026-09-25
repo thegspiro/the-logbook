@@ -193,9 +193,13 @@ class TestTemplatesCloseWithTheirOwnFooter:
         assert "100 Main Street" in html
         assert "100 Main Street" in text
 
-    def test_an_internal_notice_does_tell_the_recipient_not_to_reply(self):
+    def test_an_internal_notice_does_not_tell_the_recipient_not_to_reply(self):
+        # Replies reach the department (EmailService.default_reply_to), so
+        # the line would be discouraging the one thing that gets a member an
+        # answer.
         _, html, _ = self._render("welcome", _org())
-        assert "do not reply" in html.lower()
+        assert "do not reply" not in html.lower()
+        assert "automated message" in html.lower()
 
     def test_an_official_notice_says_so(self):
         _, html, _ = self._render("member_dropped", _org())

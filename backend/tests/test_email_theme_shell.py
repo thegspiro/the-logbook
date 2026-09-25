@@ -33,14 +33,53 @@ from app.services.email_theme import (
     CHIP_TINTS,
     DEFAULT_CSS,
     LAYOUTS,
+    action,
     build_email_document,
+    build_logo_block,
     build_logo_cell,
     build_shell,
     colourway_context,
     colourway_for,
+    fact,
+    facts,
 )
 
 _DEFS = EmailTemplateService._DEFAULT_TEMPLATE_DEFS
+_VERSIONS = pathlib.Path(__file__).resolve().parents[1] / "alembic" / "versions"
+
+
+def _load_revision(revision: str):
+    """Import a migration module by revision id rather than by filename.
+
+    The colourway migration's file was renamed once already, to keep the
+    directory in chain order after a re-parent, and a hard-coded name turned
+    that into 71 silently skipped tests.
+    """
+    import importlib.util
+
+    matches = list(_VERSIONS.glob(f"*_{revision}_*.py")) or [
+        f for f in _VERSIONS.glob("*.py") if f'revision = "{revision}"' in f.read_text()
+    ]
+    assert (
+        len(matches) == 1
+    ), f"expected exactly one file for revision {revision}, found {matches}"
+    spec = importlib.util.spec_from_file_location(f"rev_{revision}", matches[0])
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_SHELL_MIGRATION = _load_revision("f0d76814a9ab")
+
+# The defaults as they stood before the centred-masthead shell, from that
+# migration's frozen copy. The colourway migration's tests assert what it does
+# to bodies of *its* era; run against today's defaults they would be testing
+# it on markup it was never written for.
+_PREVIOUS_DEFS = [
+    dict(d, html=_SHELL_MIGRATION.PREVIOUS_BODIES[d["type"].value]) for d in _DEFS
+]
 
 
 def _contrast(fg: str, bg: str) -> float:
@@ -161,7 +200,9 @@ class TestPanelsBeatTheDataTable:
         assert _wins(style, "background-color: transparent")
         assert _wins(style, "text-transform: none")
         assert _wins(style, "border-bottom: none")
-        assert _wins(style, "font-weight: 400")
+        # The same weight as a fact panel's label, so a customised body's
+        # panel and a shipped one read as the same thing.
+        assert _wins(style, "font-weight: 600")
 
     def test_panel_row_has_no_separator_rule(self):
         style = _style_of(self._panel(), r"<td(?![^>]*logomark)[^>]*>Tuesday")
@@ -169,7 +210,8 @@ class TestPanelsBeatTheDataTable:
         assert _wins(style, "padding: 0 0 12px 0")
 
     def test_panel_table_does_not_carry_the_content_margin(self):
-        style = _style_of(self._panel(), r"<table(?![^>]*lockup)[^>]*>")
+        # Skipping the lockup and Outlook's ghost table, which carry no class.
+        style = _style_of(self._panel(), r'<table(?![^>]*(?:lockup|width="600"))[^>]*>')
         assert _wins(style, "margin: 0")
 
     def test_fineprint_beats_the_body_paragraph(self):
@@ -181,24 +223,30 @@ class TestPanelsBeatTheDataTable:
 
 
 class TestBuildShell:
-    def test_the_accent_reaches_all_four_elements_as_one_token(self):
-        # Four places, one variable. A body that named the colour four times
-        # is a body that can disagree with itself three ways.
+    def test_the_accent_reaches_every_element_as_one_token(self):
+        # Several places, one variable. A body that named the colour in each
+        # is a body that can disagree with itself.
         body = build_shell(
             "T",
-            '        <div class="details" style="border-left-color: {accent};">d</div>\n'
-            '        <p><a href="#" class="button" style="background-color: {accent};">Go</a></p>',
+            action("{{event_url}}", "Go"),
             accent=ACCENT_BLUE,
             chip="Reminder",
+            subtitle="Tuesday",
         )
-        assert "border-top-color: {{header_accent}}" in body
-        assert "border-left-color: {{header_accent}}" in body
         assert "background-color: {{header_accent}}" in body
-        # The chip is a whole deferred cell now, not a tint and a text
+        assert 'style="color: {{header_accent}};"' in body
+        # The status line is a whole deferred block, not a tint and a text
         # node written here: whether it exists at all depends on the row.
-        assert "{{status_chip_cell}}" in body
+        assert "{{status_line}}" in body
         # And no hex anywhere, or the column could not be authoritative.
         assert ACCENT_BLUE not in body
+
+    def test_the_status_line_takes_the_accent_and_escapes_the_chip(self):
+        line = colourway_context(ACCENT_BLUE, "<b>Due</b>")["status_line"]
+        assert f"background-color: {ACCENT_BLUE};" in line
+        assert f"color: {ACCENT_BLUE};" in line
+        assert "&lt;b&gt;Due&lt;/b&gt;" in line
+        assert "<b>" not in line
 
     def test_chip_tint_is_looked_up_never_passed(self):
         # The two halves of a colourway cannot disagree, because only one of
@@ -229,10 +277,14 @@ class TestBuildShell:
 
     def test_empty_chip_and_subtitle_emit_no_markup(self):
         body = build_shell("T", "        <p>x</p>")
-        # The chip cell is a token either way; what an empty chip must not
-        # produce is a tinted pill with nothing in it.
+        # The status line is a token either way; what an empty chip must not
+        # produce is a coloured square labelling nothing.
+        assert colourway_context(ACCENT_RED, "")["status_line"] == ""
         assert colourway_context(ACCENT_RED, "")["status_chip_cell"] == ""
-        assert body.count("<p") == 1  # the content's paragraph, and no subline
+        # The masthead's name line and the content's paragraph; no subline,
+        # and no preheader, because there is nothing to preview.
+        assert body.count("<p") == 2
+        assert "display:none" not in body
 
     def test_subtitle_is_escaped(self):
         # Unlike title, subtitle has no caller-side escaping guarantee
@@ -242,10 +294,12 @@ class TestBuildShell:
         assert "<script>" not in body
         assert "&lt;script&gt;" in body
 
-    def test_the_old_centred_logo_block_is_gone(self):
+    def test_the_logo_is_a_deferred_masthead_block(self):
         body = build_shell("T", "        <p>x</p>")
-        assert '<div class="logo">' not in body
-        assert "{{organization_logo_cell}}" in body
+        assert '<div class="logo">' not in body, "the pre-1b centred logo block"
+        assert 'class="lockup"' not in body, "the previous shell's lockup"
+        assert '<div class="masthead">' in body
+        assert "{{organization_logo_block}}" in body
 
     def test_exactly_one_header_and_one_content(self):
         body = build_shell("T", "        <p>x</p>", accent=ACCENT_RED, chip="Chip")
@@ -369,9 +423,10 @@ class TestEveryTemplateRendersIntoTheShell:
     def test_the_shell_is_intact(self, defn):
         html = defn["html"]
         assert '<div class="logo">' not in html, "the pre-1b centred logo block"
+        assert html.count('class="masthead"') == 1
         assert html.count('class="header"') == 1
         assert html.count('<div class="{{content_class}}">') == 1
-        assert "border-top-color:" in html, "no accent rule on the header"
+        assert html.count("{{status_line}}") == 1
 
     @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
     def test_no_placeholder_survives_the_sample_render(self, defn):
@@ -565,7 +620,6 @@ class TestTheColourwayIsData:
         _subject, html, _text = EmailTemplateService(None).render(template, {}, org)
         assert "{{" not in html.split("<body")[1]
         assert ACCENT_INDIGO in html
-        assert CHIP_TINTS[ACCENT_INDIGO] in html
         assert "Recoloured" in html
 
     def test_a_row_predating_the_columns_falls_back_to_its_type(self):
@@ -674,28 +728,7 @@ class TestTheColourwayMigrationConvertsWhatItClaimsTo:
     @pytest.fixture(scope="class")
     @classmethod
     def migration(cls):
-        import importlib.util
-
-        # Located by revision id, not filename. The file was renamed once
-        # already, to keep the directory in chain order after a re-parent,
-        # and a hard-coded name turned that into 71 silently skipped tests
-        # — the failure mode a skip is supposed to prevent, not cause.
-        versions = pathlib.Path(__file__).resolve().parents[1] / "alembic" / "versions"
-        matches = [f for f in versions.glob("*_e7c4a913b8d2_*.py")] or [
-            f
-            for f in versions.glob("*.py")
-            if 'revision = "e7c4a913b8d2"' in f.read_text()
-        ]
-        assert (
-            len(matches) == 1
-        ), f"expected exactly one file for revision e7c4a913b8d2, found {matches}"
-        path = matches[0]
-        spec = importlib.util.spec_from_file_location("colourway_migration", path)
-        assert spec is not None
-        assert spec.loader is not None
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
+        return _load_revision("e7c4a913b8d2")
 
     def test_the_frozen_tint_map_still_matches_the_live_one(self, migration):
         # A migration keeps transforming rows the way it did the day it ran,
@@ -705,7 +738,7 @@ class TestTheColourwayMigrationConvertsWhatItClaimsTo:
         # of it and gets an explicit exception, not a quiet edit.
         assert migration._CHIP_TINTS == CHIP_TINTS
 
-    @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
+    @pytest.mark.parametrize("defn", _PREVIOUS_DEFS, ids=lambda d: d["type"].value)
     def test_a_reconstructed_form_is_the_shipped_body_materialised(
         self, migration, defn
     ):
@@ -725,7 +758,7 @@ class TestTheColourwayMigrationConvertsWhatItClaimsTo:
             for token in ("{{header_accent}}", "{{chip_tint}}", "{{content_class}}"):
                 assert token not in form
 
-    @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
+    @pytest.mark.parametrize("defn", _PREVIOUS_DEFS, ids=lambda d: d["type"].value)
     def test_a_non_notice_default_is_recognised_at_its_own_layout(
         self, migration, defn
     ):
@@ -965,14 +998,14 @@ class TestOneOffEmailsResolveTheirOwnTokens:
         )
         assert "{{" not in html.split("<body")[1]
         assert ACCENT_AMBER in html
-        assert CHIP_TINTS[ACCENT_AMBER] in html
+        assert ">Reorder</td>" in html
 
     def test_the_test_email_carries_a_real_chip(self):
         from app.api.v1.endpoints.message_history import _build_test_html
 
         html = _build_test_html(self._org())
         assert "{{" not in html.split("<body")[1]
-        assert ">Test</span>" in html
+        assert ">Test</td>" in html
 
     def test_an_unmapped_accent_still_resolves(self):
         # wrap_email_body callers pass hexes that are not ACCENT_* constants.
@@ -991,7 +1024,7 @@ class TestMutedTextStaysReadable:
         muted = re.search(r"\.muted \{[^}]*color: (#[0-9a-f]{6})", DEFAULT_CSS)
         assert muted is not None
         colour = muted.group(1)
-        for surface, label in [("#ffffff", "the white card"), ("#f3f4f6", "the page")]:
+        for surface, label in [("#ffffff", "the white card"), ("#eef0f3", "the page")]:
             ratio = _contrast(colour, surface)
             assert ratio >= 4.5, f"{colour} on {label} is {ratio:.2f}:1"
 
@@ -1009,17 +1042,7 @@ class TestTheDowngradeLeavesNothingBehind:
     @pytest.fixture(scope="class")
     @classmethod
     def migration(cls):
-        import importlib.util
-
-        versions = pathlib.Path(__file__).resolve().parents[1] / "alembic" / "versions"
-        matches = list(versions.glob("*_e7c4a913b8d2_*.py"))
-        assert len(matches) == 1, matches
-        spec = importlib.util.spec_from_file_location("colourway_down", matches[0])
-        assert spec is not None
-        assert spec.loader is not None
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
+        return _load_revision("e7c4a913b8d2")
 
     #: The tokens whose answers live in the columns being dropped.
     DEFERRED = (
@@ -1029,7 +1052,7 @@ class TestTheDowngradeLeavesNothingBehind:
         "{{content_class}}",
     )
 
-    @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
+    @pytest.mark.parametrize("defn", _PREVIOUS_DEFS, ids=lambda d: d["type"].value)
     def test_no_deferred_token_survives(self, migration, defn):
         if not defn.get("accent"):
             pytest.skip("no shipped colourway")
@@ -1040,7 +1063,7 @@ class TestTheDowngradeLeavesNothingBehind:
             assert token not in body, f"{defn['type'].value} keeps {token}"
 
     def test_ordinary_template_variables_are_left_alone(self, migration):
-        defn = _DEFS[0]
+        defn = _PREVIOUS_DEFS[0]
         body = migration._materialise(
             defn["html"], defn["accent"], defn["chip"], defn["layout"]
         )
@@ -1051,7 +1074,7 @@ class TestTheDowngradeLeavesNothingBehind:
         assert "{{footer_html}}" in body
 
     def test_a_recoloured_notice_keeps_its_colourway(self, migration):
-        defn = _DEFS[0]
+        defn = _PREVIOUS_DEFS[0]
         body = migration._materialise(defn["html"], ACCENT_INDIGO, "Mine", "digest")
         assert ACCENT_INDIGO in body
         assert ">Mine</span>" in body
@@ -1059,9 +1082,407 @@ class TestTheDowngradeLeavesNothingBehind:
         assert defn["accent"] not in body
 
     def test_an_empty_chip_materialises_to_no_cell(self, migration):
-        defn = _DEFS[0]
+        defn = _PREVIOUS_DEFS[0]
         body = migration._materialise(defn["html"], defn["accent"], "", "notice")
         assert 'class="chip"' not in body
 
     def test_the_frozen_layout_map_matches_the_live_one(self, migration):
         assert migration._LAYOUT_CLASSES == _LAYOUT_CONTENT_CLASS
+
+
+def _inlined(content: str, **shell) -> str:
+    """*content* built into the shell, rendered as a document and inlined."""
+    return inline_email_css(
+        build_email_document("s", build_shell("T", content, **shell))
+    )
+
+
+class TestTheFactPanel:
+    """Labels above values, one or two facts to a row.
+
+    The panel sits inside ``.content``, so every rule it depends on is fighting
+    ``.content td`` / ``.content p`` / ``.content table`` for the same
+    properties. Those three are the data-table and body-paragraph styles; a
+    property the panel's own class does not name is inherited from them.
+    """
+
+    PANEL = facts(
+        [
+            [fact("Start", "{{event_start}}"), fact("End", "{{event_end}}")],
+            [fact("Location", "{{location_name}}<br/>{{location_details}}")],
+        ]
+    )
+
+    def test_a_pair_shares_the_row_and_a_lone_fact_spans_it(self):
+        rows = re.findall(r"<tr>(.*?)</tr>", self.PANEL)
+        assert rows[0].count('class="fact"') == 2
+        assert rows[0].count('width="50%"') == 2
+        assert rows[1].count('colspan="2"') == 1
+
+    def test_a_row_of_three_is_refused(self):
+        with pytest.raises(ValueError, match="one or two"):
+            facts([[fact("A", "1"), fact("B", "2"), fact("C", "3")]])
+
+    def test_a_value_to_be_typed_back_is_set_in_a_fixed_width_face(self):
+        panel = facts([[fact("Temporary password", "{{temp_password}}", mono=True)]])
+        assert '<p class="fact-mono">{{temp_password}}</p>' in panel
+
+    def test_the_label_beats_the_body_paragraph(self):
+        style = _style_of(_inlined(self.PANEL), r'<p class="fact-label"[^>]*>')
+        assert _wins(style, "margin: 0 0 3px 0")
+        assert _wins(style, "font-size: 12px")
+        assert _wins(style, "color: #4b5563")
+
+    def test_the_cell_is_not_a_data_table_cell(self):
+        style = _style_of(_inlined(self.PANEL), r'<td class="fact"[^>]*>')
+        assert _wins(style, "padding: 12px 16px")
+        assert _wins(style, "border-bottom: none")
+
+    def test_the_panel_is_not_a_data_table(self):
+        style = _style_of(_inlined(self.PANEL), r'<table class="facts"[^>]*>')
+        assert _wins(style, "margin: 0 0 22px 0")
+        assert _wins(style, "border-collapse: separate")
+        assert _wins(style, "background-color: #f5f6f8")
+
+    def test_labels_clear_AA_on_the_panel(self):
+        assert _contrast("#4b5563", "#f5f6f8") >= 4.5
+
+
+class TestTheAction:
+    def test_the_link_is_repeated_as_text_under_the_button(self):
+        # For a client that strips the button's styling, and for a member
+        # whose device will not open it.
+        html = action("{{event_url}}", "View Event")
+        assert 'href="{{event_url}}"' in html
+        assert "Or open this link: {{event_url}}" in html
+
+    def test_the_button_takes_the_colourway(self):
+        body = build_shell("T", action("{{event_url}}", "Go"))
+        assert (
+            'class="button" style="background-color: {{header_accent}}; '
+            'border: 1px solid {{header_accent}};"'
+        ) in body
+
+    def test_the_action_is_centred_and_the_button_is_a_touch_target(self):
+        html = _inlined(action("{{event_url}}", "Go"))
+        assert _wins(_style_of(html, r'<p class="action"[^>]*>'), "text-align: center")
+        assert _wins(
+            _style_of(html, r'<p class="action-link"[^>]*>'), "text-align: center"
+        )
+        # 14px top and bottom around a 16px line at 1.2 is 47px: over the
+        # 44px minimum a thumb needs.
+        button = _style_of(html, r'<a [^>]*class="button"[^>]*>')
+        assert _wins(button, "padding: 14px 36px")
+        assert _wins(button, "font-size: 16px")
+
+
+class TestThePreheader:
+    """The line an inbox shows beside the subject."""
+
+    @staticmethod
+    def _preheader(body: str) -> str:
+        match = re.match(r'<div style="display:none;[^"]*">(.*?)(&#847;|</div>)', body)
+        return match.group(1) if match else ""
+
+    def test_it_is_the_first_thing_in_the_body_and_hidden(self):
+        body = build_shell("T", "        <p>x</p>", subtitle="Tuesday 7pm")
+        assert body.startswith('<div style="display:none;')
+        assert "mso-hide:all" in body.split("</div>", 1)[0]
+        assert body.index("Tuesday 7pm") < body.index('<div class="container">')
+
+    def test_the_subtitle_leads_and_is_escaped(self):
+        body = build_shell("T", self._panel(), subtitle="<b>Tuesday</b>")
+        assert self._preheader(body) == "&lt;b&gt;Tuesday&lt;/b&gt;"
+
+    def test_without_a_subtitle_it_is_the_first_row_of_facts(self):
+        body = build_shell("T", self._panel())
+        assert self._preheader(body) == "{{event_start}} · {{location_name}}, {{room}}"
+
+    def test_an_explicit_preheader_wins(self):
+        body = build_shell("T", self._panel(), subtitle="x", preheader="Custom")
+        assert self._preheader(body) == "Custom"
+
+    def test_it_is_padded_so_the_masthead_does_not_leak_in(self):
+        body = build_shell("T", "        <p>x</p>", subtitle="Tuesday")
+        assert body.split("</div>", 1)[0].count("&zwnj;") >= 20
+
+    @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
+    def test_every_default_with_something_to_preview_previews_it(self, defn):
+        html = defn["html"]
+        has_facts = 'class="facts"' in html
+        has_subtitle = re.search(r"</h1>\n\s*<p style=\"color", html) is not None
+        if has_facts or has_subtitle:
+            assert self._preheader(html), f"{defn['type'].value} has no preheader"
+
+    @staticmethod
+    def _panel() -> str:
+        return facts(
+            [
+                [
+                    fact("Start", "{{event_start}}"),
+                    fact("Where", "<strong>{{location_name}}</strong><br/>{{room}}"),
+                ],
+                [fact("End", "{{event_end}}")],
+            ]
+        )
+
+
+class TestTheMastheadLogo:
+    def test_no_logo_means_no_plate(self):
+        # An empty plate would render as a white square with nothing on it.
+        assert build_logo_block("", "Falls Church") == ""
+
+    def test_data_uris_are_skipped(self):
+        assert build_logo_block("data:image/png;base64,AAAA", "X") == ""
+
+    def test_the_logo_is_centred_on_a_plate_and_capped(self):
+        block = build_logo_block("https://example.test/logo.png", "Falls Church")
+        assert 'align="center"' in block
+        assert "background-color:#ffffff" in block
+        assert "max-width:48px" in block
+        assert "max-height:48px" in block
+
+    def test_url_and_name_are_escaped(self):
+        block = build_logo_block('https://x/"><script>', "<b>Org</b>")
+        assert "<script>" not in block
+        assert "<b>" not in block
+
+    def test_the_renderer_fills_it(self):
+        # The sample context carries its own logo URL, which wins over the
+        # organization's — what matters is that the block was built at all.
+        html = TestEveryTemplateRendersIntoTheShell._render(_DEFS[0])
+        masthead = html.split('class="masthead"', 1)[1].split("</div>", 1)[0]
+        assert re.search(r'<img src="https://[^"]+" ', masthead)
+        assert "{{organization_logo_block}}" not in html
+
+
+class TestAnEditedBodyStillRendersUnderTheNewSheet:
+    """A department's edited template keeps its previous-shell markup.
+
+    It renders against *this* stylesheet from the day of the upgrade, so the
+    classes that markup uses have to stay defined and styled.
+    """
+
+    @pytest.mark.parametrize("defn", _PREVIOUS_DEFS, ids=lambda d: d["type"].value)
+    def test_every_class_the_previous_shell_used_is_still_defined(self, defn):
+        defined = set(re.findall(r"^\.([\w-]+)", DEFAULT_CSS, re.M))
+        used = set(re.findall(r'class="([\w-]+)"', defn["html"]))
+        assert used <= defined, sorted(used - defined)
+
+    def test_the_previous_shell_still_fills_its_tokens(self):
+        from app.models.email_template import EmailTemplate
+
+        defn = _PREVIOUS_DEFS[0]
+        template = EmailTemplate(
+            template_type=defn["type"],
+            subject=defn["subject"],
+            html_body=defn["html"],
+            text_body=defn["text"],
+        )
+        _subject, html, _text = EmailTemplateService(None).render(
+            template, {}, TestEveryTemplateRendersIntoTheShell._org()
+        )
+        assert "{{" not in html.split("<body")[1]
+        assert 'class="chip"' in html
+
+
+def _sqlite_templates(rows):
+    """An in-memory ``email_templates`` with just the columns migrations touch."""
+    import sqlalchemy as sa
+
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                "CREATE TABLE email_templates (id VARCHAR PRIMARY KEY, "
+                "template_type VARCHAR, html_body TEXT, header_accent VARCHAR, "
+                "status_chip VARCHAR, layout VARCHAR)"
+            )
+        )
+        for row in rows:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO email_templates VALUES "
+                    "(:id, :template_type, :html_body, :header_accent, "
+                    ":status_chip, :layout)"
+                ),
+                {"header_accent": None, "status_chip": None, "layout": None, **row},
+            )
+    return engine
+
+
+def _run(engine, fn):
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    with engine.begin() as conn:
+        with Operations.context(MigrationContext.configure(conn)):
+            fn()
+
+
+def _bodies(engine) -> dict:
+    import sqlalchemy as sa
+
+    with engine.connect() as conn:
+        rows = conn.execute(sa.text("SELECT id, html_body FROM email_templates"))
+        return {row_id: body for row_id, body in rows}
+
+
+class TestTheShellMigration:
+    """``f0d76814a9ab``: untouched templates move to the new shell."""
+
+    def test_every_shipped_default_is_the_migrations_current_body(self):
+        # If this fails, a default body changed without a migration to carry
+        # the rows already holding the old one. Ship one — a copy of this
+        # revision with its own frozen pair — and point this test at it;
+        # otherwise every installation keeps the old design and newly
+        # badges each untouched template "Edited".
+        for defn in _DEFS:
+            assert (
+                _SHELL_MIGRATION.CURRENT_BODIES[defn["type"].value] == defn["html"]
+            ), defn["type"].value
+
+    def test_the_two_maps_cover_the_same_types(self):
+        assert set(_SHELL_MIGRATION.PREVIOUS_BODIES) == set(
+            _SHELL_MIGRATION.CURRENT_BODIES
+        )
+
+    def test_only_an_untouched_body_is_converted_and_it_comes_back(self):
+        previous = _SHELL_MIGRATION.PREVIOUS_BODIES
+        current = _SHELL_MIGRATION.CURRENT_BODIES
+        engine = _sqlite_templates(
+            [
+                {
+                    "id": "pristine",
+                    "template_type": "welcome",
+                    "html_body": previous["welcome"],
+                },
+                {
+                    "id": "edited",
+                    "template_type": "welcome",
+                    "html_body": previous["welcome"].replace("Hello", "Hi"),
+                },
+                # Another type's body under this type: not what this type
+                # shipped, so not ours to replace.
+                {
+                    "id": "crossed",
+                    "template_type": "password_reset",
+                    "html_body": previous["welcome"],
+                },
+            ]
+        )
+        before = _bodies(engine)
+
+        _run(engine, _SHELL_MIGRATION.upgrade)
+        after = _bodies(engine)
+        assert after["pristine"] == current["welcome"]
+        assert after["edited"] == before["edited"]
+        assert after["crossed"] == before["crossed"]
+
+        _run(engine, _SHELL_MIGRATION.downgrade)
+        assert _bodies(engine) == before
+
+
+class TestTheColourwayDowngradeMaterialisesEveryTokenRow:
+    """``e7c4a913b8d2``'s downgrade, since 2026-09-25.
+
+    It used to materialise only rows byte-identical to the live defaults, so
+    once a default changed, a row still on the previous body — or any row an
+    admin had edited — kept tokens nothing would fill after the columns went.
+    """
+
+    def test_a_row_that_is_not_a_shipped_default_is_materialised(self):
+        from unittest.mock import patch
+
+        migration = _load_revision("e7c4a913b8d2")
+        previous = _SHELL_MIGRATION.PREVIOUS_BODIES
+        engine = _sqlite_templates(
+            [
+                {
+                    "id": "old-default",
+                    "template_type": "event_reminder",
+                    "html_body": previous["event_reminder"],
+                },
+                {
+                    "id": "edited",
+                    "template_type": "welcome",
+                    "html_body": '<p style="color: {{header_accent}};">Hi</p>',
+                    "header_accent": ACCENT_INDIGO,
+                },
+                {
+                    "id": "no-tokens",
+                    "template_type": "welcome",
+                    "html_body": "<p>Plain</p>",
+                },
+            ]
+        )
+
+        # SQLite cannot drop these columns without a table rebuild; the part
+        # under test is what happens to the bodies before they go.
+        with patch.object(migration.op, "drop_column", return_value=None):
+            _run(engine, migration.downgrade)
+
+        bodies = _bodies(engine)
+        for token in TestTheDowngradeLeavesNothingBehind.DEFERRED:
+            assert token not in bodies["old-default"]
+        assert ACCENT_BLUE in bodies["old-default"]
+        assert bodies["edited"] == f'<p style="color: {ACCENT_INDIGO};">Hi</p>'
+        assert bodies["no-tokens"] == "<p>Plain</p>"
+
+
+class TestClassicOutlook:
+    """What the Word rendering engine needs, which no other client does.
+
+    Each of these is invisible everywhere else, so nothing but a test notices
+    when one goes missing.
+    """
+
+    def test_a_ghost_table_holds_the_card_at_600px(self):
+        # Outlook ignores max-width on a div and would stretch the card across
+        # the reading pane.
+        body = build_shell("T", "        <p>x</p>")
+        opener = '<!--[if mso]><table role="presentation" align="center" width="600"'
+        assert body.count(opener) == 1
+        assert body.index(opener) < body.index('<div class="container">')
+        assert body.rstrip().endswith("<!--[if mso]></td></tr></table><![endif]-->")
+
+    def test_the_ghost_table_is_invisible_to_the_inliner(self):
+        # A classed or styled tag inside the comment would be rewritten, and
+        # the comment is only safe because the inliner never sees a tag in it.
+        html = _inlined("        <p>x</p>")
+        ghost = re.search(r"<!--\[if mso\]>(.*?)<!\[endif\]-->", html, re.S)
+        assert ghost
+        assert "style=" not in ghost.group(1)
+
+    def test_the_button_carries_a_border_in_its_own_colour(self):
+        # Word ignores padding on an inline <a> unless it has a border.
+        assert "border: 1px solid {accent};" in action("{{u}}", "Go")
+
+    def test_the_stylesheet_does_not_border_every_button(self):
+        # An edited template's button keeps its own colour and no border; a
+        # border in the sheet would draw a red ring around a blue button.
+        rule = re.search(r"^\.button \{([^}]*)\}", DEFAULT_CSS, re.M)
+        assert rule
+        assert not re.search(r"border(?!-radius)", rule.group(1))
+
+    def test_the_logo_has_a_width_attribute(self):
+        # Word ignores CSS sizing on images and would show the file at its
+        # natural size.
+        block = build_logo_block("https://example.test/logo.png", "Falls Church")
+        assert ' width="48"' in block
+        assert "width:auto" in block, "other clients must still size by CSS"
+
+    def test_the_dpi_block_has_its_namespaces(self):
+        doc = build_email_document("s", "<p>x</p>")
+        assert 'xmlns:o="urn:schemas-microsoft-com:office:office"' in doc
+        assert 'xmlns:v="urn:schemas-microsoft-com:vml"' in doc
+        assert "<o:PixelsPerInch>96</o:PixelsPerInch>" in doc
+
+
+class TestTheDocumentOptsOutOfAutoDarkening:
+    def test_it_declares_light_only(self):
+        # Plain "light" is a preference; Apple Mail only leaves the message
+        # alone when it says "light only".
+        doc = build_email_document("s", "<p>x</p>")
+        assert '<meta name="color-scheme" content="light only" />' in doc
+        assert '<meta name="supported-color-schemes" content="light only" />' in doc

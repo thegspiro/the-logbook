@@ -212,12 +212,22 @@ want to say the same thing to everybody:
 
 | Seeded footer       | Audience                                                                                                                                                                                                                                                                            |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Internal**        | Members. The routine "do not reply" close. The default                                                                                                                                                                                                                              |
+| **Internal**        | Members. The routine "this is an automated message" close. The default. It no longer says "do not reply": replies reach the department (see below)                                                                                                                                  |
 | **Public**          | Outside the department. Invites a reply and carries the mailing address. Event requesters and applicants get this one — telling somebody who asked the station to visit their school not to reply was wrong, and a physical address is what mail to the public is expected to carry |
 | **Official notice** | On the record: separations, property return, election results                                                                                                                                                                                                                       |
 
 Departments can rename, reword, add and delete these; a footer names its own
 lines and toggles the contact and address blocks.
+
+**Where replies go.** Every message carries a `Reply-To` set to the
+department's own contact email, the address templates show as
+`{{organization_email}}`. The code sending a message can name a different one;
+the ballot, for example, names its election administrator. The sending address
+is often an unattended relay or `noreply@` account, and members reply to
+notices anyway. When the department has no contact email set, no `Reply-To` is
+added and replies go to the sending address, as before. A department that
+saved its footer library before this change keeps its own wording, including
+any "do not reply" line; edit it under **Footers** to match.
 
 ### How it renders
 

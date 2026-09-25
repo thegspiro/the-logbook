@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**277 tables · 4611 columns · 900 foreign keys**
+**277 tables · 4612 columns · 900 foreign keys**
 
 ---
 
@@ -321,7 +321,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_lots`](#inventory_lots) | `InventoryLot` | 13 | A batch/lot of a consumable inventory item held as ready stock. |
 | [`inventory_nfc_audit_digests`](#inventory_nfc_audit_digests) | `InventoryNfcAuditDigest` | 5 | One "shelf audits overdue" digest sent to an organization. |
 | [`inventory_nfc_audit_items`](#inventory_nfc_audit_items) | `InventoryNfcAuditItem` | 10 | One item's line in a shelf audit. |
-| [`inventory_nfc_audits`](#inventory_nfc_audits) | `InventoryNfcAudit` | 12 | One shelf audit: the items tapped on a storage area, compared with the |
+| [`inventory_nfc_audits`](#inventory_nfc_audits) | `InventoryNfcAudit` | 13 | One shelf audit: the items tapped on a storage area, compared with the |
 | [`inventory_nfc_scans`](#inventory_nfc_scans) | `InventoryNfcScan` | 9 | One staff tap of an NFC tag on an item — the "last seen" trail. |
 | [`inventory_nfc_tags`](#inventory_nfc_tags) | `InventoryNfcTag` | 14 | An NFC tag physically attached to an inventory item, a storage area, or |
 | [`inventory_notification_queue`](#inventory_notification_queue) | `InventoryNotificationQueue` | 15 | Queues inventory change events for delayed, consolidated email |
@@ -4981,10 +4981,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `audited_at` | DATETIME | no |  | `now()` |  |
 | `applied_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `applied_at` | DATETIME | yes |  |  |  |
+| `client_submission_id` | VARCHAR(64) | yes |  |  |  |
 
 **Indexes**
 
 - `idx_inventory_nfc_audit_org_area_time` (`organization_id`, `storage_area_id`, `audited_at`)
+
+**Constraints**
+
+- UNIQUE `uq_inventory_nfc_audits_client_submission` (`organization_id`, `client_submission_id`)
 
 ### `inventory_nfc_scans`
 

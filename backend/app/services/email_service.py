@@ -27,11 +27,12 @@ from app.core.config import settings
 from app.models.email_template import EmailTemplateType
 from app.models.user import Organization
 from app.schemas.organization import decrypt_settings_secrets
+from app.services.branding_service import email_logo_src
 from app.services.email_template_service import EmailTemplateService
 from app.services.email_theme import (
     ACCENT_RED,
     build_email_document,
-    build_logo_cell,
+    build_logo_block,
     build_shell,
     colourway_context,
 )
@@ -58,6 +59,14 @@ def _redact_email(address: str) -> str:
         local, domain = address.rsplit("@", 1)
         return f"{local[0]}***@{domain}" if local else f"***@{domain}"
     return "***"
+
+
+# One address, nothing else: no display name, no list, no whitespace. Deliberately
+# narrow — this decides whether the department's stored contact address is fit
+# for a Reply-To header, and "not fit" costs only the header, never the send.
+_REPLY_TO_ADDRESS = re.compile(
+    r"[^@\s<>,;:\"()\[\]]+@[^@\s<>,;:\"()\[\]]+\.[A-Za-z]{2,}"
+)
 
 
 def inline_email_css(html: str) -> str:
@@ -232,12 +241,11 @@ def build_email_logo_img(organization: Optional[Organization]) -> str:
     """
     if not organization:
         return ""
-    logo_url = getattr(organization, "logo", None) or ""
+    # An uploaded logo is a data URI, whose payload (often 100–500 KB) would
+    # push the email over Gmail's 102 KB clipping limit; this is the hosted
+    # rendering's address instead, or "" when there is none.
+    logo_url = email_logo_src(getattr(organization, "logo", None))
     if not logo_url:
-        return ""
-    # Data URIs embed the full image payload in the HTML, often 100–500 KB,
-    # which pushes the email over Gmail's 102 KB clipping limit.
-    if logo_url.startswith("data:"):
         return ""
     org_name = getattr(organization, "name", "Organization")
     safe_url = _html.escape(str(logo_url))
@@ -260,18 +268,18 @@ def build_email_logo_html(organization: Optional[Organization]) -> str:
     return f'<div style="text-align:center;padding:16px 0;">' f"{img}</div>"
 
 
-def build_email_logo_cell(organization: Optional[Organization]) -> str:
-    """The header lockup's logo cell for *organization*, or an empty string.
+def build_email_logo_block(organization: Optional[Organization]) -> str:
+    """The masthead's centred logo for *organization*, or an empty string.
 
-    Thin wrapper over :func:`email_theme.build_logo_cell` so callers holding
+    Thin wrapper over :func:`email_theme.build_logo_block` so callers holding
     an ``Organization`` do not each dig the two fields out themselves. The
     logic lives in ``email_theme`` because ``email_template_service`` needs it
     too and cannot import this module — the dependency runs the other way.
     """
     if not organization:
         return ""
-    return build_logo_cell(
-        getattr(organization, "logo", None) or "",
+    return build_logo_block(
+        email_logo_src(getattr(organization, "logo", None)),
         getattr(organization, "name", "Organization"),
     )
 
@@ -294,18 +302,18 @@ def wrap_email_body(
     came from somewhere else, precisely because nobody edits them.
 
     Args:
-        organization: Org for the lockup. ``None`` omits the logo cell.
+        organization: Org for the masthead. ``None`` omits the logo.
         title: Text for the ``<h1>``.
         body_html: Pre-escaped HTML for the content area.
         footer_text: Optional replacement for the whole footer block. Left
             empty — which is the usual case — the department's default footer
             is used, the same one its templates close with.
         header_color: The accent. Named for the solid header band it used to
-            paint; since 1b it drives the header rule, the chip tint, the
-            details panel's left edge and the button. Callers pass hexes that
-            are not ``ACCENT_*`` constants, which is why ``build_shell``
-            falls back rather than raising on an unmapped tint.
-        chip: Optional status chip text for the lockup.
+            paint; it now drives the status line, the subtitle and the
+            button. Callers pass hexes that are not ``ACCENT_*`` constants,
+            which is why ``build_shell`` falls back rather than raising on
+            an unmapped tint.
+        chip: Optional status text shown above the title.
         subtitle: Optional accent-coloured subline under the title.
     """
     # The department's default footer, so a one-off email from a scheduled
@@ -329,14 +337,14 @@ def wrap_email_body(
     )
     # build_shell writes the shell as a template and this path never goes
     # through variable substitution, so every token it emits is filled in
-    # here. Missing the colourway ones mailed a literal
+    # here. Missing the colourway ones once mailed a literal
     # "border-top-color: {{header_accent}};" and, on the test email, a chip
     # reading "{{status_chip}}" — to every scheduled task and alert, which
     # are exactly the sends nobody is looking at when they go out.
     for _key, _value in colourway_context(accent, chip).items():
         body = body.replace("{{" + _key + "}}", str(_value))
     body = body.replace(
-        "{{organization_logo_cell}}", build_email_logo_cell(organization)
+        "{{organization_logo_block}}", build_email_logo_block(organization)
     )
     body = body.replace(
         "{{organization_name}}",
@@ -1106,6 +1114,27 @@ class EmailService:
         )
         return list(results)
 
+    def default_reply_to(self) -> Optional[str]:
+        """Where a reply goes when the caller did not say: the department.
+
+        The sending address is often an unattended one (a relay account, a
+        ``noreply@``), and members reply to notices anyway — to ask about a
+        shift, to say they cannot make a drill. Without a Reply-To those
+        replies land in a mailbox nobody reads, or bounce, and a recipient
+        whose reply goes nowhere learns to mark the sender as spam. The
+        department's own contact address is the one somebody answers.
+
+        ``None`` when the organization has no usable address, which leaves the
+        message exactly as it was: replies go to the From address. The value
+        is checked here rather than trusted because it lands in a header —
+        ``_sanitize_header`` strips line breaks, but an address with a space
+        or a second ``@`` is still not one a mail client can reply to.
+        """
+        address = str(getattr(self.organization, "email", None) or "").strip()
+        if not address or not _REPLY_TO_ADDRESS.fullmatch(address):
+            return None
+        return address
+
     def build_message(
         self,
         to_email: str,
@@ -1161,6 +1190,7 @@ class EmailService:
         SMTP server it has not configured.
         """
         html_body = inline_email_css(html_body)
+        reply_to = reply_to or self.default_reply_to()
 
         msg = MIMEMultipart("alternative")
         if text_body:
@@ -1313,6 +1343,7 @@ class EmailService:
         # Inline CSS: convert <style> class rules to inline style=""
         # attributes so they survive Gmail's <style> stripping.
         html_body = inline_email_css(html_body)
+        reply_to = reply_to or self.default_reply_to()
 
         # --- Cloudflare Email Service path (REST API, no SMTP) ---
         if self._use_cloudflare:
