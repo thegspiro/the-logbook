@@ -1,5 +1,28 @@
 # Screenshot currency
 
+## Guide 20 folded into the module guides, 2026-09-25
+
+The September release lesson is now an index, so its 18 `20-*` images moved
+into the module guides that describe their screens. No image was re-captured;
+each keeps its file name, and its manifest entry's `doc` now names its new
+guide.
+
+| Images                                  | Now in                         |
+| --------------------------------------- | ------------------------------ |
+| `20-01`–`20-03`, `20-08`–`20-10` (setup wizard) | `08-admin-reports.md` (The setup steps) |
+| `20-04` (Navigation Layout), `20-05` (Members Administration → Settings), `20-18` (Test Connection, simulated result) | `08-admin-reports.md` |
+| `20-11` (SMTP preset)                   | `08-admin-reports.md` (already there) |
+| `20-06`, `20-16`, `20-17` (close-out queue, admin hub, staffing gaps) | `03-scheduling.md` (Scheduling Administration) |
+| `20-07`, `20-12`, `20-13`, `20-14` (applicant drawer, stage picker) | `15-prospective-members.md` |
+| `20-15` (Suggestions sidebar)           | `00-getting-started.md`        |
+
+`20-05` had been placed only in guide 20. It is kept, beside the narrower
+`08-79`, because it is the one frame that shows all five sections of the screen.
+
+The wizard section of `08-admin-reports.md` used to say the wizard could not be
+pictured; it now carries the six frames `wizard-walk.mjs` captures against an
+empty database, and that note is gone.
+
 ## Disposition for September 24-25, 2026 - the Compliance Officer
 
 The Compliance Officer arrived as a seeded position (#2673), an active default

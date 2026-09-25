@@ -4729,8 +4729,8 @@ export const SHOTS = [
   // the bootstrap step -- the reverse of every other shot here.
   {
     id: "20-01-onboarding-prepare",
-    doc: "20-september-2026-release-changes.md",
-    line: 1022,
+    doc: "08-admin-reports.md",
+    line: 120,
     anchor:
       "`/onboarding/prepare` showing both lists — what setup requires and what it",
     alt: "Setup Prerequisites — the two lists: what setup requires, and what it will ask for but can skip",
@@ -4745,8 +4745,8 @@ export const SHOTS = [
   },
   {
     id: "20-02-onboarding-progress-order",
-    doc: "20-september-2026-release-changes.md",
-    line: 1052,
+    doc: "08-admin-reports.md",
+    line: 145,
     anchor:
       "The onboarding progress indicator on a mid-flow step, showing the new",
     alt: "The setup progress strip on step 3 — Step 3 of 11: Modules, with steps 1 and 2 ticked and the optional steps marked",
@@ -4758,8 +4758,8 @@ export const SHOTS = [
   },
   {
     id: "20-03-onboarding-rank-ladder",
-    doc: "20-september-2026-release-changes.md",
-    line: 1074,
+    doc: "08-admin-reports.md",
+    line: 161,
     anchor:
       "Step 4 with the rank ladder editor open — a renamed rank, a reordered",
     alt: "Step 4's rank ladder — each rank with the shift seats it may fill, an Edit control per rank, and Add Rank",
@@ -4770,8 +4770,8 @@ export const SHOTS = [
   },
   {
     id: "20-08-onboarding-member-numbering",
-    doc: "20-september-2026-release-changes.md",
-    line: 1059,
+    doc: "08-admin-reports.md",
+    line: 155,
     anchor:
       "Step 1's member-numbering block with the switch on, a prefix filled in and a",
     alt: "Step 1's member-numbering block — the switch on, a prefix of FD- and numbering starting at 100",
@@ -4784,8 +4784,8 @@ export const SHOTS = [
   },
   {
     id: "20-09-onboarding-tier-rights",
-    doc: "20-september-2026-release-changes.md",
-    line: 1075,
+    doc: "08-admin-reports.md",
+    line: 166,
     anchor:
       "Step 4's membership tier ladder with one tier's rights open — the voting,",
     alt: "Step 4's tier ladder with Active Member open — can vote, can hold office, the attendance threshold, and the automatic-advancement switch",
@@ -4798,8 +4798,8 @@ export const SHOTS = [
   },
   {
     id: "20-10-onboarding-permission-rows",
-    doc: "20-september-2026-release-changes.md",
-    line: 1088,
+    doc: "08-admin-reports.md",
+    line: 173,
     anchor:
       "Step 4's permission rows for any position other than IT Manager, against a",
     alt: "Step 4's permission rows for Chief, with 13 unenabled modules hidden and a Show all modules control",
@@ -4812,8 +4812,8 @@ export const SHOTS = [
   // ── 20 September release: reachable from the seeded department ──────
   {
     id: "20-11-settings-email-smtp-preset",
-    doc: "20-september-2026-release-changes.md",
-    line: 1401,
+    doc: "08-admin-reports.md",
+    line: 2182,
     anchor: "what a picture adds is the effect",
     alt: "Settings → Email with SMTP (any provider) selected and the Fastmail preset applied — the credential line naming the provider, and the host, port and encryption it filled in",
     route: "/settings?tab=email",
@@ -4882,8 +4882,8 @@ export const SHOTS = [
   },
   {
     id: "20-12-stage-picker-election-vote",
-    doc: "20-september-2026-release-changes.md",
-    line: 1355,
+    doc: "15-prospective-members.md",
+    line: 75,
     anchor: "this type could not be saved from this dialog at all",
     alt: "The Add Pipeline Stage dialog with Election / Vote selected, its voting configuration revealed below the type grid, and Add Stage enabled with no validation error",
     route: "/prospective-members/settings",
@@ -4936,8 +4936,8 @@ export const SHOTS = [
   },
   {
     id: "20-15-suggestions-sidebar-submit",
-    doc: "20-september-2026-release-changes.md",
-    line: 1528,
+    doc: "00-getting-started.md",
+    line: 221,
     anchor: "capture as an ordinary member so the",
     alt: "An ordinary member's view: the Suggestions item in the sidebar just below Messages, and the Suggestions page open on its Submit tab with the Training ideas box chosen and its description showing — no Review tab",
     route: "/suggestions",
@@ -4978,8 +4978,8 @@ export const SHOTS = [
   },
   {
     id: "20-14-applicant-meeting-stage-hint",
-    doc: "20-september-2026-release-changes.md",
-    line: 1584,
+    doc: "15-prospective-members.md",
+    line: 188,
     anchor:
       "the applicant detail drawer for an applicant on a **meeting** stage whose",
     alt: "The applicant drawer for an applicant on the Attend a Business Meeting stage, whose Auto-Link Event Type is set: the hint above the action row says they must be checked in at the stage's event and that event's attendance must be finalized before they can advance",
@@ -5008,8 +5008,8 @@ export const SHOTS = [
   },
   {
     id: "20-13-applicant-drawer-not-elected",
-    doc: "20-september-2026-release-changes.md",
-    line: 1324,
+    doc: "15-prospective-members.md",
+    line: 528,
     anchor:
       "the applicant detail drawer for an applicant whose election package reads",
     alt: "An applicant's drawer after a losing vote — the Membership Vote stage, the red not elected package status, the banner and a link to the closed ballot, and an action row that offers Advance",
@@ -5058,8 +5058,8 @@ export const SHOTS = [
   },
   {
     id: "20-04-org-profile-navigation-layout",
-    doc: "20-september-2026-release-changes.md",
-    line: 940,
+    doc: "08-admin-reports.md",
+    line: 199,
     anchor:
       "Settings → Organization → Profile with the Navigation Layout control",
     alt: "The Navigation Layout control in Settings → General → Profile, noting that it applies to everyone in the department",
@@ -5085,8 +5085,8 @@ export const SHOTS = [
   },
   {
     id: "20-05-members-settings-ranks",
-    doc: "20-september-2026-release-changes.md",
-    line: 1110,
+    doc: "08-admin-reports.md",
+    line: 260,
     anchor:
       "The Members Administration → Settings screen with the section sidebar",
     // "across the top", not "in the sidebar": SettingsLayout renders top-level
@@ -5100,8 +5100,8 @@ export const SHOTS = [
   },
   {
     id: "20-06-scheduling-closeout-queue",
-    doc: "20-september-2026-release-changes.md",
-    line: 1158,
+    doc: "03-scheduling.md",
+    line: 1223,
     anchor:
       "`/scheduling/admin/closeout` with several shifts in the queue, oldest",
     alt: "The shift close-out queue — ended shifts that were never closed out, oldest first, beside the close-out settings",
@@ -5111,8 +5111,8 @@ export const SHOTS = [
   },
   {
     id: "20-07-applicant-place-on-stage",
-    doc: "20-september-2026-release-changes.md",
-    line: 1180,
+    doc: "15-prospective-members.md",
+    line: 332,
     anchor:
       "The applicant board with the place-on-a-stage action open on an applicant,",
     // The stage list itself cannot be pictured: it is a native <select>, and an
@@ -14238,8 +14238,8 @@ export const SHOTS = [
     // never pressed: the form, the platform and the demo address all stay in
     // the browser.
     id: "20-18-email-test-connection",
-    doc: "20-september-2026-release-changes.md",
-    line: 200,
+    doc: "08-admin-reports.md",
+    line: 2071,
     anchor:
       "Settings → Email with the Test Connection button and a successful test result",
     alt: "Settings → Email with Microsoft 365 selected: the App registration (OAuth) and App Password choice with App Password chosen, the notice that Microsoft disables it by default at the end of December 2026, and a Test Connection toast reading SMTP connection successful — a simulated result, since the demo has no Microsoft 365 tenant",
@@ -14286,8 +14286,8 @@ export const SHOTS = [
   },
   {
     id: "20-16-scheduling-admin-hub",
-    doc: "20-september-2026-release-changes.md",
-    line: 92,
+    doc: "03-scheduling.md",
+    line: 1219,
     anchor: "The `/scheduling/admin` hub",
     alt: "The Scheduling Administration hub: the headline metrics To close out, Short-staffed, Hours this month and Needs attention, the Needs attention queue, and the card grid grouped Before the shift, On the shift, After the shift, People & eligibility, Reporting and Department settings",
     route: "/scheduling/admin",
@@ -14296,8 +14296,8 @@ export const SHOTS = [
   },
   {
     id: "20-17-staffing-gaps",
-    doc: "20-september-2026-release-changes.md",
-    line: 299,
+    doc: "03-scheduling.md",
+    line: 1221,
     anchor: "The staffing-gaps view at `/scheduling/admin/planning`",
     alt: "Shift Planning on its Staffing gaps tab: a date range, the count of short shifts and open seats, and each short shift with its empty seats and an assign control, beside the Templates and Patterns tabs",
     route: "/scheduling/admin/planning",

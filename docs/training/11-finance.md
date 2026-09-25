@@ -36,6 +36,10 @@ The Finance module is an optional module that must be enabled by your department
 | **Officers with `finance.approve`**             | Approve or deny purchase requests, expense reports, and check requests                                          |
 | **Officers with `finance.configure_approvals`** | Set up and manage approval chains and their steps                                                               |
 
+The seeded **Treasurer** position holds all four finance permissions, so a new
+department's Treasurer can build the approval chain and act on it. Nobody can
+approve their own request, whatever they hold.
+
 ### Permissions
 
 | Permission                    | Description                                                                                                                 |

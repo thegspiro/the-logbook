@@ -844,7 +844,7 @@ happen automatically — the dialog has no per-change options for them.
 
 When a member is dropped, the system automatically:
 
-1. Generates a **property return report** listing all assigned equipment and saves it to Documents
+1. Generates a **property return report** listing all assigned equipment and saves it to Documents, in the leadership-only **Member Separations** folder — not Reports, because it names the member, the reason for the separation and their home address
 2. Emails the report to the member (and any CC recipients your drop-notification settings name)
 3. Opens a **departure clearance** to track outstanding items
 4. Archives the member automatically once every item is returned **and** the departure clearance has been completed

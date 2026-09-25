@@ -4144,7 +4144,7 @@ broken by this and no data is at risk; the fix was still correct, because the
 column is settable through the API and the race was real for anyone who had set
 it. But it means "set your form to one submission per person" must not be
 written into operator documentation as an available step, and it is why
-`docs/training/20-september-2026-release-changes.md` and the wiki handoff for
+`docs/training/07-documents-forms.md` (Public Forms) and the wiki handoff for
 this window say explicitly that the checkbox does not exist.
 
 This is the inverse of CLAUDE.md Pitfall #19 ("a config switch must have a

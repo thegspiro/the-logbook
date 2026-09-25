@@ -44,6 +44,12 @@ The Documents page provides:
 - **Grid and List view** toggles
 - **Search** across all documents
 
+An empty library or folder shows its "get started" instruction — upload a file,
+create a folder — only to someone who can act on it; everyone else sees that it
+is empty. A search or filter that matches nothing is reported to everyone. If
+your permission to upload, create folders or delete is withdrawn while one of
+those dialogs is open, the dialog closes.
+
 ![Documents page with the folder tree, file list, and search bar](./images/07-01-documents.png)
 
 ---
@@ -54,11 +60,20 @@ Documents are organized into folders. The system provides default folders, and a
 
 **System Folders** (created automatically):
 
-- SOPs
+- Meeting Minutes
+- SOPs & Procedures
 - Policies
+- Forms & Templates
+- Reports
 - Training Materials
-- Forms
-- Templates
+- General Documents
+- Member Files
+- Apparatus Files
+- Facility Files
+- Event Attachments
+- **Member Separations** — leadership only. Property-return reports are filed
+  here, because each names a departed member, the reason for the separation and
+  their home address.
 
 ### Creating Folders
 
@@ -222,6 +237,14 @@ Public forms can be accessed without a login:
 3. Share the URL or QR code externally.
 4. Submissions are collected and linked to the form.
 
+> **There is no "one submission per person" setting to switch on.** The form
+> builder has no control for it, and every form a department creates allows
+> multiple submissions — so a public form will offer _Submit Another Response_
+> after each one. A form that was set to one submission per person through the
+> API is held to it on the public link, even when two submissions arrive at the
+> same moment; the limit does not apply to submissions made from inside the
+> app. See [Known Limitations](../KNOWN_LIMITATIONS.md).
+
 ![Form sharing dialog with the public URL and its QR code](./images/07-05-form-sharing.png)
 
 > **Hint:** Public forms are great for community feedback, mutual aid incident reports, or application forms linked from your department's public portal.
@@ -266,11 +289,11 @@ Navigate to **Notifications** in the sidebar (`/notifications`) to manage notifi
 
 The Notifications page uses a three-tab layout:
 
-| Tab                    | Purpose                                                                 |
-| ---------------------- | ----------------------------------------------------------------------- |
-| **Notification Rules** | Create and manage rules that define when and how notifications are sent |
-| **Email Templates**    | Link to email template management for customizing notification formats  |
-| **Send Log**           | View delivery history with channel filtering (All / Email / In-App)     |
+| Tab                    | Purpose                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| **Notification Rules** | Create and manage rules that define when and how notifications are sent                    |
+| **Email Templates**    | Link to email template management for customizing notification formats                     |
+| **Send Log**           | Your own delivery history, email and in-app, with channel filtering (All / Email / In-App) |
 
 ![Notification rules and logs page with summary cards and the rules list](./images/07-08-notification-rules.png)
 
@@ -302,15 +325,18 @@ Rules can be enabled/disabled individually with toggle switches. The summary car
 
 ### Send Log
 
-The **Send Log** tab shows notification delivery history with:
+The **Send Log** tab shows **your own** delivery history — the email and in-app
+notifications sent to you — and every member can open it. It lists:
 
 - Date and time
-- Recipient
 - Subject and message content
 - Channel (email or in-app)
 - Delivery status (sent, read, failed)
 - **Channel filter** — filter by All, Email only, or In-App only
 - **Mark All Read** button to bulk-clear unread notifications
+
+The department-wide view of every member's deliveries, for checking that mail is
+getting through, requires `notifications.manage`.
 
 ![Notification send log with channel filters and delivery status](./images/07-09-notification-send-log.png)
 
@@ -533,7 +559,10 @@ positions.
    one-way box: reviewers read every submission but do not reply or report a
    status.
 5. Pick the reviewers: any mix of **Reviewer positions** (whoever holds that
-   position) and **Reviewer members**. An active box needs at least one.
+   position) and **Reviewer members**. An active box needs at least one. They
+   are the only people who will ever read it, so choose them with the box's
+   purpose in mind — a complaints box reviewed by the people most likely to be
+   complained about will not be used.
 6. Leave **Accepting submissions** ticked, and **Save box**.
 
 Boxes are never deleted — untick **Accepting submissions** to close one. Its
@@ -780,12 +809,11 @@ She uses the form builder to add fields by clicking **Add Field** for each one. 
 
 Capt. Zhao configures the form settings:
 
-| Setting                        | Value                                                                                    |
-| ------------------------------ | ---------------------------------------------------------------------------------------- |
-| **Status**                     | Active                                                                                   |
-| **Public Access**              | Off (internal only — requires login)                                                     |
-| **Allow Multiple Submissions** | Yes (one per day per apparatus)                                                          |
-| **Submission Notification**    | On — notify Safety Officer when a submission includes "Minor Issues" or "Out of Service" |
+| Setting                     | Value                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------- |
+| **Status**                  | Active                                                                                   |
+| **Public Access**           | Off (internal only — requires login)                                                     |
+| **Submission Notification** | On — notify Safety Officer when a submission includes "Minor Issues" or "Out of Service" |
 
 She clicks **Save**. The form is now live and accessible to all logged-in members.
 

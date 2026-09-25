@@ -436,17 +436,13 @@ Hazmat, Service Call, Alarm / Good Intent, Mutual Aid, and Other. A department
 can define its own instead.
 
 **You can rename a type freely without touching history.** What gets stored on
-each call is the type's internal slug, not the label you see — so fixing a typo
-in a label does not orphan last year's calls. What you should _not_ do casually
-is delete a type: existing calls keep the deleted slug, and it will show as
-unclassified.
-
-> **A rename is invisible in the Call Volume report.** That report prints the
-> stored **slug**, not your label — so a type whose slug is `mva` reads as "mva"
-> there no matter what you call it on screen, and `mutual_aid` reads as "mutual
-> aid". Only the close-out wizard uses your labels. Bear it in mind when
-> choosing the slug for a new type: that string is what a reader sees in the
-> report.
+each call is the type's permanent slug, not the label you see — so fixing a typo
+in a label does not orphan last year's calls, and reports, the CSV export, the
+shift-report badges, the printable report and the end-of-shift summary email all
+show your current label. A type with calls behind it can be **retired** but not
+deleted, so its history keeps its name. The editor is at **Administration →
+Scheduling Admin → General → Call types**; see
+[Name your own call types](#name-your-own-call-types-2026-09-05).
 
 ### The three numbers, and why they will not add up
 
@@ -995,7 +991,9 @@ Organization Settings and Event Settings: a **section list down the left** on a
 computer, a **scrollable tab strip across the top** on a phone, and one heading
 rather than the two stacked titles it used to show.
 
-Seven sections, of which six are always present:
+Six sections, of which five are always present. They live under
+**Administration → Scheduling Admin → Settings**, and each is its own address,
+`/scheduling/admin/settings/<section>`:
 
 | Section           | What it holds                                             |
 | ----------------- | --------------------------------------------------------- |
@@ -1004,12 +1002,15 @@ Seven sections, of which six are always present:
 | **Platoons**      | Platoon rosters and assignments                           |
 | **Eligibility**   | Which membership types may sign themselves up for a shift |
 | **Notifications** | Shift reminders and alerts                                |
-| **Equipment**     | Check requirements and templates                          |
 | **Shift Reports** | End-of-shift reporting options                            |
+
+Equipment-check requirements and templates are not here: they are managed in
+Inventory, from the checklist console in **Inventory Admin**
+(`/inventory/admin/checklists`).
 
 **Platoons only appears once platoon scheduling is switched on**, from the
 toggle at the top of **General**. A department that does not run A/B/C
-rotations sees six sections and no empty platoon screen — and turning the
+rotations sees five sections and no empty platoon screen — and turning the
 feature off while you are on that section returns you to General rather than
 leaving you on a page that has gone.
 
@@ -1019,15 +1020,14 @@ leaving you on a page that has gone.
 
 ### Two things that changed with it
 
-**The Save button only appears where it saves something.** General, Apparatus and
-Equipment have the Save/Reset footer. The other four sections each have their own
-save control. Until this change the footer was shown on all seven while saving
-only three — so on Notifications and Shift Reports you could press **Save**, see
-"Settings saved", and have changed nothing.
+**The Save button only appears where it saves something.** General and
+Apparatus have the Save/Reset footer. The other sections each have their own
+save control.
 
-**A section can now be linked to.** Selecting a section puts it in the address
-bar, so you can bookmark it, refresh into it, and go **back** to the section you
-came from. It previously read the address on load but never wrote it.
+**A section can be linked to.** Each section is its own address, so you can
+bookmark it, refresh into it, and go **back** to the section you came from. An
+older link of the form `/scheduling/admin/settings?tab=…` forwards to the
+section it names, or to General.
 
 > **Eligibility here is not the same screen as rank eligibility.** This section
 > governs which **membership types** may sign themselves up for a shift. Which
@@ -1170,13 +1170,18 @@ opened the schedule to find the settings. That strip is gone.
 | `/scheduling/admin/planning`           | Shift Planning          | Every upcoming short shift, with the assignment on the row         |
 | `/scheduling/admin/planning/templates` | Shift Templates         | Manage shift templates                                             |
 | `/scheduling/admin/planning/patterns`  | Shift Patterns          | Create and manage shift patterns                                   |
+| `/scheduling/admin/closeout`           | Shift Close-Out         | Every ended shift not yet closed out, oldest first, beside the close-out settings |
 | `/scheduling/admin/reports`            | Scheduling Reports      | Hours, coverage and compliance reports                             |
 | `/scheduling/admin/platoons`           | Platoons                | Department-wide roster and bulk assignment                         |
 | `/scheduling/admin/positions`          | Who Can Fill What       | Position eligibility roster                                        |
 | `/scheduling/admin/settings/<section>` | Settings (six sections) | `general`, `apparatus`, `platoons`, `eligibility`, `notifications`, `shift-reports` |
 
 Every page here requires `scheduling.manage` — the hub, the settings sections
-and the position roster alike.
+and the position roster alike. The position roster's API
+(`GET /scheduling/eligibility/roster`) requires it too, so a training officer
+without it cannot read the roster from the API either. A named shift officer
+still closes out their own shift from the shift itself; the close-out queue is
+the department-wide view.
 
 > **⚠️ Six old URLs no longer resolve, and there is no redirect.**
 > `/scheduling/settings`, `/scheduling/templates`, `/scheduling/patterns`,
@@ -1196,9 +1201,12 @@ page's own state reads cannot be linked to.
 **Shift Planning** is the screen the rest was reorganised around. It lists every
 upcoming shift carrying fewer people than it asks for, over a date range, with
 the assignment control on the row — filling ten gaps used to be ten trips
-through the month grid, the day, the shift drawer and back. Templates and
-patterns are sections of that screen rather than screens beside it, because the
-reason to open a template is a shift that keeps coming up short.
+through the month grid, the day, the shift and back. Assigning from a row goes
+through the same call as **Shift Details**, so it shows the same **EVOC and
+overtime advisories** and opens the same **driver-exception** dialog. Templates
+and patterns are sections of that screen rather than screens beside it, each at
+its own address, because the reason to open a template is a shift that keeps
+coming up short.
 
 > **One thing to know about the numbers.** The gaps list is built from the same
 > rules the shift board uses, so it cannot answer differently about a shift than
@@ -1207,6 +1215,12 @@ reason to open a template is a shift that keeps coming up short.
 > board, and is **not listed** here — while the hub's Short-staffed metric does
 > count it. The hub number can exceed the rows on this screen for a department
 > that states no crew size anywhere; the fix is to state one.
+
+![The Scheduling Administration hub: the headline metrics To close out, Short-staffed, Hours this month and Needs attention, the Needs attention queue, and the card grid grouped Before the shift, On the shift, After the shift, People & eligibility, Reporting and Department settings](./images/20-16-scheduling-admin-hub.png)
+
+![Shift Planning on its Staffing gaps tab: a date range, the count of short shifts and open seats, and each short shift with its empty seats and an assign control, beside the Templates and Patterns tabs](./images/20-17-staffing-gaps.png)
+
+![The shift close-out queue — ended shifts that were never closed out, oldest first, beside the close-out settings](./images/20-06-scheduling-closeout-queue.png)
 
 ![A scheduling admin sub-page with its back arrow and page header](./images/03-51-admin-subpage-header.png)
 
@@ -2412,11 +2426,11 @@ A scheduled task runs every 30 minutes to send reminders to members assigned to 
 - Configurable lookahead window (default: 2 hours before shift start)
 - Optional email in addition to in-app notification
 
-Department settings for reminders are under **Settings > Scheduling > Notifications > Start-of-Shift Reminders**.
+Department settings for reminders are under **Scheduling Admin → Settings → Notifications → Start-of-Shift Reminders**.
 
 ![Scheduling notification settings showing the start-of-shift reminder options](./images/03-39-notifications-reminders.png)
 
-> **Edge case:** A shift that has already started is skipped. Reminders are sent only once per shift (tracked via `activities.start_reminder_sent`).
+> **Edge case:** A shift that has already started is skipped. Reminders are sent only once per shift (tracked via `activities.start_reminder_sent`). A shift with no currently active assigned members is not marked as reminded, so a member added or reactivated later in the window still gets the reminder.
 
 ### Selected Shift Highlight
 
@@ -2807,9 +2821,10 @@ When submitting an equipment check with unanswered items, a **confirmation dialo
 
 ### Resuming In-Progress Checks
 
-Previously, if you started an equipment check but couldn't finish it, the check was stuck in an incomplete state. Now:
+A check you started and could not finish is kept, answers and all — including
+when you leave the page mid-check. To pick it up again:
 
-1. Open the **Equipment Checks** tab — as a member it is headed **My Equipment Checklists**
+1. Open **Operations → My Checklists** — the page is headed **My Equipment Checklists**
 2. Each card shows the rig, whether it is a start- or end-of-shift check, the date, and how many of its items are answered, with a progress bar. An untouched one reads **Not Started**; a part-answered one reads **In Progress** with its percentage; a finished one reads **Passed**
 3. The button follows the state: **Continue checklist** on a part-answered card, **Open checklist** otherwise. Continuing opens the form with the answered items already filled in
 4. Complete what is left and submit
@@ -3186,6 +3201,12 @@ says nothing about an intact inner one.
 collapsed to a line — is built and tested but **not connected to the check
 screen**, which still shows the flat compartment list. Do not teach it,
 screenshot it, or promise it in this release.
+
+**The crew "Sweep"** — walking a check one stop at a time, with a map of the
+truck across the top, a single claim per stop, and the check finishing on the
+exceptions — is **not switched on for crews**. It is visible only in the
+template builder's preview, so a department can see it against its own
+templates first. Do not narrate it as the current member experience.
 
 ### Swapping stock during a check
 
