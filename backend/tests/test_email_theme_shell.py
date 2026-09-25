@@ -77,8 +77,12 @@ _SHELL_MIGRATION = _load_revision("f0d76814a9ab")
 # migration's frozen copy. The colourway migration's tests assert what it does
 # to bodies of *its* era; run against today's defaults they would be testing
 # it on markup it was never written for.
+# A template type added after that migration had no body of that era, so it
+# has nothing to contribute here.
 _PREVIOUS_DEFS = [
-    dict(d, html=_SHELL_MIGRATION.PREVIOUS_BODIES[d["type"].value]) for d in _DEFS
+    dict(d, html=_SHELL_MIGRATION.PREVIOUS_BODIES[d["type"].value])
+    for d in _DEFS
+    if d["type"].value in _SHELL_MIGRATION.PREVIOUS_BODIES
 ]
 
 
@@ -1337,7 +1341,12 @@ class TestTheShellMigration:
         # revision with its own frozen pair — and point this test at it;
         # otherwise every installation keeps the old design and newly
         # badges each untouched template "Edited".
+        #
+        # A type added after this revision is skipped: no installation held
+        # a row of it when the migration ran, so there is no old body to carry.
         for defn in _DEFS:
+            if defn["type"].value not in _SHELL_MIGRATION.CURRENT_BODIES:
+                continue
             assert (
                 _SHELL_MIGRATION.CURRENT_BODIES[defn["type"].value] == defn["html"]
             ), defn["type"].value

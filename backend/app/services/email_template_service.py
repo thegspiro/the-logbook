@@ -518,6 +518,14 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Date the applicant withdrew, in the department's timezone",
         },
     ],
+    "suggestion_submitted": [
+        {"name": "recipient_name", "description": "Reviewer's display name"},
+        {"name": "box_name", "description": "Name of the suggestion box"},
+        {
+            "name": "suggestion_url",
+            "description": "Link to the submission in the Review tab",
+        },
+    ],
     "ballot_eligibility_summary": [
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "election_title", "description": "Title of the election"},
@@ -1060,6 +1068,13 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         {
             "applicant_name": "Alex Johnson",
             "withdrawal_date": "March 3, 2026",
+        }
+    ),
+    "suggestion_submitted": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "box_name": "Compliance",
+            "suggestion_url": "https://example.org/suggestions?tab=review&id=sample",
         }
     ),
     "ballot_eligibility_summary": _sample(
@@ -1785,6 +1800,34 @@ or would like to apply again in the future, please contact us directly.
 DEFAULT_APPLICATION_WITHDRAWN_SUBJECT = (
     "Your application has been withdrawn — {{organization_name}}"
 )
+
+# Sent to a box's reviewers when a submission arrives. Deliberately carries no
+# submission content: a complaint copied into mailboxes is out of the
+# department's control for good, so the text stays in the application. An
+# administrator editing this template should keep it that way.
+DEFAULT_SUGGESTION_SUBMITTED_HTML = build_shell(
+    "New Suggestion Box Submission",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>A new submission was received in the <strong>{{box_name}}</strong>
+        suggestion box, which you review.</p>
+        <p>Open it in the Logbook to read it and set its status.</p>
+""" + action("{{suggestion_url}}", "Review Submission"),
+    accent=ACCENT_BLUE,
+    chip="Suggestion box",
+)
+
+DEFAULT_SUGGESTION_SUBMITTED_TEXT = """New Suggestion Box Submission
+
+Hello {{recipient_name}},
+
+A new submission was received in the {{box_name}} suggestion box, which you
+review. Open it in the Logbook to read it and set its status.
+
+Review it: {{suggestion_url}}
+
+{{footer_text}}"""
+
+DEFAULT_SUGGESTION_SUBMITTED_SUBJECT = "New submission in the {{box_name}} box"
 
 # Default ballot notification email
 DEFAULT_BALLOT_NOTIFICATION_HTML = build_shell(
@@ -3292,6 +3335,17 @@ class EmailTemplateService:
             "description": (
                 "Sent to an applicant who withdraws their own application "
                 "from their application status page, confirming it is closed."
+            ),
+        },
+        {
+            "type": EmailTemplateType.SUGGESTION_SUBMITTED,
+            "name": "Suggestion Submitted",
+            "subject": DEFAULT_SUGGESTION_SUBMITTED_SUBJECT,
+            "html": DEFAULT_SUGGESTION_SUBMITTED_HTML,
+            "text": DEFAULT_SUGGESTION_SUBMITTED_TEXT,
+            "description": (
+                "Sent to each reviewer of a suggestion box when a member "
+                "submits to it. Carries a link only, never the submission."
             ),
         },
         {

@@ -33,11 +33,17 @@ import SuggestionThread from './SuggestionThread';
 
 const PAGE_SIZE = 25;
 const DISPOSITIONS = Object.values(SuggestionDisposition);
+const OPEN_DISPOSITIONS: ReadonlySet<SuggestionDisposition> = new Set([
+  SuggestionDisposition.NEW,
+  SuggestionDisposition.UNDER_REVIEW,
+]);
 
 interface SuggestionReviewPanelProps {
   boxes: SuggestionBoxPublic[];
   selectedId: string;
   onSelect: (id: string) => void;
+  /** Called after a disposition changes, so the parent can refresh its open count. */
+  onReviewed?: (() => void) | undefined;
 }
 
 interface ReviewDetailProps {
@@ -243,7 +249,7 @@ const ReviewDetail: React.FC<ReviewDetailProps> = ({ detail, onChange }) => {
   );
 };
 
-const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, selectedId, onSelect }) => {
+const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, selectedId, onSelect, onReviewed }) => {
   const tz = useTimezone();
   const [boxId, setBoxId] = useState('');
   const [filter, setFilter] = useState<ReviewFilter>('open');
@@ -274,10 +280,10 @@ const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, se
   }, [load]);
 
   useEffect(() => {
-    if (!selectedId) {
-      setDetail(null);
-      return;
-    }
+    // Cleared up front so a failed load cannot leave the previous submission
+    // on screen under the new selection.
+    setDetail(null);
+    if (!selectedId) return;
     let cancelled = false;
     suggestionsService
       .getForReview(selectedId)
@@ -311,14 +317,24 @@ const SuggestionReviewPanel: React.FC<SuggestionReviewPanelProps> = ({ boxes, se
   };
 
   const handleChange = (updated: ReviewSuggestionDetail) => {
+    const dispositionChanged = detail?.id === updated.id && detail.disposition !== updated.disposition;
     setDetail(updated);
-    setItems((current) =>
-      current.map((item) =>
-        item.id === updated.id
-          ? { ...item, disposition: updated.disposition, messageCount: updated.messages.length }
-          : item
-      )
-    );
+    // Under the Open filter a closed submission no longer belongs in the list.
+    // The detail stays on screen so the reviewer still sees what they saved.
+    const leavesList = dispositionChanged && filter === 'open' && !OPEN_DISPOSITIONS.has(updated.disposition);
+    if (leavesList) {
+      setItems((current) => current.filter((item) => item.id !== updated.id));
+      setTotal((current) => Math.max(0, current - 1));
+    } else {
+      setItems((current) =>
+        current.map((item) =>
+          item.id === updated.id
+            ? { ...item, disposition: updated.disposition, messageCount: updated.messages.length }
+            : item
+        )
+      );
+    }
+    if (dispositionChanged) onReviewed?.();
   };
 
   return (
