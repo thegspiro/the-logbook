@@ -9,15 +9,18 @@ stored timestamp to the organization's timezone.
 
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.models.inventory import InventoryActionType, InventoryNotificationQueue
 from app.models.storefront import StoreOrderWindow
 from app.models.user import Organization
+from app.services import inventory_notification_service as inventory_module
 from app.services import storefront_notification_service as notify_module
 from app.services.email_service import EmailService
 from app.services.event_request_service import render_request_template
+from app.services.inventory_notification_service import InventoryNotificationService
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.storefront_notification_service import (
     StorefrontNotificationService,
@@ -153,3 +156,78 @@ class TestStorefrontWindowDeadline:
         body = sent[-1]["html_body"]
         assert "October 06, 2026 at 07:00 PM" in body
         assert "UTC" not in body
+
+
+# 02:30 UTC on October 7 is 10:30 PM Eastern on October 6: a date-only value
+# taken in UTC lands on the wrong day for the evening hours.
+LATE_EVENING_UTC = datetime(2026, 10, 7, 2, 30, tzinfo=timezone.utc)
+
+
+class _FrozenDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        if tz is None:
+            return LATE_EVENING_UTC.replace(tzinfo=None)
+        return LATE_EVENING_UTC.astimezone(tz)
+
+
+class TestDuplicateApplicationDate:
+    async def test_the_original_application_date_is_the_departments_day(self):
+        org = _org("America/New_York")
+        org.email = None
+        org_result = MagicMock()
+        org_result.scalar_one_or_none.return_value = org
+        service = MembershipPipelineService.__new__(MembershipPipelineService)
+        service.db = SimpleNamespace(
+            execute=AsyncMock(return_value=org_result), commit=AsyncMock()
+        )
+        service._log_activity = AsyncMock()
+        prospect = SimpleNamespace(
+            id="p-1",
+            first_name="Dana",
+            last_name="Reyes",
+            email="dana@example.org",
+            created_at=LATE_EVENING_UTC,
+        )
+        send = AsyncMock(return_value=True)
+
+        email_service = MagicMock(send_duplicate_application_email=send)
+        with patch(
+            "app.services.email_service.EmailService", return_value=email_service
+        ):
+            await service._notify_duplicate_application(prospect, "org-1")
+
+        assert send.await_args.kwargs["original_date"] == "October 06, 2026"
+
+
+class TestInventoryChangeDate:
+    async def test_the_change_date_is_the_departments_day(self, monkeypatch):
+        monkeypatch.setattr(inventory_module, "datetime", _FrozenDatetime)
+        record = InventoryNotificationQueue(
+            id="rec-1",
+            organization_id="org-1",
+            user_id="user-1",
+            item_id="item-1",
+            item_name="Radio",
+            action_type=InventoryActionType.ASSIGNED,
+            quantity=1,
+            processed=False,
+            created_at=LATE_EVENING_UTC,
+        )
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [record]
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+        db.commit = AsyncMock()
+        service = InventoryNotificationService(db)
+        service._get_user = AsyncMock(
+            return_value=SimpleNamespace(first_name="Dana", email="d@example.org")
+        )
+        service._get_organization = AsyncMock(return_value=_org("America/New_York"))
+        send = AsyncMock(return_value=True)
+        service._send_notification_email = send
+
+        await service.process_pending_notifications()
+
+        context = send.await_args.args[2]
+        assert context["change_date"] == "October 06, 2026"

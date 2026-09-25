@@ -5146,7 +5146,9 @@ class MembershipPipelineService:
             # Format the original application date
             original_date = "unknown"
             if existing_prospect.created_at:
-                original_date = existing_prospect.created_at.strftime("%B %d, %Y")
+                original_date = format_in_org_timezone(
+                    existing_prospect.created_at, org, "%B %d, %Y"
+                )
 
             applicant_name = (
                 f"{existing_prospect.first_name} {existing_prospect.last_name}"
