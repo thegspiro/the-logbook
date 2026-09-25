@@ -184,12 +184,12 @@ Shipped in PR #2649. User-facing walkthrough:
 
 ### Code map
 
-| Layer    | Where                                                                                                                                                 |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Model    | `app/models/suggestion.py` — `SuggestionBox`, `SuggestionBoxReviewer`, `Suggestion`, `SuggestionAttachment`, `SuggestionMessage`, `SuggestionForward` |
-| Service  | `app/services/suggestion_service.py`                                                                                                                  |
-| API      | `app/api/v1/endpoints/suggestions.py`, mounted at `/api/v1/suggestions`                                                                               |
-| Frontend | `modules/communications/pages/SuggestionsPage.tsx`, `SuggestionBoxesAdminPage.tsx`, `components/Suggestion*.tsx`, `services/suggestionsService.ts`    |
+| Layer    | Where                                                                                                                                                                         |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model    | `app/models/suggestion.py` — `SuggestionBox`, `SuggestionBoxReviewer`, `SuggestionBoxWatcher`, `Suggestion`, `SuggestionAttachment`, `SuggestionMessage`, `SuggestionForward` |
+| Service  | `app/services/suggestion_service.py`                                                                                                                                          |
+| API      | `app/api/v1/endpoints/suggestions.py`, mounted at `/api/v1/suggestions`                                                                                                       |
+| Frontend | `modules/communications/pages/SuggestionsPage.tsx`, `SuggestionBoxesAdminPage.tsx`, `components/Suggestion*.tsx`, `services/suggestionsService.ts`                            |
 
 ### Pages
 
@@ -263,18 +263,37 @@ Dispositions: `new`, `under_review`, `accepted`, `implemented`, `declined`,
 submitter's response schema. In a one-way box (`allow_follow_up` false) the
 submitter sees neither disposition nor messages.
 
-Emails go through the background task `send_suggestion_notice` to active members
-only, template type `suggestion_box`, and **carry a link and never the content**:
+Notices go through the background task `send_suggestion_notice` to active
+members only. Each recipient gets an in-app notification (category
+`suggestions`, linking to the submission), a web push where push is configured,
+and **their own email**, so no recipient sees another's address. Every channel
+**carries a link and never the content**, and nothing identifying the submitter
+goes into the notification row. Email is not gated on the member's email
+preference: for a reviewer it is the channel of record (CLAUDE.md pitfall #18).
 
-| Event              | Recipients                                 |
-| ------------------ | ------------------------------------------ |
-| New submission     | The box's reviewers                        |
-| Submitter reply    | The box's reviewers and forward recipients |
-| Disposition change | Named submitter, follow-up boxes only      |
-| Reviewer reply     | Named submitter                            |
-| Forward            | The new recipients                         |
+| Event              | Recipients                                                     | Email template                                |
+| ------------------ | -------------------------------------------------------------- | --------------------------------------------- |
+| New submission     | The box's reviewers                                            | `suggestion_submitted` (editable)             |
+| New submission     | The box's notified people ("Also notify"), minus its reviewers | `suggestion_box` (fixed; no link to the item) |
+| Submitter reply    | The box's reviewers and forward recipients                     | `suggestion_box`                              |
+| Disposition change | Named submitter, follow-up boxes only                          | `suggestion_box`                              |
+| Reviewer reply     | Named submitter                                                | `suggestion_box`                              |
+| Forward            | The new recipients                                             | `suggestion_box`                              |
 
-Anonymous submitters are never emailed. Audit events: `suggestion_box_created`,
+**Notified people are not reviewers.** `suggestion_box_watchers` names positions
+or members told that a box received something; they cannot open it, and their
+notice links to `/suggestions`, not to the submission. A chief who asks to know
+the Compliance box is in use must not become able to read a complaint about
+themselves by asking. An update that omits both `watcherPositionIds` and
+`watcherMemberIds` leaves them unchanged, so a client older than the field does
+not clear them.
+
+**The new-submission notices can be switched off** under Notification Rules
+(trigger `suggestion_submitted`). No rule means on. The switch covers only the
+two new-submission rows above; replies, forwards and status changes are the
+conversation itself and always go out.
+
+Anonymous submitters are never notified. Audit events: `suggestion_box_created`,
 `suggestion_box_updated`, `suggestion_submitted` (named only),
 `suggestion_disposition_changed`, `suggestion_forwarded`,
 `suggestion_forward_withdrawn`.
@@ -297,6 +316,7 @@ Anonymous submitters are never emailed. Audit events: `suggestion_box_created`,
 | `80e2004cd691` | Creates the five box/suggestion tables, each guarded on absence (no-op after `create_all`)                                                            | Drops them — **every suggestion, attachment record and message**; files under `uploads/suggestions` are left on disk |
 | `394600cbfae2` | Adds `suggestions.manage` to `is_system` rows for `fire_chief`, `deputy_chief`, `assistant_chief`, `president`, `communications_officer` where absent | Removes it from the same rows, including a deliberate post-upgrade grant                                             |
 | `9cb132ad83dc` | Creates `suggestion_forwards`                                                                                                                         | Drops it — every forward, suggestions intact                                                                         |
+| `1ae1ffbc445e` | Widens `notification_rules.trigger` and the two `template_type` enums with `suggestion_submitted`; creates `suggestion_box_watchers`                  | Deletes rules and templates of that value, narrows the enums, drops the watchers table                               |
 
 ## User documentation
 

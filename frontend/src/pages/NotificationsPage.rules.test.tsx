@@ -107,7 +107,11 @@ describe('NotificationsPage rules', () => {
     await openCreateModal(user);
 
     const options = await screen.findAllByRole('option');
-    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual(['event_reminder', 'training_expiry']);
+    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual([
+      'event_reminder',
+      'training_expiry',
+      'suggestion_submitted',
+    ]);
   });
 
   it('describes what the rule will do instead of a channel it does not control', async () => {

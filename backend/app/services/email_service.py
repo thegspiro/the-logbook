@@ -2131,6 +2131,53 @@ class EmailService:
 
         return success_count > 0
 
+    async def send_suggestion_submitted_email(
+        self,
+        to_email: str,
+        recipient_name: str,
+        box_name: str,
+        suggestion_url: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell one reviewer a suggestion box received a submission.
+
+        One recipient per call so reviewers never see each other's addresses;
+        ``sent_by`` is never passed because the submitter may be anonymous.
+        """
+        from app.services.email_template_service import (
+            DEFAULT_SUGGESTION_SUBMITTED_HTML,
+            DEFAULT_SUGGESTION_SUBMITTED_SUBJECT,
+            DEFAULT_SUGGESTION_SUBMITTED_TEXT,
+        )
+
+        context = {
+            "recipient_name": recipient_name,
+            "box_name": box_name,
+            "suggestion_url": suggestion_url,
+        }
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.SUGGESTION_SUBMITTED,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_SUGGESTION_SUBMITTED_SUBJECT,
+            default_html=DEFAULT_SUGGESTION_SUBMITTED_HTML,
+            default_text=DEFAULT_SUGGESTION_SUBMITTED_TEXT,
+        )
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.SUGGESTION_SUBMITTED.value,
+        )
+
+        return success_count > 0
+
     async def send_duplicate_application_email(
         self,
         to_email: str,

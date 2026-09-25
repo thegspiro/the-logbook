@@ -97,6 +97,11 @@ class SuggestionBox(Base):
         back_populates="box",
         cascade="all, delete-orphan",
     )
+    watchers = relationship(
+        "SuggestionBoxWatcher",
+        back_populates="box",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         UniqueConstraint("organization_id", "name", name="uq_suggestion_box_org_name"),
@@ -141,6 +146,45 @@ class SuggestionBoxReviewer(Base):
         Index("idx_suggestion_reviewers_org_box", "organization_id", "box_id"),
         UniqueConstraint("box_id", "position_id", name="uq_suggestion_reviewer_pos"),
         UniqueConstraint("box_id", "user_id", name="uq_suggestion_reviewer_user"),
+    )
+
+
+class SuggestionBoxWatcher(Base):
+    """Someone told that a box received a submission, without being able to
+    read it: either a position or a single member.
+
+    Kept apart from ``SuggestionBoxReviewer`` because the two grant different
+    things. A chief who wants to know the Compliance box is being used must
+    not, by asking, become able to read a complaint about themselves.
+    """
+
+    __tablename__ = "suggestion_box_watchers"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    box_id = Column(
+        String(36),
+        ForeignKey("suggestion_boxes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    position_id = Column(
+        String(36), ForeignKey("positions.id", ondelete="CASCADE"), nullable=True
+    )
+    user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    box = relationship("SuggestionBox", back_populates="watchers")
+
+    __table_args__ = (
+        Index("idx_suggestion_watchers_org_box", "organization_id", "box_id"),
+        UniqueConstraint("box_id", "position_id", name="uq_suggestion_watcher_pos"),
+        UniqueConstraint("box_id", "user_id", name="uq_suggestion_watcher_user"),
     )
 
 
