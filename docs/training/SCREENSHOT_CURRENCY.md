@@ -13,14 +13,18 @@ one showed the change.
 | `08-37-email-officers`        | **Re-shot.** New Compliance Officer row with Lila Nakamura assigned, and Signature Variables 48 → 52. Also replaces the older frame in which every office was vacant |
 | `07-14-suggestion-box-dialog` | Unchanged. The reviewer-positions list is a scroll box, captured scrolled to the ticked Secretary and Training Officer; Compliance Officer sits above the fold |
 | `08-04-role-management`       | Unchanged by this. Compliance Officer is 15th of 31 by priority, below the fold                                                                              |
-| `08-56`, `08-57`, `08-65`, `08-66` | Unchanged by this. The Officer Signature Variables header, whose count moved, sits below the editor's first screen in every one                         |
+| `08-57`, `08-65`, `08-66`     | Unchanged by this. The Officer Signature Variables header, whose count moved, is outside the frame                                                            |
+| `08-56-template-discard`      | **Corrected 09-25:** this one scrolls down to the HTML body, and the header is in frame. It was judged unaffected from the other three; the 09-25 re-shot below now reads "(52)" |
 
-**Found along the way, not re-shot.** The four template-editor shots and
-`08-04` no longer match the shipped UI for reasons unrelated to this change: the
-breadcrumb now sits above the page title rather than beside it, the template
+**Found along the way, re-shot 2026-09-25.** The four template-editor shots and
+`08-04` no longer matched the shipped UI for reasons unrelated to this change:
+the breadcrumb now sits above the page title rather than beside it, the template
 filter pills were restyled, Members & Accounts lists eight templates rather than
-seven, and the role cards' "+N more" permission counts moved. Each wants a
-re-shot on its own terms.
+seven, and the role cards' "+N more" permission counts moved. All five were
+re-shot from a freshly seeded demo on `main` and each checked against its
+caption: `08-04-role-management`, `08-56-template-discard`,
+`08-57-template-reset-dialog`, `08-65-template-footer-selector`,
+`08-66-template-variable-palette`.
 
 ## Remaining placeholders, filled 2026-09-24 — 44 down to 0
 
