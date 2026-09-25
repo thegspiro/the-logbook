@@ -10629,7 +10629,7 @@ export const SHOTS = [
     doc: "07-documents-forms.md",
     line: 633,
     anchor: "tab with one submission open: the disposition",
-    alt: "Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the Response to the submitter and internal note fields, the Idea board section showing it published, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply",
+    alt: "Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the Response to the submitter and internal note fields, the Status history from Received to Under review, the Idea board section with its published copy and the Edit published copy and Take off the board buttons, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply",
     route: "/suggestions?tab=review",
     // The seeded reviewer is the Secretary position, which this account holds.
     // The administrator reviews no box, by design, and has no Review tab.
@@ -10665,7 +10665,7 @@ export const SHOTS = [
     doc: "07-documents-forms.md",
     line: 629,
     anchor: "What a forward recipient sees: Suggestions",
-    alt: "Suggestions → Review as a member who reviews no box: the one submission forwarded to them, marked Forwarded to you, open on the right with its disposition, internal note and thread, and under Forwarded to the note that only the box's reviewers can forward it, with no Forward button",
+    alt: "Suggestions → Review as a member who reviews no box: the one submission forwarded to them, marked Forwarded to you, open on the right with its disposition, internal note and thread, its Idea board section saying only the box's reviewers can publish it, and under Forwarded to the note that only the box's reviewers can forward it, with no Forward button",
     route: "/suggestions?tab=review",
     // Reviews no box, so everything on this tab arrives by forward -- which is
     // the state the guide describes. The secretary reviews every box and would
@@ -10804,7 +10804,7 @@ export const SHOTS = [
     doc: "07-documents-forms.md",
     line: 732,
     anchor: "Create Notification Rule** with the trigger event set",
-    alt: "Notifications → Create Notification Rule with the trigger event set to Suggestion Submitted, and the note under it saying it notifies box reviewers and watchers of new submissions and what switching it off stops",
+    alt: "Notifications → Create Notification Rule with the trigger event set to Suggestion Submitted, and the note under it saying it tells the box's reviewers, and anyone the box notifies, that a submission arrived, and that replies and status updates still go out when it is switched off",
     route: "/notifications?tab=rules",
     expect: "Create Notification Rule",
     viewport: { width: 1280, height: 1100 },
