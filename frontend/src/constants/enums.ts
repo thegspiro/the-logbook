@@ -872,6 +872,14 @@ export const MicrosoftAuthMethod = {
 } as const;
 export type MicrosoftAuthMethod = (typeof MicrosoftAuthMethod)[keyof typeof MicrosoftAuthMethod];
 
+/** Mirrors `EmailLinkDomainSource` in `app/schemas/organization.py`. */
+export const EmailLinkDomainSource = {
+  FRONTEND_URL: 'frontend_url',
+  ALLOWED_ORIGINS: 'allowed_origins',
+  UNRESOLVED_LOOPBACK: 'unresolved_loopback',
+} as const;
+export type EmailLinkDomainSource = (typeof EmailLinkDomainSource)[keyof typeof EmailLinkDomainSource];
+
 // ============================================
 // Suggestion boxes
 // ============================================

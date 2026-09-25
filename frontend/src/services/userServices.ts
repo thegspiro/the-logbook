@@ -11,6 +11,7 @@ import type {
   ContactInfoSettings,
   ContactInfoUpdate,
   EmailConnectionTestResult,
+  EmailLinkDomain,
   EmailServiceSettings,
   FileStorageSettings,
   User,
@@ -459,6 +460,15 @@ export const organizationService = {
    */
   async updateEmailSettings(settings: EmailServiceSettings): Promise<EmailServiceSettings> {
     const response = await api.patch<EmailServiceSettings>('/organization/settings/email', settings);
+    return response.data;
+  },
+
+  /**
+   * The address links in outgoing email are built from, and where the
+   * deployment's configuration got it.
+   */
+  async getEmailLinkDomain(): Promise<EmailLinkDomain> {
+    const response = await api.get<EmailLinkDomain>('/organization/settings/email/link-domain');
     return response.data;
   },
 
