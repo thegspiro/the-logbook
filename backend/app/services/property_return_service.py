@@ -207,7 +207,9 @@ class PropertyReturnService:
                 }
             )
 
-        today = date.today()
+        # The effective date and deadline are printed in a notice emailed to
+        # the member, so "today" is the department's day, not the server's.
+        today = datetime.now(org_tz).date()
         return_deadline = today + timedelta(days=return_deadline_days)
 
         report_data = {

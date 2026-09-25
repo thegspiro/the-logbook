@@ -172,6 +172,30 @@ class TestGenerateReport:
         assert "Radio" in html
         assert "$350.00" in html
 
+    async def test_dates_are_the_departments_day_not_the_servers(self, monkeypatch):
+        """At 10:30 PM Eastern it is already tomorrow in UTC, which is what a
+        container's date.today() returns. The emailed notice must carry the
+        department's date."""
+        from app.services import property_return_service as module
+
+        frozen = datetime(2026, 10, 7, 2, 30, tzinfo=timezone.utc)
+
+        class _Frozen(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return frozen.astimezone(tz) if tz else frozen.replace(tzinfo=None)
+
+        monkeypatch.setattr(module, "datetime", _Frozen)
+        officer = SimpleNamespace(full_name="Chief Bob", rank="Chief")
+        db = _db(_member(), _org(), officer, [], [])
+
+        data, _html = await PropertyReturnService(db).generate_report(
+            "u1", "org-1", "dropped_voluntary", "officer-1", return_deadline_days=14
+        )
+
+        assert data["effective_date"] == "October 06, 2026"
+        assert data["return_deadline"] == "October 20, 2026"
+
     async def test_includes_unreturned_pool_issuances(self):
         # Pool-issued items are accountable property and must appear in the
         # letter (count, value x quantity, and an "Issued" row label).

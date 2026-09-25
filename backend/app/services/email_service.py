@@ -19,7 +19,6 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
-from zoneinfo import ZoneInfo
 
 from loguru import logger
 
@@ -42,6 +41,7 @@ from app.utils.email_providers import (
     stored_email_section,
 )
 from app.utils.microsoft_oauth import acquire_access_token, xoauth2_string
+from app.utils.org_timezone import format_in_org_timezone
 
 # Header injection control characters that must never appear in
 # RFC 5322 unstructured fields (Subject, From display-name, etc.).
@@ -454,14 +454,7 @@ class EmailService:
 
     def _format_local_dt(self, dt: datetime, fmt: str = "%B %d, %Y at %I:%M %p") -> str:
         """Format a datetime in the organization's local timezone."""
-        tz_name = (
-            getattr(self.organization, "timezone", None) if self.organization else None
-        )
-        if tz_name:
-            local_dt = dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz_name))
-        else:
-            local_dt = dt
-        return local_dt.strftime(fmt)
+        return format_in_org_timezone(dt, self.organization, fmt)
 
     async def _render_with_fallback(
         self,

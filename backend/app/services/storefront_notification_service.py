@@ -84,6 +84,7 @@ from app.services.email_theme import (
     TFOOT_STYLE,
     TH_STYLE,
 )
+from app.utils.org_timezone import format_in_org_timezone
 from app.utils.storefront_payments import build_payment_options
 
 # Header banner colour by notice kind. Aliased rather than re-declared so a
@@ -867,7 +868,7 @@ class StorefrontNotificationService:
         if window.closes_at:
             extra += (
                 "<p>Orders close "
-                f'<strong>{window.closes_at.strftime("%B %d, %Y at %I:%M %p UTC")}'
+                f"<strong>{format_in_org_timezone(window.closes_at, org)}"
                 "</strong>.</p>"
             )
         if message:
@@ -907,7 +908,7 @@ class StorefrontNotificationService:
         if window.closes_at:
             extra += (
                 "<p>Ordering closes "
-                f'<strong>{window.closes_at.strftime("%B %d, %Y at %I:%M %p UTC")}'
+                f"<strong>{format_in_org_timezone(window.closes_at, org)}"
                 "</strong>.</p>"
             )
         body = self._window_body(
