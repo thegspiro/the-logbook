@@ -27,6 +27,7 @@ from app.core.config import settings
 from app.models.email_template import EmailTemplateType
 from app.models.user import Organization
 from app.schemas.organization import decrypt_settings_secrets
+from app.services.branding_service import email_logo_src
 from app.services.email_template_service import EmailTemplateService
 from app.services.email_theme import (
     ACCENT_RED,
@@ -232,12 +233,11 @@ def build_email_logo_img(organization: Optional[Organization]) -> str:
     """
     if not organization:
         return ""
-    logo_url = getattr(organization, "logo", None) or ""
+    # An uploaded logo is a data URI, whose payload (often 100–500 KB) would
+    # push the email over Gmail's 102 KB clipping limit; this is the hosted
+    # rendering's address instead, or "" when there is none.
+    logo_url = email_logo_src(getattr(organization, "logo", None))
     if not logo_url:
-        return ""
-    # Data URIs embed the full image payload in the HTML, often 100–500 KB,
-    # which pushes the email over Gmail's 102 KB clipping limit.
-    if logo_url.startswith("data:"):
         return ""
     org_name = getattr(organization, "name", "Organization")
     safe_url = _html.escape(str(logo_url))
@@ -271,7 +271,7 @@ def build_email_logo_block(organization: Optional[Organization]) -> str:
     if not organization:
         return ""
     return build_logo_block(
-        getattr(organization, "logo", None) or "",
+        email_logo_src(getattr(organization, "logo", None)),
         getattr(organization, "name", "Organization"),
     )
 

@@ -26,6 +26,7 @@ from app.models.email_template import (
 )
 from app.services import email_footers as _footers
 from app.services import email_templates_storefront as _storefront_templates
+from app.services.branding_service import email_logo_src
 from app.services.email_theme import (  # noqa: F401  (re-exported: many services import DEFAULT_CSS from here)
     ACCENT_AMBER,
     ACCENT_BLUE,
@@ -2836,10 +2837,12 @@ class EmailTemplateService:
         ctx.setdefault("login_url", f"{frontend_url}/login" if frontend_url else "")
 
         # Build a ready-to-use <img> tag so templates can just insert it.
-        # Skip base64 data URIs — they embed the full image payload in the
-        # HTML and easily exceed Gmail's 102 KB message-clipping threshold.
-        logo_val = ctx.get("organization_logo", "")
-        if logo_val and not str(logo_val).startswith("data:"):
+        # An uploaded logo is a base64 data URI, which would embed the whole
+        # image and push the message past Gmail's 102 KB clipping threshold;
+        # email_logo_src swaps it for the address this deployment serves it
+        # from, or empties it when there is no public address to use.
+        logo_val = email_logo_src(ctx.get("organization_logo", ""))
+        if logo_val:
             import html as _h
 
             org_name = ctx.get("organization_name", "Organization")
