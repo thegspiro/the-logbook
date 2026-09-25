@@ -38,6 +38,22 @@ def scheduling_timezone(organization: Optional[Organization]) -> ZoneInfo:
         return ZoneInfo(DEFAULT_SCHEDULING_TIMEZONE)
 
 
+def format_in_org_timezone(
+    value: datetime,
+    organization: Optional[Organization],
+    fmt: str = "%B %d, %Y at %I:%M %p",
+) -> str:
+    """Render a stored timestamp as wall-clock time in the department's zone.
+
+    Timestamps are stored as UTC, and MySQL hands some of them back naive, so
+    a naive value is read as UTC rather than as local time. Emails have no
+    browser to localize for the reader, so this is the only conversion an
+    emailed time ever gets.
+    """
+    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return aware.astimezone(scheduling_timezone(organization)).strftime(fmt)
+
+
 async def resolve_scheduling_timezone(
     db: AsyncSession, organization_id: UUID | str
 ) -> ZoneInfo:

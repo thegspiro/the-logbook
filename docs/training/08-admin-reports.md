@@ -200,7 +200,9 @@ Navigate to **Administration > Organization Settings > Organization** to manage 
 - **Logo** upload
 - **Navigation Layout** (under **Profile**) — **Left sidebar**, the default, or
   **Top bar**. It applies to every member from their next page load; nobody
-  chooses their own.
+  chooses their own. The top bar holds one entry per menu group, so the more
+  modules a department has on, the wider it needs to be; groups that do not fit
+  on a member's screen move under **More**.
 
 ![Organization Settings page with department name, timezone and contact details](./images/08-02-organization-settings.png)
 
@@ -1650,17 +1652,23 @@ The equipment check template builder received UX improvements:
 - **Save redirect**: Correctly redirects to template list after saving
 - **Input stability**: Fixed inputs losing focus after each keystroke
 
-**Preview** is a button in the builder's toolbar, and it opens **over** the
-builder rather than beside it: the check form is drawn inside a phone frame,
-because that is what a crew will be holding. Its inputs work, so you can walk
-the form as a member would, and a banner says so — nothing is submitted and no
-check is created. Close it to go back to editing.
+On a wide screen (1440px or more) the preview sits in a rail beside the
+builder, under **What the crew sees**, and updates as you edit. The rail has two
+tabs: **Crew view** is the preview, and **Before publishing** lists what still
+stops the template from being published. On a narrower screen there is no room
+for the rail, so **Preview** is under the **Tools** menu and opens over the
+builder instead.
+
+Either way the check form is drawn inside a phone frame, because that is what a
+crew will be holding. Its inputs work, so you can walk the form as a member
+would — nothing is submitted and no check is created.
 
 ![The template builder's Preview — the check form drawn inside a phone frame, as a crew would see it](./images/08-73-template-builder-preview.png)
 
-> **Corrected 2026-08-12.** This described "a preview panel on the right". The
-> preview is a full-screen overlay, not a side panel, and nothing in the
-> builder renders beside the editor.
+> **Corrected 2026-09-25.** The 2026-08-12 correction said the preview was only
+> ever a full-screen overlay, with nothing beside the editor. On a wide screen
+> it is now a rail beside the builder; the overlay is what a narrower screen
+> gets.
 
 ## Time Picker Redesign (2026-03-22)
 
@@ -2066,10 +2074,10 @@ They now have real template rows with documented variables and sample data.
 > stylesheet**, so future improvements reach you automatically. Templates whose
 > CSS you _did_ edit are left exactly as they are.
 
-![The rendered preview: the white card on grey, its header band and details table](./images/08-67-email-preview-design.png)
+![The rendered preview: the white card on grey, its centred masthead and fact panel](./images/08-67-email-preview-design.png)
 
 Pictured with **Shift Assignment**, whose body carries `{{footer_html}}` — the
-closing block sits below the details table, off the bottom of this frame. The
+closing block sits below the fact panel, off the bottom of this frame. The
 **Sample data** selector above the message swaps in a real member's details, and
 the two small icons beside **Refresh** switch the preview between desktop and
 phone width.

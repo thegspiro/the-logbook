@@ -54,4 +54,29 @@ describe('SuggestionsPage', () => {
 
     expect(await screen.findByRole('tab', { name: /Review\s*3/ })).toBeInTheDocument();
   });
+
+  it('offers the Idea board tab only when a box has a board', async () => {
+    mockSummary.mockResolvedValue({ isReviewer: false, openCount: 0, boxes: [] });
+    mockListBoxes.mockResolvedValue([
+      {
+        id: 'b1',
+        name: 'Ideas',
+        description: null,
+        anonymityMode: 'allowed',
+        followUpEnabled: true,
+        publicBoardEnabled: true,
+      },
+    ]);
+    renderWithRouter(<SuggestionsPage />);
+
+    expect(await screen.findByRole('tab', { name: /Idea board|Ideas/ })).toBeInTheDocument();
+  });
+
+  it('offers no Idea board tab when no box has one', async () => {
+    mockSummary.mockResolvedValue({ isReviewer: false, openCount: 0, boxes: [] });
+    renderWithRouter(<SuggestionsPage />);
+
+    await screen.findByText('No suggestion boxes yet');
+    expect(screen.queryByRole('tab', { name: /Idea board|Ideas/ })).not.toBeInTheDocument();
+  });
 });

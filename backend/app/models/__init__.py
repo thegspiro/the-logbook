@@ -343,6 +343,8 @@ from app.models.suggestion import (
     SuggestionDisposition,
     SuggestionForward,
     SuggestionMessage,
+    SuggestionStatusEvent,
+    SuggestionVote,
 )
 from app.models.testing_checklist import (
     TestingAccessExpectation,
@@ -776,6 +778,8 @@ __all__ = [
     "SuggestionDisposition",
     "SuggestionForward",
     "SuggestionMessage",
+    "SuggestionStatusEvent",
+    "SuggestionVote",
     # Testing checklist models
     "TestingAccessExpectation",
     "TestingCheckStatus",

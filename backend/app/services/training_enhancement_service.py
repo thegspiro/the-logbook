@@ -38,7 +38,10 @@ from app.models.user import User, UserStatus
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
-from app.utils.org_timezone import resolve_org_today
+from app.utils.org_timezone import (
+    resolve_org_today,
+    resolve_scheduling_timezone,
+)
 
 
 def _stringify_uuids(data: dict) -> dict:
@@ -1233,6 +1236,11 @@ class ReportExportService:
         )
         requirements = req_result.scalars().all()
 
+        # The server's date.today() is UTC in a container, which is already
+        # tomorrow for a US department every evening.
+        org_tz = await resolve_scheduling_timezone(self.db, organization_id)
+        generated_on = datetime.now(org_tz).date()
+
         buf = io.BytesIO()
         c = canvas.Canvas(buf, pagesize=letter)
         page_w, page_h = letter
@@ -1245,7 +1253,7 @@ class ReportExportService:
         c.drawString(
             margin,
             page_h - margin - 18,
-            f"Period: {start_date} to {end_date}  |  Generated: {date.today()}",
+            f"Period: {start_date} to {end_date}  |  Generated: {generated_on}",
         )
 
         # Table header

@@ -107,7 +107,7 @@ from app.utils.label_renderer import (
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
-from app.utils.org_timezone import resolve_org_today
+from app.utils.org_timezone import resolve_org_today, scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # How many of a low-stock category's items a report names.
@@ -11087,7 +11087,10 @@ class InventoryService:
 
         meta = {
             "org_name": org_name,
-            "generated_at": datetime.now(timezone.utc),
+            # Printed on the plan, so it reads in the department's zone.
+            "generated_at": datetime.now(timezone.utc).astimezone(
+                scheduling_timezone(org)
+            ),
             "parameters": parameters,
             "show_size": bool(size_field),
             "show_existing": bool(filters.get("related_category_id")),

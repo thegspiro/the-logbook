@@ -40,6 +40,7 @@ const detail = (id: string, title: string): SubmitterSuggestionDetail => ({
   disposition: 'new',
   attachments: [],
   messages: [],
+  timeline: [],
   createdAt: '2026-09-23T15:00:00Z',
   timestampPrecision: 'exact',
 });

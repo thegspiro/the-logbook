@@ -37,6 +37,7 @@ from app.services.email_template_service import (
     DEFAULT_INVENTORY_CHANGE_TEXT,
     EmailTemplateService,
 )
+from app.utils.org_timezone import format_in_org_timezone
 
 # Pairs of actions that cancel each other out for the same item
 _NETTING_PAIRS = {
@@ -232,7 +233,9 @@ class InventoryNotificationService:
                 context = {
                     "first_name": user.first_name or "Member",
                     "organization_name": org.name if org else "Your Department",
-                    "change_date": datetime.now(timezone.utc).strftime("%B %d, %Y"),
+                    "change_date": format_in_org_timezone(
+                        datetime.now(timezone.utc), org, "%B %d, %Y"
+                    ),
                     "items_issued_html": items_issued_html,
                     "items_returned_html": items_returned_html,
                     "items_removed_html": items_removed_html,

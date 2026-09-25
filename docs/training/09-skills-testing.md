@@ -570,21 +570,18 @@ touch them.
 
 When the candidate finishes the procedure:
 
-1. Click **Complete Test**. The timer automatically stops.
+1. Click **Finish & Review** (**Finish** on a section before the last). The
+   timer automatically stops.
 
-   > **If any steps are still blank, a dialog names the count** and reminds you
-   > that **an unscored critical step scores the same as a fail** — which is what
-   > actually happens. The review screen repeats it, with a button that takes you
-   > straight back to the first unfinished section.
+   > **If any steps are still blank, a dialog names the count** and offers
+   > **Keep scoring** or **Review them**. The test cannot be submitted until
+   > every step has a result, but the review screen lists the blank ones and can
+   > record a step as **not observed**. Where the template requires all critical
+   > steps **and one of the blank ones is critical**, the dialog also says that
+   > an unscored critical step scores the same as a fail — which is what
+   > actually happens.
 
-   > The dialog counts the blank steps and offers **Keep scoring** or **Review
-   > anyway**. What it says after the count depends on what is blank: where the
-   > template requires all critical steps **and one of the blank ones is
-   > critical**, it says so and what that costs — otherwise it points at the
-   > green checks on the section chips, which are the sections you have
-   > finished.
-
-   ![The warning raised on finishing — how many steps have no score, and the choice between going back and reviewing anyway](./images/09-18-finish-with-unscored-steps.png)
+   ![The warning raised on finishing — how many steps have no result, and the choice between going back to score and reviewing them](./images/09-18-finish-with-unscored-steps.png)
 
    > **The clock keeps running while the dialog is open.** An examiner who taps
    > Finish, reads the warning and goes back to score the last step is still
@@ -979,7 +976,7 @@ As FF Thompson works through the assessment, Lt. Santos scores each criterion:
 
 ### Part 4: Results
 
-Lt. Santos clicks **Complete Test**. The system calculates:
+Lt. Santos clicks **Finish & Review**. The system calculates:
 
 | Metric                    | Value                |
 | ------------------------- | -------------------- |
