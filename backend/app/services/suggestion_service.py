@@ -52,6 +52,7 @@ from app.models.suggestion import (
     SuggestionDisposition,
     SuggestionForward,
     SuggestionMessage,
+    SuggestionStatusEvent,
 )
 from app.models.user import Organization, Position, User, user_positions
 from app.schemas.suggestion import (
@@ -689,6 +690,7 @@ class SuggestionService:
             "disposition": suggestion.disposition if follow_up else None,
             "attachments": [self._attachment_view(a) for a in suggestion.attachments],
             "messages": messages,
+            "timeline": await self.timeline(suggestion) if follow_up else [],
             "created_at": suggestion.created_at,
             "timestamp_precision": "day" if suggestion.is_anonymous else "exact",
         }
@@ -922,6 +924,7 @@ class SuggestionService:
             "can_forward": can_forward,
             "via_forward": not can_forward,
             "forwards": await self.list_forwards(suggestion),
+            "timeline": await self.timeline(suggestion),
         }
 
     # ------------------------------------------------------------------
@@ -1040,12 +1043,32 @@ class SuggestionService:
         suggestion: Suggestion,
         actor_id: str,
         fields: Dict[str, Any],
-    ) -> Optional[str]:
-        """Apply a partial update. Returns the previous disposition when it
-        changed, otherwise None."""
+    ) -> Tuple[Optional[str], bool]:
+        """Apply a partial update.
+
+        Returns the previous disposition when it changed (otherwise None),
+        and whether a public response was recorded. Either one adds a step to
+        the submitter's timeline; an internal-note edit alone adds nothing.
+        """
         previous: Optional[str] = None
         now = datetime.now(timezone.utc)
         new_disposition = fields.get("disposition")
+        response = fields.get("public_response")
+        if response and not suggestion.box.follow_up_enabled:
+            # Nobody could ever read it: a one-way box shows its submitter
+            # neither status nor responses.
+            raise ValueError(
+                "This box is one-way, so its submitters never see a response."
+            )
+        # Two reviewers saving at once would both read the same last step and
+        # collide on its sequence. Lock the suggestion to serialize them, and
+        # make the max a locking read so it is not answered from a snapshot
+        # taken before the lock (CLAUDE.md pitfall #27).
+        await self.db.execute(
+            select(Suggestion.id)
+            .where(Suggestion.id == suggestion.id)
+            .with_for_update()
+        )
         if new_disposition and new_disposition != suggestion.disposition:
             previous = suggestion.disposition
             suggestion.disposition = new_disposition
@@ -1053,9 +1076,66 @@ class SuggestionService:
             suggestion.disposition_updated_at = now
         if "internal_note" in fields:
             suggestion.internal_note = (fields["internal_note"] or "").strip() or None
+        if previous is not None or response:
+            last = await self.db.scalar(
+                select(func.max(SuggestionStatusEvent.sequence))
+                .where(SuggestionStatusEvent.suggestion_id == suggestion.id)
+                .with_for_update()
+            )
+            self.db.add(
+                SuggestionStatusEvent(
+                    organization_id=suggestion.organization_id,
+                    suggestion_id=suggestion.id,
+                    sequence=int(last or 0) + 1,
+                    disposition=suggestion.disposition,
+                    public_response=response or None,
+                    created_at=now,
+                )
+            )
         suggestion.updated_at = now
         await self.db.commit()
-        return previous
+        return previous, bool(response)
+
+    async def timeline(self, suggestion: Suggestion) -> List[Dict[str, Any]]:
+        """Receipt, then every step reviewers took, oldest first.
+
+        Receipt carries the submission's own date and precision. The steps
+        after it are reviewer actions, timed exactly: when a reviewer acted
+        says nothing about who submitted.
+        """
+        events = (
+            (
+                await self.db.execute(
+                    select(SuggestionStatusEvent)
+                    .where(
+                        SuggestionStatusEvent.organization_id
+                        == suggestion.organization_id,
+                        SuggestionStatusEvent.suggestion_id == suggestion.id,
+                    )
+                    .order_by(SuggestionStatusEvent.sequence)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        entries = [
+            {
+                "disposition": SuggestionDisposition.NEW.value,
+                "public_response": None,
+                "created_at": suggestion.created_at,
+                "timestamp_precision": "day" if suggestion.is_anonymous else "exact",
+            }
+        ]
+        entries.extend(
+            {
+                "disposition": event.disposition,
+                "public_response": event.public_response,
+                "created_at": event.created_at,
+                "timestamp_precision": "exact",
+            }
+            for event in events
+        )
+        return entries
 
     async def add_reviewer_message(
         self, suggestion: Suggestion, actor_id: str, body: str
@@ -1371,8 +1451,14 @@ def forward_notice(box_name: str, suggestion_id: str) -> Dict[str, str]:
 
 
 def submitter_notice(
-    box_name: str, suggestion_id: str, *, disposition: Optional[str]
+    box_name: str,
+    suggestion_id: str,
+    *,
+    disposition: Optional[str],
+    responded: bool = False,
 ) -> Dict[str, str]:
+    """Tell a named submitter something changed. Like every notice here, it
+    carries no content: a reviewer's response is read in the Logbook."""
     box = html.escape(box_name)
     if disposition:
         label = disposition.replace("_", " ")
@@ -1382,6 +1468,19 @@ def submitter_notice(
             f"is now <strong>{html.escape(label)}</strong>."
         )
         message = f"The status of your submission to the {box_name} box is now {label}."
+        if responded:
+            lead += " A reviewer also left a response."
+            message += " A reviewer also left a response."
+    elif responded:
+        subject = (
+            f"A reviewer responded to your submission to the "
+            f"{_subject_safe(box_name)} box"
+        )
+        lead = (
+            "A reviewer responded to your submission to the "
+            f"<strong>{box}</strong> box."
+        )
+        message = f"A reviewer responded to your submission to the {box_name} box."
     else:
         subject = f"New reply on your submission to the {_subject_safe(box_name)} box"
         lead = (

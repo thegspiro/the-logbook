@@ -86,6 +86,14 @@ export interface MySuggestionSummary {
   createdAt: string;
 }
 
+/** One step on a submission's timeline. The first is always receipt. */
+export interface TimelineEntry {
+  disposition: SuggestionDisposition;
+  publicResponse?: string | null;
+  createdAt: string;
+  timestampPrecision: TimestampPrecision;
+}
+
 export interface SubmitterSuggestionDetail {
   id: string | null;
   boxName: string;
@@ -96,6 +104,8 @@ export interface SubmitterSuggestionDetail {
   disposition?: SuggestionDisposition | null;
   attachments: SuggestionAttachment[];
   messages: ThreadMessage[];
+  /** Empty in a one-way box, where the submitter sees no status. */
+  timeline: TimelineEntry[];
   createdAt: string;
   timestampPrecision: TimestampPrecision;
 }
@@ -147,6 +157,7 @@ export interface ReviewSuggestionDetail {
   canForward: boolean;
   viaForward: boolean;
   forwards: SuggestionForward[];
+  timeline: TimelineEntry[];
 }
 
 export interface ReviewSummary {
@@ -159,6 +170,8 @@ export interface ReviewSummary {
 export interface DispositionUpdate {
   disposition?: SuggestionDisposition | undefined;
   internalNote?: string | null | undefined;
+  /** Each response is a new step; omit to add none. */
+  publicResponse?: string | undefined;
 }
 
 export type ReviewFilter = 'open' | SuggestionDisposition | '';

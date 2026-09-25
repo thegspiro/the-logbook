@@ -58,6 +58,9 @@ const detail = (overrides: Partial<ReviewSuggestionDetail> = {}): ReviewSuggesti
   canForward: true,
   viaForward: false,
   forwards: [],
+  timeline: [
+    { disposition: 'new', publicResponse: null, createdAt: '2026-09-23T12:00:00Z', timestampPrecision: 'day' },
+  ],
   ...overrides,
 });
 
@@ -124,14 +127,16 @@ describe('SuggestionReviewPanel disposition changes', () => {
     renderWithRouter(<SuggestionReviewPanel boxes={[]} selectedId="s1" onSelect={vi.fn()} onReviewed={onReviewed} />);
 
     const user = userEvent.setup();
-    const list = await screen.findByRole('list');
+    const list = await screen.findByRole('list', { name: 'Submissions' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Disposition' }), 'accepted');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByRole('heading', { name: 'Engine 2 bay door' })).toBeInTheDocument();
-    expect(within(screen.getByRole('list')).getAllByRole('listitem')).toHaveLength(1);
-    expect(within(screen.getByRole('list')).queryByText('Engine 2 bay door')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Submissions' })).getAllByRole('listitem')).toHaveLength(1);
+    expect(
+      within(screen.getByRole('list', { name: 'Submissions' })).queryByText('Engine 2 bay door')
+    ).not.toBeInTheDocument();
     expect(onReviewed).toHaveBeenCalledTimes(1);
   });
 
@@ -150,7 +155,62 @@ describe('SuggestionReviewPanel disposition changes', () => {
         internalNote: 'Asked the captain',
       })
     );
-    expect(within(screen.getByRole('list')).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(screen.getByRole('list', { name: 'Submissions' })).getAllByRole('listitem')).toHaveLength(2);
     expect(onReviewed).not.toHaveBeenCalled();
+  });
+});
+
+describe('SuggestionReviewPanel public response', () => {
+  beforeEach(() => {
+    mockList.mockReset();
+    mockGet.mockReset();
+    mockUpdate.mockReset();
+    mockList.mockResolvedValue({ items: [summary()], total: 1 });
+  });
+
+  it('sends a response with the save and clears the box after', async () => {
+    mockGet.mockResolvedValue(detail({ followUpEnabled: true, canFollowUp: true }));
+    mockUpdate.mockResolvedValue(detail({ followUpEnabled: true, canFollowUp: true }));
+    renderWithRouter(<SuggestionReviewPanel boxes={[]} selectedId="s1" onSelect={vi.fn()} />);
+
+    const user = userEvent.setup();
+    const box = await screen.findByLabelText(/Response to the submitter/);
+    await user.type(box, '  We ordered a new seal.  ');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await vi.waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith('s1', {
+        disposition: 'new',
+        internalNote: null,
+        publicResponse: 'We ordered a new seal.',
+      })
+    );
+    await vi.waitFor(() => expect(box).toHaveValue(''));
+  });
+
+  it('omits a blank response rather than sending an empty one', async () => {
+    mockGet.mockResolvedValue(detail({ followUpEnabled: true, canFollowUp: true }));
+    mockUpdate.mockResolvedValue(detail({ followUpEnabled: true, canFollowUp: true }));
+    renderWithRouter(<SuggestionReviewPanel boxes={[]} selectedId="s1" onSelect={vi.fn()} />);
+
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText(/Response to the submitter/), '   ');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await vi.waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith('s1', {
+        disposition: 'new',
+        internalNote: null,
+        publicResponse: undefined,
+      })
+    );
+  });
+
+  it('offers no response where nobody could read it', async () => {
+    mockGet.mockResolvedValue(detail({ followUpEnabled: true, canFollowUp: false }));
+    renderWithRouter(<SuggestionReviewPanel boxes={[]} selectedId="s1" onSelect={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'Engine 2 bay door' })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Response to the submitter/)).not.toBeInTheDocument();
   });
 });

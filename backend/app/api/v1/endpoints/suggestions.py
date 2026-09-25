@@ -442,11 +442,11 @@ async def update_disposition(
     suggestion = await _for_review(service, current_user, suggestion_id)
     fields = data.model_dump(exclude_unset=True)
     async with handle_service_errors("Failed to update submission"):
-        previous = await service.update_disposition(
+        previous, responded = await service.update_disposition(
             suggestion, str(current_user.id), fields
         )
     refreshed = await _for_review(service, current_user, suggestion_id)
-    if previous is not None:
+    if previous is not None or responded:
         await log_audit_event(
             db=db,
             event_type="suggestion_disposition_changed",
@@ -455,8 +455,9 @@ async def update_disposition(
             event_data={
                 "suggestion_id": refreshed.id,
                 "box_id": refreshed.box_id,
-                "from": previous,
+                "from": previous or refreshed.disposition,
                 "to": refreshed.disposition,
+                "public_response": responded,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -469,7 +470,10 @@ async def update_disposition(
                 refreshed.organization_id,
                 [refreshed.submitted_by],
                 submitter_notice(
-                    refreshed.box.name, refreshed.id, disposition=refreshed.disposition
+                    refreshed.box.name,
+                    refreshed.id,
+                    disposition=refreshed.disposition if previous else None,
+                    responded=responded,
                 ),
             )
     return await service.reviewer_view(refreshed, str(current_user.id))

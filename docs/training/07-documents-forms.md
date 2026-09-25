@@ -614,7 +614,10 @@ existing submissions stay readable by its reviewers.
 5. Press **Submit** (or **Submit anonymously**).
 
 Named submissions appear under **My submissions**, where you can follow the
-status and reply if the box allows follow-up.
+status and reply if the box allows follow-up. In a follow-up box, **Status
+history** shows when your submission was received, each status it has moved
+through, and any response the reviewers wrote for you. An anonymous submission
+shows the same history when you open it with its follow-up key.
 
 ![Suggestions → Submit with the Training ideas box chosen, its description and anonymity hint showing, a title and details filled in, one screenshot attached, and Submit anonymously ticked with the warning to check screenshots for your name](./images/07-15-suggestion-submit-anonymous.png)
 
@@ -666,6 +669,10 @@ Open a submission to:
 - set its **Disposition** — **New**, **Under review**, **Accepted**,
   **Implemented**, **Declined** or **Duplicate**. In a follow-up box, a named
   submitter is emailed when it changes;
+- write a **Response to the submitter**, in a follow-up box. It appears on the
+  submitter's **Status history** under "Reviewers", never with your name, and
+  they are notified that you responded. Each response is added as a new step;
+  use it to explain a decision or what happens next;
 - keep an **Internal note (reviewers only)** — never shown to the submitter;
 - reply in the **Follow-up** thread, if the box allows follow-up. An anonymous
   author appears as **Anonymous submitter**.

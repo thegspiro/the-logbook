@@ -633,7 +633,7 @@ class TestFollowUp:
         reviewed = await service.get_for_review(
             dept["org"], dept["training_officer"], suggestion.id
         )
-        previous = await service.update_disposition(
+        previous, _ = await service.update_disposition(
             reviewed,
             dept["training_officer"],
             {"disposition": "accepted", "internal_note": "Budget line 4"},
@@ -867,6 +867,129 @@ class TestOverHttp:
         ((_, recipients, notice),) = sent
         assert recipients == [dept["member"]]
         assert "accepted" in notice["body_html"]
+
+
+@pytest.mark.integration
+class TestTimeline:
+    """What the submitter sees of the review: receipt, then each step."""
+
+    async def _submitted(self, db_session, dept, anonymous=False, follow_up=True):
+        box = await _box(db_session, dept, follow_up_enabled=follow_up)
+        suggestion, _ = await _submit(
+            db_session, box, dept["member"], anonymous=anonymous
+        )
+        service = SuggestionService(db_session)
+        loaded = await service.get_for_review(
+            dept["org"], dept["training_officer"], suggestion.id
+        )
+        return service, loaded
+
+    async def test_status_changes_and_responses_become_steps(self, db_session, dept):
+        service, suggestion = await self._submitted(db_session, dept)
+        await service.update_disposition(
+            suggestion, dept["training_officer"], {"disposition": "under_review"}
+        )
+        previous, responded = await service.update_disposition(
+            suggestion,
+            dept["training_officer"],
+            {"public_response": "Scheduling this for the spring drills."},
+        )
+        assert (previous, responded) == (None, True)
+
+        timeline = (await service.submitter_view(suggestion, dept["member"]))[
+            "timeline"
+        ]
+        assert [(e["disposition"], e["public_response"]) for e in timeline] == [
+            ("new", None),
+            ("under_review", None),
+            ("under_review", "Scheduling this for the spring drills."),
+        ]
+
+    async def test_an_internal_note_alone_adds_no_step(self, db_session, dept):
+        service, suggestion = await self._submitted(db_session, dept)
+        previous, responded = await service.update_disposition(
+            suggestion, dept["training_officer"], {"internal_note": "Ask Chief"}
+        )
+        assert (previous, responded) == (None, False)
+        timeline = await service.timeline(suggestion)
+        assert [e["disposition"] for e in timeline] == ["new"]
+
+    async def test_anonymous_receipt_stays_day_precise(self, db_session, dept):
+        service, suggestion = await self._submitted(db_session, dept, anonymous=True)
+        await service.update_disposition(
+            suggestion, dept["training_officer"], {"disposition": "accepted"}
+        )
+        receipt, step = await service.timeline(suggestion)
+        assert receipt["timestamp_precision"] == "day"
+        assert receipt["created_at"] == suggestion.created_at
+        assert step["timestamp_precision"] == "exact"
+
+    async def test_a_one_way_box_shows_no_timeline_and_takes_no_response(
+        self, db_session, dept
+    ):
+        service, suggestion = await self._submitted(db_session, dept, follow_up=False)
+        await service.update_disposition(
+            suggestion, dept["training_officer"], {"disposition": "declined"}
+        )
+        view = await service.submitter_view(suggestion, dept["member"])
+        assert view["timeline"] == []
+        with pytest.raises(ValueError, match="one-way"):
+            await service.update_disposition(
+                suggestion, dept["training_officer"], {"public_response": "No."}
+            )
+
+    async def test_a_response_notifies_the_named_submitter(
+        self, db_session, dept, sent
+    ):
+        box = await _box(db_session, dept, follow_up_enabled=True)
+        suggestion, _ = await _submit(db_session, box, dept["member"])
+        async with await _client(db_session, dept["training_officer"]) as client:
+            resp = await client.patch(
+                f"/suggestions/review/{suggestion.id}",
+                json={"publicResponse": "  Thanks, we're on it.  "},
+            )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["timeline"][-1]["publicResponse"] == "Thanks, we're on it."
+        ((_, recipients, notice),) = sent
+        assert recipients == [dept["member"]]
+        assert "responded" in notice["subject"]
+        # The response itself stays in the application.
+        assert "on it" not in notice["body_html"]
+
+    async def test_backfill_records_the_current_status_once(self, db_session, dept):
+        migration = _load_revision("0010291816fd")
+        box = await _box(db_session, dept, follow_up_enabled=True)
+        moved, _ = await _submit(db_session, box, dept["member"])
+        untouched, _ = await _submit(db_session, box, dept["member"])
+        await db_session.execute(
+            text(
+                "UPDATE suggestions SET disposition = 'accepted', "
+                "disposition_updated_at = :at WHERE id = :id"
+            ),
+            {"at": datetime(2026, 9, 1, 15, 0, tzinfo=timezone.utc), "id": moved.id},
+        )
+        await db_session.execute(
+            text("DELETE FROM suggestion_status_events WHERE organization_id = :o"),
+            {"o": dept["org"]},
+        )
+        # The backfill skips a table that already holds rows, which another
+        # organization's history in a shared test database could; this test
+        # is about what one run writes, so start the table empty.
+        await db_session.execute(text("DELETE FROM suggestion_status_events"))
+        for _ in range(2):  # the second run must not duplicate
+            await db_session.run_sync(lambda s: migration._backfill(s.connection()))
+        rows = (
+            await db_session.execute(
+                text(
+                    "SELECT suggestion_id, disposition, public_response "
+                    "FROM suggestion_status_events WHERE organization_id = :o"
+                ),
+                {"o": dept["org"]},
+            )
+        ).all()
+        assert [tuple(r) for r in rows] == [(moved.id, "accepted", None)]
+        assert untouched.id not in {r[0] for r in rows}
 
 
 @pytest.fixture
@@ -1135,6 +1258,16 @@ class TestNotices:
         assert anonymous_timestamp(moment) == datetime(
             2026, 9, 23, 12, 0, tzinfo=timezone.utc
         )
+
+
+def _load_revision(revision: str):
+    (path,) = (Path(__file__).resolve().parents[1] / "alembic/versions").glob(
+        f"*_{revision}_*.py"
+    )
+    spec = importlib.util.spec_from_file_location(f"rev_{revision}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _load_grant_migration():

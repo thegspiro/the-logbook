@@ -27,6 +27,7 @@ _REQUEST_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 MAX_TITLE_LENGTH = 200
 MAX_DETAILS_LENGTH = 10000
 MAX_MESSAGE_LENGTH = 5000
+MAX_PUBLIC_RESPONSE_LENGTH = 2000
 # A follow-up key is secrets.token_urlsafe(32): 43 characters. The bounds
 # only keep an absurd body out of the hash; the lookup is what validates it.
 _KEY_MIN, _KEY_MAX = 20, 100
@@ -190,6 +191,18 @@ class MySuggestionSummary(UTCResponseBase):
     created_at: datetime
 
 
+class TimelineEntry(UTCResponseBase):
+    """A step the submitter can see. The first entry is always receipt
+    (``disposition`` "new", no response), dated like the submission itself."""
+
+    model_config = _RESPONSE_CONFIG
+
+    disposition: str
+    public_response: Optional[str] = None
+    created_at: datetime
+    timestamp_precision: Literal["exact", "day"] = "exact"
+
+
 class SubmitterSuggestionDetail(UTCResponseBase):
     """The submitter's view — shared by named submitters and key holders."""
 
@@ -204,6 +217,8 @@ class SubmitterSuggestionDetail(UTCResponseBase):
     disposition: Optional[str] = None
     attachments: List[AttachmentResponse]
     messages: List[ThreadMessageResponse]
+    # Empty in a one-way box, where the submitter sees no status at all.
+    timeline: List[TimelineEntry] = Field(default_factory=list)
     created_at: datetime
     timestamp_precision: Literal["exact", "day"] = "exact"
 
@@ -318,6 +333,7 @@ class ReviewSuggestionDetail(UTCResponseBase):
     can_forward: bool = False
     via_forward: bool = False
     forwards: List[ForwardResponse] = Field(default_factory=list)
+    timeline: List[TimelineEntry] = Field(default_factory=list)
 
 
 class ReviewSummary(UTCResponseBase):
@@ -336,3 +352,12 @@ class DispositionUpdate(BaseModel):
 
     disposition: Optional[Disposition] = None
     internal_note: Optional[str] = Field(None, max_length=MAX_DETAILS_LENGTH)
+    # Shown to the submitter on their timeline. Not a stored field to clear:
+    # each one is a new step, so a blank value simply adds nothing.
+    public_response: Optional[str] = Field(None, max_length=MAX_PUBLIC_RESPONSE_LENGTH)
+
+    @field_validator("public_response")
+    @classmethod
+    def _public_response(cls, value: Optional[str]) -> Optional[str]:
+        value = (value or "").strip()
+        return value or None

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**278 tables · 4618 columns · 904 foreign keys**
+**279 tables · 4625 columns · 906 foreign keys**
 
 ---
 
@@ -551,6 +551,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`suggestion_boxes`](#suggestion_boxes) | `SuggestionBox` | 10 | A configurable intake box. Archived via ``is_active``, never deleted, |
 | [`suggestion_forwards`](#suggestion_forwards) | `SuggestionForward` | 7 | One suggestion forwarded to a member or a position. |
 | [`suggestion_messages`](#suggestion_messages) | `SuggestionMessage` | 8 | One entry in a follow-up thread. |
+| [`suggestion_status_events`](#suggestion_status_events) | `SuggestionStatusEvent` | 7 | One step a reviewer took that the submitter can see: a disposition |
 | [`suggestions`](#suggestions) | `Suggestion` | 14 |  |
 
 ### Testing_Checklist
@@ -7552,6 +7553,30 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_suggestion_msg_seq` (`suggestion_id`, `sequence`)
 
+### `suggestion_status_events`
+
+**SuggestionStatusEvent** · `app/models/suggestion.py`
+
+> One step a reviewer took that the submitter can see: a disposition change, a public response, or both at once. Deliberately carries no reviewer id. The submitter sees "Reviewers", not a name, and who acted is already in the audit log. Receipt is not stored as an event: it is the suggestion's own ``created_at``, which for an anonymous submission is already truncated to the day.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `suggestion_id` | VARCHAR(36) | no | FK |  | → `suggestions.id` ON DELETE CASCADE |
+| `sequence` | INTEGER | no |  |  |  |
+| `disposition` | VARCHAR(32) | no |  |  |  |
+| `public_response` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | no |  |  |  |
+
+**Indexes**
+
+- `idx_suggestion_status_events_org_suggestion` (`organization_id`, `suggestion_id`)
+
+**Constraints**
+
+- UNIQUE `uq_suggestion_status_event_seq` (`suggestion_id`, `sequence`)
+
 ### `suggestions`
 
 **Suggestion** · `app/models/suggestion.py`
@@ -10059,7 +10084,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (224 references)
+### → `organizations` (225 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10268,6 +10293,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_boxes` | `organization_id` | CASCADE | no |
 | `suggestion_forwards` | `organization_id` | CASCADE | no |
 | `suggestion_messages` | `organization_id` | CASCADE | no |
+| `suggestion_status_events` | `organization_id` | CASCADE | no |
 | `suggestions` | `organization_id` | CASCADE | no |
 | `template_change_logs` | `organization_id` | CASCADE | no |
 | `testing_checklist_entries` | `organization_id` | CASCADE | no |
@@ -10670,6 +10696,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_product_variants` | `product_id` | CASCADE | no |
 | `store_window_products` | `product_id` | CASCADE | no |
 
+### → `suggestions` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `suggestion_attachments` | `suggestion_id` | CASCADE | no |
+| `suggestion_forwards` | `suggestion_id` | CASCADE | no |
+| `suggestion_messages` | `suggestion_id` | CASCADE | no |
+| `suggestion_status_events` | `suggestion_id` | CASCADE | no |
+
 ### → `budget_categories` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -10749,14 +10784,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_box_reviewers` | `box_id` | CASCADE | no |
 | `suggestion_box_watchers` | `box_id` | CASCADE | no |
 | `suggestions` | `box_id` | CASCADE | no |
-
-### → `suggestions` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `suggestion_attachments` | `suggestion_id` | CASCADE | no |
-| `suggestion_forwards` | `suggestion_id` | CASCADE | no |
-| `suggestion_messages` | `suggestion_id` | CASCADE | no |
 
 ### → `admin_hours_categories` (2 references)
 
