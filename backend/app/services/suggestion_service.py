@@ -1364,6 +1364,10 @@ class SuggestionService:
                 .join(SuggestionBox, SuggestionBox.id == Suggestion.box_id)
                 .where(
                     *self._board_filters(organization_id),
+                    # Repeats the helper's own filter so the tenancy guard is
+                    # visible at the by-id lookup (pitfall #14; the ratchet
+                    # test cannot see through the spread).
+                    Suggestion.organization_id == str(organization_id),
                     Suggestion.id == str(suggestion_id),
                 )
             )
