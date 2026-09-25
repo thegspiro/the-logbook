@@ -378,3 +378,44 @@ class TestProgramDeadline:
 
         assert expired is False
         assert enrollment.status == EnrollmentStatus.ACTIVE
+
+
+class TestInstructorQualification:
+    async def test_a_qualification_expiring_today_locally_is_still_valid(self):
+        """Good through its expiration date on the department's calendar; the
+        UTC date (a day on) would have refused the instructor that evening."""
+        from app.services.training_enhancement_service import (
+            InstructorQualificationService,
+        )
+
+        qual = SimpleNamespace(expiration_date=LOCAL_TODAY)
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(qual), _one(_org())])
+
+        ok = await InstructorQualificationService(db).validate_instructor_for_session(
+            "u1", "course-1", "org-1"
+        )
+
+        assert ok is True
+
+
+class TestRenewalTasks:
+    async def test_the_renewal_window_is_bounded_by_the_departments_date(self):
+        from app.services.training_enhancement_service import RecertificationService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+        db.flush = AsyncMock()
+        service = RecertificationService(db)
+        service.get_pathways = AsyncMock(
+            return_value=[
+                SimpleNamespace(source_requirement_id="req-1", renewal_window_days=0)
+            ]
+        )
+
+        await service.generate_renewal_tasks("org-1")
+
+        query = db.execute.await_args_list[1].args[0]
+        bound = set(query.compile().params.values())
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
