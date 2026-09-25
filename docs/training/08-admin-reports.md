@@ -1650,17 +1650,23 @@ The equipment check template builder received UX improvements:
 - **Save redirect**: Correctly redirects to template list after saving
 - **Input stability**: Fixed inputs losing focus after each keystroke
 
-**Preview** is a button in the builder's toolbar, and it opens **over** the
-builder rather than beside it: the check form is drawn inside a phone frame,
-because that is what a crew will be holding. Its inputs work, so you can walk
-the form as a member would, and a banner says so — nothing is submitted and no
-check is created. Close it to go back to editing.
+On a wide screen (1440px or more) the preview sits in a rail beside the
+builder, under **What the crew sees**, and updates as you edit. The rail has two
+tabs: **Crew view** is the preview, and **Before publishing** lists what still
+stops the template from being published. On a narrower screen there is no room
+for the rail, so **Preview** is under the **Tools** menu and opens over the
+builder instead.
+
+Either way the check form is drawn inside a phone frame, because that is what a
+crew will be holding. Its inputs work, so you can walk the form as a member
+would — nothing is submitted and no check is created.
 
 ![The template builder's Preview — the check form drawn inside a phone frame, as a crew would see it](./images/08-73-template-builder-preview.png)
 
-> **Corrected 2026-08-12.** This described "a preview panel on the right". The
-> preview is a full-screen overlay, not a side panel, and nothing in the
-> builder renders beside the editor.
+> **Corrected 2026-09-25.** The 2026-08-12 correction said the preview was only
+> ever a full-screen overlay, with nothing beside the editor. On a wide screen
+> it is now a rail beside the builder; the overlay is what a narrower screen
+> gets.
 
 ## Time Picker Redesign (2026-03-22)
 

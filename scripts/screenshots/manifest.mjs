@@ -2759,13 +2759,16 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1331,
     anchor: "Screenshot of the weekly schedule, its cards tinted green",
-    alt: "The weekly schedule, its cards tinted green when fully staffed and amber when short",
+    alt: "The weekly schedule, each shift a chip tinted by its staffing, with the legend above the grid",
     route: "/scheduling",
     prepare: async (page) => {
-      // The staffing ratio only appears once a shift knows how many positions
-      // it has, so wait for a card to render one rather than a fixed pause.
+      // Each chip is tinted by its staffing status and reads "N open",
+      // "Full 4/4", "You + 2/4" or "N on"; wait for one rather than a fixed
+      // pause. The old wait wanted an "n/m" ratio, which only a full shift or
+      // one of your own still prints.
       await page
-        .getByText(/\d+\/\d+/)
+        .getByRole("grid")
+        .getByText(/\d+ (on|open)|\d+\/\d+/)
         .first()
         .waitFor({ timeout: 15_000 });
       await page.waitForTimeout(800);
@@ -3005,25 +3008,23 @@ export const SHOTS = [
       // The toggle only renders for a category whose item type supports
       // variants — uniform, PPE, tool or equipment — so the category has to
       // be chosen before it appears.
-      const category = page
-        .locator("select")
-        .filter({ hasText: /categor/i })
-        .first();
+      const dialog = page.getByRole("dialog", { name: "Add Item" });
+      const category = dialog.getByRole("combobox", { name: "Category" });
+      // Uniforms first: the item pictured is a polo shirt, and "Structural
+      // PPE" sorts ahead of it alphabetically.
       const options = await category.locator("option").evaluateAll((els) =>
-        els
-          .filter((e) => /uniform|ppe|gear|clothing/i.test(e.textContent || ""))
+        [/uniform/i, /ppe|gear|clothing/i]
+          .flatMap((re) => els.filter((e) => re.test(e.textContent || "")))
           .map((e) => e.getAttribute("value"))
           .filter(Boolean),
       );
       if (options[0]) await category.selectOption(options[0]);
       await page.waitForTimeout(500);
-      // The checkbox is sr-only inside a label that wraps only the toggle
-      // track; the caption beside it is a sibling span, so clicking the words
-      // does nothing at all.
-      await page
-        .locator("fieldset input[type='checkbox']")
-        .first()
-        .check({ force: true, timeout: 10_000 });
+      // The whole row is the switch (role="switch"), so its caption is its
+      // accessible name.
+      await dialog
+        .getByRole("switch", { name: "Generate Sizes & Styles" })
+        .click({ timeout: 10_000 });
       await page.waitForTimeout(700);
       for (const size of ["S", "M", "L", "XL"]) {
         await page
@@ -3045,9 +3046,8 @@ export const SHOTS = [
       // A name, so the form is not pictured with its one required field
       // blank. Scoped to the dialog — the page's own search box is the first
       // input on the document and swallowed the text.
-      await page
-        .locator("div.fixed.inset-0 form input:not([type])")
-        .first()
+      await dialog
+        .getByRole("textbox", { name: "Name *" })
         .fill("Uniform Polo Shirt", { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
@@ -3877,7 +3877,8 @@ export const SHOTS = [
     },
     // The phase card the gate sits in, so its siblings and their chips are in
     // the frame alongside it.
-    selector: "div.rounded-lg.border:has(h3:text-is('Basic Skills'))",
+    // The phase card is the shared `card` utility, not a hand-typed border.
+    selector: "div.card:has(h3:text-is('Basic Skills'))",
   },
   {
     id: "02-99-member-locked-requirement",
@@ -4015,12 +4016,40 @@ export const SHOTS = [
         { waitUntil: "domcontentloaded" },
       );
       await page.waitForTimeout(2500);
-      // The member whose written exam carries a recorded score, so the panel
+      // A member whose written exam carries a recorded score, so the panel
       // shows a used attempt rather than "Attempts: 0 / 3" beside an empty
       // field. Recording one here instead would spend an attempt on every
-      // capture run.
+      // capture run. Looked up rather than named: the demo member's exam is
+      // deliberately left unscored, because it is the gate 02-99 photographs
+      // locking the rest of that member's phase.
+      const scored = await page.evaluate(async (id) => {
+        const get = async (path) => {
+          const response = await fetch(`/api/v1${path}`, {
+            credentials: "include",
+          });
+          return response.ok ? response.json() : null;
+        };
+        const body = await get(`/training/programs/programs/${id}/enrollments`);
+        const list = Array.isArray(body) ? body : body?.enrollments || [];
+        for (const enrollment of list) {
+          const detail = await get(
+            `/training/programs/enrollments/${enrollment.id}`,
+          );
+          const rows = detail?.requirement_progress || [];
+          const exam = rows.find(
+            (row) => row.requirement?.name === "Firefighter I Written Exam",
+          );
+          if (exam?.status === "completed") return enrollment.user_name;
+        }
+        return null;
+      }, programId);
+      if (!scored) {
+        throw new Error(
+          "02-95: no enrollee has a scored written exam; re-run seed_demo_data.py",
+        );
+      }
       await page
-        .getByText(/Nadia Belhaj/)
+        .getByText(scored, { exact: true })
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(2500);
@@ -4508,8 +4537,10 @@ export const SHOTS = [
     alt: "An in-app confirmation dialog with its consequence sentence and named buttons",
     // A delete that names both the consequence and the two choices — the
     // pattern the section is about. Equipment-check templates are the clearest
-    // instance in the app.
-    route: "/inventory/admin/checklists/settings",
+    // instance in the app. The templates are listed on the checklists page
+    // itself; Settings now holds only the prompt and check-in window options.
+    // The dialog is opened and never confirmed, so nothing is deleted.
+    route: "/inventory/admin/checklists",
     prepare: async (page) => {
       await page
         .getByRole("button", { name: /^Delete/ })
@@ -7441,17 +7472,19 @@ export const SHOTS = [
         "templates",
         (template) => template.name === "Engine Daily Check",
       )(page);
-      await clickByName("Preview")(page);
-      await page.waitForSelector("text=Safety Equipment", { timeout: 20_000 });
+      // On a wide canvas the preview is a rail beside the builder, chosen by
+      // its "Crew view" tab (the other tab lists what blocks publishing). The
+      // Tools menu's Preview entry, which opened it as a dialog, is rendered
+      // only on a narrow canvas, where there is no room for the rail.
+      await clickByName("Crew view")(page);
+      await page
+        .getByRole("heading", { name: "What the crew sees" })
+        .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
-    // The phone frame itself, not the dimmed page behind it.
-    //
-    // Third distinct dialog shape in this file: this one is the shared
-    // `modal-overlay` utility, which carries the fixed positioning itself, so
-    // it matches neither `fixed.inset-0` nor role="dialog". Anchored on the
-    // utility, which is the thing the design system actually guarantees.
-    selector: "div.modal-overlay > div",
+    // The rail card: the phone frame and its "What the crew sees" heading,
+    // not the builder beside it.
+    selector: 'div.card:has(h3:text-is("What the crew sees"))',
     viewport: { width: 1440, height: 1300 },
   },
   {
@@ -8224,9 +8257,12 @@ export const SHOTS = [
         // left on screen belongs to the line just added.
         const picker = page.getByPlaceholder("Search inventory…").first();
         await picker.fill(term);
-        // The picker debounces, then renders its results as buttons.
+        // The picker debounces, then renders its results as buttons. Scoped
+        // to the dialog: the items list behind it now has a button per row
+        // too, and the first page-wide match sat under the overlay.
         await page.waitForTimeout(1_200);
         await page
+          .getByRole("dialog", { name: "Receive Stock" })
           .getByRole("button", { name: new RegExp(term) })
           .first()
           .click({ timeout: 10_000 });
@@ -10940,8 +10976,9 @@ export const SHOTS = [
     line: 78,
     anchor:
       'Screenshot of the "Your Data" section showing the "Download my data" button',
-    alt: "The Your Data section of account security with its export button",
-    route: "/account?tab=security",
+    alt: "The Your Data section of your privacy settings with its export button",
+    // Privacy, not Security: the export moved with the other privacy choices.
+    route: "/account?tab=privacy",
     // The section sits at the foot of a long tab; clip to it rather than
     // shooting the whole page for one button.
     selector: 'div:has(> h2:text-is("Your Data"))',
@@ -11407,7 +11444,12 @@ export const SHOTS = [
       // match on that stage rather than on a name, since the seeder spreads
       // applicants across stages and who lands on the last one moves.
       await openApplicantAtStage("Onboarding")(page);
-      await clickByName(/convert/i)(page);
+      // Scoped to the drawer and exact: /convert/i also matches the board's
+      // "Converted" tab behind it, which is visible and comes first.
+      await page
+        .getByRole("dialog", { name: "Applicant details" })
+        .getByRole("button", { name: "Convert", exact: true })
+        .click({ timeout: 10_000 });
       // The modal opens on step 1 of 2 (Review Applicant); the membership
       // type, ID, rank and start date the placeholder names are on step 2.
       await clickByName(/^continue$/i)(page);
@@ -11623,7 +11665,7 @@ export const SHOTS = [
     doc: "09-skills-testing.md",
     line: 510,
     anchor: 'The "finish with unscored steps" dialog',
-    alt: "The warning raised on finishing — how many steps have no score, what an unscored critical step costs, and the choice between going back and reviewing anyway",
+    alt: "The warning raised on finishing — how many steps have no result, and the choice between going back to score and reviewing them",
     route: "/training/skills-testing",
     prepare: async (page) => {
       const testId = await page.evaluate(async () => {
@@ -11654,7 +11696,7 @@ export const SHOTS = [
         .click({ timeout: 20_000 });
       await page.waitForTimeout(1200);
       await page
-        .getByText(/Some steps have no score/)
+        .getByText(/Some steps have no result/)
         .first()
         .waitFor({ timeout: 20_000 });
     },

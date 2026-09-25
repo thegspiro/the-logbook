@@ -108,6 +108,8 @@ DEMO_MEMBER_PASSWORD = "DemoMember!2026"
 # account whose own records have to be worth picturing. Keep it in step with
 # DEMO_MEMBER_CREDENTIALS in manifest.mjs.
 DEMO_MEMBER_USERNAME = "nbelhaj"
+# As the enrollments list reports it (`user_name`), which carries no username.
+DEMO_MEMBER_FULL_NAME = "Nadia Belhaj"
 
 # EQUIPMENT_REQUESTS still describes each row by how the quartermaster hands the
 # item over, which is the useful thing to read. The API wants the member's side
@@ -8916,6 +8918,9 @@ class Seeder:
             program_id = pick(program, "id")
             if not program_id:
                 continue
+            gate_names = set(
+                PROGRAM_GATE_REQUIREMENTS.get(str(pick(program, "name") or ""), ())
+            )
             enrollments = items(
                 self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
                 "enrollments",
@@ -8924,6 +8929,14 @@ class Seeder:
                 enrollment_id = pick(enrollment, "id")
                 if not enrollment_id:
                     continue
+                # The demo member's gates stay unfinished: a satisfied gate
+                # locks nothing, and the member-facing "Locked until you
+                # finish …" line is photographed from this member's session.
+                # Every other enrollee still finishes theirs, which is what
+                # gives the officer-side test panel a recorded score to show.
+                keep_gates_open = (
+                    str(pick(enrollment, "user_name") or "") == DEMO_MEMBER_FULL_NAME
+                )
                 detail = self.api.get(f"/training/programs/enrollments/{enrollment_id}")
                 rows = items(detail, "requirement_progress")
                 if not rows:
@@ -8980,7 +8993,10 @@ class Seeder:
                         ),
                         None,
                     )
-                    complete = index < done and not is_checklist
+                    is_open_gate = keep_gates_open and (
+                        str(pick(requirement, "name") or "") in gate_names
+                    )
+                    complete = index < done and not is_checklist and not is_open_gate
                     # A knowledge test is completed by *recording a score*, not
                     # by setting a status: the score fills in the "Last score"
                     # line and spends one of the requirement's attempts, and a
@@ -15140,7 +15156,7 @@ class Seeder:
         if not items(self.api.get("/store/orders/mine"), "orders"):
             self._place_admin_store_order(products)
         self._seed_member_store_orders(products, members)
-        self._spread_store_order_states()
+        self._spread_store_order_states(self._demo_member_id(members))
         return items(self.api.get("/store/orders/mine"), "orders")
 
     def _place_admin_store_order(self, products: list[dict]) -> None:
@@ -15190,7 +15206,12 @@ class Seeder:
         demo fixtures in a throwaway database, never real accounts.
         """
         existing = items(self.api.get("/store/orders"), "orders")
-        if len(existing) >= 4:
+        demo_member_id = self._demo_member_id(members)
+        demo_member_ordered = any(
+            str(pick(order, "user_id", "userId") or "") == demo_member_id
+            for order in existing
+        )
+        if len(existing) >= 4 and demo_member_ordered:
             return
 
         line_products = [
@@ -15206,7 +15227,13 @@ class Seeder:
         # and POST /users/{id}/reset-password refuses your own account -- "Use
         # the change-password endpoint to change your own password". The roster
         # is returned admin-first, so members[:3] reached it every time.
-        orderers = [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME][:3]
+        candidates = [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME]
+        # The demo member first: 19-07 pictures the member changing the payment
+        # method on their own order, and the `auth: "member"` shots sign in as
+        # them, so an order placed only by other members leaves My Orders empty.
+        candidates.sort(key=lambda m: m.get("username") != DEMO_MEMBER_USERNAME)
+        ordered_by = {str(pick(order, "user_id", "userId") or "") for order in existing}
+        orderers = [m for m in candidates[:3] if str(pick(m, "id")) not in ordered_by]
         for member in orderers:
             user_id = pick(member, "id")
             username = member.get("username")
@@ -15236,7 +15263,18 @@ class Seeder:
                     raise
                 self.blocked.append(f"store order for {username}: {exc}")
 
-    def _spread_store_order_states(self) -> None:
+    @staticmethod
+    def _demo_member_id(members: list[dict]) -> str:
+        return next(
+            (
+                str(pick(m, "id"))
+                for m in members
+                if m.get("username") == DEMO_MEMBER_USERNAME
+            ),
+            "",
+        )
+
+    def _spread_store_order_states(self, demo_member_id: str) -> None:
         """Leave the order list sitting in more than one state.
 
         Store Admin's activity cards count orders by status and its list filters
@@ -15259,10 +15297,14 @@ class Seeder:
             pick(order, "id")
             for order in items(self.api.get("/store/orders/mine"), "orders")
         }
+        # The demo member's order stays unpaid for the same reason: 19-07
+        # pictures its "Change payment method" control, which a paid order
+        # (no balance left) does not offer.
         orders = [
             order
             for order in items(self.api.get("/store/orders"), "orders")
             if pick(order, "id") not in mine
+            and str(pick(order, "user_id", "userId") or "") != demo_member_id
         ]
         if len(orders) < 2:
             return

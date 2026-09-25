@@ -12,16 +12,29 @@ so its counts ("Advanced 2", "Skipped 9") follow the demo's current pipeline.
 `01-31-applicant-documents` captures but reads "No documents yet", the seed gap
 the 2026-08-25 entry already records, so its committed bytes stand.
 
-**Thirteen fail again, identically.** These are selectors that no longer match
-the screen they were written for. Each needs its prepare step repaired against
-the current DOM, one screen at a time.
+**Thirteen failed again, identically, and all thirteen are fixed.** Each was
+re-run with a harness copy that saved the page and its accessibility tree at the
+moment of failure. Nine were selectors or copy the screen had moved past; three
+were demo data the shot depends on and a previous run had used up or never
+seeded; one needs an opt-in seed step.
 
-| Shot | Fails at |
-| ---- | -------- |
-| `03-55-staffing-status-cards`, `02-99-member-locked-requirement`, `20-07-applicant-place-on-stage`, `15-02-board-truncated`, `09-18-finish-with-unscored-steps` | `locator.waitFor`: the element the step waits for never appears |
-| `05-62-generate-variants` | `locator.check`: the checkbox it ticks is not found |
-| `00-14-confirm-dialog`, `08-73-template-builder-preview`, `05-09-receive-stock-modal`, `15-09-convert-modal`, `19-07-member-payment-method` | `locator.click`: the control it opens the screen with is not found |
-| `02-98-requirement-prerequisite`, `17-02-download-my-data` | `locator.screenshot`: the framing element never becomes stable |
+| Shot | Cause | Fix |
+| ---- | ----- | --- |
+| `03-55-staffing-status-cards` | The week board's chips read "2 open", "Full 4/4", "You + 2/4" or "3 on"; the wait wanted an `n/m` ratio, which only some chips print | Waits for any chip. The guide's table described the retired cards (ratio, CheckCircle2 icon, template-colour overrides) and now lists the board's legend and chip labels, taken from `statusStyles.ts` and `chipLabel` |
+| `05-62-generate-variants` | The category `<select>` no longer contains the word "category", and the variants toggle is a `role="switch"` button | Category by its label, preferring Uniforms (Structural PPE sorted first for a polo shirt); the switch by its name; the item name by its label |
+| `02-98-requirement-prerequisite` | The phase card is the shared `card` utility, not `rounded-lg border` | Frame selector |
+| `00-14-confirm-dialog` | Checklist templates moved from Checklist Settings to the checklists page | Route. The dialog is opened and never confirmed |
+| `08-73-template-builder-preview` | At 1440px the preview is a rail beside the builder; the Tools menu's Preview only renders on a narrower canvas | Picks the rail's Crew view tab and frames the rail card. The guide's 2026-08-12 correction ("nothing renders beside the editor") is superseded by a 2026-09-25 one |
+| `05-09-receive-stock-modal` | The item picker's result buttons were matched page-wide, and the items list behind the dialog now has a button per row | Scoped to the dialog |
+| `15-09-convert-modal` | `/convert/i` matched the board's "Converted" tab before the drawer's Convert button | Scoped to the drawer, exact name |
+| `09-18-finish-with-unscored-steps` | The dialog is now "Some steps have no result", offering Keep scoring or Review them, and says the test cannot be submitted until every step has one | Wait text and caption; the guide's two notes are merged into one describing what the dialog says, and "Complete Test" is now "Finish & Review" in both places the guide names it |
+| `17-02-download-my-data` | Your Data moved from Account → Security to Account → Privacy | Route, caption, and the guide's step 1 |
+| `02-99-member-locked-requirement` | The seeder completed the demo member's Written Exam, which is the gate: a satisfied gate locks nothing | **Seeder:** `_advance_pipeline_progress` no longer completes the demo member's gate requirements. `02-95-knowledge-test-entry`, which needed a scored exam from the same member, now looks up any enrollee whose exam is scored (Saoirse Nolan here). This demo's row was reset with the officer's Reset action |
+| `19-07-member-payment-method` | The demo member had no store order: member orders went to the first three non-admin members | **Seeder:** the demo member orders first, and their order is left out of the state spread so it stays unpaid |
+| `20-07-applicant-place-on-stage` | Marcus Webb, the one applicant seeded with no stage, had been placed by earlier runs of `15-09-bulk-action-result`, which really advances applicants | None to the shot: on a fresh seed it runs before 15-09. This demo's row was put back |
+| `15-02-board-truncated` | Needs a pipeline past the board's 200-card ceiling, which only `seed_demo_data.py --bulk-prospects` creates | Ran that step. The demo pipeline now holds 247 applicants, which buries the named ones, so it is the last prospective-member shot to take on a database |
+
+`20-07` came back byte-identical to its committed image.
 
 ## Email templates re-shot on the centred-masthead shell, 2026-09-25
 
