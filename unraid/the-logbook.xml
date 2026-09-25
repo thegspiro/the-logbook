@@ -54,6 +54,7 @@
 
   <!-- Application Settings -->
   <Config Name="Allowed Origins" Target="ALLOWED_ORIGINS" Default="http://[IP]:[PORT:7880]" Mode="" Description="CORS allowed origins (comma-separated)" Type="Variable" Display="advanced" Required="true" Mask="false">http://[IP]:[PORT:7880]</Config>
+  <Config Name="Public Site Address" Target="FRONTEND_URL" Default="" Mode="" Description="The address members open the site on, e.g. https://logbook.yourdept.org. Every link in an outgoing email is built from it. Leave blank to use the first address in Allowed Origins." Type="Variable" Display="always" Required="false" Mask="false"></Config>
   <Config Name="Rate Limiting" Target="RATE_LIMIT_ENABLED" Default="true" Mode="" Description="Enable API rate limiting" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
 
   <!-- Email Configuration (Optional) -->
