@@ -300,9 +300,18 @@ events page.
 1. Set the **event type**, **title**, **date**, **start time**, and **end time**.
 2. Add a **location** and **description**.
 3. Configure **check-in settings** (QR code, manual, or both).
-4. Set **reminder schedule** — choose one or more reminder times (e.g., 24 hours before, 1 hour before). Members who RSVP'd will receive notifications at these times.
-5. Optionally attach files (agendas, maps, etc.).
-6. Click **Create Event**.
+4. In **RSVP Settings**, choose **Who can see who's going**. The options are
+   **Use organization default**, **Everyone in the department** or **Only
+   event managers**.
+   - Members only ever see names, never contact details, notes or
+     accessibility information.
+   - The department default is set under **Manage Events → Settings →
+     Attendance**, and starts out as **Only event managers**.
+   - See
+     [Who's going, RSVP and the waitlist](#whos-going-rsvp-and-the-waitlist-2026-09-01).
+5. Set **reminder schedule** — choose one or more reminder times (e.g., 24 hours before, 1 hour before). Members who RSVP'd will receive notifications at these times.
+6. Optionally attach files (agendas, maps, etc.).
+7. Click **Create Event**.
 
 ![Create Event form with type, title, date, location, and reminder fields](./images/04-05-create-event.png)
 
