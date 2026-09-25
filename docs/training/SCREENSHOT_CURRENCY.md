@@ -1,5 +1,33 @@
 # Screenshot currency
 
+## Suggestion boxes re-shot after notifications, history, board and delete, 2026-09-25
+
+The suggestion-box shots in guide 07 predated four changes to those screens:
+submission notifications and **Also notify** (#2720), the submitter's status
+history and the response to the submitter (#2730, which also carried the idea
+board), and deleting a box (#2734). All ten were taken against a freshly
+seeded demo department.
+
+| Shot | State |
+| ---- | ----- |
+| `07-14-suggestion-box-dialog` | **Re-shot.** The dialog now has **Public idea board** (ticked in the frame) and the **Also notify** pickers, so the frame is taller and the caption names both. The image moved up to sit after the setup steps rather than after the new delete paragraph |
+| `07-15-suggestion-submit-anonymous`, `07-16-suggestion-follow-up-key` | Re-run; byte-identical, so no change |
+| `07-17-suggestion-review` | **Re-shot.** Adds **Response to the submitter**, **Status history** and the **Idea board** section with the published copy |
+| `07-18-suggestion-forwarded-to-you` | **Re-shot.** The idea board section reads "Only the box's reviewers can publish it"; the manifest now fails the shot if a forward recipient is offered publishing |
+| `07-20-suggestion-status-history` | **New.** The demo member's accepted idea under **My submissions**, its history with the reviewers' response |
+| `07-21-suggestion-idea-board` | **New.** Top sort, 3 votes against 1, one voted for and one not — the shot fails if the seed leaves both buttons in the same state |
+| `07-22-suggestion-publish-dialog` | **New.** **Edit published copy**, opened and never saved |
+| `07-23-suggestion-box-delete-dialog` | **New.** The typed-name dialog with **Archive instead**; the shot fails if **Delete permanently** is enabled before a name is typed. Never confirmed |
+| `07-24-suggestion-notification-rule` | **New.** **Create Notification Rule** with **Suggestion Submitted** chosen; never saved |
+
+**Seeder:** Training ideas has the board on (switched on for a box an earlier
+seed created without it), the accepted night drill carries a response to its
+submitter, two entries are published and the votes are cast. Every step is
+safe to re-run.
+
+`07-19-suggestion-review-phone` is still a placeholder, for the reason the full
+sweep below records.
+
 ## The 17 timed-out shots, re-run one at a time, 2026-09-25
 
 Each of the 17 locator timeouts from the full sweep below was run alone, with

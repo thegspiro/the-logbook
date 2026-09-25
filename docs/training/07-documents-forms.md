@@ -598,6 +598,8 @@ positions.
    complained about will not be used.
 6. Leave **Accepting submissions** ticked, and **Save box**.
 
+![The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below](./images/07-14-suggestion-box-dialog.png)
+
 To close a box, untick **Accepting submissions**. Its existing submissions stay
 readable by its reviewers.
 
@@ -609,7 +611,7 @@ To remove a box you no longer need, press **Delete** on it:
   removes every submission, screenshot and reply in it, cannot be undone, and
   asks you to type the box's name first.
 
-![The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up ticked, the note that managing boxes does not let you read them, and two reviewer positions ticked](./images/07-14-suggestion-box-dialog.png)
+![The Delete "Training ideas"? dialog: the warning giving how many submissions the box holds and that deleting removes them all, the Archive instead button, and the field for typing the box's name, with Delete permanently still disabled](./images/07-23-suggestion-box-delete-dialog.png)
 
 ### Submitting a suggestion (every member)
 
@@ -626,6 +628,8 @@ status and reply if the box allows follow-up. In a follow-up box, **Status
 history** shows when your submission was received, each status it has moved
 through, and any response the reviewers wrote for you. An anonymous submission
 shows the same history when you open it with its follow-up key.
+
+![Suggestions → My submissions with the accepted night-time extrication drill open: its Status history running from Received through Accepted, with the reviewers' response to the submitter under the Accepted step](./images/07-20-suggestion-status-history.png)
 
 ![Suggestions → Submit with the Training ideas box chosen, its description and anonymity hint showing, a title and details filled in, one screenshot attached, and Submit anonymously ticked with the warning to check screenshots for your name](./images/07-15-suggestion-submit-anonymous.png)
 
@@ -675,6 +679,8 @@ an idea to vote for it; press it again to take your vote back. Sort by
 **Top** (most votes) or **New**, and filter by status. When reviewers have
 responded to an idea, their latest response is shown with it.
 
+![Suggestions → Idea board sorted by Top: the night-time extrication drill with three votes, already voted for, marked Accepted with the reviewers' response, above the SCBA sessions idea with one vote, marked Under review](./images/07-21-suggestion-idea-board.png)
+
 Reviewers of a board-enabled box see an **Idea board** section when they open a
 submission. **Publish to the board** asks for a title and summary in your own
 words, so write it without names or anything that identifies the sender.
@@ -682,6 +688,8 @@ words, so write it without names or anything that identifies the sender.
 votes are kept if you publish it again. While an idea is published, your
 latest response to the submitter is shown on the board too. Administrators
 turn the board on per box with **Public idea board** in the box's settings.
+
+![The Edit published copy dialog opened from a submission's Idea board section: the note that every member can read it and that the submission, its screenshots and its sender are never shown, then the public title and summary](./images/07-22-suggestion-publish-dialog.png)
 
 ### Reviewing submissions
 
@@ -709,6 +717,8 @@ link to it.** A department can turn the new-submission notices off under
 **Notifications → Notification Rules** with a **Suggestion Submitted** rule; replies and
 status changes still go out.
 
+![Notifications → Create Notification Rule with the trigger event set to Suggestion Submitted, and the note under it saying it tells the box's reviewers, and anyone the box notifies, that a submission arrived, and that replies and status updates still go out when it is switched off](./images/07-24-suggestion-notification-rule.png)
+
 **Telling someone about new submissions without letting them read them.** In a
 box's settings, **Also notify** names positions or members who are told when
 something arrives in that box. They cannot open it: their notice says which box
@@ -726,14 +736,14 @@ They are emailed a link, and see a **Forwarded to you** badge. Reviewers see who
 it was forwarded to and can **Withdraw** a forward. An anonymous submitter stays
 anonymous when forwarded. Forwards and withdrawals are audit-logged.
 
-![Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the internal note, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply](./images/07-17-suggestion-review.png)
+![Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the Response to the submitter and internal note fields, the Status history from Received to Under review, the Idea board section with its published copy and the Edit published copy and Take off the board buttons, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply](./images/07-17-suggestion-review.png)
 
 The person it was forwarded to finds it on their own **Review** tab, even if
 they review no box. Only the suggestions forwarded to them appear there, each
 marked **Forwarded to you**, and the **Forward** button is replaced by a note
 that only the box's reviewers can forward it.
 
-![Suggestions → Review as a member who reviews no box: the one submission forwarded to them, marked Forwarded to you, open on the right with its disposition, internal note and thread, and under Forwarded to the note that only the box's reviewers can forward it, with no Forward button](./images/07-18-suggestion-forwarded-to-you.png)
+![Suggestions → Review as a member who reviews no box: the one submission forwarded to them, marked Forwarded to you, open on the right with its disposition, internal note and thread, its Idea board section saying only the box's reviewers can publish it, and under Forwarded to the note that only the box's reviewers can forward it, with no Forward button](./images/07-18-suggestion-forwarded-to-you.png)
 
 **On a phone** the list and the open submission stack rather than sitting side
 by side. Tap a submission and the page scrolls down to it; scroll back up for the
