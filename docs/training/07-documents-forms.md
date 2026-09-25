@@ -598,6 +598,8 @@ positions.
    complained about will not be used.
 6. Leave **Accepting submissions** ticked, and **Save box**.
 
+![The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up ticked, the note that managing boxes does not let you read them, and two reviewer positions ticked](./images/07-14-suggestion-box-dialog.png)
+
 To close a box, untick **Accepting submissions**. Its existing submissions stay
 readable by its reviewers.
 
@@ -609,7 +611,10 @@ To remove a box you no longer need, press **Delete** on it:
   removes every submission, screenshot and reply in it, cannot be undone, and
   asks you to type the box's name first.
 
-![The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up ticked, the note that managing boxes does not let you read them, and two reviewer positions ticked](./images/07-14-suggestion-box-dialog.png)
+> **Screenshot needed:**
+> _[The **Delete "Training ideas"?** dialog for a box that holds submissions:
+> how many it holds, the **Archive instead** button, and the box's name to type
+> before **Delete permanently** is enabled.]_
 
 ### Submitting a suggestion (every member)
 
@@ -626,6 +631,11 @@ status and reply if the box allows follow-up. In a follow-up box, **Status
 history** shows when your submission was received, each status it has moved
 through, and any response the reviewers wrote for you. An anonymous submission
 shows the same history when you open it with its follow-up key.
+
+> **Screenshot needed:**
+> _[Suggestions → **My submissions** with an accepted submission open: its
+> **Status history** from Received through Accepted, with the reviewers'
+> response to the submitter under the Accepted step.]_
 
 ![Suggestions → Submit with the Training ideas box chosen, its description and anonymity hint showing, a title and details filled in, one screenshot attached, and Submit anonymously ticked with the warning to check screenshots for your name](./images/07-15-suggestion-submit-anonymous.png)
 
@@ -675,6 +685,11 @@ an idea to vote for it; press it again to take your vote back. Sort by
 **Top** (most votes) or **New**, and filter by status. When reviewers have
 responded to an idea, their latest response is shown with it.
 
+> **Screenshot needed:**
+> _[Suggestions → **Idea board** sorted by **Top**: two published ideas with
+> their vote counts, one already voted for, their status badges, and the
+> reviewers' latest response under the accepted one.]_
+
 Reviewers of a board-enabled box see an **Idea board** section when they open a
 submission. **Publish to the board** asks for a title and summary in your own
 words, so write it without names or anything that identifies the sender.
@@ -682,6 +697,12 @@ words, so write it without names or anything that identifies the sender.
 votes are kept if you publish it again. While an idea is published, your
 latest response to the submitter is shown on the board too. Administrators
 turn the board on per box with **Public idea board** in the box's settings.
+
+> **Screenshot needed:**
+> _[The **Edit published copy** dialog a reviewer opens from a submission's
+> **Idea board** section: the note that every member can read it and that the
+> submission and its sender are never shown, then the public title and
+> summary.]_
 
 ### Reviewing submissions
 
@@ -708,6 +729,11 @@ a submitter's reply arrives. **Neither carries the submission's content, only a
 link to it.** A department can turn the new-submission notices off under
 **Notifications → Notification Rules** with a **Suggestion Submitted** rule; replies and
 status changes still go out.
+
+> **Screenshot needed:**
+> _[Notifications → **Create Notification Rule** with the trigger event set
+> to **Suggestion Submitted** and the note describing what switching it off
+> stops.]_
 
 **Telling someone about new submissions without letting them read them.** In a
 box's settings, **Also notify** names positions or members who are told when

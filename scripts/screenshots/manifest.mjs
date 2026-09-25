@@ -10450,14 +10450,14 @@ export const SHOTS = [
   {
     id: "07-14-suggestion-box-dialog",
     doc: "07-documents-forms.md",
-    line: 542,
+    line: 600,
     anchor: 'dialog filled in for a "training ideas" box',
-    alt: "The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up ticked, the note that managing boxes does not let you read them, and two reviewer positions ticked",
+    alt: "The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below",
     route: "/communications/suggestion-boxes",
     // The sentence the shot exists to carry. It sits between the switches and
     // the reviewer pickers, so a frame cut short above it also fails here.
     expect: "Managing boxes does not by itself let you read them",
-    viewport: { width: 1280, height: 1500 },
+    viewport: { width: 1280, height: 2000 },
     // The panel, not `[role="dialog"]`: Modal puts that role on the fixed
     // full-screen backdrop, so clipping to it photographs the whole dimmed page.
     selector: '[data-testid="modal-panel"]',
@@ -10483,6 +10483,10 @@ export const SHOTS = [
         .locator("label", { hasText: "Allow follow-up" })
         .locator('input[type="checkbox"]');
       if (!(await followUp.isChecked())) await followUp.check();
+      await dialog
+        .locator("label", { hasText: "Public idea board" })
+        .locator('input[type="checkbox"]')
+        .check();
       const positions = dialog.locator("fieldset", {
         has: page.locator("legend", { hasText: "Reviewer positions" }),
       });
@@ -10625,13 +10629,13 @@ export const SHOTS = [
     doc: "07-documents-forms.md",
     line: 633,
     anchor: "tab with one submission open: the disposition",
-    alt: "Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the internal note, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply",
+    alt: "Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the Response to the submitter and internal note fields, the Idea board section showing it published, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply",
     route: "/suggestions?tab=review",
     // The seeded reviewer is the Secretary position, which this account holds.
     // The administrator reviews no box, by design, and has no Review tab.
     auth: "secretary",
     expect: "Anonymous submitter",
-    viewport: { width: 1280, height: 1800 },
+    viewport: { width: 1280, height: 2400 },
     selector: '[role="tabpanel"]',
     prepare: async (page) => {
       await page
@@ -10645,6 +10649,7 @@ export const SHOTS = [
           hasText: "More hands-on SCBA time for probationary members",
         })
         .waitFor();
+      await page.getByRole("button", { name: "Edit published copy" }).waitFor();
       const disposition = await page
         .locator("#suggestion-disposition")
         .inputValue();
@@ -10689,6 +10694,135 @@ export const SHOTS = [
           "a Forward button is showing, so this account reviews the box; re-run seed_demo_data.py and check SUGGESTION_FORWARD_MEMBER_USERNAME",
         );
       }
+      // Publishing is for the box's own reviewers; a forward does not carry it.
+      if (
+        await page
+          .getByRole("button", {
+            name: /Publish to the board|Edit published copy/,
+          })
+          .count()
+      ) {
+        throw new Error("a forward recipient is being offered publishing");
+      }
+    },
+  },
+  {
+    id: "07-20-suggestion-status-history",
+    doc: "07-documents-forms.md",
+    line: 635,
+    anchor: "Status history** from Received through Accepted",
+    alt: "Suggestions → My submissions with the accepted night-time extrication drill open: its Status history running from Received through Accepted, with the reviewers' response to the submitter under the Accepted step",
+    route: "/suggestions?tab=mine",
+    auth: "member",
+    expect: "Scheduled for the second Tuesday next month",
+    viewport: { width: 1280, height: 1800 },
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Night-time vehicle extrication drill/ })
+        .first()
+        .click();
+      await page.locator('section[aria-label="Status history"]').waitFor();
+    },
+  },
+  {
+    id: "07-21-suggestion-idea-board",
+    doc: "07-documents-forms.md",
+    line: 688,
+    anchor: "Idea board** sorted by **Top**",
+    alt: "Suggestions → Idea board sorted by Top: the night-time extrication drill with three votes, already voted for, marked Accepted with the reviewers' response, above the SCBA sessions idea with one vote, marked Under review",
+    route: "/suggestions?tab=board",
+    auth: "member",
+    expect: "Night-time extrication drill",
+    viewport: { width: 1280, height: 1200 },
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      // Both states of the vote button are the point of the shot, so a seed
+      // that left them the same should fail here rather than be photographed.
+      await page
+        .getByRole("button", {
+          name: /^Remove your vote for Night-time extrication drill/,
+        })
+        .waitFor();
+      await page
+        .getByRole("button", {
+          name: /^Vote for Regular hands-on SCBA sessions for probies/,
+        })
+        .waitFor();
+    },
+  },
+  {
+    id: "07-22-suggestion-publish-dialog",
+    doc: "07-documents-forms.md",
+    line: 701,
+    anchor: "Edit published copy** dialog a reviewer opens",
+    alt: "The Edit published copy dialog opened from a submission's Idea board section: the note that every member can read it and that the submission, its screenshots and its sender are never shown, then the public title and summary",
+    route: "/suggestions?tab=review",
+    auth: "secretary",
+    expect: "Write it in your own words",
+    viewport: { width: 1280, height: 1200 },
+    selector: '[data-testid="modal-panel"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: /More hands-on SCBA time for probationary members/,
+        })
+        .first()
+        .click();
+      // Opened and photographed, never saved.
+      await page.getByRole("button", { name: "Edit published copy" }).click();
+      await page.locator("#publish-title").waitFor();
+    },
+  },
+  {
+    id: "07-23-suggestion-box-delete-dialog",
+    doc: "07-documents-forms.md",
+    line: 614,
+    anchor:
+      'Delete "Training ideas"?** dialog for a box that holds submissions',
+    alt: 'The Delete "Training ideas"? dialog: the warning giving how many submissions the box holds and that deleting removes them all, the Archive instead button, and the field for typing the box\'s name, with Delete permanently still disabled',
+    route: "/communications/suggestion-boxes",
+    expect: "Archive instead",
+    viewport: { width: 1280, height: 1200 },
+    selector: '[data-testid="modal-panel"]',
+    prepare: async (page) => {
+      // Opened and photographed, never confirmed: nothing is typed, so the
+      // delete button stays disabled throughout.
+      await page.getByRole("button", { name: "Delete Training ideas" }).click();
+      await page.locator("#delete-box-confirm").waitFor();
+      if (
+        await page
+          .getByRole("button", { name: "Delete permanently" })
+          .isEnabled()
+      ) {
+        throw new Error("Delete permanently is enabled before a name is typed");
+      }
+    },
+  },
+  {
+    id: "07-24-suggestion-notification-rule",
+    doc: "07-documents-forms.md",
+    line: 732,
+    anchor: "Create Notification Rule** with the trigger event set",
+    alt: "Notifications → Create Notification Rule with the trigger event set to Suggestion Submitted, and the note under it saying it notifies box reviewers and watchers of new submissions and what switching it off stops",
+    route: "/notifications?tab=rules",
+    expect: "Create Notification Rule",
+    viewport: { width: 1280, height: 1100 },
+    selector: '[aria-labelledby="create-rule-title"] div.max-w-lg',
+    prepare: async (page) => {
+      // Opened and photographed, never saved.
+      await page.getByRole("button", { name: "Add Rule" }).click();
+      const dialog = page.locator('[aria-labelledby="create-rule-title"]');
+      await dialog.waitFor();
+      await dialog.locator("#rule-name").fill("New suggestion notices");
+      await dialog
+        .locator("select")
+        .first()
+        .selectOption({ label: "Suggestion Submitted" });
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
     },
   },
   {
