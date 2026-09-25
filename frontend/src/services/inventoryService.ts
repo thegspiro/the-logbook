@@ -102,6 +102,8 @@ import type {
   InventoryNfcPutAwayResponse,
   InventoryNfcResolveAnyRequest,
   InventoryNfcResolveAnyResponse,
+  InventoryNfcResolveCheckRequest,
+  InventoryNfcResolveCheckResponse,
   InventoryNfcResolveRequest,
   InventoryNfcScanListResponse,
   InventoryNfcSettings,
@@ -650,6 +652,23 @@ export const inventoryService = {
 
   async resolveAnyNfcTag(data: InventoryNfcResolveAnyRequest): Promise<InventoryNfcResolveAnyResponse> {
     const response = await api.post<InventoryNfcResolveAnyResponse>('/inventory/nfc/resolve-any', data);
+    return response.data;
+  },
+
+  async resolveCheckNfcTag(data: InventoryNfcResolveCheckRequest): Promise<InventoryNfcResolveCheckResponse> {
+    const response = await api.post<InventoryNfcResolveCheckResponse>('/inventory/nfc/resolve-check', data);
+    return { ...response.data, template_item_ids: expectArray(response.data?.template_item_ids, 'checklist tap') };
+  },
+
+  async getCheckCompartmentNfcTags(compartmentId: string): Promise<InventoryNfcTagListResponse> {
+    const response = await api.get<InventoryNfcTagListResponse>(
+      `/inventory/check-compartments/${compartmentId}/nfc-tags`
+    );
+    return response.data;
+  },
+
+  async linkCheckCompartmentNfcTag(compartmentId: string, data: InventoryNfcTagCreate): Promise<InventoryNfcTag> {
+    const response = await api.post<InventoryNfcTag>(`/inventory/check-compartments/${compartmentId}/nfc-tags`, data);
     return response.data;
   },
 
