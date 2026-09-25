@@ -559,20 +559,20 @@ in the membership process. The stage type is chosen from a grid of tiles in the
 Add Pipeline Stage / Edit Stage dialog, and picking one swaps the configuration panel
 below it.
 
-| Stage Type                | Purpose                                | What Happens                                                                                                                                                                                                                       |
-| ------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Form Submission**       | Collect information from the applicant | Links to a form from the Forms module. Can auto-advance when the form is submitted                                                                                                                                                 |
-| **Document Upload**       | Collect required documents             | Applicant uploads documents (ID, background check, etc.). Can auto-advance when all documents are uploaded                                                                                                                         |
-| **Meeting**               | Schedule interview/orientation         | Requires attendance at or scheduling of a meeting; links to upcoming events                                                                                                                                                        |
-| **Election / Vote**       | Membership vote                        | Advancing an applicant onto this stage with **Advance** (or by dragging the card) creates an election package for the Elections module. Advance All, Skip and auto-advance do not; create the package from the drawer in that case |
-| **Manual Approval**       | Coordinator sign-off                   | An admin or designated role manually marks this stage as complete                                                                                                                                                                  |
-| **Enable Status Page**    | Turn on public tracking                | Stores an enable/disable setting, but nothing acts on it yet. Whether applicants can use the public status page is set for the whole pipeline in Pipeline Settings > **Public Application Status Page**                            |
-| **Automated Email**       | Send a notification email              | Sends a configurable email when the prospect reaches this stage. Configure subject, welcome message, FAQ link, meeting details and custom sections                                                                                 |
-| **Reference Check**       | Collect references                     | Collect and verify personal or professional references                                                                                                                                                                             |
-| **Checklist**             | Multi-item sign-off                    | A checklist of items (orientation, gear issue, etc.) rather than a single approval                                                                                                                                                 |
-| **Interview Requirement** | Require N interviews                   | Requires a set number of interviews before the prospect can advance                                                                                                                                                                |
-| **Multi-Signer Approval** | Several roles must agree               | Requires multiple designated roles to all sign off                                                                                                                                                                                 |
-| **Medical Screening**     | Physical or medical clearance          | Requires a physical exam or medical clearance before advancing                                                                                                                                                                     |
+| Stage Type                | Purpose                                | What Happens                                                                                                                                                                                                                                    |
+| ------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Form Submission**       | Collect information from the applicant | Links to a form from the Forms module. Can auto-advance when the form is submitted                                                                                                                                                              |
+| **Document Upload**       | Collect required documents             | Applicant uploads documents (ID, background check, etc.). Can auto-advance when all documents are uploaded                                                                                                                                      |
+| **Meeting**               | Schedule interview/orientation         | Requires attendance at or scheduling of a meeting; links to upcoming events                                                                                                                                                                     |
+| **Election / Vote**       | Membership vote                        | Advancing an applicant onto this stage with **Advance** (or by dragging the card) creates an election package for the Elections module. Advance All, Skip and auto-advance do not; create the package from the drawer in that case              |
+| **Manual Approval**       | Coordinator sign-off                   | An admin or designated role manually marks this stage as complete                                                                                                                                                                               |
+| **Enable Status Page**    | Turn public tracking on or off         | When the applicant reaches it, switches their public status page on (and emails them the link) or off, overriding the pipeline setting for them. Then completes itself — see [Enable Status Page Stages](#enable-status-page-stages-2026-09-25) |
+| **Automated Email**       | Send a notification email              | Sends a configurable email when the prospect reaches this stage. Configure subject, welcome message, FAQ link, meeting details and custom sections                                                                                              |
+| **Reference Check**       | Collect references                     | Collect and verify personal or professional references                                                                                                                                                                                          |
+| **Checklist**             | Multi-item sign-off                    | A checklist of items (orientation, gear issue, etc.) rather than a single approval                                                                                                                                                              |
+| **Interview Requirement** | Require N interviews                   | Requires a set number of interviews before the prospect can advance                                                                                                                                                                             |
+| **Multi-Signer Approval** | Several roles must agree               | Requires multiple designated roles to all sign off                                                                                                                                                                                              |
+| **Medical Screening**     | Physical or medical clearance          | Requires a physical exam or medical clearance before advancing                                                                                                                                                                                  |
 
 > **Corrected 2026-08-10.** This table previously listed seven types, one of
 > which — "Form Dropdown" — has never existed; it described the form picker
@@ -608,7 +608,8 @@ When a prospect advances to an automated email stage, the system sends the confi
 - **Membership FAQ Link** — link to your department's FAQ page
 - **Next Meeting Details** — the event type plus free text for date, time and location
 - **Application Tracker Link** — a link to the prospect's public status page. It
-  requires the public status page to be enabled, and says so under the checkbox
+  is included only while that prospect's page is on — the pipeline setting, or
+  an Enable Status Page stage they have passed — and says so under the checkbox
 - **Add custom section** — titled content blocks (e.g. "What to Bring",
   "Parking Information")
 
@@ -621,6 +622,37 @@ field for it.
 ![The automated-email stage configuration with its subject, welcome message and custom sections](./images/01-28-stage-email-config.png)
 
 > **Edge case:** If email is not configured (Settings > Email) or the send fails, no email goes out and the applicant **stays on the automated email stage** instead of moving past it. An applicant sitting on an email stage is the sign to check your email settings.
+
+#### Enable Status Page Stages _(2026-09-25)_
+
+The pipeline's **Public Application Status Page** setting decides whether
+applicants can track their application online. An **Enable Status Page** stage
+lets you decide that per applicant, at a point in the process — for example,
+reveal the tracker once someone has passed their interview.
+
+- **Enabling stage** (the default): when the applicant reaches it, their status
+  page is switched on — even if the pipeline setting is off — and they are
+  emailed the link, with the stage's optional message. The stage then completes
+  itself and the applicant moves to the next stage.
+- **Disabling stage** (untick **Enable public status page at this stage**):
+  their page is switched off and the link stops working, even if the pipeline
+  setting is on. Nothing is sent, and the stage completes itself.
+- The **latest** such stage an applicant has reached decides for them. An
+  applicant who has reached none follows the pipeline setting. Moving an
+  applicant back before the stage undoes it.
+
+> **Edge case:** If the link email cannot be sent — email is not configured, or
+> the applicant has no email address — the applicant **stays on the stage**.
+> Their page is still on; fix the problem and complete the stage yourself.
+> A stage marked as the final stage never completes itself, since completing
+> the final stage is the department's approval.
+>
+> **Edge case:** The email is sent, and the stage completes itself, only when an
+> applicant reaches it by completing the stage before it — the same as an
+> Automated Email stage. An applicant who starts on it (it is the first stage),
+> is placed on it directly, or is moved back onto it still gets the stage's
+> on/off setting, but is not emailed the link, and the stage waits for you to
+> complete it.
 
 ### Pipeline Configuration
 

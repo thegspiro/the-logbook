@@ -1034,9 +1034,13 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
                       </span>
                     </div>
                     <p className="text-theme-text-muted text-xs">
-                      When the prospect reaches this stage, their public status page will be
-                      {statusPageConfig.enable_public_status ? ' activated' : ' deactivated'}. They will receive a link
-                      to check their application progress.
+                      {statusPageConfig.enable_public_status
+                        ? 'When the prospect reaches this stage, their public status page is switched on and they are emailed the link. The stage then completes itself; if the email cannot be sent it stays open for you.'
+                        : 'When the prospect reaches this stage, their public status page is switched off and the link stops working. Nothing is sent, and the stage completes itself.'}
+                    </p>
+                    <p className="text-theme-text-muted mt-2 text-xs">
+                      This overrides the pipeline&rsquo;s public status page setting for prospects who reach this stage.
+                      Moving a prospect back before it undoes it.
                     </p>
                   </div>
                   <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
@@ -1048,19 +1052,21 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
                     />
                     Enable public status page at this stage
                   </label>
-                  <div>
-                    <label htmlFor="stage-status-page-message" className="text-theme-text-muted mb-2 block text-sm">
-                      Custom Status Message (optional)
-                    </label>
-                    <textarea
-                      id="stage-status-page-message"
-                      value={statusPageConfig.custom_message ?? ''}
-                      onChange={(e) => setConfig({ ...statusPageConfig, custom_message: e.target.value })}
-                      placeholder="e.g., Welcome! You can now track your application progress here."
-                      rows={2}
-                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                    />
-                  </div>
+                  {statusPageConfig.enable_public_status && (
+                    <div>
+                      <label htmlFor="stage-status-page-message" className="text-theme-text-muted mb-2 block text-sm">
+                        Message in the link email (optional)
+                      </label>
+                      <textarea
+                        id="stage-status-page-message"
+                        value={statusPageConfig.custom_message ?? ''}
+                        onChange={(e) => setConfig({ ...statusPageConfig, custom_message: e.target.value })}
+                        placeholder="e.g., Welcome! You can now track your application progress here."
+                        rows={2}
+                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
