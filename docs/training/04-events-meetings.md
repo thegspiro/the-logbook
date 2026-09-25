@@ -809,10 +809,14 @@ Each election shows:
    - _(2026-08-12)_ Or apply one of **your saved ballots** — a whole ballot your department saved from a previous election. See [Elections & Voting > Saved Ballot Templates](./14-elections.md#saved-ballot-templates) for how to save one and what it does and does not carry
    - Each position can only have one ballot item (the dropdown shows only unused positions)
    - Positions load from your organization's operational ranks (Chief, Captain, etc.) with type-ahead filtering
-4. For each item, add **candidates** and configure options:
-   - Allow write-ins (auto-fills name with "Write-in Candidate")
-   - Voting method (simple majority, ranked choice, approval, supermajority) and victory condition (most votes, majority, supermajority, threshold)
-   - Number of winners
+4. For each item, set its **Vote Type** (Candidate Selection, or Approval for a
+   yes/no question) and **Who Can Vote**, then add **candidates**:
+   - Tick **Write-in candidate** to add a write-in slot (the name fills in as
+     "Write-in Candidate")
+   - Optionally override the **Victory Condition** for this item — Most Votes,
+     Majority, Supermajority or Threshold, with a percentage for the last two.
+     How votes are counted comes from the election's **How is the Winner
+     Determined?** choice in step 2; an item cannot change it
    - Move candidates between positions using the position dropdown in the edit form
 5. Configure **proxy voting** in Election Settings if needed (enable/disable, set max proxies per person).
 6. Optionally enable **email ballots** for members who cannot access the system.
@@ -1449,15 +1453,15 @@ When members attend events with configured mappings, their attendance hours are 
 
 ### Dashboard Notification Management
 
-Dashboard notification cards now include **clear** and **dismiss** buttons, allowing you to manage notifications without navigating to the full Notifications page.
+Event reminders and notices reach the dashboard's **My Updates** feed, one list
+of unread notifications and department messages. Opening a row marks it read
+and takes you to what it announces. Five rows show; **Older Items** opens the
+full Notifications inbox, which is where marking everything read lives — the
+feed has no per-card dismiss and no Clear All.
 
-- **Dismiss**: Hides the notification from your dashboard (personal action, doesn't affect others)
-- **Clear**: Marks the notification as read
-
-The dashboard panel is pictured under
-[Administration & Reports → Dashboard Notification Management](./08-admin-reports.md#dashboard-notification-management);
-this guide does not repeat the screenshot. Each card carries one control, the
-✕, which marks it read; **Clear All** in the panel header does the lot.
+The feed, its order (pinned, then persistent, then newest) and who may clear a
+persistent message are described and pictured under
+[Administration & Reports → Dashboard Notification Management](./08-admin-reports.md#dashboard-notification-management).
 
 ### Department Messages
 
@@ -1466,7 +1470,7 @@ Messages** — with priority-based email/SMS escalation, required acknowledgment
 scheduling, and targeting. See the full how-to in
 [Documents, Forms & Communications → Department Messages](./07-documents-forms.md#department-messages).
 
-> **Edge case:** Non-admin users cannot dismiss persistent messages — the dismiss button is not shown. Only users with `notifications.manage` see the "Clear" action.
+> **Edge case:** Only holders of `notifications.manage` or `settings.manage` see the ✕ that clears a persistent message, and clearing it takes it down for everyone. Other members cannot remove one; it stays in their feed after they read it.
 
 ### Notification Channel Filter
 
