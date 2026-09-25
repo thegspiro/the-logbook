@@ -1708,3 +1708,7 @@ department**.]**
   `nbelhaj` waitlisted.
 - **Record the settings beat without saving,** or put the setting back
   afterwards.
+- **The 0:34 officer beat is the short version of script 04's.** Script 04's
+  event walkthrough (Chapter 3, right after RSVP Settings) covers the per-event
+  dropdown and all three of its choices. Use the same labels here, and point
+  officers there in the description.

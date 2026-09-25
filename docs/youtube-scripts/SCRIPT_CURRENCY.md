@@ -47,6 +47,10 @@ managers**), that members see names only, and the department default under
 managers**. It adds about 20 seconds. Film it as an officer; nothing needs
 saving.
 
+The script carries an **EDITOR** note folding those 20 seconds into Chapter 3's
+pending re-timing. Short **8AU**'s production notes now point its 0:34 officer
+beat at this one, so the two use the same labels.
+
 ## Flagged by the 2026-09-15 → 09-23 changes
 
 Full reason/data-path context in

@@ -143,6 +143,10 @@ event participation, member activity]**
 **[SCREEN: The Who can see who's going dropdown on the event form, open on its
 three choices; then Manage Events → Settings → Attendance.]**
 
+**EDITOR (2026-09-24):** This beat adds about 0:20 to Chapter 3. Fold it into
+the re-timing of later chapters that the elections note below already calls
+for, rather than re-timing twice.
+
 > "**QR Check-In** — enable this and the system generates a unique QR code for
 > the event. Members scan it with their phone when they arrive for instant,
 > contactless attendance tracking."
