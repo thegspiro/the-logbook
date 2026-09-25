@@ -58,6 +58,17 @@ a loopback address (`127.x.x.x`, `::1`), `0.0.0.0`, or cannot be parsed. Set
 docker compose config | grep FRONTEND_URL
 ```
 
+Then restart the backend so it takes effect.
+
+**An installation set up before 2026-09-24 most likely has the default.**
+Neither installer set `FRONTEND_URL` until then; the Unraid setup script now
+uses the HTTPS address it asks for, and the universal installer takes
+`--public-url` (see [`DEPLOYMENT.md`](./DEPLOYMENT.md)).
+
+**Links already sent keep the old address.** Fixing the setting does not
+reach mail already delivered: members request a fresh password reset, and the
+secretary re-sends any open ballots.
+
 ### "I set it in .env and nothing changed"
 
 A Docker Compose `environment:` block is a **whitelist**. A variable missing
@@ -224,8 +235,15 @@ would hide it everywhere.
 **every suggestion, attachment record and reply**; uploaded screenshots are left
 on disk under `uploads/suggestions`. Reversing `394600cbfae2` removes the grant
 from the same five seeded positions, including one your department added by
-hand after upgrading — nothing distinguishes the two. Back up first if you might
-roll back.
+hand after upgrading — nothing distinguishes the two. Reversing `9cb132ad83dc`
+drops **every forward** (a suggestion a reviewer passed to a member or position);
+the suggestions themselves are untouched. Back up first if you might roll back.
+
+**Decide who reviews a box before you announce it.** A box's reviewers are the
+only people who will ever read it, so choose them with the box's purpose in
+mind: a complaints box reviewed by the people most likely to be complained about
+will not be used. Reviewers are emailed a link when something arrives, never the
+content.
 
 **Anonymity has limits worth telling members about.** An anonymous submission
 stores no author and no exact time, but whoever administers the **server** could
@@ -766,6 +784,25 @@ nothing to migrate.
 member from their next page load. Departments already on the default need do
 nothing.
 
+### Off-list event-request preferences are settled, and it does not reverse (2026-09-10)
+
+An event request's **date flexibility**, **venue preference** and **preferred
+time of day** are fixed vocabularies that the coordinator's board and the
+public status page are written against. A department could rename its own
+form's option values, so stored requests could carry something else and render
+as a raw slug, or as nothing. Migration `0533644945cd` settles those rows the
+way intake now does: trimmed and lower-cased first, and replaced with the
+fallback value only when genuinely unrecognised.
+
+**Only values outside the vocabulary are touched.** A request whose flexibility
+says "specific dates" without naming one is left alone, and **outreach types
+are not touched at all**, because a type missing from today's list may be one
+your department genuinely offered and has since retired.
+
+**It does not reverse.** The original off-list text is not recorded anywhere,
+so the downgrade is a no-op; the settled values are valid under the older code
+too.
+
 ### Published event-request forms keep working (2026-09-09)
 
 `events.request_pipeline.accept_public_requests` shipped read by exactly one of
@@ -792,6 +829,23 @@ of `false`.
 public submissions, the toggle now genuinely controls it — turn it off at
 **Events → Settings → Pipeline**.
 
+### Applicant pipeline stages are renumbered (2026-09-08)
+
+A stage's position is not only its column on the applicant board: **Advance**
+moves an applicant to the next stage in that order. Two stages could end up
+sharing a position — adding a stage numbered it from the count of stages, and
+deleting a middle stage left a gap — and then both the column order and where
+Advance went depended on how the tie happened to break.
+
+Migration `a3f61c8d27b4` renumbers every pipeline's stages densely, keeping the
+order a coordinator currently sees and breaking a tie toward the stage created
+first. Nothing is added, dropped or deleted.
+
+**What to check:** open the applicant board. Where two stages were tied, the
+column order may settle differently from what you were used to — that is the
+tie being broken deliberately rather than at random. If it is not the order you
+want, reorder the stages in the pipeline settings.
+
 ### Property-return reports are no longer readable department-wide (2026-09-07)
 
 `PropertyReturnService.save_as_document` filed each generated property-return
@@ -807,8 +861,10 @@ organizations whose system folders were already initialised (the service's own
 `initialize_system_folders` returns early for them) and moves the reports
 already written into `Reports`.
 
-**No action needed.** This is listed so you know what was exposed, and to whom,
-before the upgrade.
+**Nothing to configure.** This is listed so you know what was exposed, and to
+whom, before the upgrade — and so you can **tell whoever handles separations**
+that new reports are filed in the leadership-only **member-separations** folder,
+not Reports.
 
 **The downgrade restores the disclosure.** It moves the reports back to
 `Reports` and drops the folders the revision created, restoring the prior state
@@ -821,13 +877,16 @@ gate real endpoints, but **no seeded position held either**. Only `it_manager`
 could reach them, and only through its `*` wildcard — the IT administrator
 rather than a finance role.
 
-**What that cost a department.** With no chain configured,
-`submit_purchase_request` skips approval entirely, so requests quietly bypass
-the workflow rather than failing visibly. Configure a chain _without_ also
-granting `finance.approve`, and every submitted request lands in
-`PENDING_APPROVAL` with nobody able to action it. The half-configured state is
-the one that strands records, and the settings screen that produces it was
-itself unreachable.
+**What that cost a department.** Configure a chain _without_ also granting
+`finance.approve`, and every submitted request lands in `PENDING_APPROVAL` with
+nobody able to action it — and the settings screen that produces that state was
+itself unreachable. (With no chain configured at all, `submit_purchase_request`
+also sets `PENDING_APPROVAL`, creating no approval records, for manual
+approval.)
+
+_Corrected 2026-09-25: this entry previously said that with no chain configured
+a request skips approval entirely. It does not — see the `else` branch in
+`FinanceService.submit_purchase_request`._
 
 Migration `ee7390dcdf47` grants both to the Treasurer position.
 
@@ -844,6 +903,169 @@ holding either new grant, or any other finance shape, is left alone. **If you
 deliberately curated your Treasurer to exactly view + manage, meaning "no
 approval powers", review that position after upgrading** — nothing in the
 stored row distinguishes that decision from the untouched seed.
+
+**Then look for a backlog.** If you built a chain that nobody could action,
+requests may be sitting in _Pending Approval_; the Treasurer can now work
+through them.
+
+### A call type your department named "unclassified" is renamed (2026-09-05)
+
+`unclassified` is the slug of the synthetic bucket a call with **no** type falls
+into. A department-configured type sharing it was indistinguishable from that
+remainder: the call-volume report merged its calls with the untyped ones and
+labelled the total "Not categorised", and the type's own name vanished from
+every screen. Migration `c9f4a2b71d38` renames such a slug, deriving the new one
+from your own label, and moves the calls and filed reports that point at it.
+
+**Nothing to do** unless you had such a type — then expect its calls to reappear
+under its own name.
+
+### The Membership Coordinator rename, and two other repairs, finally run (2026-09-05)
+
+Four earlier migrations named the `positions` table at a point in the chain
+where it was still called `roles`, and an existence guard turned the resulting
+crash into a silent no-op. On every department that upgraded:
+
+- the **Membership Committee Chair** position was never renamed to **Membership
+  Coordinator**;
+- role-targeted department messages were never converted from position names to
+  ids;
+- the default **Member** position never received the equipment-check submit
+  grant, **so those members lost the checklist on upgrade**.
+
+Migration `e8a1c04f6b27` performs all three. It skips a department that already
+has a Membership Coordinator, leaves a position the department created alone,
+and converts message targeting **before** renaming, so a message addressed to
+the old name still resolves. A message targeting a name two positions share is
+left as-is, rather than silently dropping one position's members.
+
+### Scheduling administration moved, and six addresses stop working (2026-09-05)
+
+Everything an officer administers about the schedule is at `/scheduling/admin`,
+gated by `scheduling.manage`. These addresses stop resolving, **with no
+redirect** — they land on the dashboard:
+
+| Old address                  | New address                                                      |
+| ---------------------------- | ---------------------------------------------------------------- |
+| `/scheduling/settings`       | `/scheduling/admin/settings/general` (and five sibling sections) |
+| `/scheduling/templates`      | `/scheduling/admin/planning/templates`                           |
+| `/scheduling/patterns`       | `/scheduling/admin/planning/patterns`                            |
+| `/scheduling/reports`        | `/scheduling/admin/reports`                                      |
+| `/scheduling/platoons`       | `/scheduling/admin/platoons`                                     |
+| `/scheduling/qualifications` | `/scheduling/admin/positions`                                    |
+
+`/scheduling/admin/settings?tab=…` still forwards to the section it names.
+
+**The position roster was narrowed to `scheduling.manage`.** It used to accept
+the training grants too, so a training officer could open
+`/scheduling/admin/positions`; the page and the API behind it
+(`GET /scheduling/eligibility/roster`) now both require `scheduling.manage`
+alone. Grant it if that officer needs the roster.
+
+**Update station SOPs, pinned tabs and saved links** to these addresses, and to
+the eight equipment-checklist addresses retired on 2026-08-31 (below).
+
+### Compliance percentages may rise (2026-09-05)
+
+Two grading defects were fixed, both in the favourable direction:
+
+- a member exempt from a requirement could never reach 100%, because the
+  percentage divided by every active requirement while counting only the ones
+  that applied to that member;
+- a certification that is valid today but expiring soon read as a failure.
+
+**Expect some members' percentages to go up** after upgrading. Nothing to
+configure. The Compliance Matrix's **Notify** and **Assign** buttons are gone:
+they had no endpoint behind them.
+
+### Six upgrade steps take permissions away (2026-09-05)
+
+The old onboarding position editor saved a heuristic's checkbox defaults over
+the seeded position rows, and a user's permissions are the union of every
+position they hold, so the difference became live grants on every department
+that finished setup. Migrations `c9a5e21f7b04`, `d1c7f4a92e63`, `f3b8d0c26a17`,
+`a2e9f6b04c71`, `b6e4a0d17c93` and `d5f2b8c04a19` remove them:
+
+| Grant                                                                                   | Comes off                                                                                                                   | What those members lose                                                                                     |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `reports.view`                                                                          | Member, Firefighter                                                                                                         | Administration → Reports, and with it the Administration section itself for anyone who had nothing else     |
+| `apparatus.view`                                                                        | The rank-and-file, including the membership-standing positions (Probationary, Junior, Life, Administrative, Social, Exempt) | The fleet maintenance and compliance record                                                                 |
+| `integrations.view`, `medical_supplies.view`, `mobile.view`, `prospective_members.view` | Member, Firefighter, Engineer, EMT                                                                                          | Those four workspaces                                                                                       |
+| `positions.view`, `reports.view`, `settings.view`, and the `apparatus.*` wildcard       | Engineer                                                                                                                    | Engineer keeps `apparatus.view` and `apparatus.maintenance`, which is what a driver/operator is seeded with |
+
+Two steps go the other way (`f7b3c8d2e569`, `b4d1c8e37f52`): four grants are
+restored on EMT positions (seeing the department's own information, its
+locations and its meetings, and asking to swap a shift), and the store-order
+and equipment-check-submit grants on Member.
+
+**⚠️ The revocation is unconditional, including where you granted it on
+purpose.** Nothing in a stored position row distinguishes a deliberate grant
+from the setup screen's mistake — earlier attempts to tell them apart missed
+every department that had switched those modules off during setup. Because
+these grants expose other members' aggregated hours, training and roster data,
+they are removed wherever they are found. A position your department created
+itself is never touched.
+
+**What to do:** if your department deliberately gave members Reports, or wants
+them to see the fleet, **grant it again on the positions screen after
+upgrading.** The lightweight `/apparatus-basic` page, shown when the Apparatus
+module is off, stays open to everyone.
+
+### Gmail and Microsoft 365 email never sent; stored OAuth fields are deleted (2026-09-03)
+
+The settings form saved these platforms' credentials under keys the sender never
+read, so every message failed with "SMTP host and from_email are required" —
+after a green "Email settings saved" toast, and **in preference to** a working
+server-wide SMTP configuration, because the organization's own section wins
+whenever it is enabled. Both platforms now resolve host, port, encryption and
+login from a fixed preset shared by the sender and the connection test.
+
+**What to do:** re-open **Settings → Email**, confirm the From address and app
+password, and press **Test Connection**, which signs in to the provider without
+saving.
+
+**Migration `e3a9c1d5b7f2` deletes the stored Gmail and Microsoft OAuth Client
+ID / Client Secret values, and does not reverse.** Nothing ever read them — no
+refresh token was obtained and no send path existed.
+
+**Microsoft 365 has a deadline.** Exchange Online is retiring Basic
+authentication for SMTP submission: unchanged through December 2026, disabled by
+default for existing tenants at the end of it, unavailable to tenants created
+after, and removed in the second half of 2027. An App Password _is_ Basic auth.
+Settings → Email offers **App registration (OAuth)** alongside it; an existing
+App Password configuration keeps working, and keeps its method, until you
+choose to move.
+
+### Equipment checklists moved to Inventory; eight addresses and three permissions renamed (2026-08-31)
+
+These addresses stop resolving with no redirect. Seven land on the dashboard;
+`/scheduling?tab=equipment-checks` opens Scheduling on its **Schedule** tab,
+because that page still exists and ignores the removed tab:
+
+| Old address                               | New address                                 |
+| ----------------------------------------- | ------------------------------------------- |
+| `/scheduling/equipment-check-templates/…` | `/inventory/admin/checklists/templates/…`   |
+| `/scheduling/equipment-check-reports`     | `/inventory/admin/checklists/reports`       |
+| `/scheduling/supply/expiring`             | `/inventory/admin/checklists/supply`        |
+| `/scheduling/equipment`                   | `/inventory/checklists`                     |
+| `/scheduling/equipment/checks`            | `/inventory/checklists/log`                 |
+| `/scheduling/equipment/{id}`              | `/inventory/checklists/apparatus/{id}`      |
+| `/scheduling/apparatus-inventory`         | `/inventory/checklists/apparatus-inventory` |
+| `/scheduling?tab=equipment-checks`        | `/inventory/checklists/my`                  |
+
+**Tell your crews:** members find their checks at **Operations → My
+Checklists**, and officers at **Fleet Readiness** beside it. End-of-shift
+reminders **already in members' bells** carry the old address; new ones point
+at the right place, and the old ones age out within a few days.
+
+**Permissions.** Migration `ff8076f4987a` renames `equipment_check.view` /
+`.manage` / `.submit` to `inventory.check_view` / `.check_manage` /
+`.check_submit` on every stored position, so every position keeps exactly the
+authority it had. **⚠️ A position holding the `inventory.*` wildcard now also
+authors and submits equipment checklists.** No seeded position holds
+`inventory.*`, so this reaches only positions your department built — typically
+a quartermaster. If that is wider than you intend, replace the wildcard with the
+specific `inventory.` grants you want.
 
 ## When adding a change that can block startup
 

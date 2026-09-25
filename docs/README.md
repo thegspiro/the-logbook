@@ -19,7 +19,8 @@ that advance on **finalized** attendance and bind a coordinator's own Advance,
 inventory **label tracking** with print-by-filter, server-side conditional
 form visibility, and the department's logo as the installed app's icon. It
 carries the Alembic route, the permission grant, and the screenshot / YouTube
-disposition. Operator lesson:
+disposition. Operator documentation is in the module guides; where each topic
+went is indexed in
 [`training/20-september-2026-release-changes.md`](./training/20-september-2026-release-changes.md).
 
 Earlier windows since the entry below:

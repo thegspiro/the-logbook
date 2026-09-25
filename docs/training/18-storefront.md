@@ -433,6 +433,11 @@ number is what ties your payment to your order — keep it.
 If the store is closed, or no window is open, the page says so instead of
 showing an empty catalog.
 
+When several members order the last of a stock-tracked item at the same moment,
+only the orders the stock can cover are accepted; the rest are refused with a
+message saying how many remain available (for example _Only 1 of 'Station
+T-Shirt' remain available_).
+
 ---
 
 ## Paying (Member View)
@@ -839,8 +844,7 @@ Nothing inside it changed — the same six tabs (Overview, Order Windows, Catalo
 Orders, Payments, Settings), the same `storefront.manage` permission, the same
 module flag. Only the name and the address moved, as part of the same tidy-up
 that renamed Gear Admin to Inventory Administration (see
-[Inventory](./05-inventory.md) and the
-[September release notes](./20-september-2026-release-changes.md)).
+[Inventory](./05-inventory.md)).
 
 **Reach it from Inventory Administration**, where the store now has its own
 section with four cards, each a deep link into the tab it names:

@@ -699,6 +699,10 @@ Action items have:
 
 > **Hint:** Members see their own action items prominently. Officers can view and manage all action items across the department.
 
+**Reminders.** An open or in-progress action item with a due date sends its
+assignee a reminder three days before it is due, one day before, and once it is
+overdue. The check runs once a day.
+
 ### Attendance Dashboard (Secretary)
 
 The **Meetings > Attendance Dashboard** provides:
@@ -829,18 +833,22 @@ The Events module includes a **Public Outreach Request Pipeline** that lets comm
 
 **Required Permission:** `events.manage`
 
-1. Navigate to **Events Admin > Settings**.
-2. Under **Outreach Types**, add the program types your department offers:
+1. Navigate to **Manage Events → Settings**.
+2. Under **Pipeline**, switch on **Accept Public Requests**. It gates **both**
+   ways a request arrives: the public request API and a Forms-module event
+   request form (the kind **Generate Event Request Form** produces). While it
+   is off, a published form stops creating requests.
+3. Under **Outreach Types**, add the program types your department offers:
    - Click **Add Type**, enter a key (e.g., `fire_safety_demo`) and label (e.g., "Fire Safety Demonstration")
    - These appear as options on the public request form
-3. Under **Request Pipeline**, configure:
+4. Under **Request Pipeline**, configure:
    - **Default Coordinator** — Select a member who will be auto-assigned all new requests
    - **Pipeline Tasks** — Add custom checklist steps (e.g., "Chief Approval", "Email Volunteer Signup", "Prep Equipment"). Use the up/down arrows to reorder.
    - **Public Progress Visibility** — Toggle whether the requester can see task progress on their status page (off by default)
-4. Under **Email Triggers**, configure which status changes send notifications:
+5. Under **Email Triggers**, configure which status changes send notifications:
    - Toggle each trigger on/off (e.g., "On Submitted", "On Scheduled", "On Postponed")
    - Each trigger can notify the requester, the assigned coordinator, or both
-5. Under **Email Templates**, create reusable email messages:
+6. Under **Email Templates**, create reusable email messages:
    - Example: "How to Find Our Building" email with directions and parking info
    - Templates support variables: `{{contact_name}}`, `{{event_date}}`, `{{organization_name}}`, etc.
    - Optionally set a trigger (e.g., "7 days before event") for automatic sending

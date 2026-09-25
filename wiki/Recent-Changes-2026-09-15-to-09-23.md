@@ -246,12 +246,12 @@ Both holds carry a Dependabot ignore and a lift condition in
 
 ## Where to read more
 
-| Topic                         | Repository file                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------- |
-| Operator lesson               | `docs/training/20-september-2026-release-changes.md` (September 15–23 section)  |
-| Suggestion boxes walkthrough  | `docs/training/07-documents-forms.md`                                           |
-| Meeting stages                | `docs/training/15-prospective-members.md`, `docs/PROSPECTIVE_MEMBERS_MODULE.md` |
-| Label tracking                | `docs/training/05-inventory.md`, `docs/LABEL_PRINTING_MODULE.md`                |
-| Upgrade notes                 | `docs/UPGRADING.md`                                                             |
-| Screenshots to create/replace | `docs/training/SCREENSHOT_CURRENCY.md`                                          |
-| Video script changes          | `docs/youtube-scripts/SCRIPT_CURRENCY.md`                                       |
+| Topic                         | Repository file                                                                                       |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Operator documentation        | the module guides; `docs/training/20-september-2026-release-changes.md` indexes where each topic went |
+| Suggestion boxes walkthrough  | `docs/training/07-documents-forms.md`                                                                 |
+| Meeting stages                | `docs/training/15-prospective-members.md`, `docs/PROSPECTIVE_MEMBERS_MODULE.md`                       |
+| Label tracking                | `docs/training/05-inventory.md`, `docs/LABEL_PRINTING_MODULE.md`                                      |
+| Upgrade notes                 | `docs/UPGRADING.md`                                                                                   |
+| Screenshots to create/replace | `docs/training/SCREENSHOT_CURRENCY.md`                                                                |
+| Video script changes          | `docs/youtube-scripts/SCRIPT_CURRENCY.md`                                                             |

@@ -60,12 +60,19 @@ Navigate to **Prospective Members > Settings** to configure the pipeline.
 
 1. Click **Create Pipeline** (or edit the default pipeline)
 2. Enter a **name** and **description**
-3. Add stages by clicking **Add Stage** — each stage has a type that determines its behavior
-4. **Drag and drop** stages to reorder them
+3. Add stages by clicking **Add Stage** — each stage has a type that determines
+   its behavior. Every type can be added here, **Manual Approval** and
+   **Election / Vote** included; choosing Election / Vote reveals its voting
+   configuration below the type grid
+4. **Drag and drop** stages to reorder them. Each stage holds its own position
+   in the order, so the column order on the board and the stage **Advance**
+   moves an applicant to are always the same
 5. Configure each stage's settings (auto-advance, timeout, etc.)
 6. Save
 
 ![Pipeline builder listing the stages with their drag handles and types](./images/15-02-pipeline-builder.png)
+
+![The Add Pipeline Stage dialog with Election / Vote selected, its voting configuration revealed below the type grid, and Add Stage enabled with no validation error](./images/20-12-stage-picker-election-vote.png)
 
 ### Pipeline Settings
 
@@ -177,6 +184,8 @@ Each pipeline stage has a type that determines its behavior:
 > Advance was held to it and a single Advance was exempt; since 2026-09-16 the
 > stage decides, not the button. Before 2026-09-16 a stage auto-advanced at the
 > moment of check-in rather than at finalize.
+
+![The applicant drawer for an applicant on the Attend a Business Meeting stage, whose Auto-Link Event Type is set: the hint above the action row says they must be checked in at the stage's event and that event's attendance must be finalized before they can advance](./images/20-14-applicant-meeting-stage-hint.png)
 
 ### Stage Configuration Options
 
@@ -307,7 +316,8 @@ if you delete a pipeline's _only remaining_ stage there is nowhere to move them
 to, and they are left without one.
 
 The board shows these applicants in an **Unassigned** column rather than hiding
-them. Open one and you will see **Not on a stage**, with a picker of the
+them. The column holds only this pipeline's stageless applicants, and switching
+the board to another pipeline shows only that pipeline's applicants. Open one and you will see **Not on a stage**, with a picker of the
 stages in their pipeline: choose the stage they should be working and click
 **Place**. The stage is recorded as in progress and the placement appears in
 their activity log.
@@ -318,6 +328,8 @@ used to move someone past a stage's requirements. Note that placing an
 applicant mid-pipeline does not mark the earlier stages complete, because
 nobody completed them; their progress count will read low until those stages
 are worked or skipped.
+
+![The Not on a stage panel in an applicant's drawer — the stage picker and the Place button](./images/20-07-applicant-place-on-stage.png)
 
 ### Holding, Rejecting, or Withdrawing
 
@@ -512,6 +524,8 @@ When an applicant advances to an **Election Vote** stage, the system automatical
 > is unaffected: a stage with no package, or one still **Draft** or **Ready**,
 > advances exactly as before. Nothing is gated until a package is actually put
 > on a ballot.
+
+![An applicant's drawer after a losing vote — the Membership Vote stage, the red not elected package status, the banner and a link to the closed ballot, and an action row that offers Advance](./images/20-13-applicant-drawer-not-elected.png)
 
 > **…and it holds Convert too** _(2026-09-14)_**.** The gate above originally
 > covered **Advance** alone, which left the commoner route open: **Convert** is

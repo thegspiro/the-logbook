@@ -98,6 +98,9 @@ Two things worth knowing:
   Category column disappears — the heading already says it — and a **Size**
   column takes its place, since size is what you are usually scanning for.
 
+**Export** follows what you are looking at: the file carries the current
+filters and grouping, not the whole catalog.
+
 ![The items list grouped by category, with collapsible group headings carrying whole-set counts and a Size column in place of the Category column](./images/05-03-items-grouped.png)
 
 ---
@@ -384,7 +387,12 @@ When creating a new uniform or PPE item that comes in multiple sizes and styles,
 4. Pick **Sizes** from the chips. Eleven are offered: XXS, XS, S, M, L, XL,
    XXL, 3XL, 4XL, One Size and Custom. At least one is required
 5. Optionally pick **Styles**. Ten are offered: Short Sleeve, Long Sleeve,
-   Men's, Women's, Unisex, V-Neck, Crew Neck, Polo, Button Down and Quarter Zip
+   Men's, Women's, Unisex, V-Neck, Crew Neck, Polo, Button Down and Quarter Zip.
+   Sleeve, fit, neckline and closure are independent attributes, so a garment
+   records every one it has — picking Men's, Long Sleeve and Polo describes
+   **one** men's long-sleeve polo. Only two options on the **same** attribute
+   multiply: Short Sleeve and Long Sleeve together make one item for each. Each
+   size and colour combination then becomes one item
 6. Optionally enter **Colors** as a comma-separated list (e.g. "Navy, White")
 7. Read the preview panel, which shows the total and how it was reached —
    "16 items will be created / 4 sizes × 2 styles × 2 colors". The submit
@@ -425,10 +433,9 @@ stock quantity per size and colour, open it on **Inventory Admin > Variant
 Groups**; that grid is pictured under
 [Stock Matrix on Variant Groups Page](#stock-matrix-on-variant-groups-page).
 
-> **Corrected 2026-08-12.** The retired screenshot placeholder here asked for
-> "a variant group **expanded**" in the inventory items list. The list does not
-> group or collapse variants — every variant is a top-level row, and the only
-> place a group is expandable is the Variant Groups admin page.
+**In the items list, a product's size variants fold into one row** that you
+expand to see each size — a coat in six sizes is one line until you open it.
+The Variant Groups admin page shows the same group as a grid instead.
 
 ### Edge Cases
 
@@ -2891,6 +2898,8 @@ know what the department calls a thing had nowhere to start.
   through the same alias table the impact planner uses — so "Large" on their
   record selects the row you stored as "L". Any other size the department stocks
   is one tap away.
+- **The member's fit preference preselects the variant** too — Women's or Long
+  Sleeve, say — alongside their boot width.
 
 ![Request Equipment at the product step: category filters across the top and one row per product with its on-hand count and number of sizes, or None on hand — you can still ask](./images/05-86-gear-request-products.png)
 

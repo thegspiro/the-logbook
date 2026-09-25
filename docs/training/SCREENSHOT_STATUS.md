@@ -9,30 +9,29 @@ image still matches the application is tracked by hand in
 [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) — this file is
 regenerated wholesale, so that audit cannot live here.
 
-**600 of 602 placeholders filled** (2 remaining).
+**583 of 585 placeholders filled** (2 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
-| [00-getting-started.md](./00-getting-started.md) | 17 | 0 |
+| [00-getting-started.md](./00-getting-started.md) | 18 | 0 |
 | [01-membership.md](./01-membership.md) | 29 | 0 |
 | [02-training.md](./02-training.md) | 73 | 0 |
-| [03-scheduling.md](./03-scheduling.md) | 84 | 0 |
+| [03-scheduling.md](./03-scheduling.md) | 87 | 0 |
 | [04-events-meetings.md](./04-events-meetings.md) | 39 | 0 |
 | [05-inventory.md](./05-inventory.md) | 65 | 0 |
 | [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 21 | 0 |
 | [07-documents-forms.md](./07-documents-forms.md) | 17 | 2 |
-| [08-admin-reports.md](./08-admin-reports.md) | 53 | 0 |
+| [08-admin-reports.md](./08-admin-reports.md) | 62 | 0 |
 | [09-skills-testing.md](./09-skills-testing.md) | 24 | 0 |
 | [10-mobile-pwa.md](./10-mobile-pwa.md) | 18 | 0 |
 | [11-finance.md](./11-finance.md) | 11 | 0 |
 | [12-grants-fundraising.md](./12-grants-fundraising.md) | 10 | 0 |
 | [13-medical-screening.md](./13-medical-screening.md) | 7 | 0 |
 | [14-elections.md](./14-elections.md) | 18 | 0 |
-| [15-prospective-members.md](./15-prospective-members.md) | 16 | 0 |
+| [15-prospective-members.md](./15-prospective-members.md) | 20 | 0 |
 | [16-integrations.md](./16-integrations.md) | 7 | 0 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 4 | 0 |
 | [18-storefront.md](./18-storefront.md) | 4 | 0 |
 | [19-august-2026-release-changes.md](./19-august-2026-release-changes.md) | 49 | 0 |
-| [20-september-2026-release-changes.md](./20-september-2026-release-changes.md) | 34 | 0 |
-| **Total** | **600** | **2** |
+| **Total** | **583** | **2** |
 

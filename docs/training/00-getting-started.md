@@ -123,7 +123,10 @@ After your first login, you will be prompted to change your temporary password. 
 
 ## Understanding the Interface
 
-The Logbook uses a sidebar navigation layout. The main areas of the screen are:
+The Logbook uses a sidebar navigation layout by default. Your department can
+switch everyone to a top bar instead, under **Settings → General → Profile →
+Navigation Layout**; the choice applies to every member from their next page
+load. The main areas of the screen are:
 
 1. **Sidebar (Left)** - Navigation menu for all modules
 2. **Main Content Area (Center)** - The active page you are working on
@@ -191,28 +194,31 @@ These links are available to all active members:
 Three of them are **groups** that expand when you click them, rather than links
 of their own — Training, Operations and Governance:
 
-| Menu Item            | Description                                                                                     |
-| -------------------- | ----------------------------------------------------------------------------------------------- |
-| **Dashboard**        | Your home page with quick stats and upcoming items                                              |
-| **Learning Center**  | Short task-based paths through the app — open a task, do it, tick it off                        |
-| **Members**          | Department roster and member profiles                                                           |
-| **Events**           | Upcoming and past department events                                                             |
-| **Documents**        | Shared files, SOPs, and policies                                                                |
-| **Training** ▾       | My Training, Submit Training, Course Library, Programs, Skills Testing                          |
-| **Admin Hours**      | Log administrative work hours (if module enabled)                                               |
-| **Shift Scheduling** | Duty roster, your shifts, and open shifts                                                       |
-| **Operations** ▾     | My Issued Gear, Gear & Uniforms, Apparatus, Facilities (Department Store is its own item above) |
-| **Governance** ▾     | Elections, Minutes, Action Items                                                                |
-| **Notifications**    | Your inbox, with an unread count on the item itself                                             |
-| **Messages**         | Department messages and announcements                                                           |
-| **My Account**       | Your own settings — account, password, security, emergency contacts, appearance, notifications  |
-| **My ID Card**       | Your digital member ID, with its QR code and barcode                                            |
+| Menu Item            | Description                                                                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dashboard**        | Your home page with quick stats and upcoming items                                                                                                                                                       |
+| **Learning Center**  | Short task-based paths through the app — open a task, do it, tick it off                                                                                                                                 |
+| **Members**          | Department roster and member profiles                                                                                                                                                                    |
+| **Events**           | Upcoming and past department events                                                                                                                                                                      |
+| **Documents**        | Shared files, SOPs, and policies                                                                                                                                                                         |
+| **Training** ▾       | My Training, Submit Training, Course Library, Programs, Skills Testing                                                                                                                                   |
+| **Admin Hours**      | Log administrative work hours (if module enabled)                                                                                                                                                        |
+| **Shift Scheduling** | Duty roster, your shifts, and open shifts                                                                                                                                                                |
+| **Operations** ▾     | My Issued Gear, My Checklists, Apparatus Inventory, and — if your position grants them — Inventory, Medical Supplies, Fleet Readiness, Apparatus and Facilities (Department Store is its own item above) |
+| **Governance** ▾     | Org Chart, Elections, Minutes, Action Items, Legal Documents                                                                                                                                             |
+| **Notifications**    | Your inbox, with an unread count on the item itself                                                                                                                                                      |
+| **Messages**         | Department messages and announcements                                                                                                                                                                    |
+| **Suggestions**      | Send an idea, question or concern to one of your department's suggestion boxes, and follow your own submissions                                                                                          |
+| **My Account**       | Your own settings — account, password, security, emergency contacts, appearance, notifications                                                                                                           |
+| **My ID Card**       | Your digital member ID, with its QR code and barcode                                                                                                                                                     |
 
 Which of the grouped items appear depends on the modules your department has
 enabled: a department not running elections has no Elections link under
 Governance, and so on.
 
 ![The navigation sidebar with the member-facing sections expanded](./images/00-15-sidebar-member.png)
+
+![An ordinary member's view: the Suggestions item in the sidebar just below Messages, and the Suggestions page open on its Submit tab with the Training ideas box chosen and its description showing — no Review tab](./images/20-15-suggestions-sidebar-submit.png)
 
 ### Administration Section
 
@@ -222,13 +228,13 @@ If you have administrative permissions (officers, IT Manager, etc.), you will se
 | --------------------------- | --------------------------------------------------------------------------------------------- |
 | **Department Setup**        | Guided checklist for initial configuration                                                    |
 | **Members** ▾               | Prospective, Pipeline Settings, Member Management, Scan Member ID, Waivers, Medical Screening |
-| **Events Admin**            | Create events, view analytics                                                                 |
+| **Manage Events**           | Create events, view analytics, event settings                                                 |
 | **Training Admin**          | Review submissions, manage requirements, compliance                                           |
 | **Scheduling Admin**        | Shift planning, platoons, positions, scheduling reports and settings (`scheduling.manage`)    |
 | **Inventory Admin**         | Manage gear and uniform items, equipment checklists, view member issued equipment             |
 | **Store Admin**             | Storefront products, order windows, and fulfilment — opens the **Department Store** console   |
 | **Admin Hours**             | Review and approve administrative hours                                                       |
-| **Forms & Comms** ▾         | Email Templates, Messages, Forms, Integrations                                                |
+| **Forms & Comms** ▾         | Email Templates, Messages, Suggestion Boxes, Photo Use Consent, Forms, Integrations           |
 | **Reports**                 | Generate department reports                                                                   |
 | **Organization Settings** ▾ | Organization settings, roles, public portal                                                   |
 
@@ -483,11 +489,14 @@ If you are following an older walkthrough, four things are in different places.
 | Gear Admin                                                                  | **Inventory Admin** — the same place, renamed                                          |
 | The Department Store console                                                | Inside Inventory Admin, at `/inventory/admin/store`                                    |
 
-> **⚠️ Old links land on the dashboard, not on an error.** Thirteen addresses
-> stop resolving with no redirect, and the catch-all makes that silent — so a
+> **⚠️ Old links land on the wrong page, not on an error.** Fourteen addresses
+> stop resolving with no redirect. Thirteen land on the dashboard, and
+> `/scheduling?tab=equipment-checks` opens Scheduling on its Schedule tab — so a
 > bookmark or an SOP link appears to work and simply shows you the wrong page.
-> The full before/after tables are in
-> [20 — September release changes](./20-september-2026-release-changes.md#where-everything-moved).
+> The full before/after tables are in the upgrade notes for the
+> [equipment checklists](../UPGRADING.md#equipment-checklists-moved-to-inventory-eight-addresses-and-three-permissions-renamed-2026-08-31)
+> and for
+> [scheduling administration](../UPGRADING.md#scheduling-administration-moved-and-six-addresses-stop-working-2026-09-05).
 
 ![The sidebar as an officer, clipped to the navigation: Operations expanded to My Issued Gear, Inventory, Medical Supplies, My Checklists, Fleet Readiness, Apparatus Inventory, Apparatus and Facilities, and below it the Administration section with Scheduling Admin and Inventory Admin](./images/00-26-sidebar-officer-operations.png)
 
@@ -508,6 +517,6 @@ so a member account will not see:
   everyone
 
 That is the intended state, not a fault. An administrator can re-grant either on
-the positions screen. See
-[20 — September release changes](./20-september-2026-release-changes.md#six-upgrade-steps-take-permissions-away)
+the positions screen. See the
+[upgrade note](../UPGRADING.md#six-upgrade-steps-take-permissions-away-2026-09-05)
 for why those grants were there in the first place.

@@ -36,6 +36,12 @@ The Apparatus module tracks department vehicles, their maintenance, fuel logs, e
 
 Navigate to **Apparatus** in the sidebar to view your department's vehicle fleet.
 
+The Apparatus pages are the fleet's maintenance and compliance record, so they
+need `apparatus.view`. Officers, chiefs, administrators and the Engineer rank
+hold it; a regular member does not, and does not see the **Apparatus** item. A
+department that wants its members to see the fleet adds `apparatus.view` to its
+Member position.
+
 The apparatus list shows all vehicles with:
 
 - Unit number and name
@@ -46,7 +52,7 @@ The apparatus list shows all vehicles with:
 
 ![Apparatus listing with unit numbers, type badges, and status badges](./images/06-01-apparatus-list.png)
 
-> **Hint:** If your department has the full Apparatus module disabled, you will see a simplified **Apparatus Basic** view that provides a lightweight list of apparatus for shift scheduling purposes.
+> **Hint:** If your department has the full Apparatus module disabled, you will see a simplified **Apparatus Basic** view that provides a lightweight list of apparatus for shift scheduling purposes. It is open to every member.
 
 ### Printing Apparatus Labels
 
@@ -245,7 +251,7 @@ Click on any facility from the dashboard to open its full-page detail view at `/
 | **Maintenance**        | Maintenance history and work orders with 16 NFPA-aligned maintenance types. Priority badges (low/medium/high/critical)                                                                                                                                                                        |
 | **Inspections**        | Inspection records with inspector name, license number, agency, pass/fail status, deficiency tracking, and corrective action dates                                                                                                                                                            |
 | **Utilities**          | Utility accounts (electric, gas, water, internet) with monthly usage readings and cost tracking                                                                                                                                                                                               |
-| **Emergency Contacts** | Building-specific emergency contacts with phone, role, and priority                                                                                                                                                                                                                           |
+| **Emergency Contacts** | Building-specific emergency contacts with phone, role, and priority. A contact needs a name; the company is optional, e.g. the facility's own on-call staff                                                                                                                                   |
 | **Access Keys**        | Key and access card tracking with assignment history                                                                                                                                                                                                                                          |
 | **Shutoff Locations**  | Gas, water, and electrical shutoff location descriptions and photos                                                                                                                                                                                                                           |
 | **Capital Projects**   | Building improvement projects with budget, timeline, status, and contractor info                                                                                                                                                                                                              |
