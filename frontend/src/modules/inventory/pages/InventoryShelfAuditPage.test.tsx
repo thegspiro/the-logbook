@@ -15,6 +15,7 @@ const { service, scanner } = vi.hoisted(() => ({
     getNfcAudits: vi.fn(),
     getNfcAudit: vi.fn(),
     applyNfcAudit: vi.fn(),
+    getAuditSchedule: vi.fn(),
   },
   scanner: { onTag: null as ((tag: Tag) => void) | null, start: vi.fn(), stop: vi.fn() },
 }));
@@ -120,6 +121,8 @@ describe('InventoryShelfAuditPage', () => {
     service.getNfcAudits.mockResolvedValue({ items: [], total: 0 });
     service.getNfcAudit.mockReset();
     service.getNfcAudit.mockResolvedValue(detail());
+    service.getAuditSchedule.mockReset();
+    service.getAuditSchedule.mockResolvedValue({ items: [], total: 0 });
     service.applyNfcAudit.mockReset();
     service.applyNfcAudit.mockResolvedValue(
       detail({
@@ -236,5 +239,52 @@ describe('InventoryShelfAuditPage', () => {
     await user.click(await screen.findByRole('button', { name: 'View' }));
     await waitFor(() => expect(service.getNfcAudit).toHaveBeenCalledWith('audit-1'));
     expect(await screen.findByRole('heading', { name: 'Shelf A' })).toBeInTheDocument();
+  });
+
+  it('lists the audit schedule, due first, and starts an audit from it', async () => {
+    const user = userEvent.setup();
+    service.getAuditSchedule.mockResolvedValue({
+      total: 2,
+      items: [
+        {
+          storage_area_id: 'area-2',
+          storage_area_name: 'Shelf B',
+          location_name: 'Bay 1',
+          audit_frequency: 'weekly',
+          last_audited_at: null,
+          next_due_at: null,
+          overdue: true,
+          days_overdue: null,
+        },
+        {
+          storage_area_id: 'area-1',
+          storage_area_name: 'Shelf A',
+          location_name: null,
+          audit_frequency: 'monthly',
+          last_audited_at: '2026-09-20T12:00:00Z',
+          next_due_at: '2026-10-20T12:00:00Z',
+          overdue: false,
+          days_overdue: null,
+        },
+      ],
+    });
+    renderWithRouter(<InventoryShelfAuditPage />);
+    expect(await screen.findByRole('heading', { name: 'Audit schedule (1 due)' })).toBeInTheDocument();
+    expect(screen.getByText(/never audited/)).toBeInTheDocument();
+    expect(screen.getByText(/next due/)).toBeInTheDocument();
+
+    const buttons = screen.getAllByRole('button', { name: 'Audit now' });
+    await user.click(buttons[0] as HTMLElement);
+    const inProgress = await screen.findByRole('region', { name: 'Audit in progress' });
+    expect(await within(inProgress).findByText('Shelf B', { selector: 'strong' })).toBeInTheDocument();
+    // One audit at a time: the schedule's buttons wait until it is finished.
+    for (const b of screen.getAllByRole('button', { name: 'Audit now' })) expect(b).toBeDisabled();
+  });
+
+  it('hides the schedule when nothing is scheduled', async () => {
+    renderWithRouter(<InventoryShelfAuditPage />);
+    await screen.findByText(/No shelf chosen/);
+    await waitFor(() => expect(service.getAuditSchedule).toHaveBeenCalled());
+    expect(screen.queryByRole('heading', { name: /Audit schedule/ })).not.toBeInTheDocument();
   });
 });

@@ -6,6 +6,7 @@
  */
 
 import type {
+  InventoryAuditFrequency,
   InventoryNfcAuditResult,
   InventoryNfcScanAction,
   InventoryNfcTagStatus,
@@ -240,4 +241,25 @@ export interface NotSeenFilters {
   days?: number | undefined;
   category_id?: string | undefined;
   limit?: number | undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Audit schedule
+// ---------------------------------------------------------------------------
+
+export interface InventoryAuditScheduleRow {
+  storage_area_id: string;
+  storage_area_name: string;
+  location_name: string | null;
+  audit_frequency: InventoryAuditFrequency | null;
+  last_audited_at: string | null;
+  /** Null while the area has never been audited: it is due now. */
+  next_due_at: string | null;
+  overdue: boolean;
+  days_overdue: number | null;
+}
+
+export interface InventoryAuditScheduleListResponse {
+  items: InventoryAuditScheduleRow[];
+  total: number;
 }

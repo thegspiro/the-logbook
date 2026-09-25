@@ -98,11 +98,11 @@ Recommended crontab (add to host or container cron):
 
 import copy
 import html as _html
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
-from sqlalchemy import or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.call_tracking import CallTrackingMode
@@ -319,6 +319,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:30",
         "cron": "30 7 * * *",
+    },
+    "inventory_audit_digest": {
+        "description": "Email inventory managers a list of shelves overdue for an NFC shelf audit. Checked daily, sent at most once a week per department, and only when something is overdue",
+        "frequency": "daily check, weekly send",
+        "recommended_time": "08:00",
+        "cron": "0 8 * * *",
     },
     "nfpa_retirement_alerts": {
         "description": "Send weekly alerts for PPE approaching NFPA 1851 10-year retirement date (180/90/30-day tiers)",
@@ -4282,6 +4288,124 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "inventory_low_stock_alerts", process)
 
 
+# A digest is weekly; the hour of slack absorbs the daily check drifting a few
+# minutes later each day, which would otherwise push a send to the eighth day.
+AUDIT_DIGEST_MIN_GAP = timedelta(days=7) - timedelta(hours=1)
+AUDIT_DIGEST_ROWS_SHOWN = 50
+
+
+async def run_inventory_audit_digest(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Email inventory managers the shelves overdue for an NFC shelf audit.
+
+    Runs daily but sends at most once a week per organization: the in-process
+    scheduler forgets its last run on every restart, so the week is measured
+    from the last ``inventory_nfc_audit_digests`` row instead. Nothing is sent
+    when nothing is overdue, when NFC tracking is switched off (an audit cannot
+    be done then), or when nobody holds ``inventory.manage``.
+    """
+    from app.core.config import settings
+    from app.models.inventory import InventoryNfcAuditDigest
+    from app.services.email_service import EmailService, wrap_email_body
+    from app.services.inventory_audit_schedule_service import (
+        InventoryAuditScheduleService,
+    )
+    from app.utils.inventory_nfc import nfc_tracking_enabled_in
+    from app.utils.org_timezone import scheduling_timezone
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        org_id = str(org.id)
+        if not nfc_tracking_enabled_in(org.settings):
+            return 0
+
+        now = datetime.now(timezone.utc)
+        last_sent = (
+            await db_session.execute(
+                select(func.max(InventoryNfcAuditDigest.sent_at)).where(
+                    InventoryNfcAuditDigest.organization_id == org_id
+                )
+            )
+        ).scalar_one_or_none()
+        if last_sent is not None:
+            if last_sent.tzinfo is None:
+                last_sent = last_sent.replace(tzinfo=timezone.utc)
+            if now - last_sent < AUDIT_DIGEST_MIN_GAP:
+                return 0
+
+        due = await InventoryAuditScheduleService(db_session).list_schedule(
+            org_id, due_only=True, now=now
+        )
+        if not due:
+            return 0
+
+        recipients = await _stock_alert_recipients(
+            db_session, org_id, permissions=GEAR_STOCK_PERMISSIONS
+        )
+        emails = [u.email for u in recipients if u.email]
+        if not emails:
+            return 0
+
+        tz = scheduling_timezone(org)
+        cell = "padding:6px 12px;border-bottom:1px solid #eee;"
+        rows_html = ""
+        for row in due[:AUDIT_DIGEST_ROWS_SHOWN]:
+            last = row["last_audited_at"]
+            place = row["storage_area_name"] + (
+                f" ({row['location_name']})" if row["location_name"] else ""
+            )
+            rows_html += (
+                f"<tr><td style='{cell}'>{_html.escape(place)}</td>"
+                f"<td style='{cell}'>{row['audit_frequency'].value.title()}</td>"
+                f"<td style='{cell}'>"
+                + (last.astimezone(tz).strftime("%b %d, %Y") if last else "Never")
+                + "</td></tr>"
+            )
+        more = len(due) - AUDIT_DIGEST_ROWS_SHOWN
+        audit_url = f"{settings.FRONTEND_URL}/inventory/shelf-audit"
+        html_body = wrap_email_body(
+            org,
+            "Shelf Audits Overdue",
+            f"<p>{len(due)} storage area(s) are due an NFC shelf audit:</p>"
+            '<table style="width:100%;border-collapse:collapse;margin:16px 0;">'
+            '<thead><tr style="background:#f3f4f6;">'
+            '<th style="padding:8px 12px;text-align:left;">Storage area</th>'
+            '<th style="padding:8px 12px;text-align:left;">Schedule</th>'
+            '<th style="padding:8px 12px;text-align:left;">Last audited</th>'
+            f"</tr></thead><tbody>{rows_html}</tbody></table>"
+            + (f"<p>…and {more} more.</p>" if more > 0 else "")
+            + f'<p><a href="{_html.escape(audit_url)}">Open Shelf Audit</a></p>',
+            footer_text=(
+                "You receive this weekly while any shelf is overdue because you "
+                "manage inventory."
+            ),
+        )
+        success_count, _ = await EmailService(organization=org).send_email(
+            to_emails=emails,
+            subject=f"Shelf audits overdue — {len(due)} storage area(s)",
+            html_body=html_body,
+            text_body=(
+                f"{len(due)} storage area(s) are due an NFC shelf audit. "
+                f"Open Shelf Audit: {audit_url}"
+            ),
+        )
+        if success_count <= 0:
+            # Not recorded, so tomorrow's check tries again.
+            return 0
+
+        db_session.add(
+            InventoryNfcAuditDigest(
+                organization_id=org_id,
+                sent_at=now,
+                overdue_count=len(due),
+                recipient_count=success_count,
+            )
+        )
+        await db_session.commit()
+        return 1
+
+    return await _for_each_org(db, "inventory_audit_digest", process)
+
+
 async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
     Send email alerts for overdue checkouts. Daily at 07:30.
@@ -6135,6 +6259,7 @@ TASK_RUNNERS = {
     "storefront_payment_reminders": run_storefront_payment_reminders,
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
+    "inventory_audit_digest": run_inventory_audit_digest,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "supply_expiration_alerts": run_supply_expiration_alerts,
     "compliance_auto_reports": run_compliance_auto_reports,
@@ -6190,6 +6315,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "action_item_reminders": 86400,
     "inventory_low_stock_alerts": 86400,
     "inventory_overdue_alerts": 86400,
+    # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).
+    "inventory_audit_digest": 86400,
     "property_return_reminders": 86400,
     "storefront_payment_reminders": 86400,
     "compliance_auto_reports": 86400,

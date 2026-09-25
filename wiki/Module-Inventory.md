@@ -222,21 +222,22 @@ wildcard, exactly as `view_medical` / `manage_medical` already were.
 
 ### Core Tables
 
-| Table                       | Purpose                                                                                                                                                                                                                               |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `inventory_categories`      | Item categories with type, requirements, low-stock thresholds                                                                                                                                                                         |
-| `inventory_items`           | Items with serial/barcode/asset tag, condition, status, tracking type. `label_printed_at` / `label_printed_by` _(2026-09-23, migration `5a70c5dcd138`)_ record a confirmed label print and are cleared when the printed value changes |
-| `inventory_lots`            | A dated batch of a consumable held as ready stock: lot number, expiration, quantity, received date. **The source of "on hand" for any item that has lots** _(documented 2026-08-10)_                                                  |
-| `item_assignments`          | Permanent/temporary assignments of individual items to members                                                                                                                                                                        |
-| `item_issuances`            | Pool item issuance records (quantity tracking)                                                                                                                                                                                        |
-| `checkout_records`          | Temporary checkout records with expected return dates                                                                                                                                                                                 |
-| `maintenance_records`       | Maintenance history (inspection, repair, calibration, etc.)                                                                                                                                                                           |
-| `inventory_vendors`         | Suppliers: name (unique per organization), account number, phone/email/fax/website, address, payment terms, preferred and active flags _(2026-08-16)_                                                                                 |
-| `inventory_vendor_contacts` | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag _(2026-08-16)_                                                                                                          |
-| `inventory_nfc_tags`        | NFC tags on items or storage areas: hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization _(2026-09-24)_                                                                               |
-| `inventory_nfc_scans`       | Staff NFC taps on items (lookups and put-aways): who, when, which tag, to and from which storage area _(2026-09-24)_                                                                                                                  |
-| `inventory_nfc_audits`      | Shelf audits: the storage area (name snapshotted), who ran it, expected / found / missing / unexpected counts, who confirmed moving items _(2026-09-24)_                                                                              |
-| `inventory_nfc_audit_items` | One line per item a shelf audit judged: found, missing or unexpected, where it was recorded, whether it was moved _(2026-09-24)_                                                                                                      |
+| Table                         | Purpose                                                                                                                                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inventory_categories`        | Item categories with type, requirements, low-stock thresholds                                                                                                                                                                         |
+| `inventory_items`             | Items with serial/barcode/asset tag, condition, status, tracking type. `label_printed_at` / `label_printed_by` _(2026-09-23, migration `5a70c5dcd138`)_ record a confirmed label print and are cleared when the printed value changes |
+| `inventory_lots`              | A dated batch of a consumable held as ready stock: lot number, expiration, quantity, received date. **The source of "on hand" for any item that has lots** _(documented 2026-08-10)_                                                  |
+| `item_assignments`            | Permanent/temporary assignments of individual items to members                                                                                                                                                                        |
+| `item_issuances`              | Pool item issuance records (quantity tracking)                                                                                                                                                                                        |
+| `checkout_records`            | Temporary checkout records with expected return dates                                                                                                                                                                                 |
+| `maintenance_records`         | Maintenance history (inspection, repair, calibration, etc.)                                                                                                                                                                           |
+| `inventory_vendors`           | Suppliers: name (unique per organization), account number, phone/email/fax/website, address, payment terms, preferred and active flags _(2026-08-16)_                                                                                 |
+| `inventory_vendor_contacts`   | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag _(2026-08-16)_                                                                                                          |
+| `inventory_nfc_tags`          | NFC tags on items or storage areas: hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization _(2026-09-24)_                                                                               |
+| `inventory_nfc_scans`         | Staff NFC taps on items (lookups and put-aways): who, when, which tag, to and from which storage area _(2026-09-24)_                                                                                                                  |
+| `inventory_nfc_audits`        | Shelf audits: the storage area (name snapshotted), who ran it, expected / found / missing / unexpected counts, who confirmed moving items _(2026-09-24)_                                                                              |
+| `inventory_nfc_audit_items`   | One line per item a shelf audit judged: found, missing or unexpected, where it was recorded, whether it was moved _(2026-09-24)_                                                                                                      |
+| `inventory_nfc_audit_digests` | One row per weekly "shelf audits overdue" email sent: when, how many areas, how many recipients _(2026-09-24)_                                                                                                                        |
 
 ### Workflow Tables
 
@@ -377,6 +378,8 @@ GET    /api/v1/inventory/nfc/audits/{id}                 # One audit with its li
 POST   /api/v1/inventory/nfc/audits/{id}/apply           # Move chosen unexpected items onto the shelf (inventory.manage)
 POST   /api/v1/inventory/nfc/resolve-member              # Tapped member ID card -> member; needs NFC ID Cards too (inventory.manage)
 GET    /api/v1/inventory/nfc/untagged                    # Active items with no working tag; ?search=&category_id= (inventory.manage)
+GET    /api/v1/inventory/nfc/audit-schedule              # Scheduled areas, overdue first; ?due_only= (inventory.manage)
+PUT    /api/v1/inventory/storage-areas/{id}/audit-schedule # {"audit_frequency": "weekly"|...|null} (inventory.manage)
 GET    /api/v1/inventory/not-seen                        # Items not seen in ?days= (default 180) (inventory.manage; not NFC-gated)
 GET    /api/v1/inventory/not-seen/export                 # The same as CSV, up to 5,000 rows (inventory.manage; not NFC-gated)
 ```
@@ -419,6 +422,16 @@ GET    /api/v1/inventory/not-seen/export                 # The same as CSV, up t
   only when ticked and confirmed (`/apply`), through `put_away_items`, so an
   assigned item is skipped with the reason. Every tapped item is logged in the
   tap log as `audit`, on the audited shelf.
+- **Audit schedules.** `storage_areas.audit_frequency` (weekly, monthly,
+  quarterly, yearly; null = not scheduled). The next audit is due one calendar
+  period (`relativedelta`) after the area's latest saved audit, or now if it
+  has none; this is computed on read, never stored. The
+  `inventory_audit_digest` scheduled task checks daily and emails
+  `inventory.manage` holders the overdue areas at most once a week per
+  department, measured from `inventory_nfc_audit_digests` because the
+  in-process scheduler forgets its run times on restart. It sends nothing
+  when nothing is overdue or NFC is off, and a failed send is retried the
+  next day.
 - **Member ID card lookup.** With the NFC ID Cards integration connected, the
   member scanner on the inventory screens (distribute, return, member lookup)
   shows **Or tap their ID card**. The card resolves through the same hash and

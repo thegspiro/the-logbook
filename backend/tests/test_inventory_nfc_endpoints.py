@@ -18,6 +18,7 @@ from app.api.v1.endpoints.inventory_nfc import router
 from app.core.database import get_db
 from app.schemas.inventory_nfc import (
     MAX_AUDIT_TAPS,
+    InventoryAuditScheduleUpdate,
     InventoryNfcAuditApply,
     InventoryNfcAuditCreate,
     InventoryNfcMemberResponse,
@@ -108,6 +109,12 @@ GUARDED_CALLS = [
     ("POST", "/inventory/nfc/audits/audit-1/apply", {"item_ids": ["i-1"]}),
     ("POST", "/inventory/nfc/resolve-member", RESOLVE_BODY),
     ("GET", "/inventory/nfc/untagged", None),
+    ("GET", "/inventory/nfc/audit-schedule", None),
+    (
+        "PUT",
+        "/inventory/storage-areas/area-1/audit-schedule",
+        {"audit_frequency": "weekly"},
+    ),
 ]
 
 
@@ -562,3 +569,77 @@ class TestResolveMember:
             )
         assert response.status_code == 404
         assert fragment in response.json()["detail"]
+
+
+class TestAuditSchedule:
+    @pytest.mark.parametrize(
+        ("path", "method"),
+        [
+            ("/nfc/audit-schedule", "GET"),
+            ("/storage-areas/{storage_area_id}/audit-schedule", "PUT"),
+        ],
+    )
+    def test_needs_manage(self, path, method):
+        assert _permission_set(path, method) == {"inventory.manage"}
+
+    def test_an_empty_body_cannot_clear_a_schedule(self):
+        with pytest.raises(ValidationError):
+            InventoryAuditScheduleUpdate()
+
+    def test_null_clears_and_a_value_sets(self):
+        assert (
+            InventoryAuditScheduleUpdate(audit_frequency=None).audit_frequency is None
+        )
+        assert (
+            InventoryAuditScheduleUpdate(
+                audit_frequency="quarterly"
+            ).audit_frequency.value
+            == "quarterly"
+        )
+
+    def test_an_unknown_frequency_is_rejected(self):
+        with pytest.raises(ValidationError):
+            InventoryAuditScheduleUpdate(audit_frequency="daily")
+
+    async def test_setting_a_schedule_is_audited(self):
+        service = MagicMock()
+        service.set_frequency = AsyncMock(
+            return_value={
+                "storage_area_id": "area-1",
+                "storage_area_name": "Shelf A",
+                "audit_frequency": "monthly",
+                "overdue": True,
+            }
+        )
+        audit_log = AsyncMock()
+        with _switch(on=True), patch(
+            f"{MODULE}.InventoryAuditScheduleService", return_value=service
+        ), patch(f"{MODULE}.log_audit_event", audit_log):
+            response = await _request(
+                _app_for(_user()),
+                "PUT",
+                "/inventory/storage-areas/area-1/audit-schedule",
+                {"audit_frequency": "monthly"},
+            )
+        assert response.status_code == 200
+        service.set_frequency.assert_awaited_once()
+        assert service.set_frequency.await_args.args[:2] == ("area-1", "org-1")
+        kwargs = audit_log.await_args.kwargs
+        assert kwargs["event_type"] == "inventory_audit_schedule_changed"
+        assert kwargs["event_data"]["audit_frequency"] == "monthly"
+
+    async def test_an_unknown_area_is_a_404(self):
+        service = MagicMock()
+        service.set_frequency = AsyncMock(
+            side_effect=LookupError("Storage area not found")
+        )
+        with _switch(on=True), patch(
+            f"{MODULE}.InventoryAuditScheduleService", return_value=service
+        ):
+            response = await _request(
+                _app_for(_user()),
+                "PUT",
+                "/inventory/storage-areas/nope/audit-schedule",
+                {"audit_frequency": None},
+            )
+        assert response.status_code == 404

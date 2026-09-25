@@ -835,6 +835,22 @@ lists past audits; **View** opens one.
 > **Hint:** Audit one shelf or bin at a time. An audit covers exactly the
 > storage area you tapped, not the bins inside it.
 
+### Scheduling shelf audits
+
+**Required Permission:** `inventory.manage`
+
+1. Go to **Inventory > Storage Areas** and edit the shelf, bin or cabinet.
+2. Under **Shelf audit schedule**, choose **Weekly**, **Monthly**,
+   **Quarterly** or **Yearly**. It saves straight away.
+
+**Shelf Audit** then lists the area under **Audit schedule**, showing when it
+was last audited and when it is next due. **Audit now** starts an audit of it.
+Each area is due one week, month, quarter or year after its last saved audit,
+or straight away if it has never been audited.
+
+While any scheduled shelf is overdue, quartermasters get one reminder email a
+week listing them.
+
 ### Tagging many items at once
 
 **Required Permission:** `inventory.manage`

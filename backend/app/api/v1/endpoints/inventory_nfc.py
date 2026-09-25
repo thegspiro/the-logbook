@@ -39,6 +39,9 @@ from app.models.inventory import InventoryNfcScanAction
 from app.models.user import User
 from app.schemas.inventory import ScanLookupResponse
 from app.schemas.inventory_nfc import (
+    InventoryAuditScheduleListResponse,
+    InventoryAuditScheduleRow,
+    InventoryAuditScheduleUpdate,
     InventoryNfcAuditApply,
     InventoryNfcAuditCreate,
     InventoryNfcAuditDetail,
@@ -58,6 +61,9 @@ from app.schemas.inventory_nfc import (
     InventoryNfcUntaggedListResponse,
 )
 from app.schemas.nfc_tag import NfcCheckInStatus
+from app.services.inventory_audit_schedule_service import (
+    InventoryAuditScheduleService,
+)
 from app.services.inventory_nfc_service import (
     InventoryNfcService,
     InventoryNfcTagNotFound,
@@ -591,3 +597,57 @@ async def list_untagged_inventory_items(
         org_id, search=search, category_id=category_id, limit=limit
     )
     return {"items": items, "total": len(items)}
+
+
+@router.get("/nfc/audit-schedule", response_model=InventoryAuditScheduleListResponse)
+async def list_inventory_audit_schedule(
+    due_only: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Storage areas on an audit schedule, overdue first."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    items = await InventoryAuditScheduleService(db).list_schedule(
+        org_id, due_only=due_only
+    )
+    return {"items": items, "total": len(items)}
+
+
+@router.put(
+    "/storage-areas/{storage_area_id}/audit-schedule",
+    response_model=InventoryAuditScheduleRow,
+)
+async def set_inventory_audit_schedule(
+    storage_area_id: str,
+    data: InventoryAuditScheduleUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Set how often a storage area should be audited, or clear it."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    try:
+        row = await InventoryAuditScheduleService(db).set_frequency(
+            storage_area_id, org_id, data.audit_frequency
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_audit_schedule_changed",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "storage_area_id": storage_area_id,
+            "audit_frequency": (
+                data.audit_frequency.value if data.audit_frequency else None
+            ),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return row

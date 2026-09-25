@@ -12,6 +12,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.inventory import (
+    InventoryAuditFrequency,
     InventoryNfcAuditResult,
     InventoryNfcScanAction,
     InventoryNfcTagStatus,
@@ -313,4 +314,35 @@ class InventoryNfcUntaggedItem(BaseModel):
 
 class InventoryNfcUntaggedListResponse(BaseModel):
     items: List[InventoryNfcUntaggedItem]
+    total: int
+
+
+# ---------------------------------------------------------------------------
+# Audit schedule
+# ---------------------------------------------------------------------------
+
+
+class InventoryAuditScheduleUpdate(BaseModel):
+    """Put a storage area on an audit schedule, or take it off with ``null``.
+
+    The key is required so an empty body cannot silently clear a schedule.
+    """
+
+    audit_frequency: Optional[InventoryAuditFrequency] = Field(...)
+
+
+class InventoryAuditScheduleRow(UTCResponseBase):
+    storage_area_id: str
+    storage_area_name: str
+    location_name: Optional[str] = None
+    audit_frequency: Optional[InventoryAuditFrequency] = None
+    last_audited_at: Optional[datetime] = None
+    # Null while the area has never been audited: it is due now.
+    next_due_at: Optional[datetime] = None
+    overdue: bool
+    days_overdue: Optional[int] = None
+
+
+class InventoryAuditScheduleListResponse(BaseModel):
+    items: List[InventoryAuditScheduleRow]
     total: int

@@ -1591,6 +1591,16 @@ class StorageLocationType(str, enum.Enum):
     OTHER = "other"
 
 
+class InventoryAuditFrequency(str, enum.Enum):
+    """How often a storage area should be audited by NFC tap. No frequency
+    (a null column) means the area is not on a schedule."""
+
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    QUARTERLY = "quarterly"
+    YEARLY = "yearly"
+
+
 class StorageArea(Base):
     """
     Storage Area model
@@ -1636,6 +1646,14 @@ class StorageArea(Base):
 
     # Optional: barcode or QR code for scanning
     barcode = Column(String(255))
+
+    # How often this area should be audited by NFC tap (NFC phase 4). Null:
+    # not on a schedule. Due dates are computed from the latest saved audit
+    # in inventory_nfc_audits, not stored, so they cannot drift from it.
+    audit_frequency = Column(
+        Enum(InventoryAuditFrequency, values_callable=_enum_values),
+        nullable=True,
+    )
 
     # Ordering within parent
     sort_order = Column(Integer, default=0)
@@ -2862,4 +2880,30 @@ class InventoryNfcAuditItem(Base):
     __table_args__ = (
         # An item's audit history: every shelf it was found on, or missing from.
         Index("idx_inventory_nfc_audit_item_org_item", "organization_id", "item_id"),
+    )
+
+
+class InventoryNfcAuditDigest(Base):
+    """One "shelf audits overdue" digest sent to an organization.
+
+    The scheduler keeps task run times in memory, so a weekly task would fire
+    again after every restart. The digest runs daily instead and sends only
+    when the organization's last row here is a week old, which makes "weekly"
+    true across deploys.
+    """
+
+    __tablename__ = "inventory_nfc_audit_digests"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sent_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    overdue_count = Column(Integer, nullable=False, default=0, server_default="0")
+    recipient_count = Column(Integer, nullable=False, default=0, server_default="0")
+
+    __table_args__ = (
+        Index("idx_inventory_nfc_audit_digest_org_sent", "organization_id", "sent_at"),
     )
