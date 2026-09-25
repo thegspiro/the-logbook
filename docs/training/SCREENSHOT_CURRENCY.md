@@ -1,5 +1,42 @@
 # Screenshot currency
 
+## Guide 19 folded into the module guides, 2026-09-25
+
+The August release lesson is now an index too, so its screenshots moved into
+the module guides that describe their screens. No image was re-captured; each
+keeps its file name, and its manifest entry's `doc` names its new guide.
+
+| Images                                                                                   | Now in                         |
+| ---------------------------------------------------------------------------------------- | ------------------------------ |
+| `19-31`, `19-32` (notification before and after the action)                              | `00-getting-started.md`        |
+| `19-37`, `19-38` (ID cards, check-in station)                                            | `01-membership.md`             |
+| `19-29` (training-session linkage)                                                       | `02-training.md`               |
+| `19-34`, `19-36`, `19-40` (schedule board, standing shift, seal panel)                   | `03-scheduling.md`             |
+| `19-24` (outreach form picker)                                                           | `04-events-meetings.md`        |
+| `19-33` (label printers)                                                                 | `05-inventory.md`              |
+| `19-04`, `19-05`, `19-23` (QR directory, regenerate warning, crew seats)                 | `06-apparatus-facilities.md`   |
+| `19-42` (message page)                                                                   | `07-documents-forms.md`        |
+| `19-16`, `19-22`, `19-28`, `19-39`, `19-41` (legal editor, admin-hours summary, My Updates, metrics, My Admin Hours) | `08-admin-reports.md` |
+| `19-30` (point deduction)                                                                | `09-skills-testing.md`         |
+| `19-11`, `19-35` (dark gutter, board on a phone)                                         | `10-mobile-pwa.md`             |
+| `19-25`, `19-26` (saved ballot before and after)                                         | `14-elections.md`              |
+| `19-03`, `19-43` (privacy notice, photo-use consent)                                     | `17-privacy-data-rights.md`    |
+| `19-06`, `19-07`, `19-08` (store orders, payment method, store activity)                 | `18-storefront.md`             |
+
+`19-01`, `19-09`, `19-10` and `19-27` were already embedded in module guides.
+
+**Not carried over — the module guide already shows the same state:**
+`19-12` (03-78), `19-13` (03-79), `19-14` (03-80), `19-15` (10-17), `19-17`
+(08-78), `19-18` (17-03), `19-19` (17-04, byte-identical), `19-20` (14-25) and
+`19-21` (14-26). Their files and manifest entries stay, pointing at the index,
+so nothing that captures them breaks.
+
+**Manifest order.** `19-25`, `19-26` and `19-27` keep `doc` on the index even
+though guide 14 shows them: `19-26` and `14-24-ballot-send-skipped` both mutate
+the seeded data, and the manifest allows one mutating shot per guide. `19-24`
+moved ahead of `04-49-early-checkin-notice` for the same rule; it only reads the
+seeded outreach form.
+
 ## Guide 20 folded into the module guides, 2026-09-25
 
 The September release lesson is now an index, so its 18 `20-*` images moved

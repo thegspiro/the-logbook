@@ -69,19 +69,19 @@ Key pages:
    - **Election Type** — Officer Election, Board Election, or General
    - **Start Date** — When voting opens
    - **End Date** — When voting closes
-   - **Voting Method** — How votes are counted (see below)
+   - **How is the Winner Determined?** — The voting method and victory condition, chosen together as one option (see below)
    - **Anonymous Voting** — Whether votes are anonymous (recommended for officer elections)
    - **Allow Write-Ins** — Whether voters can write in candidates not on the ballot
 3. Click **Create** — the election is created in **Draft** status
 
 ### Voting Methods
 
-| Method              | Description                                                        | Use Case                               |
-| ------------------- | ------------------------------------------------------------------ | -------------------------------------- |
-| **Simple Majority** | Each voter selects one candidate per position                      | Officer elections, single-choice races |
-| **Ranked Choice**   | Voters rank candidates; lowest eliminated in instant-runoff rounds | Contested multi-candidate races        |
-| **Approval**        | Voters may approve any number of candidates; most approvals wins   | Board seats, membership approval votes |
-| **Supermajority**   | Single-choice voting counted against a higher victory threshold    | Bylaw amendments                       |
+| Method              | Description                                                                                                                                                                                                                        | Use Case                               |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| **Simple Majority** | Each voter selects one candidate per position                                                                                                                                                                                      | Officer elections, single-choice races |
+| **Ranked Choice**   | Voters rank candidates; lowest eliminated in instant-runoff rounds                                                                                                                                                                 | Contested multi-candidate races        |
+| **Approval**        | Voters may approve any number of candidates; most approvals wins                                                                                                                                                                   | Board seats, membership approval votes |
+| **Supermajority**   | Single-choice voting counted against a higher victory threshold. The create form does not offer it as a method; its **Supermajority Required (2/3)** option uses Simple Majority counting with the Supermajority victory condition | Bylaw amendments                       |
 
 > **Note:** Approval and ranked-choice ballots are submitted atomically — all of a voter's approvals (or rankings) for a position are recorded together, or none are.
 
@@ -96,7 +96,7 @@ Key pages:
 
 ![Create Election form with title, dates, and voting method](./images/14-02-create-election.png)
 
-> **Hint:** For bylaw amendments requiring a 2/3 supermajority, set the victory condition to **Supermajority** with **victory_percentage = 67**.
+> **Hint:** For bylaw amendments requiring a 2/3 supermajority, choose **Supermajority Required (2/3)**. That one option sets both halves — Simple Majority counting and the **Supermajority** victory condition — and adds a **Supermajority Percentage** field that defaults to 67.
 
 ---
 
@@ -163,20 +163,45 @@ and apply it to next year's election:
 > confirmation is about the ballot; nothing on screen mentions the settings, and
 > the details card above the builder reports only the method. Click **Preview
 > Ballot** afterwards — its Election Details strip is where the method, the
-> victory condition and its percentage, and Write-ins allowed appear together.
-> [Guide 19 pictures the before and after](./19-august-2026-release-changes.md#elections-reuse-a-ballot-without-reusing-election-data).
+> victory condition and its percentage, Anonymous, Write-ins allowed and the
+> quorum appear together.
+
+Below is one draft before and after applying "Annual officer election", a
+template saved from a ranked-choice officer ballot. One item becomes four, which
+the confirmation warned about — and the voting method changes from Simple
+Majority to Ranked Choice, which nothing warned about.
+
+![The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — Simple Majority](./images/19-25-ballot-template-settings-before.png)
+
+![The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked Choice](./images/19-26-ballot-template-settings-after.png)
+
+The hazard is the part that did _not_ change. This draft was created as
+**Supermajority Required (2/3)** — Simple Majority counting with the
+Supermajority victory condition. The apply overwrote the method and left the
+condition alone, so a bylaw amendment that must carry two-thirds is now decided
+by ranked choice with its 67% threshold still recorded underneath.
+**Positions** still reads the draft's old value over a ballot of four officer
+seats, and the write-in setting is overwritten along with the method: the
+officer template had write-ins off, so they went off. Treat a saved ballot as a
+starting point for a _new_ election rather than a change to a configured one.
 
 ### Edge Cases
 
-| Scenario                                                          | Behavior                                                                                                                                                                                                                                  |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Two templates named "Annual Officers" and "annual officers"       | Rejected — names are unique per department **case-insensitively** (409 "A ballot template with this name already exists"). The saved name keeps your original casing                                                                      |
-| Applying a template over a ballot you were editing                | The current ballot is **replaced**, not merged — the two-step confirm exists because of this                                                                                                                                              |
-| The member who saved a template leaves the department             | The template survives — it belongs to the organization, not its author                                                                                                                                                                    |
-| Deleting a template used by past elections                        | Safe — elections hold their own copy of their ballot; a template is only a starting point                                                                                                                                                 |
-| Applying the same template to two elections                       | Each application mints fresh ballot-item ids, so the two ballots never share identifiers                                                                                                                                                  |
-| Applying a template to an election configured for a supermajority | The **method** is overwritten and the **victory condition is not**, leaving a 2/3 threshold recorded under whatever method the template brought. Nothing in the app edits an election's voting method afterwards — re-create the election |
-| A template from another department                                | Invisible — templates are organization-scoped; list and delete both 404 across org lines                                                                                                                                                  |
+| Scenario                                                                               | Behavior                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Two templates named "Annual Officers" and "annual officers"                            | Rejected — names are unique per department **case-insensitively** (409 "A ballot template with this name already exists"). The saved name keeps your original casing                                                                                                                                                                                                                             |
+| Applying a template over a ballot you were editing                                     | The current ballot is **replaced**, not merged — the two-step confirm exists because of this                                                                                                                                                                                                                                                                                                     |
+| The member who saved a template leaves the department                                  | The template survives — it belongs to the organization, not its author                                                                                                                                                                                                                                                                                                                           |
+| Deleting a template used by past elections                                             | Safe — elections hold their own copy of their ballot; a template is only a starting point                                                                                                                                                                                                                                                                                                        |
+| Applying the same template to two elections                                            | Each application mints fresh ballot-item ids, so the two ballots never share identifiers                                                                                                                                                                                                                                                                                                         |
+| Applying a template to an election configured for a supermajority                      | The **method** is overwritten and the **victory condition is not**, leaving a 2/3 threshold recorded under whatever method the template brought. Applying a template is the only control that changes an election's voting method once the election exists — **Edit Dates** and **Clone Election** do not touch it — so to get a different method/condition pairing back, re-create the election |
+| Results                                                                                | Never in a template — the stored shape is the ballot items, the voting method and the write-in setting                                                                                                                                                                                                                                                                                           |
+| Deleting a saved template                                                              | Asks for confirmation — the picker's delete button arms a **Delete** / **Cancel** pair                                                                                                                                                                                                                                                                                                           |
+| A template or ballot with an invalid or duplicate item ID, or an unknown voting method | Rejected. Item IDs may use only letters, numbers, `_` and `-`, and must be unique within the ballot                                                                                                                                                                                                                                                                                              |
+| Voter type `all` alongside another voter type on one item                              | Rejected — "'all' cannot be combined with other voter types"                                                                                                                                                                                                                                                                                                                                     |
+| A ballot item overriding its victory condition to supermajority without a percentage   | Rejected — a supermajority item needs its `victory_percentage`                                                                                                                                                                                                                                                                                                                                   |
+| Quorum values on the election                                                          | A **count** quorum may exceed 100; a **percentage** quorum may not ("Percentage quorum cannot exceed 100")                                                                                                                                                                                                                                                                                       |
+| A template from another department                                                     | Invisible — templates are organization-scoped; list and delete both 404 across org lines                                                                                                                                                                                                                                                                                                         |
 
 ---
 
@@ -558,6 +583,11 @@ they count toward results.
 4. Submit — one vote row is stored per paper ballot, flagged as manual and
    attributed to you as the recording officer
 
+Because paper votes are ordinary vote rows, a closed election's results carry
+no separate "paper" figure — the paper votes are simply in the counts. What
+stays itemized after the close is the **Paper-Ballot Batches** panel (below):
+who recorded each batch, when, and which officers attested it.
+
 Manual votes carry no voter identity and no dedup hash — the recording
 officer's attested count is the source of truth — but they **are** signed and
 chained exactly like electronic votes, so the integrity check covers the full
@@ -565,9 +595,16 @@ mixed ballot box. The vote signature also covers the manual flag, so a stored
 paper vote can't be silently re-labeled as electronic (or vice versa).
 
 **Plausibility guard:** a batch that would push a position past _eligible
-voters × allowed votes_ is rejected with the numbers spelled out. If the count
-really is correct (e.g., overrides admitted extra voters), an explicit
-**Allow over-count** override records it anyway — audited at warning severity.
+voters × allowed votes_ is rejected before a single vote row is written, with
+the projected total, the eligible count and the cap spelled out. The multiplier
+is the number of votes one member may legitimately cast: under approval voting
+it is the number of accepted candidates for the position, otherwise the
+election's votes-per-position setting. The optional **Physical ballots in this
+stack** field has no multiplier — one member hands in one sheet — so it is
+checked against the eligible count directly. If the count really is correct
+(e.g., overrides admitted extra voters), the override checkbox — **The tally
+is correct — override the eligible-voter count check** — records it anyway,
+audited at warning severity and naming who overrode it.
 
 ![Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
 
@@ -581,9 +618,10 @@ By default, **2 officers other than the recorder** (configurable 0–3 in
 Election Settings → Features) must attest each batch before its votes count:
 
 1. A recorded batch starts **Pending** — its votes are stored, signed, and
-   chained immediately, but excluded from results and statistics
-2. Officers with `elections.manage` open the **Paper Batches** panel and click
-   **Attest** after checking the entered counts against the physical tally
+   chained immediately, but excluded from results, statistics and the vote
+   count on the elections list
+2. Officers with `elections.manage` open the **Paper-Ballot Batches** panel and
+   click **Attest** after checking the entered counts against the physical tally
 3. The recorder can never attest their own batch, and each officer counts
    once (enforced at the database level)
 4. When the requirement is met, the batch flips to **Confirmed** and its
@@ -599,7 +637,7 @@ of the certified results, and the close writes a warning
 The panel is on the election page itself, above the tab strip — not inside a
 tab — and appears as soon as one batch exists.
 
-![The Paper Batches panel — a recorded in-room tally, who recorded it, and the officer attestations that confirmed it](./images/14-18-paper-batches.png)
+![The Paper-Ballot Batches panel — a recorded in-room tally, who recorded it, and the officer attestations that confirmed it](./images/14-18-paper-batches.png)
 
 **Attest and Void are only offered while voting is open**, so a batch
 photographed after the close carries its trail and no buttons.
@@ -1009,9 +1047,9 @@ Sarah generates the election report and emails it to the department.
 | Vote count doesn't match attendance                      | Check for proxy votes (counted separately). Check for voter overrides (members not on attendance list).                                                                                                                                                                                      |
 | Forensics shows integrity warning                        | Run full forensics report. Contact system administrator if vote signatures are invalid.                                                                                                                                                                                                      |
 | Runoff not auto-created                                  | Verify **Enable Runoffs** is on in election settings. Check that the victory condition was set correctly.                                                                                                                                                                                    |
-| Paper batch recorded but results don't change            | The batch is likely **Pending** attestation — check the Paper Batches panel. It needs the configured number of other officers to attest before its votes count.                                                                                                                              |
+| Paper batch recorded but results don't change            | The batch is likely **Pending** attestation — check the Paper-Ballot Batches panel. It needs the configured number of other officers to attest before its votes count.                                                                                                                       |
 | "Attest" button missing or rejected                      | The recorder cannot attest their own batch, each officer attests once, and attestation only works while voting is open.                                                                                                                                                                      |
-| Paper tally rejected as implausible                      | The count exceeds eligible voters × allowed votes for the position. Re-check the count; if it's genuinely correct (e.g., overrides admitted extra voters), tick **Allow over-count** — the override is audited.                                                                              |
+| Paper tally rejected as implausible                      | The count exceeds eligible voters × allowed votes for the position. Re-check the count; if it's genuinely correct (e.g., overrides admitted extra voters), tick **The tally is correct — override the eligible-voter count check** — the override is audited.                                |
 | Nominate button missing                                  | Check the **Nominations** feature toggle in Election Settings, and that the election is in the nomination phase (managers open it from a draft election).                                                                                                                                    |
 | Member nominated but not on the ballot                   | Third-party nominees must **accept** the nomination first. Check the Nominations tab for pending entries; the nominee was emailed an accept/decline link.                                                                                                                                    |
 | Reminder button greyed out / "sent recently"             | Reminders have a one-hour cooldown per election. Wait, or verify the **Reminders** feature toggle is on.                                                                                                                                                                                     |
@@ -1023,7 +1061,3 @@ Sarah generates the election report and emails it to the department.
 ---
 
 **Previous:** [Medical Screening](./13-medical-screening.md) | **Next:** [Prospective Members Pipeline](./15-prospective-members.md)
-
-## August 12–14, 2026 update
-
-Saved ballot settings, physical ballot counts, validation, and legacy/concurrency cases from August 12–14 are covered with two screenshot markers in [the release workflow lesson](./19-august-2026-release-changes.md#elections-reuse-a-ballot-without-reusing-election-data).

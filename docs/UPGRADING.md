@@ -113,6 +113,22 @@ This file is written by hand and never updated by pulling this repository, so
 it is the deployment most likely to fall behind a newly added gate. Run the
 check before each upgrade.
 
+## Before every upgrade: back up, and do not downgrade to fix a fork
+
+The backend applies database migrations itself when it starts, so the restart
+_is_ the upgrade. Before it:
+
+- **Back up the database, and separately back up `ENCRYPTION_KEY` and
+  `ENCRYPTION_SALT`.** Sensitive fields are encrypted with them, so a restored
+  database is unreadable without the keys that were in use when it was written.
+- **If you apply migrations by hand** (`cd backend && alembic upgrade head`),
+  run `alembic heads` first. It must print exactly one revision; two means the
+  release itself has a fork, and it should be reported rather than repaired
+  locally.
+- **Never downgrade to "repair" a migration fork.** Several migrations
+  deliberately do not reverse, and one loses data on the way down — the entries
+  below name them.
+
 ## Changes that can stop an existing deployment from starting
 
 Newest first. Every entry here is a change that was safe on a fresh install
@@ -165,6 +181,18 @@ public `FRONTEND_URL`, and both refuse a `localhost` address.
 `unraid/unraid-setup.sh` refuses a `localhost` HTTPS origin, and its update
 path stops, before restarting anything, when the kept `.env` would not boot.
 
+### The production compose file needs Docker Compose v2.24.4 or later (2026-08-16)
+
+`docker-compose.prod.yml` uses `volumes: !override` to throw away the
+development bind mounts it inherits from `docker-compose.yml`, so production
+runs the built image rather than a source tree mounted over it. Compose older
+than v2.24.4 does not understand the tag and will not bring the stack up.
+
+Check with `docker compose version`. **Upgrade Compose; do not delete the
+tag** — without it, production mounts the development source over the image.
+The Unraid compose files in `unraid/` do not use the tag, and neither does a
+compose file of your own unless you copied it in.
+
 ### `SECURITY_REQUIRE_TLS` defaults to `true` (2026-08-13)
 
 Absent transport TLS was previously a warning. It is now a **blocking**
@@ -188,6 +216,31 @@ flag. It currently gates no behaviour — nothing emits HSTS and nothing
 redirects HTTP — so setting it true cannot cause a redirect loop behind a
 reverse proxy or CDN. To control the `Secure` flag on auth cookies, use
 `COOKIE_SECURE`.
+
+### Duplicate active applicants stop the migration (2026-08-12)
+
+Migration `20260812_0003` restores the rule that a department has at most one
+**active** prospective member per email address, and builds a unique index to
+hold it. A later step (`20260814_0003`) reconciles duplicates — but the index
+is built first, so a database that already holds two active applicants with the
+same email fails the upgrade at that index, before the reconciliation can run.
+
+Run this before upgrading an installation older than 2026-08-12:
+
+```sql
+SELECT organization_id, LOWER(TRIM(email)) AS normalized_email, COUNT(*) AS active_rows
+FROM prospective_members
+WHERE status = 'active' AND email IS NOT NULL
+GROUP BY organization_id, LOWER(TRIM(email))
+HAVING COUNT(*) > 1;
+```
+
+**Any row it returns is a hard stop.** For each group, keep the record with the
+earliest `created_at` (then the lowest `id`), review the applications linked to
+the others, and set those others to `inactive`. Do not delete them. Re-run the
+query until it returns nothing, then upgrade, and read the migration log
+afterwards for anything the reconciliation merged. The full procedure is in the
+[August 12–14 change audit](./CHANGE_AUDIT_2026-08-12_TO_14.md#alembic-route-upgrade-data-path).
 
 ### `RATE_LIMIT_ENABLED` is enforced (2026-08-01)
 
@@ -525,6 +578,26 @@ today; absence means on, not off. The box now renders ticked by default to
 match. If you had deliberately left it un-ticked expecting it to hold
 applicants, it will now do that, which is a change from what you have been
 getting.
+
+### Direct label printing needs an approved network (2026-09-14)
+
+The backend opens a network connection to a registered label printer, so the
+addresses it may reach are now an **operator** decision rather than something
+a department administrator types in. `LABEL_PRINTER_ALLOWED_NETWORKS` takes a
+comma-separated list of printer IP addresses or CIDR ranges, and it is **empty
+by default, which turns direct printing off**. A printer outside the list is
+refused with "… does not resolve to an operator-approved label-printer
+network."
+
+A department that registered printers before this upgrade loses direct
+printing until the setting is made. Add the printers' subnet to `.env`, for
+example `LABEL_PRINTER_ALLOWED_NETWORKS=192.168.10.0/24`. The shipped
+`docker-compose.yml` passes it through. **The Unraid compose files in `unraid/`
+do not**, and neither does a compose file of your own: add
+`LABEL_PRINTER_ALLOWED_NETWORKS: ${LABEL_PRINTER_ALLOWED_NETWORKS:-}` to the
+backend's `environment:` block, or the value in `.env` never reaches the
+container. Loopback, link-local and
+reserved addresses are refused whatever the list says.
 
 ### Two prospective-member stages now hold applicants where they should (2026-09-13)
 
@@ -1087,6 +1160,198 @@ authors and submits equipment checklists.** No seeded position holds
 `inventory.*`, so this reaches only positions your department built — typically
 a quartermaster. If that is wider than you intend, replace the wildcard with the
 specific `inventory.` grants you want.
+
+### Re-check four things after the August 24–31 upgrade (2026-08-31)
+
+- **Compliance percentages.** Clearing a compliance setting and saving used to
+  keep the old value, and a compliance profile with every requirement unchecked
+  was graded against every department-wide requirement. Both are fixed, so a
+  percentage can move — a lot, for any group meant to have no required
+  certifications.
+- **Any grant or fundraising report whose range ended on the day it was run.**
+  It left out that day's later records; run it again.
+- **Your quartermaster.** "Checkout batch" is now **Item Distribution**
+  (labels only — the data is unchanged), and stock received through the reorder
+  workflow can be issued, which it could not before.
+- **Empty is correct here.** Member qualifications, the organizational chart and
+  testing runs all start empty after the upgrade; nothing is inferred from
+  ranks, positions or members.
+
+### The Testing Checklist is a module, and it starts switched off (2026-08-27)
+
+`/testing` stops resolving because the checklist became a module of its own and
+is off unless a department enables it: **Settings → Modules → Testing
+Checklist**. Marks already on the server come back when it is on. Marks kept in
+the **browser** by builds older than the server-side checklist (under
+`logbook.testing-checklist.v1`) have no import path — **export that run before
+you upgrade**.
+
+### Administrative members lose their operational rank, and it does not come back (2026-08-27)
+
+Migration `a7c4e9b13f58` clears the operational rank of every member whose
+class is **administrative**. A rank carries chain-of-command permissions, so an
+administrative member holding one held grants that class is outside of. The
+downgrade does not restore the ranks: nothing recorded which were cleared, and
+putting them back would also restore ranks an officer had cleared on purpose.
+
+**You cannot simply set the rank again** — the API refuses an administrative
+member with a rank, and the edit screen disables the control. If the rank is
+right for that person, change their class first.
+
+### Four upgrade steps take permissions away from seeded positions (2026-08-27)
+
+Each rewrites only the positions the system seeded; nothing grants the
+permission back.
+
+| Migration      | Removes              | From                                  |
+| -------------- | -------------------- | ------------------------------------- |
+| `31e2816df7c3` | `compliance.view`    | Member and Firefighter                |
+| `a1f7c34e9b02` | `notifications.view` | Member, Firefighter and Engineer      |
+| `e4f5a6b7c8d9` | `facilities.view`    | Member, Firefighter, EMT and Engineer |
+| `c7e2b9a41f83` | `facilities.view`    | the chiefs, Captain and Lieutenant    |
+
+`compliance.view` let any member read another member's admin-hours compliance,
+and `notifications.view` let any member read the Send Log of every notification
+the department had sent. Facilities became a leadership and facility-manager
+workspace. If someone still needs one of these, grant it in Role Management.
+
+The chiefs keep `facilities.manage`, so they lose no access.
+
+Two steps **add** grants, again only to seeded rows. `e3b7c25f9a41` gives
+`training.configure` to the Membership Coordinator, and to the seeded chief,
+officer, president, safety-officer and training-officer positions that still
+hold `training.manage`. `c4a91b7e2f08` gives `users.view_consents` (the
+photo-use consent roster) to the Communications Officer / PIO, Historian and
+Public Outreach positions, but
+only where their permissions still match the shipped default — a position your
+department edited is left alone.
+
+**Facility files uploaded before this upgrade stay readable department-wide.**
+Migration `a9c4e7b2f631` gates the facility document folders on the facilities
+permissions, and new uploads are filed into them, but a file already stored
+outside those folders is not moved. Re-attach or re-file anything sensitive —
+insurance policies, leases, capital project files.
+
+### Who receives a ballot changes (2026-08-26)
+
+A member's single "membership type" became two facts, a **class** and a
+**status**. Two ballot categories reach a different set of members:
+
+- A **life** member now receives a `regular` ballot, which they could not
+  before.
+- An **administrative** member with regular standing **no longer** receives
+  ballots restricted to active or life members.
+
+The `operational` category is unchanged: it still requires the operational
+class and regular standing. Check the recipient list of your next ballot; to
+include administrative voters, use an override or an explicit voter list.
+
+### Three upgrade steps do not reverse (2026-08-26)
+
+None loses data on the way up, and each downgrade is a deliberate no-op,
+because putting the old values back would do more damage than leaving them:
+
+- `c3d4e5f6a7b8` recovers members' class and status from the membership
+  "positions" onboarding used to create (Probationary, Life and so on). Nothing
+  records which members it reclassified, so undoing it would also flatten
+  standings a department set by hand. The positions themselves are kept.
+- `d7a4e9c31b60` and `e2c8f5a71d40` settle stored crew-seat names onto one
+  spelling (`EMT` becomes `ems`, which fixes EMT seats nobody could sign up
+  for). Nothing records which spelling a row had.
+- `b8d5f0c24a69` adds the administrative-access flag to stored crew seats.
+  Older versions read the extra field without complaint.
+
+### Rolling back past the org chart loses every additional holder (2026-08-25)
+
+> **⚠️ This downgrade destroys data.** `a7c93f21d5b8` lets one seat on the
+> organizational chart hold several people. Its downgrade restores the
+> single-holder shape by keeping **each seat's first holder only**, then drops
+> the holders table: every other holder is lost, and a seat whose holders came
+> only from a linked position comes back **empty**. If your department has drawn
+> its chart and you may roll back, write the holders down first.
+
+### Equipment-check item types collapse from nine to four, and it does not reverse (2026-08-23)
+
+Migration `c3f81a4d5e72` turns the old check types into four — **Level**,
+**Function**, **Count** and **Expiry** (Pass/Fail, Present and Functional all
+become Function; Reading joins Level). Headings and free text are untouched. It
+also writes default instructions into items that had none, and leaves any
+description an author wrote alone.
+
+The downgrade leaves the types collapsed. Nothing records which of three old
+names a Function item started as, and **a wrong guess renders the wrong control
+on a safety checklist.** No data is lost either way.
+
+### ID cards, label printers and the new columns start empty (2026-08-23)
+
+- **NFC ID cards are off** until turned on at **Settings → Integrations → NFC ID
+  Cards**. Grant `members.manage_id_cards` to whoever issues cards and
+  `members.check_in` to whoever runs a check-in station; the upgrade grants
+  neither.
+- **Register your label printers** before anyone tries to print, and set
+  `LABEL_PRINTER_ALLOWED_NETWORKS` — see
+  [Direct label printing needs an approved network](#direct-label-printing-needs-an-approved-network-2026-09-14).
+- **Several new columns deliberately start empty**, and an empty value is not a
+  failed upgrade: no compartment is sealed, no earlier check-in has an
+  early-arrival figure, earlier QR check-ins stay recorded as `qr_scan`,
+  training submitted before this has no start time, existing email templates
+  keep their own colours, no standing shift claims are inferred from anyone's
+  assignments, and a department with no metric preferences gets the built-in
+  metrics on each administration page.
+
+### Two access rules tighten for officers (2026-08-23)
+
+- **Screening compliance needs `medical_screening.view`.** Officers who saw
+  medical-screening compliance on the Members administration page through
+  `members.manage` alone now see it reading _unknown_, with an empty queue,
+  until they hold it.
+- **Schedulers are held to position eligibility.** Assigning a member to a seat
+  their rank is not cleared for is refused, with the missing qualification
+  named — the same rule members already met when claiming a seat.
+
+### Seat lists and equipment checks: two steps that do not reverse (2026-08-22)
+
+Neither loses data:
+
+- `1eeb053d59b7` rewrites every stored seat list into one shape, expanding a
+  legacy crew **count** into that many seats. Its downgrade is a no-op: the
+  original count cannot be recovered from the seats, and both old and new code
+  read the new shape.
+- `a17c4e9d2b61` allows one equipment check per shift per template. Historical
+  duplicates are detached from their shift, not deleted, and their item
+  snapshots are kept. The downgrade cannot re-attach them.
+
+**Do not downgrade past both `d6f4a13c9e20` and `4c8d7e2a91b3`.** Both widen
+`shift_equipment_check_items.compartment_name` to `TEXT`; downgrading past the
+second narrows it back and truncates deep compartment paths (SCHEMA-1 in
+[Known Limitations](./KNOWN_LIMITATIONS.md)).
+
+Three further migrations in this window (`7ed8593bc904`, `5c2f6a8b1d34`,
+`9f6d1c2a4b70`) repair databases that were stamped as having run work they
+never ran, after earlier revisions were renumbered. On a healthy database they
+do nothing.
+
+### Legal Documents and swap approval change who can do what (2026-08-20)
+
+- **Governance → Legal Documents** needs `legal.propose` to draft and
+  `legal.publish` to publish. Migration `06adc68a8b84` grants `legal.propose` to
+  every position holding `settings.view` and `legal.publish` to every position
+  holding `settings.manage`. Review who that reaches before anyone drafts.
+- **Nobody can review a swap or time-off request they are part of**, even with
+  `scheduling.manage`. If exactly one person holds `scheduling.manage` and they
+  also request swaps, their own requests will wait — grant a second person.
+
+### Rooms can nest, storage areas get barcodes, and suppliers become vendors (2026-08-16)
+
+- `20260816_0001` lets a facility room sit inside another. Existing rooms stay
+  top-level.
+- `20260816_0002` gives every storage area without a barcode the next code in
+  the department's `SA-` series. Codes already in use, including on retired
+  areas, are skipped.
+- `20260816_0003` creates one inventory vendor for every distinct free-text
+  supplier name (ignoring case) and links the items and reorders that named it.
+  `Galls` and `Galls Inc.` become two vendors; merge them by hand if they are
+  one.
 
 ## When adding a change that can block startup
 

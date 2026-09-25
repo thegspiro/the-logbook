@@ -485,10 +485,11 @@ to fill in.
 
 ### Edge Cases
 
-| Scenario            | Behavior                                                     |
-| ------------------- | ------------------------------------------------------------ |
-| Edit interview      | Only the original interviewer can edit                       |
-| Multiple interviews | Multiple records supported; each interviewer files their own |
+| Scenario                      | Behavior                                                                                                                                                 |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Edit interview                | Only the original interviewer can edit                                                                                                                   |
+| Multiple interviews           | Multiple records supported; each interviewer files their own                                                                                             |
+| Interviewer's account deleted | The interview stays on the applicant's record under the interviewer's name. Only a permanently deleted account leaves it reading **Unknown Interviewer** |
 
 ---
 
@@ -573,6 +574,11 @@ When an applicant has completed all pipeline stages:
 4. Click **Convert to Member** to confirm. The conversion creates the member
    account and marks the applicant converted; it cannot be undone.
 
+**One applicant, one account.** Two coordinators converting the same applicant
+at the same moment — or one person double-clicking — create exactly one member.
+The second request waits for the first and is then refused with _Prospect has
+already been transferred_.
+
 ### What Happens on Conversion
 
 - A new **User** record is created with the applicant's info
@@ -611,7 +617,8 @@ A member can no longer see their own prospect record, at all:
 - The detail page and every action on it return **"not found"**.
 - The record is filtered out of the **prospect list** (and its total), the
   **kanban board**, the **pipeline statistics**, the **election-package list**,
-  and **label generation**.
+  **label generation**, and the dashboard's **Prospective-member pipeline**
+  widget — its counts, aging buckets and names.
 
 > **Why "not found" rather than "you may not view this"?** A permission error
 > would confirm the record exists and that there is something in it about them —

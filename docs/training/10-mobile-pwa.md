@@ -257,6 +257,19 @@ forced a white background and still does.
 
 ![The public form page in dark mode, readable on the themed background](./images/10-11-public-form-dark.png)
 
+The themed background also covers the **scrollbar gutter** — the strip the
+browser reserves at the right edge of the window — so a dark page runs to the
+window's edge, on public pages and inside the app alike. One exception is a
+browser constraint rather than a defect: a dialog's dimmed backdrop cannot
+reach that strip, so on a **light** page under an open dialog the gutter stays
+light beside the dimmed page. When you reuse an older dark-mode screenshot or
+handout, check its right edge for a bright strip.
+
+Printing with the browser's **Background graphics** option switched on still
+prints no themed background, in light or dark mode — printed output is white.
+
+![A public form in dark mode at full window width, the themed gradient reaching the window edges](./images/19-11-dark-scrollbar-gutter.png)
+
 ### Automatic Updates
 
 The app uses an **autoUpdate** service worker strategy:
@@ -364,7 +377,17 @@ The Logbook is designed as an **online-first** application. The PWA caches the a
 ### What Requires a Connection
 
 - **All data operations** — viewing member lists, submitting forms, checking in, RSVPing, logging training, etc.
-- **API calls** — the service worker is configured with a **NetworkOnly** strategy for all `/api` routes, meaning data is never served from cache
+- **API calls** — the service worker is configured with a **NetworkOnly** strategy for all `/api` routes, so no data is ever stored in or served from the service worker's cache, and nothing loads without a connection
+
+Inside an open tab, the app keeps a short-lived **in-memory** copy of recent
+responses so moving between screens does not refetch everything: a response up
+to 30 seconds old is reused as is, and one up to 90 seconds old is shown while
+a fresh copy loads behind it. Anything you save clears the related entries.
+Member-level data — profiles and the roster, scheduling, individual training
+records, medical and emergency-contact information, notifications and the like
+— is excluded from it entirely and always fetched fresh. The copy lives only in
+memory: it is gone when the tab closes, and it is cleared when anyone signs in
+or out.
 
 This is a deliberate design decision for data integrity and HIPAA compliance — serving stale or cached member data could lead to incorrect records or privacy issues.
 
@@ -398,7 +421,9 @@ their photos, queued shift reports, queued training submissions and RSVPs,
 saved shift-report drafts, and **in-progress equipment-check drafts**
 _(added 2026-08-16; previously these drafts survived logout, so the next
 person at the terminal could read apparatus results and notes — flagged and
-fixed as red-team finding RT-08)_.
+fixed as red-team finding RT-08)_. The sweep also removes draft entries the
+app has lost track of, so a draft whose bookkeeping entry went missing is not
+left behind.
 
 **If you have queued work, get back online and let it sync before you sign
 out.** Anything still waiting is discarded. The app is not silent about it: if
@@ -515,6 +540,12 @@ What lands when it works is not special, which is the reassuring part — it is
 the ordinary shift check-in page for that apparatus, naming the unit, the date
 and the hours, exactly as it looks when reached by scanning the QR code or by
 tapping through the app.
+
+**Check the shift named on that page before you confirm.** An apparatus tag
+does not name a shift: it resolves when tapped, to the truck's earliest
+not-yet-finalized shift dated today. On a day the truck runs two shifts, that
+is the earlier one even once it is over and the second is under way, so a crew
+checking in to the later shift may be shown the wrong one.
 
 **This is Chrome on Android, over HTTPS, and nothing else.** iPhone cannot do
 it; Safari does not implement Web NFC and no iOS browser does. A desktop cannot
@@ -864,6 +895,10 @@ sideways scroll to discover._
 Each tab now carries the page name rather than a generic app title, so several
 Logbook tabs open at once are finally distinguishable. Nothing to configure.
 
+A tab never keeps the previous page's name while the next one loads: it reads
+**The Logbook** until the new page's heading appears, then takes that
+heading's name.
+
 ## August 23–24, 2026 update
 
 ### The app now updates in Brave
@@ -875,14 +910,16 @@ after every release, you can stop.
 ### The schedule on a phone
 
 The Schedule tab is a **board** on a phone too: a bar grid of the month, a day
-sheet you pull up, and a confirmation screen for claiming a seat. A shift's
-chip says whether it still needs people, and one button claims the first open
-seat you are cleared for.
+sheet that opens beneath it when you tap a day, and a confirmation screen for
+claiming a seat. A shift's chip says whether it still needs people, and one
+button claims the first open seat you are cleared for.
 
 **The month grid's touch targets are back to 44px.**
 
-Full walkthrough:
-[the release workflow lesson](./19-august-2026-release-changes.md#scheduling-the-calendar-says-which-shifts-need-people-and-claiming-one-is-a-tap).
+![The Schedule tab on a phone: the month header with the All shifts / Needs staffing / My shifts filter, the days-this-week-still-need-people warning, and the top of the bar grid above the bottom navigation](./images/19-35-schedule-board-phone.png)
+
+The chips, the claim button and the reasons it can be missing are described in
+[The Schedule Board and Standing Shifts](./03-scheduling.md#the-schedule-board-and-standing-shifts-2026-08-23--08-24).
 
 ### Settings on a phone
 

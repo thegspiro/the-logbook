@@ -40,6 +40,14 @@ When your department first sets up The Logbook, this checklist guides you throug
 
 Each step shows its completion status. You can return to any step to update the configuration.
 
+The department type decides which ranks and positions setup creates. Every
+type gets the same officer ladder and administrative positions. A fire
+department or combined department also gets Firefighter, Engineer and EMT. An
+EMS-only department gets no Firefighter rank or position; it gets EMT and an
+Engineer rung labelled **Driver / Operator**. The EMT rank and position carry
+the same line-member permissions as Firefighter, so an EMT-only member can use
+the app on day one.
+
 ![Department setup checklist with each step and its completion state](./images/08-01-setup-checklist.png)
 
 > **Hint:** The setup checklist is always accessible even after initial setup. Use it as a reference to verify your department's configuration is complete.
@@ -887,8 +895,12 @@ The system enforces session timeouts in alignment with HIPAA session management 
 
 - Minimum password length (configurable)
 - Password history tracking (prevents reuse of recent passwords)
-- Account lockout after failed attempts
+- Account lockout after failed attempts: `MAX_LOGIN_ATTEMPTS` consecutive failures (default 5) lock the account for `ACCOUNT_LOCKOUT_DURATION_MINUTES` (default 15). A successful sign-in or a password reset clears the count
 - Mandatory password change on first login
+- **Breached-password rejection** (optional, off by default: `BREACHED_PASSWORD_CHECK_ENABLED`). A new or changed password that appears in known breach data is refused. Only the first five characters of the password's SHA-1 hash leave the server — never the password or its full hash. If the lookup service is unreachable, the change **goes through**: the check is supplementary, and complexity, history, MFA and lockout still apply
+
+These are server settings in the deployment's environment file, set by whoever
+operates the installation, not screens in the app.
 
 ### Audit Logging
 
@@ -931,7 +943,31 @@ The system applies rate limiting to sensitive endpoints with specific thresholds
 
 When rate-limited, the system returns HTTP 429 with a `Retry-After` header indicating the lockout duration in seconds. Failed login attempts are also tracked per-user via the `failed_login_attempts` counter on the user record.
 
-> **Hint:** If a member reports being locked out, check if they exceeded the login attempt limit. The lockout expires automatically after the duration above. The `Retry-After` header tells the client exactly how long to wait.
+> **Hint:** If a member reports being locked out, check if they exceeded the login attempt limit. The rate-limit lockout expires automatically after the duration above, and the `Retry-After` header tells the client exactly how long to wait. The per-account lockout under [Password Policies](#password-policies) is separate: it runs for `ACCOUNT_LOCKOUT_DURATION_MINUTES`, and resetting the member's password clears it at once.
+
+Three more sign-in controls sit alongside the rate limits. Like them, each is a
+server setting the operator sets in the deployment's environment, not a screen
+in the app:
+
+- **Lockout messages are generic by default.** A locked account answers
+  "Incorrect username or password", exactly like a wrong password, because
+  "this account is locked" would confirm the account exists. An operator can
+  set `ACCOUNT_LOCKOUT_REVEAL=true` to tell the member the account is
+  temporarily locked and for roughly how long, at the cost of that
+  confirmation. Members on a default install will not see a lockout message —
+  expect "my password stopped working" instead.
+- **A per-IP throttle** (`SUSPICIOUS_IP_THROTTLE_ENABLED`, on by default)
+  counts **failed** sign-ins from one address across **all** accounts — 50 in
+  an hour blocks that address for 15 minutes by default. Account lockout is
+  per member, so one password tried against a thousand accounts never trips
+  it; this is the control that does. A fully completed sign-in from the address
+  clears its count, but never lifts a block already in force.
+- **A human challenge (CAPTCHA)** (`CAPTCHA_ENABLED`, off by default; Turnstile,
+  hCaptcha or reCAPTCHA) can be required on the internet-facing forms: Forgot
+  Password, public form submissions and public event requests. If the
+  challenge provider is unreachable, the submission is **rejected** — there is
+  no other control behind it, so accepting unverified traffic during an outage
+  is what an attacker would want.
 
 ### Security Hardening (2026-03-07)
 
@@ -963,16 +999,17 @@ The following security measures are enforced:
 
 ### Authentication & Session Edge Cases
 
-| Scenario                                                | Behavior                                                                                                                                                                                                                                                                                                                     |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Admin changes a member's roles while they are logged in | Server enforces new permissions immediately (re-queried from DB on every request). However, the frontend UI may show stale permission-based elements (buttons, menu items) until the page is reloaded or the session refreshes via `/auth/me`.                                                                               |
-| Password reset requested twice within 30 minutes        | The second request returns the same success message but no email is sent. This is intentional anti-enumeration — there is no indication to the user that a cooldown is active. Reset tokens expire after 30 minutes.                                                                                                         |
-| Admin resets member password with "force change"        | `password_changed_at` is intentionally NOT updated, so the user may see a password-expiry warning on their next login before they reach the change-password form. This resolves after they complete the forced password change.                                                                                              |
-| Multiple browser tabs open when access token expires    | A shared refresh promise prevents races within one tab, but multiple tabs can trigger simultaneous refresh requests. If two tabs refresh at the same time, the second may see the rotated token as invalid, triggering a full session revocation across all tabs. Closing extra tabs before the session timeout avoids this. |
-| Member soft-deleted by admin                            | The user's next API request returns 401 (deleted users are filtered out of token validation). However, sessions are not proactively revoked — the session record stays in the database as an orphan until it expires naturally.                                                                                              |
-| Server restarts or deploys during active sessions       | In-memory rate limiters reset (Redis-backed limiters are persistent). Encryption ciphers are re-initialized from the current `ENCRYPTION_KEY`. If the key was rotated without restart, data encrypted with the old key cannot be decrypted.                                                                                  |
-| Brief database outage during page refresh               | If `GET /auth/me` returns 503 or a network error, the frontend clears `has_session` and logs the user out. The user must log in again when the database recovers.                                                                                                                                                            |
-| Concurrent session count                                | There is no enforced limit on simultaneous sessions. A monitoring threshold of 3 concurrent sessions triggers an anomaly alert but does not block additional logins.                                                                                                                                                         |
+| Scenario                                                | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Admin changes a member's roles while they are logged in | Server enforces new permissions immediately (re-queried from DB on every request). However, the frontend UI may show stale permission-based elements (buttons, menu items) until the page is reloaded or the session refreshes via `/auth/me`.                                                                                                                                                                                  |
+| Password reset requested twice within 30 minutes        | The second request returns the same success message but no email is sent. This is intentional anti-enumeration — there is no indication to the user that a cooldown is active. Reset tokens expire after 30 minutes.                                                                                                                                                                                                            |
+| Admin resets member password with "force change"        | `password_changed_at` is intentionally NOT updated, so the user may see a password-expiry warning on their next login before they reach the change-password form. This resolves after they complete the forced password change.                                                                                                                                                                                                 |
+| Multiple browser tabs open when access token expires    | A shared refresh promise prevents races within one tab, but multiple tabs can trigger simultaneous refresh requests. If two tabs refresh at the same time, the second may see the rotated token as invalid, triggering a full session revocation across all tabs. Closing extra tabs before the session timeout avoids this.                                                                                                    |
+| Member soft-deleted by admin                            | The user's next API request returns 401 (deleted users are filtered out of token validation). However, sessions are not proactively revoked — the session record stays in the database as an orphan until it expires naturally.                                                                                                                                                                                                 |
+| Server restarts or deploys during active sessions       | In-memory rate limiters reset (Redis-backed limiters are persistent). Encryption ciphers are re-initialized from the current `ENCRYPTION_KEY`. If the key was rotated without restart, data encrypted with the old key cannot be decrypted.                                                                                                                                                                                     |
+| Brief database outage during page refresh               | If `GET /auth/me` returns 503 or a network error, the frontend clears `has_session` and logs the user out. The user must log in again when the database recovers.                                                                                                                                                                                                                                                               |
+| Concurrent session count                                | There is no enforced limit on simultaneous sessions. A monitoring threshold of 3 concurrent sessions triggers an anomaly alert but does not block additional logins.                                                                                                                                                                                                                                                            |
+| Session used from a new address, or a very large export | In production deployments, background monitoring checks every signed-in request: a session whose IP address changes within 5 minutes of its last request is recorded as `session_hijack_suspected`, and a single export over 50 MB (or more than 250 MB of exports by one member in 24 hours) as `data_exfiltration_alert`, both at **critical** severity in the Audit Log. Detection only — the request itself is not blocked. |
 
 ---
 
@@ -1327,6 +1364,21 @@ Profiles allow different compliance standards for different groups:
    - **Threshold overrides** — optionally set different thresholds for this group
 3. Set **priority** — when a member matches multiple profiles, the highest-priority profile applies
 
+How a profile grades the members it matches:
+
+- **The required requirements you tick are the whole list.** A profile with
+  every required requirement unticked grades its members against **none**, so
+  they count as compliant in the department's Training Compliance figure; it
+  does not fall back to every active requirement.
+- **Threshold overrides apply on their own.** A profile whose only
+  customization is a stricter or more lenient threshold still applies that
+  threshold to its members.
+
+**Clearing a field and saving clears it.** This holds for the email report
+recipients, the reminder-days list, a profile's description, its threshold
+overrides, and its membership-type and requirement selections — the saved
+value is empty, not the previous one.
+
 ![The Profiles tab: each profile with the groups it targets and the requirements it demands](./images/08-70-compliance-profiles.png)
 
 > **Profiles are refused until the thresholds have been saved once.** The tab
@@ -1342,6 +1394,10 @@ Profiles allow different compliance standards for different groups:
 
 ![Compliance requirements configuration: the Thresholds tab, with its status preview and reminder schedule](./images/08-69-compliance-requirements-config.png)
 
+**[SCREENSHOT — REPLACE the compliance requirements configuration capture.**
+The non-compliance notification panel now carries a "not yet active"
+label.**]**
+
 The page carries **four tabs** — Thresholds, Profiles, Auto Reports and Report
 History — so the thresholds and the profile list are separate screens rather
 than one page scrolled. The **Status Preview** strip under the threshold fields
@@ -1349,12 +1405,17 @@ restates the three bands in the numbers just entered ("Compliant: ≥ 100% · At
 Risk: 75% – 99% · Non-Compliant: < 75%"), which is the quickest way to check a
 change means what was intended before saving it.
 
+The **Notifications** panel on the Thresholds tab — **Notify members when they
+become non-compliant** and **Reminder Days Before Deadline** — is labelled
+"Not yet active: these settings are saved, but no reminder is sent yet."
+Nothing reads either setting, so members are not notified when they become
+non-compliant, whatever is saved there.
+
 ### Automated Reporting
 
 1. Set the **report frequency**: Monthly, Quarterly, or Yearly
 2. Configure **email recipients** — who receives the reports
 3. Set the **day of month** for report generation
-4. Optionally enable **non-compliant member notifications** with configurable lead times (e.g., notify 30, 14, and 7 days before deadline)
 
 ### Generating Reports On-Demand
 
@@ -1468,11 +1529,27 @@ All API response schemas now inherit from `UTCResponseBase`, which automatically
 The dashboard's **My Updates** panel merges your notifications and department
 messages into one feed. An amber dot marks each unread row and the header
 counts them; opening a row marks it read and takes you to what it announces —
-a notification's own screen, or the Messages page. A **pinned department
-message** stays in the feed until you clear it with the ✕ beside it; that
-control appears only on persistent messages, which would otherwise never
-leave. **Older Items** at the foot opens the full notification inbox, which
-is where bulk actions such as marking everything read live.
+a notification's own screen, or the message's own page.
+
+The feed holds unread items only, in this order: **pinned** department
+messages first, then **persistent** ones, then everything else newest first.
+Five rows show; **Older Items** at the foot opens the full notification inbox,
+which is where bulk actions such as marking everything read live. Pinning and
+persistence do different jobs:
+
+- **Pinning** sorts a message to the top, so a pinned notice sits above newer
+  notifications instead of being pushed off the five rows. A pinned message
+  that is not persistent still drops off once the member has read it.
+- **Persistence** keeps a message in the feed after it has been read. It stays
+  until a manager clears it with the ✕ beside it, which takes it down for
+  everyone. The ✕ appears only on persistent messages and only for holders of
+  `notifications.manage` or `settings.manage`.
+
+A message that asks for acknowledgement is not in this feed while it is
+pending; it sits in the dashboard's **Needs you** panel with an
+**Acknowledge** button.
+
+![My Updates on the dashboard: a pinned announcement and a standing order badged Persistent above the unread notifications, with the clear control only a manager sees](./images/19-28-station-board-messages.png)
 
 > **Superseded 2026-08-16.** This previously described the Notifications
 > panel — a per-card dismiss ✕ and a Clear All header action. The station
@@ -1724,12 +1801,44 @@ Each template can be reset to its built-in default content:
 2. Click **Reset** in the template's header — the dialog it opens is titled
    "Reset to Default"
 3. Confirm the action in the dialog
-4. The template's subject, HTML body, text body, and CSS styles are restored to the application's defaults
+4. The template's subject, HTML body, text body, CSS styles, closing footer, layout, header accent and status chip are restored to the application's defaults
 5. Custom CC/BCC recipients are **preserved** — only content is reset
 
 This is useful when a template has been heavily customized and you want to start fresh from the standard design.
 
 ![The Reset to Default confirmation, naming what it restores and what it keeps](./images/08-57-template-reset-dialog.png)
+
+### The email design and the Email Templates screen
+
+Every email renders into one shell: a centred masthead (the department's logo
+above its name) on a light grey page, then a white card holding a small
+**status line** — a square in the notice's accent colour beside the status
+chip's wording, such as "Action required" — above the title and body, with the
+footer under the card. Spacing, not rules, separates the blocks. Three
+settings on each template shape it:
+
+- **Layout** — **Notice** (prose, a details panel and a button), **Receipt**
+  (a wide items table) or **Digest** (a run of section headings and lists).
+- **Header accent** — one of a fixed set of colours, used for the status
+  line, the optional subtitle and the button. Changing only the colour does
+  not count as editing the template.
+- **Status chip** — the status line's wording, shown uppercased as the editor
+  previews it. Leave it empty and the email carries no status line.
+
+**A template your department has edited keeps its own look until somebody
+presses Reset on it.** Templates you have never edited already use the current
+design; an edited one keeps its stored markup, which still renders inside the
+current card and footer. The banner at the top of the Templates tab says so.
+Reset keeps your CC/BCC settings.
+
+On a wide screen the Templates tab is three columns: the template list, the
+editor, and the rendered preview beside it, so you see a change as you type.
+On a narrower screen the editor and preview stack, with an **Edit** /
+**Preview** strip to switch between them. Each entry in the list says whether
+your department has changed it and how heavily it is used — for example
+"Edited · sent 1,204 times" or "Default · never sent", counted from this
+department's Message History. The **Edited** filter above the list shows only
+the notices you have changed; **All**, **Active** and **Off** are the others.
 
 ### Send Test Email
 
@@ -1948,9 +2057,10 @@ They now have real template rows with documented variables and sample data.
 
 > **Your emails will look different.** One stylesheet, one document shell and one
 > table style are now shared by templates, the storefront and the election
-> report. The design is a white card on a grey page — system font stack, rounded
-> header band, consistent paragraph rhythm — replacing the full-bleed red band
-> over a grey slab.
+> report. The design is a white card on a grey page — system font stack,
+> centred masthead, consistent paragraph rhythm — replacing the full-bleed red
+> band over a grey slab. See
+> [The email design and the Email Templates screen](#the-email-design-and-the-email-templates-screen).
 >
 > **If you never edited a template's CSS, you now track the built-in
 > stylesheet**, so future improvements reach you automatically. Templates whose
@@ -2409,7 +2519,7 @@ look there.
 
 ## August 12–14, 2026 update
 
-The station-board, calendar-year admin-hours summary, related-notification cleanup, and operator upgrade notes are covered in [the August 12–14 release lesson](./19-august-2026-release-changes.md#dashboard-and-admin-hours).
+The dashboard's My Updates feed is described under [Dashboard Notification Management](#dashboard-notification-management), the calendar-year admin-hours summary under [The Admin Hours summary](#the-admin-hours-summary), and the archiving of a notification once its action is done under [Notification Cards](./00-getting-started.md#notification-cards-2026-03-26). Operator upgrade notes are in [UPGRADING.md](../UPGRADING.md).
 
 ## August 19–23, 2026 update — Governance → Legal Documents
 
@@ -2423,12 +2533,9 @@ record-retention rules, volunteer versus career status, and state law all
 differ, and boilerplate written for the platform does not describe what your
 department actually does with member data.
 
-Full walkthrough and edge cases:
-[release lesson](./19-august-2026-release-changes.md#governance--legal-documents-your-own-privacy-notice).
-
 ![Governance → Legal Documents: the Privacy Notice published with its last-updated line and published history, beside a Terms of Service tab still carrying an unpublished draft](./images/19-09-legal-documents.png)
 
-_Shared with the [release lesson](./19-august-2026-release-changes.md#governance--legal-documents-your-own-privacy-notice); the two documents are tabs on one screen rather than side-by-side cards._
+_The two documents are tabs on one screen rather than side-by-side cards._
 
 ### Drafting and publishing are separate permissions
 
@@ -2441,6 +2548,8 @@ _Shared with the [release lesson](./19-august-2026-release-changes.md#governance
 This is how a department gets "the secretary drafts, an officer approves"
 without running it as an off-system procedure. A department that does not want
 the ceremony gives one person `settings.manage`.
+
+![The revision editor under a propose-only account: the document text, the filled-in change note, and the free-text Effective date printed to members as Last updated](./images/19-16-legal-revision-editor.png)
 
 ![The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish to members — beside the administrator's draft, which offers them nothing](./images/08-77-legal-proposal-as-proposer.png)
 
@@ -2458,7 +2567,9 @@ publish; publishing to the second group only._
   than editing the page in place is that somebody in two years can see why.
 - **"Last updated" is free text** and is never interpreted. `March 3, 2026`,
   `FY26-Q1` and `Adopted at the 3/3/26 business meeting` all work and display
-  exactly as typed. Clearing it genuinely clears it.
+  exactly as typed. Clearing it genuinely clears it: each document keeps its
+  own date, and publishing a revision with the box empty shows no date on that
+  page, without touching the other document's.
 - **Old versions are archived, never deleted.** A records request does not ask
   what your notice says — it asks what it said on the day the member joined.
 - **Removing the member who wrote a revision does not remove the revision.**
@@ -2524,6 +2635,10 @@ pages now share one frame:
 3. A **Needs attention** queue — the things somebody has to act on.
 4. The module's existing tabs, unchanged, underneath.
 
+**[SCREENSHOT — REPLACE the four administration page headers.** The Members,
+Training, Inventory and Events admin captures all show a layout that no longer
+exists.**]**
+
 **The tabs and their contents did not change.** This replaced what sat above
 them.
 
@@ -2547,6 +2662,8 @@ Two scopes exist: a **department default** everyone sees, and optionally a
 **personal** selection. The department decides whether personal selections are
 permitted at all — turn that off and every administrator looks at the same four
 numbers.
+
+![Members metrics settings at department scope: three chooseable slots with one cleared for a swap, the applies-to-everyone switch, and slot four shown as fixed](./images/19-39-admin-metrics-settings.png)
 
 ### Who can see the queue
 
@@ -2591,17 +2708,55 @@ The six-tile grid is replaced by:
   the same window.
 - **Three fixed stats**: approved, awaiting review, logged this period, with
   entry counts as sublines rather than tiles of their own.
-- **Requirement progress**, where the department has configured requirements
-  for the member's profile. The personal page never showed this, despite it
-  being the question members actually have.
+- **My requirements**, where the department has configured requirements for
+  the member's profile. Each configured category is shown against its own
+  required hours for its own period ("this quarter" or "this year"), badged
+  **On track**, **At risk** or **Behind**, with the hours still needed and the
+  date the period ends. Only approved hours count; hours awaiting review do
+  not.
 - **A ranked category breakdown** with share bars, plus one line naming the
   categories with nothing in the period — instead of a tile reading zero for
   each.
 - **An empty state that says what to do**, in place of a row of zeros.
 
-**The period defaults to all time.** A calendar-year default hid older entries
-behind a control the member has to notice first, and "no hours logged in this
-year" reads as an empty account rather than as an active filter.
+**The period defaults to This month**, the month members are reporting
+against; the selector widens it from there. "This year" means the calendar
+year, January 1 to today.
+
+![My Admin Hours over all time: the category breakdown with share bars, the requirement-progress section, and the muted line naming the categories with nothing logged](./images/19-41-my-admin-hours.png)
+
+**NFC tags.** A category's QR code page
+(`/admin-hours/categories/:categoryId/qr-code`, reached from the QR link on
+the **Categories** tab) can also write that link to a blank NFC tag or
+sticker, so a member taps the tag with a phone to open that category's
+clock-in — no camera needed. With the app already open, **Tap Tag** in the My
+Admin Hours header reads a tag directly. Both need Chrome on Android over
+HTTPS; elsewhere the writer is replaced by a line naming which of the two is
+missing, the Tap Tag button does not appear, and the QR code still works.
+
+### The Admin Hours summary
+
+**Where:** **Admin Hours** in the administration menu (`/admin-hours/manage`)
+→ **Summary** tab · **Who:** `admin_hours.manage`
+
+The Summary tab totals the whole department's completed sessions, grouped by
+each entry's current category. The **Reporting period** is All time (the
+default), Last 30 days, **This calendar year** or a custom range, and the date
+range it covers is stated beside the heading. **This calendar year** runs from
+January 1 to today, not the last 365 days.
+
+![The Admin Hours Summary on This calendar year: counted, approved and needs-review totals over a year of logged time, ranked by the category it was logged against](./images/19-22-admin-hours-summary-year.png)
+
+- **Counted hours** includes approved hours and hours still awaiting review;
+  use **Approved** for finalized reporting. When entries are waiting,
+  **Review now** under **Needs review** opens the Pending Review tab.
+- **Where the hours came from** ranks the categories by hours logged, with
+  each one's share. Active sessions, rejected entries and deleted entries are
+  excluded.
+- **Per-category limits are not on this screen.** **Auto-approve under
+  (hours)** and **Max hours per session** are set on each category in the
+  **Categories** tab. What the summary ranks is hours logged, not the limits
+  they were logged under.
 
 ## Scheduling Staffing Tiles on the Dashboard _(2026-08-23)_
 
@@ -2609,7 +2764,9 @@ Seven tiles — Today's Staffing, Future Coverage Gaps, Open Slots, Pending
 Changes, Incomplete Closeouts, Workload Balance, Special Operations. Each links
 into the schedule **already filtered to what it counted**, so a number is
 somewhere to start rather than a fact to go and find. Each keeps its own
-horizon and filters, per person. Requires `scheduling.view`.
+horizon and filters, per person. They sit under **Scheduling Operations** on
+the dashboard's **My Department** view and need `scheduling.manage` with the
+Scheduling module enabled.
 
 ## Settings: Nine Screens, One Shell _(2026-08-23)_
 
@@ -2624,6 +2781,11 @@ one now:
 
 **No setting moved and no setting changed meaning.** If a member of staff says
 a screen "looks different", that is the whole of it.
+
+**[SCREENSHOT — REPLACE every settings capture, and every capture of a received
+Logbook email.** For the email shots, caption whether the department has
+adopted the new shell — both are current, depending on whether Reset was
+pressed.**]**
 
 ---
 
