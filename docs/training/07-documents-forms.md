@@ -598,8 +598,16 @@ positions.
    complained about will not be used.
 6. Leave **Accepting submissions** ticked, and **Save box**.
 
-Boxes are never deleted — untick **Accepting submissions** to close one. Its
-existing submissions stay readable by its reviewers.
+To close a box, untick **Accepting submissions**. Its existing submissions stay
+readable by its reviewers.
+
+To remove a box you no longer need, press **Delete** on it:
+
+- **A box that never received a submission** is deleted after you confirm.
+- **A box with submissions** shows how many it holds and offers **Archive
+  instead**, which closes it and keeps everything. Deleting it permanently
+  removes every submission, screenshot and reply in it, cannot be undone, and
+  asks you to type the box's name first.
 
 ![The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up ticked, the note that managing boxes does not let you read them, and two reviewer positions ticked](./images/07-14-suggestion-box-dialog.png)
 

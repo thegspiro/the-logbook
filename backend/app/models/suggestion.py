@@ -59,8 +59,12 @@ class SuggestionAuthorRole(str, enum.Enum):
 
 
 class SuggestionBox(Base):
-    """A configurable intake box. Archived via ``is_active``, never deleted,
-    because deleting one would cascade away every submission it received."""
+    """A configurable intake box.
+
+    Closing a box is ``is_active``. Deleting one cascades through every
+    submission it received (screenshots, threads, forwards), so
+    ``SuggestionService.delete_box`` requires the administrator to type the
+    box's name before deleting a box that holds any submissions."""
 
     __tablename__ = "suggestion_boxes"
 

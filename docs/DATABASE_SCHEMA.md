@@ -548,7 +548,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`suggestion_attachments`](#suggestion_attachments) | `SuggestionAttachment` | 9 | A screenshot, re-encoded to WebP on upload. The display name is |
 | [`suggestion_box_reviewers`](#suggestion_box_reviewers) | `SuggestionBoxReviewer` | 6 | One reviewer grant on a box: either a position or a single member. |
 | [`suggestion_box_watchers`](#suggestion_box_watchers) | `SuggestionBoxWatcher` | 6 | Someone told that a box received a submission, without being able to |
-| [`suggestion_boxes`](#suggestion_boxes) | `SuggestionBox` | 11 | A configurable intake box. Archived via ``is_active``, never deleted, |
+| [`suggestion_boxes`](#suggestion_boxes) | `SuggestionBox` | 11 | A configurable intake box. |
 | [`suggestion_forwards`](#suggestion_forwards) | `SuggestionForward` | 7 | One suggestion forwarded to a member or a position. |
 | [`suggestion_messages`](#suggestion_messages) | `SuggestionMessage` | 8 | One entry in a follow-up thread. |
 | [`suggestion_status_events`](#suggestion_status_events) | `SuggestionStatusEvent` | 7 | One step a reviewer took that the submitter can see: a disposition |
@@ -7481,7 +7481,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **SuggestionBox** · `app/models/suggestion.py`
 
-> A configurable intake box. Archived via ``is_active``, never deleted, because deleting one would cascade away every submission it received.
+> A configurable intake box. Closing a box is ``is_active``. Deleting one cascades through every submission it received (screenshots, threads, forwards), so ``SuggestionService.delete_box`` requires the administrator to type the box's name before deleting a box that holds any submissions.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|

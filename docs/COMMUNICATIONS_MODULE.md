@@ -347,8 +347,19 @@ and vote on.
   `DELIBERATELY_UNGATED` in `tests/test_module_api_gating.py`.
 - **`/suggestions` is in `UNCACHEABLE_PREFIXES`** — a cached thread would hide a
   reply, and the payload is sensitive.
-- **Boxes are never deleted**; `is_active` closes one. An active box must have at
-  least one reviewer.
+- **Closing a box and deleting one are different.** `is_active` closes a box
+  and keeps everything in it. `DELETE /admin/boxes/{id}` (`suggestions.manage`)
+  removes the box.
+  - An empty box deletes directly.
+  - A box that has received submissions deletes only with `confirm_name` equal
+    to its name. Otherwise the endpoint returns 409 and the screen offers
+    archiving first.
+  - Deletion cascades through every submission, screenshot row, message,
+    forward and status step. Screenshot files are removed after the commit.
+  - It is audited as `suggestion_box_deleted`, with the number of submissions
+    lost, at `warning` severity when that number is above zero.
+  - The admin list reports `submissionCount` for this.
+- **An active box must have at least one reviewer.**
 
 ### Suggestion box migrations
 
