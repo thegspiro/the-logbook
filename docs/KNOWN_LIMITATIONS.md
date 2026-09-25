@@ -471,38 +471,52 @@ against the plain one will find the masked version noticeably smaller. Fitting
 it larger means some launchers cut the corners off the crest, which is worse and
 is not visible to whoever chooses the setting.
 
-## "Today" Is Still the Server's Date in 138 Places (2026-09-25)
+## "Today" Is Still the Server's Date in 113 Places (2026-09-25)
 
-🚩 **Open — needs an owner decision on scope.** `date.today()` returns the
-server's date, and a container runs in UTC, so for a US department it is
+🚩 **Open — the remainder needs reading, not a sweep.** `date.today()` returns
+the server's date, and a container runs in UTC, so for a US department it is
 already tomorrow every evening (from 7–8 PM Eastern, 4–5 PM Pacific). Anything
 that counts days, decides expired-versus-not, or picks "this month" from it is
 off by one day for those hours, and the scheduled jobs that run early in the
 UTC morning are off for the western half of the country every time they run.
 
-**Fixed so far** (with `org_today` / `resolve_org_today` /
-`local_day_start_utc` in `app/utils/org_timezone.py`): the certification
-expiry alerts, NFPA retirement alerts, expiring-supplies email, the monthly
-compliance auto-report's "last month", the training report exports' default
-end date and the certification CSV's status, and the equipment check reports'
-date range and trend buckets. `tests/test_org_local_today.py` pins each.
+**Fixed** (with `org_today` / `today_in` / `resolve_org_today` /
+`local_day_start_utc` in `app/utils/org_timezone.py`):
 
-**Deliberately not changed, because doing it piecemeal is worse:** the
-training compliance engine — `TrainingService.evaluate_requirement_detail`
-and its callers in `training_service.py`, `training_compliance.py`,
-`competency_matrix_service.py`, `compliance_officer_service.py` and the
-compliance CSV/PDF "Met / Not Met" cells — still evaluates as of
-`date.today()`. Moving the exports alone would make the exported sheet and the
-compliance screen disagree about the same member for several hours a day,
-which is the failure Pitfall #29 exists to prevent. The fix is to move the
-whole engine to the department's date at once.
+- The certification expiry alerts, NFPA retirement alerts, expiring-supplies
+  email, the monthly compliance auto-report's "last month", the training
+  report exports' default end date and the certification CSV's status, and
+  the equipment check reports' date range and trend buckets
+  (`tests/test_org_local_today.py`).
+- The whole training compliance engine, moved at once so no two views grade
+  against different days (Pitfall #29): the compliance matrix and its
+  `as_of`, the dashboard and admin-hub compliance percentage
+  (`compute_org_compliance_pct`), member status, compliance summary,
+  requirement progress (`check_requirement_progress`, resolved once per page
+  in `get_requirements_progress_for`), member training stats, expiring
+  certifications, the competency matrix, the annual compliance report, the
+  compliance CSV/PDF "Met / Not Met" cells and forecast, the member's own
+  My Training page, the MCP training tools, and a program requirement's
+  recency window (`tests/test_compliance_engine_org_today.py`).
 
-**Remaining call sites** (138, counted by `grep -rn "date.today()"
+**Still on the server's date, each needing its own read:** program enrollment
+deadlines and resets (`training_program_service.py`), the struggling-member
+and enrollment-deadline warnings (`struggling_member_service.py`),
+recertification renewal tasks and instructor-qualification expiry
+(`training_enhancement_service.py`), `qualification_service.py`'s defaults
+(shift eligibility), and the certification-expiration report in
+`reports_service.py`. Also, `admin_hub_service.py` and the dashboard fall back
+to UTC for an organization with no timezone set while `scheduling_timezone`
+falls back to America/New_York; the compliance percentage now resolves its own
+date so it agrees with the matrix, but the hub's other date-based cards still
+use the UTC fallback. Organizations get America/New_York by column default, so
+this affects only a row whose timezone was cleared.
+
+**Remaining call sites** (113, counted by `grep -rn "date.today()"
 backend/app` excluding comments): `equipment_check_service.py` 11,
-`apparatus_service.py` 11, `training_enhancement_service.py` 8,
-`scheduling_service.py` 7, `inventory_service.py` 7, `endpoints/training.py`
-6, `facilities_service.py` 5, `driver_exception_service.py` 5, and 1–4 each in
-about 35 more files. Many are harmless (a stored `created_on` default, a
+`apparatus_service.py` 11, `scheduling_service.py` 7, `inventory_service.py`
+7, `facilities_service.py` 5, `driver_exception_service.py` 5, and 1–4 each
+in about 35 more files. Many are harmless (a stored `created_on` default, a
 filename) — each needs reading rather than a mechanical replace, which is why
 this is recorded here rather than swept.
 

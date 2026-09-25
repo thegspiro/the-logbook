@@ -983,6 +983,9 @@ class ReportExportService:
         writer.writerow(header)
 
         # Data rows
+        # "Met" is judged as of the department's today, the same day the
+        # compliance screens use; a caller's end_date only bounds the rows.
+        today = await resolve_org_today(self.db, organization_id)
         for user in users:
             records_result = await self.db.execute(
                 select(TrainingRecord)
@@ -1007,7 +1010,7 @@ class ReportExportService:
                 from app.services.training_service import TrainingService
 
                 detail = TrainingService.evaluate_requirement_detail(
-                    req, records, date.today()
+                    req, records, today
                 )
                 row.append("Met" if detail["is_met"] else "Not Met")
 
@@ -1099,7 +1102,7 @@ class ReportExportService:
         self, organization_id: str
     ) -> List[Dict[str, Any]]:
         """Generate predictive compliance forecast for all members"""
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         forecasts = []
 
         users_result = await self.db.execute(
@@ -1306,7 +1309,7 @@ class ReportExportService:
                 from app.services.training_service import TrainingService
 
                 detail = TrainingService.evaluate_requirement_detail(
-                    req, records, date.today()
+                    req, records, generated_on
                 )
                 status_text = "Met" if detail["is_met"] else "Not Met"
                 if not detail["is_met"]:

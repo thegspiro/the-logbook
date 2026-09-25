@@ -10,6 +10,7 @@ The clock is frozen at 02:30 UTC on October 7, which is 10:30 PM on October 6
 in New York.
 """
 
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -47,6 +48,8 @@ def _frozen_clock(monkeypatch):
         cert_alert_service,
         inventory_service,
         training_enhancement_service,
+        training_program_service,
+        training_service,
     )
 
     monkeypatch.setattr(org_timezone, "datetime", _Frozen)
@@ -56,6 +59,8 @@ def _frozen_clock(monkeypatch):
     monkeypatch.setattr(cert_alert_service, "date", _ServerDate)
     monkeypatch.setattr(inventory_service, "date", _ServerDate)
     monkeypatch.setattr(training_enhancement_service, "date", _ServerDate)
+    monkeypatch.setattr(training_program_service, "date", _ServerDate)
+    monkeypatch.setattr(training_service, "date", _ServerDate)
 
 
 def _org(tz="America/New_York", **extra):
@@ -291,3 +296,62 @@ class TestTrainingCertificationCsv:
         # Valid through today on the department's calendar; the server's date
         # (tomorrow) would have printed it Expired at -1 days.
         assert csv_text.splitlines()[1].endswith(",Expiring Soon,0")
+
+
+class TestTrainingStats:
+    async def test_a_cert_expiring_tomorrow_locally_is_not_counted_expired(self):
+        from app.services.training_service import TrainingService
+
+        cert = SimpleNamespace(
+            certification_number="C-1",
+            # A cert counts as expired on its expiration date; this one is
+            # tomorrow for the department, which is already "today" in UTC.
+            expiration_date=LOCAL_TODAY + timedelta(days=1),
+            hours_completed=8,
+            completion_date=date(2026, 1, 10),
+            training_type=None,
+        )
+        records = MagicMock()
+        records.scalars.return_value.all.return_value = [cert]
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), records])
+
+        stats = await TrainingService(db).get_user_training_stats(uuid.uuid4(), "org-1")
+
+        assert stats.expired == 0
+        assert stats.active_certifications == 1
+
+
+class TestProgramRecencyWindow:
+    async def test_the_window_is_measured_from_the_departments_date(self):
+        """A 180-day window measured from Oct 6 still admits Apr 9; measured
+        from the UTC date (Oct 7) it would reject it."""
+        from app.services.training_program_service import TrainingProgramService
+
+        requirement = SimpleNamespace(id="req-1", recency_days=180)
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(
+                    scalar_one_or_none=MagicMock(
+                        return_value=SimpleNamespace(id="enr-1")
+                    )
+                ),
+                MagicMock(
+                    first=MagicMock(
+                        return_value=(SimpleNamespace(id="p1"), requirement)
+                    )
+                ),
+                _one(_org()),
+            ]
+        )
+
+        ok, error = await TrainingProgramService(db).validate_apply_target(
+            user_id="u1",
+            organization_id="org-1",
+            program_id="prog-1",
+            requirement_id="req-1",
+            completed_on=LOCAL_TODAY - timedelta(days=180),
+        )
+
+        assert ok, error

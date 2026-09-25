@@ -73,6 +73,7 @@ from app.utils.checklist import (
 from app.utils.json_ids import normalize_id_list
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org
+from app.utils.org_timezone import resolve_org_today
 from app.utils.phase_prerequisites import find_cycle
 
 # progress_notes keys written only through officer-gated paths: checklist
@@ -3464,7 +3465,11 @@ class TrainingProgramService:
         # quietly defeat it. An undated completion must fail closed when a
         # window is configured because its freshness cannot be verified.
         _, requirement = row
-        cutoff = recency_cutoff(requirement, date.today())
+        # The department's date: a completion from exactly N days ago is still
+        # inside the window for the evening hours when UTC has moved on.
+        cutoff = recency_cutoff(
+            requirement, await resolve_org_today(self.db, organization_id)
+        )
         if cutoff is not None:
             if completed_on is None:
                 return None, (
