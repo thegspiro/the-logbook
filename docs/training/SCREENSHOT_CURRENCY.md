@@ -1,5 +1,27 @@
 # Screenshot currency
 
+## Disposition for September 24-25, 2026 - the Compliance Officer
+
+The Compliance Officer arrived as a seeded position (#2673), an active default
+**Compliance** suggestion box it reviews (#2678), an email signature office
+(#2682), and a demo holder, Lila Nakamura (#2693). Seven candidate shots were
+re-captured from a freshly seeded demo and diffed against the committed images;
+one showed the change.
+
+| Image                         | Outcome                                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `08-37-email-officers`        | **Re-shot.** New Compliance Officer row with Lila Nakamura assigned, and Signature Variables 48 → 52. Also replaces the older frame in which every office was vacant |
+| `07-14-suggestion-box-dialog` | Unchanged. The reviewer-positions list is a scroll box, captured scrolled to the ticked Secretary and Training Officer; Compliance Officer sits above the fold |
+| `08-04-role-management`       | Unchanged by this. Compliance Officer is 15th of 31 by priority, below the fold                                                                              |
+| `08-56`, `08-57`, `08-65`, `08-66` | Unchanged by this. The Officer Signature Variables header, whose count moved, sits below the editor's first screen in every one                         |
+
+**Found along the way, not re-shot.** The four template-editor shots and
+`08-04` no longer match the shipped UI for reasons unrelated to this change: the
+breadcrumb now sits above the page title rather than beside it, the template
+filter pills were restyled, Members & Accounts lists eight templates rather than
+seven, and the role cards' "+N more" permission counts moved. Each wants a
+re-shot on its own terms.
+
 ## Remaining placeholders, filled 2026-09-24 — 44 down to 0
 
 Every open placeholder in the guides was worked in one pass, and all but one
