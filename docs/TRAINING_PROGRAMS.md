@@ -2652,4 +2652,4 @@ resume count, and result visibility are server enforced; undated training does
 not satisfy recency, and member responses exclude officer-only checklist and
 sign-off state. A failed skill step may deduct points without independently
 forcing the entire evaluation to fail. See
-[training lesson 19](./training/19-august-2026-release-changes.md#training-sessions-programs-and-skills-tests).
+[Linking a Session to What It Counts Toward](./training/02-training.md#linking-a-session-to-what-it-counts-toward) and the skills-testing guide's [point deductions](./training/09-skills-testing.md#a-failed-step-that-costs-points-without-ending-the-test).
