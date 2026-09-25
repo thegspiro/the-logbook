@@ -4,6 +4,7 @@
 
 import type {
   ConsentStatus,
+  EmailLinkDomainSource,
   MicrosoftAuthMethod,
   RejoinServiceCredit,
   SeparationStatus,
@@ -106,6 +107,20 @@ export interface EmailConnectionTestResult {
   success: boolean;
   message: string;
   details: Record<string, unknown>;
+}
+
+/**
+ * The deployment-wide address emailed links are built from (FRONTEND_URL, or
+ * the public ALLOWED_ORIGINS entry the backend substituted for a loopback one).
+ * Read-only: it is server configuration, not an organization setting.
+ */
+export interface EmailLinkDomain {
+  effective_url: string;
+  configured_url: string;
+  source: EmailLinkDomainSource;
+  is_loopback: boolean;
+  is_https: boolean;
+  email_enabled: boolean;
 }
 
 export interface EmailServiceSettings {

@@ -209,8 +209,9 @@ Two training lessons used to repeat, window by window, what each module guide
 should say, and the copies had drifted apart. Both are now indexes:
 [#2706](https://github.com/thegspiro/the-logbook/pull/2706) folded guide 20
 (August 31 – September 23) and
-[#2713](https://github.com/thegspiro/the-logbook/pull/2713) folds guide 19
-(August 12–31).
+[#2713](https://github.com/thegspiro/the-logbook/pull/2713) folded guide 19
+(August 12–31), with a last correction to guide 04 following in
+[#2725](https://github.com/thegspiro/the-logbook/pull/2725).
 
 - **Teach from the module guides.** Each one now describes how its screens work
   today, in one place. Guides 19 and 20 remain only as lists of where each topic
@@ -246,6 +247,15 @@ should say, and the copies had drifted apart. Both are now indexes:
     one; reading the chip serial is the fallback.
   - **The dashboard staffing tiles need `scheduling.manage`**, not
     `scheduling.view`.
+  - **A ballot item has no voting method of its own and no number of winners**
+    (guide 04). Each item has a **Vote Type**, **Who Can Vote** and an optional
+    **Victory Condition** override; how votes are counted is the election's
+    **How is the Winner Determined?** choice.
+  - **The dashboard has no Clear All** (guide 04 still described one, and a
+    dismiss button on every card). Event notices land in **My Updates**, where
+    opening a row marks it read. Only holders of `notifications.manage` or
+    `settings.manage` can clear a persistent message, and that clears it for
+    everyone.
 - **Screenshots moved with the text.** Thirty-three images from guide 19 now sit
   in the guides that describe their screens; nine were left out because a module
   guide already shows the same screen.

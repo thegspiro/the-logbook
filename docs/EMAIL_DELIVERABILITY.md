@@ -173,6 +173,14 @@ start** when this is the case, logging a `CRITICAL: FRONTEND_URL ...` line, and
 `python -m app.preflight` lists it as blocking — see
 [UPGRADING.md](UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
 
+To see the address a running installation uses, open **Settings → Email** as
+an administrator. The _Email link address_ card shows it, says whether it came
+from `FRONTEND_URL` or was picked from `ALLOWED_ORIGINS`, warns when it is a
+loopback or `http://` address or differs from the address you are browsing
+from, and lists where to change it. It is read-only: the value is deployment
+configuration read at startup, so changing it means setting `FRONTEND_URL` and
+restarting the backend.
+
 ### Which configuration wins _(2026-09-15)_
 
 Both options above are **deployment-wide**. A department can also configure its
