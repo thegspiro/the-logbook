@@ -351,6 +351,18 @@ INVENTORY_CHECK_SUBMIT = Permission(
     PermissionCategory.INVENTORY,
 )
 
+# Inventory — self-service checkout kiosk (NFC phase 4b).
+#
+# Opening kiosk mode on a shared tablet, where members check loaner gear out
+# and back in themselves by tapping their ID card and then the item's tag.
+# Seeded to no position: a department decides who may run a kiosk. The
+# ``inventory.*`` module wildcard grants it, like every inventory permission.
+INVENTORY_KIOSK = Permission(
+    "inventory.kiosk",
+    "Open self-service checkout kiosk mode",
+    PermissionCategory.INVENTORY,
+)
+
 # Storefront (optional department store that sits alongside logistics)
 STOREFRONT_VIEW = Permission(
     "storefront.view",
@@ -722,6 +734,7 @@ ALL_PERMISSIONS: list[Permission] = [
     INVENTORY_CHECK_VIEW,
     INVENTORY_CHECK_MANAGE,
     INVENTORY_CHECK_SUBMIT,
+    INVENTORY_KIOSK,
     STOREFRONT_VIEW,
     STOREFRONT_ORDER,
     STOREFRONT_MANAGE,
