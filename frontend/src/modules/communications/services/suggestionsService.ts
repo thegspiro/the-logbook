@@ -194,4 +194,10 @@ export const suggestionsService = {
     const response = await api.put<SuggestionBoxAdmin>(`/suggestions/admin/boxes/${id}`, data);
     return response.data;
   },
+  /** A box holding submissions needs `confirmName` equal to its name. */
+  async deleteBox(id: string, confirmName?: string): Promise<void> {
+    await api.delete(`/suggestions/admin/boxes/${id}`, {
+      params: { confirm_name: confirmName || undefined },
+    });
+  },
 };

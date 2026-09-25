@@ -21,7 +21,13 @@ from sqlalchemy import func, select, text
 from app.api.v1.endpoints import suggestions as suggestion_endpoints
 from app.models.audit import AuditLog
 from app.models.notification import NotificationLog, NotificationRule
-from app.models.suggestion import Suggestion, SuggestionAttachment, SuggestionMessage
+from app.models.suggestion import (
+    Suggestion,
+    SuggestionAttachment,
+    SuggestionMessage,
+    SuggestionStatusEvent,
+    SuggestionVote,
+)
 from app.models.user import User
 from app.schemas.suggestion import SuggestionBoxWrite
 from app.services import suggestion_service
@@ -491,6 +497,85 @@ class TestBoxConfiguration:
             dept["org"], box.id
         ) == [dept["admin"]]
 
+    async def test_an_empty_box_deletes_without_confirmation(self, db_session, dept):
+        box = await _box(db_session, dept)
+        service = SuggestionService(db_session)
+        assert await service.delete_box(box, None) == 0
+        assert await service.get_box(dept["org"], box.id) is None
+
+    async def test_a_box_with_submissions_needs_its_name(self, db_session, dept):
+        box = await _box(db_session, dept, name="Complaints")
+        await _submit(db_session, box, dept["member"])
+        service = SuggestionService(db_session)
+        for wrong in (None, "", "complaints"):
+            with pytest.raises(PermissionError, match="Type the box's name"):
+                await service.delete_box(box, wrong)
+        assert await service.get_box(dept["org"], box.id) is not None
+
+    async def test_deleting_takes_submissions_and_screenshots_with_it(
+        self, db_session, dept, upload_dir
+    ):
+        box = await _box(
+            db_session,
+            dept,
+            name="Ideas",
+            follow_up_enabled=True,
+            public_board_enabled=True,
+        )
+        suggestion, _ = await _submit(
+            db_session, box, dept["member"], screenshots=[_webp()]
+        )
+        service = SuggestionService(db_session)
+        await service.add_submitter_message(suggestion, dept["member"], "Any news?")
+        reviewed = await service.get_for_review(
+            dept["org"], dept["training_officer"], suggestion.id
+        )
+        await service.update_disposition(
+            reviewed,
+            dept["training_officer"],
+            {"disposition": "accepted", "public_response": "Scheduled"},
+        )
+        await service.publish(reviewed, dept["training_officer"], "Idea", "S")
+        await service.set_vote(dept["org"], dept["admin"], suggestion.id, True)
+        stored = (
+            await db_session.execute(
+                select(SuggestionAttachment.file_path).where(
+                    SuggestionAttachment.suggestion_id == suggestion.id
+                )
+            )
+        ).scalar_one()
+        assert Path(stored).exists()
+
+        assert await service.delete_box(box, "  Ideas ") == 1
+
+        for model in (
+            Suggestion,
+            SuggestionAttachment,
+            SuggestionMessage,
+            SuggestionStatusEvent,
+            SuggestionVote,
+        ):
+            remaining = await db_session.scalar(
+                select(func.count())
+                .select_from(model)
+                .where(model.organization_id == dept["org"])
+            )
+            assert remaining == 0, model.__name__
+        assert not Path(stored).exists()
+
+    async def test_the_admin_list_reports_submission_counts(self, db_session, dept):
+        box = await _box(db_session, dept)
+        await _submit(db_session, box, dept["member"])
+        await _submit(db_session, box, dept["member"])
+        (view,) = [
+            b
+            for b in await SuggestionService(db_session).list_boxes_for_admin(
+                dept["org"]
+            )
+            if b["id"] == box.id
+        ]
+        assert view["submission_count"] == 2
+
     async def test_archived_box_takes_no_submissions(self, db_session, dept):
         box = await _box(db_session, dept, is_active=False)
         service = SuggestionService(db_session)
@@ -847,6 +932,46 @@ class TestOverHttp:
             )
         assert resp.status_code == 201, resp.text
         assert sent == []
+
+    async def test_deleting_a_box_over_http(self, db_session, dept, sent):
+        box = await _box(db_session, dept, name="Ideas")
+        await _submit(db_session, box, dept["member"])
+        async with await _client(db_session, dept["training_officer"]) as client:
+            forbidden = await client.delete(f"/suggestions/admin/boxes/{box.id}")
+        async with await _client(db_session, dept["admin"]) as client:
+            unconfirmed = await client.delete(f"/suggestions/admin/boxes/{box.id}")
+            deleted = await client.delete(
+                f"/suggestions/admin/boxes/{box.id}", params={"confirm_name": "Ideas"}
+            )
+            gone = await client.delete(f"/suggestions/admin/boxes/{box.id}")
+        assert forbidden.status_code == 403
+        assert unconfirmed.status_code == 409
+        assert "1 submission" in unconfirmed.json()["detail"]
+        assert deleted.status_code == 204
+        assert gone.status_code == 404
+        audit = (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.event_type == "suggestion_box_deleted",
+                    AuditLog.user_id == dept["admin"],
+                )
+            )
+        ).scalar_one()
+        assert audit.event_data["submissions_deleted"] == 1
+
+    async def test_another_orgs_box_cannot_be_deleted(self, db_session, dept, sent):
+        other_org = await _org(db_session)
+        other_admin = await _user(db_session, other_org, "Otto")
+        admin_pos = await _position(
+            db_session, other_org, "Admin", permissions=["suggestions.manage"]
+        )
+        await _assign(db_session, other_admin, admin_pos)
+        await db_session.flush()
+        box = await _box(db_session, dept)
+        async with await _client(db_session, other_admin) as client:
+            resp = await client.delete(f"/suggestions/admin/boxes/{box.id}")
+        assert resp.status_code == 404
+        assert await SuggestionService(db_session).get_box(dept["org"], box.id)
 
     async def test_disposition_change_notifies_named_submitter(
         self, db_session, dept, sent

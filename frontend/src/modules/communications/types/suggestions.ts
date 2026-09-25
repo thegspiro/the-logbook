@@ -33,6 +33,8 @@ export interface SuggestionBoxAdmin extends SuggestionBoxPublic {
   /** Told of new submissions; cannot read them. */
   watcherPositions: ReviewerRef[];
   watcherMembers: ReviewerRef[];
+  /** What a permanent delete would destroy. */
+  submissionCount: number;
   createdAt?: string | null;
   updatedAt?: string | null;
 }

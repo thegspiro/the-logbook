@@ -529,12 +529,12 @@ const EmailTemplatesPage: React.FC = () => {
         {activeTab === 'history' && <MessageHistoryList templates={templates} />}
         {/* A department that has already edited a notice keeps its wording:
               ensure_default_templates only ever creates missing rows, and the
-              migration that carries a redesign (f0d76814a9ab, for the
-              centred-masthead shell) rewrites only bodies still identical to
-              the previous default. So an edited template reaches the new
-              design when — and only when — somebody presses Reset. Which
-              nothing in the UI would otherwise say, leaving an admin to
-              conclude the redesign skipped them. */}
+              migrations that carry a redesign (f0d76814a9ab, then
+              b795d1b3401b for every earlier shipped version) rewrite only
+              fields still identical to a default this codebase shipped. So an
+              edited template reaches the new design when — and only when —
+              somebody presses Reset. Which nothing in the UI would otherwise
+              say, leaving an admin to conclude the redesign skipped them. */}
         {activeTab === 'templates' && (
           <div className="mb-6 flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
             <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-blue-700 dark:text-blue-400" />
