@@ -15,6 +15,8 @@ for these things:
   issues them.
 - **A self-service kiosk** where members check loaner gear out and back in
   themselves by tapping their ID card, then the item.
+- **Apparatus checks.** Tag a truck's compartments: during an equipment check,
+  tapping a compartment jumps to it, and tapping a tool's tag answers it.
 
 A **not-seen report** sits alongside: the items nobody has handled in months.
 It uses assignments and checkouts as well as taps, so it also works without
@@ -75,6 +77,8 @@ settings page.
 | Identify a member by ID card tap       | `inventory.manage`, plus the NFC ID Cards integration |
 | Open the self-service kiosk            | `inventory.kiosk` (granted to no position by default) |
 | Allow a category at the kiosk          | `inventory.manage`                                    |
+| Tag a checklist compartment            | `inventory.check_manage`                              |
+| Tap tags during an equipment check     | `inventory.check_submit` or `inventory.check_manage`  |
 | Items Not Seen report                  | `inventory.manage` (works with NFC off)               |
 | Tap a tag to open an item              | `inventory.view` (held by the seeded member roles)    |
 
@@ -282,6 +286,51 @@ the officer who opened the kiosk as the one who checked it out.
 busy kiosk stays signed in; an idle one signs out after the department's
 session timeout, and the officer signs in again.
 
+### Apparatus compartment tags
+
+Tag the compartments on a truck, and the crew can walk the morning check by
+tapping: a compartment's tag opens that compartment on the check, and an
+item's tag answers that item.
+
+**Setting it up** (`inventory.check_manage`)
+
+1. Open the checklist in **Inventory → Administration → Checklists** and save
+   it if it is new.
+2. On a compartment's **⋯** menu, choose **NFC tags**, then write or read a tag
+   and stick it on that compartment on the truck. A compartment can carry more
+   than one tag: a checklist shared by several trucks needs one tag per truck,
+   all linked to the same compartment.
+3. For an item to be answered by a tap, it needs its own inventory tag (see
+   [Step 2](#step-2-link-tags-to-items)) **and** its checklist row must be
+   linked to that inventory item in the builder.
+
+**Using it** (crews, Chrome on Android)
+
+1. Start the check and press **Tap NFC tags**. The phone keeps reading until
+   you press it again.
+2. Tap a compartment's tag to jump to that compartment.
+3. Tap an item's tag. A pass/fail row nobody has answered yet is marked
+   passed ("marked present"). A count, a reading or an expiry date is brought
+   on screen for you to finish, since a tap cannot count stock or read a
+   gauge. A tap never changes an answer already given.
+
+**What it refuses, and says so:** a compartment tag from another checklist; an
+item that is not on this checklist; a shelf tag; a lost tag. A member limited
+to their assigned checklists can only tap against those.
+
+**Keep in mind:**
+
+- **Replacing a checklist's contents deletes its compartment tags.** Loading a
+  vehicle preset, or importing JSON or CSV, recreates every compartment, and
+  the tags go with the old ones. Re-link them afterwards. Editing a
+  compartment, or adding and removing items, keeps its tags.
+- **An iPhone cannot tap during a check.** Reading tags inside a page needs Web
+  NFC, which only Chrome on Android has. Tapping a compartment tag from an
+  iPhone's home screen shows "Tap it during an equipment check".
+- **A tap on a pass/fail row marks it passed.** For rows that ask whether
+  something _works_ (a radio, a light), the crew should still test it, and can
+  change the answer to failed.
+
 ### Identifying a member by ID card
 
 Where the department issues [Member ID Cards](Member-ID-Cards) (**Settings →
@@ -344,6 +393,8 @@ record**: the log tracks equipment, not where members were.
 | "This tag is marked lost"                                 | **Mark found** on the item or shelf it belongs to                                                                                                                                                                                                            |
 | A tag linked on a phone does not match at the desk reader | Many USB readers type the serial as a **decimal** number, or with the bytes **reversed**. The app matches the hexadecimal serial a phone reads. Set the reader to hexadecimal, forward byte order, or link tags with the same reader you will read them with |
 | An iPhone tap opens the login page                        | Expected: the member must be signed in. After signing in, the tag's page finds the item                                                                                                                                                                      |
+| "This tag is on a compartment of another checklist"       | The tag is linked to a compartment on a different checklist. Link it to this checklist's compartment too, or use the right truck's tag                                                                                                                       |
+| "... is not on this checklist"                            | The tapped item's checklist row is not linked to that inventory item. Link it in the checklist builder                                                                                                                                                       |
 | Put-away refuses an item                                  | It is assigned, checked out, lost, stolen or retired. The message says which; fix the record first                                                                                                                                                           |
 | A shelf audit lists an item as missing that is there      | Its tag was not read. Tap it again before **Finish audit**; an item on a shelf with no tag is always missing                                                                                                                                                 |
 | **Or tap their ID card** does not appear                  | The NFC ID Cards integration is not connected, inventory NFC is off, or the phone has no Web NFC                                                                                                                                                             |
@@ -351,9 +402,9 @@ record**: the log tracks equipment, not where members were.
 ## Reference
 
 - Endpoints and data model: [Inventory → NFC Tags](Module-Inventory#nfc-tags-2026-09-24).
-- Tables: `inventory_nfc_tags`, `inventory_nfc_scans`, `inventory_nfc_audits`,
-  `inventory_nfc_audit_items`, `inventory_nfc_audit_digests`, and
-  `storage_areas.audit_frequency`. See
+- Tables: `inventory_nfc_tags` (including `check_compartment_id`),
+  `inventory_nfc_scans`, `inventory_nfc_audits`, `inventory_nfc_audit_items`,
+  `inventory_nfc_audit_digests`, and `storage_areas.audit_frequency`. See
   [Database Schema](Database-Schema).
 - Tag identifiers are stored as a **peppered SHA-256 hash** plus the last four
   characters, the same scheme as member ID cards. The phone that links

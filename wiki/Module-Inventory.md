@@ -233,7 +233,7 @@ wildcard, exactly as `view_medical` / `manage_medical` already were.
 | `maintenance_records`         | Maintenance history (inspection, repair, calibration, etc.)                                                                                                                                                                           |
 | `inventory_vendors`           | Suppliers: name (unique per organization), account number, phone/email/fax/website, address, payment terms, preferred and active flags _(2026-08-16)_                                                                                 |
 | `inventory_vendor_contacts`   | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag _(2026-08-16)_                                                                                                          |
-| `inventory_nfc_tags`          | NFC tags on items or storage areas: hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization _(2026-09-24)_                                                                               |
+| `inventory_nfc_tags`          | NFC tags on items, storage areas or equipment-check compartments (`check_compartment_id`, 2026-09-25): hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization _(2026-09-24)_            |
 | `inventory_nfc_scans`         | Staff NFC taps on items (lookups and put-aways): who, when, which tag, to and from which storage area _(2026-09-24)_                                                                                                                  |
 | `inventory_nfc_audits`        | Shelf audits: the storage area (name snapshotted), who ran it, expected / found / missing / unexpected counts, who confirmed moving items _(2026-09-24)_                                                                              |
 | `inventory_nfc_audit_items`   | One line per item a shelf audit judged: found, missing or unexpected, where it was recorded, whether it was moved _(2026-09-24)_                                                                                                      |
@@ -361,12 +361,12 @@ report is the exception: it lives outside the NFC router and works with the
 switch off.
 
 ```
-GET    /api/v1/inventory/nfc/settings                    # Is it on? (inventory.view)
+GET    /api/v1/inventory/nfc/settings                    # Is it on? (inventory.view, check_submit or check_manage)
 POST   /api/v1/inventory/nfc/resolve                     # Tapped tag -> item, exact match (inventory.view)
 GET    /api/v1/inventory/items/{id}/nfc-tags             # Tags on an item (inventory.manage)
 POST   /api/v1/inventory/items/{id}/nfc-tags             # Link a tag (inventory.manage)
-PATCH  /api/v1/inventory/nfc-tags/{tag_id}               # Relabel, mark lost/found (inventory.manage)
-DELETE /api/v1/inventory/nfc-tags/{tag_id}               # Unlink (inventory.manage)
+PATCH  /api/v1/inventory/nfc-tags/{tag_id}               # Relabel, mark lost/found (inventory.manage; check_manage for a compartment tag)
+DELETE /api/v1/inventory/nfc-tags/{tag_id}               # Unlink (inventory.manage; check_manage for a compartment tag)
 POST   /api/v1/inventory/nfc/resolve-any                 # Tapped tag -> item or storage area (inventory.view)
 POST   /api/v1/inventory/nfc/put-away                    # Move an item onto a storage area (inventory.manage)
 GET    /api/v1/inventory/items/{id}/nfc-scans            # Tap log, newest first (inventory.manage)
@@ -380,6 +380,9 @@ POST   /api/v1/inventory/nfc/resolve-member              # Tapped member ID card
 GET    /api/v1/inventory/nfc/untagged                    # Active items with no working tag; ?search=&category_id= (inventory.manage)
 GET    /api/v1/inventory/nfc/audit-schedule              # Scheduled areas, overdue first; ?due_only= (inventory.manage)
 PUT    /api/v1/inventory/storage-areas/{id}/audit-schedule # {"audit_frequency": "weekly"|...|null} (inventory.manage)
+GET    /api/v1/inventory/check-compartments/{id}/nfc-tags # Tags on a checklist compartment (inventory.check_manage)
+POST   /api/v1/inventory/check-compartments/{id}/nfc-tags # Link a tag to a checklist compartment (inventory.check_manage)
+POST   /api/v1/inventory/nfc/resolve-check               # Tap during a check of template_id -> compartment or checklist rows (check_submit or check_manage)
 POST   /api/v1/inventory/kiosk/identify                  # Card -> member + open loans (inventory.kiosk)
 POST   /api/v1/inventory/kiosk/preview                   # Card + item -> checkout or return, or 409 why not (inventory.kiosk)
 POST   /api/v1/inventory/kiosk/checkout                  # Borrow (inventory.kiosk)
@@ -403,9 +406,14 @@ GET    /api/v1/inventory/not-seen/export                 # The same as CSV, up t
   retired item resolves to nothing.
 - **Browser support.** Web NFC exists only in Chrome on Android, over HTTPS. That
   is the browser's limit, not the app's.
-- **Shelves carry tags too** (linked from the storage area editor). A tag names
-  exactly one item or one storage area; the database enforces it
-  (`ck_inventory_nfc_tags_one_target`).
+- **Shelves carry tags too** (linked from the storage area editor), and so do
+  **equipment-check compartments** (linked from the checklist builder). A tag
+  names exactly one item, one storage area or one compartment; the database
+  enforces it (`ck_inventory_nfc_tags_one_target`). A compartment tag is read
+  only during a check of its own template (`/nfc/resolve-check`); the item and
+  put-away lookups refuse it. Deleting a compartment deletes its tags, and so
+  does replacing a template's contents from a vehicle preset, JSON or CSV
+  import, because that recreates every compartment.
 - **Put away** (`/inventory/put-away`). Tapping a shelf first _opens_ it: every
   item tapped afterwards goes onto it. Tapping an item first holds it until a
   shelf is tapped, moves it there, and leaves no shelf open. The move is the

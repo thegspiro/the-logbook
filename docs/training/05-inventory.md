@@ -893,6 +893,27 @@ The kiosk says why it will not lend something (for example, "Ask a
 quartermaster" for restricted gear). It forgets you after a minute without a
 tap.
 
+### Apparatus compartment tags
+
+**Required Permission:** `inventory.check_manage` to tag compartments;
+`inventory.check_submit` to tap during a check.
+
+**To tag a truck:** open the checklist in the builder, choose **NFC tags** on a
+compartment's **⋯** menu, and link a tag. Stick it on that compartment. For an
+item to be answered by a tap, give the item its own tag and link its checklist
+row to the inventory item.
+
+**During a check** (Chrome on Android):
+
+1. Press **Tap NFC tags**.
+2. Tap a compartment's tag to jump to it.
+3. Tap an item's tag. An unanswered pass/fail row is marked passed. A count,
+   reading or date is brought on screen to finish by hand. A tap never changes
+   an answer already given.
+
+Loading a vehicle preset or importing a checklist replaces its compartments and
+deletes their tags; re-link them afterwards.
+
 ### Items not seen
 
 **Required Permission:** `inventory.manage`
