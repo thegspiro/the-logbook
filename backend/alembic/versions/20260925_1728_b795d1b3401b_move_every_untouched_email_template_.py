@@ -1,7 +1,7 @@
 """Move every untouched email template onto the current defaults.
 
 Revision ID: b795d1b3401b
-Revises: 3f3b315165ed
+Revises: 53ce8e3e29a5
 Create Date: 2026-09-25 17:28:00
 
 A department's templates are written to ``email_templates`` the first time
@@ -58,7 +58,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "b795d1b3401b"
-down_revision: Union[str, Sequence[str], None] = "3f3b315165ed"
+down_revision: Union[str, Sequence[str], None] = "53ce8e3e29a5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
