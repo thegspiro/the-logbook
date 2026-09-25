@@ -105,8 +105,8 @@ Add sections to organize the evaluation, then add criteria (scored items) within
 3. Select the **criterion type**. The dropdown offers five:
    - **Pass / Fail** (default) — one tap, the digital equivalent of a tick box
    - **Numeric Score** — a weighted step scored out of its max, and the only
-     type that feeds the overall percentage unless the template opts pass/fail
-     steps in (see "Pass/Fail steps can be made to carry points" below)
+     type that always feeds the overall percentage; the others feed it only as
+     their **If this step is failed** setting says (step 5)
    - **Timed Task** — a stopwatch on the step itself, with its own limit
    - **Checklist** — several sub-items ticked off within one step
    - **Statement** — text the examiner reads aloud to the candidate; it marks
@@ -114,11 +114,31 @@ Add sections to organize the evaluation, then add criteria (scored items) within
 4. On a **Numeric Score** step, set **Max Points** — this is where weighting
    lives, and a step worth 20 moves the percentage twice as far as one worth 10.
    The field appears for that type alone; the other four have nothing to weight.
-5. Check **Required** if this is a critical criterion — failing a required criterion triggers automatic fail when "Require All Critical" is enabled on the template.
+5. On a **Pass / Fail**, **Checklist** or **Timed Task** step, choose what a
+   failure costs under **If this step is failed**:
+   - **Recorded only — no effect on the score** — the verdict appears on the
+     scorecard and moves nothing
+   - **Worth points — earned by passing** — adds its points (1 unless you set
+     a number) to the points available; a fail earns none of them
+   - **Deducts points — taken off if failed** — takes a fixed number of points
+     (1 unless you set a number) off the total, without changing the points
+     available
+
+   Left alone, a Pass / Fail step follows the template's default and the other
+   two are recorded only. The builder refuses to save a template where a step
+   deducts points but no step earns any — there would be no total for the
+   deduction to come off.
+6. Check **Critical** (_Must pass to pass the test_) if failing the step should
+   end the test — a failed critical criterion is an automatic fail when
+   **Require all critical criteria to pass** is enabled on the template. This is
+   a separate question from step 5: **If this step is failed** decides what a
+   failure costs, **Critical** decides whether it ends the test. A step can
+   deduct points without being critical, so a candidate can lose points on it
+   and still pass.
 
 ![Skill template builder with its sections and scored criteria](./images/09-04-template-builder.png)
 
-> **Hint:** Required (critical) criteria are the digital equivalent of the "Critical Criteria" section at the bottom of NREMT skill sheets. If a candidate triggers any of these, the result is an automatic FAIL regardless of their point score. Non-critical criteria that are unchecked display as "Not Completed" (not "FAIL").
+> **Hint:** Critical criteria are the digital equivalent of the "Critical Criteria" section at the bottom of NREMT skill sheets. If a candidate triggers any of these, the result is an automatic FAIL regardless of their point score. Non-critical criteria that are unchecked display as "Not Completed" (not "FAIL").
 
 > **Passing Points appears only on critical criteria** _(2026-08-08)_. It used to
 > render for every scored criterion, with a "(critical only)" hint doing the
@@ -130,9 +150,9 @@ Add sections to organize the evaluation, then add criteria (scored items) within
 >
 > - The "passing score cannot exceed max score" validation is now scoped to
 >   critical criteria too. Previously a value left over from before you unchecked
->   **Required** could block saving over a field the editor no longer showed —
+>   **Critical** could block saving over a field the editor no longer showed —
 >   an error with no reachable cause.
-> - **Unchecking Required keeps the stored threshold rather than clearing it.**
+> - **Unchecking Critical keeps the stored threshold rather than clearing it.**
 >   Clearing would look tidier, but the threshold falls back to `0` when absent,
 >   so an accidental toggle off and back on would leave the criterion quietly
 >   passing at any score. The value sits inert until the criterion is critical
@@ -247,6 +267,11 @@ which is what a psychomotor evaluation means.
 trail, never touch enrollment progress, and self-drilling is the point of
 them — so you can run a practice test on yourself freely.
 
+The rule holds after the test too. An officer cannot validate, **Void result**
+or **Send back to examiner** on a test in which they are the candidate — void
+and send-back are refused with _"You cannot void your own skills test"_ (or
+_return_), and another officer has to act on it.
+
 - The template's sections and criteria loaded for scoring
 
 ![Start skill test form with its template and candidate fields](./images/09-06-new-test-form.png)
@@ -310,6 +335,15 @@ opens on the scoring screen; a finished one still opens on its scorecard.
 A test that has been started says **Tap to resume**; one created but not yet
 begun says **Tap to start**. A cancelled test says neither — it is closed, and
 opening it shows its scorecard rather than the scoring screen.
+
+**The server counts every pickup**, not the device, so a client cannot reset
+it. A resumed test shows **Resumed evaluation** above the scoring — the clock
+carried on from the last save, so the recorded time is not an exact stopwatch
+reading — and its printed scorecard says **Timing not verified**. If someone
+else saved the same test in between, the screen says _Someone else changed this
+test. Your scoring is not being saved._ and offers **Reload current results**.
+It retries on its own only when the retry cannot overwrite another examiner's
+marks on this test.
 
 ![Test records showing unfinished, completed and cancelled rows side by side](./images/09-14-test-records-statuses.png)
 
@@ -403,9 +437,9 @@ They could because **not every criterion type feeds the percentage**:
 | Criterion type | Counts toward the percentage?                                |
 | -------------- | ------------------------------------------------------------ |
 | **Score**      | Yes — earns 0…max                                            |
-| **Pass/Fail**  | **Only if the template opts in** (see below); off by default |
-| **Checklist**  | No                                                           |
-| **Timed**      | No                                                           |
+| **Pass/Fail**  | **Only if the step or the template opts in** (see below)     |
+| **Checklist**  | Only if its **If this step is failed** setting says so       |
+| **Timed**      | Only if its **If this step is failed** setting says so       |
 | **Statement**  | No — read aloud, marks itself, never scored                  |
 
 This is a defensible way to build a sheet — the questions still appear on the
@@ -430,10 +464,44 @@ Two things fixed that:
 > behaviour keeps the number it was given. Change it and only new tests follow
 > the new rule.
 
-> **Checklist and timed steps stay out of the point pool deliberately.** A
-> checklist is partly completable and would need its own earned-fraction rule; a
-> time limit is a gate on the evolution, not a measure of how well it was
-> performed. If either must decide the outcome, make it a **critical** criterion.
+> **Checklist and timed steps are recorded only unless you choose otherwise.**
+> Their **If this step is failed** setting can make them worth points or deduct
+> points, judged on the step's overall pass or fail — a checklist earns no
+> fraction for partly completed items. If either must decide the outcome, make
+> it a **critical** criterion.
+
+#### A failed step that costs points without ending the test
+
+A step set to **Deducts points — taken off if failed** costs a fixed number of
+points when the examiner records a fail, and ends the test only if it is also
+**Critical**.
+
+![A validated skill result's score breakdown: 47 of 50 points earned, a 10-point deduction on one failed step, netting 74% against the department's 70% pass mark — PASS, with no critical failure](./images/19-30-skill-point-deduction.png)
+
+The candidate above lost ten points on one failed step and still passed at 74%,
+because that step is not Critical. The first line of **How this score was
+calculated** reads as the subtraction it is: **47 of 50 points earned, −10
+deducted = 74%**, with the pass mark stated underneath and the step that took
+the points named at the bottom. The earned figure is gross — a reader adding up
+the marks on the sheet arrives at 47.
+
+- **A deducting step does not enlarge the point pool.** The sheet above is out
+  of 50 whether or not it lists the step, so a candidate who does it correctly
+  reads the same percentage as one testing on a sheet that never mentioned it.
+  Only the fault costs anything.
+- **A step left unscored is never charged.** A deduction is a recorded
+  judgement about what the candidate did, and an examiner who never marked the
+  step made no such judgement. (A blank _Critical_ step is a different matter,
+  and is reported as a critical failure in its own right.)
+- **Deductions can drive the total below zero, and the percentage stops at
+  0%.** The individual penalties are still listed in full, so the clamp hides
+  nothing.
+
+If the sheet carries no point-earning steps at all, there is nothing for a
+deduction to come off, and the panel says so — _The N deducted points did not
+affect this score. No step on this template earns points, so there is no total
+to subtract from. A training officer should give the scored steps a point
+value._
 
 ### A statement that is read on the clock _(2026-08-09)_
 
@@ -1388,7 +1456,7 @@ Competency Matrix reflects new scores
 | Elapsed time looks wrong on an old test                          | Tests completed before 2026-08-08 recorded wall-clock time from when the test first went in progress, so one begun in the morning and submitted after lunch shows hours. Newer tests record the examiner's stopwatch reading.                                                                                                                                     |
 | A member says their result is missing                            | Check the department's disclosure setting (**Training Admin > Configuration > Skills-Test Results**) and the template's override. If disclosure is **Nothing**, or release is set to **On release** and the result has not been released, the member sees no entry at all — this is by design. Release it from the records tab.                                   |
 | Editing a published template changed an old scorecard            | It no longer can. Every test created from 2026-08-08 onward stores a snapshot of the template at creation. Tests completed before that were backfilled from the current template and are frozen against further edits.                                                                                                                                            |
-| Passing Points field disappeared from a criterion                | It is shown only on **critical** criteria — a non-critical criterion cannot fail the test on its own, so the threshold was never read. Check **Required** to bring the field back; the previous value is still there.                                                                                                                                             |
+| Passing Points field disappeared from a criterion                | It is shown only on **critical** criteria — a non-critical criterion cannot fail the test on its own, so the threshold was never read. Check **Critical** to bring the field back; the previous value is still there.                                                                                                                                             |
 | Statement criterion text not saving                              | Ensure the criterion type is set to `statement` in the template builder. Save and republish the template.                                                                                                                                                                                                                                                         |
 | Can I score a test with no signal?                               | Not yet. Autosave covers a locked phone or a killed tab **with signal up**, which is the common case. True offline operation is scoped but not built — the blocker is that the test structure has to be _read_ from the server before you can score into it. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#skills-testing--offline-support-2026-08-07).      |
 
@@ -1398,4 +1466,7 @@ Competency Matrix reflects new scores
 
 ## August 12–14, 2026 update
 
-Point deductions, resume conflicts, result visibility, and officer-only state from August 12–14 are covered with a screenshot marker in [the release workflow lesson](./19-august-2026-release-changes.md#training-sessions-programs-and-skills-tests).
+- Point deductions: [A failed step that costs points without ending the test](#a-failed-step-that-costs-points-without-ending-the-test)
+- Resumed tests and save conflicts: [Coming back to an interrupted test](#coming-back-to-an-interrupted-test-2026-08-09)
+- Result visibility: [Who Sees a Result — Disclosure Settings](#who-sees-a-result--disclosure-settings-2026-08-08)
+- Officer-only checklist steps: [Steps only the officer sees](./02-training.md#steps-only-the-officer-sees)

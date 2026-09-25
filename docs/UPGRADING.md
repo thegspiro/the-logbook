@@ -1221,7 +1221,8 @@ Two steps **add** grants, again only to seeded rows. `e3b7c25f9a41` gives
 `training.configure` to the Membership Coordinator, and to the seeded chief,
 officer, president, safety-officer and training-officer positions that still
 hold `training.manage`. `c4a91b7e2f08` gives `users.view_consents` (the
-photo-use consent roster) to the Historian and Public Outreach positions, but
+photo-use consent roster) to the Communications Officer / PIO, Historian and
+Public Outreach positions, but
 only where their permissions still match the shipped default — a position your
 department edited is left alone.
 

@@ -132,7 +132,10 @@ their duties require:
   was created or changed, your notification preferences, or the permission
   lists behind your roles — only the role names the profile displays. Those
   fields remain visible to user administrators (`users.view`), roster
-  managers, and you on your own record.
+  managers, and you on your own record. The withheld fields come back empty
+  rather than as an error — `null`, and an empty permission list on each role —
+  so an integration that reads colleague profiles with `members.view` must
+  tolerate them being absent.
 
 ![A colleague's profile as an officer: compliance summary, training and certification history and emergency contacts all present](./images/17-03-profile-as-officer.png)
 
@@ -175,6 +178,25 @@ the panel is there, the values are withheld.
 - **Access to sensitive records is logged.** If you ever want to know who
   looked at something, that question is answerable.
 
+### Photo Use Consent
+
+Whether you agreed to your photograph being used is set in your own User
+Settings. The people who publish — choosing images for a newsletter, a social
+post or a press release — see the whole department's answers on one roster at
+**`/communications/photo-use-consent`**: who has agreed, who has declined, and
+who has not answered. It shows only what identifies a member on a photo call
+sheet — name, rank, station and membership number — and no contact details.
+Inactive members are left out unless **Include inactive members** is ticked.
+The roster is read-only: your consent is yours to set.
+
+Opening it takes any one of `users.view_consents`, `notifications.manage`,
+`members.manage` or `users.edit`. `users.view_consents` is a grant that means
+only this page, and it is seeded to the **Historian**, **Public Outreach** and
+**Communications Officer / PIO** positions. The roster is excluded from the
+app's response cache, like other member-identifying data.
+
+![Photo Use Consent, captured as the administrator (who holds users.view_consents): one member agreed, one declined and twenty not answered, with the roster showing each member's standing](./images/19-43-photo-use-consent.png)
+
 ---
 
 ## The Privacy Notice and Terms
@@ -189,6 +211,8 @@ The notice explains what the department collects, where it comes from, why it
 is used, who can see it, how long it is kept, and what you can ask for. If your
 department has written its own wording, that is what you will see; otherwise
 the platform's defaults apply, which are written for a fire-service deployment.
+
+![The Privacy Policy above the fold, opening with who controls the system and the department's ownership of every account on it](./images/19-03-privacy-header.png)
 
 ### The part members ask about most
 

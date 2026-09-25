@@ -135,6 +135,9 @@ Navigate to **Training > Submit Training** to log a completed training activity.
 
 ![Submit Training form with course, date, hours, and attachment fields](./images/02-03-submit-training.png)
 
+**[SCREENSHOT — REPLACE the Submit External Training capture.** The screen is
+rebuilt; the certificate now attaches inline.**]**
+
 **After Submission:**
 
 - Your record enters a **Pending Review** state.
@@ -156,6 +159,13 @@ The library shows all courses created by your department, organized by category.
 - Category
 - Required hours
 - Whether it is a certification course
+- **Certifies:** and the qualification, on a course whose completion grants one
+
+The **Certifies** field on the course form names the qualification a completion
+grants the member, dated from the training record's completion and expiry — it
+decides which shift positions they may fill. Qualifications are recorded only
+this way; see
+[Rank and Qualification Are Different Things](./01-membership.md#rank-and-qualification-are-different-things-2026-08-26).
 
 ![Course Library showing course cards grouped by category](./images/02-04-course-library.png)
 
@@ -299,6 +309,9 @@ If each meeting covers a different subject, you want a cohort.
 ## Training Programs
 
 Navigate to **Training > Programs** to view available training programs.
+For holders of `training.manage` the page's breadcrumb starts at **Training
+Administration**, one tap back to the admin hub; other members do not see that
+crumb.
 
 Training programs are structured multi-phase curricula (e.g., "Probationary Firefighter Program", "Officer Development"). Each program includes:
 
@@ -343,6 +356,13 @@ Navigate to **Training > Programs** and click **Create Program** to open the pip
 ![Training pipeline wizard with program details and phase list](./images/02-11-pipeline-wizard.png)
 
 > **Hint:** The **program code** must be unique within your department. Use a short, memorable code — it appears on printed program pages and travels with the program when it is exported and shared with other departments.
+
+**Deleting a pipeline** — **Delete pipeline** on its detail page — permanently
+removes its phases, milestones, enrollments and every enrolled member's
+progress, and cannot be undone. Requirements created inside the pipeline go
+with it once no other program references them. A requirement the pipeline only
+linked to from the library is not the pipeline's to delete: it stays in
+Training Requirements.
 
 ### Enrolling Members
 
@@ -843,6 +863,40 @@ When you finalize a training session, what happens next depends on the **Require
 ![Step 3 of the Create Session form — the settings, with Require instructor confirmation among them](./images/02-91-session-confirmation-toggle.png)
 
 > **Hint:** Leave **Require instructor confirmation** off for routine drills you want completed the moment you finalize them. Turn it on only when a second officer must sign off before records count.
+
+### Linking a Session to What It Counts Toward
+
+What finalizing credits is decided by the session's links, set on the create
+form's second step, **Training Info**, under **Connect to Requirements &
+Programs**: the **course** it teaches, the **Training Category** its hours land
+in, the **Requirement** attendance credits directly, and the **Training
+Program** whose enrolled members it advances (with an optional **Program
+Phase**). All are optional.
+
+![Step 2 of the training-session wizard: an existing course selected, and the category, requirement and program links under a plain-language line saying what attendance will advance](./images/19-29-training-session-linkage.png)
+
+- **The summary line** under the pickers restates the combination in plain
+  terms — for a program and a requirement, _Attendance will advance
+  "requirement" for members enrolled in program_ — and changes as you change
+  the links.
+- **Choosing a course pre-fills** the category and program that course
+  declares, without overriding a choice already made. Requirements the course
+  counts toward are offered as one-tap suggestions.
+- **Everything offered is this department's.** The pickers list only your
+  organization's categories, requirements and programs, and the server checks
+  every id again on save — a link to another department's record is refused
+  with a flat "Invalid training program" (or category, requirement, phase)
+  that does not reveal whether the record exists. **Program Phase** has no
+  organization of its own and is checked through the program it belongs to.
+- **A phase need not match the program above it.** Sessions generated from a
+  course cohort can carry a class-level phase from a different program, so the
+  combination is allowed rather than rejected.
+
+The same pickers appear on the event page as **Requirements & Programs** — that
+is where a session created before a requirement existed, or linked to the wrong
+pipeline, gets corrected. Changing them steers how future attendance is
+credited; members already signed off for the session keep the credit they were
+given. Once the session is finalized the links are locked.
 
 ---
 
@@ -2561,9 +2615,6 @@ This PDF is saved to the department's records and can be submitted to the state 
 
 ## Submit External Training, Rebuilt _(2026-08-23 → 08-24)_
 
-Full operator walkthrough:
-[release lesson](./19-august-2026-release-changes.md#submit-external-training-the-certificate-goes-with-it).
-
 ### The certificate goes with the submission
 
 Attaching evidence used to be a **second step after submitting**, which meant it
@@ -2609,8 +2660,10 @@ number its own queue is measuring. Training's built-in three are **Compliance**,
 **Hours this quarter** and **Active programs** — a department that changes
 nothing keeps them.
 
-Access is `training.manage` plus the Training module enabled. See the
-[shared frame section of the release lesson](./19-august-2026-release-changes.md#every-administration-page-opens-the-same-way).
+Access is `training.manage` plus the Training module enabled. See
+[Every Administration Page Opens the Same Way](./08-admin-reports.md#every-administration-page-opens-the-same-way-2026-08-23)
+in the administration guide, which covers choosing the metrics and who can see
+the queue.
 
 ## The Compliance Matrix is a queue you can work _(2026-09-05)_
 
