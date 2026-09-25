@@ -25,7 +25,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.training import ShiftEquipmentCheck, ShiftEquipmentCheckItem
-from app.models.user import User
+from app.models.user import Organization, User
 from app.schemas.equipment_check import (
     ApparatusInventoryResponse,
     CheckLogResponse,
@@ -1561,6 +1561,10 @@ async def export_pdf(
     )
 
     service = EquipmentCheckService(db)
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    organization = org_result.scalar_one_or_none()
     date_from_str = date_from.isoformat() if date_from else None
     date_to_str = date_to.isoformat() if date_to else None
 
@@ -1574,6 +1578,7 @@ async def export_pdf(
             data,
             date_from=date_from_str,
             date_to=date_to_str,
+            organization=organization,
         )
         filename = "equipment_check_compliance.pdf"
 
@@ -1589,6 +1594,7 @@ async def export_pdf(
             data,
             date_from=date_from_str,
             date_to=date_to_str,
+            organization=organization,
         )
         filename = "equipment_check_failures.pdf"
 
@@ -1633,7 +1639,7 @@ async def export_pdf(
                 last = u.last_name or ""
                 name = f"{first} {last}".strip()
                 check_dict["checked_by_name"] = name or "Unknown"
-        pdf_bytes = generate_check_detail_pdf(check_dict)
+        pdf_bytes = generate_check_detail_pdf(check_dict, organization=organization)
         filename = f"equipment_check_{check_id[:8]}.pdf"
 
     else:
