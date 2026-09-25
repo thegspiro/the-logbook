@@ -47,6 +47,8 @@ def _frozen_clock(monkeypatch):
     from app.services import (
         cert_alert_service,
         inventory_service,
+        qualification_service,
+        reports_service,
         training_enhancement_service,
         training_program_service,
         training_service,
@@ -61,6 +63,8 @@ def _frozen_clock(monkeypatch):
     monkeypatch.setattr(training_enhancement_service, "date", _ServerDate)
     monkeypatch.setattr(training_program_service, "date", _ServerDate)
     monkeypatch.setattr(training_service, "date", _ServerDate)
+    monkeypatch.setattr(reports_service, "date", _ServerDate)
+    monkeypatch.setattr(qualification_service, "date", _ServerDate)
 
 
 def _org(tz="America/New_York", **extra):
@@ -419,3 +423,68 @@ class TestRenewalTasks:
         bound = set(query.compile().params.values())
         assert LOCAL_TODAY in bound
         assert FROZEN_UTC.date() not in bound
+
+
+class TestCertificationExpirationReport:
+    async def test_a_cert_expiring_today_locally_is_not_reported_expired(self):
+        from app.services.reports_service import ReportsService
+
+        record = SimpleNamespace(
+            user_id="u1",
+            course_name="EMT",
+            certification_number="C-1",
+            issuing_agency=None,
+            completion_date=None,
+            expiration_date=LOCAL_TODAY,
+        )
+        user = SimpleNamespace(
+            id="u1", first_name="Jane", last_name="Smith", username="js", rank=None
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_scalars([record]), _scalars([user]), _one(_org())]
+        )
+        service = ReportsService(db)
+        service._get_rank_display_map = AsyncMock(return_value={})
+
+        report = await service._generate_certification_expiration("org-1")
+
+        # Valid through today on the department's calendar; the UTC date
+        # (tomorrow) would have reported it expired at -1 days.
+        entry = report["entries"][0]
+        assert entry["expiry_status"] == "expiring_soon"
+        assert entry["days_until_expiry"] == 0
+
+
+class TestQualificationDefaults:
+    async def test_current_qualifications_default_to_the_departments_date(self):
+        from app.services.qualification_service import QualificationService
+
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await QualificationService(db).get_member_codes("u1", "org-1")
+
+        query = db.execute.await_args_list[1].args[0]
+        bound = set(query.compile().params.values())
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+
+class TestShiftEligibilityDate:
+    def test_an_evening_shift_is_judged_on_its_own_day(self):
+        """A shift starting 10:30 PM Eastern is stored as 02:30 UTC the next
+        day; a qualification lapsing that next day must not be read as lapsed
+        for this shift, nor one lapsing today as still good."""
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        shift = SimpleNamespace(shift_date=None, start_time=FROZEN_UTC)
+
+        assert ShiftEligibilityService._shift_date(shift, _org()) == LOCAL_TODAY
+
+    def test_no_shift_means_the_departments_today(self):
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        assert ShiftEligibilityService._shift_date(None, _org()) == LOCAL_TODAY

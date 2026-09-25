@@ -21,6 +21,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.qualification import MemberQualification
+from app.utils.org_timezone import resolve_org_today
 
 # code -> (label, shift positions it clears the holder for)
 #
@@ -130,7 +131,9 @@ class QualificationService:
             select(MemberQualification.qualification_code).where(
                 MemberQualification.user_id == user_id,
                 MemberQualification.organization_id == organization_id,
-                self._current_on(as_of or date.today()),
+                self._current_on(
+                    as_of or await resolve_org_today(self.db, organization_id)
+                ),
             )
         )
         return [code for (code,) in result.all()]
@@ -204,7 +207,9 @@ class QualificationService:
                 MemberQualification.expires_on,
             ).where(
                 MemberQualification.organization_id == organization_id,
-                self._current_on(as_of or date.today()),
+                self._current_on(
+                    as_of or await resolve_org_today(self.db, organization_id)
+                ),
             )
         )
         # No per-code deduplication: ``uq_member_qualification`` allows one row

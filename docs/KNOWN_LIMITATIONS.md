@@ -485,7 +485,7 @@ against the plain one will find the masked version noticeably smaller. Fitting
 it larger means some launchers cut the corners off the crest, which is worse and
 is not visible to whoever chooses the setting.
 
-## "Today" Is Still the Server's Date in 102 Places (2026-09-25)
+## "Today" Is Still the Server's Date in 94 Places (2026-09-25)
 
 🚩 **Open — the remainder needs reading, not a sweep.** `date.today()` returns
 the server's date, and a container runs in UTC, so for a US department it is
@@ -524,18 +524,27 @@ UTC morning are off for the western half of the country every time they run.
 - Recertification renewal tasks (the renewal window) and instructor
   qualification expiry, both for validating an instructor for a session and
   for listing a course's qualified instructors (`tests/test_org_local_today.py`).
+- Member qualifications (`qualification_service.py`): a qualification is
+  current through its expiry day when no date is given, and shift
+  eligibility judges one against the shift's day on the department's
+  calendar (an evening shift's UTC start is the next day) — the position
+  roster passes the department's date from the org it already holds. The
+  reports service's certification-expiration report, apparatus inspection
+  due dates and call-volume year-to-date default
+  (`tests/test_org_local_today.py`).
 
-**Still on the server's date, each needing its own read:**
-`qualification_service.py`'s defaults
-(shift eligibility), and the certification-expiration report in
-`reports_service.py`. Also, `admin_hub_service.py` and the dashboard fall back
-to UTC for an organization with no timezone set while `scheduling_timezone`
-falls back to America/New_York; the compliance percentage now resolves its own
-date so it agrees with the matrix, but the hub's other date-based cards still
-use the UTC fallback. Organizations get America/New_York by column default, so
-this affects only a row whose timezone was cleared.
+**Still on the server's date, each needing its own read:** apparatus operator
+certificate expiry, in both `shift_eligibility_service._get_operator_map` and
+`EvocLevelService.check_driver_evoc_eligibility` — the roster's docstring
+requires the two to agree, so they move together. Also,
+`admin_hub_service.py` and the dashboard fall back to UTC for an organization
+with no timezone set while `scheduling_timezone` falls back to
+America/New_York; the compliance percentage now resolves its own date so it
+agrees with the matrix, but the hub's other date-based cards still use the
+UTC fallback. Organizations get America/New_York by column default, so this
+affects only a row whose timezone was cleared.
 
-**Remaining call sites** (102, counted by `grep -rn "date.today()"
+**Remaining call sites** (94, counted by `grep -rn "date.today()"
 backend/app` excluding comments): `equipment_check_service.py` 11,
 `apparatus_service.py` 11, `scheduling_service.py` 7, `inventory_service.py`
 7, `facilities_service.py` 5, `driver_exception_service.py` 5, and 1–4 each
