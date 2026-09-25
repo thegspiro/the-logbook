@@ -1,7 +1,7 @@
 """
 Operational Rank Model
 
-Per-organization configurable operational ranks (e.g. Fire Chief, Captain,
+Per-organization configurable operational ranks (e.g. Chief, Captain,
 Firefighter).  Department leadership can add, rename, reorder, and
 deactivate ranks through the admin settings UI.
 """
