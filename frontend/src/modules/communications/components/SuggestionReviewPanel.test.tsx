@@ -8,6 +8,7 @@ const mockList = vi.fn();
 const mockGet = vi.fn();
 const mockOptions = vi.fn();
 const mockForward = vi.fn();
+const mockUpdate = vi.fn();
 
 vi.mock('../services/suggestionsService', () => ({
   suggestionsService: {
@@ -15,6 +16,7 @@ vi.mock('../services/suggestionsService', () => ({
     getForReview: (...args: unknown[]) => mockGet(...args) as unknown,
     getForwardOptions: (...args: unknown[]) => mockOptions(...args) as unknown,
     forward: (...args: unknown[]) => mockForward(...args) as unknown,
+    updateDisposition: (...args: unknown[]) => mockUpdate(...args) as unknown,
     getReviewAttachment: vi.fn(),
   },
 }));
@@ -104,5 +106,51 @@ describe('SuggestionReviewPanel forwarding', () => {
     expect(await screen.findByText(/was forwarded to you/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Forward' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Withdraw forward/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('SuggestionReviewPanel disposition changes', () => {
+  beforeEach(() => {
+    mockList.mockReset();
+    mockGet.mockReset();
+    mockUpdate.mockReset();
+    mockList.mockResolvedValue({ items: [summary(), summary({ id: 's2', title: 'Hose tester' })], total: 2 });
+    mockGet.mockResolvedValue(detail());
+  });
+
+  it('drops a closed submission from the Open list and tells the page', async () => {
+    mockUpdate.mockResolvedValue(detail({ disposition: 'accepted' }));
+    const onReviewed = vi.fn();
+    renderWithRouter(<SuggestionReviewPanel boxes={[]} selectedId="s1" onSelect={vi.fn()} onReviewed={onReviewed} />);
+
+    const user = userEvent.setup();
+    const list = await screen.findByRole('list');
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Disposition' }), 'accepted');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('heading', { name: 'Engine 2 bay door' })).toBeInTheDocument();
+    expect(within(screen.getByRole('list')).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(screen.getByRole('list')).queryByText('Engine 2 bay door')).not.toBeInTheDocument();
+    expect(onReviewed).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a submission listed when only its note changes', async () => {
+    mockUpdate.mockResolvedValue(detail({ internalNote: 'Asked the captain' }));
+    const onReviewed = vi.fn();
+    renderWithRouter(<SuggestionReviewPanel boxes={[]} selectedId="s1" onSelect={vi.fn()} onReviewed={onReviewed} />);
+
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText(/Internal note/), 'Asked the captain');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await vi.waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith('s1', {
+        disposition: 'new',
+        internalNote: 'Asked the captain',
+      })
+    );
+    expect(within(screen.getByRole('list')).getAllByRole('listitem')).toHaveLength(2);
+    expect(onReviewed).not.toHaveBeenCalled();
   });
 });

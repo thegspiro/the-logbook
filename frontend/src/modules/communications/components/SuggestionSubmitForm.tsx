@@ -254,6 +254,14 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
                 label="Drop screenshots here or click to browse"
                 onFilesSelected={setScreenshots}
               />
+              {/* Said as soon as the sixth lands, not only when Submit refuses it. */}
+              {screenshots.length > MAX_SCREENSHOTS && (
+                <p role="alert" className="text-theme-alert-danger-text mt-1 text-xs">
+                  {screenshots.length} screenshots selected. Remove{' '}
+                  {screenshots.length - MAX_SCREENSHOTS === 1 ? 'one' : screenshots.length - MAX_SCREENSHOTS} to submit;
+                  at most {MAX_SCREENSHOTS} can be attached.
+                </p>
+              )}
               {willBeAnonymous && (
                 <p className="text-theme-text-muted mt-1 text-xs">
                   Image metadata (such as location and device) is removed. Check the screenshots themselves do not show

@@ -47,6 +47,7 @@ import {
   Truck,
   Ban,
   Store,
+  Lightbulb,
 } from 'lucide-react';
 import { formatNumber } from '../../../utils/dateFormatting';
 import type { EmailTemplate } from '../types';
@@ -75,6 +76,7 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   ballot_eligibility_summary: { icon: ListChecks, label: 'Ballot Eligibility Summary', color: 'text-amber-600' },
   duplicate_application: { icon: Copy, label: 'Duplicate Application', color: 'text-slate-500' },
   application_withdrawn: { icon: FileX, label: 'Application Withdrawn', color: 'text-slate-500' },
+  suggestion_submitted: { icon: Lightbulb, label: 'Suggestion Submitted', color: 'text-amber-600' },
   series_end_reminder: { icon: CalendarRange, label: 'Series End Reminder', color: 'text-purple-400' },
   shift_assignment: { icon: CalendarCheck, label: 'Shift Assignment', color: 'text-green-600' },
   shift_decline: { icon: UserX, label: 'Shift Decline', color: 'text-red-400' },
@@ -161,6 +163,11 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
     id: 'inventory',
     label: 'Inventory & Property',
     types: ['inventory_change', 'property_return_reminder'],
+  },
+  {
+    id: 'suggestions',
+    label: 'Suggestion Boxes',
+    types: ['suggestion_submitted'],
   },
   {
     id: 'storefront',

@@ -32,7 +32,7 @@ import html
 import os
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from loguru import logger
@@ -48,6 +48,7 @@ from app.models.suggestion import (
     SuggestionAuthorRole,
     SuggestionBox,
     SuggestionBoxReviewer,
+    SuggestionBoxWatcher,
     SuggestionDisposition,
     SuggestionForward,
     SuggestionMessage,
@@ -156,7 +157,10 @@ class SuggestionService:
         # collection as written, not as first loaded into the session.
         result = await self.db.execute(
             select(SuggestionBox)
-            .options(selectinload(SuggestionBox.reviewers))
+            .options(
+                selectinload(SuggestionBox.reviewers),
+                selectinload(SuggestionBox.watchers),
+            )
             .where(
                 SuggestionBox.id == str(box_id),
                 SuggestionBox.organization_id == str(organization_id),
@@ -168,7 +172,10 @@ class SuggestionService:
     async def list_boxes_for_admin(self, organization_id: str) -> List[Dict[str, Any]]:
         result = await self.db.execute(
             select(SuggestionBox)
-            .options(selectinload(SuggestionBox.reviewers))
+            .options(
+                selectinload(SuggestionBox.reviewers),
+                selectinload(SuggestionBox.watchers),
+            )
             .where(SuggestionBox.organization_id == str(organization_id))
             .order_by(SuggestionBox.is_active.desc(), SuggestionBox.name)
         )
@@ -188,13 +195,15 @@ class SuggestionService:
             follow_up_enabled=data.follow_up_enabled,
             is_active=data.is_active,
             created_by=str(actor_id),
-            # Initialized so _replace_reviewers never lazy-loads the collection
-            # on a new instance, which an async session cannot do.
+            # Initialized so _replace_grants never lazy-loads a collection on
+            # a new instance, which an async session cannot do.
             reviewers=[],
+            watchers=[],
         )
         self.db.add(box)
         await self.db.flush()
         self._replace_reviewers(box, organization_id, data)
+        self._replace_watchers(box, organization_id, data)
         await self.db.commit()
         return await self._reload_admin_view(organization_id, box.id)
 
@@ -211,6 +220,7 @@ class SuggestionService:
         box.follow_up_enabled = data.follow_up_enabled
         box.is_active = data.is_active
         self._replace_reviewers(box, organization_id, data)
+        self._replace_watchers(box, organization_id, data)
         await self.db.commit()
         return await self._reload_admin_view(organization_id, box.id)
 
@@ -249,6 +259,7 @@ class SuggestionService:
             follow_up_enabled=True,
             is_active=position_id is not None,
             reviewers=[],
+            watchers=[],
         )
         if position_id:
             box.reviewers.append(
@@ -300,6 +311,20 @@ class SuggestionService:
             organization_id,
             label="reviewer member",
         )
+        await assert_all_in_org(
+            self.db,
+            Position,
+            data.watcher_position_ids or [],
+            organization_id,
+            label="notified position",
+        )
+        await assert_all_in_org(
+            self.db,
+            User,
+            data.watcher_member_ids or [],
+            organization_id,
+            label="notified member",
+        )
         # A live box with nobody able to read it would accept submissions into
         # a void — the submitter would believe they had been heard.
         if data.is_active and not (
@@ -318,23 +343,56 @@ class SuggestionService:
     def _replace_reviewers(
         self, box: SuggestionBox, organization_id: str, data: SuggestionBoxWrite
     ) -> None:
-        wanted = {("position", pid) for pid in data.reviewer_position_ids} | {
-            ("member", uid) for uid in data.reviewer_member_ids
+        self._replace_grants(
+            box.reviewers,
+            SuggestionBoxReviewer,
+            organization_id,
+            data.reviewer_position_ids,
+            data.reviewer_member_ids,
+        )
+
+    def _replace_watchers(
+        self, box: SuggestionBox, organization_id: str, data: SuggestionBoxWrite
+    ) -> None:
+        # Both omitted means "leave them alone": an older client that does not
+        # know about watchers must not clear them by saving the box.
+        if data.watcher_position_ids is None and data.watcher_member_ids is None:
+            return
+        self._replace_grants(
+            box.watchers,
+            SuggestionBoxWatcher,
+            organization_id,
+            data.watcher_position_ids or [],
+            data.watcher_member_ids or [],
+        )
+
+    @staticmethod
+    def _replace_grants(
+        collection: List[Any],
+        model: Any,
+        organization_id: str,
+        position_ids: Iterable[str],
+        member_ids: Iterable[str],
+    ) -> None:
+        """Make ``collection`` hold exactly the named positions and members,
+        keeping rows that survive so their ids and timestamps do too."""
+        wanted = {("position", pid) for pid in position_ids} | {
+            ("member", uid) for uid in member_ids
         }
         current = {}
-        for reviewer in list(box.reviewers):
+        for grant in list(collection):
             key = (
-                ("position", reviewer.position_id)
-                if reviewer.position_id
-                else ("member", reviewer.user_id)
+                ("position", grant.position_id)
+                if grant.position_id
+                else ("member", grant.user_id)
             )
             if key in wanted:
-                current[key] = reviewer
+                current[key] = grant
             else:
-                box.reviewers.remove(reviewer)
+                collection.remove(grant)
         for kind, ref in wanted - set(current):
-            box.reviewers.append(
-                SuggestionBoxReviewer(
+            collection.append(
+                model(
                     organization_id=str(organization_id),
                     position_id=ref if kind == "position" else None,
                     user_id=ref if kind == "member" else None,
@@ -353,10 +411,9 @@ class SuggestionService:
     async def _reviewer_names(
         self, boxes: Sequence[SuggestionBox]
     ) -> Tuple[Dict[str, str], Dict[str, str]]:
-        position_ids = {
-            r.position_id for b in boxes for r in b.reviewers if r.position_id
-        }
-        member_ids = {r.user_id for b in boxes for r in b.reviewers if r.user_id}
+        grants = [g for b in boxes for g in (*b.reviewers, *b.watchers)]
+        position_ids = {g.position_id for g in grants if g.position_id}
+        member_ids = {g.user_id for g in grants if g.user_id}
         position_names: Dict[str, str] = {}
         member_names: Dict[str, str] = {}
         if position_ids:
@@ -375,16 +432,25 @@ class SuggestionService:
         position_names: Dict[str, str],
         member_names: Dict[str, str],
     ) -> Dict[str, Any]:
-        positions = [
-            {"id": r.position_id, "name": position_names.get(r.position_id, "")}
-            for r in box.reviewers
-            if r.position_id
-        ]
-        members = [
-            {"id": r.user_id, "name": member_names.get(r.user_id, "")}
-            for r in box.reviewers
-            if r.user_id
-        ]
+        def refs(grants: Iterable[Any]) -> Tuple[List[Dict], List[Dict]]:
+            grants = list(grants)
+            positions = [
+                {"id": g.position_id, "name": position_names.get(g.position_id, "")}
+                for g in grants
+                if g.position_id
+            ]
+            members = [
+                {"id": g.user_id, "name": member_names.get(g.user_id, "")}
+                for g in grants
+                if g.user_id
+            ]
+            return (
+                sorted(positions, key=lambda p: p["name"]),
+                sorted(members, key=lambda m: m["name"]),
+            )
+
+        reviewer_positions, reviewer_members = refs(box.reviewers)
+        watcher_positions, watcher_members = refs(box.watchers)
         return {
             "id": box.id,
             "name": box.name,
@@ -392,8 +458,10 @@ class SuggestionService:
             "anonymity_mode": box.anonymity_mode,
             "follow_up_enabled": bool(box.follow_up_enabled),
             "is_active": bool(box.is_active),
-            "reviewer_positions": sorted(positions, key=lambda p: p["name"]),
-            "reviewer_members": sorted(members, key=lambda m: m["name"]),
+            "reviewer_positions": reviewer_positions,
+            "reviewer_members": reviewer_members,
+            "watcher_positions": watcher_positions,
+            "watcher_members": watcher_members,
             "created_at": box.created_at,
             "updated_at": box.updated_at,
         }
@@ -1016,6 +1084,32 @@ class SuggestionService:
             {r.position_id for r in rows if r.position_id},
         )
 
+    async def watcher_recipient_ids(
+        self, organization_id: str, box_id: str
+    ) -> List[str]:
+        """Active members told of a box's new submissions without reviewing
+        it. Anyone who also reviews the box is left out: they get the
+        reviewer's notice, which links to the submission, and one is enough."""
+        rows = (
+            (
+                await self.db.execute(
+                    select(SuggestionBoxWatcher).where(
+                        SuggestionBoxWatcher.organization_id == str(organization_id),
+                        SuggestionBoxWatcher.box_id == str(box_id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        watchers = await self.active_member_ids(
+            organization_id,
+            {r.user_id for r in rows if r.user_id},
+            {r.position_id for r in rows if r.position_id},
+        )
+        reviewers = set(await self.reviewer_recipient_ids(organization_id, box_id))
+        return [w for w in watchers if w not in reviewers]
+
     async def suggestion_recipient_ids(self, suggestion: Suggestion) -> List[str]:
         """Everyone who reviews this suggestion: the box's reviewers plus
         whoever it was forwarded to."""
@@ -1202,33 +1296,78 @@ def reviewer_notice(
     application; a complaint copied into mailboxes is out of the department's
     control for good."""
     box = html.escape(box_name)
+    path = f"/suggestions?tab=review&id={suggestion_id}"
     if reply:
         subject = f"New follow-up reply in the {_subject_safe(box_name)} box"
         lead = (
             f"The submitter replied on a submission in the <strong>{box}</strong> box."
         )
+        message = f"The submitter replied on a submission in the {box_name} box."
     else:
         subject = f"New submission in the {_subject_safe(box_name)} box"
         lead = f"A new submission was received in the <strong>{box}</strong> box."
-    url = html.escape(_link(f"/suggestions?tab=review&id={suggestion_id}"))
+        message = f"A new submission was received in the {box_name} box."
+    url = html.escape(_link(path))
     body = (
         f"<p>{lead}</p>"
         f'<p><a href="{url}">Open it in the Logbook</a> to read it.</p>'
     )
-    return {"subject": subject, "heading": subject, "body_html": body}
+    notice = {
+        "subject": subject,
+        "heading": subject,
+        "body_html": body,
+        "message": message,
+        "action_path": path,
+    }
+    if not reply:
+        # The new-submission email is the administrator-editable template;
+        # the bell and push still use the fields above.
+        notice["template"] = "suggestion_submitted"
+        notice["box_name"] = box_name
+    return notice
+
+
+def watcher_notice(box_name: str) -> Dict[str, str]:
+    """For someone told of a submission who cannot read it. No link to the
+    submission, because following one would only reach a refusal."""
+    box = html.escape(box_name)
+    subject = f"New submission in the {_subject_safe(box_name)} box"
+    message = (
+        f"A new submission was received in the {box_name} box. "
+        "Its reviewers have been notified."
+    )
+    body = (
+        f"<p>A new submission was received in the <strong>{box}</strong> box.</p>"
+        "<p>You are notified of this box's submissions but do not review it; "
+        "its reviewers have been notified and will handle it.</p>"
+    )
+    return {
+        "subject": subject,
+        "heading": subject,
+        "body_html": body,
+        "message": message,
+        "action_path": "/suggestions",
+    }
 
 
 def forward_notice(box_name: str, suggestion_id: str) -> Dict[str, str]:
     """Like ``reviewer_notice``: no submission content, only a link."""
     box = html.escape(box_name)
     subject = f"A submission in the {_subject_safe(box_name)} box was forwarded to you"
-    url = html.escape(_link(f"/suggestions?tab=review&id={suggestion_id}"))
+    path = f"/suggestions?tab=review&id={suggestion_id}"
+    url = html.escape(_link(path))
     body = (
         f"<p>A reviewer of the <strong>{box}</strong> box forwarded a submission "
         "to you for review.</p>"
         f'<p><a href="{url}">Open it in the Logbook</a> to read it.</p>'
     )
-    return {"subject": subject, "heading": subject, "body_html": body}
+    return {
+        "subject": subject,
+        "heading": subject,
+        "body_html": body,
+        "message": (f"A reviewer of the {box_name} box forwarded a submission to you."),
+        "action_path": path,
+    }
 
 
 def submitter_notice(
@@ -1242,24 +1381,38 @@ def submitter_notice(
             f"The status of your submission to the <strong>{box}</strong> box "
             f"is now <strong>{html.escape(label)}</strong>."
         )
+        message = f"The status of your submission to the {box_name} box is now {label}."
     else:
         subject = f"New reply on your submission to the {_subject_safe(box_name)} box"
         lead = (
             f"A reviewer replied on your submission to the <strong>{box}</strong> box."
         )
-    url = html.escape(_link(f"/suggestions?tab=mine&id={suggestion_id}"))
+        message = f"A reviewer replied on your submission to the {box_name} box."
+    path = f"/suggestions?tab=mine&id={suggestion_id}"
+    url = html.escape(_link(path))
     body = f'<p>{lead}</p><p><a href="{url}">Open it in the Logbook</a>.</p>'
-    return {"subject": subject, "heading": subject, "body_html": body}
+    return {
+        "subject": subject,
+        "heading": subject,
+        "body_html": body,
+        "message": message,
+        "action_path": path,
+    }
 
 
 async def send_suggestion_notice(
     organization_id: str, user_ids: List[str], notice: Dict[str, str]
 ) -> None:
-    """Background task: email ``notice`` to the active members in
-    ``user_ids``. Runs on its own session after the response; never raises.
+    """Background task: deliver ``notice`` to the active members in
+    ``user_ids`` — a bell entry, a web push where configured, and an email.
+    Runs on its own session after the response; never raises.
 
-    Email only, per CLAUDE.md pitfall #18 — nothing here warrants a text.
-    ``sent_by`` is never passed: the triggering member may be anonymous.
+    Each member gets their own email, so no recipient sees another's address.
+    The email goes out whatever the member's preferences say: for a reviewer
+    it is the channel of record (CLAUDE.md pitfall #18), and the bell is an
+    addition, not a substitute. Email only, never SMS — nothing here warrants
+    a text. ``sent_by`` is never passed: the triggering member may be
+    anonymous, and nothing identifying them goes into the bell entry either.
     """
     if not user_ids:
         return
@@ -1269,23 +1422,116 @@ async def send_suggestion_notice(
         async for session in database_manager.get_session():
             org = await session.get(Organization, str(organization_id))
             result = await session.execute(
-                select(User.email).where(
+                select(User).where(
                     User.id.in_(user_ids),
                     User.organization_id == str(organization_id),
                     User.is_active,
                 )
             )
-            emails = sorted({row[0] for row in result.all() if row[0]})
-            if not emails:
+            users = sorted(result.scalars().all(), key=lambda u: str(u.id))
+            if not users:
                 return
-            from app.services.email_service import EmailService, wrap_email_body
-
-            await EmailService(organization=org).send_email(
-                to_emails=emails,
-                subject=notice["subject"],
-                html_body=wrap_email_body(org, notice["heading"], notice["body_html"]),
-                db=session,
-                template_type=EMAIL_TEMPLATE_TYPE,
-            )
+            await _record_in_app(session, str(organization_id), users, notice)
+            await _push(session, str(organization_id), users, notice)
+            await _email(session, org, users, notice)
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Suggestion box notification failed: {}", exc)
+
+
+# A bell entry about a suggestion is a pointer, not a record; the suggestion
+# itself is where the history lives.
+NOTICE_EXPIRY_DAYS = 30
+
+
+async def _record_in_app(
+    session: AsyncSession,
+    organization_id: str,
+    users: Sequence[User],
+    notice: Dict[str, str],
+) -> None:
+    from app.models.notification import NotificationChannel, NotificationLog
+
+    expires_at = datetime.now(timezone.utc) + timedelta(days=NOTICE_EXPIRY_DAYS)
+    for user in users:
+        session.add(
+            NotificationLog(
+                organization_id=organization_id,
+                recipient_id=str(user.id),
+                channel=NotificationChannel.IN_APP,
+                category="suggestions",
+                subject=notice["subject"],
+                message=notice.get("message") or notice["subject"],
+                action_url=notice.get("action_path"),
+                expires_at=expires_at,
+                delivered=True,
+            )
+        )
+    try:
+        await session.commit()
+    except Exception as exc:
+        # The email below still carries the notice; a failed bell insert must
+        # not take it down too.
+        await session.rollback()
+        logger.warning("Suggestion box in-app notification failed: {}", exc)
+
+
+async def _push(
+    session: AsyncSession,
+    organization_id: str,
+    users: Sequence[User],
+    notice: Dict[str, str],
+) -> None:
+    try:
+        from app.services.push_service import PushService
+
+        push = PushService(session)
+        if not push.is_configured():
+            return
+        for user in users:
+            await push.send_to_user(
+                organization_id=uuid.UUID(organization_id),
+                user_id=uuid.UUID(str(user.id)),
+                title=notice["subject"],
+                body=notice.get("message") or "",
+                url=notice.get("action_path") or "/notifications?tab=inbox",
+                tag="suggestions",
+            )
+    except Exception as exc:
+        logger.warning("Suggestion box web push failed: {}", exc)
+
+
+async def _email(
+    session: AsyncSession,
+    org: Optional[Organization],
+    users: Sequence[User],
+    notice: Dict[str, str],
+) -> None:
+    from app.services.email_service import EmailService, wrap_email_body
+
+    email_service = EmailService(organization=org)
+    for user in users:
+        if not user.email:
+            continue
+        try:
+            if notice.get("template") == "suggestion_submitted":
+                await email_service.send_suggestion_submitted_email(
+                    to_email=user.email,
+                    recipient_name=_display_name(user) or "",
+                    box_name=notice["box_name"],
+                    suggestion_url=_link(notice["action_path"]),
+                    db=session,
+                    organization_id=str(org.id) if org else None,
+                )
+            else:
+                await email_service.send_email(
+                    to_emails=[user.email],
+                    subject=notice["subject"],
+                    html_body=wrap_email_body(
+                        org, notice["heading"], notice["body_html"]
+                    ),
+                    db=session,
+                    template_type=EMAIL_TEMPLATE_TYPE,
+                )
+        except Exception as exc:
+            # One bad address must not stop the rest of the reviewers hearing.
+            logger.warning("Suggestion box email to a recipient failed: {}", exc)

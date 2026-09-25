@@ -1,8 +1,9 @@
 /**
  * Create or edit a suggestion box, reviewers included.
  *
- * Reviewers are the only people who read a box. Saving replaces the whole
- * reviewer set, so the form always sends every field it owns.
+ * Reviewers are the only people who read a box; people it notifies are told a
+ * submission arrived and can read nothing. Saving replaces both sets, so the
+ * form always sends every field it owns.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -35,6 +36,9 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
   const [positionIds, setPositionIds] = useState<string[]>(box?.reviewerPositions.map((p) => p.id) ?? []);
   const [memberIds, setMemberIds] = useState<string[]>(box?.reviewerMembers.map((m) => m.id) ?? []);
   const [memberFilter, setMemberFilter] = useState('');
+  const [watcherPositionIds, setWatcherPositionIds] = useState<string[]>(box?.watcherPositions.map((p) => p.id) ?? []);
+  const [watcherMemberIds, setWatcherMemberIds] = useState<string[]>(box?.watcherMembers.map((m) => m.id) ?? []);
+  const [watcherFilter, setWatcherFilter] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const hasReviewers = positionIds.length + memberIds.length > 0;
@@ -43,6 +47,11 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
   const memberItems = useMemo(() => {
     const known = new Set(options.members.map((m) => m.id));
     const missing = (box?.reviewerMembers ?? []).filter((m) => !known.has(m.id));
+    return [...options.members, ...missing];
+  }, [options.members, box]);
+  const watcherItems = useMemo(() => {
+    const known = new Set(options.members.map((m) => m.id));
+    const missing = (box?.watcherMembers ?? []).filter((m) => !known.has(m.id));
     return [...options.members, ...missing];
   }, [options.members, box]);
 
@@ -61,6 +70,8 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
       isActive,
       reviewerPositionIds: positionIds,
       reviewerMemberIds: memberIds,
+      watcherPositionIds,
+      watcherMemberIds,
     };
     try {
       const saved = box
@@ -154,8 +165,8 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
 
           <div className="alert-info text-sm">
             <p className="text-theme-text-primary">
-              Only reviewers can read this box&apos;s submissions and set their disposition. They are emailed when
-              something new arrives. Managing boxes does not by itself let you read them.
+              Only reviewers can read this box&apos;s submissions and set their disposition. They get a notification and
+              an email when something new arrives. Managing boxes does not by itself let you read them.
             </p>
           </div>
           <ReviewerChecklist
@@ -183,6 +194,46 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
               filter={memberFilter}
             />
           </div>
+
+          <section
+            aria-labelledby="box-watchers-heading"
+            className="border-theme-surface-border space-y-4 border-t pt-4"
+          >
+            <div>
+              <h3 id="box-watchers-heading" className="text-theme-text-primary text-sm font-semibold">
+                Also notify
+              </h3>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                These people are told when a submission arrives but cannot read it: the notice says only which box
+                received something. Anyone who is also a reviewer gets the reviewer&apos;s notice instead.
+              </p>
+            </div>
+            <ReviewerChecklist
+              legend="Notified positions"
+              items={options.positions}
+              selected={watcherPositionIds}
+              onChange={setWatcherPositionIds}
+            />
+            <div>
+              <label htmlFor="box-watcher-filter" className="form-label">
+                Find members to notify
+              </label>
+              <input
+                id="box-watcher-filter"
+                className="form-input mb-2"
+                value={watcherFilter}
+                onChange={(e) => setWatcherFilter(e.target.value)}
+                placeholder="Filter by name"
+              />
+              <ReviewerChecklist
+                legend="Notified members"
+                items={watcherItems}
+                selected={watcherMemberIds}
+                onChange={setWatcherMemberIds}
+                filter={watcherFilter}
+              />
+            </div>
+          </section>
         </div>
 
         <div className="border-theme-surface-border flex justify-end gap-2 border-t px-5 py-4">

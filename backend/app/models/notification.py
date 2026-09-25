@@ -47,6 +47,7 @@ class NotificationTrigger(str, enum.Enum):
     ACTION_ITEM_ASSIGNED = "action_item_assigned"
     MEETING_SCHEDULED = "meeting_scheduled"
     DOCUMENT_UPLOADED = "document_uploaded"
+    SUGGESTION_SUBMITTED = "suggestion_submitted"
 
 
 # Triggers whose senders actually consult the rules table. A rule for anything
@@ -59,6 +60,7 @@ ENFORCED_TRIGGERS = frozenset(
     {
         NotificationTrigger.EVENT_REMINDER,
         NotificationTrigger.TRAINING_EXPIRY,
+        NotificationTrigger.SUGGESTION_SUBMITTED,
     }
 )
 

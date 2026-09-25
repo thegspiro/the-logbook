@@ -34,6 +34,7 @@ const MySuggestionsPanel: React.FC<MySuggestionsPanelProps> = ({ selectedId, onS
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
+    setError(null);
     suggestionsService
       .listMine()
       .then((data) => {
@@ -51,10 +52,10 @@ const MySuggestionsPanel: React.FC<MySuggestionsPanelProps> = ({ selectedId, onS
   }, [refreshToken]);
 
   useEffect(() => {
-    if (!selectedId) {
-      setDetail(null);
-      return;
-    }
+    // Cleared up front, not on arrival: until the new submission loads, the
+    // previous one must not stay on screen taking replies.
+    setDetail(null);
+    if (!selectedId) return;
     let cancelled = false;
     suggestionsService
       .getMine(selectedId)
@@ -69,14 +70,18 @@ const MySuggestionsPanel: React.FC<MySuggestionsPanelProps> = ({ selectedId, onS
     };
   }, [selectedId]);
 
+  // Actions act on the submission on screen, never on the one selected: the
+  // two differ while a new selection loads, and a reply typed under one must
+  // not be filed against the other.
+  const detailId = detail?.id ?? '';
   const loadAttachment = useCallback(
-    (attachmentId: string) => suggestionsService.getMineAttachment(selectedId, attachmentId),
-    [selectedId]
+    (attachmentId: string) => suggestionsService.getMineAttachment(detailId, attachmentId),
+    [detailId]
   );
 
   const reply = async (body: string) => {
     try {
-      setDetail(await suggestionsService.replyMine(selectedId, body));
+      setDetail(await suggestionsService.replyMine(detailId, body));
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Unable to send your reply.'));
       throw err;

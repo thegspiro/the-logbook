@@ -9,7 +9,7 @@
  * `?tab=` and `?id=` are what the notification emails link to.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { Lightbulb } from 'lucide-react';
 import { Breadcrumbs } from '../../../components/ux';
@@ -38,6 +38,7 @@ const SHORT_TAB_LABELS: Partial<Record<Tab, string>> = {
 const SuggestionsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [summary, setSummary] = useState<ReviewSummary | null>(null);
+  const [summaryFailed, setSummaryFailed] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
@@ -49,12 +50,22 @@ const SuggestionsPage: React.FC = () => {
       })
       .catch(() => {
         // Not being able to tell reviewer status only hides the Review tab;
-        // submitting is unaffected, so this stays quiet.
-        if (!cancelled) setSummary(null);
+        // submitting is unaffected, so this stays quiet unless the member was
+        // sent straight to the Review tab (below).
+        if (!cancelled) setSummaryFailed(true);
       });
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Keeps the open-count badge honest after a reviewer closes something. A
+  // failure here keeps the last count rather than hiding the tab mid-review.
+  const refreshSummary = useCallback(() => {
+    suggestionsService
+      .getReviewSummary()
+      .then(setSummary)
+      .catch(() => undefined);
   }, []);
 
   const tabs: Tab[] = summary?.isReviewer ? ['submit', 'mine', 'key', 'review'] : ['submit', 'mine', 'key'];
@@ -120,7 +131,17 @@ const SuggestionsPage: React.FC = () => {
         )}
         {active === 'key' && <FollowUpKeyPanel />}
         {active === 'review' && summary?.isReviewer && (
-          <SuggestionReviewPanel boxes={summary.boxes} selectedId={selectedId} onSelect={selectItem('review')} />
+          <SuggestionReviewPanel
+            boxes={summary.boxes}
+            selectedId={selectedId}
+            onSelect={selectItem('review')}
+            onReviewed={refreshSummary}
+          />
+        )}
+        {active === 'review' && summaryFailed && (
+          <p role="alert" className="alert-danger text-sm">
+            Unable to load the boxes you review. Please reload the page to try again.
+          </p>
         )}
       </div>
     </div>

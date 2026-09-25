@@ -28,6 +28,9 @@ export interface SuggestionBoxAdmin extends SuggestionBoxPublic {
   isActive: boolean;
   reviewerPositions: ReviewerRef[];
   reviewerMembers: ReviewerRef[];
+  /** Told of new submissions; cannot read them. */
+  watcherPositions: ReviewerRef[];
+  watcherMembers: ReviewerRef[];
   createdAt?: string | null;
   updatedAt?: string | null;
 }
@@ -40,6 +43,8 @@ export interface SuggestionBoxWrite {
   isActive: boolean;
   reviewerPositionIds: string[];
   reviewerMemberIds: string[];
+  watcherPositionIds: string[];
+  watcherMemberIds: string[];
 }
 
 export interface ReviewerOptions {
