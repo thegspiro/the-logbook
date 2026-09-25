@@ -655,11 +655,7 @@ they review no box. Only the suggestions forwarded to them appear there, each
 marked **Forwarded to you**, and the **Forward** button is replaced by a note
 that only the box's reviewers can forward it.
 
-> **Screenshot needed:**
-> _[What a forward recipient sees: Suggestions → **Review** for a member who
-> reviews no box, with the one forwarded submission marked **Forwarded to you**
-> and open, and under **Forwarded to** the note that only the box's reviewers can
-> forward it — no **Forward** button.]_
+![Suggestions → Review as a member who reviews no box: the one submission forwarded to them, marked Forwarded to you, open on the right with its disposition, internal note and thread, and under Forwarded to the note that only the box's reviewers can forward it, with no Forward button](./images/07-18-suggestion-forwarded-to-you.png)
 
 **On a phone** the list and the open submission stack rather than sitting side
 by side. Tap a submission and the page scrolls down to it; scroll back up for the

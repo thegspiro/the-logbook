@@ -1,5 +1,72 @@
 # Screenshot currency
 
+## Full sweep, 2026-09-25 — 479 images refreshed, 16 held back, 24 shots that did not run
+
+Every entry in the manifest was re-captured from a freshly seeded demo
+department and compared, image by image, with the committed file. The last full
+pass was 2026-08-25; a month of seed-data work shows here more than any UI
+change does. Screens that used to be photographed empty — medical screening
+records, skills test records, the store activity feed, an event's attendance
+list, a member profile's certifications — now carry the data their captions
+describe.
+
+**The first attempt was discarded, and the harness is fixed (#2719).** Every
+admin shot after `08-62-topnav-bell-badge` came back 21px too wide and in the
+top-bar layout. `08-62` mocks `/auth/branding`, which is where the navigation
+layout has come from since 2026-09-11, and route mocks outlived their shot on
+the reused page. `capture.mjs` now drops every route before each shot. None of
+that run's images were kept.
+
+### How the 494 changed images were judged
+
+Dimensions first, as the 2026-08-25 entry recommends: every image that shrank
+was opened next to its committed version, as were the largest growers and
+every shot the capture flagged as an empty state. Most of the empty-state
+flags were placeholder text in a form ("No folder", "No preference", "No
+personal information") and the images are good.
+
+**Held back — the committed image stands:**
+
+| Image | Why |
+| ----- | --- |
+| `04-42-cast-ballot`, `14-26-candidates-as-member`, `19-21-candidates-as-member` | The ballot is replaced by "Your meeting attendance is 0.0% … below the 50% minimum required to vote". The voting member has no meeting attendance in the seed, so the frame shows the gate rather than the ballot its caption describes. A seed gap |
+| `02-34-shift-report-analytics` | The monthly trend chart, which the text above it describes, is gone: every seeded report now falls in one month. The new rating-scale line is real and will arrive with the next capture |
+| `03-97-shift-reminder-expanded` | The expanded reminder reads "No equipment checklists are assigned for this shift"; its caption promises the apparatus checklists |
+| `08-34`, `08-36`, `08-37`, `08-56`, `08-57`, `08-58`, `08-64`, `08-65`, `08-66`, `08-67` (the email template screens) | Captured before migration `f0d76814a9ab` (centred-masthead shell) was applied to the demo database, so the stored template bodies are the previous design. They need re-shooting once the demo has been migrated; committing them would picture the retired shell |
+
+**Kept with a real UI change**, among others: `05-02` and `05-53` (items
+list split into Available / Unavailable, variants grouped under an expandable
+row), `05-85` (label printer picker on the print page), `09-23` and `09-24`
+(Not Observed column on the printed scorecard), `15-14` (the drawer's Back
+button), `07-16` (the follow-up key panel is narrower), and breadcrumbs above
+page titles throughout.
+
+**Filled:** `07-18-suggestion-forwarded-to-you`, the forward recipient's view
+of Suggestions → Review, which had been a placeholder in
+`07-documents-forms.md`.
+
+### Did not run — the committed bytes stand
+
+A shot that fails never reaches `page.screenshot`, so these are unchanged.
+
+| Shot | Failure |
+| ---- | ------- |
+| `07-19-suggestion-review-phone`, `03-103-shift-details-modal-phone` | The subject is outside the captured frame: the page scrolls itself (`useScrollDetailIntoView`) after the frame is measured. `07-19` is still a placeholder |
+| `04-40-end-event` | No running event has anyone checked in |
+| `06-21-apparatus-evoc-level`, `06-23-add-operator-member-picker` | No Intermediate EVOC level is defined in the demo |
+| `01-08-member-audit-history` | The page renders "No events match the selected" filter |
+| `19-32-notification-after-action` | `New Shift Assignment` matches three notifications; the selector needs narrowing |
+| `03-55`, `05-62`, `02-98`, `02-99`, `00-14`, `20-13`, `20-07`, `01-35`, `01-31`, `15-02`, `08-73`, `05-09`, `03-09`, `17-02`, `15-09`, `09-18`, `19-07` | Locator timeouts. Not re-run individually in this pass, so drift and timing are not yet told apart |
+
+### Found, not fixed here
+
+Five pages scroll sideways at the width they are shot:
+`08-62-topnav-bell-badge` (the top navigation bar is 21px wider than a 1440px
+viewport), `08-06-reports`, `02-65-print-compliance`,
+`03-82-call-volume-count-only` and `03-83-call-volume-detailed`. All five have
+the same dimensions as their committed images, so the overflow predates this
+pass.
+
 ## Guide 20 folded into the module guides, 2026-09-25
 
 The September release lesson is now an index, so its 18 `20-*` images moved
