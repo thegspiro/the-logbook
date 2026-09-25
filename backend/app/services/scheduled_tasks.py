@@ -117,6 +117,7 @@ from app.services.email_service import _redact_email
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.email_providers import stored_email_section
 from app.utils.hours import hours_from_minutes
+from app.utils.org_timezone import org_today
 from app.utils.positions import position_label
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
@@ -4503,6 +4504,7 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
         items_due = await service.get_nfpa_retirement_due_items(
             organization_id=org.id,
             days_ahead=180,
+            today=org_today(org),
         )
         if not items_due:
             return 0
@@ -4598,8 +4600,6 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
     its apparatus on every check and notifies through that path, so this alert
     exists to get ahead of the date, and a daily version of it would be noise.
     """
-    from datetime import date as _date
-
     from app.services.email_service import EmailService, wrap_email_body
     from app.services.equipment_check_service import EquipmentCheckService
     from app.services.inventory_service import InventoryService
@@ -4619,8 +4619,13 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
         return f"<strong style='color:{color};'>{text}</strong>"
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
+        # One department-local date for every count in the email; the job runs
+        # early in the UTC morning, which is still yesterday in the west.
+        today = org_today(org)
         check_service = EquipmentCheckService(db_session)
-        overview = await check_service.get_supply_overview(str(org.id), window_days)
+        overview = await check_service.get_supply_overview(
+            str(org.id), window_days, today=today
+        )
         deployed = overview.get("items", [])
 
         inventory_service = InventoryService(db_session)
@@ -4628,9 +4633,11 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
         # email body, so a medical-only officer receiving the whole list would
         # be mailed gear lot numbers and counts the API refuses them.
         medical_lots = await inventory_service.get_expiring_lots(
-            str(org.id), window_days, item_types=MEDICAL_ITEM_TYPES
+            str(org.id), window_days, item_types=MEDICAL_ITEM_TYPES, today=today
         )
-        all_lots = await inventory_service.get_expiring_lots(str(org.id), window_days)
+        all_lots = await inventory_service.get_expiring_lots(
+            str(org.id), window_days, today=today
+        )
         medical_lot_ids = {lot.id for lot, _ in medical_lots}
         gear_lots = [
             (lot, name) for lot, name in all_lots if lot.id not in medical_lot_ids
@@ -4639,8 +4646,6 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
 
         if not deployed and not lot_rows:
             return 0
-
-        today = _date.today()
 
         # Split by whether a replacement is actually on hand: "swap it" and
         # "order it" are different jobs, and the officer plans the week around
@@ -4787,16 +4792,11 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     On January 1st, generates yearly reports.
     """
     import calendar
-    from datetime import timezone as _tz_compliance
 
     from app.models.compliance_config import ComplianceConfig
     from app.services.compliance_config_service import ComplianceReportService
+    from app.utils.org_timezone import resolve_org_today
 
-    today = datetime.now(_tz_compliance.utc)
-    # Clamp the configured report day to the current month's length so a
-    # report_day of 29/30/31 still fires on the last day of shorter months
-    # (e.g. Feb 28) instead of being silently skipped.
-    days_in_month = calendar.monthrange(today.year, today.month)[1]
     results = []
     total_generated = 0
 
@@ -4817,8 +4817,17 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
         try:
             freq = config.auto_report_frequency
             report_day = config.report_day_of_month or 1
-            effective_day = min(report_day, days_in_month)
             org_id = str(config.organization_id)
+            # The department's date, not UTC's. This runs at 06:30 UTC, which
+            # on the 1st is still the last day of the previous month on the
+            # West Coast: a UTC date would send, and label, a report for a
+            # month the department has not finished.
+            today = await resolve_org_today(db, org_id)
+            # Clamp the configured report day to the current month's length so
+            # a report_day of 29/30/31 still fires on the last day of shorter
+            # months (e.g. Feb 28) instead of being silently skipped.
+            days_in_month = calendar.monthrange(today.year, today.month)[1]
+            effective_day = min(report_day, days_in_month)
 
             should_generate_monthly = (
                 freq in ("monthly", "quarterly") and today.day == effective_day

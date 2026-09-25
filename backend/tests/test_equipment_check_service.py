@@ -11,6 +11,7 @@ Mocked sessions/getters — no DB — so it runs in the sandbox.
 """
 
 import asyncio
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -726,7 +727,9 @@ class TestOperationalInventoryTemplateVisibility:
             new_callable=AsyncMock,
             return_value={},
         ):
-            await service.get_supply_overview("org-1")
+            # An explicit date keeps the org-timezone lookup out of the
+            # first execute, which is the query this test inspects.
+            await service.get_supply_overview("org-1", today=date(2026, 10, 6))
 
         self.assert_active_filter(mock_db.execute.await_args_list[0].args[0])
 

@@ -13,7 +13,7 @@ always used, and generation writes real timestamps — changing it would move
 existing departments' shift times.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from typing import Optional
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -62,3 +62,34 @@ async def resolve_scheduling_timezone(
         select(Organization).where(Organization.id == str(organization_id))
     )
     return scheduling_timezone(result.scalar_one_or_none())
+
+
+def org_today(organization: Optional[Organization]) -> date:
+    """Today's date on the department's calendar.
+
+    ``date.today()`` is the server's date, and a container runs in UTC, which
+    is already tomorrow for a US department every evening. Anything that
+    counts days, picks "last month", or decides expired-versus-not has to ask
+    the department's calendar instead.
+    """
+    return today_in(scheduling_timezone(organization))
+
+
+def today_in(tz: ZoneInfo) -> date:
+    """Today's date in ``tz``, for a caller that has already resolved it."""
+    return datetime.now(tz).date()
+
+
+async def resolve_org_today(db: AsyncSession, organization_id: UUID | str) -> date:
+    """Load the organization and return today's date in its timezone."""
+    return today_in(await resolve_scheduling_timezone(db, organization_id))
+
+
+def local_day_start_utc(day: date, tz: ZoneInfo) -> datetime:
+    """The UTC instant at which ``day`` begins on the department's calendar.
+
+    A date filter against a UTC timestamp column has to be bounded by the
+    department's midnight, not UTC's, or an evening row is filed under the
+    next day.
+    """
+    return datetime.combine(day, time.min, tz).astimezone(timezone.utc)

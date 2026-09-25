@@ -11,6 +11,7 @@ import math
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from uuid import NAMESPACE_URL, uuid5
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_
 from sqlalchemy import delete as sa_delete
@@ -48,6 +49,12 @@ from app.utils.check_types import COUNT, EXPIRY, LEVEL, normalize_check_type
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import best_matches
 from app.utils.org_scoping import is_in_org
+from app.utils.org_timezone import (
+    local_day_start_utc,
+    resolve_org_today,
+    resolve_scheduling_timezone,
+    today_in,
+)
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
@@ -2819,11 +2826,18 @@ class EquipmentCheckService:
     # ------------------------------------------------------------------
 
     async def get_supply_overview(
-        self, organization_id: str, days_ahead: int = 30
+        self,
+        organization_id: str,
+        days_ahead: int = 30,
+        today: Optional[date] = None,
     ) -> Dict[str, Any]:
         """Supply-officer view: checklist items expiring soon on apparatus,
-        joined with the ready replacement stock available to swap in."""
-        today = date.today()
+        joined with the ready replacement stock available to swap in.
+
+        ``today`` is the department's date, resolved from the org if omitted.
+        """
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
         cutoff = today + timedelta(days=days_ahead)
 
         result = await self.db.execute(
@@ -4898,6 +4912,33 @@ class EquipmentCheckService:
     # Report Queries
     # ============================================
 
+    async def _report_window(
+        self,
+        organization_id: str,
+        date_from: Optional[date],
+        date_to: Optional[date],
+        default_days: int,
+    ) -> Tuple[ZoneInfo, datetime, datetime]:
+        """The UTC instants bounding a report's date range, and the org's zone.
+
+        The dates a user picks — and the default "last N days" — are days on
+        the department's calendar, so each bound is the department's midnight.
+        Bounding at UTC midnight filed every evening check under the next day
+        and dropped the last evening of the range.
+        """
+        from datetime import timedelta
+
+        org_tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = today_in(org_tz)
+        date_from = date_from or today - timedelta(days=default_days)
+        date_to = date_to or today
+        start = local_day_start_utc(date_from, org_tz)
+        # Inclusive upper bound, matching the <= comparisons in the callers.
+        end = local_day_start_utc(date_to + timedelta(days=1), org_tz) - timedelta(
+            microseconds=1
+        )
+        return org_tz, start, end
+
     async def get_compliance_report(
         self,
         organization_id: str,
@@ -4905,18 +4946,8 @@ class EquipmentCheckService:
         date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         """Aggregated compliance stats by apparatus + date range."""
-        from datetime import timedelta
-
-        if not date_from:
-            date_from = date.today() - timedelta(days=30)
-        if not date_to:
-            date_to = date.today()
-
-        date_to_end = datetime.combine(date_to, datetime.max.time()).replace(
-            tzinfo=timezone.utc
-        )
-        date_from_start = datetime.combine(date_from, datetime.min.time()).replace(
-            tzinfo=timezone.utc
+        _, date_from_start, date_to_end = await self._report_window(
+            organization_id, date_from, date_to, default_days=30
         )
 
         # All checks in the date range
@@ -5033,18 +5064,8 @@ class EquipmentCheckService:
         offset: int = 0,
     ) -> Dict[str, Any]:
         """Paginated failure log with filters."""
-        from datetime import timedelta
-
-        if not date_from:
-            date_from = date.today() - timedelta(days=30)
-        if not date_to:
-            date_to = date.today()
-
-        date_to_end = datetime.combine(date_to, datetime.max.time()).replace(
-            tzinfo=timezone.utc
-        )
-        date_from_start = datetime.combine(date_from, datetime.min.time()).replace(
-            tzinfo=timezone.utc
+        _, date_from_start, date_to_end = await self._report_window(
+            organization_id, date_from, date_to, default_days=30
         )
 
         base_q = (
@@ -5157,18 +5178,8 @@ class EquipmentCheckService:
         interval: str = "weekly",
     ) -> Dict[str, Any]:
         """Per-item pass/fail trend over time."""
-        from datetime import timedelta
-
-        if not date_from:
-            date_from = date.today() - timedelta(days=90)
-        if not date_to:
-            date_to = date.today()
-
-        date_to_end = datetime.combine(date_to, datetime.max.time()).replace(
-            tzinfo=timezone.utc
-        )
-        date_from_start = datetime.combine(date_from, datetime.min.time()).replace(
-            tzinfo=timezone.utc
+        org_tz, date_from_start, date_to_end = await self._report_window(
+            organization_id, date_from, date_to, default_days=90
         )
 
         # Get all check items for this template item, selecting the parent
@@ -5233,7 +5244,12 @@ class EquipmentCheckService:
             check = checks_map.get(str(item.check_id))
             if not check or not check.checked_at:
                 continue
-            period_key = check.checked_at.strftime(fmt)
+            checked_at = check.checked_at
+            if checked_at.tzinfo is None:
+                checked_at = checked_at.replace(tzinfo=timezone.utc)
+            # Bucket by the department's calendar, the same one the range
+            # bounds use, so an evening check counts toward its own day.
+            period_key = checked_at.astimezone(org_tz).strftime(fmt)
             bucket = self._trend_bucket_for_status(item.status)
             if bucket:
                 buckets[period_key][bucket] += 1

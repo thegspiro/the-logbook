@@ -92,7 +92,7 @@ def _lot(item_name="4x4 Gauze", expiration=SOON, quantity=6, lot_id=None):
 def _lots_by_domain(medical, gear):
     """Answer ``get_expiring_lots`` per its ``item_types`` argument."""
 
-    async def _side_effect(_org, _days=30, item_types=None):
+    async def _side_effect(_org, _days=30, item_types=None, today=None):
         return list(medical) if item_types else list(medical) + list(gear)
 
     return _side_effect
