@@ -138,6 +138,15 @@ name, a loopback address (`127.x.x.x`, `::1`), `0.0.0.0`, or a value with no
 parseable host. It runs in `production` only; staging and development are
 unaffected.
 
+**A public address in `ALLOWED_ORIGINS` counts.** When `FRONTEND_URL` is
+loopback or empty, the backend uses the first address in `ALLOWED_ORIGINS`
+that is not loopback, logs that it did, and starts. That covers the Unraid
+Community Apps template and `scripts/setup-env.py`, which ask only for the
+allowed origins. The block applies only when neither setting names an
+address a recipient could open. Setting `FRONTEND_URL` explicitly is still
+the way to choose, for example an `https://` domain rather than the LAN
+address CORS also allows.
+
 **The fix:** set `FRONTEND_URL` in `.env` to the address members open the site
 at — `https://logbook.yourdept.org`, or a LAN address such as
 `http://192.168.1.50:7880` for an install nobody reaches from outside — then
