@@ -1874,9 +1874,9 @@ async def delete_user(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
                     "This member owns records that must retain an owner, so they "
-                    "cannot be permanently deleted. Deactivate the member instead, "
-                    "then anonymize them to remove their personal information while "
-                    "keeping those records intact."
+                    "cannot be permanently deleted. Archive the member instead, "
+                    "then anonymize them from their profile to remove their personal "
+                    "information while keeping those records intact."
                 ),
             )
 
@@ -1901,7 +1901,8 @@ async def delete_user(
                 detail=(
                     "This member is still referenced by records that must keep "
                     "an owner, so they cannot be permanently deleted. "
-                    "Deactivate the member instead, then anonymize them."
+                    "Archive the member instead, then anonymize them from their "
+                    "profile."
                 ),
             )
 

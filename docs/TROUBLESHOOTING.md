@@ -8540,7 +8540,7 @@ Pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so bare 
 
 ### Problem: A departed member asks to be erased
 
-**Fix:** `POST /users/{id}/anonymize` scrubs names, contacts, address, DOB, photo, emergency contacts, credentials and MFA material, and the applicant-era prospect record — while keeping operational history (training completions, attendance, dues) as the department's record. `users.anonymized_at` records the event.
+**Fix:** On the member's profile, **Anonymize member** under **Status** (Dropped or Archived members only, `members.manage`; added 2026-09-25), or `POST /users/{id}/anonymize`. It scrubs names, contacts, address, DOB, photo, emergency contacts, credentials and MFA material, and the applicant-era prospect record — while keeping operational history (training completions, attendance, dues) as the department's record. `users.anonymized_at` records the event.
 
 **Edge Case:** Audit logs and election records are deliberately untouched — rewriting them would be tampering. Documents and meeting minutes are excluded from automatic retention deletion for the same reason: destroying official records stays a human decision.
 
