@@ -16,6 +16,22 @@ import pytest
 from app.services.struggling_member_service import StrugglingMemberService
 
 
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date and zone; answer with UTC so the
+    date.today()-relative fixtures here keep meaning what they say."""
+    from zoneinfo import ZoneInfo
+
+    monkeypatch.setattr(
+        "app.services.struggling_member_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+    monkeypatch.setattr(
+        "app.services.struggling_member_service.resolve_scheduling_timezone",
+        AsyncMock(return_value=ZoneInfo("UTC")),
+    )
+
+
 def _scalars(items):
     r = MagicMock()
     r.scalars.return_value.all.return_value = items
@@ -171,3 +187,45 @@ class TestDeadlineWarnings:
             self._db([enrollment])
         ).send_deadline_warnings("org")
         assert out["warnings_sent"] == 1
+
+
+class TestDepartmentCalendar:
+    """Deadlines are counted on the department's calendar.
+
+    At 02:30 UTC on Oct 7 it is 10:30 PM on Oct 6 in New York. A deadline of
+    Oct 14 is 8 days out for the department (a warning); the UTC date would
+    call it 7 and escalate it to critical a day early.
+    """
+
+    async def test_days_to_deadline_use_the_departments_date(self, monkeypatch):
+        from zoneinfo import ZoneInfo
+
+        from app.services import struggling_member_service as module
+        from app.utils import org_timezone
+
+        frozen = datetime(2026, 10, 7, 2, 30, tzinfo=timezone.utc)
+
+        class _Frozen(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return frozen.astimezone(tz) if tz else frozen.replace(tzinfo=None)
+
+        class _ServerDate(date):
+            @classmethod
+            def today(cls):
+                return frozen.date()
+
+        monkeypatch.setattr(org_timezone, "datetime", _Frozen)
+        monkeypatch.setattr(module, "date", _ServerDate, raising=False)
+        monkeypatch.setattr(
+            module,
+            "resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("America/New_York")),
+        )
+        enrollment = _enrollment(target=date(2026, 10, 14), progress=40)
+
+        out = await StrugglingMemberService(
+            TestDetectAndNotify()._db_for(enrollment)
+        ).detect_and_notify("org")
+
+        assert out["flagged_members"][0]["max_severity"] == "warning"

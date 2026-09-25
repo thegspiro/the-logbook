@@ -471,7 +471,7 @@ against the plain one will find the masked version noticeably smaller. Fitting
 it larger means some launchers cut the corners off the crest, which is worse and
 is not visible to whoever chooses the setting.
 
-## "Today" Is Still the Server's Date in 113 Places (2026-09-25)
+## "Today" Is Still the Server's Date in 105 Places (2026-09-25)
 
 🚩 **Open — the remainder needs reading, not a sweep.** `date.today()` returns
 the server's date, and a container runs in UTC, so for a US department it is
@@ -481,7 +481,7 @@ off by one day for those hours, and the scheduled jobs that run early in the
 UTC morning are off for the western half of the country every time they run.
 
 **Fixed** (with `org_today` / `today_in` / `resolve_org_today` /
-`local_day_start_utc` in `app/utils/org_timezone.py`):
+`local_date` / `local_day_start_utc` in `app/utils/org_timezone.py`):
 
 - The certification expiry alerts, NFPA retirement alerts, expiring-supplies
   email, the monthly compliance auto-report's "last month", the training
@@ -498,10 +498,17 @@ UTC morning are off for the western half of the country every time they run.
   compliance CSV/PDF "Met / Not Met" cells and forecast, the member's own
   My Training page, the MCP training tools, and a program requirement's
   recency window (`tests/test_compliance_engine_org_today.py`).
+- Training program enrollments: the default deadline on enrolling, the
+  recert schedule and resets (read-time and the sweep), expiry of an
+  overdue enrollment (read-time and the sweep), reopening with a new
+  deadline, a requirement's evaluation window, and the progress page's
+  days-left and behind-schedule figures; and the struggling-member and
+  enrollment-deadline warnings. An enrollment's timestamps (`enrolled_at`,
+  `cycle_started_at`) are read as the department's calendar day through
+  `local_date` (`tests/test_org_local_today.py`,
+  `tests/test_struggling_member_service.py`).
 
-**Still on the server's date, each needing its own read:** program enrollment
-deadlines and resets (`training_program_service.py`), the struggling-member
-and enrollment-deadline warnings (`struggling_member_service.py`),
+**Still on the server's date, each needing its own read:**
 recertification renewal tasks and instructor-qualification expiry
 (`training_enhancement_service.py`), `qualification_service.py`'s defaults
 (shift eligibility), and the certification-expiration report in
@@ -512,7 +519,7 @@ date so it agrees with the matrix, but the hub's other date-based cards still
 use the UTC fallback. Organizations get America/New_York by column default, so
 this affects only a row whose timezone was cleared.
 
-**Remaining call sites** (113, counted by `grep -rn "date.today()"
+**Remaining call sites** (105, counted by `grep -rn "date.today()"
 backend/app` excluding comments): `equipment_check_service.py` 11,
 `apparatus_service.py` 11, `scheduling_service.py` 7, `inventory_service.py`
 7, `facilities_service.py` 5, `driver_exception_service.py` 5, and 1–4 each

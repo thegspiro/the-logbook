@@ -355,3 +355,26 @@ class TestProgramRecencyWindow:
         )
 
         assert ok, error
+
+
+class TestProgramDeadline:
+    async def test_a_deadline_of_today_locally_is_not_expired(self, monkeypatch):
+        """Oct 6 is still the member's last day in New York; the UTC date
+        (Oct 7) would have expired the enrollment that evening."""
+        from app.models.training import EnrollmentStatus
+        from app.services import training_program_service as module
+        from app.services.training_program_service import TrainingProgramService
+
+        monkeypatch.setattr(module, "datetime", _Frozen)
+        enrollment = SimpleNamespace(
+            organization_id="org-1",
+            status=EnrollmentStatus.ACTIVE,
+            target_completion_date=LOCAL_TODAY,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_one(_org()))
+
+        expired = await TrainingProgramService(db).auto_expire_if_overdue(enrollment)
+
+        assert expired is False
+        assert enrollment.status == EnrollmentStatus.ACTIVE

@@ -64,6 +64,11 @@ from app.services.sample_program_templates import (
     list_sample_template_summaries,
 )
 from app.services.training_program_service import TrainingProgramService
+from app.utils.org_timezone import (
+    local_date,
+    resolve_scheduling_timezone,
+    today_in,
+)
 
 router = APIRouter()
 
@@ -1420,9 +1425,13 @@ async def get_enrollment_progress(
     # An enrollment past its completion deadline expires the same way, so the
     # page reports the state it is actually in rather than showing "42 days
     # overdue" against a status that still says active.
+    # One department-local date for the reset, the expiry and the days-left
+    # figures below, so the page cannot report a deadline it just expired on.
+    org_tz = await resolve_scheduling_timezone(db, current_user.organization_id)
+    today = today_in(org_tz)
     if await service.auto_reset_if_due(
-        enrollment
-    ) or await service.auto_expire_if_overdue(enrollment):
+        enrollment, today=today
+    ) or await service.auto_expire_if_overdue(enrollment, today=today):
         refreshed = await service.get_enrollment_by_id(
             enrollment_id=enrollment_id,
             organization_id=current_user.organization_id,
@@ -1434,17 +1443,17 @@ async def get_enrollment_progress(
     time_remaining_days = None
     is_behind_schedule = False
     if enrollment.target_completion_date:
-        from datetime import date
-
-        days_remaining = (enrollment.target_completion_date - date.today()).days
+        days_remaining = (enrollment.target_completion_date - today).days
         time_remaining_days = days_remaining
 
         # Simple heuristic: behind schedule if less than 50% time and less than 50% progress.
         # Measure from the current cycle start (cycle_started_at), not the original
         # enrollment, so a fresh recert cycle isn't instantly flagged "behind".
-        cycle_start = (enrollment.cycle_started_at or enrollment.enrolled_at).date()
+        cycle_start = local_date(
+            enrollment.cycle_started_at or enrollment.enrolled_at, org_tz
+        )
         if enrollment.target_completion_date and time_remaining_days is not None:
-            time_elapsed = (date.today() - cycle_start).days
+            time_elapsed = (today - cycle_start).days
             total_time = (enrollment.target_completion_date - cycle_start).days
             if total_time > 0:
                 time_progress = (time_elapsed / total_time) * 100

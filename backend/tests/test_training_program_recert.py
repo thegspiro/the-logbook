@@ -12,8 +12,20 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+import pytest
+
 from app.models.training import EnrollmentStatus, RequirementProgressStatus
 from app.services.training_program_service import TrainingProgramService
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with UTC so the
+    date.today()-relative fixtures here keep meaning what they say."""
+    monkeypatch.setattr(
+        "app.services.training_program_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
 
 
 def _one(obj):
@@ -128,7 +140,9 @@ class TestClampDay:
 
 class TestAutoResetIfDue:
     async def test_future_deadline_is_a_noop(self):
-        enrollment = SimpleNamespace(next_recert_reset_at=date(2100, 1, 1))
+        enrollment = SimpleNamespace(
+            organization_id="org-1", next_recert_reset_at=date(2100, 1, 1)
+        )
         svc = TrainingProgramService(RecordingSession([]))
         assert await svc.auto_reset_if_due(enrollment) is False
 
@@ -142,6 +156,7 @@ class TestAutoResetIfDue:
         # deadline must NOT flip them back to ACTIVE.
         enrollment = SimpleNamespace(
             id=str(uuid4()),
+            organization_id="org-1",
             program_id=str(uuid4()),
             status=EnrollmentStatus.WITHDRAWN,
             next_recert_reset_at=date(2000, 1, 1),
@@ -154,6 +169,7 @@ class TestAutoResetIfDue:
     async def test_past_due_resets_and_reschedules(self):
         enrollment = SimpleNamespace(
             id=str(uuid4()),
+            organization_id="org-1",
             program_id=str(uuid4()),
             status=EnrollmentStatus.COMPLETED,
             progress_percentage=100.0,
