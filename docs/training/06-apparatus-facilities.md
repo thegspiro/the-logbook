@@ -54,6 +54,25 @@ The apparatus list shows all vehicles with:
 
 > **Hint:** If your department has the full Apparatus module disabled, you will see a simplified **Apparatus Basic** view that provides a lightweight list of apparatus for shift scheduling purposes. It is open to every member.
 
+### Crew Seats
+
+The apparatus form's **Crew Positions / Seats** list sets who rides the unit,
+in riding order, and those seats are imported into the unit's shifts. Each seat
+is a picker, not free text: it offers the built-in crew positions plus the
+department's own custom scheduling positions, and each option names the
+department's configured ranks eligible to fill it. **Add Seat** adds another; pick the
+same position more than once for repeated seats.
+
+A seat saved before the picker existed, holding a name that matches no current
+position, still shows its old value with **(legacy position)** after it, so
+nothing is lost on opening the form. Choosing a current position replaces it.
+
+![The rescue's crew seats: three chosen from the department's configured positions and a fourth still holding a free-text value, marked (legacy position)](./images/19-23-apparatus-crew-seats.png)
+
+_Each closed control already names the ranks eligible for that seat. The open
+option list is not pictured: these are native `<select>`s, and an open one is
+drawn by the operating system rather than by the page._
+
 ### Printing Apparatus Labels
 
 Each apparatus row has a **Print label** action (printer icon). It opens the shared label print page for that unit, where you choose a label size — including any sticker/thermal printer (Dymo, Rollo, or a custom size) — and download a PDF or print directly. The barcode encodes the apparatus **asset tag** (or unit number if no asset tag is set). Your printer choice is remembered for the **apparatus team's role**, so whoever prints apparatus labels gets the same printer on any computer, independent of the inventory or other modules' printers.
@@ -189,6 +208,16 @@ The Facilities header has a **Print Labels** button that prints a barcode label 
 
 Every station and room gets a kiosk **display code** when it is created, and its QR code opens the room's public kiosk display (`/display/{code}`) for event check-in. The **Check-In QR Codes** page (`/locations/qr-codes`) collects every code in one printable directory, grouped by station/facility, with a search box for large departments. When the Scheduling module is enabled it also lists each apparatus's **shift check-in code** — a permanent QR encoding `/scheduling/checkin?apparatus={id}` that resolves the apparatus's active shift at scan time, so one printed card on the dashboard covers every shift. Two print layouts: **Cut-out cards** (a compact sheet — print, cut out, and post each code) and **Room signs** (one full-page sign per code, sized for posting on a door or dashboard). Reach the page from the **Check-In QR Codes** button on the Locations page, the matching link in a facility's Rooms section, or the command palette (Ctrl/Cmd+K, search "QR"). Rooms in a facility's Rooms section also have their own QR button to view and copy a single room's code in place, and an individual apparatus card is still available from any shift's detail panel.
 
+**Who can open the directory:** it needs the Facilities module enabled and one
+of `locations.manage`, `facilities.manage` or `apparatus.view`. Room kiosk codes
+are served only to holders of `locations.manage`, `facilities.manage` or
+`locations.edit`, so someone who enters on `apparatus.view` alone sees the
+apparatus shift check-in cards and no room cards. Every code is bound to your
+department: a room code opens only that room's kiosk, and an apparatus code
+resolves a shift only for a member of the department that owns the truck.
+
+![The Check-In QR Codes directory filtered to the stations, each card offering Copy URL, Download PNG and Regenerate above the Print All and Room signs controls](./images/19-04-qr-directory-search.png)
+
 #### Writing NFC tags for the fleet _(2026-08-18)_
 
 This directory is where a box of NFC tags gets written for a whole fleet in one
@@ -204,6 +233,10 @@ card would triple the height of a grid built for printing. The screenshot harnes
 runs headless Chromium over `http://localhost`, so it cannot produce the fourth
 button, and staging one would be a picture of a control the reader's browser may
 correctly not have.
+
+A shift's detail panel can write the same tag: its apparatus QR block carries
+the writer beside the code, and what it writes is that truck's apparatus
+check-in code rather than the shift's.
 
 **Write the apparatus tag, not a shift tag.** The apparatus code resolves when
 it is used rather than naming a shift, so one sticker on the dashboard serves
@@ -236,6 +269,8 @@ tag and an hour logged against the wrong shift.
 > desktop, and on a plain-`http://` LAN deployment. Print the QR code for those.
 
 Each card offers **Download PNG** for embedding a code in your own signage documents. Users with `locations.edit` or `locations.manage` also see **Regenerate**: if a printed code leaks or walks off, regenerating issues a new code and the old `/display/{code}` URL stops working immediately — reprint the posted code and update any kiosk tablets afterward. Regenerations are recorded in the audit log.
+
+![The regenerate-code confirmation, warning that the code already printed stops working once a new one is issued](./images/19-05-qr-regenerate-warning.png)
 
 ---
 
@@ -287,9 +322,10 @@ the training room — instead of every space sitting in one flat list.
 
 ![The room form's "Located Inside" field, holding the room that contains the one being edited](./images/06-25-room-located-inside.png)
 
-**Where the nesting shows up elsewhere:** the room picker used by Events,
-Training, and Scheduling lists sub-rooms indented under their container and
-prints the containment path beneath the selected room.
+**Where the nesting shows up elsewhere:** the location pickers on the event
+and training-session forms list a nested room by its linked Location, whose
+name is the full containment path, and the event form prints that path beneath
+the selected room.
 
 ![The event form's location picker with a nested room chosen, the control showing the full containment path from the room up to its station](./images/06-27-event-room-picker-path.png)
 
@@ -299,7 +335,10 @@ Volunteer Office — Station 1 - Headquarters` — rather than sitting indented
 under a parent. It is a native picker, so the phone and screen-reader versions
 render the same words your browser does, and a path in the text survives a list
 that indentation cannot express. Selecting one confirms the choice underneath
-with the building, the address and the room's own number and floor.
+with the building, the address and the room's own number and floor. In a
+department whose rooms all belong to one facility, the event form's list shortens
+each room to its own name, since the rest of the path would repeat on every
+line; the confirmation underneath still shows the full path.
 
 **Edge cases worth teaching:**
 
@@ -855,7 +894,17 @@ for the shelf side of it.
 
 ## August 12–14, 2026 update
 
-Room QR rotation/download/printing, sensitive facility reads, and rank-backed crew seats from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#room-and-apparatus-qr-codes); its screenshot markers remain open.
+Room QR codes — the directory, downloading, printing and regenerating — are
+covered in [Check-In QR Codes](#check-in-qr-codes), and the apparatus form's
+crew seats in [Crew Seats](#crew-seats).
+
+A facility's documents and its sensitive sections — access keys and codes,
+utility accounts and readings, capital projects, insurance policies and
+occupants — are readable only with `facilities.view_sensitive`,
+`facilities.edit` or `facilities.manage`. `facilities.view_sensitive` reads them
+without any write access; adding or changing them needs a facilities write
+grant (`facilities.edit` or `facilities.manage`, or `facilities.create` to add
+a record).
 
 ---
 
@@ -867,8 +916,8 @@ Room QR rotation/download/printing, sensitive facility reads, and rank-backed cr
 
 A facility's **Files** section stores each upload in the shared **Documents**
 module and keeps a reference on the facility record. The facility _record_ was
-properly restricted — to members holding "view sensitive facility data",
-facility edit, or facility management. The _file_ it pointed at was not.
+properly restricted — to members holding `facilities.view_sensitive`,
+`facilities.edit` or `facilities.manage`. The _file_ it pointed at was not.
 
 Uploads landed **outside any folder**, and a file in no folder is treated as
 belonging to the whole organization. So anyone who could open the Documents

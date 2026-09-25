@@ -1097,7 +1097,8 @@ removes that step. The server sends the label to the printer in the printer's
 own language (ZPL), with the dimensions already fixed in printer dots.
 
 **Requires:** a label printer that accepts raw printing on port 9100, reachable
-from the server on the department network. Two printer languages are supported:
+from the server on the department network, at an address the server's operator
+has approved. Two printer languages are supported:
 
 - **ZPL** — Zebra's language, and the one to pick for a Zebra. It is worth
   knowing that **many non-Zebra printers speak it too**: TSC, Godex, Honeywell
@@ -1110,8 +1111,31 @@ from the server on the department network. Two printer languages are supported:
   Several models take **linerless label roll**, which turns one of those into a
   perfectly good asset-tag printer.
 
-Pick the language when registering the printer; everything after that works the
-same way.
+Pick the language when registering the printer. It decides more than the bytes
+sent: the renderer, the label sizes the form offers (a receipt printer is
+offered paper widths instead), and the status query all follow it — which is
+why a printer running a ZPL emulation is registered as ZPL.
+
+![Settings → Label Printers with two registrations: a ZPL watch-desk printer marked default and an ESC/POS printer in the supply room, each on a documentation address](./images/19-33-label-printers.png)
+
+> **The server opens the connection to the printer, not your browser.** A
+> printer you can reach from your laptop may be unreachable from the machine
+> running The Logbook, so when a printer answers from a desk and fails from the
+> app, test whether the **server** can reach it.
+>
+> **Direct printing also needs the operator to allow the address.** The server
+> opens a print socket only to an address inside
+> `LABEL_PRINTER_ALLOWED_NETWORKS`, a comma-separated list of IP addresses or
+> CIDR ranges in the server's environment. It is **empty by default, which
+> disables direct printing outright**. It is set by whoever runs the server, not
+> by a department administrator from this screen — deliberately, so that
+> registering a printer cannot be used to make the server connect to arbitrary
+> hosts. An address outside it is refused before any connection is attempted,
+> with _"… does not resolve to an operator-approved label-printer network."_
+> **Test connection**, **Check status**, test labels and every print are all
+> held to it; if each printer you register reports that message, the allowlist
+> is what needs changing, and that is a conversation with the server operator.
+> The port is held to the raw-print ports, 9100–9109 and 6101.
 
 **Setting one up** — _Organization Settings → Label Printers_, which needs the
 `settings.manage` permission:
@@ -1145,7 +1169,11 @@ most people should get with **Make default**.
 print. This matters more than it sounds: a network connection succeeds against
 a printer that is powered on but out of labels, and against whatever else has
 picked up that address — so "connected" alone is not good news. The status line
-reports the model, and any fault the printer names. A printer that accepts the
+reports the model, and any fault the printer names. Status is reported per
+printer, on the line under each one, so one printer failing to answer does not
+hide the others' answers. A healthy printer reads in green as model ·
+resolution · firmware — for example **"ZD421 · 203 dpi · V93.21.01Z"** — with
+any warnings appended after a dash. A printer that accepts the
 connection but answers nothing is called out as such rather than shown as fine.
 
 Faults are separated into **errors**, which mean the printer cannot print now,
@@ -2750,8 +2778,8 @@ four headline metrics, a **Needs attention** queue, then its existing tabs.
 Its built-in three metrics are **Items tracked**, **Issued to members** and
 **Out for repair**; the fourth slot is always the count the queue is about, so
 it cannot be configured away. Access is `inventory.manage` plus the Inventory
-module enabled. See the
-[shared frame section of the release lesson](./19-august-2026-release-changes.md#every-administration-page-opens-the-same-way).
+module enabled. Choosing the metrics, and who may see the queue, are covered in
+[Administration & Reports → Every Administration Page Opens the Same Way](./08-admin-reports.md#every-administration-page-opens-the-same-way-2026-08-23).
 
 ---
 
@@ -3155,3 +3183,14 @@ Three related fixes:
 - **Every category appears in the pickers.** A department with a long category
   list could have categories past an internal cap silently missing from every
   picker and filter.
+
+## Medical Supplies: the headline counts and the audit trail
+
+The **Below reorder point** tile at the top of **Medical Supplies**
+(`/medical-supplies`) covers every active medical item that has a reorder point
+set, however large the catalog. An item
+with no reorder point is never counted as low: the reorder point is the
+department's own floor for that item.
+
+Creating or **editing** a medical category or item, and retiring an item, are
+each recorded in the audit log, with who made the change.

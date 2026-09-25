@@ -245,6 +245,20 @@ Public forms can be accessed without a login:
 > same moment; the limit does not apply to submissions made from inside the
 > app. See [Known Limitations](../KNOWN_LIMITATIONS.md).
 
+**Each public form takes a limited number of submissions a day.** The ceiling
+is a server setting (`PUBLIC_FORM_DAILY_LIMIT`, 500 per form per day unless the
+operator changes it). Only accepted submissions count toward it: one that fails
+validation — a required answer missing, a value too long — and one caught as a
+bot are turned away without using up the day's allowance, so a flood of junk
+cannot lock genuine submitters out. Once the ceiling is reached, a visitor is
+told _"This form is not accepting further submissions today."_
+
+**The full catalog of forms is the Forms page**, which requires `forms.manage`.
+Event administrators who look after the public outreach request form do not
+need it: **Manage Events → Settings → Public Form** lists only the forms wired
+to the event request pipeline, under `events.manage` — see
+[Events & Meetings → Public Request Form](./04-events-meetings.md#public-request-form).
+
 ![Form sharing dialog with the public URL and its QR code](./images/07-05-form-sharing.png)
 
 > **Hint:** Public forms are great for community feedback, mutual aid incident reports, or application forms linked from your department's public portal.
@@ -399,7 +413,8 @@ guaranteed record of notice (see the caveats below). The dashboard card shows
 what still needs your attention:
 unread messages, acknowledgment-required messages you haven't acknowledged,
 and persistent notices. Once you resolve a message it clears off the card on
-your next visit; the full history stays on the **Messages** page. Urgent
+your next visit — never while you are reading it; the full history stays on the
+**Messages** page. Urgent
 messages are additionally **escalated** to SMS:
 
 | Priority / flag         | In-app (bell, inbox, dashboard) | Email | SMS |
@@ -434,6 +449,21 @@ who was never asked counts as _not_ consented), **and** their text-message
 preference is on. A member who turns off or never grants SMS is still included
 in the email escalation, subject to the caveats above. The author of a message
 is not notified about their own post.
+
+### Opening a message
+
+Each message has its own page at `/messages/:id`, opened from the inbox or the
+dashboard card, so a link to a message works: paste it into an email or a chat
+and the recipient lands on that message. The breadcrumb leads back to
+**Messages**. Opening the page marks the message read, and an
+acknowledgment-required message carries its **Acknowledge** button there.
+
+The page needs no permission beyond signing in, and that is safe rather than
+loose: the server serves a message only to a member it was targeted at. Anyone
+else — or anyone opening a message that has expired or been removed — sees
+**Message unavailable** with a way back to the inbox.
+
+![A department message on its own page: the breadcrumb back to Messages, the title, sender and sent date, and a body several paragraphs long](./images/19-42-message-detail.png)
 
 ### Requiring acknowledgment
 
@@ -517,6 +547,8 @@ in-app notification is always delivered regardless of these settings.
 | Editing an already-sent message             | Saves changes in place; it is **not** re-sent or re-escalated.                                                             |
 | Urgent message when Twilio isn't configured | Still delivered in-app and by email; SMS is skipped.                                                                       |
 | Very high volume of urgent/ack messages     | Email/SMS escalation is rate-limited per department to prevent runaway sends; the in-app notification is always delivered. |
+| Sending is retried for a message            | Each member gets the email (and any SMS) once; a send already made to them is not repeated.                                |
+| A send to a member fails                    | It is recorded as failed, never as delivered.                                                                              |
 
 ---
 
@@ -869,7 +901,7 @@ She clicks **Export CSV** to download the data for the monthly operations report
 | Public form URL not working                                    | Verify that Public Access is enabled on the form. The form must be in Active status. Ensure the URL uses the correct format: `/f/{slug}`.                                                                                                                                        |
 | Form builder drag-and-drop not working                         | The builder uses `@dnd-kit` for reordering. Clear browser cache and reload. If the issue persists, run `cd frontend && npm install` to ensure dependencies are installed.                                                                                                        |
 | Public form shows 404 error                                    | Fixed in March 2026 — a doubled `/v1` in the API URL path has been corrected. Pull latest code and rebuild.                                                                                                                                                                      |
-| Forms page not visible in navigation                           | The Forms page now requires `forms.view` permission (changed from `settings.manage` in March 2026). Ask your administrator to grant `forms.view` to your role.                                                                                                                   |
+| Forms page not visible in navigation                           | The Forms page requires `forms.manage` permission. Ask your administrator to grant `forms.manage` to your role.                                                                                                                                                                  |
 | Integration reprocessing fails                                 | Check that the target module (Membership or Inventory) is enabled and the field mapping is correct. Review the error details on the failed submission.                                                                                                                           |
 | Not receiving email notifications                              | Check your notification preferences in My Account > Notifications. Verify your email address is correct. Check your spam folder. If using Cloudflare Email Service, verify the API token is valid in Administration > Organization Settings > Email tab.                         |
 | Slack integration not posting                                  | Verify the webhook URL is correct and the Slack channel exists. Check the integration logs for errors.                                                                                                                                                                           |
@@ -883,7 +915,7 @@ She clicks **Export CSV** to download the data for the monthly operations report
 | Form submission does not auto-advance prospect                 | As of 2026-03-14, auto-advance must be explicitly enabled in the pipeline stage configuration. Open Pipeline Settings, edit the form_submission stage, and check "Auto-advance when form is submitted".                                                                          |
 | Automated pipeline email not sent on form submission           | The email is triggered when advancing to an `automated_email` stage, not when submitting a form. Verify the pipeline has an `automated_email` stage after the `form_submission` stage and that SMTP is configured. _(added 2026-03-14)_                                          |
 | "Required field '…' is missing" on a question nobody could see | Fixed 2026-09-23. A required question hidden by its conditional-visibility rule is no longer enforced. If it still happens, check the rule: an operator the server does not recognise counts as **visible**, so the field stays required rather than silently becoming optional. |
-| Public form submission by bot                                  | The system uses a hidden honeypot field for bot detection. If filled, the submission returns HTTP 200 with no body (fake success) — no record is created. Legitimate users never see this field.                                                                                 |
+| Public form submission by bot                                  | The system uses a hidden honeypot field for bot detection. If filled, the submission is answered with an ordinary thank-you (fake success) — no record is created. Legitimate users never see this field.                                                                        |
 
 ---
 
@@ -891,4 +923,4 @@ She clicks **Export CSV** to download the data for the monthly operations report
 
 ## August 12–14, 2026 update
 
-The event-scoped public-outreach form catalog and its permission/data-sharing boundaries are covered in [the August 12–14 release lesson](./19-august-2026-release-changes.md#events-reminders-check-in-and-outreach-forms).
+The public-outreach form list event administrators see, and how it differs from the Forms catalog, is covered under [Public Forms](#public-forms).
