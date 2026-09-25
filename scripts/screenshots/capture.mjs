@@ -654,6 +654,13 @@ async function main() {
       await page
         .evaluate(() => localStorage.removeItem("navigationLayout"))
         .catch(() => {});
+      // Route mocks outlive their shot the same way, and since the layout
+      // moved to /auth/branding they are what actually leaked it: 08-62's
+      // branding mock stayed on the reused page and put every later admin
+      // shot in the top bar — 400 pages in one run, each 21px too wide.
+      // Dropping every route before the next shot installs its own makes a
+      // mock last exactly one shot, whatever manifest order does.
+      await page.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {});
       if (shot.beforeNavigate) {
         // Install route mocks before the first document request. This is used
         // sparingly for provider-controlled configuration states (for example,
