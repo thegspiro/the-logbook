@@ -19,13 +19,14 @@ const TARGET_ID = 'target-2';
 
 let routeUserId = TARGET_ID;
 let grantedPermissions: string[] = [];
+const mockNavigate = vi.fn();
 
 vi.mock('react-router', async () => {
   const actual = await vi.importActual<typeof import('react-router')>('react-router');
   return {
     ...actual,
     useParams: () => ({ userId: routeUserId }),
-    useNavigate: () => vi.fn(),
+    useNavigate: () => mockNavigate,
   };
 });
 
@@ -52,6 +53,7 @@ const getUserWithRoles = vi.fn();
 const setMyProfileVisibility = vi.fn();
 const checkContactInfoEnabled = vi.fn();
 const reactivateMember = vi.fn();
+const anonymizeMember = vi.fn();
 const getServiceHistory = vi.fn();
 const changeStatus = vi.fn();
 let nfcIdCardsConnected = false;
@@ -96,6 +98,7 @@ vi.mock('../services/api', () => ({
   memberStatusService: {
     getMemberLeaves: () => Promise.resolve([]),
     reactivateMember: (...args: unknown[]) => reactivateMember(...args) as unknown,
+    anonymizeMember: (...args: unknown[]) => anonymizeMember(...args) as unknown,
     getServiceHistory: (...args: unknown[]) => getServiceHistory(...args) as unknown,
     changeStatus: (...args: unknown[]) => changeStatus(...args) as unknown,
   },
@@ -394,6 +397,65 @@ describe('MemberProfilePage membership and privacy', () => {
       )
     );
     await waitFor(() => expect(getUserWithRoles.mock.calls.length).toBeGreaterThan(fetchesBefore));
+  });
+
+  describe('anonymizing a departed member', () => {
+    beforeEach(() => {
+      grantedPermissions = ['members.manage'];
+      anonymizeMember.mockReset();
+      anonymizeMember.mockResolvedValue({ user_id: TARGET_ID, anonymized_at: '2026-09-25T12:00:00Z' });
+      mockNavigate.mockReset();
+    });
+
+    it('offers it for an archived member, then returns to the roster', async () => {
+      getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.ARCHIVED });
+      renderWithRouter(<MemberProfilePage />);
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Anonymize member' }));
+      expect(await screen.findByRole('heading', { name: 'Anonymize Member' })).toBeInTheDocument();
+      await userEvent.type(screen.getByLabelText(/to confirm/), 'Jane Doe');
+      await userEvent.click(screen.getByRole('button', { name: 'Anonymize' }));
+
+      await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/members'));
+      expect(anonymizeMember).toHaveBeenCalledWith(TARGET_ID);
+    });
+
+    it('offers it for a dropped member', async () => {
+      getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.DROPPED_INVOLUNTARY });
+      renderWithRouter(<MemberProfilePage />);
+
+      expect(await screen.findByRole('button', { name: 'Anonymize member' })).toBeInTheDocument();
+    });
+
+    // The backend refuses every status but dropped and archived.
+    it.each([UserStatus.ACTIVE, UserStatus.RETIRED, UserStatus.INACTIVE])(
+      'does not offer it for a %s member',
+      async (status) => {
+        getUserWithRoles.mockResolvedValue({ ...redactedColleague, status });
+        renderWithRouter(<MemberProfilePage />);
+
+        await screen.findByText('Captain · Life member');
+        expect(screen.queryByRole('button', { name: 'Anonymize member' })).not.toBeInTheDocument();
+      }
+    );
+
+    it('does not offer it without members.manage', async () => {
+      grantedPermissions = [];
+      getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.ARCHIVED });
+      renderWithRouter(<MemberProfilePage />);
+
+      await screen.findByText('Captain · Life member');
+      expect(screen.queryByRole('button', { name: 'Anonymize member' })).not.toBeInTheDocument();
+    });
+
+    it("does not offer it on the officer's own profile", async () => {
+      routeUserId = VIEWER_ID;
+      getUserWithRoles.mockResolvedValue({ ...redactedColleague, id: VIEWER_ID, status: UserStatus.ARCHIVED });
+      renderWithRouter(<MemberProfilePage />);
+
+      await screen.findByText('Captain · Life member');
+      expect(screen.queryByRole('button', { name: 'Anonymize member' })).not.toBeInTheDocument();
+    });
   });
 
   it('shows a members-manager the service history, with prior service noted', async () => {

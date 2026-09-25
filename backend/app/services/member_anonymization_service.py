@@ -99,8 +99,8 @@ class MemberAnonymizationService:
         departed = user.deleted_at is not None or status in _DEPARTED_STATUSES
         if not departed:
             raise ValueError(
-                "Only departed members can be anonymized. Deactivate or "
-                "archive the member first."
+                "Only departed members can be anonymized. Drop or archive "
+                "the member first."
             )
 
     async def anonymize_member(self, user: User) -> dict[str, Any]:
