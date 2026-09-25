@@ -519,6 +519,33 @@ describe('organizationService', () => {
     });
   });
 
+  // ── setEmailLinkDomain / clearEmailLinkDomain ───────────────────────
+  describe('setEmailLinkDomain', () => {
+    it('should PUT the url to /organization/settings/email/link-domain', async () => {
+      const domain = { effective_url: 'https://logbook.yourdept.org', source: 'override' };
+      mockPut.mockResolvedValue({ data: domain });
+
+      const result = await organizationService.setEmailLinkDomain('https://logbook.yourdept.org');
+
+      expect(mockPut).toHaveBeenCalledWith('/organization/settings/email/link-domain', {
+        url: 'https://logbook.yourdept.org',
+      });
+      expect(result).toEqual(domain);
+    });
+  });
+
+  describe('clearEmailLinkDomain', () => {
+    it('should DELETE /organization/settings/email/link-domain', async () => {
+      const domain = { effective_url: 'https://logbook.yourdept.org', source: 'allowed_origins' };
+      mockDelete.mockResolvedValue({ data: domain });
+
+      const result = await organizationService.clearEmailLinkDomain();
+
+      expect(mockDelete).toHaveBeenCalledWith('/organization/settings/email/link-domain');
+      expect(result).toEqual(domain);
+    });
+  });
+
   // ── updateFileStorageSettings ────────────────────────────────────────
   describe('updateFileStorageSettings', () => {
     it('should PATCH to /organization/settings/file-storage', async () => {

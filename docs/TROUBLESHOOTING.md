@@ -613,7 +613,9 @@ CRITICAL: FRONTEND_URL is 'http://localhost:3000', which points at this machine.
 ```
 
 An administrator can also check the address from the app: **Settings → Email**
-shows the _Email link address_ in use and where it came from.
+shows the _Email link address_ in use and where it came from. A System Owner can
+change it there too, to any address the server already accepts traffic on. That
+takes effect without a restart and takes priority over `FRONTEND_URL`.
 
 **Solution**:
 

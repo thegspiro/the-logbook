@@ -473,6 +473,21 @@ export const organizationService = {
   },
 
   /**
+   * Save an override for the address emailed links use. The backend refuses a
+   * host this server does not serve. Requires system.manage_link_domain.
+   */
+  async setEmailLinkDomain(url: string): Promise<EmailLinkDomain> {
+    const response = await api.put<EmailLinkDomain>('/organization/settings/email/link-domain', { url });
+    return response.data;
+  },
+
+  /** Remove a saved override so links use the server's own address again. */
+  async clearEmailLinkDomain(): Promise<EmailLinkDomain> {
+    const response = await api.delete<EmailLinkDomain>('/organization/settings/email/link-domain');
+    return response.data;
+  },
+
+  /**
    * Test the email configuration on the form without saving it. Redacted
    * secrets are resolved server-side against what is already stored.
    */

@@ -365,21 +365,32 @@ class EmailLinkDomainSource(str, Enum):
     FRONTEND_URL = "frontend_url"
     ALLOWED_ORIGINS = "allowed_origins"
     UNRESOLVED_LOOPBACK = "unresolved_loopback"
+    OVERRIDE = "override"
 
 
 class EmailLinkDomainResponse(BaseModel):
     """The deployment-wide address every emailed link is built from.
 
-    Read-only: it comes from the FRONTEND_URL environment variable, not from
-    organization settings, so changing it means changing the deployment.
+    It comes from the FRONTEND_URL environment variable unless an IT
+    administrator has saved an override (``source == "override"``), in which
+    case ``deployment_url`` is what the environment would otherwise give.
     """
 
     effective_url: str
     configured_url: str
+    deployment_url: str
+    override_url: Optional[str] = None
     source: EmailLinkDomainSource
     is_loopback: bool
     is_https: bool
     email_enabled: bool
+    allowed_hosts: List[str] = Field(default_factory=list)
+
+
+class EmailLinkDomainUpdate(BaseModel):
+    """An administrator's choice of address for emailed links."""
+
+    url: str = Field(..., min_length=1, max_length=255)
 
 
 class FileStorageSettings(BaseModel):
