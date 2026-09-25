@@ -261,10 +261,16 @@ The dashboard is your landing page after login. It provides an at-a-glance view 
 - **Upcoming Events** - The next few scheduled events
 - **Upcoming Shifts** - Your next assigned shifts
 - **Recent Activity** - Latest actions across the department
-- **Notifications** - Unread alerts and reminders with **Clear All** and individual dismiss (X) buttons. Persistent department messages (set by administrators) cannot be dismissed by regular members and show a "Persistent" badge
-- **Department Messages** - Organization-wide announcements you haven't dealt with yet. Urgent messages are highlighted (every message also reaches you by email, urgent ones by text too), some ask you to **Acknowledge** them, and persistent messages remain visible until an admin clears them. Once you've read or acknowledged a message it clears off the card; your full message history lives on the **Messages** page (megaphone icon)
+- **Needs you** - Anything you are on the hook for, including a department message that asks you to **Acknowledge** it (the button is on the row)
+- **My Updates** - One feed holding both department messages and your own notifications, with an unread count. Pinned messages come first, then persistent ones (badged **Persistent**), then everything else newest first. Five rows show; **Older Items** opens your full inbox. A message you have read drops off on the next load, except a persistent one, which stays until a manager clears it with the ✕ (regular members do not see that control). Every department message also reaches you by email, urgent ones by text too; your full message history lives on the **Messages** page (megaphone icon)
+- **Scheduling Operations** (on the **My Department** view, for members with `scheduling.manage` when Scheduling is enabled) - Seven staffing tiles: Today's Staffing, Future Coverage Gaps, Open Slots, Pending Changes, Incomplete Closeouts, Workload Balance and Special Operations. Each tile opens the schedule already filtered to what it counted, and each keeps its own window, station and platoon settings for you
 
 ![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
+
+**[SCREENSHOT — REPLACE `00-04-dashboard-overview.png` and
+`00-07-dashboard-panels.png`.** The scheduling tiles are new. **Caption which
+permissions the capturing account held** — what a reader sees depends on their
+own grants.**]**
 
 > **Training Compliance is all-or-nothing, and that is why it reads 0%**
 > _(2026-08-13)_. The card counts the share of active members who satisfy
@@ -319,6 +325,16 @@ page with the correct tab and shift selected.
 > reminders, recurring-series warnings, action-item reminders and event-update
 > notices were all being saved that way and now carry their destination.
 
+A notification that asks you to do something is archived once that thing is
+done. Finalizing an event's attendance archives that event's "validate
+attendance" prompt, and finalizing a shift archives that shift's post-shift
+validation prompt. Only the notification tied to that same event or shift goes;
+unrelated notifications stay where they are.
+
+![The notification inbox with an unread 'Validate attendance' prompt for a just-ended event, beside an unrelated shift-assignment notification](./images/19-31-notification-before-action.png)
+
+![The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there](./images/19-32-notification-after-action.png)
+
 > **Edge case:** If you expand a notification card to read it but navigate away before collapsing, the notification remains unread.
 
 ---
@@ -349,21 +365,21 @@ From here you can:
 
 ## Login & Session Edge Cases
 
-| Scenario                                | What Happens                                                                                                                                                                                                            |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Too many failed login attempts          | After 5 failed attempts within 60 seconds, you are locked out for 30 minutes. The lock screen shows a countdown.                                                                                                        |
-| Forgot password, requested reset twice  | Only the first request sends an email. Subsequent requests within 30 minutes return a success message but no email is sent — this is an anti-enumeration security measure. Wait 30 minutes or use the first email link. |
-| Session expires while working           | Your access token expires after 30 minutes of inactivity. The system automatically refreshes it in the background. If the refresh fails, you are redirected to the login page.                                          |
-| Multiple tabs open                      | Keep the number of open tabs reasonable. If your session refreshes simultaneously in multiple tabs, a race condition can log you out of all tabs. Refreshing the page resolves this.                                    |
-| Admin changed your role while logged in | The server enforces the new permissions immediately. However, menu items and buttons may not update until you refresh the page.                                                                                         |
-| "Too many requests" error               | Rate limiting is active. Wait for the duration shown in the error message before trying again.                                                                                                                          |
+| Scenario                                | What Happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Too many failed login attempts          | After 5 failed attempts in a row (your department's operator can change the number), the server locks the account for 15 minutes (also configurable). While it is locked, the sign-in page still says only "Incorrect username or password" — the same as a wrong password — unless the operator has chosen to reveal lockouts. Separately, after 5 failures in the same browser tab the **Sign in** button reads **Wait Ns** and counts down: 2 seconds, doubling with each further failure up to 5 minutes. |
+| Forgot password, requested reset twice  | Only the first request sends an email. Subsequent requests within 30 minutes return a success message but no email is sent — this is an anti-enumeration security measure. Wait 30 minutes or use the first email link.                                                                                                                                                                                                                                                                                       |
+| Session expires while working           | Your access token expires after 30 minutes of inactivity. The system automatically refreshes it in the background. If the refresh fails, you are redirected to the login page.                                                                                                                                                                                                                                                                                                                                |
+| Multiple tabs open                      | Keep the number of open tabs reasonable. If your session refreshes simultaneously in multiple tabs, a race condition can log you out of all tabs. Refreshing the page resolves this.                                                                                                                                                                                                                                                                                                                          |
+| Admin changed your role while logged in | The server enforces the new permissions immediately. However, menu items and buttons may not update until you refresh the page.                                                                                                                                                                                                                                                                                                                                                                               |
+| "Too many requests" error               | Rate limiting is active. Wait for the duration shown in the error message before trying again.                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ---
 
 ## Getting Help
 
 - **Forgot your password?** Use the "Forgot Password?" link on the login page. You will receive a reset link by email. If no email arrives, wait 30 minutes and try again (a cooldown prevents duplicate emails).
-- **Locked out?** Wait for the lockout period to expire (30 minutes), or ask your IT Manager to unlock your account.
+- **Locked out?** If the correct password keeps being refused after several failed attempts, the account is probably locked — the message will not say so. Wait 15 minutes (unless your department set a different period) and try once more, reset it yourself with "Forgot Password?", or ask your IT Manager to reset your password, which also clears the lock.
 - **Missing a module?** Some modules may be disabled by your department. Contact your administrator to enable them.
 - **Permission denied?** If you see a "Not Authorized" message, the action requires a role you have not been assigned. Contact your officer or IT Manager.
 - **Something looks wrong?** Your department may have an error monitoring dashboard (Settings > Error Monitor) where administrators can review issues.
@@ -389,8 +405,9 @@ Because Oakville FD requires multi-factor authentication, Jake is redirected to 
 After completing setup, the dashboard loads with personalized widgets:
 
 - **Hours this month** — four figures across the top: total, training, standby and administrative
-- **Department Messages** — what he hasn't read or acknowledged yet, plus any persistent standing notices, pinned items first
-- **Notifications** — the most recent, with an unread count and Clear All
+- **My Updates** — department messages and his notifications in one feed with
+  an unread count: pinned messages first, then persistent standing notices,
+  then the newest, five at a time with **Older Items** for the rest
 - **My Upcoming Shifts** — his next five shifts with dates, times, and the officer on each
 - **Open Shifts** — shifts he can sign up for. **Five at a time**, with a line
   underneath saying how many more there are in the next 30 days; **View

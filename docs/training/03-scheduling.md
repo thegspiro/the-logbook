@@ -3177,7 +3177,9 @@ expire with the shift, which is why that rule still applies.
 Seven staffing tiles — Today's Staffing, Future Coverage Gaps, Open Slots,
 Pending Changes, Incomplete Closeouts, Workload Balance, Special Operations —
 each linking into the schedule already filtered to what it counted. Each keeps
-its own horizon and filters, per person. Requires `scheduling.view`.
+its own horizon and filters, per person. The tiles sit on the dashboard's
+**My Department** view and need `scheduling.manage` with the Scheduling module
+on.
 
 ### Also fixed
 
