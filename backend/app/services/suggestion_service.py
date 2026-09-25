@@ -181,7 +181,63 @@ class SuggestionService:
         )
         boxes = list(result.scalars().all())
         position_names, member_names = await self._reviewer_names(boxes)
-        return [self._box_admin_view(b, position_names, member_names) for b in boxes]
+        counts = await self._submission_counts(organization_id)
+        return [
+            {
+                **self._box_admin_view(b, position_names, member_names),
+                "submission_count": counts.get(b.id, 0),
+            }
+            for b in boxes
+        ]
+
+    async def _submission_counts(self, organization_id: str) -> Dict[str, int]:
+        rows = await self.db.execute(
+            select(Suggestion.box_id, func.count(Suggestion.id))
+            .where(Suggestion.organization_id == str(organization_id))
+            .group_by(Suggestion.box_id)
+        )
+        return {box_id: int(count) for box_id, count in rows.all()}
+
+    async def delete_box(self, box: SuggestionBox, confirm_name: Optional[str]) -> int:
+        """Delete a box, and with it everything it received.
+
+        A box with submissions is deleted only when ``confirm_name`` matches
+        its name: the delete cannot be undone, and a complaints box may hold
+        records the department is expected to keep. Returns the number of
+        submissions deleted. Screenshot files are removed after the commit,
+        so a failed delete never leaves rows pointing at missing files.
+        """
+        count = (await self._submission_counts(box.organization_id)).get(box.id, 0)
+        if count and (confirm_name or "").strip() != box.name:
+            raise PermissionError(
+                f"This box holds {count} submission"
+                f"{'' if count == 1 else 's'}. Type the box's name to delete "
+                "it and everything in it, or archive it instead."
+            )
+        attachments = (
+            (
+                await self.db.execute(
+                    select(SuggestionAttachment)
+                    .join(
+                        Suggestion, Suggestion.id == SuggestionAttachment.suggestion_id
+                    )
+                    .where(
+                        Suggestion.organization_id == box.organization_id,
+                        Suggestion.box_id == box.id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        paths = [p for p in (self.confined_path(a) for a in attachments) if p]
+        # The database cascades from the box through its submissions and
+        # everything under them.
+        await self.db.delete(box)
+        await self.db.commit()
+        for path in paths:
+            _remove_quietly(path)
+        return count
 
     async def create_box(
         self, organization_id: str, data: SuggestionBoxWrite, actor_id: str
@@ -406,7 +462,11 @@ class SuggestionService:
         if box is None:  # pragma: no cover - just written in this transaction
             raise LookupError("Suggestion box not found")
         position_names, member_names = await self._reviewer_names([box])
-        return self._box_admin_view(box, position_names, member_names)
+        counts = await self._submission_counts(organization_id)
+        return {
+            **self._box_admin_view(box, position_names, member_names),
+            "submission_count": counts.get(box.id, 0),
+        }
 
     async def _reviewer_names(
         self, boxes: Sequence[SuggestionBox]

@@ -114,6 +114,9 @@ class SuggestionBoxAdminResponse(UTCResponseBase):
     reviewer_members: List[ReviewerRef]
     watcher_positions: List[ReviewerRef] = Field(default_factory=list)
     watcher_members: List[ReviewerRef] = Field(default_factory=list)
+    # How much a permanent delete would destroy; the admin screen asks for
+    # the box's name before deleting a box where this is above zero.
+    submission_count: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

@@ -35,6 +35,7 @@ const existing: SuggestionBoxAdmin = {
   reviewerMembers: [],
   watcherPositions: [],
   watcherMembers: [{ id: 'u-drew', name: 'Drew Member' }],
+  submissionCount: 0,
 };
 
 describe('SuggestionBoxFormModal', () => {

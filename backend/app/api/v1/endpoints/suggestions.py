@@ -658,6 +658,40 @@ async def update_box(
     return box
 
 
+@router.delete("/admin/boxes/{box_id}", status_code=204)
+async def delete_box(
+    box_id: str,
+    confirm_name: Optional[str] = Query(None, max_length=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("suggestions.manage")),
+):
+    """Delete a box. One holding submissions needs ``confirm_name`` equal to
+    its name, and takes every submission with it."""
+    service = SuggestionService(db)
+    box = ensure_found(
+        await service.get_box(current_user.organization_id, box_id), "Suggestion box"
+    )
+    name = box.name
+    try:
+        deleted = await service.delete_box(box, confirm_name)
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await log_audit_event(
+        db=db,
+        event_type="suggestion_box_deleted",
+        event_category="suggestions",
+        # Deleting submissions destroys records; flag it so it stands out.
+        severity="warning" if deleted else "info",
+        event_data={
+            "box_id": box_id,
+            "name": name,
+            "submissions_deleted": deleted,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 async def _audit_box(
     db: AsyncSession, current_user: User, event_type: str, box: dict
 ) -> None:
