@@ -70,12 +70,12 @@ Three things worth knowing:
 
 You can download everything the system stores about you at any time.
 
-1. Go to **My Account → Security**.
+1. Go to **My Account → Privacy**.
 2. Scroll to **Your Data**.
 3. Click **Download my data**.
 4. A JSON file (`logbook-personal-data-export.json`) downloads to your device.
 
-![The Your Data section of account security with its export button](./images/17-02-download-my-data.png)
+![The Your Data section of your privacy settings with its export button](./images/17-02-download-my-data.png)
 
 ### What is in the export
 
