@@ -5,7 +5,7 @@
  * Organized by category for easy management.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useId, useState, useMemo } from 'react';
 import { useDataWhitelist } from '../hooks/usePublicPortal';
 import type { PublicPortalDataWhitelist } from '../types';
 
@@ -119,11 +119,18 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onT
       {isExpanded && (
         <div className="divide-theme-surface-border divide-y">
           {fields.map((field) => (
-            <div key={field.id} className="hover:bg-theme-surface-hover px-6 py-4 transition-colors">
+            <div
+              key={field.id}
+              role="group"
+              aria-labelledby={`whitelist-field-${field.id}`}
+              className="hover:bg-theme-surface-hover px-6 py-4 transition-colors"
+            >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2">
-                    <code className="text-theme-text-primary font-mono text-sm">{field.field_name}</code>
+                    <code id={`whitelist-field-${field.id}`} className="text-theme-text-primary font-mono text-sm">
+                      {field.field_name}
+                    </code>
                     {field.is_sensitive && (
                       <span className="rounded-sm bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                         PII
@@ -155,6 +162,9 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onT
 export const DataWhitelistTab: React.FC = () => {
   const { whitelist, loading, error, toggleField } = useDataWhitelist();
   const [searchTerm, setSearchTerm] = useState('');
+  const totalCardId = useId();
+  const enabledCardId = useId();
+  const sensitiveCardId = useId();
 
   // Group fields by category
   const fieldsByCategory = useMemo(() => {
@@ -253,10 +263,12 @@ export const DataWhitelistTab: React.FC = () => {
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="card p-4">
+        <div className="card p-4" role="group" aria-labelledby={totalCardId}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-theme-text-secondary text-sm">Total Fields</p>
+              <p id={totalCardId} className="text-theme-text-secondary text-sm">
+                Total Fields
+              </p>
               <p className="text-theme-text-primary text-2xl font-semibold">{totalFields}</p>
             </div>
             <div className="rounded-lg bg-blue-100 p-3 dark:bg-blue-500/20">
@@ -272,10 +284,12 @@ export const DataWhitelistTab: React.FC = () => {
           </div>
         </div>
 
-        <div className="card p-4">
+        <div className="card p-4" role="group" aria-labelledby={enabledCardId}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-theme-text-secondary text-sm">Enabled</p>
+              <p id={enabledCardId} className="text-theme-text-secondary text-sm">
+                Enabled
+              </p>
               <p className="text-theme-text-primary text-2xl font-semibold">
                 {enabledFields}
                 <span className="text-theme-text-muted ml-2 text-sm">
@@ -296,10 +310,12 @@ export const DataWhitelistTab: React.FC = () => {
           </div>
         </div>
 
-        <div className="card p-4">
+        <div className="card p-4" role="group" aria-labelledby={sensitiveCardId}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-theme-text-secondary text-sm">Sensitive (PII)</p>
+              <p id={sensitiveCardId} className="text-theme-text-secondary text-sm">
+                Sensitive (PII)
+              </p>
               <p className="text-theme-text-primary text-2xl font-semibold">
                 {sensitiveEnabled}
                 <span className="text-theme-text-muted ml-2 text-sm">enabled</span>
