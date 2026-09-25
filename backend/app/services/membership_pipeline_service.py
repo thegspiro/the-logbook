@@ -13,7 +13,16 @@ import secrets
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Optional
+from typing import (
+    AbstractSet,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+)
 
 from loguru import logger
 from sqlalchemy import and_, delete, func, or_, select, update
@@ -145,7 +154,8 @@ def effective_step_type(step: MembershipPipelineStep) -> PipelineStepType:
     guesses at ELECTION_VOTE / STATUS_PAGE_TOGGLE / FORM_SUBMISSION from the
     shape of ``config``; those are presentation heuristics, and none of them
     carries a completion gate, so they are deliberately not replicated into a
-    decision about whether an applicant may move.
+    decision about whether an applicant may move. The status-page shape does
+    carry behaviour, and ``is_status_page_stage`` recognises it separately.
     """
     if step.step_type != PipelineStepType.ACTION:
         return step.step_type
@@ -157,6 +167,65 @@ def effective_step_type(step: MembershipPipelineStep) -> PipelineStepType:
         ActionType.SCHEDULE_MEETING.value: PipelineStepType.MEETING,
         ActionType.COLLECT_DOCUMENT.value: PipelineStepType.DOCUMENT_UPLOAD,
     }.get(raw, PipelineStepType.ACTION)
+
+
+def is_status_page_stage(step: MembershipPipelineStep) -> bool:
+    """Whether ``step`` is an Enable Status Page stage.
+
+    Besides the typed stage, this accepts the legacy shape the stage editor
+    also shows as one (``mapStepTypeToFrontend`` in the prospective-members
+    ``services/api.ts``): an ``action`` row with no recognised
+    ``action_type`` whose config carries ``enable_public_status``. Unlike the
+    editor's other shape heuristics this one now has behaviour behind it, so
+    a stage a coordinator sees as "Enable Status Page" must act as one.
+    """
+    step_type = effective_step_type(step)
+    if step_type == PipelineStepType.STATUS_PAGE_TOGGLE:
+        return True
+    return step_type == PipelineStepType.ACTION and "enable_public_status" in (
+        step.config or {}
+    )
+
+
+def status_page_stage_enables(step: MembershipPipelineStep) -> bool:
+    """Whether an Enable Status Page stage turns the page on (False: off).
+
+    The stage editor seeds ``enable_public_status: true``, so a stage whose
+    config lacks the key was built as an enabling stage. Only an explicit
+    ``false`` disables — config is unvalidated JSON (pitfall #19).
+    """
+    return (step.config or {}).get("enable_public_status", True) is not False
+
+
+def public_status_enabled_for(prospect: ProspectiveMember) -> bool:
+    """Whether ``prospect``'s public status page is switched on.
+
+    The latest Enable Status Page stage the applicant has reached (their
+    current stage or any before it) decides for them. An applicant who has
+    reached none follows the pipeline-wide ``public_status_enabled`` switch,
+    which is what every applicant followed before the stage had a reader.
+    Deriving it from position rather than storing it means moving an
+    applicant back before the stage undoes it, with no second copy to drift.
+
+    Requires ``prospect.pipeline.steps`` loaded.
+    """
+    pipeline = prospect.pipeline
+    if not pipeline:
+        return False
+    if not prospect.current_step_id:
+        return bool(pipeline.public_status_enabled)
+
+    steps = sorted(pipeline.steps or [], key=lambda s: s.sort_order)
+    current_idx = next(
+        (i for i, s in enumerate(steps) if str(s.id) == str(prospect.current_step_id)),
+        None,
+    )
+    if current_idx is not None:
+        for step in reversed(steps[: current_idx + 1]):
+            if is_status_page_stage(step):
+                return status_page_stage_enables(step)
+
+    return bool(pipeline.public_status_enabled)
 
 
 def meeting_config_matches_event(config: Dict[str, Any], event: Event) -> bool:
@@ -2534,11 +2603,11 @@ class MembershipPipelineService:
         # on. A skip is a coordinator bypass, not an approval — it must never
         # convert the prospect to a member, even if a stage flagged
         # is_final_step ended up mid-pipeline through reordering.
-        sent_email_step_id: Optional[str] = None
+        finished_on_arrival: Optional[Tuple[str, str]] = None
         if not will_auto_transfer:
             # Advance to next step. The transfer, when there is one, already
             # ran above and moved the prospect out of the pipeline.
-            sent_email_step_id = await self._advance_current_step(prospect, step_id)
+            finished_on_arrival = await self._advance_current_step(prospect, step_id)
 
         # Some explicit operations have a domain-level audit event in addition
         # to the step-level event above.  Stage both before committing so the
@@ -2554,49 +2623,61 @@ class MembershipPipelineService:
         await self.db.commit()
 
         # An automated-email stage has nothing left for anyone to do once its
-        # email has gone out, so it completes itself rather than sitting "in
-        # progress" until a coordinator clicks past it. This runs after the
-        # commit above so the stage being left is durable whatever happens
-        # here, and it goes back through complete_step so the completion gets
-        # the same gates, activity entry and optional notice as a manual one —
-        # and chains, when the next stage is another automated email.
-        if sent_email_step_id:
-            return await self._complete_sent_email_step(
-                prospect_id, organization_id, sent_email_step_id
+        # email has gone out, and an Enable Status Page stage none once it has
+        # acted, so each completes itself rather than sitting "in progress"
+        # until a coordinator clicks past it. This runs after the commit above
+        # so the stage being left is durable whatever happens here, and it
+        # goes back through complete_step so the completion gets the same
+        # gates, activity entry and optional notice as a manual one — and
+        # chains, when the next stage finishes on arrival too.
+        if finished_on_arrival:
+            finished_step_id, trigger = finished_on_arrival
+            return await self._complete_on_arrival_step(
+                prospect_id, organization_id, finished_step_id, trigger
             )
         return await self.get_prospect(prospect_id, organization_id)
 
-    async def _complete_sent_email_step(
+    # What a stage that finishes itself on arrival records, per trigger.
+    _ON_ARRIVAL_COMPLETIONS: Dict[str, Tuple[str, Dict[str, Any]]] = {
+        "stage_email_sent": (
+            "Completed automatically when the stage email was sent",
+            {"email_sent": True},
+        ),
+        "status_page_applied": (
+            "Completed automatically when the status page stage was applied",
+            {},
+        ),
+    }
+
+    async def _complete_on_arrival_step(
         self,
         prospect_id: str,
         organization_id: str,
         step_id: str,
+        trigger: str,
     ) -> Optional[ProspectiveMember]:
-        """Complete an automated-email stage whose email was just sent.
+        """Complete a stage that did its work as the applicant arrived.
 
-        ``completed_by`` is None: the system sent the email, and the
-        coordinator whose action reached this stage did not complete it.
-        A refusal from the stage gate leaves the stage in progress for a
-        coordinator, exactly as it stood before this existed.
+        ``completed_by`` is None: the system acted, and the coordinator whose
+        action reached this stage did not complete it. A refusal from the
+        stage gate leaves the stage in progress for a coordinator, exactly as
+        it stood before this existed.
         """
+        notes, extra = self._ON_ARRIVAL_COMPLETIONS[trigger]
         try:
             return await self.complete_step(
                 prospect_id=prospect_id,
                 organization_id=organization_id,
                 step_id=step_id,
                 completed_by=None,
-                notes="Completed automatically when the stage email was sent",
-                action_result={
-                    "auto_advanced": True,
-                    "trigger": "stage_email_sent",
-                    "email_sent": True,
-                },
+                notes=notes,
+                action_result={"auto_advanced": True, "trigger": trigger, **extra},
                 automated=True,
             )
         except ValueError as e:
             logger.warning(
-                f"Stage email sent to prospect {prospect_id} but step "
-                f"{step_id} was left open: {e}"
+                f"Stage {step_id} acted on arrival for prospect {prospect_id} "
+                f"({trigger}) but was left open: {e}"
             )
             return await self.get_prospect(prospect_id, organization_id)
 
@@ -3349,14 +3430,15 @@ class MembershipPipelineService:
 
     async def _advance_current_step(
         self, prospect: ProspectiveMember, completed_step_id: str
-    ) -> Optional[str]:
+    ) -> Optional[Tuple[str, str]]:
         """After completing a step, move current_step_id to the next step.
 
-        Returns the id of the stage moved onto when it is an automated-email
-        stage whose email was sent, so the caller can complete it once its own
-        transaction is committed. Returns None otherwise — including when the
-        send failed, which leaves the stage open so a coordinator sees that
-        the applicant never received it.
+        Returns ``(stage id, trigger)`` when the stage moved onto finishes
+        itself on arrival — an automated-email stage whose email was sent, or
+        an Enable Status Page stage that has done its work — so the caller can
+        complete it once its own transaction is committed. Returns None
+        otherwise, including when a send failed, which leaves the stage open
+        so a coordinator sees that the applicant never received it.
         """
         if not prospect.pipeline:
             return None
@@ -3400,7 +3482,15 @@ class MembershipPipelineService:
                 # them). Sending an email is not that approval, so a final
                 # email stage stays for a coordinator to complete.
                 if sent and not next_step.is_final_step:
-                    return str(next_step.id)
+                    return (str(next_step.id), "stage_email_sent")
+
+            if is_status_page_stage(next_step):
+                await self.db.flush()
+                done = await self._apply_status_page_stage(prospect, next_step)
+                # Same rule as the email stage: a final stage is where the
+                # department approves the applicant, which this is not.
+                if done and not next_step.is_final_step:
+                    return (str(next_step.id), "status_page_applied")
         return None
 
     # =========================================================================
@@ -4024,11 +4114,7 @@ class MembershipPipelineService:
             def _build_status_tracker() -> str | None:
                 if not config.get("include_status_tracker"):
                     return None
-                if (
-                    prospect.status_token
-                    and prospect.pipeline
-                    and getattr(prospect.pipeline, "public_status_enabled", False)
-                ):
+                if prospect.status_token and public_status_enabled_for(prospect):
                     from app.core.config import settings as app_settings
 
                     frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
@@ -4139,11 +4225,7 @@ class MembershipPipelineService:
                             )
                 elif sid == "status_tracker":
                     if config.get("include_status_tracker") and prospect.status_token:
-                        if prospect.pipeline and getattr(
-                            prospect.pipeline,
-                            "public_status_enabled",
-                            False,
-                        ):
+                        if public_status_enabled_for(prospect):
                             from app.core.config import settings as app_settings
 
                             frontend_url = (
@@ -4249,6 +4331,108 @@ class MembershipPipelineService:
             logger.error(
                 "Failed to send step-completion notification "
                 f"to {prospect.email}: {e}"
+            )
+            return False
+
+    async def _apply_status_page_stage(
+        self,
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+    ) -> bool:
+        """Act on an Enable Status Page stage the applicant has just reached.
+
+        Access needs no write here: ``public_status_enabled_for`` reads the
+        stage from the applicant's position. What an enabling stage must do is
+        deliver the link. Returns True when nothing is left to do at the
+        stage — a disabling stage, or an enabling one whose email went out —
+        and False when the link could not be sent, which leaves the stage open
+        so a coordinator sees the applicant never received it.
+        """
+        if not status_page_stage_enables(step):
+            return True
+        if not prospect.status_token or not prospect.email:
+            return False
+
+        # The link lapses after _STATUS_TOKEN_TTL_DAYS without a view, and an
+        # applicant can reach this stage long after applying; the link being
+        # sent now must open.
+        prospect.status_token_created_at = datetime.now(timezone.utc)
+        return await self._send_status_page_link_email(prospect, step)
+
+    async def _send_status_page_link_email(
+        self,
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+    ) -> bool:
+        """Email the applicant the link to their public status page."""
+        try:
+            import html as _html
+
+            from app.core.config import settings as app_settings
+            from app.services.email_service import EmailService
+            from app.services.email_template_service import DEFAULT_CSS
+
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == prospect.organization_id)
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                logger.error("Cannot send status page link: organization not found")
+                return False
+
+            frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
+            status_url = f"{frontend_url}/application-status/{prospect.status_token}"
+            custom_message = ((step.config or {}).get("custom_message") or "").strip()
+
+            org_name = _html.escape(org.name or "The Logbook")
+            first_name = _html.escape(prospect.first_name or "")
+            custom_html = (
+                f"<p>{_html.escape(custom_message)}</p>" if custom_message else ""
+            )
+            html_body = (
+                f"<!DOCTYPE html><html><head>"
+                f"<style>{DEFAULT_CSS}</style></head><body>"
+                f'<div class="container">'
+                f'<div class="header"><h1>{org_name}</h1></div>'
+                f'<div class="content">'
+                f"<p>Hi {first_name},</p>"
+                f"{custom_html}"
+                f"<p>You can now follow the progress of your membership "
+                f"application online.</p>"
+                f'<p><a href="{_html.escape(status_url)}" class="button">'
+                f"Track Your Application</a></p>"
+                f"</div>"
+                f'<div class="footer">'
+                f"This email was sent by {org_name}.</div>"
+                f"</div></body></html>"
+            )
+            text_parts = [f"Hi {prospect.first_name},"]
+            if custom_message:
+                text_parts.append(custom_message)
+            text_parts += [
+                "You can now follow the progress of your membership application "
+                f"online: {status_url}",
+                f"This email was sent by {org.name or 'The Logbook'}.",
+            ]
+
+            email_svc = EmailService(org)
+            success, _ = await email_svc.send_email(
+                to_emails=[prospect.email],
+                subject="Track Your Membership Application",
+                html_body=html_body,
+                text_body="\n\n".join(text_parts),
+                db=self.db,
+                template_type="pipeline_stage",
+            )
+            if success:
+                logger.info(
+                    f"Status page link sent to prospect {prospect.id} "
+                    f"for step '{step.name}'"
+                )
+            return success > 0
+        except Exception as e:
+            logger.error(
+                f"Failed to send status page link to prospect {prospect.id}: {e}"
             )
             return False
 
@@ -6193,8 +6377,9 @@ class MembershipPipelineService:
         """Whether ``prospect``'s status token may still unlock the public page.
 
         Shared by the read and the withdrawal so the two cannot disagree about
-        which links are live: an expired token, or a pipeline that has not
-        opted in to public status pages, grants neither.
+        which links are live: an expired token, or a page that is switched
+        off for this applicant (see ``public_status_enabled_for``), grants
+        neither.  Requires ``prospect.pipeline.steps`` loaded.
         """
         from datetime import timedelta
 
@@ -6207,7 +6392,7 @@ class MembershipPipelineService:
                 )
                 return False
 
-        return bool(prospect.pipeline and prospect.pipeline.public_status_enabled)
+        return public_status_enabled_for(prospect)
 
     @classmethod
     def _can_self_withdraw(cls, prospect: ProspectiveMember) -> bool:
@@ -6233,7 +6418,9 @@ class MembershipPipelineService:
             select(ProspectiveMember)
             .where(ProspectiveMember.status_token == token)
             .options(
-                selectinload(ProspectiveMember.pipeline),
+                selectinload(ProspectiveMember.pipeline).selectinload(
+                    MembershipPipeline.steps
+                ),
                 selectinload(ProspectiveMember.current_step),
             )
             .with_for_update()
@@ -6495,8 +6682,9 @@ class MembershipPipelineService:
     async def get_prospect_by_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Look up a prospect by their public status token. Returns limited public-safe fields.
 
-        Returns None if the pipeline has public_status_enabled=False,
-        if the token has expired, or if no match is found.
+        Returns None if the page is switched off for this applicant (the
+        pipeline setting, or the latest Enable Status Page stage they have
+        reached), if the token has expired, or if no match is found.
         Only steps with public_visible=True are included in the timeline.
         When the pipeline's ``public_show_future_stages`` is off, the timeline
         is limited to completed stages, and the current stage, its action and

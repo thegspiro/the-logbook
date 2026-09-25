@@ -330,13 +330,35 @@ describe('StageConfigModal', () => {
     expect(screen.getByLabelText(/enable public status page at this stage/i)).toBeChecked();
   });
 
+  it('says an enabling stage emails the link and overrides the pipeline setting', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Enable Status Page'));
+
+    expect(screen.getByText(/they are emailed the link/i)).toBeInTheDocument();
+    expect(screen.getByText(/overrides the pipeline.s public status page setting/i)).toBeInTheDocument();
+  });
+
+  it('a disabling stage sends nothing and asks for no message', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Enable Status Page'));
+    await user.click(screen.getByLabelText(/enable public status page at this stage/i));
+
+    expect(screen.getByText(/disables the public status page/i)).toBeInTheDocument();
+    expect(screen.getByText(/nothing is sent/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/message in the link email/i)).not.toBeInTheDocument();
+  });
+
   it('saves status page toggle stage with correct config', async () => {
     const user = userEvent.setup();
     render(<StageConfigModal {...defaultProps} />);
 
     await user.click(screen.getByText('Enable Status Page'));
     await user.type(screen.getByLabelText(/stage name/i), 'Activate Status Page');
-    await user.type(screen.getByLabelText(/custom status message/i), 'Welcome! Track your progress here.');
+    await user.type(screen.getByLabelText(/message in the link email/i), 'Welcome! Track your progress here.');
 
     await user.click(screen.getByText('Add Stage'));
 

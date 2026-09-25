@@ -87,4 +87,34 @@ describe('PipelineSettingsPage show upcoming stages', () => {
 
     expect(screen.getByRole('checkbox', { name: /Show upcoming stages/i })).toBeDisabled();
   });
+
+  // An Enable Status Page stage opens the page for applicants who reach it
+  // even with the switch off, and this setting still shapes what they see.
+  const statusStage = (enable: boolean) => ({
+    id: 'stage-1',
+    pipeline_id: 'pipe-1',
+    name: 'Reveal status page',
+    stage_type: 'status_page_toggle' as const,
+    config: { enable_public_status: enable },
+    sort_order: 0,
+    is_required: true,
+    notify_prospect_on_completion: false,
+    public_visible: true,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  });
+
+  it('stays available when a stage enables the page with the switch off', () => {
+    mockCurrentPipeline = pipeline({ public_status_enabled: false, stages: [statusStage(true)] });
+    renderPage();
+
+    expect(screen.getByRole('checkbox', { name: /Show upcoming stages/i })).toBeEnabled();
+  });
+
+  it('stays disabled when the only such stage disables the page', () => {
+    mockCurrentPipeline = pipeline({ public_status_enabled: false, stages: [statusStage(false)] });
+    renderPage();
+
+    expect(screen.getByRole('checkbox', { name: /Show upcoming stages/i })).toBeDisabled();
+  });
 });

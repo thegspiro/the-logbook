@@ -445,7 +445,8 @@ const AutomatedEmailConfig: React.FC<AutomatedEmailConfigProps> = ({
                     </label>
                     <p className="text-theme-text-muted ml-6 text-xs">
                       Includes a link to the prospect's public status page so they can track their application progress.
-                      Requires the public status page to be enabled.
+                      Included only while the prospect&rsquo;s status page is on: the pipeline setting, or an Enable
+                      Status Page stage they have passed.
                     </p>
                   </div>
                 </SortableEmailSection>
