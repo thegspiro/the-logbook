@@ -633,7 +633,7 @@ class TestFollowUp:
         reviewed = await service.get_for_review(
             dept["org"], dept["training_officer"], suggestion.id
         )
-        previous = await service.update_disposition(
+        previous, _ = await service.update_disposition(
             reviewed,
             dept["training_officer"],
             {"disposition": "accepted", "internal_note": "Budget line 4"},
@@ -867,6 +867,303 @@ class TestOverHttp:
         ((_, recipients, notice),) = sent
         assert recipients == [dept["member"]]
         assert "accepted" in notice["body_html"]
+
+
+@pytest.mark.integration
+class TestTimeline:
+    """What the submitter sees of the review: receipt, then each step."""
+
+    async def _submitted(self, db_session, dept, anonymous=False, follow_up=True):
+        box = await _box(db_session, dept, follow_up_enabled=follow_up)
+        suggestion, _ = await _submit(
+            db_session, box, dept["member"], anonymous=anonymous
+        )
+        service = SuggestionService(db_session)
+        loaded = await service.get_for_review(
+            dept["org"], dept["training_officer"], suggestion.id
+        )
+        return service, loaded
+
+    async def test_status_changes_and_responses_become_steps(self, db_session, dept):
+        service, suggestion = await self._submitted(db_session, dept)
+        await service.update_disposition(
+            suggestion, dept["training_officer"], {"disposition": "under_review"}
+        )
+        previous, responded = await service.update_disposition(
+            suggestion,
+            dept["training_officer"],
+            {"public_response": "Scheduling this for the spring drills."},
+        )
+        assert (previous, responded) == (None, True)
+
+        timeline = (await service.submitter_view(suggestion, dept["member"]))[
+            "timeline"
+        ]
+        assert [(e["disposition"], e["public_response"]) for e in timeline] == [
+            ("new", None),
+            ("under_review", None),
+            ("under_review", "Scheduling this for the spring drills."),
+        ]
+
+    async def test_an_internal_note_alone_adds_no_step(self, db_session, dept):
+        service, suggestion = await self._submitted(db_session, dept)
+        previous, responded = await service.update_disposition(
+            suggestion, dept["training_officer"], {"internal_note": "Ask Chief"}
+        )
+        assert (previous, responded) == (None, False)
+        timeline = await service.timeline(suggestion)
+        assert [e["disposition"] for e in timeline] == ["new"]
+
+    async def test_anonymous_receipt_stays_day_precise(self, db_session, dept):
+        service, suggestion = await self._submitted(db_session, dept, anonymous=True)
+        await service.update_disposition(
+            suggestion, dept["training_officer"], {"disposition": "accepted"}
+        )
+        receipt, step = await service.timeline(suggestion)
+        assert receipt["timestamp_precision"] == "day"
+        assert receipt["created_at"] == suggestion.created_at
+        assert step["timestamp_precision"] == "exact"
+
+    async def test_a_one_way_box_shows_no_timeline_and_takes_no_response(
+        self, db_session, dept
+    ):
+        service, suggestion = await self._submitted(db_session, dept, follow_up=False)
+        await service.update_disposition(
+            suggestion, dept["training_officer"], {"disposition": "declined"}
+        )
+        view = await service.submitter_view(suggestion, dept["member"])
+        assert view["timeline"] == []
+        with pytest.raises(ValueError, match="one-way"):
+            await service.update_disposition(
+                suggestion, dept["training_officer"], {"public_response": "No."}
+            )
+
+    async def test_a_response_notifies_the_named_submitter(
+        self, db_session, dept, sent
+    ):
+        box = await _box(db_session, dept, follow_up_enabled=True)
+        suggestion, _ = await _submit(db_session, box, dept["member"])
+        async with await _client(db_session, dept["training_officer"]) as client:
+            resp = await client.patch(
+                f"/suggestions/review/{suggestion.id}",
+                json={"publicResponse": "  Thanks, we're on it.  "},
+            )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["timeline"][-1]["publicResponse"] == "Thanks, we're on it."
+        ((_, recipients, notice),) = sent
+        assert recipients == [dept["member"]]
+        assert "responded" in notice["subject"]
+        # The response itself stays in the application.
+        assert "on it" not in notice["body_html"]
+
+    async def test_backfill_records_the_current_status_once(self, db_session, dept):
+        migration = _load_revision("0010291816fd")
+        box = await _box(db_session, dept, follow_up_enabled=True)
+        moved, _ = await _submit(db_session, box, dept["member"])
+        untouched, _ = await _submit(db_session, box, dept["member"])
+        await db_session.execute(
+            text(
+                "UPDATE suggestions SET disposition = 'accepted', "
+                "disposition_updated_at = :at WHERE id = :id"
+            ),
+            {"at": datetime(2026, 9, 1, 15, 0, tzinfo=timezone.utc), "id": moved.id},
+        )
+        await db_session.execute(
+            text("DELETE FROM suggestion_status_events WHERE organization_id = :o"),
+            {"o": dept["org"]},
+        )
+        # The backfill skips a table that already holds rows, which another
+        # organization's history in a shared test database could; this test
+        # is about what one run writes, so start the table empty.
+        await db_session.execute(text("DELETE FROM suggestion_status_events"))
+        for _ in range(2):  # the second run must not duplicate
+            await db_session.run_sync(lambda s: migration._backfill(s.connection()))
+        rows = (
+            await db_session.execute(
+                text(
+                    "SELECT suggestion_id, disposition, public_response "
+                    "FROM suggestion_status_events WHERE organization_id = :o"
+                ),
+                {"o": dept["org"]},
+            )
+        ).all()
+        assert [tuple(r) for r in rows] == [(moved.id, "accepted", None)]
+        assert untouched.id not in {r[0] for r in rows}
+
+
+@pytest.mark.integration
+class TestIdeaBoard:
+    """Published copies only, one vote per member, nothing of the original."""
+
+    async def _published(self, db_session, dept, *, board=True, title="Hose dryer"):
+        box = await _box(
+            db_session, dept, follow_up_enabled=True, public_board_enabled=board
+        )
+        suggestion, _ = await _submit(db_session, box, dept["member"])
+        service = SuggestionService(db_session)
+        loaded = await service.get_for_review(
+            dept["org"], dept["training_officer"], suggestion.id
+        )
+        if board:
+            await service.publish(
+                loaded, dept["training_officer"], title, "Dry hose faster."
+            )
+        return box, loaded
+
+    async def test_the_board_shows_only_the_published_copy(
+        self, db_session, dept, upload_dir
+    ):
+        box, suggestion = await self._published(db_session, dept)
+        await _submit(db_session, box, dept["member"])  # never published
+        async with await _client(db_session, dept["direct_reviewer"]) as client:
+            resp = await client.get("/suggestions/board")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["total"] == 1
+        (entry,) = body["items"]
+        assert entry["id"] == suggestion.id
+        assert (entry["title"], entry["summary"]) == ("Hose dryer", "Dry hose faster.")
+        assert set(entry) == {
+            "id",
+            "boxId",
+            "boxName",
+            "title",
+            "summary",
+            "disposition",
+            "publicResponse",
+            "voteCount",
+            "hasVoted",
+            "publishedAt",
+        }
+        assert "never leave" not in resp.text
+
+    async def test_a_box_without_a_board_cannot_publish(self, db_session, dept):
+        _, suggestion = await self._published(db_session, dept, board=False)
+        with pytest.raises(ValueError, match="idea board"):
+            await SuggestionService(db_session).publish(
+                suggestion, dept["training_officer"], "T", "S"
+            )
+
+    async def test_switching_the_board_off_hides_what_was_published(
+        self, db_session, dept
+    ):
+        box, _ = await self._published(db_session, dept)
+        service = SuggestionService(db_session)
+        box.public_board_enabled = False
+        await db_session.flush()
+        items, total = await service.list_board(dept["org"], dept["member"])
+        assert (items, total) == ([], 0)
+
+    async def test_voting_is_idempotent_and_withdrawable(self, db_session, dept):
+        _, suggestion = await self._published(db_session, dept)
+        async with await _client(db_session, dept["direct_reviewer"]) as client:
+            first = await client.post(f"/suggestions/board/{suggestion.id}/vote")
+            again = await client.post(f"/suggestions/board/{suggestion.id}/vote")
+            withdrawn = await client.delete(f"/suggestions/board/{suggestion.id}/vote")
+        assert first.status_code == 200, first.text
+        assert (first.json()["voteCount"], first.json()["hasVoted"]) == (1, True)
+        assert again.json()["voteCount"] == 1
+        assert (withdrawn.json()["voteCount"], withdrawn.json()["hasVoted"]) == (
+            0,
+            False,
+        )
+
+    async def test_an_unpublished_or_foreign_suggestion_takes_no_vote(
+        self, db_session, dept
+    ):
+        box, _ = await self._published(db_session, dept)
+        hidden, _ = await _submit(db_session, box, dept["member"])
+        other_org = await _org(db_session)
+        outsider = await _user(db_session, other_org, "Olga")
+        await db_session.flush()
+        _, published = await self._published(db_session, dept, title="Second")
+        async with await _client(db_session, dept["member"]) as client:
+            unpublished = await client.post(f"/suggestions/board/{hidden.id}/vote")
+        async with await _client(db_session, outsider) as client:
+            foreign = await client.post(f"/suggestions/board/{published.id}/vote")
+        assert unpublished.status_code == 404
+        assert foreign.status_code == 404
+
+    async def test_top_orders_by_votes_and_new_by_publication(self, db_session, dept):
+        box = await _box(
+            db_session, dept, follow_up_enabled=True, public_board_enabled=True
+        )
+        service = SuggestionService(db_session)
+        ids = []
+        for title in ("Older", "Newer"):
+            s, _ = await _submit(db_session, box, dept["member"])
+            loaded = await service.get_for_review(
+                dept["org"], dept["training_officer"], s.id
+            )
+            await service.publish(loaded, dept["training_officer"], title, "S")
+            loaded.published_at = datetime(
+                2026, 9, 1 if title == "Older" else 2, tzinfo=timezone.utc
+            )
+            ids.append(s.id)
+        await db_session.flush()
+        await service.set_vote(dept["org"], dept["admin"], ids[0], True)
+        top, _ = await service.list_board(dept["org"], dept["member"], sort="top")
+        new, _ = await service.list_board(dept["org"], dept["member"], sort="new")
+        assert [e["title"] for e in top] == ["Older", "Newer"]
+        assert [e["title"] for e in new] == ["Newer", "Older"]
+
+    async def test_the_latest_public_response_rides_along(self, db_session, dept):
+        _, suggestion = await self._published(db_session, dept)
+        service = SuggestionService(db_session)
+        for text_ in ("First look.", "Ordered one."):
+            await service.update_disposition(
+                suggestion, dept["training_officer"], {"public_response": text_}
+            )
+        entry = await service.get_board_entry(
+            dept["org"], dept["member"], suggestion.id
+        )
+        assert entry["public_response"] == "Ordered one."
+
+    async def test_a_forward_recipient_cannot_publish(self, db_session, dept, sent):
+        box = await _box(
+            db_session, dept, follow_up_enabled=True, public_board_enabled=True
+        )
+        suggestion, _ = await _submit(db_session, box, dept["member"])
+        service = SuggestionService(db_session)
+        loaded = await service.get_for_review(
+            dept["org"], dept["training_officer"], suggestion.id
+        )
+        await service.add_forwards(
+            loaded, dept["training_officer"], [], [dept["admin"]]
+        )
+        async with await _client(db_session, dept["admin"]) as client:
+            resp = await client.post(
+                f"/suggestions/review/{suggestion.id}/publish",
+                json={"title": "T", "summary": "S"},
+            )
+        assert resp.status_code == 403
+
+    async def test_unpublishing_keeps_the_votes(self, db_session, dept):
+        _, suggestion = await self._published(db_session, dept)
+        service = SuggestionService(db_session)
+        await service.set_vote(dept["org"], dept["admin"], suggestion.id, True)
+        assert await service.unpublish(suggestion) is True
+        assert (
+            await service.get_board_entry(dept["org"], dept["admin"], suggestion.id)
+            is None
+        )
+        await service.publish(suggestion, dept["training_officer"], "Again", "S")
+        entry = await service.get_board_entry(dept["org"], dept["admin"], suggestion.id)
+        assert (entry["vote_count"], entry["has_voted"]) == (1, True)
+
+    async def test_an_update_that_omits_the_board_setting_keeps_it(
+        self, db_session, dept
+    ):
+        box = await _box(db_session, dept, name="Ideas", public_board_enabled=True)
+        view = await SuggestionService(db_session).update_box(
+            dept["org"],
+            box.id,
+            SuggestionBoxWrite(
+                name="Ideas", reviewer_position_ids=[dept["training_pos"]]
+            ),
+        )
+        assert view["public_board_enabled"] is True
 
 
 @pytest.fixture
@@ -1135,6 +1432,16 @@ class TestNotices:
         assert anonymous_timestamp(moment) == datetime(
             2026, 9, 23, 12, 0, tzinfo=timezone.utc
         )
+
+
+def _load_revision(revision: str):
+    (path,) = (Path(__file__).resolve().parents[1] / "alembic/versions").glob(
+        f"*_{revision}_*.py"
+    )
+    spec = importlib.util.spec_from_file_location(f"rev_{revision}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _load_grant_migration():

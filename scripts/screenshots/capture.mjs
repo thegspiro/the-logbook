@@ -663,6 +663,12 @@ async function main() {
       // if the mocks cannot be dropped, the next shot could inherit one, so
       // the shot must fail rather than photograph whatever leaked.
       await page.unrouteAll({ behavior: "ignoreErrors" });
+      // The pointer outlives its shot too. A shot that clicks a tab leaves
+      // the mouse over it, and the next shot on the same page renders that
+      // spot in its hover state: 08-34 came back with the Officers tab lit
+      // because 08-37 had just clicked it. (0, 0) is where a fresh page
+      // starts, so every shot begins from the state the first one saw.
+      await page.mouse.move(0, 0);
       if (shot.beforeNavigate) {
         // Install route mocks before the first document request. This is used
         // sparingly for provider-controlled configuration states (for example,

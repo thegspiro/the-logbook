@@ -2354,21 +2354,25 @@ Swap and time-off request cards now show **Approve** and **Deny** buttons direct
 
 ### Staffing Status on Shift Cards
 
-Shift cards now show staffing status at a glance:
+Each shift on the schedule is a chip tinted by its staffing, with a legend
+above the grid:
 
-| Visual                        | Meaning                                     |
-| ----------------------------- | ------------------------------------------- |
-| Green CheckCircle2 icon       | Shift is fully staffed                      |
-| Green background in crew info | All positions filled                        |
-| Amber background in crew info | Below minimum staffing                      |
-| Staffing ratio (e.g., "4/4")  | Filled / required positions                 |
-| Green tint on shift card      | Overrides template color when fully staffed |
-| Amber tint on shift card      | Overrides template color when understaffed  |
+| Tint  | Legend            | Meaning                                                 |
+| ----- | ----------------- | ------------------------------------------------------- |
+| Red   | 2+ seats open     | Two or more positions still unfilled                    |
+| Amber | 1 seat open       | One position still unfilled                             |
+| Green | Fully staffed     | Every position filled                                   |
+| Blue  | You're on it      | You hold a seat on this shift                           |
+| Grey  | Crew size not set | No crew size configured, so there is nothing to measure |
 
-A shift with no minimum staffing configured keeps its template colour and
-shows no ratio at all — there is nothing to measure it against.
+The chip reads **N open** while a shift is short, **Full 4/4** once every
+seat is taken, and **You + 2/4** on a shift you are on. A shift that has
+already run, or is closed to signups, is greyed and struck through and reads
+**N on** — there is nothing on it for anyone to act on — as does a shift with
+no crew size, which has no seats to count against. **Crew size not set**
+only appears in the legend when a shift on screen is in that state.
 
-![The weekly schedule, its cards tinted green when fully staffed and amber when short](./images/03-55-staffing-status-cards.png)
+![The weekly schedule, each shift a chip tinted by its staffing, with the legend above the grid](./images/03-55-staffing-status-cards.png)
 
 ### Position-First Assignment Flow
 
