@@ -210,7 +210,8 @@ class TestPanelsBeatTheDataTable:
         assert _wins(style, "padding: 0 0 12px 0")
 
     def test_panel_table_does_not_carry_the_content_margin(self):
-        style = _style_of(self._panel(), r"<table(?![^>]*lockup)[^>]*>")
+        # Skipping the lockup and Outlook's ghost table, which carry no class.
+        style = _style_of(self._panel(), r'<table(?![^>]*(?:lockup|width="600"))[^>]*>')
         assert _wins(style, "margin: 0")
 
     def test_fineprint_beats_the_body_paragraph(self):
@@ -1157,7 +1158,10 @@ class TestTheAction:
 
     def test_the_button_takes_the_colourway(self):
         body = build_shell("T", action("{{event_url}}", "Go"))
-        assert 'class="button" style="background-color: {{header_accent}};"' in body
+        assert (
+            'class="button" style="background-color: {{header_accent}}; '
+            'border: 1px solid {{header_accent}};"'
+        ) in body
 
     def test_the_action_is_centred_and_the_button_is_a_touch_target(self):
         html = _inlined(action("{{event_url}}", "Go"))
@@ -1177,7 +1181,7 @@ class TestThePreheader:
 
     @staticmethod
     def _preheader(body: str) -> str:
-        match = re.match(r'<div style="display:none;[^"]*">(.*?)(&zwnj;|</div>)', body)
+        match = re.match(r'<div style="display:none;[^"]*">(.*?)(&#847;|</div>)', body)
         return match.group(1) if match else ""
 
     def test_it_is_the_first_thing_in_the_body_and_hidden(self):
@@ -1424,3 +1428,61 @@ class TestTheColourwayDowngradeMaterialisesEveryTokenRow:
         assert ACCENT_BLUE in bodies["old-default"]
         assert bodies["edited"] == f'<p style="color: {ACCENT_INDIGO};">Hi</p>'
         assert bodies["no-tokens"] == "<p>Plain</p>"
+
+
+class TestClassicOutlook:
+    """What the Word rendering engine needs, which no other client does.
+
+    Each of these is invisible everywhere else, so nothing but a test notices
+    when one goes missing.
+    """
+
+    def test_a_ghost_table_holds_the_card_at_600px(self):
+        # Outlook ignores max-width on a div and would stretch the card across
+        # the reading pane.
+        body = build_shell("T", "        <p>x</p>")
+        opener = '<!--[if mso]><table role="presentation" align="center" width="600"'
+        assert body.count(opener) == 1
+        assert body.index(opener) < body.index('<div class="container">')
+        assert body.rstrip().endswith("<!--[if mso]></td></tr></table><![endif]-->")
+
+    def test_the_ghost_table_is_invisible_to_the_inliner(self):
+        # A classed or styled tag inside the comment would be rewritten, and
+        # the comment is only safe because the inliner never sees a tag in it.
+        html = _inlined("        <p>x</p>")
+        ghost = re.search(r"<!--\[if mso\]>(.*?)<!\[endif\]-->", html, re.S)
+        assert ghost
+        assert "style=" not in ghost.group(1)
+
+    def test_the_button_carries_a_border_in_its_own_colour(self):
+        # Word ignores padding on an inline <a> unless it has a border.
+        assert "border: 1px solid {accent};" in action("{{u}}", "Go")
+
+    def test_the_stylesheet_does_not_border_every_button(self):
+        # An edited template's button keeps its own colour and no border; a
+        # border in the sheet would draw a red ring around a blue button.
+        rule = re.search(r"^\.button \{([^}]*)\}", DEFAULT_CSS, re.M)
+        assert rule
+        assert not re.search(r"border(?!-radius)", rule.group(1))
+
+    def test_the_logo_has_a_width_attribute(self):
+        # Word ignores CSS sizing on images and would show the file at its
+        # natural size.
+        block = build_logo_block("https://example.test/logo.png", "Falls Church")
+        assert ' width="48"' in block
+        assert "width:auto" in block, "other clients must still size by CSS"
+
+    def test_the_dpi_block_has_its_namespaces(self):
+        doc = build_email_document("s", "<p>x</p>")
+        assert 'xmlns:o="urn:schemas-microsoft-com:office:office"' in doc
+        assert 'xmlns:v="urn:schemas-microsoft-com:vml"' in doc
+        assert "<o:PixelsPerInch>96</o:PixelsPerInch>" in doc
+
+
+class TestTheDocumentOptsOutOfAutoDarkening:
+    def test_it_declares_light_only(self):
+        # Plain "light" is a preference; Apple Mail only leaves the message
+        # alone when it says "light only".
+        doc = build_email_document("s", "<p>x</p>")
+        assert '<meta name="color-scheme" content="light only" />' in doc
+        assert '<meta name="supported-color-schemes" content="light only" />' in doc

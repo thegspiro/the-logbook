@@ -58,9 +58,10 @@ export const EMAIL_BLOCKS: EmailBlock[] = [
     label: 'Button',
     icon: 'squareMousePointer',
     // The same address again as text under the button, for a client that
-    // strips the button's styling.
+    // strips the button's styling. The border, in the button's own colour, is
+    // what makes classic Outlook honour the button's padding.
     html: [
-      '<p class="action"><a href="{{login_url}}" class="button" style="background-color: #b91c1c;">Open</a></p>',
+      '<p class="action"><a href="{{login_url}}" class="button" style="background-color: #b91c1c; border: 1px solid #b91c1c;">Open</a></p>',
       '<p class="action-link">Or open this link: {{login_url}}</p>',
     ].join('\n'),
   },

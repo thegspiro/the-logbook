@@ -355,7 +355,10 @@ def build_logo_block(logo_url: str, organization_name: str) -> str:
 
     Sized with ``max-width``/``max-height`` rather than fixed dimensions
     because a department's logo can be any aspect ratio, and fixed width and
-    height would stretch it. Data URIs are skipped, as in
+    height would stretch it. Classic Outlook ignores CSS sizing on images
+    altogether and would show the file at its natural size, so the ``width``
+    attribute is set as well: Outlook reads it, and every other client lets
+    the inline ``width:auto`` override it. Data URIs are skipped, as in
     :func:`build_logo_cell`.
     """
     url = str(logo_url or "")
@@ -367,7 +370,7 @@ def build_logo_block(logo_url: str, organization_name: str) -> str:
         '<table role="presentation" align="center" cellpadding="0" '
         'cellspacing="0" style="margin:0 auto;"><tr>'
         '<td style="background-color:#ffffff;border-radius:10px;padding:5px;">'
-        '<img src="' + safe_url + '" alt="' + safe_name + '" '
+        '<img src="' + safe_url + '" alt="' + safe_name + '" width="48" '
         'style="display:block;max-width:48px;max-height:48px;width:auto;'
         'height:auto;border:0;" /></td></tr></table>'
     )
@@ -426,10 +429,18 @@ def action(url: str, label: str) -> str:
     *url* is a template variable name, written as ``{{name}}`` by the
     caller. ``{accent}`` is left for :func:`build_shell` to turn into the
     colourway token.
+
+    The border in the button's own colour is for classic Outlook, whose Word
+    engine ignores padding on an inline ``<a>`` unless the element has a
+    border — without it the button collapses to a coloured strip the height
+    of its text. It is written here rather than in ``.button`` so that a
+    template a department edited, whose button carries its own colour and no
+    border, is not given a border in the stylesheet's red.
     """
     return (
         f'        <p class="action"><a href="{url}" class="button" '
-        f'style="background-color: {{accent}};">{label}</a></p>\n'
+        f'style="background-color: {{accent}}; border: 1px solid {{accent}};">'
+        f"{label}</a></p>\n"
         f'        <p class="action-link">Or open this link: {url}</p>\n'
     )
 
@@ -437,9 +448,11 @@ def action(url: str, label: str) -> str:
 _FACT_VALUE = re.compile(r'<p class="fact-(?:value|mono)">(.*?)</p>', re.S)
 _FACT_ROW = re.compile(r"<tr>(.*?)</tr>", re.S)
 
-# Zero-width non-joiner and a no-break space, repeated: the conventional
-# filler that clients render as nothing but count as preview text.
-_PREHEADER_FILLER = "&zwnj;&nbsp;" * 40
+# The conventional filler after preview text: characters clients render as
+# nothing but count toward the preview, so it is not topped up with the start
+# of the body. &#847;&zwnj;&nbsp; is Litmus's published sequence; &#8199;&shy;
+# was added after iOS 16.4 and Yahoo stopped counting the first three.
+_PREHEADER_FILLER = "&#847;&zwnj;&nbsp;&#8199;&shy;" * 30
 
 
 def _first_fact_row(content: str) -> str:
@@ -566,7 +579,12 @@ def build_shell(
     teaser = preheader or _html.escape(subtitle) or _first_fact_row(content)
     if teaser:
         head.append(_preheader(teaser))
+    # Classic Outlook ignores max-width on a div and would stretch the card
+    # across the whole reading pane; this table, which only Outlook's Word
+    # engine sees, holds it at the 600px every other client gets.
     head += [
+        '<!--[if mso]><table role="presentation" align="center" width="600" '
+        'cellpadding="0" cellspacing="0"><tr><td><![endif]-->',
         '<div class="container">',
         '    <div class="masthead">',
         "        {{organization_logo_block}}",
@@ -592,6 +610,7 @@ def build_shell(
             "    </div>",
             "    {{footer_html}}",
             "</div>",
+            "<!--[if mso]></td></tr></table><![endif]-->",
         ]
     )
     if cache:
@@ -617,22 +636,25 @@ def build_email_document(subject: str, body_html: str, css: str = "") -> str:
       the body as Windows-1252 and the em dashes in almost every subject line
       arrive as ``â€"``.
     * ``meta viewport`` — stops mobile Safari shrinking the 600px card to fit.
-    * ``color-scheme: light`` — clients that auto-invert for dark mode leave a
-      page declaring its scheme alone, so the header accent survives.
+    * ``color-scheme: light only`` — Apple Mail leaves a page that declares it
+      supports light only alone rather than auto-inverting it. The ``only``
+      matters: plain ``light`` is a preference, not a refusal. Gmail's apps
+      and classic Outlook repaint regardless, which the logo plate is for.
     * The ``mso`` block pins Outlook's DPI, which otherwise scales the card up
-      by 25% on high-DPI Windows.
+      by 25% on high-DPI Windows. It is Office XML, so it only takes effect
+      with the ``o:`` and ``v:`` namespaces declared on ``<html>``.
     """
     import html as _html
 
     safe_subject = _html.escape(subject)
     safe_subject_attr = _html.escape(subject, quote=True)
     return f"""<!DOCTYPE html>
-<html lang="en" dir="ltr" xmlns="http://www.w3.org/1999/xhtml">
+<html lang="en" dir="ltr" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="color-scheme" content="light" />
-<meta name="supported-color-schemes" content="light" />
+<meta name="color-scheme" content="light only" />
+<meta name="supported-color-schemes" content="light only" />
 <title>{safe_subject}</title>
 <style>
 {css or DEFAULT_CSS}
