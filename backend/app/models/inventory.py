@@ -2845,6 +2845,11 @@ class InventoryNfcAudit(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     applied_at = Column(DateTime(timezone=True), nullable=True)
+    # Set by an audit finished offline and sent later from the phone's queue.
+    # A sync whose response was lost is retried with the same id, and the
+    # unique constraint turns that retry into the audit already saved rather
+    # than a second one.
+    client_submission_id = Column(String(64), nullable=True)
 
     items = relationship(
         "InventoryNfcAuditItem",
@@ -2858,6 +2863,11 @@ class InventoryNfcAudit(Base):
             "organization_id",
             "storage_area_id",
             "audited_at",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "client_submission_id",
+            name="uq_inventory_nfc_audits_client_submission",
         ),
     )
 
