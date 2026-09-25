@@ -13,8 +13,9 @@
  */
 import type { AxiosInstance } from 'axios';
 import { openIndexedDb } from './offlineDb';
+import { isNetworkError } from './errorHandling';
 
-export type GenericQueueKind = 'training-submission' | 'event-rsvp';
+export type GenericQueueKind = 'training-submission' | 'event-rsvp' | 'nfc-put-away' | 'nfc-shelf-audit';
 
 export interface GenericQueuedItem {
   id: string;
@@ -26,7 +27,21 @@ export interface GenericQueuedItem {
   queuedAt: number;
   retries: number;
   lastError?: string;
+  /**
+   * Still being written by the screen that queued it, so not to be sent yet.
+   * The NFC put-away screen adds each offline tap to one entry, because the
+   * taps only mean something in order and together; sending it half-written
+   * and then adding to it would lose the taps made in between. The screen
+   * clears this when it is done, and a held entry left behind by a closed tab
+   * is released once it goes quiet (`GENERIC_HELD_STALE_MS`).
+   */
+  held?: boolean;
+  /** When a held entry was last written. */
+  updatedAt?: number;
 }
+
+/** How long a held entry may go unwritten before it is sent anyway. */
+export const GENERIC_HELD_STALE_MS = 30 * 60 * 1000;
 
 const DB_NAME = 'logbook-offline-generic';
 const DB_VERSION = 1;
@@ -74,6 +89,31 @@ export async function enqueueGeneric(
     req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
   return entry;
+}
+
+/** Write an entry as given, replacing any with the same id. */
+export async function putGenericItem(item: GenericQueuedItem): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const req = txStore(db, 'readwrite').put(item);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
+  });
+}
+
+export async function getGenericItem(id: string): Promise<GenericQueuedItem | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = txStore(db, 'readonly').get(id);
+    req.onsuccess = () => resolve((req.result as GenericQueuedItem | undefined) ?? null);
+    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
+  });
+}
+
+/** Whether an entry may be sent now: not held, or held but abandoned. */
+export function isGenericSendable(item: GenericQueuedItem, now: number = Date.now()): boolean {
+  if (!item.held) return true;
+  return now - (item.updatedAt ?? item.queuedAt) >= GENERIC_HELD_STALE_MS;
 }
 
 export async function listGenericPending(): Promise<GenericQueuedItem[]> {
@@ -127,13 +167,27 @@ export async function genericPendingCount(): Promise<number> {
  * Drops items past `MAX_RETRIES` so a permanently-rejected request
  * (e.g. 4xx validation error after a schema change) doesn't block the
  * queue forever.
+ *
+ * A send that never reached the server is not one of those attempts. The
+ * queue exists for weak signal, and counting a dropped connection as a
+ * rejection discarded an item after five flaky reconnects without the server
+ * ever having seen it.
+ *
+ * `onSynced` receives the server's answer, for queues whose result is worth
+ * telling the member about (what an offline put-away actually moved).
  */
-export async function flushOne(item: GenericQueuedItem, axios: AxiosInstance): Promise<boolean> {
+export async function flushOne(
+  item: GenericQueuedItem,
+  axios: AxiosInstance,
+  onSynced?: (data: unknown) => void
+): Promise<boolean> {
   try {
-    await axios.post(item.url, item.body);
+    const response = await axios.post<unknown>(item.url, item.body);
     await dequeueGeneric(item.id);
+    onSynced?.(response.data);
     return true;
   } catch (err) {
+    if (isNetworkError(err)) return false;
     const message = err instanceof Error ? err.message : 'Sync failed';
     if (item.retries + 1 >= MAX_RETRIES) {
       await dequeueGeneric(item.id);

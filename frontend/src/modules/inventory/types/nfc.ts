@@ -332,3 +332,58 @@ export interface KioskReturnRequest extends KioskItemRequest {
   damaged: boolean;
   damage_notes?: string | undefined;
 }
+
+// ---------------------------------------------------------------------------
+// Taps made offline, applied later
+// ---------------------------------------------------------------------------
+
+/**
+ * One step taken without signal: what was read off a tag, or a storage area
+ * picked from the list. The phone keeps the raw read and nothing it knows
+ * about the tag; the server decides what it names when it arrives.
+ */
+export interface InventoryNfcReplayTap {
+  code?: string | undefined;
+  serial_number?: string | undefined;
+  storage_area_id?: string | undefined;
+}
+
+export interface InventoryNfcPutAwayReplayRequest {
+  open_storage_area_id?: string | undefined;
+  held_item_id?: string | undefined;
+  held_item_tag_id?: string | undefined;
+  taps: InventoryNfcReplayTap[];
+}
+
+export type InventoryNfcReplayOutcome = 'moved' | 'already_there' | 'shelf_opened' | 'held' | 'refused' | 'unread';
+
+export interface InventoryNfcPutAwayReplayStep {
+  index: number;
+  outcome: InventoryNfcReplayOutcome;
+  item_id: string | null;
+  item_name: string | null;
+  storage_area_name: string | null;
+  message: string | null;
+}
+
+export interface InventoryNfcPutAwayReplayResponse {
+  results: InventoryNfcPutAwayReplayStep[];
+  moved_count: number;
+  refused_count: number;
+  unread_count: number;
+  held_item_name: string | null;
+}
+
+export interface InventoryNfcAuditReplayRequest {
+  client_submission_id: string;
+  storage_area_id?: string | undefined;
+  tapped: InventoryNfcAuditTap[];
+  taps: InventoryNfcReplayTap[];
+}
+
+export interface InventoryNfcAuditReplayResponse {
+  audit: InventoryNfcAuditDetail | null;
+  not_saved_reason: string | null;
+  unread_count: number;
+  other_shelf_count: number;
+}

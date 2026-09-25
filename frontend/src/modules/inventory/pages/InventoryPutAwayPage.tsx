@@ -17,21 +17,36 @@
  *
  * A typed box sits beside the reader for a USB NFC reader at a desk, and a
  * shelf can be picked from a list, so the page is usable without Web NFC.
+ *
+ * **Without signal** (a basement store room, the far end of a bay) taps are
+ * kept on the phone as raw reads, in order, in one offline session, and sent
+ * when signal returns (`utils/nfcOfflineSync.ts`); the server then applies
+ * them with the rules above, starting from the shelf and held item the screen
+ * showed when signal went. The screen cannot know what an offline tap named,
+ * so once a session is sent the shelf is closed and has to be tapped again.
+ * A tap made while an earlier session is still unsent joins a new session
+ * rather than going straight to the server, so taps never apply out of order.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { AlertTriangle, ArrowLeft, Box, Check, Loader2, Nfc, Package, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Box, Check, CloudOff, Loader2, Nfc, Package, X } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { useNfcScanner } from '../../../hooks/useNfcScanner';
 import { useScanFeedback } from '../../../hooks/useScanFeedback';
 import { ScanSuccessFlash } from '../../../components/ux/ScanSuccessFlash';
 import { Breadcrumbs } from '../../../components/ux';
 import { parseInventoryTagCode } from '../../../constants/nfc';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorMessage, isNetworkError } from '../../../utils/errorHandling';
+import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
+import { triggerOfflineDrain } from '../../../hooks/useOfflineSyncEngine';
+import { getGenericItem, putGenericItem } from '../../../utils/genericOfflineQueue';
+import { usePendingSyncStore } from '../../../stores/pendingSyncStore';
 import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
+import { newOfflineId, putAwaySessionItem, replayTap } from '../utils/nfcOfflineSync';
 import type { StorageAreaResponse } from '../types';
-import type { InventoryNfcPutAwayResponse } from '../types/nfc';
+import type { InventoryNfcPutAwayReplayRequest, InventoryNfcPutAwayResponse } from '../types/nfc';
+import { MAX_AUDIT_TAPS } from '../types/nfc';
 
 interface Shelf {
   id: string;
@@ -47,7 +62,16 @@ interface HeldItem {
 /** What a tap, a typed serial, or a picked shelf amounts to. */
 type Input = { kind: 'tag'; code: string | null; serial: string | null } | { kind: 'shelf'; shelf: Shelf };
 
+/** Taps kept on the phone while there is no signal, sent together later. */
+interface OfflineSession {
+  id: string;
+  queuedAt: number;
+  body: InventoryNfcPutAwayReplayRequest;
+}
+
 const RECENT_MOVES_SHOWN = 20;
+// The replay endpoint's bound; a longer offline stretch is sent as several.
+const MAX_SESSION_TAPS = MAX_AUDIT_TAPS;
 
 export const InventoryPutAwayPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -61,12 +85,20 @@ export const InventoryPutAwayPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typedSerial, setTypedSerial] = useState('');
+  const isOnline = useOnlineStatus();
+  const [offlineTaps, setOfflineTaps] = useState(0);
+  const [unsent, setUnsent] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // The queue reads these rather than state: a tap handled after another must
   // see what the previous one decided, not what was rendered before either.
   const openShelfRef = useRef<Shelf | null>(null);
   const heldItemRef = useRef<HeldItem | null>(null);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
+  // The session being written now, and sessions handed to the sync queue that
+  // it has not yet confirmed sending.
+  const sessionRef = useRef<OfflineSession | null>(null);
+  const unsentRef = useRef<string[]>([]);
 
   const setShelf = (shelf: Shelf | null) => {
     openShelfRef.current = shelf;
@@ -109,8 +141,116 @@ export const InventoryPutAwayPage: React.FC = () => {
     signalScanSuccess();
   };
 
+  const refreshPending = () => void usePendingSyncStore.getState().refresh();
+
+  /**
+   * Hand the session being written to the sync queue. What it will leave open
+   * is unknown here, so the screen closes the shelf and drops any held item.
+   */
+  const releaseSession = async () => {
+    const session = sessionRef.current;
+    if (!session) return;
+    sessionRef.current = null;
+    setOfflineTaps(0);
+    const stored = await getGenericItem(session.id);
+    if (stored) await putGenericItem({ ...stored, held: false });
+    unsentRef.current = [...unsentRef.current, session.id];
+    setUnsent(unsentRef.current.length);
+    setShelf(null);
+    setHeld(null);
+  };
+
+  /** Drop the sessions the sync queue has sent; true when none is left. */
+  const pruneUnsent = async (): Promise<boolean> => {
+    const still: string[] = [];
+    for (const id of unsentRef.current) {
+      if (await getGenericItem(id)) still.push(id);
+    }
+    unsentRef.current = still;
+    setUnsent(still.length);
+    return still.length === 0;
+  };
+
+  /** Send what was tapped offline, before any tap made after it. */
+  const sendOffline = async () => {
+    await releaseSession();
+    if (unsentRef.current.length === 0) return;
+    // A drain already running when this session was released skipped it
+    // while it was still held, so a second one is asked for if needed.
+    await triggerOfflineDrain();
+    if (!(await pruneUnsent())) await triggerOfflineDrain();
+    if (await pruneUnsent()) {
+      setNotice('Your offline taps have been sent. Tap a shelf to carry on.');
+    }
+    refreshPending();
+  };
+
+  const recordOffline = async (input: Input, startShelf: Shelf | null, startHeld: HeldItem | null) => {
+    let session = sessionRef.current;
+    if (session) {
+      // Sent by the sync engine after going quiet: its effect is unknown, so
+      // carry on from nothing rather than from what the screen shows.
+      const stored = await getGenericItem(session.id);
+      if (!stored?.held || session.body.taps.length >= MAX_SESSION_TAPS) {
+        if (stored?.held) await releaseSession();
+        session = null;
+        sessionRef.current = null;
+        startShelf = null;
+        startHeld = null;
+        setShelf(null);
+        setHeld(null);
+      }
+    }
+    if (!session) {
+      session = {
+        id: newOfflineId('putaway'),
+        queuedAt: Date.now(),
+        body: {
+          open_storage_area_id: startShelf?.id,
+          held_item_id: startHeld?.id,
+          held_item_tag_id: startHeld?.tagId ?? undefined,
+          taps: [],
+        },
+      };
+    }
+    session.body.taps.push(
+      input.kind === 'shelf' ? { storage_area_id: input.shelf.id } : replayTap(input.code, input.serial)
+    );
+    await putGenericItem(putAwaySessionItem(session.id, session.body, session.queuedAt));
+    sessionRef.current = session;
+    setOfflineTaps(session.body.taps.length);
+    refreshPending();
+    signalScanSuccess();
+  };
+
   const handle = async (input: Input) => {
     setError(null);
+    setNotice(null);
+    const startShelf = openShelfRef.current;
+    const startHeld = heldItemRef.current;
+
+    // Order is everything here: a tap made after offline ones must not reach
+    // the server first, so it waits behind them — or joins them.
+    if (!sessionRef.current && unsentRef.current.length > 0 && navigator.onLine) {
+      await sendOffline();
+    }
+    if (sessionRef.current || unsentRef.current.length > 0 || !navigator.onLine) {
+      await recordOffline(input, startShelf, startHeld);
+      return;
+    }
+    try {
+      await handleOnline(input);
+    } catch (err: unknown) {
+      if (!isNetworkError(err)) throw err;
+      // Signal went mid-tap. Nothing was applied, so the tap starts an
+      // offline session from where the screen stood before it.
+      setShelf(startShelf);
+      setHeld(startHeld);
+      await recordOffline(input, startShelf, startHeld);
+    }
+  };
+
+  const handleOnline = async (input: Input) => {
     let shelf: Shelf | null = null;
     let item: HeldItem | null = null;
 
@@ -155,11 +295,16 @@ export const InventoryPutAwayPage: React.FC = () => {
   const handleRef = useRef(handle);
   handleRef.current = handle;
 
-  const enqueue = useCallback((input: Input) => {
+  const sendOfflineRef = useRef(sendOffline);
+  sendOfflineRef.current = sendOffline;
+  const releaseRef = useRef(releaseSession);
+  releaseRef.current = releaseSession;
+
+  const runQueued = useCallback((job: () => Promise<void>) => {
     queueRef.current = queueRef.current.then(async () => {
       setBusy(true);
       try {
-        await handleRef.current(input);
+        await job();
       } catch (err: unknown) {
         setError(getErrorMessage(err, 'That tap could not be recorded.'));
       } finally {
@@ -167,6 +312,23 @@ export const InventoryPutAwayPage: React.FC = () => {
       }
     });
   }, []);
+
+  const enqueue = useCallback((input: Input) => runQueued(() => handleRef.current(input)), [runQueued]);
+
+  // Signal back: send the offline taps, in the same queue as taps, so a tap
+  // made the moment signal returns still lands after them.
+  useEffect(() => {
+    if (isOnline) runQueued(() => sendOfflineRef.current());
+  }, [isOnline, runQueued]);
+
+  // Leaving the screen ends the session: it is sent now if there is signal,
+  // or as soon as there is, rather than waiting to go stale.
+  useEffect(
+    () => () => {
+      void releaseRef.current().then(() => triggerOfflineDrain());
+    },
+    []
+  );
 
   const onTag = useCallback(
     (tag: { serialNumber: string; payload: string | null }) => {
@@ -235,11 +397,46 @@ export const InventoryPutAwayPage: React.FC = () => {
         </div>
       ) : (
         <>
+          {(!isOnline || offlineTaps > 0 || unsent > 0) && (
+            <section className="alert-warning space-y-2" aria-label="Offline taps" role="status">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <CloudOff className="h-4 w-4" aria-hidden="true" />
+                {isOnline ? 'Offline taps waiting to be sent' : 'No signal: keep tapping'}
+              </p>
+              <p className="text-sm">
+                {offlineTaps > 0
+                  ? `${offlineTaps} tap${offlineTaps === 1 ? '' : 's'} saved on this phone. They are applied in order when there is signal, and you will be told what moved.`
+                  : unsent > 0
+                    ? 'Your offline taps are saved on this phone and will be sent when there is signal.'
+                    : 'Taps are saved on this phone and applied when signal returns.'}
+              </p>
+              {isOnline && (offlineTaps > 0 || unsent > 0) && (
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => runQueued(() => sendOfflineRef.current())}
+                >
+                  Send now
+                </button>
+              )}
+            </section>
+          )}
+          {notice && (
+            <div className="alert-info text-sm" role="status">
+              {notice}
+            </div>
+          )}
+
           <section className="card space-y-3 p-4" aria-label="Current shelf and item">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-theme-text-primary flex items-center gap-2 text-sm">
                 <Box className="h-4 w-4" aria-hidden="true" />
-                {openShelf ? (
+                {offlineTaps > 0 ? (
+                  // What an offline tap named is only known once it is sent.
+                  <span className="text-theme-text-secondary">
+                    Shelves and items tapped offline are worked out when the taps are sent.
+                  </span>
+                ) : openShelf ? (
                   <span>
                     Items tapped now go on <strong>{openShelf.name}</strong>
                   </span>
@@ -247,14 +444,16 @@ export const InventoryPutAwayPage: React.FC = () => {
                   <span className="text-theme-text-secondary">No shelf open. Tap a shelf tag, or pick one below.</span>
                 )}
               </p>
-              {openShelf && (
+              {/* Closing a shelf is not a tap, so an offline session has no
+                  way to carry it; the next shelf tap takes its place. */}
+              {openShelf && offlineTaps === 0 && (
                 <button type="button" className="btn-secondary btn-sm" onClick={() => setShelf(null)}>
                   Close shelf
                 </button>
               )}
             </div>
 
-            {heldItem && (
+            {heldItem && offlineTaps === 0 && (
               <div className="alert-info flex flex-wrap items-center justify-between gap-2" role="status">
                 <span className="flex items-center gap-2 text-sm">
                   <Package className="h-4 w-4" aria-hidden="true" />

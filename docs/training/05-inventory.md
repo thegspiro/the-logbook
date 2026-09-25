@@ -900,6 +900,14 @@ The kiosk says why it will not lend something (for example, "Ask a
 quartermaster" for restricted gear). It forgets you after a minute without a
 tap.
 
+### Tapping without signal
+
+Put-away and shelf audits keep working without signal. Open the screen first,
+then keep tapping. Put-away taps are sent in order when signal returns, and a
+message says what moved. After that, tap the shelf again. For a shelf audit, press **Finish audit** as usual;
+without signal it is kept on the phone and saved later. Finish an audit before
+closing the screen, because an unfinished one is not kept.
+
 ### Apparatus compartment tags
 
 **Required Permission:** `inventory.check_manage` to tag compartments;

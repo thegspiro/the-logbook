@@ -24,6 +24,11 @@ unlinking one through the shared ``/nfc-tags/{id}`` routes asks for
 ``inventory.check_submit`` limited to their assigned templates, as the check
 form itself is, or ``inventory.check_manage``.
 
+Put-away and shelf-audit taps made without signal are queued on the phone as
+raw reads and sent later to the ``/replay`` routes, which decide what each tap
+names when it arrives and apply them in order with the online rules. Those are
+``inventory.manage``, like the screens that queue them.
+
 Shelf audits, the member ID card lookup and the bulk-enrollment list are
 ``inventory.manage`` too: each is a quartermaster's tool. The card lookup also
 requires the NFC ID Cards integration, because it reads that integration's
@@ -55,7 +60,11 @@ from app.schemas.inventory_nfc import (
     InventoryNfcAuditCreate,
     InventoryNfcAuditDetail,
     InventoryNfcAuditListResponse,
+    InventoryNfcAuditReplayRequest,
+    InventoryNfcAuditReplayResponse,
     InventoryNfcMemberResponse,
+    InventoryNfcPutAwayReplayRequest,
+    InventoryNfcPutAwayReplayResponse,
     InventoryNfcPutAwayRequest,
     InventoryNfcPutAwayResponse,
     InventoryNfcResolveAnyRequest,
@@ -241,6 +250,53 @@ async def put_away_inventory_item(
                 "skipped": 0,
                 "from_storage_area_id": result["from_storage_area_id"],
                 "method": "nfc",
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return result
+
+
+@router.post("/nfc/put-away/replay", response_model=InventoryNfcPutAwayReplayResponse)
+async def replay_put_away_taps(
+    data: InventoryNfcPutAwayReplayRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Apply put-away taps made offline, in order, and say what each did.
+
+    A tap that names nothing, or a move the put-away rule refuses, is reported
+    in its step and the rest still apply: the answer is 200 unless the request
+    itself is refused.
+    """
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    service = InventoryNfcService(db)
+    result = await service.replay_put_away(
+        organization_id=org_id,
+        scanned_by=str(current_user.id),
+        taps=[t.model_dump() for t in data.taps],
+        open_storage_area_id=data.open_storage_area_id,
+        held_item_id=data.held_item_id,
+        held_item_tag_id=data.held_item_tag_id,
+    )
+
+    # One event per move, in the online put-away's shape, so an auditor
+    # searching for put-aways finds these beside the ones made with signal.
+    for step in result["results"]:
+        if step["outcome"] != "moved":
+            continue
+        await log_audit_event(
+            db=db,
+            event_type="inventory_items_put_away",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "storage_area_id": step["storage_area_id"],
+                "item_ids": [step["item_id"]],
+                "skipped": 0,
+                "from_storage_area_id": step["from_storage_area_id"],
+                "method": "nfc_offline",
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -643,6 +699,56 @@ async def create_inventory_nfc_audit(
         username=current_user.username,
     )
     return audit
+
+
+@router.post("/nfc/audits/replay", response_model=InventoryNfcAuditReplayResponse)
+async def replay_inventory_nfc_audit(
+    data: InventoryNfcAuditReplayRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Save a shelf audit finished offline.
+
+    Sending the same ``client_submission_id`` again returns the audit already
+    saved. When the taps name no shelf, nothing is saved and the answer says
+    why — a 200, because resending cannot change that.
+    """
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    service = InventoryNfcService(db)
+    try:
+        result = await service.replay_audit(
+            organization_id=org_id,
+            audited_by=str(current_user.id),
+            client_submission_id=data.client_submission_id,
+            storage_area_id=data.storage_area_id,
+            tapped=[(t.item_id, t.tag_id) for t in data.tapped],
+            taps=[t.model_dump() for t in data.taps],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+    audit = result["audit"]
+    # A resend of an audit already saved is not a second audit.
+    if audit is not None and result["created"]:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_nfc_shelf_audited",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "audit_id": audit["id"],
+                "storage_area_id": audit["storage_area_id"],
+                "expected": audit["expected_count"],
+                "found": audit["found_count"],
+                "missing": audit["missing_count"],
+                "unexpected": audit["unexpected_count"],
+                "offline": True,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return result
 
 
 @router.get("/nfc/audits", response_model=InventoryNfcAuditListResponse)
