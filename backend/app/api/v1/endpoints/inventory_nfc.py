@@ -15,6 +15,15 @@ Permissions follow the barcode flow they sit beside: resolving a tag is
 ``inventory.view``, like ``GET /inventory/lookup``; changing which tags an item
 carries, moving an item, and reading the tap log are ``inventory.manage``.
 
+Tags on equipment-check compartments belong to whoever builds checklists:
+listing and linking them is ``inventory.check_manage``, and relabelling or
+unlinking one through the shared ``/nfc-tags/{id}`` routes asks for
+``inventory.check_manage`` when the tag is on a compartment and
+``inventory.manage`` otherwise. Resolving a tap during a check
+(``/nfc/resolve-check``) is for whoever may perform that template's check —
+``inventory.check_submit`` limited to their assigned templates, as the check
+form itself is, or ``inventory.check_manage``.
+
 Shelf audits, the member ID card lookup and the bulk-enrollment list are
 ``inventory.manage`` too: each is a quartermaster's tool. The card lookup also
 requires the NFC ID Cards integration, because it reads that integration's
@@ -51,6 +60,8 @@ from app.schemas.inventory_nfc import (
     InventoryNfcPutAwayResponse,
     InventoryNfcResolveAnyRequest,
     InventoryNfcResolveAnyResponse,
+    InventoryNfcResolveCheckRequest,
+    InventoryNfcResolveCheckResponse,
     InventoryNfcResolveRequest,
     InventoryNfcScanListResponse,
     InventoryNfcSettingsResponse,
@@ -61,6 +72,7 @@ from app.schemas.inventory_nfc import (
     InventoryNfcUntaggedListResponse,
 )
 from app.schemas.nfc_tag import NfcCheckInStatus
+from app.services.equipment_check_service import EquipmentCheckService
 from app.services.inventory_audit_schedule_service import (
     InventoryAuditScheduleService,
 )
@@ -80,12 +92,40 @@ def _is_staff(user: User) -> bool:
     return user_has_permission(user, "inventory.manage")
 
 
+def _require_tag_manager(user: User, tag: dict) -> None:
+    """403 unless ``user`` may manage tags of this tag's kind.
+
+    The ``/nfc-tags/{id}`` routes serve every kind of tag and admit either
+    permission, so the tag itself decides which one is needed: a checklist
+    builder should not relabel a quartermaster's item tags, nor the reverse.
+    """
+    needed = (
+        "inventory.check_manage"
+        if tag["check_compartment_id"] is not None
+        else "inventory.manage"
+    )
+    if not user_has_permission(user, needed):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to manage this tag.",
+        )
+
+
 @router.get("/nfc/settings", response_model=InventoryNfcSettingsResponse)
 async def get_inventory_nfc_settings(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(
+        require_permission(
+            "inventory.view", "inventory.check_submit", "inventory.check_manage"
+        )
+    ),
 ):
-    """Whether NFC tag tracking is switched on for this organization."""
+    """Whether NFC tag tracking is switched on for this organization.
+
+    Also open to whoever performs or builds equipment checks, which need not
+    include ``inventory.view``: the check form and the checklist builder read
+    it to decide whether to offer compartment and item taps.
+    """
     enabled = await inventory_nfc_enabled(db, str(current_user.organization_id))
     return {"enabled": enabled}
 
@@ -226,6 +266,134 @@ async def list_item_nfc_scans(
     return {"items": items, "total": len(items)}
 
 
+@router.post("/nfc/resolve-check", response_model=InventoryNfcResolveCheckResponse)
+async def resolve_check_inventory_nfc_tag(
+    data: InventoryNfcResolveCheckRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.check_submit", "inventory.check_manage")
+    ),
+):
+    """Find what a tap during an equipment check names: one of the template's
+    compartments, or the checklist entries linked to a tagged inventory item.
+
+    The template is fetched exactly as the check form fetches it, so a member
+    limited to their assigned templates cannot probe another one's contents.
+    """
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+
+    checks = EquipmentCheckService(db)
+    visible_positions = None
+    if not (
+        user_has_permission(current_user, "inventory.check_view")
+        or user_has_permission(current_user, "inventory.check_manage")
+    ):
+        visible_positions = await checks.get_user_check_positions(
+            str(current_user.id), org_id
+        )
+    template = await checks.get_template(
+        data.template_id,
+        org_id,
+        visible_positions=visible_positions,
+        submitter_user_id=str(current_user.id),
+    )
+    if template is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    service = InventoryNfcService(db)
+    try:
+        resolved = await service.resolve_check(
+            org_id, data.template_id, (data.code, data.serial_number)
+        )
+    except InventoryNfcTagNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+    if resolved.item is not None and _is_staff(current_user):
+        await service.record_scan(
+            organization_id=org_id,
+            item_id=str(resolved.item.id),
+            action=InventoryNfcScanAction.LOOKUP,
+            scanned_by=str(current_user.id),
+            tag_id=str(resolved.tag.id),
+        )
+
+    return InventoryNfcResolveCheckResponse(
+        kind=resolved.kind,
+        tag_id=str(resolved.tag.id),
+        compartment_id=(str(resolved.compartment.id) if resolved.compartment else None),
+        compartment_name=resolved.compartment.name if resolved.compartment else None,
+        item_name=resolved.item.name if resolved.item else None,
+        template_item_ids=resolved.template_item_ids,
+    )
+
+
+@router.get(
+    "/check-compartments/{compartment_id}/nfc-tags",
+    response_model=InventoryNfcTagListResponse,
+)
+async def list_check_compartment_nfc_tags(
+    compartment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
+):
+    """List the tags linked to one equipment-check compartment."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    service = InventoryNfcService(db)
+    try:
+        items = await service.list_compartment_tags(compartment_id, org_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"items": items, "total": len(items)}
+
+
+@router.post(
+    "/check-compartments/{compartment_id}/nfc-tags",
+    response_model=InventoryNfcTagResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_check_compartment_nfc_tag(
+    compartment_id: str,
+    data: InventoryNfcTagCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
+):
+    """Link a tag to an equipment-check compartment on an apparatus."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    service = InventoryNfcService(db)
+    try:
+        tag = await service.link_tag(
+            organization_id=org_id,
+            check_compartment_id=compartment_id,
+            tag_uid=data.tag_uid,
+            credential_type=data.credential_type,
+            label=data.label,
+            linked_by=str(current_user.id),
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_nfc_tag_linked",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "tag_id": tag["id"],
+            "check_compartment_id": compartment_id,
+            "uid_preview": tag["uid_preview"],
+            "credential_type": data.credential_type.value,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return tag
+
+
 @router.get(
     "/storage-areas/{storage_area_id}/nfc-tags",
     response_model=InventoryNfcTagListResponse,
@@ -360,7 +528,9 @@ async def update_inventory_nfc_tag(
     tag_id: str,
     data: InventoryNfcTagUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.manage")),
+    current_user: User = Depends(
+        require_permission("inventory.manage", "inventory.check_manage")
+    ),
 ):
     """Relabel a tag, or mark it lost or found."""
     org_id = str(current_user.organization_id)
@@ -368,6 +538,7 @@ async def update_inventory_nfc_tag(
     service = InventoryNfcService(db)
     updates = data.model_dump(exclude_unset=True)
     try:
+        _require_tag_manager(current_user, await service.get_tag(tag_id, org_id))
         tag = await service.update_tag(tag_id, org_id, updates)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -384,6 +555,7 @@ async def update_inventory_nfc_tag(
                 "tag_id": tag_id,
                 "item_id": tag["item_id"],
                 "storage_area_id": tag["storage_area_id"],
+                "check_compartment_id": tag["check_compartment_id"],
                 "new_status": tag["status"].value,
             },
             user_id=str(current_user.id),
@@ -396,13 +568,16 @@ async def update_inventory_nfc_tag(
 async def unlink_inventory_nfc_tag(
     tag_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.manage")),
+    current_user: User = Depends(
+        require_permission("inventory.manage", "inventory.check_manage")
+    ),
 ):
-    """Unlink a tag from its item, freeing it to be linked again."""
+    """Unlink a tag from what it marks, freeing it to be linked again."""
     org_id = str(current_user.organization_id)
     await require_inventory_nfc(db, org_id)
     service = InventoryNfcService(db)
     try:
+        _require_tag_manager(current_user, await service.get_tag(tag_id, org_id))
         removed = await service.unlink_tag(tag_id, org_id)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -416,6 +591,7 @@ async def unlink_inventory_nfc_tag(
             "tag_id": tag_id,
             "item_id": removed["item_id"],
             "storage_area_id": removed["storage_area_id"],
+            "check_compartment_id": removed["check_compartment_id"],
             "uid_preview": removed["uid_preview"],
         },
         user_id=str(current_user.id),

@@ -1,16 +1,23 @@
 """
 Inventory NFC Tag Service
 
-Links NFC tags to inventory items and storage areas, resolves a tapped tag
-back to what it names, moves items onto a shelf by tap (put-away), and keeps
-the staff tap log that is each item's "last seen" trail.
+Links NFC tags to inventory items, storage areas and equipment-check
+compartments, resolves a tapped tag back to what it names, moves items onto a
+shelf by tap (put-away), and keeps the staff tap log that is each item's "last
+seen" trail.
+
+A compartment tag is only meaningful during an equipment check of the template
+it belongs to (``resolve_check``): it names a place on a truck, not a thing
+anybody can pick up, so the item-only and item-or-shelf resolvers refuse it.
+Compartments are template-scoped and carry no ``organization_id`` of their
+own, so every compartment read here goes through its template's organization.
 
 The hashing and normalization are the member ID card's (``nfc_tag_service``)
 rather than a copy: a tag has to read the same way whichever screen tapped it,
 and one definition of "the same tag" is what guarantees that.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
@@ -19,6 +26,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.apparatus import (
+    CheckTemplateCompartment,
+    CheckTemplateItem,
+    EquipmentCheckTemplate,
+)
 from app.models.inventory import (
     InventoryItem,
     InventoryNfcAudit,
@@ -57,8 +69,26 @@ _NOT_ON_SHELF = frozenset(
 )
 
 
+_Target = Union[InventoryItem, StorageArea, CheckTemplateCompartment]
+
+
 class InventoryNfcTagNotFound(Exception):
     """The tag is not linked to anything usable. The message says why."""
+
+
+@dataclass
+class ResolvedCheckTap:
+    """What a tap during an equipment check named.
+
+    ``kind`` is ``compartment`` (jump to it) or ``item`` (mark the checklist
+    entries linked to this inventory item present).
+    """
+
+    tag: InventoryNfcTag
+    kind: str
+    compartment: Optional[CheckTemplateCompartment] = None
+    item: Optional[InventoryItem] = None
+    template_item_ids: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -71,7 +101,8 @@ class ResolvedTag:
 
 
 class InventoryNfcService:
-    """Business logic for NFC tags on inventory items and storage areas."""
+    """Business logic for NFC tags on inventory items, storage areas and
+    equipment-check compartments."""
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -101,6 +132,26 @@ class InventoryNfcService:
             InventoryNfcTag.storage_area_id == str(storage_area_id),
         )
 
+    async def list_compartment_tags(
+        self, compartment_id: str, organization_id: str
+    ) -> List[Dict[str, Any]]:
+        """Tags on one equipment-check compartment. Raises ``LookupError`` for
+        a compartment outside the organization."""
+        await self._get_compartment(compartment_id, organization_id)
+        return await self._list_tags(
+            organization_id,
+            InventoryNfcTag.check_compartment_id == str(compartment_id),
+        )
+
+    async def get_tag(self, tag_id: str, organization_id: str) -> Dict[str, Any]:
+        """One tag, as the management screens show it. Raises ``LookupError``.
+
+        The endpoints read this before a relabel or unlink to decide which
+        permission the tag's target calls for.
+        """
+        tag = await self._get_tag(tag_id, organization_id)
+        return self._to_dict(tag, {})
+
     async def link_tag(
         self,
         *,
@@ -111,20 +162,29 @@ class InventoryNfcService:
         linked_by: Optional[str],
         item_id: Optional[str] = None,
         storage_area_id: Optional[str] = None,
+        check_compartment_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Attach a tag to an item or to a storage area (exactly one).
+        """Attach a tag to an item, a storage area or an equipment-check
+        compartment (exactly one).
 
         Raises ``LookupError`` (→ 404) for a target outside the organization and
         ``ValueError`` (→ 400) for a tag that is already linked.
         """
-        if (item_id is None) == (storage_area_id is None):
-            raise ValueError("A tag is linked to exactly one item or storage area.")
+        targets = [t for t in (item_id, storage_area_id, check_compartment_id) if t]
+        if len(targets) != 1:
+            raise ValueError(
+                "A tag is linked to exactly one item, storage area or compartment."
+            )
 
-        target: Union[InventoryItem, StorageArea]
+        target: _Target
         if item_id is not None:
             target = await self._get_item(item_id, organization_id)
-        else:
+        elif storage_area_id is not None:
             target = await self._get_storage_area(storage_area_id, organization_id)
+        else:
+            target = await self._get_compartment(
+                str(check_compartment_id), organization_id
+            )
 
         uid_hash = hash_tag_uid(tag_uid)
         existing = await self._find_by_hash(organization_id, uid_hash)
@@ -136,6 +196,9 @@ class InventoryNfcService:
             item_id=str(target.id) if isinstance(target, InventoryItem) else None,
             storage_area_id=(
                 str(target.id) if isinstance(target, StorageArea) else None
+            ),
+            check_compartment_id=(
+                str(target.id) if isinstance(target, CheckTemplateCompartment) else None
             ),
             uid_hash=uid_hash,
             uid_preview=uid_preview(tag_uid),
@@ -175,6 +238,7 @@ class InventoryNfcService:
                 "organization_id",
                 "item_id",
                 "storage_area_id",
+                "check_compartment_id",
                 "uid_hash",
                 "uid_preview",
                 "credential_type",
@@ -224,23 +288,14 @@ class InventoryNfcService:
     ) -> ResolvedTag:
         """Resolve what was read off a tag to the item or storage area it names.
 
-        ``candidates`` is tried in order, and callers put the written code
-        first: a code this app wrote onto a tag is the deliberate link, while
-        the chip serial underneath may have been linked to something else
-        before the tag was rewritten.
+        ``candidates`` is tried in order (see ``_find_active_tag``).
         """
-        tag: Optional[InventoryNfcTag] = None
-        for candidate in candidates:
-            if candidate and candidate.strip():
-                tag = await self._find_by_hash(organization_id, hash_tag_uid(candidate))
-                if tag:
-                    break
+        tag = await self._find_active_tag(organization_id, candidates)
 
-        if tag is None:
-            raise InventoryNfcTagNotFound("This tag is not linked to anything.")
-        if tag.status != InventoryNfcTagStatus.ACTIVE:
+        if tag.check_compartment_id is not None:
             raise InventoryNfcTagNotFound(
-                "This tag is marked lost. Mark it found before using it."
+                "This tag marks an apparatus compartment. "
+                "Tap it during an equipment check."
             )
 
         if tag.storage_area_id is not None:
@@ -251,22 +306,65 @@ class InventoryNfcService:
                 )
             return ResolvedTag(tag=tag, storage_area=area)
 
-        result = await self.db.execute(
-            select(InventoryItem)
-            .where(
-                InventoryItem.id == tag.item_id,
-                InventoryItem.organization_id == str(organization_id),
-            )
-            .options(selectinload(InventoryItem.category))
-        )
-        item = result.scalar_one_or_none()
-        # Matches the barcode lookup, which only finds active items: a tag on a
-        # retired helmet should not quietly put it back into circulation.
-        if item is None or not item.active:
-            raise InventoryNfcTagNotFound(
-                "This tag is linked to an item that is no longer active."
-            )
+        item = await self._active_item_for_tag(tag, organization_id)
         return ResolvedTag(tag=tag, item=item)
+
+    async def resolve_check(
+        self,
+        organization_id: str,
+        template_id: str,
+        candidates: Sequence[Optional[str]],
+    ) -> ResolvedCheckTap:
+        """Resolve a tap made during an equipment check of ``template_id``.
+
+        A compartment tag must be on one of this template's compartments; an
+        item tag must name an inventory item that at least one of this
+        template's checklist entries is linked to. Anything else is refused
+        with a message the crew member can act on. The caller has already
+        confirmed the template is one this user may check.
+        """
+        tag = await self._find_active_tag(organization_id, candidates)
+
+        if tag.storage_area_id is not None:
+            raise InventoryNfcTagNotFound(
+                "This tag marks a storage shelf, not part of this checklist."
+            )
+
+        if tag.check_compartment_id is not None:
+            compartment = await self._find_compartment(
+                tag.check_compartment_id, organization_id
+            )
+            if compartment is None or compartment.template_id != str(template_id):
+                raise InventoryNfcTagNotFound(
+                    "This tag is on a compartment of another checklist."
+                )
+            return ResolvedCheckTap(
+                tag=tag, kind="compartment", compartment=compartment
+            )
+
+        item = await self._active_item_for_tag(tag, organization_id)
+        result = await self.db.execute(
+            select(CheckTemplateItem.id)
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .where(
+                CheckTemplateCompartment.template_id == str(template_id),
+                CheckTemplateItem.inventory_item_id == item.id,
+            )
+            .order_by(
+                CheckTemplateCompartment.sort_order.asc(),
+                CheckTemplateItem.sort_order.asc(),
+                CheckTemplateItem.id.asc(),
+            )
+        )
+        template_item_ids = [str(i) for i in result.scalars().all()]
+        if not template_item_ids:
+            raise InventoryNfcTagNotFound(f"{item.name} is not on this checklist.")
+        return ResolvedCheckTap(
+            tag=tag, kind="item", item=item, template_item_ids=template_item_ids
+        )
 
     # =========================================================================
     # Put-away and the tap log
@@ -765,6 +863,77 @@ class InventoryNfcService:
             raise LookupError("Storage area not found")
         return area
 
+    async def _find_compartment(
+        self, compartment_id: str, organization_id: str
+    ) -> Optional[CheckTemplateCompartment]:
+        # Compartments carry no organization_id; the template's is the scope
+        # (Pitfall #14a, parent-resolution shape).
+        result = await self.db.execute(
+            select(CheckTemplateCompartment)
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                CheckTemplateCompartment.id == str(compartment_id),
+                EquipmentCheckTemplate.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def _get_compartment(
+        self, compartment_id: str, organization_id: str
+    ) -> CheckTemplateCompartment:
+        compartment = await self._find_compartment(compartment_id, organization_id)
+        if compartment is None:
+            raise LookupError("Compartment not found")
+        return compartment
+
+    async def _find_active_tag(
+        self, organization_id: str, candidates: Sequence[Optional[str]]
+    ) -> InventoryNfcTag:
+        """The first candidate that names a tag, which must not be marked lost.
+
+        ``candidates`` is tried in order, and callers put the written code
+        first: a code this app wrote onto a tag is the deliberate link, while
+        the chip serial underneath may have been linked to something else
+        before the tag was rewritten.
+        """
+        tag: Optional[InventoryNfcTag] = None
+        for candidate in candidates:
+            if candidate and candidate.strip():
+                tag = await self._find_by_hash(organization_id, hash_tag_uid(candidate))
+                if tag:
+                    break
+
+        if tag is None:
+            raise InventoryNfcTagNotFound("This tag is not linked to anything.")
+        if tag.status != InventoryNfcTagStatus.ACTIVE:
+            raise InventoryNfcTagNotFound(
+                "This tag is marked lost. Mark it found before using it."
+            )
+        return tag
+
+    async def _active_item_for_tag(
+        self, tag: InventoryNfcTag, organization_id: str
+    ) -> InventoryItem:
+        result = await self.db.execute(
+            select(InventoryItem)
+            .where(
+                InventoryItem.id == tag.item_id,
+                InventoryItem.organization_id == str(organization_id),
+            )
+            .options(selectinload(InventoryItem.category))
+        )
+        item = result.scalar_one_or_none()
+        # Matches the barcode lookup, which only finds active items: a tag on a
+        # retired helmet should not quietly put it back into circulation.
+        if item is None or not item.active:
+            raise InventoryNfcTagNotFound(
+                "This tag is linked to an item that is no longer active."
+            )
+        return item
+
     async def _get_tag(self, tag_id: str, organization_id: str) -> InventoryNfcTag:
         result = await self.db.execute(
             select(InventoryNfcTag).where(
@@ -849,13 +1018,23 @@ class InventoryNfcService:
     async def _already_linked_message(
         self,
         existing: InventoryNfcTag,
-        target: Union[InventoryItem, StorageArea],
+        target: _Target,
     ) -> str:
-        if existing.item_id == target.id or existing.storage_area_id == target.id:
-            noun = "item" if isinstance(target, InventoryItem) else "storage area"
+        if target.id in (
+            existing.item_id,
+            existing.storage_area_id,
+            existing.check_compartment_id,
+        ):
+            if isinstance(target, InventoryItem):
+                noun = "item"
+            elif isinstance(target, StorageArea):
+                noun = "storage area"
+            else:
+                noun = "compartment"
             return f"This tag is already linked to this {noun}."
-        # Naming the other item or area is safe here, unlike for a member ID
-        # card: the caller manages inventory and can already see all of it, and
+        # Naming the other item, area or compartment is safe here, unlike for a
+        # member ID card: the caller manages inventory or checklists in this
+        # organization, the name is of equipment rather than a person, and
         # "where is this tag linked" is exactly what they need to fix it.
         if existing.item_id is not None:
             result = await self.db.execute(
@@ -864,7 +1043,22 @@ class InventoryNfcService:
                     InventoryItem.organization_id == existing.organization_id,
                 )
             )
-            other = result.scalar_one_or_none() or "another item"
+            name = result.scalar_one_or_none()
+            place = f'"{name}"' if name else "another item"
+        elif existing.check_compartment_id is not None:
+            result = await self.db.execute(
+                select(CheckTemplateCompartment.name, EquipmentCheckTemplate.name)
+                .join(
+                    EquipmentCheckTemplate,
+                    EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+                )
+                .where(
+                    CheckTemplateCompartment.id == existing.check_compartment_id,
+                    EquipmentCheckTemplate.organization_id == existing.organization_id,
+                )
+            )
+            row = result.first()
+            place = f'"{row[0]}" on "{row[1]}"' if row else "another compartment"
         else:
             result = await self.db.execute(
                 select(StorageArea.name).where(
@@ -872,9 +1066,10 @@ class InventoryNfcService:
                     StorageArea.organization_id == existing.organization_id,
                 )
             )
-            other = result.scalar_one_or_none() or "another storage area"
+            name = result.scalar_one_or_none()
+            place = f'"{name}"' if name else "another storage area"
         return (
-            f'This tag is already linked to "{other}". '
+            f"This tag is already linked to {place}. "
             "Unlink it there before linking it here."
         )
 
@@ -915,6 +1110,7 @@ class InventoryNfcService:
             "id": tag.id,
             "item_id": tag.item_id,
             "storage_area_id": tag.storage_area_id,
+            "check_compartment_id": tag.check_compartment_id,
             "uid_preview": tag.uid_preview,
             "credential_type": tag.credential_type,
             "label": tag.label,
