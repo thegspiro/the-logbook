@@ -69,12 +69,7 @@ const renderTab = async () => {
 };
 
 /** The row a field's name sits in, so a badge is asserted against its own field. */
-const rowFor = (fieldName: string): HTMLElement => {
-  const code = screen.getByText(fieldName);
-  const row = code.closest('div.px-6');
-  if (!row) throw new Error(`no row found for ${fieldName}`);
-  return row as HTMLElement;
-};
+const rowFor = (fieldName: string): HTMLElement => screen.getByRole('group', { name: fieldName });
 
 describe('DataWhitelistTab', () => {
   // This block states the implementation it depends on rather than inheriting
@@ -125,7 +120,7 @@ describe('DataWhitelistTab', () => {
       // Both the warning above the list and the counter card read the same
       // number — the screen's whole claim is that they describe reality.
       expect(screen.getByText(/You currently have 2 sensitive fields enabled/)).toBeInTheDocument();
-      const card = screen.getByText('Sensitive (PII)').closest('div.card') as HTMLElement;
+      const card = screen.getByRole('group', { name: 'Sensitive (PII)' });
       expect(within(card).getByText('2')).toBeInTheDocument();
     });
 

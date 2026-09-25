@@ -40,6 +40,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import ensure_found, handle_service_errors
+from app.models.notification import NotificationTrigger
 from app.models.suggestion import Suggestion
 from app.models.user import User
 from app.schemas.suggestion import (
@@ -59,6 +60,7 @@ from app.schemas.suggestion import (
     SuggestionBoxPublic,
     SuggestionBoxWrite,
 )
+from app.services.notification_rules import NotificationRuleResolver
 from app.services.suggestion_service import (
     MAX_SCREENSHOT_BYTES,
     MAX_SCREENSHOTS,
@@ -68,6 +70,7 @@ from app.services.suggestion_service import (
     reviewer_notice,
     send_suggestion_notice,
     submitter_notice,
+    watcher_notice,
 )
 from app.utils.upload_limits import read_upload_limited
 
@@ -182,13 +185,24 @@ async def submit_suggestion(
             user_id=str(current_user.id),
             username=current_user.username,
         )
-    recipients = await service.reviewer_recipient_ids(box.organization_id, box.id)
-    background_tasks.add_task(
-        send_suggestion_notice,
-        box.organization_id,
-        recipients,
-        reviewer_notice(box.name, suggestion.id, reply=False),
-    )
+    if await NotificationRuleResolver(db).is_enabled(
+        box.organization_id, NotificationTrigger.SUGGESTION_SUBMITTED
+    ):
+        reviewers = await service.reviewer_recipient_ids(box.organization_id, box.id)
+        watchers = await service.watcher_recipient_ids(box.organization_id, box.id)
+        background_tasks.add_task(
+            send_suggestion_notice,
+            box.organization_id,
+            reviewers,
+            reviewer_notice(box.name, suggestion.id, reply=False),
+        )
+        if watchers:
+            background_tasks.add_task(
+                send_suggestion_notice,
+                box.organization_id,
+                watchers,
+                watcher_notice(box.name),
+            )
     return {
         "id": None if suggestion.is_anonymous else suggestion.id,
         "is_anonymous": bool(suggestion.is_anonymous),
@@ -662,6 +676,8 @@ async def _audit_box(
             "is_active": box["is_active"],
             "reviewer_position_ids": [p["id"] for p in box["reviewer_positions"]],
             "reviewer_member_ids": [m["id"] for m in box["reviewer_members"]],
+            "watcher_position_ids": [p["id"] for p in box["watcher_positions"]],
+            "watcher_member_ids": [m["id"] for m in box["watcher_members"]],
         },
         user_id=str(current_user.id),
         username=current_user.username,

@@ -65,6 +65,10 @@ class SuggestionBoxWrite(BaseModel):
     is_active: bool = True
     reviewer_position_ids: List[str] = Field(default_factory=list, max_length=50)
     reviewer_member_ids: List[str] = Field(default_factory=list, max_length=200)
+    # None leaves the box's watchers as they are, so a client written before
+    # watchers existed can still PUT a box without clearing them.
+    watcher_position_ids: Optional[List[str]] = Field(None, max_length=50)
+    watcher_member_ids: Optional[List[str]] = Field(None, max_length=200)
 
     @field_validator("name")
     @classmethod
@@ -80,6 +84,13 @@ class SuggestionBoxWrite(BaseModel):
     @field_validator("reviewer_position_ids", "reviewer_member_ids")
     @classmethod
     def _dedupe(cls, value: List[str]) -> List[str]:
+        return list(dict.fromkeys(v.strip() for v in value if v and v.strip()))
+
+    @field_validator("watcher_position_ids", "watcher_member_ids")
+    @classmethod
+    def _dedupe_optional(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        if value is None:
+            return None
         return list(dict.fromkeys(v.strip() for v in value if v and v.strip()))
 
 
@@ -101,6 +112,8 @@ class SuggestionBoxAdminResponse(UTCResponseBase):
     is_active: bool
     reviewer_positions: List[ReviewerRef]
     reviewer_members: List[ReviewerRef]
+    watcher_positions: List[ReviewerRef] = Field(default_factory=list)
+    watcher_members: List[ReviewerRef] = Field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

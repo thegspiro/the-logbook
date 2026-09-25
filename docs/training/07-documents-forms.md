@@ -315,14 +315,15 @@ The Notifications page uses a three-tab layout:
 
 Notification rules define when and how you are alerted. Rules can be set for:
 
-| Trigger             | Description                                           | Default Category | Default Channel |
-| ------------------- | ----------------------------------------------------- | ---------------- | --------------- |
-| **event_reminder**  | Alerts before upcoming events                         | Events           | In-App          |
-| **training_expiry** | Warnings when certifications are expiring             | Training         | Email           |
-| **schedule_change** | Alerts for shift changes or new assignments           | Scheduling       | In-App          |
-| **new_member**      | Notification when a new member is added               | Members          | In-App          |
-| **maintenance_due** | Alerts for upcoming equipment or facility maintenance | Maintenance      | Email           |
-| **form_submitted**  | Alerts when a form receives a new submission          | General          | In-App          |
+| Trigger                  | Description                                                                                                        | Default Category | Default Channel  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------ | ---------------- | ---------------- |
+| **event_reminder**       | Alerts before upcoming events                                                                                      | Events           | In-App           |
+| **training_expiry**      | Warnings when certifications are expiring                                                                          | Training         | Email            |
+| **schedule_change**      | Alerts for shift changes or new assignments                                                                        | Scheduling       | In-App           |
+| **new_member**           | Notification when a new member is added                                                                            | Members          | In-App           |
+| **maintenance_due**      | Alerts for upcoming equipment or facility maintenance                                                              | Maintenance      | Email            |
+| **form_submitted**       | Alerts when a form receives a new submission                                                                       | General          | In-App           |
+| **suggestion_submitted** | Tells a suggestion box's reviewers and notified people that a submission arrived; disabling it stops those notices | General          | In-App and email |
 
 ### Creating a Rule
 
@@ -669,8 +670,21 @@ Open a submission to:
 - reply in the **Follow-up** thread, if the box allows follow-up. An anonymous
   author appears as **Anonymous submitter**.
 
-Reviewers are emailed when a submission or a submitter's reply arrives. **The
-email carries a link, never the submission's content.**
+Reviewers get a notification in the app (and a push notification, where your
+department has them switched on) and an email of their own when a submission or
+a submitter's reply arrives. **Neither carries the submission's content, only a
+link to it.** A department can turn the new-submission notices off under
+**Notifications → Notification Rules** with a **Suggestion Submitted** rule; replies and
+status changes still go out.
+
+**Telling someone about new submissions without letting them read them.** In a
+box's settings, **Also notify** names positions or members who are told when
+something arrives in that box. They cannot open it: their notice says which box
+received a submission and that its reviewers have it, nothing more. Use it for
+someone who needs to know a box is being used, such as a chief who wants to know
+the Compliance box has something in it, without making them a reviewer. The
+email reviewers receive is editable under **Communications → Email Templates →
+Suggestion Boxes → Suggestion Submitted**.
 
 **Forwarding one suggestion to somebody else.** A box's reviewer can press
 **Forward** and choose members and/or positions. They can read **that

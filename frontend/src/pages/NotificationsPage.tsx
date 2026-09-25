@@ -22,6 +22,7 @@ import {
   FileText,
   Wrench,
   CheckCheck,
+  Lightbulb,
 } from 'lucide-react';
 import { Breadcrumbs, SkeletonPage } from '../components/ux';
 import { useAuthStore } from '../stores/authStore';
@@ -66,6 +67,11 @@ const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; la
     color: 'text-cyan-700 dark:text-cyan-400',
     label: 'Form Submitted',
   },
+  suggestion_submitted: {
+    icon: <Lightbulb className="h-5 w-5" />,
+    color: 'text-amber-700 dark:text-amber-400',
+    label: 'Suggestion Submitted',
+  },
 };
 
 // Dropdown options for the create modal.
@@ -84,6 +90,12 @@ const TRIGGER_OPTIONS = [
     value: 'training_expiry',
     effect: 'Sends certification expiration alerts, when the training module has them switched on.',
   },
+  {
+    label: 'Suggestion Submitted',
+    value: 'suggestion_submitted',
+    effect:
+      'Tells a suggestion box’s reviewers, and anyone the box notifies, that a submission arrived. Disabling it stops those notices; replies and status updates still go out.',
+  },
 ];
 
 // Category mapping from trigger to category
@@ -94,6 +106,7 @@ const TRIGGER_CATEGORY_MAP: Record<string, string> = {
   new_member: 'members',
   maintenance_due: 'maintenance',
   form_submitted: 'general',
+  suggestion_submitted: 'general',
 };
 
 function getTriggerDisplay(trigger: string) {
