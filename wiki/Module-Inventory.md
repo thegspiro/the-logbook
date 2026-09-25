@@ -380,6 +380,8 @@ POST   /api/v1/inventory/nfc/resolve-member              # Tapped member ID card
 GET    /api/v1/inventory/nfc/untagged                    # Active items with no working tag; ?search=&category_id= (inventory.manage)
 GET    /api/v1/inventory/nfc/audit-schedule              # Scheduled areas, overdue first; ?due_only= (inventory.manage)
 PUT    /api/v1/inventory/storage-areas/{id}/audit-schedule # {"audit_frequency": "weekly"|...|null} (inventory.manage)
+POST   /api/v1/inventory/nfc/put-away/replay         # Put-away taps made offline, applied in order; per-tap outcome (inventory.manage)
+POST   /api/v1/inventory/nfc/audits/replay           # Shelf audit finished offline; resend-safe by client_submission_id (inventory.manage)
 GET    /api/v1/inventory/check-compartments/{id}/nfc-tags # Tags on a checklist compartment (inventory.check_manage)
 POST   /api/v1/inventory/check-compartments/{id}/nfc-tags # Link a tag to a checklist compartment (inventory.check_manage)
 POST   /api/v1/inventory/nfc/resolve-check               # Tap during a check of template_id -> compartment or checklist rows (check_submit or check_manage)
@@ -414,6 +416,14 @@ GET    /api/v1/inventory/not-seen/export                 # The same as CSV, up t
   put-away lookups refuse it. Deleting a compartment deletes its tags, and so
   does replacing a template's contents from a vehicle preset, JSON or CSV
   import, because that recreates every compartment.
+- **Offline taps** (put-away and shelf audits only). The phone keeps raw reads
+  in the generic offline queue (`genericOfflineQueue.ts`, purged at sign-out)
+  and never what a tag names; the `/replay` routes resolve them on arrival and
+  apply the online rules in order. A put-away session is one queue entry,
+  marked held while the screen adds to it and sent once it is released (or
+  after 30 minutes idle). An offline audit carries a `client_submission_id`,
+  unique per organization (`inventory_nfc_audits.client_submission_id`), so a
+  resend after a lost response returns the audit already saved.
 - **Put away** (`/inventory/put-away`). Tapping a shelf first _opens_ it: every
   item tapped afterwards goes onto it. Tapping an item first holds it until a
   shelf is tapped, moves it there, and leaves no shelf open. The move is the

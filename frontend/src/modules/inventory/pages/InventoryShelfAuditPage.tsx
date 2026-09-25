@@ -15,11 +15,21 @@
  *
  * Taps are handled one after another, as on the put-away page, so a shelf tap
  * and the item tap straight after it cannot race.
+ *
+ * **Without signal** a tap cannot be identified, so its raw read is kept on
+ * the page and shown as a count. If signal returns before the audit is
+ * finished, the reads are identified then and the audit carries on as usual.
+ * If it is finished without signal, the audit — the shelf if known, the items
+ * already identified, and the raw reads — goes into the offline queue and is
+ * saved by the server when the phone next has signal
+ * (`utils/nfcOfflineSync.ts`). Reads are not kept anywhere until then: an
+ * unfinished audit is not something to send on its own, because every item
+ * not yet tapped would be reported missing.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { AlertTriangle, ArrowLeft, Box, ClipboardCheck, Loader2, Nfc, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Box, ClipboardCheck, CloudOff, Loader2, Nfc, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '../../../services/api';
 import { useNfcScanner } from '../../../hooks/useNfcScanner';
@@ -31,8 +41,12 @@ import { Breadcrumbs } from '../../../components/ux';
 import { InventoryNfcAuditResult } from '../../../constants/enums';
 import { AUDIT_FREQUENCY_LABELS, parseInventoryTagCode } from '../../../constants/nfc';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorMessage, isNetworkError } from '../../../utils/errorHandling';
+import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
+import { putGenericItem } from '../../../utils/genericOfflineQueue';
+import { usePendingSyncStore } from '../../../stores/pendingSyncStore';
 import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
+import { auditReplayItem, newOfflineId, replayTap } from '../utils/nfcOfflineSync';
 import type { StorageAreaResponse } from '../types';
 import {
   MAX_AUDIT_TAPS,
@@ -40,6 +54,7 @@ import {
   type InventoryNfcAuditLine,
   type InventoryAuditScheduleRow,
   type InventoryNfcAuditSummary,
+  type InventoryNfcReplayTap,
 } from '../types/nfc';
 
 interface Shelf {
@@ -75,8 +90,12 @@ export const InventoryShelfAuditPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typedSerial, setTypedSerial] = useState('');
+  const isOnline = useOnlineStatus();
+  const [offlineReadCount, setOfflineReadCount] = useState(0);
 
   const shelfRef = useRef<Shelf | null>(null);
+  // Raw reads made without signal, identified when it returns.
+  const offlineReadsRef = useRef<InventoryNfcReplayTap[]>([]);
   const tappedRef = useRef<TappedItem[]>([]);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -87,6 +106,23 @@ export const InventoryShelfAuditPage: React.FC = () => {
   const setTapped = (next: TappedItem[]) => {
     tappedRef.current = next;
     setTappedState(next);
+  };
+  const setOfflineReads = (next: InventoryNfcReplayTap[]) => {
+    offlineReadsRef.current = next;
+    setOfflineReadCount(next.length);
+  };
+
+  const keepOfflineRead = (code: string | null, serial: string | null) => {
+    const read = replayTap(code, serial);
+    const reads = offlineReadsRef.current;
+    // The same tag read twice while held against the phone.
+    if (reads.some((r) => r.code === read.code && r.serial_number === read.serial_number)) return;
+    if (tappedRef.current.length + reads.length >= MAX_AUDIT_TAPS) {
+      setError(`An audit holds up to ${MAX_AUDIT_TAPS} items. Finish this one and audit the rest separately.`);
+      return;
+    }
+    setOfflineReads([...reads, read]);
+    signalScanSuccess();
   };
 
   // Recent audits and the schedule, reloaded together: finishing an audit
@@ -131,12 +167,23 @@ export const InventoryShelfAuditPage: React.FC = () => {
       chooseShelf(input.shelf);
       return;
     }
-    const resolved = await inventoryService.resolveAnyNfcTag({
-      code: input.code || undefined,
-      serial_number: input.serial || undefined,
-      // The audit logs every tap itself when it is saved.
-      record: false,
-    });
+    if (!navigator.onLine) {
+      keepOfflineRead(input.code, input.serial);
+      return;
+    }
+    let resolved;
+    try {
+      resolved = await inventoryService.resolveAnyNfcTag({
+        code: input.code || undefined,
+        serial_number: input.serial || undefined,
+        // The audit logs every tap itself when it is saved.
+        record: false,
+      });
+    } catch (err: unknown) {
+      if (!isNetworkError(err)) throw err;
+      keepOfflineRead(input.code, input.serial);
+      return;
+    }
     if (resolved.kind === 'storage_area' && resolved.storage_area) {
       chooseShelf({ id: resolved.storage_area.id, name: resolved.storage_area.name });
       return;
@@ -161,7 +208,7 @@ export const InventoryShelfAuditPage: React.FC = () => {
 
   const chooseShelf = (next: Shelf) => {
     const current = shelfRef.current;
-    if (current && current.id !== next.id && tappedRef.current.length > 0) {
+    if (current && current.id !== next.id && tappedRef.current.length + offlineReadsRef.current.length > 0) {
       setError(`You are auditing ${current.name}. Finish or cancel that audit before starting ${next.name}.`);
       return;
     }
@@ -173,18 +220,76 @@ export const InventoryShelfAuditPage: React.FC = () => {
   const handleRef = useRef(handle);
   handleRef.current = handle;
 
-  const enqueue = useCallback((input: Input) => {
-    queueRef.current = queueRef.current.then(async () => {
+  /**
+   * Identify the reads kept while offline, now that there may be signal.
+   *
+   * Order is not held against them the way it is for a live tap: offline, the
+   * screen could not say "tap the shelf first", so the first shelf among the
+   * reads is chosen and every item read is kept, as the server does when it
+   * saves an audit finished offline.
+   */
+  const identifyOfflineReads = async () => {
+    const reads = offlineReadsRef.current;
+    if (reads.length === 0 || !navigator.onLine) return;
+    const stillOffline: InventoryNfcReplayTap[] = [];
+    const items: TappedItem[] = [];
+    let unread = 0;
+    for (const read of reads) {
+      try {
+        const resolved = await inventoryService.resolveAnyNfcTag({
+          code: read.code,
+          serial_number: read.serial_number,
+          record: false,
+        });
+        if (resolved.kind === 'storage_area' && resolved.storage_area) {
+          if (!shelfRef.current) setShelf({ id: resolved.storage_area.id, name: resolved.storage_area.name });
+        } else if (resolved.item) {
+          items.push({ id: resolved.item.id, name: resolved.item.name, tagId: resolved.tag_id });
+        }
+      } catch (err: unknown) {
+        if (isNetworkError(err)) stillOffline.push(read);
+        else unread += 1;
+      }
+    }
+    const known = new Set(tappedRef.current.map((t) => t.id));
+    const added: TappedItem[] = [];
+    for (const item of items) {
+      if (known.has(item.id)) continue;
+      known.add(item.id);
+      added.unshift(item);
+    }
+    setTapped([...added, ...tappedRef.current]);
+    setOfflineReads(stillOffline);
+    if (unread > 0) {
+      setError(`${unread} tag(s) read without signal are not linked to anything usable, and were left out.`);
+    } else if (!shelfRef.current && added.length > 0) {
+      setError('Tap the shelf these items are on, or pick it below, then finish the audit.');
+    }
+  };
+
+  const identifyRef = useRef(identifyOfflineReads);
+  identifyRef.current = identifyOfflineReads;
+
+  const runQueued = useCallback((job: () => Promise<void>) => {
+    const run = queueRef.current.then(async () => {
       setBusy(true);
       try {
-        await handleRef.current(input);
+        await job();
       } catch (err: unknown) {
         setError(getErrorMessage(err, 'That tap could not be read.'));
       } finally {
         setBusy(false);
       }
     });
+    queueRef.current = run;
+    return run;
   }, []);
+
+  const enqueue = useCallback((input: Input) => void runQueued(() => handleRef.current(input)), [runQueued]);
+
+  useEffect(() => {
+    if (isOnline) void runQueued(() => identifyRef.current());
+  }, [isOnline, runQueued]);
 
   const onTag = useCallback(
     (tag: { serialNumber: string; payload: string | null }) => {
@@ -213,8 +318,53 @@ export const InventoryShelfAuditPage: React.FC = () => {
     enqueue({ kind: 'tag', code: null, serial });
   };
 
-  const finish = async () => {
+  /**
+   * Finish without signal: the audit goes into the offline queue as it stands
+   * and is saved when the phone next has signal. The page is cleared, as it
+   * is after an audit saved online.
+   */
+  const queueOfflineAudit = async () => {
     const current = shelfRef.current;
+    await putGenericItem(
+      auditReplayItem(
+        {
+          client_submission_id: newOfflineId('audit'),
+          storage_area_id: current?.id,
+          tapped: tappedRef.current.map((t) => ({ item_id: t.id, tag_id: t.tagId ?? undefined })),
+          taps: offlineReadsRef.current,
+        },
+        current?.name ?? null
+      )
+    );
+    void usePendingSyncStore.getState().refresh();
+    stop();
+    setTapped([]);
+    setOfflineReads([]);
+    setShelf(null);
+    toast.success(
+      'No signal, so this audit is saved on this phone. It is recorded when there is signal, and you will be told the result.',
+      { duration: 8_000 }
+    );
+  };
+
+  const finish = async () => {
+    // Reads kept offline are identified first if signal is back, so an audit
+    // finished with signal is the ordinary one.
+    await runQueued(() => identifyRef.current());
+    const current = shelfRef.current;
+    if (offlineReadsRef.current.length > 0 || !navigator.onLine) {
+      if (!current && offlineReadsRef.current.length === 0) return;
+      setSubmitting(true);
+      setError(null);
+      try {
+        await queueOfflineAudit();
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Could not keep the audit on this phone.'));
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     if (!current) return;
     if (tappedRef.current.length === 0) {
       const ok = await confirm({
@@ -239,23 +389,29 @@ export const InventoryShelfAuditPage: React.FC = () => {
       setShelf(null);
       void loadLists();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Could not save the audit.'));
+      if (isNetworkError(err)) {
+        await queueOfflineAudit();
+      } else {
+        setError(getErrorMessage(err, 'Could not save the audit.'));
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   const cancel = async () => {
-    if (tappedRef.current.length > 0) {
+    const count = tappedRef.current.length + offlineReadsRef.current.length;
+    if (count > 0) {
       const ok = await confirm({
         title: 'Discard this audit?',
-        message: `The ${tappedRef.current.length} item(s) tapped so far will not be recorded.`,
+        message: `The ${count} item(s) tapped so far will not be recorded.`,
         confirmLabel: 'Discard audit',
         cancelLabel: 'Keep auditing',
       });
       if (!ok) return;
     }
     setTapped([]);
+    setOfflineReads([]);
     setShelf(null);
   };
 
@@ -328,6 +484,19 @@ export const InventoryShelfAuditPage: React.FC = () => {
         </div>
       ) : (
         <>
+          {(!isOnline || offlineReadCount > 0) && (
+            <section className="alert-warning space-y-1" aria-label="Offline audit" role="status">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <CloudOff className="h-4 w-4" aria-hidden="true" />
+                {isOnline ? 'Identifying tags read without signal…' : 'No signal: keep tapping'}
+              </p>
+              <p className="text-sm">
+                Tags read now are identified when signal returns. Finishing without signal keeps the audit on this phone
+                and records it later. Finish before closing this screen: an unfinished audit is not kept.
+              </p>
+            </section>
+          )}
+
           <section className="card space-y-3 p-4" aria-label="Audit in progress">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-theme-text-primary flex items-center gap-2 text-sm">
@@ -335,6 +504,11 @@ export const InventoryShelfAuditPage: React.FC = () => {
                 {shelf ? (
                   <span>
                     Auditing <strong>{shelf.name}</strong>: {tapped.length} item(s) tapped
+                    {offlineReadCount > 0 && `, ${offlineReadCount} tag(s) read without signal`}
+                  </span>
+                ) : offlineReadCount > 0 ? (
+                  <span>
+                    {offlineReadCount} tag(s) read without signal. The first shelf among them is the one audited.
                   </span>
                 ) : (
                   <span className="text-theme-text-secondary">
@@ -342,7 +516,7 @@ export const InventoryShelfAuditPage: React.FC = () => {
                   </span>
                 )}
               </p>
-              {shelf && (
+              {(shelf || offlineReadCount > 0) && (
                 <div className="flex flex-wrap gap-2">
                   <button type="button" className="btn-secondary btn-sm" onClick={() => void cancel()}>
                     <X className="h-4 w-4" aria-hidden="true" /> Cancel
