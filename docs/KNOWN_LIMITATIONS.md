@@ -471,6 +471,41 @@ against the plain one will find the masked version noticeably smaller. Fitting
 it larger means some launchers cut the corners off the crest, which is worse and
 is not visible to whoever chooses the setting.
 
+## "Today" Is Still the Server's Date in 138 Places (2026-09-25)
+
+🚩 **Open — needs an owner decision on scope.** `date.today()` returns the
+server's date, and a container runs in UTC, so for a US department it is
+already tomorrow every evening (from 7–8 PM Eastern, 4–5 PM Pacific). Anything
+that counts days, decides expired-versus-not, or picks "this month" from it is
+off by one day for those hours, and the scheduled jobs that run early in the
+UTC morning are off for the western half of the country every time they run.
+
+**Fixed so far** (with `org_today` / `resolve_org_today` /
+`local_day_start_utc` in `app/utils/org_timezone.py`): the certification
+expiry alerts, NFPA retirement alerts, expiring-supplies email, the monthly
+compliance auto-report's "last month", the training report exports' default
+end date and the certification CSV's status, and the equipment check reports'
+date range and trend buckets. `tests/test_org_local_today.py` pins each.
+
+**Deliberately not changed, because doing it piecemeal is worse:** the
+training compliance engine — `TrainingService.evaluate_requirement_detail`
+and its callers in `training_service.py`, `training_compliance.py`,
+`competency_matrix_service.py`, `compliance_officer_service.py` and the
+compliance CSV/PDF "Met / Not Met" cells — still evaluates as of
+`date.today()`. Moving the exports alone would make the exported sheet and the
+compliance screen disagree about the same member for several hours a day,
+which is the failure Pitfall #29 exists to prevent. The fix is to move the
+whole engine to the department's date at once.
+
+**Remaining call sites** (138, counted by `grep -rn "date.today()"
+backend/app` excluding comments): `equipment_check_service.py` 11,
+`apparatus_service.py` 11, `training_enhancement_service.py` 8,
+`scheduling_service.py` 7, `inventory_service.py` 7, `endpoints/training.py`
+6, `facilities_service.py` 5, `driver_exception_service.py` 5, and 1–4 each in
+about 35 more files. Many are harmless (a stored `created_on` default, a
+filename) — each needs reading rather than a mechanical replace, which is why
+this is recorded here rather than swept.
+
 ## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
 
 **Accepted.** An anonymous suggestion is stored with no record of its author:

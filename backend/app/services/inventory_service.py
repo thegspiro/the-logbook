@@ -107,6 +107,7 @@ from app.utils.label_renderer import (
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
+from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # How many of a low-stock category's items a report names.
@@ -8143,13 +8144,17 @@ class InventoryService:
         organization_id: str,
         days_ahead: int = 30,
         item_types: Optional[Iterable[ItemType]] = None,
+        today: Optional[date] = None,
     ) -> List[Tuple[InventoryLot, str]]:
         """Get in-stock lots expiring within N days, with the item name.
 
         ``item_types`` narrows the result to one domain so the medical-supply
         page reports its own expiring stock and not the whole department's.
+        ``today`` is the department's date, resolved from the org if omitted.
         """
-        cutoff = date.today() + timedelta(days=days_ahead)
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
+        cutoff = today + timedelta(days=days_ahead)
         query = (
             select(InventoryLot, InventoryItem.name)
             .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
@@ -8199,11 +8204,18 @@ class InventoryService:
         self,
         organization_id: UUID,
         days_ahead: int = 180,
+        today: Optional[date] = None,
     ) -> List[Dict[str, Any]]:
-        """Get PPE items approaching NFPA 10-year retirement date."""
+        """Get PPE items approaching NFPA 10-year retirement date.
+
+        ``today`` is the department's date, resolved from the org if omitted:
+        the days-until count decides the Past Due bucket in the alert email.
+        """
         from app.models.inventory import NFPAItemCompliance
 
-        cutoff = date.today() + timedelta(days=days_ahead)
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
+        cutoff = today + timedelta(days=days_ahead)
 
         result = await self.db.execute(
             select(NFPAItemCompliance)
@@ -8221,7 +8233,7 @@ class InventoryService:
             )
             item = item_result.scalar_one_or_none()
             if item and item.active:
-                days_until = (rec.expected_retirement_date - date.today()).days
+                days_until = (rec.expected_retirement_date - today).days
                 items_due.append(
                     {
                         "item_id": item.id,

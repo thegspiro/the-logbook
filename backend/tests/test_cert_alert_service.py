@@ -32,7 +32,9 @@ def _scalars(items):
 
 def _org(config=None):
     settings = {"cert_alert_config": config} if config is not None else {}
-    return SimpleNamespace(id="org-1", settings=settings)
+    # UTC so the service's department-local "today" matches the date.today()
+    # the records below are built from.
+    return SimpleNamespace(id="org-1", settings=settings, timezone="UTC")
 
 
 def _record(days_until, **fields):

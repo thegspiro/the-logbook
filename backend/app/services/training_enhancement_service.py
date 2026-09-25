@@ -38,6 +38,7 @@ from app.models.user import User, UserStatus
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
+from app.utils.org_timezone import resolve_org_today
 
 
 def _stringify_uuids(data: dict) -> dict:
@@ -929,7 +930,12 @@ class XAPIService:
 
 
 class ReportExportService:
-    """Service for generating training report exports (CSV/PDF)"""
+    """Service for generating training report exports (CSV/PDF)
+
+    A report with no end date runs through the department's today, not the
+    server's: ``date.today()`` in a UTC container is already tomorrow for a US
+    department every evening.
+    """
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -942,7 +948,7 @@ class ReportExportService:
     ) -> str:
         """Generate a compliance report as CSV string"""
         if not end_date:
-            end_date = date.today()
+            end_date = await resolve_org_today(self.db, organization_id)
         if not start_date:
             start_date = date(end_date.year, 1, 1)
 
@@ -1024,7 +1030,7 @@ class ReportExportService:
         pulling somebody's record gets the full sheet.
         """
         if not end_date:
-            end_date = date.today()
+            end_date = await resolve_org_today(self.db, organization_id)
 
         query = (
             select(TrainingRecord)
@@ -1207,7 +1213,7 @@ class ReportExportService:
         from reportlab.pdfgen import canvas
 
         if not end_date:
-            end_date = date.today()
+            end_date = await resolve_org_today(self.db, organization_id)
         if not start_date:
             start_date = date(end_date.year, 1, 1)
 
@@ -1327,7 +1333,7 @@ class ReportExportService:
         from reportlab.pdfgen import canvas
 
         if not end_date:
-            end_date = date.today()
+            end_date = await resolve_org_today(self.db, organization_id)
 
         # Get user info — org-scope the lookup so a cross-org user_id can't
         # leak another org's member name into the exported PDF title (the
@@ -1452,7 +1458,7 @@ class ReportExportService:
         email. A missing ``start_date`` means no lower bound (lifetime export).
         """
         if not end_date:
-            end_date = date.today()
+            end_date = await resolve_org_today(self.db, organization_id)
 
         users_result = await self.db.execute(
             select(User)
@@ -1541,7 +1547,7 @@ class ReportExportService:
         from pypdf import PdfReader, PdfWriter
 
         if not end_date:
-            end_date = date.today()
+            end_date = await resolve_org_today(self.db, organization_id)
 
         # Members who actually have records in the window.
         member_query = (
@@ -1615,7 +1621,7 @@ class ReportExportService:
         A missing ``start_date`` means no lower bound (lifetime).
         """
         if not end_date:
-            end_date = date.today()
+            end_date = await resolve_org_today(self.db, organization_id)
 
         cat_result = await self.db.execute(
             select(TrainingCategory).where(
@@ -1702,7 +1708,7 @@ class ReportExportService:
     ) -> str:
         """Generate a CSV of members' certifications with expiration status
         (valid / expiring soon / expired) for renewal tracking."""
-        as_of = end_date or date.today()
+        as_of = end_date or await resolve_org_today(self.db, organization_id)
 
         users_result = await self.db.execute(
             select(User)
