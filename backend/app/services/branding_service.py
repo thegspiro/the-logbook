@@ -17,8 +17,10 @@ from typing import Any, NamedTuple, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import _is_loopback_url, settings
 from app.models.user import Organization
 from app.utils.app_icons import (
+    EMAIL_LOGO_VARIANT,
     ICON_VARIANTS,
     decode_logo,
     render_icon,
@@ -93,6 +95,51 @@ async def get_app_icon(
     )
 
 
+async def get_email_logo(db: AsyncSession) -> Optional[tuple[str, bytes]]:
+    """The department's logo sized for an email masthead, or ``None``."""
+    return await _get_asset(
+        db, "email", lambda logo: render_icon(logo, EMAIL_LOGO_VARIANT)
+    )
+
+
+# Path of the email logo route, relative to the site. Extensionless on
+# purpose: frontend/nginx.conf serves every URL ending in .png from disk, ahead
+# of its /api proxy, so "/email-logo.png" would never reach the backend.
+EMAIL_LOGO_PATH = "/api/public/v1/branding/email-logo"
+
+
+def email_logo_src(logo: Optional[str]) -> str:
+    """The address an email should load the department's logo from.
+
+    An uploaded logo is stored as a base64 data URI, and embedding that in a
+    message pushes it past Gmail's 102 KB clipping limit, so an email instead
+    links to the rendering this deployment serves. The ``v`` parameter is the
+    logo's digest, which does two jobs: a new upload gets a new URL, so a mail
+    client's cached copy never shows a crest the department has replaced, and
+    the route answers 404 for any digest but the current one, so an email from
+    an organization other than the one this deployment serves shows its alt
+    text rather than somebody else's crest.
+
+    A logo stored as an ``https://`` address is returned as it is, as before.
+    Nothing is returned when ``FRONTEND_URL`` is loopback: a recipient could
+    not load an image from it, and a broken image is worse than no logo.
+    """
+    value = str(logo or "")
+    if not value:
+        return ""
+    if not value.startswith("data:"):
+        return value
+    base = (settings.FRONTEND_URL or "").strip().rstrip("/")
+    if not base or _is_loopback_url(base):
+        return ""
+    return f"{base}{EMAIL_LOGO_PATH}?v={logo_digest(value)}"
+
+
+def logo_digest(logo: str) -> str:
+    """The short hash that identifies one version of a stored logo."""
+    return hashlib.sha256(logo.encode("utf-8", "replace")).hexdigest()[:16]
+
+
 async def get_app_splash(
     db: AsyncSession, width: int, height: int
 ) -> Optional[tuple[str, bytes]]:
@@ -156,11 +203,7 @@ async def _current_logo(db: AsyncSession) -> tuple[Optional[str], Optional[str]]
         return None, None
 
     logo = branding.logo if branding else None
-    digest = (
-        hashlib.sha256(logo.encode("utf-8", "replace")).hexdigest()[:16]
-        if logo
-        else None
-    )
+    digest = logo_digest(logo) if logo else None
     _logo_cache.update(
         {"expires_at": now + LOGO_CACHE_TTL_SECONDS, "digest": digest, "logo": logo}
     )
