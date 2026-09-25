@@ -31,7 +31,7 @@ from app.services.email_template_service import EmailTemplateService
 from app.services.email_theme import (
     ACCENT_RED,
     build_email_document,
-    build_logo_cell,
+    build_logo_block,
     build_shell,
     colourway_context,
 )
@@ -260,17 +260,17 @@ def build_email_logo_html(organization: Optional[Organization]) -> str:
     return f'<div style="text-align:center;padding:16px 0;">' f"{img}</div>"
 
 
-def build_email_logo_cell(organization: Optional[Organization]) -> str:
-    """The header lockup's logo cell for *organization*, or an empty string.
+def build_email_logo_block(organization: Optional[Organization]) -> str:
+    """The masthead's centred logo for *organization*, or an empty string.
 
-    Thin wrapper over :func:`email_theme.build_logo_cell` so callers holding
+    Thin wrapper over :func:`email_theme.build_logo_block` so callers holding
     an ``Organization`` do not each dig the two fields out themselves. The
     logic lives in ``email_theme`` because ``email_template_service`` needs it
     too and cannot import this module — the dependency runs the other way.
     """
     if not organization:
         return ""
-    return build_logo_cell(
+    return build_logo_block(
         getattr(organization, "logo", None) or "",
         getattr(organization, "name", "Organization"),
     )
@@ -294,18 +294,18 @@ def wrap_email_body(
     came from somewhere else, precisely because nobody edits them.
 
     Args:
-        organization: Org for the lockup. ``None`` omits the logo cell.
+        organization: Org for the masthead. ``None`` omits the logo.
         title: Text for the ``<h1>``.
         body_html: Pre-escaped HTML for the content area.
         footer_text: Optional replacement for the whole footer block. Left
             empty — which is the usual case — the department's default footer
             is used, the same one its templates close with.
         header_color: The accent. Named for the solid header band it used to
-            paint; since 1b it drives the header rule, the chip tint, the
-            details panel's left edge and the button. Callers pass hexes that
-            are not ``ACCENT_*`` constants, which is why ``build_shell``
-            falls back rather than raising on an unmapped tint.
-        chip: Optional status chip text for the lockup.
+            paint; it now drives the status line, the subtitle and the
+            button. Callers pass hexes that are not ``ACCENT_*`` constants,
+            which is why ``build_shell`` falls back rather than raising on
+            an unmapped tint.
+        chip: Optional status text shown above the title.
         subtitle: Optional accent-coloured subline under the title.
     """
     # The department's default footer, so a one-off email from a scheduled
@@ -329,14 +329,14 @@ def wrap_email_body(
     )
     # build_shell writes the shell as a template and this path never goes
     # through variable substitution, so every token it emits is filled in
-    # here. Missing the colourway ones mailed a literal
+    # here. Missing the colourway ones once mailed a literal
     # "border-top-color: {{header_accent}};" and, on the test email, a chip
     # reading "{{status_chip}}" — to every scheduled task and alert, which
     # are exactly the sends nobody is looking at when they go out.
     for _key, _value in colourway_context(accent, chip).items():
         body = body.replace("{{" + _key + "}}", str(_value))
     body = body.replace(
-        "{{organization_logo_cell}}", build_email_logo_cell(organization)
+        "{{organization_logo_block}}", build_email_logo_block(organization)
     )
     body = body.replace(
         "{{organization_name}}",
