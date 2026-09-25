@@ -592,48 +592,43 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
 
                     {openDropdown === MORE_MENU && (
                       <div className="popover-panel animate-scale-in absolute top-full right-0 z-50 mt-1 max-h-[70vh] w-56 overflow-y-auto py-1">
-                        {overflowNavItems.map((entry, index) =>
-                          entry.subItems ? (
-                            <div
-                              key={entry.item.label}
-                              role="group"
-                              aria-label={entry.item.label}
-                              className={index > 0 ? 'border-theme-surface-border mt-1 border-t pt-1' : ''}
-                            >
-                              <p
-                                className="text-theme-text-muted px-4 pt-2 pb-1 text-[10px] font-bold tracking-widest uppercase"
-                                aria-hidden="true"
-                              >
-                                {entry.item.label}
-                              </p>
-                              {renderSubLinks(entry)}
-                            </div>
-                          ) : (
-                            // A link straight after a group is divided off from
-                            // it, or it reads as one of that group's pages.
-                            <div
-                              key={entry.item.label}
-                              className={
-                                overflowNavItems[index - 1]?.subItems
-                                  ? 'border-theme-surface-border mt-1 border-t pt-1'
-                                  : ''
-                              }
-                            >
-                              <a
-                                href={entry.item.path}
-                                onClick={(e) => handleNavigation(entry.item.path, e)}
-                                aria-current={isParentActive(entry.item) ? 'page' : undefined}
-                                className={`focus:ring-theme-focus-ring block px-4 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
-                                  isParentActive(entry.item)
-                                    ? 'bg-red-800 text-white'
-                                    : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
-                                }`}
-                              >
-                                {entry.item.label}
-                              </a>
-                            </div>
-                          )
-                        )}
+                        {overflowNavItems.map((entry, index) => {
+                          // A group is divided from its neighbours, and so is a
+                          // link straight after one, or the link reads as one of
+                          // that group's pages.
+                          const divided = index > 0 && (!!entry.subItems || !!overflowNavItems[index - 1]?.subItems);
+                          return (
+                            <React.Fragment key={entry.item.label}>
+                              {divided && (
+                                <div className="border-theme-surface-border my-1 border-t" role="separator" />
+                              )}
+                              {entry.subItems ? (
+                                <div role="group" aria-label={entry.item.label}>
+                                  <p
+                                    className="text-theme-text-muted px-4 pt-2 pb-1 text-[10px] font-bold tracking-widest uppercase"
+                                    aria-hidden="true"
+                                  >
+                                    {entry.item.label}
+                                  </p>
+                                  {renderSubLinks(entry)}
+                                </div>
+                              ) : (
+                                <a
+                                  href={entry.item.path}
+                                  onClick={(e) => handleNavigation(entry.item.path, e)}
+                                  aria-current={isParentActive(entry.item) ? 'page' : undefined}
+                                  className={`focus:ring-theme-focus-ring block px-4 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
+                                    isParentActive(entry.item)
+                                      ? 'bg-red-800 text-white'
+                                      : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
+                                  }`}
+                                >
+                                  {entry.item.label}
+                                </a>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

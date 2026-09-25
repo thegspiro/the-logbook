@@ -142,6 +142,24 @@ describe('TopNavigation overflow into More', () => {
     );
   });
 
+  it('divides every group from its neighbours, including a link that follows one', async () => {
+    const user = userEvent.setup();
+    renderNav();
+    const nav = within(mainNav());
+
+    await user.click(nav.getByRole('button', { name: 'More' }));
+
+    // More holds Documents, Learning Center, [Training], Admin Hours, Shift
+    // Scheduling, [Operations], [Governance]. The boundaries are before
+    // Training, after it (before Admin Hours, which is not a Training page),
+    // before Operations and before Governance: four. Without the one after a
+    // group, Admin Hours sat directly under My Training and read as its page.
+    expect(nav.getAllByRole('separator')).toHaveLength(4);
+    expect(
+      within(nav.getByRole('group', { name: 'Training' })).queryByRole('link', { name: 'Admin Hours' })
+    ).toBeNull();
+  });
+
   it('shows no More when every group fits', () => {
     clientWidth.mockReturnValue(2000);
     renderNav();
