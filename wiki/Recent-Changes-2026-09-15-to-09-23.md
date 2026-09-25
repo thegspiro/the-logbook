@@ -203,6 +203,53 @@ It adds about 20 seconds. Film it as an officer; nothing needs saving.
   going list on, for the whole department or for a single event. Before, it
   only said that an administrator has to.
 
+## Added September 25: the release lessons became indexes
+
+Two training lessons used to repeat, window by window, what each module guide
+should say, and the copies had drifted apart. Both are now indexes:
+[#2706](https://github.com/thegspiro/the-logbook/pull/2706) folded guide 20
+(August 31 – September 23) and
+[#2713](https://github.com/thegspiro/the-logbook/pull/2713) folds guide 19
+(August 12–31).
+
+- **Teach from the module guides.** Each one now describes how its screens work
+  today, in one place. Guides 19 and 20 remain only as lists of where each topic
+  went, so old links still land somewhere useful.
+- **Upgrade steps are in `docs/UPGRADING.md`**, dated. Guide 19's August steps
+  were missing from it until now. The ones worth reading before an upgrade from
+  an August build:
+  - four steps take permissions away from seeded positions;
+  - administrative members lose their operational rank, and a downgrade does not
+    give it back;
+  - rolling back past the org chart keeps only each seat's first holder;
+  - the production compose file needs Docker Compose v2.24.4 or later;
+  - a duplicate active applicant stops the upgrade part way.
+- **Direct label printing needs `LABEL_PRINTER_ALLOWED_NETWORKS`.** The setting
+  arrived on September 14 without an upgrade note, and is empty by default, which
+  turns direct printing off. The **Unraid compose files do not pass it through**,
+  so an Unraid install has to add it to the backend's `environment:` block.
+- **Some guide text was wrong, and is corrected.** Every claim was checked against
+  the application while it moved. The ones a trainer is most likely to have
+  repeated:
+  - **Account lockout** is 5 failed sign-ins and 15 minutes, and the sign-in
+    page says only "Incorrect username or password" while an account is locked.
+    The old 5-in-60-seconds and 30-minute figures belong to the separate per-IP
+    rate limit.
+  - **A budget's cap is enforced.** Finance said three times that approving over
+    budget is allowed; it is refused with "Insufficient available budget".
+  - **The skills-test builder's checkbox is Critical**, not Required, and
+    checklist and timed steps can earn or lose points.
+  - **An election is created with "How is the Winner Determined?"**, where
+    Supermajority is one choice that sets both the counting method and the
+    victory condition.
+  - **Writing a random code to a blank ID card** is the preferred way to issue
+    one; reading the chip serial is the fallback.
+  - **The dashboard staffing tiles need `scheduling.manage`**, not
+    `scheduling.view`.
+- **Screenshots moved with the text.** Thirty-three images from guide 19 now sit
+  in the guides that describe their screens; nine were left out because a module
+  guide already shows the same screen.
+
 ## Upgrade notes
 
 **Four migrations. Head is `5a70c5dcd138`.** Back up, confirm `alembic heads`
@@ -246,12 +293,12 @@ Both holds carry a Dependabot ignore and a lift condition in
 
 ## Where to read more
 
-| Topic                         | Repository file                                                                                       |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Operator documentation        | the module guides; `docs/training/20-september-2026-release-changes.md` indexes where each topic went |
-| Suggestion boxes walkthrough  | `docs/training/07-documents-forms.md`                                                                 |
-| Meeting stages                | `docs/training/15-prospective-members.md`, `docs/PROSPECTIVE_MEMBERS_MODULE.md`                       |
-| Label tracking                | `docs/training/05-inventory.md`, `docs/LABEL_PRINTING_MODULE.md`                                      |
-| Upgrade notes                 | `docs/UPGRADING.md`                                                                                   |
-| Screenshots to create/replace | `docs/training/SCREENSHOT_CURRENCY.md`                                                                |
-| Video script changes          | `docs/youtube-scripts/SCRIPT_CURRENCY.md`                                                             |
+| Topic                         | Repository file                                                                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Operator documentation        | the module guides; `docs/training/19-august-2026-release-changes.md` and `20-september-2026-release-changes.md` index where each topic went |
+| Suggestion boxes walkthrough  | `docs/training/07-documents-forms.md`                                                                                                       |
+| Meeting stages                | `docs/training/15-prospective-members.md`, `docs/PROSPECTIVE_MEMBERS_MODULE.md`                                                             |
+| Label tracking                | `docs/training/05-inventory.md`, `docs/LABEL_PRINTING_MODULE.md`                                                                            |
+| Upgrade notes                 | `docs/UPGRADING.md`                                                                                                                         |
+| Screenshots to create/replace | `docs/training/SCREENSHOT_CURRENCY.md`                                                                                                      |
+| Video script changes          | `docs/youtube-scripts/SCRIPT_CURRENCY.md`                                                                                                   |
