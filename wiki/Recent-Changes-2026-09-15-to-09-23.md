@@ -88,10 +88,11 @@ access to the server's own logs lining up times — is recorded in the repositor
 
 ## Added September 24, after the window
 
-These changes landed a day after the window closed, in
+These changes landed just after the window closed, in
 [#2653](https://github.com/thegspiro/the-logbook/pull/2653),
-[#2667](https://github.com/thegspiro/the-logbook/pull/2667) and
-[#2687](https://github.com/thegspiro/the-logbook/pull/2687).
+[#2667](https://github.com/thegspiro/the-logbook/pull/2667),
+[#2687](https://github.com/thegspiro/the-logbook/pull/2687) and
+[#2699](https://github.com/thegspiro/the-logbook/pull/2699).
 
 **Membership coordinators: one bulk-action bar in Table view** (#2653).
 
@@ -192,6 +193,15 @@ setting existed. Right after RSVP Settings, it now covers:
   which starts out as **Only event managers**.
 
 It adds about 20 seconds. Film it as an officer; nothing needs saving.
+
+**The training guides now say the same**
+([#2699](https://github.com/thegspiro/the-logbook/pull/2699)):
+
+- **Guide 04's event-creation steps** have a new step for **Who can see who's
+  going** in RSVP Settings.
+- **Guide 20, the September release lesson,** now says where to switch the
+  going list on, for the whole department or for a single event. Before, it
+  only said that an administrator has to.
 
 ## Upgrade notes
 

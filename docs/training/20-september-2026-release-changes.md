@@ -503,7 +503,10 @@ over your whole time with the department — was not reported anywhere.
 - **The going list is visible to members** — names and going status only, never
   contact details, RSVP notes, dietary restrictions, accessibility needs, guest
   counts or check-in times. **The default is managers-only**, so an
-  administrator has to opt in before members see it.
+  administrator has to opt in before members see it:
+  - for the whole department, under **Manage Events → Settings → Attendance**;
+  - or for one event, with **Who can see who's going** in the event form's
+    **RSVP Settings**.
 - **You can respond to an event that does not require a response.** The API
   used to refuse outright, which left members with nothing to do on the
   majority of events.
@@ -871,7 +874,9 @@ Then, in order:
 7. **Name your own call types** if the built-in nine do not match how your
    department reports. Retire, don't delete, any type with history.
 8. **Decide whether members may see who's going to an event.** It ships
-   managers-only.
+   managers-only. Set the department default under **Manage Events → Settings
+   → Attendance**. Organizers can still override it on a single event, with
+   **Who can see who's going** in the event form's **RSVP Settings**.
 9. **Leave the Claude (MCP) integration off** unless you want it.
 
 ---
