@@ -440,6 +440,20 @@ named ("N modules you did not enable are hidden") with a control to reveal
 them, so a department that cannot find Inventory learns it is off rather than
 concluding the permission does not exist.
 
+## Email Link Address — How a Change Reaches Every Worker (2026-09-25)
+
+An address saved on **Settings → Email** is applied to `settings.FRONTEND_URL`
+in memory on each uvicorn worker (`app/core/link_domain_sync.py`), because the
+29 places that build an emailed link read that value directly. The worker that
+saves the change applies it at once and announces it on Redis, and the other
+workers re-read it from the database when they hear the announcement.
+
+**Without Redis, the other workers take up to a minute.** Each worker also
+re-reads the saved value every 60 seconds, so a missed announcement, or a
+deployment with no Redis at all, is corrected within that window. Until then, an
+email sent by one of those workers still uses the previous address. Links already
+sent keep whatever address they were sent with.
+
 ## Installed App Icons — Three Things the Platforms Decide for Us (2026-09-17)
 
 The department's logo is rendered into the installable app's icons and iOS

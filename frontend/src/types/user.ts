@@ -111,16 +111,21 @@ export interface EmailConnectionTestResult {
 
 /**
  * The deployment-wide address emailed links are built from (FRONTEND_URL, or
- * the public ALLOWED_ORIGINS entry the backend substituted for a loopback one).
- * Read-only: it is server configuration, not an organization setting.
+ * the public ALLOWED_ORIGINS entry the backend substituted for a loopback one),
+ * unless an IT administrator has saved an override.
  */
 export interface EmailLinkDomain {
   effective_url: string;
   configured_url: string;
+  /** What the server's own configuration gives, with no override saved. */
+  deployment_url: string;
+  override_url?: string | null;
   source: EmailLinkDomainSource;
   is_loopback: boolean;
   is_https: boolean;
   email_enabled: boolean;
+  /** Hosts an override may use: the ones this server accepts traffic on. */
+  allowed_hosts: string[];
 }
 
 export interface EmailServiceSettings {

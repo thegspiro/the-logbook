@@ -475,6 +475,15 @@ SYSTEM_RUN_TASKS = Permission(
     "Trigger platform-wide background tasks",
     PermissionCategory.ADMIN,
 )
+# The saved link domain decides where every emailed link — password resets and
+# ballots included — sends its recipient, for the whole deployment. Granted to
+# no default role: only the wildcard "System Owner" (it_manager) matches it, and
+# a chief who wants to delegate it grants it to a position explicitly.
+SYSTEM_MANAGE_LINK_DOMAIN = Permission(
+    "system.manage_link_domain",
+    "Change the address links in outgoing email use",
+    PermissionCategory.ADMIN,
+)
 
 # Minutes
 MINUTES_VIEW = Permission(
@@ -766,6 +775,7 @@ ALL_PERMISSIONS: list[Permission] = [
     # Admin
     ADMIN_ACCESS,
     SYSTEM_RUN_TASKS,
+    SYSTEM_MANAGE_LINK_DOMAIN,
     # Minutes
     MINUTES_VIEW,
     MINUTES_MANAGE,
