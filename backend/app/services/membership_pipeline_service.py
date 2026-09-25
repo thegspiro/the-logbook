@@ -55,6 +55,7 @@ from app.models.user import Organization, Role, User, UserStatus, generate_uuid
 from app.utils.membership import ADMINISTRATIVE_RANK_MESSAGE, is_administrative
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
+from app.utils.org_timezone import format_in_org_timezone
 from app.utils.prospect_fields import FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP
 from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
 from app.utils.prospect_fields import (
@@ -3993,6 +3994,7 @@ class MembershipPipelineService:
         event_type: Optional[str] = None,
         event_id: Optional[str] = None,
         html: bool = True,
+        organization: Optional[Organization] = None,
     ) -> List[str]:
         """Fetch upcoming event details for the meeting section of a stage email.
 
@@ -4027,7 +4029,9 @@ class MembershipPipelineService:
             if title:
                 parts.append(_html.escape(title) if html else title)
             if start:
-                fmt = start.strftime("%A, %B %d, %Y at %I:%M %p")
+                fmt = format_in_org_timezone(
+                    start, organization, "%A, %B %d, %Y at %I:%M %p"
+                )
                 parts.append(_html.escape(fmt) if html else fmt)
             if loc:
                 parts.append(_html.escape(loc) if html else loc)
@@ -4098,6 +4102,7 @@ class MembershipPipelineService:
                         prospect.organization_id,
                         event_type=event_type_filter,
                         event_id=event_id,
+                        organization=org,
                     )
                 extra_details = config.get("next_meeting_details")
                 if extra_details:
@@ -4216,6 +4221,7 @@ class MembershipPipelineService:
                                 event_type=config.get("next_meeting_event_type"),
                                 event_id=config.get("next_meeting_event_id"),
                                 html=False,
+                                organization=org,
                             )
                         if config.get("next_meeting_details"):
                             text_meeting.append(config["next_meeting_details"])
