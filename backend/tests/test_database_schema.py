@@ -245,28 +245,25 @@ class TestForeignKeyIntegrity:
         assert not mismatches, "Foreign key type mismatches:\n" + "\n".join(mismatches)
 
     def test_fk_columns_have_ondelete(self):
-        """Foreign keys should specify an ondelete action (CASCADE or SET NULL)."""
-        missing_ondelete = []
-        for table_name, table in _tables.items():
-            for col in table.columns:
-                for fk in col.foreign_keys:
-                    if fk.ondelete is None:
-                        missing_ondelete.append(
-                            f"{table_name}.{col.name} → "
-                            f"{fk.column.table.name}.{fk.column.name}"
-                        )
-        # Report as a soft warning — some FKs intentionally use the DB
-        # default (RESTRICT).  If the list ever exceeds a reasonable
-        # threshold, fail so new FKs are reviewed.
-        if missing_ondelete:
-            import warnings
+        """Every foreign key declares its ondelete action.
 
-            warnings.warn(
-                f"{len(missing_ondelete)} FKs without explicit ondelete action:\n"
-                + "\n".join(missing_ondelete[:10]),
-                UserWarning,
-                stacklevel=1,
-            )
+        MySQL reads an omitted action as RESTRICT, which is sometimes right but
+        is then indistinguishable from nobody having decided. A new FK must
+        choose CASCADE, SET NULL or RESTRICT explicitly. RESTRICT references to
+        users.id are handled at hard-delete time by user_deletion_service.
+        """
+        missing_ondelete = [
+            f"{table_name}.{col.name} → {fk.column.table.name}.{fk.column.name}"
+            for table_name, table in _tables.items()
+            for col in table.columns
+            for fk in col.foreign_keys
+            if fk.ondelete is None
+        ]
+        assert (
+            not missing_ondelete
+        ), "Foreign keys without an explicit ondelete action:\n" + "\n".join(
+            missing_ondelete
+        )
 
     def test_set_null_fks_are_nullable(self):
         """Every FK with ondelete='SET NULL' must have nullable=True.

@@ -265,10 +265,16 @@ class Facility(Base):
         String(50), nullable=True
     )  # e.g. "Station 1", "Building A"
     facility_type_id = Column(
-        String(36), ForeignKey("facility_types.id"), nullable=False, index=True
+        String(36),
+        ForeignKey("facility_types.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
     status_id = Column(
-        String(36), ForeignKey("facility_statuses.id"), nullable=False, index=True
+        String(36),
+        ForeignKey("facility_statuses.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
 
     # Address
@@ -585,7 +591,7 @@ class FacilityMaintenance(Base):
     )
     maintenance_type_id = Column(
         String(36),
-        ForeignKey("facility_maintenance_types.id"),
+        ForeignKey("facility_maintenance_types.id", ondelete="RESTRICT"),
         nullable=False,
     )
     system_id = Column(

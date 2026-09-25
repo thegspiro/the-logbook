@@ -5,16 +5,16 @@ What happens to rows that reference a member being hard-deleted is decided by
 the ``ON DELETE`` action on each foreign key, and the schema is not uniform.
 Most of the ~280 references to ``users.id`` declare ``SET NULL`` or
 ``CASCADE``, but a long tail of attribution columns (``created_by``,
-``approved_by``, ``issued_by`` ...) was never given one. MySQL defaults those
-to RESTRICT, so any member who has ever created a record blocks their own
-deletion with errno 1451.
+``approved_by``, ``issued_by`` ...) is ``RESTRICT`` — declared explicitly in
+the models since 2026-09, and MySQL's default before that — so any member who
+has ever created a record blocks their own deletion with errno 1451.
 
 Those constraints are unnamed in the models, which makes altering ~60 of them
 in a migration fragile — Alembic would first have to resolve MySQL's generated
 ``<table>_ibfk_N`` names out of information_schema. So this module produces the
 intended outcome at delete time instead, driven by ``Base.metadata``:
 
-- nullable RESTRICT-by-default references are cleared first, which is the same
+- nullable RESTRICT references are cleared first, which is the same
   ``SET NULL`` outcome the rest of the schema declares — attribution to a row
   that is about to cease existing carries no information anyway;
 - NOT NULL ones cannot be cleared, so they are reported as blockers and the
@@ -36,8 +36,8 @@ from sqlalchemy.schema import ForeignKey
 from app.core.database import Base
 
 # Referential actions MySQL carries out by itself when the user row goes away.
-# Anything else (including an unset ondelete, which MySQL reads as NO ACTION)
-# leaves the referencing row in place and aborts the DELETE.
+# Anything else (RESTRICT, NO ACTION, or an unset ondelete, which MySQL reads
+# as NO ACTION) leaves the referencing row in place and aborts the DELETE.
 _DB_HANDLED_ACTIONS = frozenset({"CASCADE", "SET NULL", "SET DEFAULT"})
 
 _USER_TABLE = "users"

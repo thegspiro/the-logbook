@@ -688,8 +688,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `max_hours_per_session` | FLOAT | yes |  | `12.0` |  |
 | `is_active` | BOOL | no |  | `1` |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
-| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -717,7 +717,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `source_event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `source_rsvp_id` | VARCHAR(36) | yes | FK, IDX |  | → `event_rsvps.id` ON DELETE SET NULL |
 | `status` | ENUM(`active`, `pending`, `approved`, `rejected`) | no |  | `active` |  |
-| `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `approved_at` | DATETIME | yes |  |  |  |
 | `rejection_reason` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -745,7 +745,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `admin_hours_category_id` | VARCHAR(36) | no | FK |  | → `admin_hours_categories.id` ON DELETE CASCADE |
 | `percentage` | INTEGER | no |  | `100` |  |
 | `is_active` | BOOL | no |  | `1` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -828,8 +828,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `license_state` | VARCHAR(50) | yes |  |  |  |
 | `radio_id` | VARCHAR(50) | yes |  |  |  |
 | `asset_tag` | VARCHAR(50) | yes |  |  |  |
-| `apparatus_type_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus_types.id` |
-| `status_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus_statuses.id` |
+| `apparatus_type_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus_types.id` ON DELETE RESTRICT |
+| `status_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus_statuses.id` ON DELETE RESTRICT |
 | `status_reason` | TEXT | yes |  |  |  |
 | `status_changed_at` | DATETIME | yes |  |  |  |
 | `status_changed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -849,8 +849,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `tank_capacity_gallons` | INTEGER | yes |  |  |  |
 | `foam_capacity_gallons` | INTEGER | yes |  |  |  |
 | `ladder_length_feet` | INTEGER | yes |  |  |  |
-| `primary_station_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` |
-| `current_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` |
+| `primary_station_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE RESTRICT |
+| `current_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE RESTRICT |
 | `current_mileage` | INTEGER | yes |  |  |  |
 | `current_hours` | NUMERIC(10, 2) | yes |  |  |  |
 | `mileage_updated_at` | DATETIME | yes |  |  |  |
@@ -1130,7 +1130,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `apparatus_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus.id` ON DELETE CASCADE |
-| `location_id` | VARCHAR(36) | no | FK, IDX |  | → `locations.id` |
+| `location_id` | VARCHAR(36) | no | FK, IDX |  | → `locations.id` ON DELETE RESTRICT |
 | `assigned_date` | DATETIME | no | IDX |  |  |
 | `unassigned_date` | DATETIME | yes |  |  |  |
 | `assignment_reason` | TEXT | yes |  |  |  |
@@ -1155,7 +1155,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `apparatus_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus.id` ON DELETE CASCADE |
-| `maintenance_type_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus_maintenance_types.id` |
+| `maintenance_type_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus_maintenance_types.id` ON DELETE RESTRICT |
 | `component_id` | VARCHAR(36) | yes | FK, IDX |  | → `apparatus_components.id` ON DELETE SET NULL |
 | `service_provider_id` | VARCHAR(36) | yes | FK, IDX |  | → `apparatus_service_providers.id` ON DELETE SET NULL |
 | `scheduled_date` | DATE | yes |  |  |  |
@@ -1429,7 +1429,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `apparatus_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus.id` ON DELETE CASCADE |
-| `status_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus_statuses.id` |
+| `status_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus_statuses.id` ON DELETE RESTRICT |
 | `changed_at` | DATETIME | no | IDX | `now()` |  |
 | `reason` | TEXT | yes |  |  |  |
 | `mileage_at_change` | INTEGER | yes |  |  |  |
@@ -2024,7 +2024,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `required_permissions` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -2058,7 +2058,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `tags` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `uploaded_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `uploaded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -2142,7 +2142,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `runoff_type` | VARCHAR(50) | no |  | `top_two` |  |
 | `max_runoff_rounds` | INTEGER | no |  | `3` |  |
 | `is_runoff` | BOOL | no |  | `0` |  |
-| `parent_election_id` | VARCHAR(36) | yes | FK |  | → `elections.id` |
+| `parent_election_id` | VARCHAR(36) | yes | FK |  | → `elections.id` ON DELETE RESTRICT |
 | `runoff_round` | INTEGER | no |  | `0` |  |
 | `voter_anonymity_salt` | VARCHAR(64) | yes |  |  |  |
 | `attendees` | JSON | yes |  |  |  |
@@ -2619,7 +2619,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `override_check_in_at` | DATETIME | yes |  |  |  |
 | `override_check_out_at` | DATETIME | yes |  |  |  |
 | `override_duration_minutes` | INTEGER | yes |  |  |  |
-| `overridden_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `overridden_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `overridden_at` | DATETIME | yes |  |  |  |
 
 **Indexes**
@@ -2643,7 +2643,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`, `recruitment`) | no |  | `other` |  |
 | `default_title` | VARCHAR(200) | yes |  |  |  |
 | `default_description` | TEXT | yes |  |  |  |
-| `default_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` |
+| `default_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE RESTRICT |
 | `default_location` | VARCHAR(300) | yes |  |  |  |
 | `default_location_details` | TEXT | yes |  |  |  |
 | `default_duration_minutes` | INTEGER | yes |  |  |  |
@@ -2661,8 +2661,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reminder_target` | VARCHAR(20) | no |  | `going` |  |
 | `custom_fields_template` | JSON | yes |  |  |  |
 | `is_active` | BOOL | no |  | `1` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
-| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -2684,7 +2684,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `description` | TEXT | yes |  |  |  |
 | `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`, `recruitment`) | no | IDX | `other` |  |
 | `custom_category` | VARCHAR(100) | yes | IDX |  |  |
-| `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` |
+| `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE RESTRICT |
 | `location` | VARCHAR(300) | yes |  |  |  |
 | `location_details` | TEXT | yes |  |  |  |
 | `start_datetime` | DATETIME | no | IDX |  |  |
@@ -2717,8 +2717,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `recurrence_month` | INTEGER | yes |  |  |  |
 | `recurrence_exceptions` | JSON | yes |  |  |  |
 | `rolling_recurrence` | BOOL | no |  | `0` |  |
-| `recurrence_parent_id` | VARCHAR(36) | yes | FK, IDX |  | → `events.id` |
-| `template_id` | VARCHAR(36) | yes | FK |  | → `event_templates.id` |
+| `recurrence_parent_id` | VARCHAR(36) | yes | FK, IDX |  | → `events.id` ON DELETE RESTRICT |
+| `template_id` | VARCHAR(36) | yes | FK |  | → `event_templates.id` ON DELETE RESTRICT |
 | `custom_fields` | JSON | yes |  |  |  |
 | `attachments` | JSON | yes |  |  |  |
 | `attendance_finalized_at` | DATETIME | yes |  |  |  |
@@ -2727,8 +2727,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_cancelled` | BOOL | no |  | `0` |  |
 | `cancellation_reason` | TEXT | yes |  |  |  |
 | `cancelled_at` | DATETIME | yes |  |  |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
-| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -2779,8 +2779,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(200) | no |  |  |  |
 | `facility_number` | VARCHAR(50) | yes |  |  |  |
-| `facility_type_id` | VARCHAR(36) | no | FK, IDX |  | → `facility_types.id` |
-| `status_id` | VARCHAR(36) | no | FK, IDX |  | → `facility_statuses.id` |
+| `facility_type_id` | VARCHAR(36) | no | FK, IDX |  | → `facility_types.id` ON DELETE RESTRICT |
+| `status_id` | VARCHAR(36) | no | FK, IDX |  | → `facility_statuses.id` ON DELETE RESTRICT |
 | `address_line1` | VARCHAR(200) | yes |  |  |  |
 | `address_line2` | VARCHAR(200) | yes |  |  |  |
 | `city` | VARCHAR(100) | yes |  |  |  |
@@ -3098,7 +3098,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `facility_id` | VARCHAR(36) | no | FK, IDX |  | → `facilities.id` ON DELETE CASCADE |
-| `maintenance_type_id` | VARCHAR(36) | no | FK, IDX |  | → `facility_maintenance_types.id` |
+| `maintenance_type_id` | VARCHAR(36) | no | FK, IDX |  | → `facility_maintenance_types.id` ON DELETE RESTRICT |
 | `system_id` | VARCHAR(36) | yes | FK, IDX |  | → `facility_systems.id` ON DELETE SET NULL |
 | `scheduled_date` | DATE | yes |  |  |  |
 | `due_date` | DATE | yes | IDX |  |  |
@@ -3466,7 +3466,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `budget_category_id` | VARCHAR(36) | yes | FK |  | → `budget_categories.id` ON DELETE SET NULL |
 | `is_default` | BOOL | no |  | `False` |  |
 | `is_active` | BOOL | no |  | `True` |  |
-| `created_by` | VARCHAR(36) | no | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -3545,7 +3545,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `amount_encumbered` | NUMERIC(12, 2) | no |  | `0` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `station_id` | VARCHAR(36) | yes | FK |  | → `facilities.id` ON DELETE SET NULL |
-| `created_by` | VARCHAR(36) | no | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -3564,7 +3564,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `request_number` | VARCHAR(20) | no |  |  |  |
-| `requested_by` | VARCHAR(36) | no | FK |  | → `users.id` |
+| `requested_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `fiscal_year_id` | VARCHAR(36) | no | FK |  | → `fiscal_years.id` ON DELETE CASCADE |
 | `budget_id` | VARCHAR(36) | yes | FK |  | → `budgets.id` ON DELETE SET NULL |
 | `payee_name` | VARCHAR(300) | no |  |  |  |
@@ -3639,7 +3639,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `applies_to_membership_types` | JSON | yes |  |  |  |
 | `is_active` | BOOL | no |  | `True` |  |
 | `notes` | TEXT | yes |  |  |  |
-| `created_by` | VARCHAR(36) | no | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -3681,7 +3681,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `report_number` | VARCHAR(20) | no |  |  |  |
-| `submitted_by` | VARCHAR(36) | no | FK |  | → `users.id` |
+| `submitted_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `fiscal_year_id` | VARCHAR(36) | no | FK |  | → `fiscal_years.id` ON DELETE CASCADE |
 | `title` | VARCHAR(300) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
@@ -3719,7 +3719,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `date_range_end` | DATETIME | no |  |  |  |
 | `record_count` | INTEGER | no |  | `0` |  |
 | `file_format` | ENUM(`csv`, `iif`) | no |  |  |  |
-| `exported_by` | VARCHAR(36) | no | FK |  | → `users.id` |
+| `exported_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `exported_at` | DATETIME | no |  | `now()` |  |
 | `status` | VARCHAR(20) | no |  | `'pending'` |  |
 | `error_message` | VARCHAR(500) | yes |  |  |  |
@@ -3765,7 +3765,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `end_date` | DATETIME | no |  |  |  |
 | `status` | ENUM(`draft`, `active`, `closed`) | no |  | `'draft'` |  |
 | `is_locked` | BOOL | no |  | `False` |  |
-| `created_by` | VARCHAR(36) | no | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -3819,7 +3819,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `request_number` | VARCHAR(20) | no |  |  |  |
 | `fiscal_year_id` | VARCHAR(36) | no | FK |  | → `fiscal_years.id` ON DELETE CASCADE |
 | `budget_id` | VARCHAR(36) | yes | FK |  | → `budgets.id` ON DELETE SET NULL |
-| `requested_by` | VARCHAR(36) | no | FK |  | → `users.id` |
+| `requested_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `title` | VARCHAR(300) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `vendor` | VARCHAR(300) | yes |  |  |  |
@@ -3964,7 +3964,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 | `published_at` | DATETIME | yes |  |  |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -4009,7 +4009,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `thank_you_sent` | BOOL | no |  | `0` |  |
 | `tax_deductible` | BOOL | no |  | `1` |  |
 | `custom_fields` | JSON | yes |  |  |  |
-| `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -4092,7 +4092,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `active` | BOOL | no |  | `1` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -4127,7 +4127,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `registration_url` | VARCHAR(500) | yes |  |  |  |
 | `sponsors` | JSON | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -4175,7 +4175,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `priority` | ENUM(`low`, `medium`, `high`, `critical`) | no | IDX | `medium` |  |
 | `linked_campaign_id` | VARCHAR(36) | yes | FK, IDX |  | → `fundraising_campaigns.id` ON DELETE SET NULL |
 | `notes` | TEXT | yes |  |  |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -4240,7 +4240,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `submission_url` | VARCHAR(500) | yes |  |  |  |
 | `attachments` | JSON | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -4272,7 +4272,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `approval_date` | DATE | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -4295,7 +4295,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `note_type` | ENUM(`general`, `status_change`, `document_added`, `contact_made`, `milestone`, `financial`, `compliance`) | no | IDX | `general` |  |
 | `content` | TEXT | no |  |  |  |
 | `metadata` | JSON | yes |  |  |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no | IDX | `now()` |  |
 
 **Indexes**
@@ -4335,7 +4335,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `federal_program_code` | VARCHAR(50) | yes | IDX |  |  |
 | `is_active` | BOOL | no | IDX | `1` |  |
 | `notes` | TEXT | yes |  |  |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -4368,7 +4368,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reminder_enabled` | BOOL | no |  | `1` |  |
 | `last_reminder_sent` | DATETIME | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -4393,7 +4393,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `ip_address` | VARCHAR(45) | no | IDX |  |  |
 | `country_code` | VARCHAR(2) | yes | IDX |  |  |
 | `country_name` | VARCHAR(100) | yes |  |  |  |
-| `user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` |
+| `user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE RESTRICT |
 | `block_reason` | VARCHAR(100) | no | IDX |  |  |
 | `block_details` | TEXT | yes |  |  |  |
 | `request_path` | VARCHAR(500) | yes |  |  |  |
@@ -4423,10 +4423,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_blocked` | BOOL | yes | IDX | `True` |  |
 | `reason` | TEXT | no |  |  |  |
 | `risk_level` | VARCHAR(20) | yes |  |  |  |
-| `created_by` | VARCHAR(36) | no | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `blocked_attempts_count` | INTEGER | yes |  | `0` |  |
 | `last_blocked_at` | DATETIME | yes |  |  |  |
 
@@ -4449,7 +4449,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `exception_id` | VARCHAR(36) | no | FK, IDX |  | → `ip_exceptions.id` ON DELETE CASCADE |
 | `action` | VARCHAR(50) | no | IDX |  |  |
-| `performed_by` | VARCHAR(36) | no | FK |  | → `users.id` |
+| `performed_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `performed_at` | DATETIME | yes | IDX | `now()` |  |
 | `details` | TEXT | yes |  |  |  |
 | `ip_address` | VARCHAR(45) | yes |  |  |  |
@@ -4479,16 +4479,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `valid_from` | DATETIME | yes |  |  |  |
 | `valid_until` | DATETIME | no | IDX |  |  |
 | `approval_status` | ENUM(`pending`, `approved`, `rejected`, `expired`, `revoked`) | no | IDX | `'pending'` |  |
-| `requested_by` | VARCHAR(36) | no | FK |  | → `users.id` |
+| `requested_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `requested_at` | DATETIME | yes |  | `now()` |  |
-| `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `approved_at` | DATETIME | yes |  |  |  |
 | `approval_notes` | TEXT | yes |  |  |  |
 | `approved_duration_days` | INTEGER | yes |  |  |  |
-| `rejected_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `rejected_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `rejected_at` | DATETIME | yes |  |  |  |
 | `rejection_reason` | TEXT | yes |  |  |  |
-| `revoked_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `revoked_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `revoked_at` | DATETIME | yes |  |  |  |
 | `revoke_reason` | TEXT | yes |  |  |  |
 | `country_code` | VARCHAR(2) | yes |  |  |  |
@@ -4554,8 +4554,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `checked_out_at` | DATETIME | no |  | `now()` |  |
 | `expected_return_at` | DATETIME | yes |  |  |  |
 | `checked_in_at` | DATETIME | yes | IDX |  |  |
-| `checked_out_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
-| `checked_in_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `checked_out_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
+| `checked_in_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `checkout_reason` | TEXT | yes |  |  |  |
 | `checkout_condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | yes |  |  |  |
 | `return_condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | yes |  |  |  |
@@ -4599,7 +4599,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `disposition` | ENUM(`pending`, `returned`, `returned_damaged`, `written_off`, `waived`) | no |  | `pending` |  |
 | `return_condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | yes |  |  |  |
 | `resolved_at` | DATETIME | yes |  |  |  |
-| `resolved_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `resolved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `resolution_notes` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -4629,8 +4629,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `initiated_at` | DATETIME | yes |  | `now()` |  |
 | `completed_at` | DATETIME | yes |  |  |  |
 | `return_deadline` | DATETIME | yes |  |  |  |
-| `initiated_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
-| `completed_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `initiated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
+| `completed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `departure_type` | ENUM(`dropped_voluntary`, `dropped_involuntary`, `retired`) | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -4680,7 +4680,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `active` | BOOL | yes |  | `True` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -4746,7 +4746,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `active` | BOOL | yes | IDX | `True` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -4860,7 +4860,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `label_printed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -5057,7 +5057,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `item_serial_number` | VARCHAR(255) | yes |  |  |  |
 | `item_asset_tag` | VARCHAR(255) | yes |  |  |  |
 | `quantity` | INTEGER | no |  | `1` |  |
-| `performed_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `performed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `processed` | BOOL | no | IDX | `0` |  |
 | `processed_at` | DATETIME | yes |  |  |  |
 | `attempt_count` | INTEGER | no |  | `0` |  |
@@ -5184,7 +5184,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_active` | BOOL | yes |  | `True` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -5210,8 +5210,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `assigned_date` | DATETIME | no |  | `now()` |  |
 | `returned_date` | DATETIME | yes |  |  |  |
 | `expected_return_date` | DATETIME | yes |  |  |  |
-| `assigned_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
-| `returned_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `assigned_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
+| `returned_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `assignment_reason` | TEXT | yes |  |  |  |
 | `return_condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | yes |  |  |  |
 | `return_notes` | TEXT | yes |  |  |  |
@@ -5243,8 +5243,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `quantity_issued` | INTEGER | no |  | `1` |  |
 | `issued_at` | DATETIME | no |  | `now()` |  |
 | `returned_at` | DATETIME | yes |  |  |  |
-| `issued_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
-| `returned_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `issued_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
+| `returned_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `issue_reason` | TEXT | yes |  |  |  |
 | `return_condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | yes |  |  |  |
 | `return_notes` | TEXT | yes |  |  |  |
@@ -5284,7 +5284,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `active` | BOOL | yes | IDX | `True` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -5306,7 +5306,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `scheduled_date` | DATE | yes | IDX |  |  |
 | `completed_date` | DATE | yes | IDX |  |  |
 | `next_due_date` | DATE | yes | IDX |  |  |
-| `performed_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `performed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `vendor_name` | VARCHAR(255) | yes |  |  |  |
 | `cost` | NUMERIC(10, 2) | yes |  |  |  |
 | `condition_before` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | yes |  |  |  |
@@ -5322,7 +5322,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_completed` | BOOL | yes | IDX | `False` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -5388,7 +5388,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -5455,7 +5455,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `contamination_level` | ENUM(`none`, `light`, `moderate`, `heavy`, `gross`) | yes |  | `'none'` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -5617,7 +5617,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_active` | BOOL | yes | IDX | `True` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -5717,7 +5717,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `display_code` | VARCHAR(12) | yes | UQ, UQ-IDX |  |  |
 | `facility_id` | VARCHAR(36) | yes | FK, IDX |  | → `facilities.id` ON DELETE SET NULL |
 | `facility_room_id` | VARCHAR(36) | yes | FK, UQ |  | → `facility_rooms.id` ON DELETE SET NULL |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -5857,15 +5857,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `notes` | TEXT | yes |  |  |  |
 | `status` | ENUM(`draft`, `submitted`, `approved`, `rejected`) | no | IDX | `draft` |  |
 | `submitted_at` | DATETIME | yes |  |  |  |
-| `submitted_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `submitted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `approved_at` | DATETIME | yes |  |  |  |
-| `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `rejected_at` | DATETIME | yes |  |  |  |
-| `rejected_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `rejected_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `rejection_reason` | TEXT | yes |  |  |  |
 | `event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `meeting_id` | VARCHAR(36) | yes | FK |  | → `meetings.id` ON DELETE SET NULL |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -5913,7 +5913,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `minutes_id` | VARCHAR(36) | no | FK, IDX |  | → `meeting_minutes.id` ON DELETE CASCADE |
 | `description` | TEXT | no |  |  |  |
-| `assignee_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` |
+| `assignee_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE RESTRICT |
 | `assignee_name` | VARCHAR(200) | yes |  |  |  |
 | `due_date` | DATETIME | yes | IDX |  |  |
 | `priority` | ENUM(`low`, `medium`, `high`, `urgent`) | no |  | `medium` |  |
@@ -5947,7 +5947,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `sections` | JSON | no |  |  |  |
 | `header_config` | JSON | yes |  |  |  |
 | `footer_config` | JSON | yes |  |  |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -5970,7 +5970,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `meeting_id` | VARCHAR(36) | no | FK, IDX |  | → `meetings.id` ON DELETE CASCADE |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `description` | TEXT | no |  |  |  |
-| `assigned_to` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` |
+| `assigned_to` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE RESTRICT |
 | `due_date` | DATE | yes |  |  |  |
 | `status` | ENUM(`open`, `in_progress`, `completed`, `cancelled`) | no |  | `open` |  |
 | `priority` | INTEGER | yes |  | `0` |  |
@@ -6002,7 +6002,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `present` | BOOL | yes |  | `True` |  |
 | `excused` | BOOL | yes |  | `False` |  |
 | `waiver_reason` | TEXT | yes |  |  |  |
-| `waiver_granted_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `waiver_granted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `waiver_granted_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 
@@ -6035,11 +6035,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `agenda` | TEXT | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `motions` | TEXT | yes |  |  |  |
-| `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `approved_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -6103,7 +6103,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `public_status_enabled` | BOOL | yes |  | `False` |  |
 | `public_show_future_stages` | BOOL | no |  | `1` |  |
 | `report_stage_groups` | JSON | yes |  | `list()` |  |
-| `created_by` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -6518,7 +6518,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `config` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -6941,7 +6941,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `tags` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -9387,7 +9387,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reason` | TEXT | yes |  |  |  |
 | `start_date` | DATE | no | IDX |  |  |
 | `end_date` | DATE | yes |  |  |  |
-| `granted_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
+| `granted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `granted_at` | DATETIME | yes |  |  |  |
 | `active` | BOOL | no |  | `1` |  |
 | `exempt_from_training_waiver` | BOOL | no |  | `0` |  |
@@ -9591,7 +9591,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | no | PK, FK |  | → `users.id` ON DELETE CASCADE |
 | `position_id` | VARCHAR(36) | no | PK, FK |  | → `positions.id` ON DELETE CASCADE |
 | `assigned_at` | DATETIME | yes | IDX | `now()` |  |
-| `assigned_by` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` |
+| `assigned_by` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE RESTRICT |
 
 **Indexes**
 
@@ -9691,9 +9691,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `admin_hours_categories` | `created_by` | NO ACTION | yes |
-| `admin_hours_categories` | `updated_by` | NO ACTION | yes |
-| `admin_hours_entries` | `approved_by` | NO ACTION | yes |
+| `admin_hours_categories` | `created_by` | RESTRICT | yes |
+| `admin_hours_categories` | `updated_by` | RESTRICT | yes |
+| `admin_hours_entries` | `approved_by` | RESTRICT | yes |
 | `admin_hours_entries` | `user_id` | CASCADE | no |
 | `admin_hub_metric_preferences` | `user_id` | CASCADE | yes |
 | `apparatus` | `archived_by` | SET NULL | yes |
@@ -9720,25 +9720,25 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_service_providers` | `archived_by` | SET NULL | yes |
 | `apparatus_service_providers` | `created_by` | SET NULL | yes |
 | `apparatus_status_history` | `changed_by` | SET NULL | yes |
-| `approval_chains` | `created_by` | NO ACTION | no |
+| `approval_chains` | `created_by` | RESTRICT | no |
 | `approval_step_records` | `acted_by` | SET NULL | yes |
 | `approval_step_records` | `assigned_to` | SET NULL | yes |
-| `blocked_access_attempts` | `user_id` | NO ACTION | yes |
-| `budgets` | `created_by` | NO ACTION | no |
+| `blocked_access_attempts` | `user_id` | RESTRICT | yes |
+| `budgets` | `created_by` | RESTRICT | no |
 | `candidates` | `nominated_by` | SET NULL | yes |
 | `candidates` | `user_id` | SET NULL | yes |
 | `check_item_deployed_lots` | `deployed_by` | SET NULL | yes |
 | `check_requests` | `approved_by` | SET NULL | yes |
-| `check_requests` | `requested_by` | NO ACTION | no |
+| `check_requests` | `requested_by` | RESTRICT | no |
 | `check_template_items` | `restock_reported_by` | SET NULL | yes |
-| `checkout_records` | `checked_in_by` | NO ACTION | yes |
-| `checkout_records` | `checked_out_by` | NO ACTION | yes |
+| `checkout_records` | `checked_in_by` | RESTRICT | yes |
+| `checkout_records` | `checked_out_by` | RESTRICT | yes |
 | `checkout_records` | `user_id` | CASCADE | no |
 | `competency_matrices` | `created_by` | SET NULL | yes |
 | `compliance_configs` | `updated_by` | SET NULL | yes |
 | `compliance_reports` | `generated_by` | SET NULL | yes |
-| `country_block_rules` | `created_by` | NO ACTION | no |
-| `country_block_rules` | `updated_by` | NO ACTION | yes |
+| `country_block_rules` | `created_by` | RESTRICT | no |
+| `country_block_rules` | `updated_by` | RESTRICT | yes |
 | `course_classes` | `created_by` | SET NULL | yes |
 | `course_classes` | `instructor_id` | SET NULL | yes |
 | `course_cohort_classes` | `instructor_id` | SET NULL | yes |
@@ -9750,44 +9750,44 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `department_message_reads` | `user_id` | CASCADE | no |
 | `department_message_recipients` | `user_id` | CASCADE | no |
 | `department_messages` | `posted_by` | SET NULL | yes |
-| `departure_clearance_items` | `resolved_by` | NO ACTION | yes |
-| `departure_clearances` | `completed_by` | NO ACTION | yes |
-| `departure_clearances` | `initiated_by` | NO ACTION | yes |
+| `departure_clearance_items` | `resolved_by` | RESTRICT | yes |
+| `departure_clearances` | `completed_by` | RESTRICT | yes |
+| `departure_clearances` | `initiated_by` | RESTRICT | yes |
 | `departure_clearances` | `user_id` | CASCADE | no |
-| `document_folders` | `created_by` | NO ACTION | yes |
+| `document_folders` | `created_by` | RESTRICT | yes |
 | `document_folders` | `owner_user_id` | SET NULL | yes |
-| `documents` | `uploaded_by` | NO ACTION | yes |
-| `donations` | `recorded_by` | NO ACTION | yes |
+| `documents` | `uploaded_by` | RESTRICT | yes |
+| `donations` | `recorded_by` | RESTRICT | yes |
 | `donors` | `user_id` | SET NULL | yes |
 | `driver_exceptions` | `requested_by` | SET NULL | yes |
 | `driver_exceptions` | `reviewed_by` | SET NULL | yes |
 | `driver_exceptions` | `user_id` | CASCADE | no |
 | `dues_payments` | `recorded_by` | SET NULL | yes |
-| `dues_schedules` | `created_by` | NO ACTION | no |
+| `dues_schedules` | `created_by` | RESTRICT | no |
 | `elections` | `created_by` | SET NULL | yes |
 | `email_attachments` | `uploaded_by` | SET NULL | yes |
 | `email_templates` | `created_by` | SET NULL | yes |
 | `email_templates` | `updated_by` | SET NULL | yes |
 | `equipment_check_templates` | `created_by` | SET NULL | yes |
-| `equipment_kits` | `created_by` | NO ACTION | yes |
+| `equipment_kits` | `created_by` | RESTRICT | yes |
 | `equipment_requests` | `fulfilled_by` | SET NULL | yes |
 | `equipment_requests` | `requester_id` | CASCADE | no |
 | `equipment_requests` | `reviewed_by` | SET NULL | yes |
 | `event_external_attendees` | `created_by` | SET NULL | yes |
 | `event_external_attendees` | `updated_by` | SET NULL | yes |
-| `event_hour_mappings` | `created_by` | NO ACTION | yes |
+| `event_hour_mappings` | `created_by` | RESTRICT | yes |
 | `event_request_activity` | `performed_by` | SET NULL | yes |
 | `event_request_email_templates` | `created_by` | SET NULL | yes |
 | `event_requests` | `assigned_to` | SET NULL | yes |
-| `event_rsvps` | `overridden_by` | NO ACTION | yes |
+| `event_rsvps` | `overridden_by` | RESTRICT | yes |
 | `event_rsvps` | `user_id` | CASCADE | no |
-| `event_templates` | `created_by` | NO ACTION | yes |
-| `event_templates` | `updated_by` | NO ACTION | yes |
+| `event_templates` | `created_by` | RESTRICT | yes |
+| `event_templates` | `updated_by` | RESTRICT | yes |
 | `events` | `attendance_finalized_by` | SET NULL | yes |
-| `events` | `created_by` | NO ACTION | yes |
-| `events` | `updated_by` | NO ACTION | yes |
+| `events` | `created_by` | RESTRICT | yes |
+| `events` | `updated_by` | RESTRICT | yes |
 | `expense_reports` | `approved_by` | SET NULL | yes |
-| `expense_reports` | `submitted_by` | NO ACTION | no |
+| `expense_reports` | `submitted_by` | RESTRICT | no |
 | `external_category_mappings` | `mapped_by` | SET NULL | yes |
 | `external_training_imports` | `user_id` | SET NULL | yes |
 | `external_training_providers` | `created_by` | SET NULL | yes |
@@ -9816,102 +9816,102 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `facility_systems` | `created_by` | SET NULL | yes |
 | `facility_utility_accounts` | `created_by` | SET NULL | yes |
 | `facility_utility_readings` | `created_by` | SET NULL | yes |
-| `finance_export_logs` | `exported_by` | NO ACTION | no |
-| `fiscal_years` | `created_by` | NO ACTION | no |
+| `finance_export_logs` | `exported_by` | RESTRICT | no |
+| `fiscal_years` | `created_by` | RESTRICT | no |
 | `form_submissions` | `submitted_by` | SET NULL | yes |
-| `forms` | `created_by` | NO ACTION | yes |
-| `fundraising_campaigns` | `created_by` | NO ACTION | yes |
-| `fundraising_events` | `created_by` | NO ACTION | yes |
+| `forms` | `created_by` | RESTRICT | yes |
+| `fundraising_campaigns` | `created_by` | RESTRICT | yes |
+| `fundraising_events` | `created_by` | RESTRICT | yes |
 | `grant_applications` | `assigned_to` | SET NULL | yes |
-| `grant_applications` | `created_by` | NO ACTION | yes |
+| `grant_applications` | `created_by` | RESTRICT | yes |
 | `grant_compliance_tasks` | `assigned_to` | SET NULL | yes |
-| `grant_compliance_tasks` | `created_by` | NO ACTION | yes |
+| `grant_compliance_tasks` | `created_by` | RESTRICT | yes |
 | `grant_expenditures` | `approved_by` | SET NULL | yes |
-| `grant_expenditures` | `created_by` | NO ACTION | yes |
-| `grant_notes` | `created_by` | NO ACTION | yes |
-| `grant_opportunities` | `created_by` | NO ACTION | yes |
+| `grant_expenditures` | `created_by` | RESTRICT | yes |
+| `grant_notes` | `created_by` | RESTRICT | yes |
+| `grant_opportunities` | `created_by` | RESTRICT | yes |
 | `instructor_qualifications` | `created_by` | SET NULL | yes |
 | `instructor_qualifications` | `user_id` | CASCADE | no |
 | `instructor_qualifications` | `verified_by` | SET NULL | yes |
-| `inventory_categories` | `created_by` | NO ACTION | yes |
+| `inventory_categories` | `created_by` | RESTRICT | yes |
 | `inventory_impact_plans` | `created_by` | SET NULL | yes |
 | `inventory_item_pins` | `user_id` | CASCADE | no |
 | `inventory_items` | `assigned_to_user_id` | SET NULL | yes |
-| `inventory_items` | `created_by` | NO ACTION | yes |
+| `inventory_items` | `created_by` | RESTRICT | yes |
 | `inventory_items` | `label_printed_by` | SET NULL | yes |
 | `inventory_lots` | `created_by` | SET NULL | yes |
 | `inventory_nfc_audits` | `applied_by` | SET NULL | yes |
 | `inventory_nfc_audits` | `audited_by` | SET NULL | yes |
 | `inventory_nfc_scans` | `scanned_by` | SET NULL | yes |
 | `inventory_nfc_tags` | `linked_by` | SET NULL | yes |
-| `inventory_notification_queue` | `performed_by` | NO ACTION | yes |
+| `inventory_notification_queue` | `performed_by` | RESTRICT | yes |
 | `inventory_notification_queue` | `user_id` | CASCADE | no |
 | `inventory_vendors` | `created_by` | SET NULL | yes |
 | `inventory_write_offs` | `requested_by` | RESTRICT | no |
 | `inventory_write_offs` | `reviewed_by` | SET NULL | yes |
-| `ip_exception_audit_log` | `performed_by` | NO ACTION | no |
-| `ip_exceptions` | `approved_by` | NO ACTION | yes |
-| `ip_exceptions` | `rejected_by` | NO ACTION | yes |
-| `ip_exceptions` | `requested_by` | NO ACTION | no |
-| `ip_exceptions` | `revoked_by` | NO ACTION | yes |
+| `ip_exception_audit_log` | `performed_by` | RESTRICT | no |
+| `ip_exceptions` | `approved_by` | RESTRICT | yes |
+| `ip_exceptions` | `rejected_by` | RESTRICT | yes |
+| `ip_exceptions` | `requested_by` | RESTRICT | no |
+| `ip_exceptions` | `revoked_by` | RESTRICT | yes |
 | `ip_exceptions` | `user_id` | CASCADE | no |
-| `issuance_allowances` | `created_by` | NO ACTION | yes |
-| `item_assignments` | `assigned_by` | NO ACTION | yes |
-| `item_assignments` | `returned_by` | NO ACTION | yes |
+| `issuance_allowances` | `created_by` | RESTRICT | yes |
+| `item_assignments` | `assigned_by` | RESTRICT | yes |
+| `item_assignments` | `returned_by` | RESTRICT | yes |
 | `item_assignments` | `user_id` | CASCADE | no |
-| `item_issuances` | `issued_by` | NO ACTION | yes |
-| `item_issuances` | `returned_by` | NO ACTION | yes |
+| `item_issuances` | `issued_by` | RESTRICT | yes |
+| `item_issuances` | `returned_by` | RESTRICT | yes |
 | `item_issuances` | `user_id` | CASCADE | no |
-| `item_variant_groups` | `created_by` | NO ACTION | yes |
+| `item_variant_groups` | `created_by` | RESTRICT | yes |
 | `label_printers` | `created_by_id` | SET NULL | yes |
 | `legal_document_revisions` | `created_by` | SET NULL | yes |
 | `legal_document_revisions` | `published_by` | SET NULL | yes |
-| `locations` | `created_by` | NO ACTION | yes |
-| `maintenance_records` | `created_by` | NO ACTION | yes |
-| `maintenance_records` | `performed_by` | NO ACTION | yes |
+| `locations` | `created_by` | RESTRICT | yes |
+| `maintenance_records` | `created_by` | RESTRICT | yes |
+| `maintenance_records` | `performed_by` | RESTRICT | yes |
 | `manual_ballot_attestations` | `attested_by` | SET NULL | yes |
 | `manual_ballot_batches` | `recorded_by` | SET NULL | yes |
 | `mcp_service_keys` | `created_by` | SET NULL | yes |
 | `mcp_service_keys` | `revoked_by` | SET NULL | yes |
-| `meeting_action_items` | `assigned_to` | NO ACTION | yes |
+| `meeting_action_items` | `assigned_to` | RESTRICT | yes |
 | `meeting_action_items` | `created_by` | SET NULL | yes |
 | `meeting_attendees` | `user_id` | CASCADE | no |
-| `meeting_attendees` | `waiver_granted_by` | NO ACTION | yes |
-| `meeting_minutes` | `approved_by` | NO ACTION | yes |
-| `meeting_minutes` | `created_by` | NO ACTION | yes |
-| `meeting_minutes` | `rejected_by` | NO ACTION | yes |
-| `meeting_minutes` | `submitted_by` | NO ACTION | yes |
-| `meetings` | `approved_by` | NO ACTION | yes |
-| `meetings` | `created_by` | NO ACTION | yes |
+| `meeting_attendees` | `waiver_granted_by` | RESTRICT | yes |
+| `meeting_minutes` | `approved_by` | RESTRICT | yes |
+| `meeting_minutes` | `created_by` | RESTRICT | yes |
+| `meeting_minutes` | `rejected_by` | RESTRICT | yes |
+| `meeting_minutes` | `submitted_by` | RESTRICT | yes |
+| `meetings` | `approved_by` | RESTRICT | yes |
+| `meetings` | `created_by` | RESTRICT | yes |
 | `member_competencies` | `last_evaluator_id` | SET NULL | yes |
 | `member_competencies` | `user_id` | CASCADE | no |
 | `member_dues` | `user_id` | CASCADE | no |
 | `member_dues` | `waived_by` | SET NULL | yes |
-| `member_leaves_of_absence` | `granted_by` | NO ACTION | yes |
+| `member_leaves_of_absence` | `granted_by` | RESTRICT | yes |
 | `member_leaves_of_absence` | `user_id` | CASCADE | no |
 | `member_qualifications` | `user_id` | CASCADE | no |
 | `member_service_periods` | `created_by` | SET NULL | yes |
 | `member_service_periods` | `user_id` | CASCADE | no |
 | `member_size_preferences` | `user_id` | CASCADE | no |
-| `membership_pipelines` | `created_by` | NO ACTION | yes |
+| `membership_pipelines` | `created_by` | RESTRICT | yes |
 | `message_history` | `sent_by` | SET NULL | yes |
-| `minutes_action_items` | `assignee_id` | NO ACTION | yes |
-| `minutes_templates` | `created_by` | NO ACTION | yes |
+| `minutes_action_items` | `assignee_id` | RESTRICT | yes |
+| `minutes_templates` | `created_by` | RESTRICT | yes |
 | `multi_agency_trainings` | `created_by` | SET NULL | yes |
 | `nfc_tags` | `issued_by` | SET NULL | yes |
 | `nfc_tags` | `user_id` | CASCADE | no |
-| `nfpa_exposure_records` | `created_by` | NO ACTION | yes |
+| `nfpa_exposure_records` | `created_by` | RESTRICT | yes |
 | `nfpa_exposure_records` | `user_id` | SET NULL | yes |
-| `nfpa_item_compliance` | `created_by` | NO ACTION | yes |
+| `nfpa_item_compliance` | `created_by` | RESTRICT | yes |
 | `notification_logs` | `recipient_id` | SET NULL | yes |
-| `notification_rules` | `created_by` | NO ACTION | yes |
+| `notification_rules` | `created_by` | RESTRICT | yes |
 | `org_calls` | `created_by` | SET NULL | yes |
 | `org_chart_node_holders` | `user_id` | SET NULL | yes |
 | `org_chart_nodes` | `updated_by` | SET NULL | yes |
 | `organization_officers` | `updated_by` | SET NULL | yes |
 | `organization_officers` | `user_id` | SET NULL | yes |
 | `password_history` | `user_id` | CASCADE | no |
-| `pledges` | `created_by` | NO ACTION | yes |
+| `pledges` | `created_by` | RESTRICT | yes |
 | `program_enrollments` | `enrolled_by` | SET NULL | yes |
 | `program_enrollments` | `user_id` | CASCADE | no |
 | `property_return_reminders` | `user_id` | CASCADE | no |
@@ -9924,7 +9924,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospective_members` | `transferred_user_id` | SET NULL | yes |
 | `public_portal_api_keys` | `created_by` | SET NULL | yes |
 | `purchase_requests` | `approved_by` | SET NULL | yes |
-| `purchase_requests` | `requested_by` | NO ACTION | no |
+| `purchase_requests` | `requested_by` | RESTRICT | no |
 | `push_subscriptions` | `user_id` | CASCADE | no |
 | `recertification_pathways` | `created_by` | SET NULL | yes |
 | `renewal_tasks` | `user_id` | CASCADE | no |
@@ -9967,7 +9967,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_checkoffs` | `evaluator_id` | SET NULL | yes |
 | `skill_checkoffs` | `user_id` | CASCADE | no |
 | `skill_evaluations` | `created_by` | SET NULL | yes |
-| `skill_templates` | `created_by` | NO ACTION | yes |
+| `skill_templates` | `created_by` | RESTRICT | yes |
 | `skill_test_viewers` | `granted_by` | SET NULL | yes |
 | `skill_test_viewers` | `user_id` | CASCADE | no |
 | `skill_tests` | `candidate_id` | CASCADE | no |
@@ -9977,7 +9977,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_tests` | `validated_by` | SET NULL | yes |
 | `skill_tests` | `voided_by` | SET NULL | yes |
 | `standing_shift_claims` | `user_id` | CASCADE | no |
-| `storage_areas` | `created_by` | NO ACTION | yes |
+| `storage_areas` | `created_by` | RESTRICT | yes |
 | `store_order_events` | `created_by` | SET NULL | yes |
 | `store_order_windows` | `closed_by` | SET NULL | yes |
 | `store_order_windows` | `created_by` | SET NULL | yes |
@@ -10016,7 +10016,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_waivers` | `granted_by` | SET NULL | yes |
 | `training_waivers` | `user_id` | CASCADE | no |
 | `user_consents` | `user_id` | CASCADE | no |
-| `user_positions` | `assigned_by` | NO ACTION | yes |
+| `user_positions` | `assigned_by` | RESTRICT | yes |
 | `user_positions` | `user_id` | CASCADE | no |
 | `users` | `referred_by_user_id` | SET NULL | yes |
 | `votes` | `proxy_voter_id` | SET NULL | yes |
@@ -10331,7 +10331,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_external_attendees` | `event_id` | CASCADE | no |
 | `event_requests` | `event_id` | SET NULL | yes |
 | `event_rsvps` | `event_id` | CASCADE | no |
-| `events` | `recurrence_parent_id` | NO ACTION | yes |
+| `events` | `recurrence_parent_id` | RESTRICT | yes |
 | `fundraising_events` | `event_id` | SET NULL | yes |
 | `meeting_minutes` | `event_id` | SET NULL | yes |
 | `meetings` | `event_id` | SET NULL | yes |
@@ -10344,15 +10344,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `apparatus` | `current_location_id` | NO ACTION | yes |
-| `apparatus` | `primary_station_id` | NO ACTION | yes |
-| `apparatus_location_history` | `location_id` | NO ACTION | no |
+| `apparatus` | `current_location_id` | RESTRICT | yes |
+| `apparatus` | `primary_station_id` | RESTRICT | yes |
+| `apparatus_location_history` | `location_id` | RESTRICT | no |
 | `course_classes` | `location_id` | SET NULL | yes |
 | `course_cohort_classes` | `location_id` | SET NULL | yes |
 | `course_cohorts` | `location_id` | SET NULL | yes |
 | `event_requests` | `event_location_id` | SET NULL | yes |
-| `event_templates` | `default_location_id` | NO ACTION | yes |
-| `events` | `location_id` | NO ACTION | yes |
+| `event_templates` | `default_location_id` | RESTRICT | yes |
+| `events` | `location_id` | RESTRICT | yes |
 | `inventory_items` | `location_id` | SET NULL | yes |
 | `meetings` | `location_id` | SET NULL | yes |
 | `storage_areas` | `location_id` | SET NULL | yes |
@@ -10481,7 +10481,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `candidates` | `election_id` | CASCADE | no |
-| `elections` | `parent_election_id` | NO ACTION | yes |
+| `elections` | `parent_election_id` | RESTRICT | yes |
 | `manual_ballot_batches` | `election_id` | CASCADE | no |
 | `prospect_election_packages` | `election_id` | SET NULL | yes |
 | `votes` | `election_id` | CASCADE | no |
@@ -10737,8 +10737,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `apparatus` | `status_id` | NO ACTION | no |
-| `apparatus_status_history` | `status_id` | NO ACTION | no |
+| `apparatus` | `status_id` | RESTRICT | no |
+| `apparatus_status_history` | `status_id` | RESTRICT | no |
 
 ### → `approval_chains` (2 references)
 
@@ -10862,13 +10862,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `apparatus_maintenance` | `maintenance_type_id` | NO ACTION | no |
+| `apparatus_maintenance` | `maintenance_type_id` | RESTRICT | no |
 
 ### → `apparatus_types` (1 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `apparatus` | `apparatus_type_id` | NO ACTION | no |
+| `apparatus` | `apparatus_type_id` | RESTRICT | no |
 
 ### → `approval_chain_steps` (1 references)
 
@@ -10922,7 +10922,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `events` | `template_id` | NO ACTION | yes |
+| `events` | `template_id` | RESTRICT | yes |
 
 ### → `expense_reports` (1 references)
 
@@ -10946,13 +10946,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `facility_maintenance` | `maintenance_type_id` | NO ACTION | no |
+| `facility_maintenance` | `maintenance_type_id` | RESTRICT | no |
 
 ### → `facility_statuses` (1 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `facilities` | `status_id` | NO ACTION | no |
+| `facilities` | `status_id` | RESTRICT | no |
 
 ### → `facility_systems` (1 references)
 
@@ -10964,7 +10964,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `facilities` | `facility_type_id` | NO ACTION | no |
+| `facilities` | `facility_type_id` | RESTRICT | no |
 
 ### → `facility_utility_accounts` (1 references)
 
