@@ -512,6 +512,7 @@ class InventoryNfcService:
         storage_area_id: str,
         tapped: Iterable[Tuple[str, Optional[str]]],
         audited_by: Optional[str],
+        client_submission_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Compare the items tapped on a shelf with the items recorded there.
 
@@ -573,6 +574,7 @@ class InventoryNfcService:
             storage_area_id=area.id,
             storage_area_name=area.name,
             audited_by=str(audited_by) if audited_by else None,
+            client_submission_id=client_submission_id,
         )
         lines: List[InventoryNfcAuditItem] = []
         for item in expected.values():
@@ -632,6 +634,285 @@ class InventoryNfcService:
             )
         await self.db.flush()
         return await self.get_audit(audit.id, org_id)
+
+    # =========================================================================
+    # Taps made offline
+    # =========================================================================
+
+    async def replay_put_away(
+        self,
+        *,
+        organization_id: str,
+        scanned_by: Optional[str],
+        taps: Sequence[Dict[str, Optional[str]]],
+        open_storage_area_id: Optional[str] = None,
+        held_item_id: Optional[str] = None,
+        held_item_tag_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Apply put-away taps made without signal, in the order they were made.
+
+        The rules are the put-away screen's, step for step: a shelf tapped with
+        nothing held opens it and every item after goes onto it; an item tapped
+        with no shelf open is held until the next shelf, which it moves to
+        without opening. ``open_storage_area_id`` and ``held_item_id`` are what
+        the screen showed when signal went, so the first taps continue from
+        there. Each move is :meth:`put_away`, so an offline move is refused for
+        exactly the reasons an online one is.
+
+        Every step reports what it turned out to be; nothing here raises for
+        one bad tap, because the rest of a shelf's work still stands.
+        ``taps`` items have ``code`` / ``serial_number`` or ``storage_area_id``.
+        """
+        org_id = str(organization_id)
+        shelf: Optional[StorageArea] = None
+        if open_storage_area_id:
+            area = await self._find_storage_area(open_storage_area_id, org_id)
+            if area is not None and area.is_active:
+                shelf = area
+
+        held: Optional[Tuple[InventoryItem, Optional[str]]] = None
+        if held_item_id:
+            try:
+                item = await self._get_item(held_item_id, org_id)
+            except LookupError:
+                item = None
+            if item is not None and item.active:
+                held = (item, held_item_tag_id)
+
+        results: List[Dict[str, Any]] = []
+        for index, tap in enumerate(taps):
+            area: Optional[StorageArea] = None
+            tapped: Optional[Tuple[InventoryItem, Optional[str]]] = None
+            if tap.get("storage_area_id"):
+                area = await self._find_storage_area(tap["storage_area_id"], org_id)
+                if area is None or not area.is_active:
+                    results.append(
+                        {
+                            "index": index,
+                            "outcome": "refused",
+                            "message": "That storage area is no longer active.",
+                        }
+                    )
+                    continue
+            else:
+                try:
+                    resolved = await self.resolve_any(
+                        org_id, (tap.get("code"), tap.get("serial_number"))
+                    )
+                except InventoryNfcTagNotFound as e:
+                    results.append(
+                        {"index": index, "outcome": "unread", "message": str(e)}
+                    )
+                    continue
+                if resolved.storage_area is not None:
+                    area = resolved.storage_area
+                elif resolved.item is not None:
+                    tapped = (resolved.item, str(resolved.tag.id))
+
+            if area is not None:
+                if held is not None:
+                    # Item first: a one-off move, and the shelf stays closed.
+                    results.append(
+                        await self._replay_move(
+                            index, org_id, scanned_by, held[0], held[1], area
+                        )
+                    )
+                    held = None
+                else:
+                    shelf = area
+                    results.append(
+                        {
+                            "index": index,
+                            "outcome": "shelf_opened",
+                            "storage_area_name": area.name,
+                        }
+                    )
+                continue
+            if tapped is not None:
+                if shelf is not None:
+                    results.append(
+                        await self._replay_move(
+                            index, org_id, scanned_by, tapped[0], tapped[1], shelf
+                        )
+                    )
+                else:
+                    held = tapped
+                    results.append(
+                        {"index": index, "outcome": "held", "item_name": tapped[0].name}
+                    )
+
+        return {
+            "results": results,
+            "moved_count": sum(1 for r in results if r["outcome"] == "moved"),
+            "refused_count": sum(1 for r in results if r["outcome"] == "refused"),
+            "unread_count": sum(1 for r in results if r["outcome"] == "unread"),
+            "held_item_name": held[0].name if held is not None else None,
+        }
+
+    async def _replay_move(
+        self,
+        index: int,
+        organization_id: str,
+        scanned_by: Optional[str],
+        item: InventoryItem,
+        tag_id: Optional[str],
+        area: StorageArea,
+    ) -> Dict[str, Any]:
+        # Read before put_away: its flush must not be what makes these readable.
+        item_name, area_name = item.name, area.name
+        try:
+            moved = await self.put_away(
+                organization_id=organization_id,
+                item_id=str(item.id),
+                storage_area_id=str(area.id),
+                scanned_by=scanned_by,
+                item_tag_id=tag_id,
+            )
+        except (LookupError, ValueError) as e:
+            return {
+                "index": index,
+                "outcome": "refused",
+                "item_name": item_name,
+                "storage_area_name": area_name,
+                "message": str(e),
+            }
+        return {
+            "index": index,
+            "outcome": "moved" if moved["moved"] else "already_there",
+            "item_id": moved["item_id"],
+            "item_name": item_name,
+            "storage_area_id": moved["storage_area_id"],
+            "storage_area_name": area_name,
+            "from_storage_area_id": moved["from_storage_area_id"],
+        }
+
+    async def replay_audit(
+        self,
+        *,
+        organization_id: str,
+        audited_by: Optional[str],
+        client_submission_id: str,
+        storage_area_id: Optional[str],
+        tapped: Sequence[Tuple[str, Optional[str]]],
+        taps: Sequence[Dict[str, Optional[str]]],
+    ) -> Dict[str, Any]:
+        """Save a shelf audit finished without signal.
+
+        The shelf is ``storage_area_id`` when it was chosen with signal, or
+        else the first shelf found among ``taps``; another shelf's tag after
+        that is counted and ignored, as the audit screen refuses it. Items are
+        ``tapped`` (identified before signal went) plus every item among
+        ``taps``, whatever order they came in: offline, the screen cannot tell
+        a crew member to tap the shelf first.
+
+        The same ``client_submission_id`` sent twice — a retry after a lost
+        response — returns the audit the first send saved.
+
+        Returns ``audit`` None with ``not_saved_reason`` when there is nothing
+        to save, rather than raising: the phone's queue retries a refused
+        request, and no retry would make these taps name a shelf.
+        """
+        org_id = str(organization_id)
+        already = await self._audit_already_sent(org_id, client_submission_id)
+        if already is not None:
+            return already
+
+        shelf: Optional[StorageArea] = None
+        if storage_area_id:
+            shelf = await self._find_storage_area(storage_area_id, org_id)
+            if shelf is None or not shelf.is_active:
+                return self._audit_not_saved(
+                    "The shelf being audited is no longer active."
+                )
+
+        items: List[Tuple[str, Optional[str]]] = list(tapped)
+        unread = other_shelf = 0
+        for tap in taps:
+            area: Optional[StorageArea] = None
+            if tap.get("storage_area_id"):
+                area = await self._find_storage_area(tap["storage_area_id"], org_id)
+                if area is None or not area.is_active:
+                    unread += 1
+                    continue
+            else:
+                try:
+                    resolved = await self.resolve_any(
+                        org_id, (tap.get("code"), tap.get("serial_number"))
+                    )
+                except InventoryNfcTagNotFound:
+                    unread += 1
+                    continue
+                if resolved.item is not None:
+                    items.append((str(resolved.item.id), str(resolved.tag.id)))
+                    continue
+                area = resolved.storage_area
+            if area is None:
+                continue
+            if shelf is None:
+                shelf = area
+            elif area.id != shelf.id:
+                other_shelf += 1
+
+        if shelf is None:
+            return self._audit_not_saved(
+                "No shelf was chosen or tapped, so there was nothing to audit."
+            )
+        # The check above and this insert are not atomic: a retry arriving
+        # while the first send is still being handled passes it too. The
+        # unique constraint decides, and the savepoint keeps the loser's
+        # session usable so it answers with the winner's audit, not a 500.
+        try:
+            async with self.db.begin_nested():
+                audit = await self.create_audit(
+                    organization_id=org_id,
+                    storage_area_id=str(shelf.id),
+                    tapped=items,
+                    audited_by=audited_by,
+                    client_submission_id=client_submission_id,
+                )
+        except IntegrityError:
+            already = await self._audit_already_sent(org_id, client_submission_id)
+            if already is None:
+                raise
+            return already
+        return {
+            "audit": audit,
+            "created": True,
+            "not_saved_reason": None,
+            "unread_count": unread,
+            "other_shelf_count": other_shelf,
+        }
+
+    async def _audit_already_sent(
+        self, organization_id: str, client_submission_id: str
+    ) -> Optional[Dict[str, Any]]:
+        existing = (
+            await self.db.execute(
+                select(InventoryNfcAudit.id).where(
+                    InventoryNfcAudit.organization_id == organization_id,
+                    InventoryNfcAudit.client_submission_id == client_submission_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            return None
+        return {
+            "audit": await self.get_audit(existing, organization_id),
+            "created": False,
+            "not_saved_reason": None,
+            "unread_count": 0,
+            "other_shelf_count": 0,
+        }
+
+    @staticmethod
+    def _audit_not_saved(reason: str) -> Dict[str, Any]:
+        return {
+            "audit": None,
+            "created": False,
+            "not_saved_reason": reason,
+            "unread_count": 0,
+            "other_shelf_count": 0,
+        }
 
     async def apply_audit(
         self,

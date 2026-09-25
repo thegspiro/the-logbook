@@ -17,6 +17,8 @@ for these things:
   themselves by tapping their ID card, then the item.
 - **Apparatus checks.** Tag a truck's compartments: during an equipment check,
   tapping a compartment jumps to it, and tapping a tool's tag answers it.
+- **Working without signal.** Put-away and shelf audits keep going in a
+  basement or a dead corner of the bay, and catch up when signal returns.
 
 A **not-seen report** sits alongside: the items nobody has handled in months.
 It uses assignments and checkouts as well as taps, so it also works without
@@ -331,6 +333,42 @@ to their assigned checklists can only tap against those.
   something _works_ (a radio, a light), the crew should still test it, and can
   change the answer to failed.
 
+### Working without signal
+
+Put-away and shelf audits keep working where the phone has no signal. Open
+the screen **before** you go somewhere without signal: a screen opened with no
+signal cannot check that NFC is turned on, and shows as off.
+
+**Put Away.** Keep tapping. The screen says **No signal: keep tapping** and
+counts the taps saved on the phone. When signal returns they are sent, in the
+order you made them, and applied with the usual rules, starting from the shelf
+that was open when signal went. A message then says how many items were put
+away and names any that were not (an item assigned to a member, say). After
+that the shelf is closed: tap it again to carry on.
+
+- **Close shelf** and **Cancel** are hidden while taps are waiting, because
+  they are not taps and cannot be sent with them. Tap the next shelf instead.
+- If the phone thinks it has signal but the connection keeps dropping, press
+  **Send now** when you are somewhere better.
+
+**Shelf audits.** Keep tapping. Tags read without signal are counted rather
+than named. Then either:
+
+- signal returns before you finish, and they are identified and listed as
+  usual; or
+- you press **Finish audit** without signal, and the audit is kept on the
+  phone and saved when there is signal. A message then gives the result, which
+  also appears under recent audits.
+
+Finish an audit before closing the screen. An unfinished audit is not kept,
+because sending half an audit would report every item not yet tapped as
+missing.
+
+**What is kept on the phone:** the raw code or serial read off each tag, and
+nothing about what the tag names, until it is sent. Signing out clears it, like
+other unsent work. An audit is compared with the shelf's records when it is
+saved, not when it was tapped, and its time is the time it was saved.
+
 ### Identifying a member by ID card
 
 Where the department issues [Member ID Cards](Member-ID-Cards) (**Settings →
@@ -394,6 +432,8 @@ record**: the log tracks equipment, not where members were.
 | A tag linked on a phone does not match at the desk reader | Many USB readers type the serial as a **decimal** number, or with the bytes **reversed**. The app matches the hexadecimal serial a phone reads. Set the reader to hexadecimal, forward byte order, or link tags with the same reader you will read them with |
 | An iPhone tap opens the login page                        | Expected: the member must be signed in. After signing in, the tag's page finds the item                                                                                                                                                                      |
 | "This tag is on a compartment of another checklist"       | The tag is linked to a compartment on a different checklist. Link it to this checklist's compartment too, or use the right truck's tag                                                                                                                       |
+| NFC shows as off after opening the screen without signal  | The screen could not check the setting. Open it again with signal, then go where there is none                                                                                                                                                               |
+| An offline put-away left an item where it was             | The sync message names it and why (assigned, checked out, and so on). Fix the record, then put it away again                                                                                                                                                 |
 | "... is not on this checklist"                            | The tapped item's checklist row is not linked to that inventory item. Link it in the checklist builder                                                                                                                                                       |
 | Put-away refuses an item                                  | It is assigned, checked out, lost, stolen or retired. The message says which; fix the record first                                                                                                                                                           |
 | A shelf audit lists an item as missing that is there      | Its tag was not read. Tap it again before **Finish audit**; an item on a shelf with no tag is always missing                                                                                                                                                 |

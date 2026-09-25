@@ -94,6 +94,11 @@ Position names appear as badges in the header; the permissions they carry are no
 
 ![Member profile page with the photo, compliance summary, and detail panels](./images/01-02-member-profile.png)
 
+**[SCREENSHOT — REPLACE the member profile capture.** Assigned Inventory is
+absent for a viewer without `inventory.manage`. **Caption the capturing
+account's grants** — the page differs by viewer, and an uncaptioned shot reads
+as a promise.**]**
+
 ### Profile Photo Upload
 
 Members and officers can upload a profile photo:
@@ -1121,6 +1126,13 @@ date may be in the future.
 
 ![The Members Admin hub, captured before its Settings tab was added](./images/01-22-member-lifecycle.png)
 
+**What sits above the tabs.** Members Administration opens with the same frame
+as the Training, Inventory and Events administration pages: a header, **four
+headline metrics**, a **Needs attention** queue, then the tabs. Three of the
+metrics are the department's to choose, on the hub's **Settings** tab; the
+fourth is always the count the queue is about — see
+[Choosing the metrics](./08-admin-reports.md#choosing-the-metrics).
+
 ### Where Each Lifecycle Operation Actually Lives
 
 Verified against the code on 2026-09-24:
@@ -1324,6 +1336,17 @@ profile too, as `#021` beneath their name.
 > membership coordinator permission to change; and the number must be unique within your
 > department, so saving a number another active member already holds is refused
 > with "A member with this membership number already exists".
+
+Saving any restricted field without `members.manage` is refused (403) with:
+
+> Only leadership, the secretary, or the membership coordinator can update hire
+> date, rank, station, platoon, membership number, or membership class and
+> status
+
+Every position in the shipped catalogue that grants `users.edit` also grants
+`members.manage`, so no default role meets that refusal. It applies once a
+department builds a custom role that separates the two — a records clerk who
+maintains contact details but does not set rank or hire date, for example.
 
 > **Edge case:** If a member's old number has been given to someone else, reactivation leaves the member without a membership number and keeps the old one in `previous_membership_number`; assign a new number on the Admin Edit page.
 
@@ -1685,9 +1708,6 @@ Administration section for the scanner to appear in.
 
 ## Member ID Cards and the Check-In Station _(2026-08-23)_
 
-Full operator walkthrough and screenshot states:
-[release lesson](./19-august-2026-release-changes.md#id-cards-officers-issue-them-stations-read-them).
-
 > **Turn it on first.** Settings → Integrations → **NFC ID Cards**. It starts
 > off, and nothing appears until it is on. The check is enforced on the server,
 > not only in the interface, so nothing is reachable while it is off.
@@ -1697,7 +1717,19 @@ Full operator walkthrough and screenshot states:
 Member profile → **ID Cards**, with `members.manage_id_cards`. Bind a physical
 card to a member, label it, and later suspend it, report it lost, or revoke it.
 
-Cards ship blank, so **the tag's serial number is the credential**.
+**Issue card** offers two ways to bind one, and the first is the better one:
+
+| Option                           | Use it when                            | What becomes the credential                       |
+| -------------------------------- | -------------------------------------- | ------------------------------------------------- |
+| **Write a code to a blank card** | The tag is writable — a sticker, a fob | A freshly generated 128-bit code, written onto it |
+| **Read a printed card's serial** | The card is already made and locked    | The chip's own serial number                      |
+
+Prefer writing a code: it is unguessable, it is not printed anywhere on the
+card, and the tag can be rewritten and reissued to somebody else later — a card
+identified only by its chip serial is that member's for good. A written card
+shows **Written** beside its status. On a desktop with no NFC radio, hold the
+card against a USB reader with the cursor in the serial box, or type the serial
+printed on the card; writing a code needs Chrome on Android over HTTPS.
 
 **Your department stores a hash, not the number.** Nobody — officer,
 administrator, or somebody who obtains a database backup — can read a member's
@@ -1707,6 +1739,8 @@ an officer can tell two of a member's cards apart on screen.
 **Revoking or reporting a card lost is permanent.** Neither card is ever reactivated; issue a
 replacement instead. **Suspension is the reversible state**, for a card a
 member has mislaid and may still find.
+
+![The ID Cards panel on a demo member's profile: one active card and one revoked, each showing only the last four characters of its serial](./images/19-37-member-id-cards.png)
 
 ### The station
 
@@ -1733,11 +1767,15 @@ offers targets the check-in itself would accept. An unregistered card, a member
 already checked in, or a closed window are shown on screen and the station
 **stays armed** — those are outcomes, not errors.
 
+![The check-in station armed against a drill night on a tablet, with one successful tap already in the session list](./images/19-38-check-in-station-armed.png)
+
 ### In the record
 
 A card tapped at a station is recorded with entry method **`nfc_station`**, not
 `qr_scan`. Those are different acts by different people: `qr_scan` means the
-member scanned a category's QR code with their own phone. **Historical rows are
+member scanned a category's QR code with their own phone. The distinction is
+what lets an admin-hours audit tell a card tap at a station from a member's
+own scan. **Historical rows are
 not rewritten** — a `qr_scan` recorded before this really was written by the QR
 path.
 

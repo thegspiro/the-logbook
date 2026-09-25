@@ -86,12 +86,17 @@ Forensics tab.]**
 
 ### VOTING METHODS (4:30 – 5:45)
 
-**[SCREEN: Open the voting-method dropdown, pause on each option]**
+**[SCREEN: Open the "How is the Winner Determined?" dropdown, pause on each
+option]**
 
-> "Four voting methods, and picking the right one matters:"
+> "One dropdown, **How is the Winner Determined?**, sets two things at once: how
+> votes are counted, and what it takes to win. Three ways of counting sit behind
+> its six options, and picking the right one matters:"
 
-> "**Simple majority** — each voter picks one candidate per position. This is
-> the default and what most officer elections use."
+> "**One mark per voter** — each voter picks one candidate per position. Most
+> Votes Wins is the default and what most officer elections use; Majority
+> Required, Supermajority Required and Custom Threshold count the same way
+> against a higher bar."
 
 > "**Ranked choice** — voters rank candidates in order of preference. If
 > nobody has a majority of first-choice votes, the last-place candidate is
@@ -105,14 +110,17 @@ Forensics tab.]**
 > rankings, all of their selections are recorded together in one atomic
 > transaction — you can never end up with half a ballot."
 
-> "**Supermajority** — single-choice voting counted against a higher bar,
+> "**Supermajority Required (2/3)** is one mark per voter with a two-thirds
+> bar. It adds a **Supermajority Percentage** field — sixty-seven by default —
 > which brings us to victory conditions."
 
 ### VICTORY CONDITIONS, QUORUM & RUNOFFS (5:45 – 7:30)
 
-**[SCREEN: The victory condition, quorum, and runoff sections of the form]**
+**[SCREEN: The threshold and percentage fields, then the quorum and runoff
+sections of the form]**
 
-> "The victory condition defines what winning means. **Most votes** — a
+> "The victory condition — the second half of that dropdown — defines what
+> winning means. **Most votes** — a
 > plurality, ties flag every tied candidate. **Majority** — more than half of
 > votes cast. **Supermajority** — a configured percentage, sixty-seven for a
 > classic two-thirds bylaw vote. **Threshold** — an absolute vote count."
@@ -733,7 +741,7 @@ accept/decline flow on the nominee's screen]**
 
 ### ATTESTATION — FOUR-EYES FOR PAPER COUNTS (45:30 – 48:00)
 
-**[SCREEN: The Paper Batches panel — a batch in Pending status, "1 of 2
+**[SCREEN: The Paper-Ballot Batches panel — a batch in Pending status, "1 of 2
 attestations"]**
 
 > "Here's the piece that makes paper defensible: attestation. By default, a
@@ -1133,9 +1141,10 @@ timeline chart]**
 **Length:** 90 seconds
 **Audience:** Leadership, bylaw committees
 
-**[SCREEN: The voting-method dropdown]**
+**[SCREEN: The "How is the Winner Determined?" dropdown]**
 
-> "Four ways to count a vote — pick by the race, not by habit."
+> "Three ways to count a vote, and one higher bar — pick by the race, not by
+> habit."
 
 **[SCREEN: Quick visual for each — one mark; ranked list; multiple checks;
 2/3 bar]**
@@ -1205,7 +1214,7 @@ timeline chart]**
 > "You entered the paper tally, and the results didn't move. That's not a
 > bug — that's the four-eyes rule."
 
-**[SCREEN: The Paper Batches panel — "1 of 2 attestations"]**
+**[SCREEN: The Paper-Ballot Batches panel — "1 of 2 attestations"]**
 
 > "A paper batch starts _pending_ until enough officers — two by default,
 > and never the person who recorded it — attest that the entered numbers

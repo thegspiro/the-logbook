@@ -12378,7 +12378,7 @@ export const SHOTS = [
     // the marker, and the topic now lives in guide 03's "Who Can See the
     // Platoon Roster". Re-applied there on 2026-08-31, keeping the id.
     doc: "03-scheduling.md",
-    line: 635,
+    line: 698,
     anchor: "This removed access somebody already had",
     alt: "Platoon Management refusing a member who does not hold scheduling.manage",
     route: "/scheduling/admin/platoons",
@@ -12390,8 +12390,8 @@ export const SHOTS = [
     // platform, controls the data. Shot signed out because /privacy is reachable
     // from the sign-in page and that is where a member being onboarded meets it.
     id: "19-03-privacy-header",
-    doc: "19-august-2026-release-changes.md",
-    line: 493,
+    doc: "17-privacy-data-rights.md",
+    line: 215,
     anchor: "the rewritten `/privacy` page header showing the",
     alt: "The rewritten Privacy Policy above the fold, opening with who controls the system and the department's ownership of every account on it",
     route: "/privacy",
@@ -12404,8 +12404,8 @@ export const SHOTS = [
     // without naming a room, so nothing sensitive is on screen -- which the
     // marker asks for explicitly.
     id: "19-04-qr-directory-search",
-    doc: "19-august-2026-release-changes.md",
-    line: 80,
+    doc: "06-apparatus-facilities.md",
+    line: 219,
     anchor: "Check-In QR Codes directory search results with Download PNG",
     alt: "The Check-In QR Codes directory filtered to the stations, each card offering Copy URL, Download PNG and Regenerate above the Print All and Room signs controls",
     route: "/locations/qr-codes",
@@ -12427,8 +12427,8 @@ export const SHOTS = [
     // sign already printed and hung on a wall, and that consequence only exists
     // in this dialog.
     id: "19-05-qr-regenerate-warning",
-    doc: "19-august-2026-release-changes.md",
-    line: 82,
+    doc: "06-apparatus-facilities.md",
+    line: 273,
     anchor: "regenerate-code confirmation explicitly warning that the",
     alt: "The regenerate-code confirmation, warning that the code already printed stops working once a new one is issued",
     route: "/locations/qr-codes",
@@ -12449,8 +12449,8 @@ export const SHOTS = [
     // frame; the seeder now leaves orders in four distinct states so the
     // workflow breakdown is not a column of zeroes with one number in it.
     id: "19-06-store-admin-orders",
-    doc: "19-august-2026-release-changes.md",
-    line: 64,
+    doc: "18-storefront.md",
+    line: 520,
     anchor: "Store Admin with activity/status cards and a matching filtered",
     alt: "Store Admin's Orders tab narrowed to paid orders, the list showing only the two the status filter matches",
     route: "/inventory/admin/store",
@@ -12489,8 +12489,8 @@ export const SHOTS = [
     // says which is which rather than a caption claiming a screen that is not
     // in the frame.
     id: "19-08-store-admin-activity",
-    doc: "19-august-2026-release-changes.md",
-    line: 64,
+    doc: "18-storefront.md",
+    line: 516,
     anchor: "__paired-with-19-06__",
     alt: "Store Admin's Overview: the activity counts across the top and the order-workflow breakdown counting each fulfilment state the Orders list can be filtered by",
     route: "/inventory/admin/store",
@@ -12501,8 +12501,8 @@ export const SHOTS = [
     // order, and an admin looking at the same order gets the reconciliation
     // controls instead of the "tell us how you paid" editor the guide means.
     id: "19-07-member-payment-method",
-    doc: "19-august-2026-release-changes.md",
-    line: 66,
+    doc: "18-storefront.md",
+    line: 493,
     anchor: "member order payment-method editor plus the explanatory text",
     alt: "A member changing the payment method on their own order: a method picker over the department's payment handles and the \"I've sent payment\" report",
     route: "/store/orders",
@@ -12604,8 +12604,8 @@ export const SHOTS = [
     // draft so the two states sit side by side -- with nothing adopted both
     // cards show the platform default, which pictures the feature unused.
     id: "19-09-legal-documents",
-    doc: "19-august-2026-release-changes.md",
-    line: 545,
+    doc: "08-admin-reports.md",
+    line: 2536,
     anchor: "Governance → Legal Documents landing view, showing",
     alt: "Governance → Legal Documents: the Privacy Notice card published with its last-updated line, beside a Terms of Service card still carrying an unpublished draft",
     route: "/governance/legal",
@@ -12622,8 +12622,8 @@ export const SHOTS = [
     // existing event's type deliberately does not flip them, and a capture
     // taken that way would show the banner absent and teach the opposite.
     id: "19-10-event-recruitment-type",
-    doc: "19-august-2026-release-changes.md",
-    line: 703,
+    doc: "04-events-meetings.md",
+    line: 1767,
     anchor: "the event form with Recruitment selected, showing",
     alt: "A new event with Recruitment chosen: guest sign-in and create-a-prospect both switched on, under the banner explaining that guests reach the prospective-members pipeline",
     route: "/events/admin?tab=create",
@@ -12700,8 +12700,8 @@ export const SHOTS = [
     // it), so the reserved strip fell back to white. Fixed in styles/index.css;
     // this shot is the evidence and is re-captured against it.
     id: "19-11-dark-scrollbar-gutter",
-    doc: "19-august-2026-release-changes.md",
-    line: 222,
+    doc: "10-mobile-pwa.md",
+    line: 271,
     anchor: "a public page (`/f/{slug}` or an application-status link) in dark",
     alt: "A public form in dark mode at full window width, the themed gradient reaching the window edges",
     route: "/login",
@@ -12858,6 +12858,23 @@ export const SHOTS = [
       "events",
       (event) => event.title === "Station Open House — Setup Crew",
     ),
+    fullPage: true,
+  },
+  {
+    // The section lists forms whose integration type is `event_request` and
+    // nothing else: `/event-requests/forms` filters on that server-side, so
+    // the department's three ordinary forms -- near-miss, gear sizing,
+    // community request -- are absent from a screen an event administrator
+    // reaches without holding `forms.manage` at all. That absence is the
+    // marker's subject, and it is the one thing an image cannot show, so the
+    // caption names the three forms that are not here.
+    id: "19-24-outreach-form-section",
+    doc: "04-events-meetings.md",
+    line: 915,
+    anchor: "Event Settings outreach-form picker under an event-admin account",
+    alt: "Events Settings > Public Form: the generated outreach form listed as published and accepting submissions, with its public URL",
+    route: "/events/admin?tab=settings",
+    prepare: clickByName(/^Public Form/),
     fullPage: true,
   },
   {
@@ -13227,8 +13244,8 @@ export const SHOTS = [
   },
   {
     id: "19-16-legal-revision-editor",
-    doc: "19-august-2026-release-changes.md",
-    line: 563,
+    doc: "08-admin-reports.md",
+    line: 2552,
     anchor: "the revision editor with the body text area, the",
     alt: "The revision editor under a propose-only account: the document text, the filled-in change note, and the free-text Effective date printed to members as Last updated",
     route: "/governance/legal",
@@ -13353,8 +13370,8 @@ export const SHOTS = [
   },
   {
     id: "19-22-admin-hours-summary-year",
-    doc: "19-august-2026-release-changes.md",
-    line: 51,
+    doc: "08-admin-reports.md",
+    line: 2748,
     anchor: "Admin Hours Summary on Calendar Year with at least two",
     alt: "The Admin Hours Summary on This calendar year: counted, approved and needs-review totals over a year of logged time, ranked by the category it was logged against",
     route: "/admin-hours/manage",
@@ -13414,8 +13431,8 @@ export const SHOTS = [
     // "rescue specialist (legacy position)", which is the half of the marker
     // that matters: a value typed before the picker existed stays readable.
     id: "19-23-apparatus-crew-seats",
-    doc: "19-august-2026-release-changes.md",
-    line: 111,
+    doc: "06-apparatus-facilities.md",
+    line: 70,
     anchor: "apparatus form crew-position rank picker, including one legacy",
     alt: "The rescue's crew seats: three chosen from the department's configured positions and a fourth still holding a free-text value, marked (legacy position)",
     route: "/apparatus",
@@ -13427,23 +13444,6 @@ export const SHOTS = [
       "reads Level 2. Unselected options are in the DOM whatever is chosen.",
   },
   {
-    // The section lists forms whose integration type is `event_request` and
-    // nothing else: `/event-requests/forms` filters on that server-side, so
-    // the department's three ordinary forms -- near-miss, gear sizing,
-    // community request -- are absent from a screen an event administrator
-    // reaches without holding `forms.manage` at all. That absence is the
-    // marker's subject, and it is the one thing an image cannot show, so the
-    // caption names the three forms that are not here.
-    id: "19-24-outreach-form-section",
-    doc: "19-august-2026-release-changes.md",
-    line: 143,
-    anchor: "Event Settings outreach-form picker under an event-admin account",
-    alt: "Events Settings > Public Form: the generated outreach form listed as published and accepting submissions, with its public URL",
-    route: "/events/admin?tab=settings",
-    prepare: clickByName(/^Public Form/),
-    fullPage: true,
-  },
-  {
     // Step 2 of the create wizard, which is where all three links the marker
     // names sit together: the course above, and the category / requirement /
     // program pickers below it. The event-detail card corrects these links
@@ -13452,8 +13452,8 @@ export const SHOTS = [
     // Nothing is submitted -- the wizard creates on step 4 -- so this writes
     // nothing and needs no `mutatesSeedData` flag.
     id: "19-29-training-session-linkage",
-    doc: "19-august-2026-release-changes.md",
-    line: 237,
+    doc: "02-training.md",
+    line: 876,
     anchor: "training-session edit flow with requirement, course, and program",
     alt: "Step 2 of the training-session wizard: an existing course selected, and the category, requirement and program links under a plain-language line saying what attendance will advance",
     route: "/training/admin?page=records&tab=sessions",
@@ -13519,8 +13519,8 @@ export const SHOTS = [
     // the print page, which is why this is a fresh template rather than an
     // addition to the weighted sheet 09-22/09-23 already depend on.
     id: "19-30-skill-point-deduction",
-    doc: "19-august-2026-release-changes.md",
-    line: 295,
+    doc: "09-skills-testing.md",
+    line: 479,
     anchor: "skill result illustrating point deduction without automatic whole",
     alt: "A validated skill result's score breakdown: 47 of 50 points earned, a 10-point deduction on one failed step, netting 74% against the department's 70% pass mark -- PASS, with no critical failure",
     route: "/training/skills-testing",
@@ -13544,8 +13544,8 @@ export const SHOTS = [
     // unfinalized event on every seed, so the prompt is already in the inbox
     // -- this shot only has to read it.
     id: "19-31-notification-before-action",
-    doc: "19-august-2026-release-changes.md",
-    line: 311,
+    doc: "00-getting-started.md",
+    line: 334,
     anchor: "same notification before and after completing its related",
     alt: "The notification inbox with an unread 'Validate attendance' prompt for a just-ended event, beside an unrelated shift-assignment notification",
     route: "/notifications?tab=inbox",
@@ -13575,8 +13575,8 @@ export const SHOTS = [
     // guard actually requires -- nothing later in guide 19 reads event or
     // notification state, so no later shot can be broken by this one.
     id: "19-32-notification-after-action",
-    doc: "19-august-2026-release-changes.md",
-    line: 311,
+    doc: "00-getting-started.md",
+    line: 336,
     anchor: "__paired-with-19-31__",
     alt: "The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there",
     route: "/notifications?tab=inbox",
@@ -13618,8 +13618,8 @@ export const SHOTS = [
     // dashboard would be the same screen under a different caption. What is
     // not pictured anywhere is a feed carrying both kinds of item at once.
     id: "19-28-station-board-messages",
-    doc: "19-august-2026-release-changes.md",
-    line: 118,
+    doc: "08-admin-reports.md",
+    line: 1552,
     anchor: "populated station board with one pending message, one persistent",
     alt: "My Updates on the station board: unread notifications and announcements above a standing order badged Persistent, with the clear control only a manager sees",
     route: "/dashboard",
@@ -13682,8 +13682,8 @@ export const SHOTS = [
     // Shot as the member, because "one blue with the demo member on it" is a
     // statement about whose board this is.
     id: "19-34-schedule-board-desktop",
-    doc: "19-august-2026-release-changes.md",
-    line: 1150,
+    doc: "03-scheduling.md",
+    line: 3105,
     anchor: "the Schedule board, desktop",
     alt: "The month board with all four chip states: a red shift with open seats, a green full one, a blue one the member is already on, and a grey one that names neither positions nor a minimum",
     // `view=month` is not decoration: SchedulingPage defaults viewMode to
@@ -13711,8 +13711,8 @@ export const SHOTS = [
     // absent" is not a styling note: the day sheet registers as an overlay
     // surface, which hides the bar so its 56px cannot paint over the sheet.
     id: "19-35-schedule-board-phone",
-    doc: "19-august-2026-release-changes.md",
-    line: 1156,
+    doc: "10-mobile-pwa.md",
+    line: 919,
     anchor: "the Schedule board, phone",
     alt: "The same month on a phone: the bar grid with a day sheet open over it, and no bottom navigation while the sheet is up",
     route: "/scheduling?tab=schedule&view=month",
@@ -13723,8 +13723,8 @@ export const SHOTS = [
   },
   {
     id: "19-36-standing-shift-dialog",
-    doc: "19-august-2026-release-changes.md",
-    line: 1189,
+    doc: "03-scheduling.md",
+    line: 3133,
     anchor: "the standing shift dialog",
     alt: "The standing-shift dialog on a Tuesday night shift: a biweekly pattern with the horizon left at its default a year out, and the dialog's own action row in frame",
     route: "/scheduling?tab=schedule&view=month",
@@ -13736,8 +13736,8 @@ export const SHOTS = [
     // Officers only -- a member cannot issue, relabel or revoke a card, not
     // even their own -- so this is the administrator's session by default.
     id: "19-37-member-id-cards",
-    doc: "19-august-2026-release-changes.md",
-    line: 1272,
+    doc: "01-membership.md",
+    line: 1743,
     anchor: "member profile → ID Cards panel",
     alt: "The ID Cards panel on a demo member's profile: one active card and one revoked, each showing only the last four characters of its serial",
     route: "/members",
@@ -13748,8 +13748,8 @@ export const SHOTS = [
     // Tablet width, which is how a door station is actually used, and the
     // shared half of a pair with guide 10.
     id: "19-38-check-in-station-armed",
-    doc: "19-august-2026-release-changes.md",
-    line: 1315,
+    doc: "01-membership.md",
+    line: 1770,
     anchor: "the check-in station, armed",
     alt: "The check-in station armed against a drill night on a tablet, with one successful tap already in the session list",
     route: "/members/check-in-station",
@@ -13790,8 +13790,8 @@ export const SHOTS = [
     // controls are buttons and a switch rather than a native select, so the
     // swap is photographable in place.
     id: "19-39-admin-metrics-settings",
-    doc: "19-august-2026-release-changes.md",
-    line: 1397,
+    doc: "08-admin-reports.md",
+    line: 2666,
     anchor: "the metrics settings screen",
     alt: "Members metrics settings at department scope: three chooseable slots with one cleared for a swap, the applies-to-everyone switch, and slot four shown as fixed",
     route: "/members/admin?tab=settings",
@@ -13801,8 +13801,8 @@ export const SHOTS = [
   {
     id: "19-40-seal-panel",
     expect: "Tamper seal",
-    doc: "19-august-2026-release-changes.md",
-    line: 1478,
+    doc: "03-scheduling.md",
+    line: 3239,
     anchor: "the seal panel on a check",
     alt: "Two sealed bags in one frame: the Drug Bag's tag matches the last count and offers Seal intact — clear 1 check, while the Trauma Bag's differs and offers only Record seal with a hand count",
     route: "/inventory/checklists/my",
@@ -13825,8 +13825,8 @@ export const SHOTS = [
     // six categories, which satisfies "at least three" and makes "one category
     // with none" impossible.
     id: "19-41-my-admin-hours",
-    doc: "19-august-2026-release-changes.md",
-    line: 1552,
+    doc: "08-admin-reports.md",
+    line: 2726,
     anchor: "the rebuilt My Admin Hours page",
     alt: "My Admin Hours over all time: the category breakdown with share bars, the requirement-progress section, and the muted line naming the categories with nothing logged",
     route: "/admin-hours",
@@ -13853,8 +13853,8 @@ export const SHOTS = [
     // the allowlist and quotes what a healthy line reads; the picture shows
     // the two registrations, which is the part that is real.
     id: "19-33-label-printers",
-    doc: "19-august-2026-release-changes.md",
-    line: 1362,
+    doc: "05-inventory.md",
+    line: 1119,
     anchor: "Settings → Label Printers",
     alt: "Settings → Label Printers with two registrations: a ZPL watch-desk printer marked default and an ESC/POS printer in the supply room, each on a documentation address",
     route: "/settings?tab=labelPrinters",
@@ -13884,8 +13884,8 @@ export const SHOTS = [
   },
   {
     id: "19-42-message-detail",
-    doc: "19-august-2026-release-changes.md",
-    line: 2190,
+    doc: "07-documents-forms.md",
+    line: 466,
     anchor: "`/messages/:id`",
     alt: "A department message on its own page: the breadcrumb back to Messages, the title, sender and sent date, and a body several paragraphs long",
     route: "/messages",
@@ -13902,8 +13902,8 @@ export const SHOTS = [
   },
   {
     id: "19-43-photo-use-consent",
-    doc: "19-august-2026-release-changes.md",
-    line: 2208,
+    doc: "17-privacy-data-rights.md",
+    line: 198,
     anchor: "`/communications/photo-use-consent`",
     alt: "Photo Use Consent, captured as the administrator (who holds users.view_consents): one member agreed, one declined and twenty not answered, with the roster showing each member's standing",
     route: "/communications/photo-use-consent",
@@ -13920,6 +13920,11 @@ export const SHOTS = [
     // Must stay the last shot of guide 19 -- it leaves the draft holding the
     // template's four officer seats under ranked choice. `openBylawDraft` puts
     // it back for the shots that need it seeded, including the one above.
+    // `doc` stays on the guide-19 index although the image is embedded in
+    // 14-elections.md: 14-24-ballot-send-skipped and 19-26 both mutate the
+    // seeded data, and the invariant at the foot of this file allows one
+    // mutating shot per doc. Capture order, which is what the invariant
+    // protects, is unchanged.
     id: "19-26-ballot-template-settings-after",
     doc: "19-august-2026-release-changes.md",
     line: 33,

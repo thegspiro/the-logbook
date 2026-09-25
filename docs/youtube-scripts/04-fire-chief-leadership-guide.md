@@ -419,11 +419,13 @@ stage. Both buttons carry the same gate, so the refusal is the same.]**
 
 **[SCREEN: Fill in the election creation form]**
 
-> "Choose your voting method. Simple majority is the most common — each voter
-> picks one candidate per office. Ranked choice, approval voting — where members
-> can approve as many candidates as they like — and supermajority are also
-> available. And if you enable runoffs, the system automatically creates a
-> runoff election when no candidate meets the victory condition."
+> "Then **How is the Winner Determined?** One dropdown sets both how votes are
+> counted and what it takes to win. Most Votes Wins is the most common — each
+> voter picks one candidate per office, and the plurality wins. Majority
+> Required, Supermajority Required — two-thirds — Ranked Choice, Approval
+> Voting, where members can approve as many candidates as they like, and a
+> custom threshold are the others. And if you enable runoffs, the system
+> automatically creates a runoff election when no candidate meets the bar."
 
 > "Set eligibility rules — who can vote? Active members only? Minimum tenure of
 > one year? The system automatically determines eligible voters based on your

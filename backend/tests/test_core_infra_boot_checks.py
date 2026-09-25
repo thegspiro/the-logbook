@@ -211,3 +211,104 @@ class TestFrontendUrlMustNotBeLoopback:
     def test_development_is_not_checked(self):
         settings = Settings(ENVIRONMENT="development", FRONTEND_URL="http://localhost")
         assert self._frontend_warnings(settings) == []
+
+
+class TestFrontendUrlFallsBackToAPublicOrigin:
+    """A localhost FRONTEND_URL borrows the address members use from
+    ALLOWED_ORIGINS, which every install path sets. The Unraid Community Apps
+    template and scripts/setup-env.py historically set only that."""
+
+    def test_a_loopback_url_takes_the_first_public_origin(self):
+        settings = Settings(
+            FRONTEND_URL="http://localhost:3000",
+            ALLOWED_ORIGINS="http://localhost:3000,https://logbook.yourdept.org/",
+        )
+        assert settings.FRONTEND_URL == "https://logbook.yourdept.org"
+
+    def test_an_empty_url_takes_it_too(self):
+        # The Unraid template's field is blank unless the user fills it in.
+        settings = Settings(FRONTEND_URL="", ALLOWED_ORIGINS="http://192.168.1.10:7880")
+        assert settings.FRONTEND_URL == "http://192.168.1.10:7880"
+
+    def test_an_explicit_public_url_always_wins(self):
+        settings = Settings(
+            FRONTEND_URL="https://logbook.yourdept.org",
+            ALLOWED_ORIGINS="http://192.168.1.10:7880",
+        )
+        assert settings.FRONTEND_URL == "https://logbook.yourdept.org"
+
+    @pytest.mark.parametrize(
+        "origins",
+        [
+            "http://localhost:3000,http://127.0.0.1:3000",
+            "*",
+            "logbook.yourdept.org",
+            "",
+        ],
+    )
+    def test_nothing_public_leaves_it_alone(self, origins):
+        # A wildcard is not an address, and neither is a bare hostname a
+        # link could not be built from.
+        settings = Settings(
+            FRONTEND_URL="http://localhost:3000", ALLOWED_ORIGINS=origins
+        )
+        assert settings.FRONTEND_URL == "http://localhost:3000"
+
+    def test_production_with_a_public_origin_boots(self):
+        settings = _prod(
+            FRONTEND_URL="http://localhost:3000",
+            ALLOWED_ORIGINS="https://logbook.yourdept.org",
+        )
+        assert not [
+            w for w in settings.validate_security_config() if "FRONTEND_URL" in w
+        ]
+
+    def test_production_with_no_public_address_still_refuses(self):
+        settings = _prod(
+            FRONTEND_URL="http://localhost:3000",
+            ALLOWED_ORIGINS="http://localhost:3000",
+        )
+        criticals = [
+            w
+            for w in settings.validate_security_config()
+            if w.startswith("CRITICAL") and "FRONTEND_URL" in w
+        ]
+        assert len(criticals) == 1
+        assert would_block_startup(criticals, settings) is True
+
+
+class TestNonProductionEmailWithLocalhostLinksIsReported:
+    @staticmethod
+    def _frontend_warnings(settings: Settings) -> list[str]:
+        return [w for w in settings.validate_security_config() if "FRONTEND_URL" in w]
+
+    @pytest.mark.parametrize("environment", ["development", "staging"])
+    def test_sending_mail_with_localhost_links_warns(self, environment):
+        settings = Settings(
+            ENVIRONMENT=environment,
+            EMAIL_ENABLED=True,
+            FRONTEND_URL="http://localhost:3000",
+            ALLOWED_ORIGINS="http://localhost:3000",
+        )
+        warnings = self._frontend_warnings(settings)
+        assert len(warnings) == 1
+        assert warnings[0].startswith("WARNING:")
+        assert (
+            would_block_startup(
+                [w for w in warnings if w.startswith("CRITICAL")], settings
+            )
+            is False
+        )
+
+    def test_no_mail_means_no_warning(self):
+        settings = Settings(ENVIRONMENT="development", EMAIL_ENABLED=False)
+        assert self._frontend_warnings(settings) == []
+
+    def test_a_public_origin_satisfies_it(self):
+        settings = Settings(
+            ENVIRONMENT="development",
+            EMAIL_ENABLED=True,
+            FRONTEND_URL="http://localhost:3000",
+            ALLOWED_ORIGINS="http://192.168.1.10:7880",
+        )
+        assert self._frontend_warnings(settings) == []

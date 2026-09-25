@@ -369,3 +369,115 @@ class InventoryAuditScheduleRow(UTCResponseBase):
 class InventoryAuditScheduleListResponse(BaseModel):
     items: List[InventoryAuditScheduleRow]
     total: int
+
+
+# ---------------------------------------------------------------------------
+# Taps made offline, applied later
+# ---------------------------------------------------------------------------
+
+# One offline session's worth of taps: the same bound as an audit, for the
+# same reason.
+MAX_REPLAY_TAPS = MAX_AUDIT_TAPS
+
+_CLIENT_ID_PATTERN = r"^[A-Za-z0-9_\-]{8,64}$"
+
+
+class InventoryNfcReplayTap(BaseModel):
+    """One step taken without signal, in the order it was taken.
+
+    Either what was read off a tag (the code written on it, or its serial), or
+    a storage area picked from the list: exactly one of the two. The phone
+    stores the raw read and nothing it knows about the tag, so what the tap
+    means is decided here, when it arrives.
+    """
+
+    code: Optional[str] = Field(None, pattern=_UID_PATTERN)
+    serial_number: Optional[str] = Field(None, pattern=_UID_PATTERN)
+    storage_area_id: Optional[str] = Field(None, min_length=1, max_length=36)
+
+    @field_validator("code", "serial_number")
+    @classmethod
+    def _check_identifier(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else _require_enough_characters(value)
+
+    @model_validator(mode="after")
+    def _one_kind(self) -> "InventoryNfcReplayTap":
+        read = bool(self.code or self.serial_number)
+        if read == bool(self.storage_area_id):
+            raise ValueError("A step is either a tag read or a picked storage area")
+        return self
+
+
+class InventoryNfcPutAwayReplayRequest(BaseModel):
+    """Put-away taps made offline, with where the screen stood beforehand."""
+
+    open_storage_area_id: Optional[str] = Field(
+        None, min_length=1, max_length=36, description="The shelf open when signal went"
+    )
+    held_item_id: Optional[str] = Field(
+        None, min_length=1, max_length=36, description="An item waiting for its shelf"
+    )
+    held_item_tag_id: Optional[str] = Field(None, max_length=36)
+    taps: List[InventoryNfcReplayTap] = Field(
+        ..., min_length=1, max_length=MAX_REPLAY_TAPS
+    )
+
+
+class InventoryNfcPutAwayReplayStep(BaseModel):
+    """What one offline tap turned out to be, and what it did."""
+
+    index: int
+    outcome: Literal[
+        "moved", "already_there", "shelf_opened", "held", "refused", "unread"
+    ]
+    item_id: Optional[str] = None
+    item_name: Optional[str] = None
+    storage_area_name: Optional[str] = None
+    message: Optional[str] = None
+
+
+class InventoryNfcPutAwayReplayResponse(BaseModel):
+    results: List[InventoryNfcPutAwayReplayStep]
+    moved_count: int
+    refused_count: int
+    unread_count: int
+    # An item tapped last, still waiting for a shelf when the taps ran out.
+    held_item_name: Optional[str] = None
+
+
+class InventoryNfcAuditReplayRequest(BaseModel):
+    """A shelf audit finished offline.
+
+    ``tapped`` holds the items identified before signal went; ``taps`` the raw
+    reads made after. The shelf is ``storage_area_id`` when it was chosen with
+    signal, otherwise the first shelf among ``taps``.
+    """
+
+    client_submission_id: str = Field(..., pattern=_CLIENT_ID_PATTERN)
+    storage_area_id: Optional[str] = Field(None, min_length=1, max_length=36)
+    tapped: List[InventoryNfcAuditTap] = Field(
+        default_factory=list, max_length=MAX_AUDIT_TAPS
+    )
+    taps: List[InventoryNfcReplayTap] = Field(
+        default_factory=list, max_length=MAX_REPLAY_TAPS
+    )
+
+    @model_validator(mode="after")
+    def _bounded(self) -> "InventoryNfcAuditReplayRequest":
+        if len(self.tapped) + len(self.taps) > MAX_AUDIT_TAPS:
+            raise ValueError(f"An audit holds up to {MAX_AUDIT_TAPS} taps")
+        return self
+
+
+class InventoryNfcAuditReplayResponse(BaseModel):
+    """The saved audit, or why none could be saved.
+
+    ``unread_count`` taps named nothing usable (an unlinked or lost tag, an
+    inactive item); ``other_shelf_count`` were another shelf's tag, which an
+    audit of one shelf ignores.
+    """
+
+    audit: Optional[InventoryNfcAuditDetail] = None
+    not_saved_reason: Optional[str] = None
+    unread_count: int = 0
+    other_shelf_count: int = 0

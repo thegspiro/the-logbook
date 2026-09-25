@@ -2392,7 +2392,7 @@ for display only. Completion/report flows remain available to authorized
 members after equipment-check administration was tightened. Related completion
 actions archive matching notifications by organization plus entity/action ID,
 not by presentation text. See
-[training lesson 19](./training/19-august-2026-release-changes.md#apparatus-crew-seats-and-scheduling-settings).
+[Crew Seats](./training/06-apparatus-facilities.md#crew-seats) in the apparatus training guide.
 
 ---
 

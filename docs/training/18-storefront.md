@@ -86,6 +86,12 @@ off, members see nothing; you keep everything.
 | Description | Longer intro text                  |
 | Currency    | Three-letter code, defaults to USD |
 
+Beside **Store is live for members**, the Storefront section has **Show the
+"Ordering is open" banner**, on by default. Turn it off for a store that is
+always open and needs no availability callout: the order-window card on the
+member storefront then drops its check mark and the words "is open", and keeps
+the window name, the countdown and the last day to order.
+
 ### Payment methods
 
 A new store starts on **cash** only. That is deliberate: cash is the one
@@ -192,6 +198,12 @@ Two of these catch people out. **Status changes** also covers the cancellation
 email — untick it and a member whose order you cancel hears nothing. And
 **Payment receipts** covers refunds and waivers as well as payments, because
 all three are money moving on someone's order.
+
+Nobody learns who else received a notice. The four order-window notices are
+sent as a separate email to each member, never one message with everyone on
+it, and every order notice goes to the one member whose order it is. The
+**New order alert** is the exception by design — it is one staff email, so you
+and the extra notification recipients see each other's addresses.
 
 A switch is a ceiling, not a duplicate. Actions that offer an "email members"
 box — opening a window, closing one, recording the vendor order — can still
@@ -357,13 +369,15 @@ Mark the item as requiring an option if the member must pick one.
 
 For embroidered or engraved items. On the product:
 
-| Setting                 | Effect                                                                   |
-| ----------------------- | ------------------------------------------------------------------------ |
-| Enable personalization  | Adds a text box to the member's order (placeholder: "Name to embroider") |
-| Require personalization | They cannot order without filling it in                                  |
-| Label                   | What the box says — "Name for embroidery"                                |
-| Max length              | Character limit (the vendor's limit)                                     |
-| Personalization price   | Surcharge added per personalized item                                    |
+| Setting                                               | Effect                                                                                                                                                          |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Members can personalize this item (name, callsign, …) | Adds a text box to the member's order                                                                                                                           |
+| Prompt shown to the member                            | What the box says — e.g. "Name to embroider". Left blank, it reads "Add name embroidery" or "Add name engraving", by method                                     |
+| Upcharge per unit                                     | Surcharge added per personalized item                                                                                                                           |
+| How is it applied?                                    | **Embroidered** (stitched into cloth — shirts, polos, caps) or **Engraved** (cut into metal — coins, badges, plaques). Decides what the vendor sheet asks for   |
+| Thread color                                          | Embroidered items only: what the vendor embroiders in, and the colour members see their name previewed in. An engraved item has no thread and does not offer it |
+| Maximum characters                                    | Character limit (the vendor's limit), default 30                                                                                                                |
+| Required — the member must enter text                 | They cannot order without filling it in                                                                                                                         |
 
 Two shirts with different names are always listed as **separate lines**, never
 merged into one line of quantity 2. They are physically different items and
@@ -470,13 +484,40 @@ transaction, check number, etc.). That marks your order as _pending
 verification_ — it tells the quartermaster to look, it does not mark you paid.
 Somebody confirms the money actually arrived.
 
+To record a different plan, click **Change payment method** under the order and
+pick from the methods the store accepts. It is offered only on your own orders
+— the change goes through `/orders/mine/`, so there is no way to change the
+method on anyone else's — and only while a balance is due, the order is not
+cancelled, and no payment report is awaiting verification.
+
+![A member changing the payment method on their own order: a method picker over the department's payment handles and the "I've sent payment" report](./images/19-07-member-payment-method.png)
+
+**Nothing on that screen says the department is not taking the money, so say
+it in training.** The picker records _how_ a member intends to pay and **I've
+sent payment** records _that they say they have_ — both are claims the
+treasurer then reconciles against the actual account. No card is charged and no
+transfer happens in the app.
+
 ![My Orders showing an unpaid order with its balance and payment options](./images/18-04-my-orders-unpaid.png)
 
 ---
 
 ## Working the Orders
 
+The **Overview** tab is where a shift of order work starts. Across the top,
+**New (24 hours)** counts recent orders and **Collected (open window)** totals
+what the current window has taken in. The **Order workflow** grid below counts
+the orders in each order status, from Submitted to Cancelled, and clicking a
+count opens the Orders tab filtered to that status — so the two agree: a grid
+reading **Paid 2** filters the list to those same two orders. **Updates from
+the last 7 days** lists recent order activity — orders placed, status changes,
+payments reported and recorded, refunds and messages.
+
+![Store Admin's Overview: the activity counts across the top and the order-workflow breakdown counting each order status the Orders list can be filtered by](./images/19-08-store-admin-activity.png)
+
 **Department Store > Orders tab.** Filter by window, status, or payment status.
+
+![Store Admin's Orders tab narrowed to paid orders, the list showing only the two the status filter matches](./images/19-06-store-admin-orders.png)
 
 Filters: window, order status, payment status, and **payment method**. That
 last one is how you reconcile — each app pays out separately, so "show me
@@ -768,10 +809,6 @@ edit the order and message them so the change is on the record.
   inventory records
 - [Finance](./11-finance.md) — how store income relates to budgets and dues
 
-## August 12–14, 2026 update
-
-Dashboard counts, order filters, the open-banner switch, own payment-method updates, and recipient privacy from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#storefront), including two open screenshots.
-
 ## August 23–24, 2026 update
 
 **The member storefront was redesigned end to end** — catalog, checkout and My
@@ -791,8 +828,8 @@ if turning the store on has previously failed for you:
   without the module gets a clean refusal rather than a broken page.
 - **Errors on the admin side are now visible** instead of failing silently.
 
-Full context:
-[the release workflow lesson](./19-august-2026-release-changes.md#department-store-settings-and-email).
+The settings and notification emails themselves are described under
+[Store Settings](#store-settings).
 
 **[SCREENSHOT — REPLACE every storefront capture in this guide.** The catalog,
 the cart, checkout and My Orders all changed. _Demo data:_ a cart holding two
