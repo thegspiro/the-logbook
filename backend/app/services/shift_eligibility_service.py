@@ -8,7 +8,7 @@ org-wide open positions, membership type, and EVOC certification levels.
 
 import copy
 import re
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Set
 
 from sqlalchemy import or_, select
@@ -47,6 +47,12 @@ from app.utils.membership import (
     effective_member_class,
     is_administrative,
     is_operational,
+)
+from app.utils.org_timezone import (
+    local_date,
+    org_today,
+    resolve_org_today,
+    scheduling_timezone,
 )
 
 # Mapping from training program target_position values to the shift
@@ -401,7 +407,7 @@ class ShiftEligibilityService:
         # qualifies nobody to work it.
         eligible.update(
             await self._get_qualification_positions(
-                str(user.id), organization_id, self._shift_date(shift)
+                str(user.id), organization_id, self._shift_date(shift, org)
             )
         )
 
@@ -501,7 +507,7 @@ class ShiftEligibilityService:
                 str(user.id), organization_id
             )
             for shift in shifts.values():
-                as_of = self._shift_date(shift)
+                as_of = self._shift_date(shift, org)
                 if as_of not in quals_by_date:
                     quals_by_date[as_of] = positions_for_qualifications(
                         QualificationService.codes_in_force(windows, as_of)
@@ -526,7 +532,7 @@ class ShiftEligibilityService:
                 answers[str(shift_id)] = []
                 continue
             eligible = set(base)
-            eligible.update(quals_by_date.get(self._shift_date(shift), set()))
+            eligible.update(quals_by_date.get(self._shift_date(shift, org), set()))
             shift_positions = set(self._shift_position_list(shift))
             if shift_positions:
                 eligible &= shift_positions
@@ -588,9 +594,12 @@ class ShiftEligibilityService:
         slug_map = await self._get_slug_eligibility_map(organization_id)
         await self._get_held_position_map(organization_id)
         training_map = await self._get_training_program_map(organization_id, position)
-        operator_map = await self._get_operator_map(organization_id)
+        operator_map = await self._get_operator_map(
+            organization_id, today=org_today(org)
+        )
+        # The department's date, from the org already in hand.
         qualification_map = await QualificationService(self.db).get_current_by_member(
-            organization_id
+            organization_id, as_of=org_today(org)
         )
 
         members: List[Dict[str, Any]] = []
@@ -726,15 +735,18 @@ class ShiftEligibilityService:
         return by_user
 
     async def _get_operator_map(
-        self, organization_id: str
+        self, organization_id: str, today: Optional[date] = None
     ) -> Dict[str, List[Dict[str, Any]]]:
         """user_id -> current apparatus operator records, newest cert first.
 
         Only *current* certifications count, matching
         ``EvocLevelService.check_driver_evoc_eligibility``: active, certified,
         and not past expiration. An expired card must not read as cleared.
+        ``today`` is the department's date, as ``check_driver_evoc_eligibility``
+        uses, so the roster and the signup check agree on the same card.
         """
-        today = date.today()
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
         result = await self.db.execute(
             select(ApparatusOperator, Apparatus.unit_number)
             .join(Apparatus, ApparatusOperator.apparatus_id == Apparatus.id)
@@ -860,20 +872,24 @@ class ShiftEligibilityService:
         return granted
 
     @staticmethod
-    def _shift_date(shift) -> date:
+    def _shift_date(shift, org) -> date:
         """The day the member would actually work, for currency checks.
 
         Falls back to today when a shift carries no date, and when eligibility
         is asked without a shift at all — a qualification list has to be
         resolved as of *some* day, and today is the only defensible one when
-        no shift is in hand.
+        no shift is in hand. Both are the department's day: a stored UTC
+        start time is the next day for an evening shift, and the server's
+        date is tomorrow every evening.
         """
         if shift is None:
-            return date.today()
+            return org_today(org)
         value = getattr(shift, "shift_date", None) or getattr(shift, "start_time", None)
         if value is None:
-            return date.today()
-        return value.date() if hasattr(value, "date") else value
+            return org_today(org)
+        if isinstance(value, datetime):
+            return local_date(value, scheduling_timezone(org))
+        return value
 
     async def _get_qualification_positions(
         self, user_id: str, organization_id: str, as_of: date

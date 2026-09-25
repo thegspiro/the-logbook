@@ -90,6 +90,7 @@ from app.services.training_compliance import (
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_org_waivers, fetch_user_waivers
 from app.utils.org_scoping import assert_all_in_org
+from app.utils.org_timezone import resolve_org_today
 from app.utils.upload_limits import read_upload_limited
 
 router = APIRouter()
@@ -112,7 +113,7 @@ async def get_training_dashboard_summary(
     member identity fields.
     """
     org_id = current_user.organization_id
-    today = date.today()
+    today = await resolve_org_today(db, org_id)
     now = datetime.now(timezone.utc)
     year_start = date(today.year, 1, 1)
     recent_start = today - timedelta(days=30)
@@ -1480,7 +1481,7 @@ async def get_compliance_summary(
     """
     _require_self_or_training_officer(current_user, user_id)
     org_id = current_user.organization_id
-    today = date.today()
+    today = await resolve_org_today(db, org_id)
     org_include_current = await get_org_include_current_month(db, str(org_id))
 
     # Get user stats for hours and cert counts
@@ -2652,7 +2653,7 @@ async def get_category_hour_breakdown(
         )
 
     # Default to a 2-year window for biannual NREMT cycles
-    today = date.today()
+    today = await resolve_org_today(db, org_id)
     window_start = today.replace(year=today.year - 2)
 
     records_result = await db.execute(
@@ -2801,7 +2802,7 @@ async def get_compliance_matrix(
     # Batch-fetch all active waivers / leaves for the org
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
-    today = date.today()
+    today = await resolve_org_today(db, org_id)
 
     # One config load for the whole matrix. get_org_include_current_month()
     # would issue this same query — with the same selectinload of profiles —
@@ -3022,7 +3023,7 @@ async def get_member_period_status(
         records_by_user.setdefault(r.user_id, []).append(r)
 
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
-    today = date.today()
+    today = await resolve_org_today(db, org_id)
     org_include_current = await get_org_include_current_month(db, str(org_id))
 
     # Compliance thresholds (fall back to sensible defaults)
@@ -3141,7 +3142,7 @@ async def get_expiring_certifications_detailed(
     Used by Training Coordinators and Driver Trainers to proactively manage renewals.
     """
     org_id = current_user.organization_id
-    today = date.today()
+    today = await resolve_org_today(db, org_id)
     cutoff_date = today + timedelta(days=days)
 
     # Also include already-expired certifications so the tab shows them

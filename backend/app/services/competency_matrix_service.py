@@ -42,6 +42,7 @@ from app.services.training_waiver_service import (
     fetch_org_waivers,
     get_rolling_period_months,
 )
+from app.utils.org_timezone import resolve_org_today
 
 
 class CompetencyMatrixService:
@@ -132,7 +133,9 @@ class CompetencyMatrixService:
         # Batch-fetch all active waivers / leaves for the org
         waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
-        today = date.today()
+        # The department's date, the same day the compliance matrix grades
+        # against, so the two views agree about every member.
+        today = await resolve_org_today(self.db, organization_id)
         expiring_threshold = today + timedelta(days=90)
         org_include_current = await get_org_include_current_month(
             self.db, str(organization_id)
@@ -202,7 +205,7 @@ class CompetencyMatrixService:
         )
 
         return {
-            "generated_at": date.today().isoformat(),
+            "generated_at": today.isoformat(),
             "requirements": requirement_list,
             "members": member_rows,
             "summary": {

@@ -1,6 +1,6 @@
 """Training and certifications: records, requirement progress, expiries."""
 
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any, Optional
 from uuid import UUID
 
@@ -20,6 +20,7 @@ from app.mcp.tools._common import (
 )
 from app.models.training import TrainingRecord, TrainingStatus
 from app.services.training_service import TrainingService
+from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_ordering import nulls_last_desc
 
 
@@ -64,7 +65,9 @@ def register(server: Any) -> None:
         offset = clamp_offset(offset)
         # The same filter as TrainingService.get_expiring_certifications,
         # which has no page bounds because its API callers read one member.
-        cutoff = date.today() + timedelta(days=days_ahead)
+        cutoff = await resolve_org_today(db, principal.organization_id) + timedelta(
+            days=days_ahead
+        )
         criteria = (
             TrainingRecord.organization_id == principal.organization_id,
             TrainingRecord.status == TrainingStatus.COMPLETED,

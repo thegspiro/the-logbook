@@ -43,6 +43,7 @@ from app.services.training_compliance import (
 )
 from app.services.training_waiver_service import fetch_org_waivers
 from app.utils.hours import hours_from_minutes, round_hours_exact
+from app.utils.org_timezone import resolve_org_today
 
 # ISO/FSRS training hour requirements per category (annual, per member).
 #
@@ -185,7 +186,7 @@ class ISOReadinessService:
         and returns department averages and compliance percentages.
         """
         if year is None:
-            year = date.today().year
+            year = (await resolve_org_today(self.db, organization_id)).year
 
         start_date = date(year, 1, 1)
         end_date = date(year, 12, 31)
@@ -505,7 +506,7 @@ class RecordCompletenessService:
         whether the NFPA 1401 threshold (>=90%) is met.
         """
         if not end_date:
-            end_date = date.today()
+            end_date = await resolve_org_today(self.db, organization_id)
         if not start_date:
             start_date = date(end_date.year, 1, 1)
 
@@ -810,7 +811,9 @@ class AnnualComplianceReportService:
         """
         start_date = date(year, 1, 1)
         end_date = date(year, 12, 31)
-        today = date.today()
+        # The department's date, as the compliance matrix uses, so the annual
+        # report and the screen agree about the same member on the same day.
+        today = await resolve_org_today(self.db, organization_id)
         org_include_current = await get_org_include_current_month(
             self.db, organization_id
         )

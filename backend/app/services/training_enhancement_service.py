@@ -201,7 +201,9 @@ class RecertificationService:
 
         Returns the number of tasks created.
         """
-        today = date.today()
+        # The department's date: a renewal window opening "N days before
+        # expiry" opens on the department's calendar, not a day early in UTC.
+        today = await resolve_org_today(self.db, organization_id)
         tasks_created = 0
 
         # Get all active pathways
@@ -465,8 +467,11 @@ class InstructorQualificationService:
         if not qual:
             return False
 
-        # Check expiration
-        if qual.expiration_date and qual.expiration_date < date.today():
+        # Check expiration on the department's calendar: a qualification is
+        # good through its expiration date, which in UTC ends hours early.
+        if qual.expiration_date and qual.expiration_date < await resolve_org_today(
+            self.db, organization_id
+        ):
             return False
 
         return True
@@ -475,7 +480,7 @@ class InstructorQualificationService:
         self, course_id: str, organization_id: str
     ) -> list:
         """Get all qualified instructors for a course"""
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         result = await self.db.execute(
             select(InstructorQualification)
             .where(InstructorQualification.organization_id == organization_id)
@@ -983,6 +988,9 @@ class ReportExportService:
         writer.writerow(header)
 
         # Data rows
+        # "Met" is judged as of the department's today, the same day the
+        # compliance screens use; a caller's end_date only bounds the rows.
+        today = await resolve_org_today(self.db, organization_id)
         for user in users:
             records_result = await self.db.execute(
                 select(TrainingRecord)
@@ -1007,7 +1015,7 @@ class ReportExportService:
                 from app.services.training_service import TrainingService
 
                 detail = TrainingService.evaluate_requirement_detail(
-                    req, records, date.today()
+                    req, records, today
                 )
                 row.append("Met" if detail["is_met"] else "Not Met")
 
@@ -1099,7 +1107,7 @@ class ReportExportService:
         self, organization_id: str
     ) -> List[Dict[str, Any]]:
         """Generate predictive compliance forecast for all members"""
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         forecasts = []
 
         users_result = await self.db.execute(
@@ -1306,7 +1314,7 @@ class ReportExportService:
                 from app.services.training_service import TrainingService
 
                 detail = TrainingService.evaluate_requirement_detail(
-                    req, records, date.today()
+                    req, records, generated_on
                 )
                 status_text = "Met" if detail["is_met"] else "Not Met"
                 if not detail["is_met"]:

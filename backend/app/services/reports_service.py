@@ -45,6 +45,7 @@ from app.utils.hours import (
     round_hours_to_quarter,
     sum_hours_to_quarter,
 )
+from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_ordering import nulls_last_asc
 
 
@@ -864,7 +865,9 @@ class ReportsService:
             for u in users
         }
 
-        today = date.today()
+        # The department's date: a certificate is valid through its expiration
+        # day on the department's calendar, not UTC's.
+        today = await resolve_org_today(self.db, organization_id)
         soon_threshold = _safe_int((filters or {}).get("expiring_soon_days"), 90)
 
         entries = []
@@ -973,7 +976,7 @@ class ReportsService:
             for row in wo_result.all():
                 wo_counts[str(row[0])] = row[1]
 
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         in_service = 0
         out_of_service = 0
         maint_due = 0
@@ -1264,8 +1267,11 @@ class ReportsService:
         supposed to reconcile: a 400-call department can legitimately show 380
         engine runs and 240 medic runs, because both rolled on the same MVA.
         """
-        period_start = start_date or date(date.today().year, 1, 1)
-        period_end = end_date or date.today()
+        # Default to the department's year-to-date, not UTC's: on New Year's
+        # Eve evening UTC has already started the next year.
+        today = await resolve_org_today(self.db, organization_id)
+        period_start = start_date or date(today.year, 1, 1)
+        period_end = end_date or today
 
         call_service = CallTrackingService(self.db)
         tracking = await call_service.get_settings(str(organization_id))

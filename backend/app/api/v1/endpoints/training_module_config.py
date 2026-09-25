@@ -6,7 +6,7 @@ PUT  /config          - training.configure (or training.manage) to update them
 GET  /my-training     - Member's aggregated training data (respects visibility config)
 """
 
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -45,6 +45,7 @@ from app.services.training_compliance import get_org_include_current_month
 from app.services.training_module_config_service import TrainingModuleConfigService
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_user_waivers
+from app.utils.org_timezone import resolve_org_today
 
 router = APIRouter()
 
@@ -228,9 +229,10 @@ async def get_my_training_summary(
     # use, so the headline number summed a lifetime figure with two monthly
     # ones and meant nothing. `total_hours` stays lifetime — that is the right
     # reading for "my training record", which is what this endpoint is.
-    month_start = datetime.now(timezone.utc).replace(
-        day=1, hour=0, minute=0, second=0, microsecond=0
-    )
+    # The department's date for "this month", for the requirement grading
+    # and for certification expiry below: one day for the whole page.
+    today = await resolve_org_today(db, org_id)
+    month_start = today.replace(day=1)
     month_result = await db.execute(
         select(
             func.coalesce(func.sum(TrainingRecord.hours_completed), 0),
@@ -238,7 +240,7 @@ async def get_my_training_summary(
             TrainingRecord.organization_id == org_id,
             TrainingRecord.user_id == user_id,
             TrainingRecord.status == TrainingStatus.COMPLETED,
-            TrainingRecord.completion_date >= month_start.date(),
+            TrainingRecord.completion_date >= month_start,
         )
     )
     # The counts stay regardless — "how many courses have I completed" is
@@ -303,7 +305,6 @@ async def get_my_training_summary(
     # Evaluate every applicable requirement using the shared helper which
     # handles all requirement types (hours, courses, certification,
     # shifts, calls, fallback) and rolling period windows.
-    today = date.today()
     org_include_current = await get_org_include_current_month(db, str(org_id))
     met_count = 0
     total_progress_pct = 0.0
@@ -365,7 +366,6 @@ async def get_my_training_summary(
             .order_by(TrainingRecord.expiration_date.asc())
         )
         certs = cert_result.scalars().all()
-        today = date.today()
         result["certifications"] = [
             {
                 "id": str(c.id),
