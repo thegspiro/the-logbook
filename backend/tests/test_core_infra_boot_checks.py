@@ -9,6 +9,7 @@ audit-log signing key, a sane TRUSTED_PROXY_IPS range).
 import pytest
 
 from app.core.config import Settings
+from app.core.startup_diagnostics import settings_named_in, would_block_startup
 
 
 def _prod(**overrides) -> Settings:
@@ -30,6 +31,7 @@ def _prod(**overrides) -> Settings:
         REDIS_SSL_CA="/etc/ssl/redis-ca.pem",
         VOTE_SIGNING_KEY="v" * 32,
         AUDIT_LOG_SIGNING_KEY="s" * 32,
+        FRONTEND_URL="https://logbook.yourdept.org",
     )
     base.update(overrides)
     return Settings(**base)
@@ -149,7 +151,8 @@ class TestTrustedProxyRangeSanity:
 
 class TestFrontendUrlMustNotBeLoopback:
     """Every emailed link is built from FRONTEND_URL, never from the request, so
-    the shipped localhost default mails recipients links that cannot open."""
+    the shipped localhost default mails recipients links that cannot open.
+    Production refuses to start with it."""
 
     @staticmethod
     def _frontend_warnings(settings: Settings) -> list[str]:
@@ -169,14 +172,25 @@ class TestFrontendUrlMustNotBeLoopback:
             "not-a-url",
         ],
     )
-    def test_loopback_or_hostless_url_warns_in_production(self, url):
+    def test_loopback_or_hostless_url_is_critical_in_production(self, url):
         warnings = self._frontend_warnings(_prod(FRONTEND_URL=url))
         assert len(warnings) == 1
-        assert warnings[0].startswith("WARNING:")
+        assert warnings[0].startswith("CRITICAL:")
 
-    def test_the_shipped_default_warns_in_production(self):
-        warnings = self._frontend_warnings(_prod())
-        assert len(warnings) == 1
+    def test_the_shipped_default_blocks_production_boot(self):
+        settings = _prod(FRONTEND_URL=Settings.model_fields["FRONTEND_URL"].default)
+        criticals = [
+            w for w in settings.validate_security_config() if w.startswith("CRITICAL")
+        ]
+        assert len(criticals) == 1
+        assert "FRONTEND_URL" in criticals[0]
+        assert would_block_startup(criticals, settings) is True
+
+    def test_the_blocking_message_names_the_setting_for_the_source_report(self):
+        settings = _prod(FRONTEND_URL="http://localhost:3000")
+        assert "FRONTEND_URL" in settings_named_in(
+            self._frontend_warnings(settings)[0], settings
+        )
 
     @pytest.mark.parametrize(
         "url",
@@ -187,17 +201,13 @@ class TestFrontendUrlMustNotBeLoopback:
             "https://localhost.example.com",
         ],
     )
-    def test_a_reachable_url_reports_no_warning(self, url):
+    def test_a_reachable_url_reports_nothing(self, url):
         assert self._frontend_warnings(_prod(FRONTEND_URL=url)) == []
 
-    def test_is_never_critical_so_it_cannot_block_boot(self):
-        warnings = self._frontend_warnings(_prod(FRONTEND_URL="http://localhost"))
-        assert not any("CRITICAL" in w for w in warnings)
-
-    def test_staging_does_not_warn(self):
+    def test_staging_is_not_checked(self):
         settings = _prod(ENVIRONMENT="staging", FRONTEND_URL="http://localhost")
         assert self._frontend_warnings(settings) == []
 
-    def test_development_does_not_warn(self):
+    def test_development_is_not_checked(self):
         settings = Settings(ENVIRONMENT="development", FRONTEND_URL="http://localhost")
         assert self._frontend_warnings(settings) == []

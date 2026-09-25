@@ -168,9 +168,10 @@ FRONTEND_URL=https://logbook.yourdomain.com   # the address members actually use
 ```
 
 Left at the default (`http://localhost:3000`), mail is delivered normally and
-every link in it points at `localhost`. In production the backend logs a
-`WARNING: FRONTEND_URL ...` line at startup when this is the case, and
-`python -m app.preflight` lists it as advisory.
+every link in it points at `localhost`. In production the backend **refuses to
+start** when this is the case, logging a `CRITICAL: FRONTEND_URL ...` line, and
+`python -m app.preflight` lists it as blocking — see
+[UPGRADING.md](UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
 
 ### Which configuration wins _(2026-09-15)_
 

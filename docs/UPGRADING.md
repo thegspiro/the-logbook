@@ -39,24 +39,9 @@ Below any blocking items, preflight lists an **"Advisory, does not prevent
 startup"** section. These are printed in the startup log too, and the service
 boots with them — but each one names something that works worse than intended.
 
-One worth checking on every production install:
-
-```
-WARNING: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...
-```
-
-Every link in an outgoing email — password resets, ballots, approvals,
-reminders, applicant status — is built from `FRONTEND_URL`, never from the
-address a request arrived on. Left at the shipped default, those emails go out
-with links nobody else can open, and nothing else reports it. The check fires
-in `production` only, when the URL's host is `localhost`, a `*.localhost` name,
-a loopback address (`127.x.x.x`, `::1`), `0.0.0.0`, or cannot be parsed. Set
-`FRONTEND_URL` to the site's public address (for example
-`https://logbook.yourdept.org`) and confirm it lands:
-
-```bash
-docker compose config | grep FRONTEND_URL
-```
+A localhost `FRONTEND_URL` used to be listed here. Since 2026-09-25 it
+blocks startup instead — see
+[`FRONTEND_URL` must be a public address](#frontend_url-must-be-a-public-address-2026-09-25).
 
 ### "I set it in .env and nothing changed"
 
@@ -132,6 +117,49 @@ check before each upgrade.
 
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
+
+### `FRONTEND_URL` must be a public address (2026-09-25)
+
+A production backend now **refuses to start** while `FRONTEND_URL` points at
+the machine itself. Until this release that was an advisory warning, and the
+shipped default is `http://localhost:3000`, so any production install that
+never set it stops booting on the first restart after the upgrade:
+
+```
+CRITICAL: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...
+```
+
+Every link in an outgoing email — password resets, ballots, approvals,
+reminders, applicant status — is built from `FRONTEND_URL`, never from the
+address a request arrived on. A loopback value mails every recipient a link
+to their own computer, and nothing else reports it: the send succeeds, the
+link does not open. The check covers a host of `localhost`, a `*.localhost`
+name, a loopback address (`127.x.x.x`, `::1`), `0.0.0.0`, or a value with no
+parseable host. It runs in `production` only; staging and development are
+unaffected.
+
+**The fix:** set `FRONTEND_URL` in `.env` to the address members open the site
+at — `https://logbook.yourdept.org`, or a LAN address such as
+`http://192.168.1.50:7880` for an install nobody reaches from outside — then
+confirm it reaches the container and restart:
+
+```bash
+docker compose config | grep FRONTEND_URL
+```
+
+There is no waiver flag: a deployment that sends email with unusable links
+is not a configuration anyone should run. For a trial on a single machine,
+run with `ENVIRONMENT=development` instead of production.
+
+**The installers now require the address too.** `install.sh` asks for it and
+no longer offers "set it later", and without a terminal to ask from it
+stops before installing anything. `scripts/universal-install.sh` stops unless
+it is given `--public-url <url>` (or `LOGBOOK_PUBLIC_URL`) — so
+`curl ... | bash` becomes `curl ... | bash -s -- --public-url <url>`. Both
+accept a re-run without the flag when the existing `.env` already names a
+public `FRONTEND_URL`, and both refuse a `localhost` address.
+`unraid/unraid-setup.sh` refuses a `localhost` HTTPS origin, and its update
+path stops, before restarting anything, when the kept `.env` would not boot.
 
 ### `SECURITY_REQUIRE_TLS` defaults to `true` (2026-08-13)
 

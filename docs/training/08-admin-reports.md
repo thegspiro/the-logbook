@@ -899,7 +899,7 @@ The following security measures are enforced:
 
 > **Edge case:** When you deploy behind a reverse proxy you must also set `TRUSTED_PROXY_IPS` so the backend resolves each real client IP from the `X-Forwarded-For` header. This setting now accepts CIDR ranges (e.g. `172.16.0.0/12`) as well as individual addresses. It drives geo-blocking, per-client rate limiting, and the client IP recorded in the audit log. If it is left unset behind a proxy, every request appears to come from the proxy's own address — geo-blocking silently does nothing and all clients share a single rate-limit bucket.
 
-> **Edge case:** Every link the system emails — password resets, ballots, approvals, reminders, applicant status — is built from the server's `FRONTEND_URL` setting, not from the address you are browsing on. If members report that emailed links open `localhost` or will not load, `FRONTEND_URL` is still at its default. In production the backend logs `WARNING: FRONTEND_URL ...` at startup when this is the case. Set it to the address members use and restart; links already sent keep the old address, so re-send anything still needed.
+> **Edge case:** Every link the system emails — password resets, ballots, approvals, reminders, applicant status — is built from the server's `FRONTEND_URL` setting, not from the address you are browsing on. If members report that emailed links open `localhost` or will not load, `FRONTEND_URL` is still at its default. _(2026-09-25)_ In production the backend now refuses to start when this is the case, logging `CRITICAL: FRONTEND_URL ...`. Set it to the address members use and restart; links already sent keep the old address, so re-send anything still needed.
 
 ### Authentication & Session Edge Cases
 
