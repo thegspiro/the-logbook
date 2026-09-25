@@ -226,6 +226,15 @@ A budget is a line item that allocates a specific dollar amount to a category wi
 | **Amount Encumbered** | The total reserved by approved but not-yet-paid purchase requests                                   |
 | **Amount Remaining**  | `Amount Budgeted - Amount Spent - Amount Encumbered` -- the amount still available for new requests |
 
+**A budget's cap is hard.** Approving a purchase request (which encumbers its
+estimate), marking a request or an expense-report line paid, or issuing a check
+is refused with _Insufficient available budget_ when it would take Amount Spent
+plus Amount Encumbered past Amount Budgeted. There is no override, finance
+administrators included. Lowering Amount Budgeted below what is already spent
+and encumbered is refused the same way. The check runs with the budget row
+locked, so two approvers acting at the same moment cannot both squeeze under the
+cap — whichever acts second is refused.
+
 All monetary fields use `Numeric(12, 2)` precision (12 digits total, 2 decimal places) and arithmetic uses Python's `Decimal` type internally to avoid floating-point rounding errors.
 
 ### Creating a Budget
@@ -292,13 +301,13 @@ The budget summary provides an aggregate view across all budgets in a fiscal yea
 
 ### Edge Cases
 
-| Scenario                                          | Behavior                                                                                                                                                                                      |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Creating a budget in a closed fiscal year         | Not permitted -- fiscal year must be in Draft or Active status                                                                                                                                |
-| Two budgets for the same category and fiscal year | Permitted -- useful when different stations have separate budgets for the same category. Requests are linked to a specific budget, not just a category                                        |
-| Budget remaining goes negative                    | The system allows it (does not block approvals) but displays the negative remaining amount as a visual warning. Budget release operations are floored at zero to prevent negative encumbrance |
-| Deleting a budget with linked requests            | Not permitted -- the linked requests must be cancelled or reassigned first                                                                                                                    |
-| Budget summary with no budgets                    | Returns all zeroes and 0% utilization                                                                                                                                                         |
+| Scenario                                          | Behavior                                                                                                                                                                                                                                      |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Creating a budget in a closed fiscal year         | Not permitted -- fiscal year must be in Draft or Active status                                                                                                                                                                                |
+| Two budgets for the same category and fiscal year | Permitted -- useful when different stations have separate budgets for the same category. Requests are linked to a specific budget, not just a category                                                                                        |
+| Budget remaining would go negative                | Not permitted -- the approval, payment or check that would push spent plus encumbered past the amount budgeted is refused with _Insufficient available budget_. Budget release operations are floored at zero to prevent negative encumbrance |
+| Deleting a budget with linked requests            | Not permitted -- the linked requests must be cancelled or reassigned first                                                                                                                                                                    |
+| Budget summary with no budgets                    | Returns all zeroes and 0% utilization                                                                                                                                                                                                         |
 
 ---
 
@@ -338,6 +347,11 @@ check requests). Notes:
 - **Auto-approve thresholds are unaffected.** A department deciding that
   requests under a dollar amount need no review is a policy choice, and the
   chain records those steps as Auto-Approved without anyone acting.
+- **An emailed approval link follows the same rule.** When an **Email** step's
+  address is the requester's own, approving through the link is refused —
+  _"This request's requester and this step's approver are the same person;
+  self-approval is not allowed for this step."_ — unless the step has **Allow
+  Self-Approval** on. Denying through it is allowed.
 - **Small departments:** if only one person holds `finance.approve`, that
   person cannot submit requests through the chain. Grant the permission to a
   second officer — which is the point of the control, not a workaround.
@@ -467,16 +481,17 @@ As a request moves through its approval chain, each step has a status:
 
 ### Edge Cases
 
-| Scenario                                             | Behavior                                                                                                                                                    |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No approval chain matches a submitted request        | The request moves to Pending Approval status without step records, requiring manual processing                                                              |
-| Approver denies at step 2 of 3                       | The entire chain stops. The request is marked Denied with the denial reason. Remaining steps are not processed                                              |
-| Self-approval when `allowSelfApproval` is false      | The step appears in pending approvals but the submitter cannot act on their own request -- another approver with the matching role/permission must act      |
-| Multiple members hold the "Captain" position         | Any one of them can approve the step -- it is a first-come approval                                                                                         |
-| Auto-approve threshold set to $200 on a $150 request | The step is automatically created with status Auto-Approved and the chain advances to the next step                                                         |
-| Editing a chain after requests have been submitted   | Existing in-flight requests continue using the step records that were created at submission time. The edited chain applies only to newly submitted requests |
-| External email approver (Email type)                 | The approver receives an email with a secure approval token (valid for 7 days). No Logbook account is required. Expired tokens are rejected                 |
-| Denial does not release encumbrance                  | By design -- denial happens during the approval flow (before the request reaches Approved status), so no encumbrance exists to release                      |
+| Scenario                                             | Behavior                                                                                                                                                                                            |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No approval chain matches a submitted request        | The request moves to Pending Approval status without step records, requiring manual processing                                                                                                      |
+| Approver denies at step 2 of 3                       | The entire chain stops. The request is marked Denied with the denial reason. Remaining steps are not processed                                                                                      |
+| Self-approval when `allowSelfApproval` is false      | The step appears in pending approvals but the submitter cannot act on their own request -- another approver with the matching role/permission must act                                              |
+| Multiple members hold the "Captain" position         | Any one of them can approve the step -- it is a first-come approval                                                                                                                                 |
+| Auto-approve threshold set to $200 on a $150 request | The step is automatically created with status Auto-Approved and the chain advances to the next step                                                                                                 |
+| Editing a chain after requests have been submitted   | Existing in-flight requests continue using the step records that were created at submission time. The edited chain applies only to newly submitted requests                                         |
+| External email approver (Email type)                 | The approver receives an email with a secure approval token (valid for 7 days). No Logbook account is required. Expired tokens are rejected                                                         |
+| External approver uses the link a second time        | The link works once. Acting on it clears the token, so reopening it later reports **Approval not found**, and a duplicate click racing the first is refused rather than recording a second decision |
+| Denial does not release encumbrance                  | By design -- denial happens during the approval flow (before the request reaches Approved status), so no encumbrance exists to release                                                              |
 
 ---
 
@@ -577,15 +592,15 @@ Once approved, officers can progress the request through the fulfillment stages:
 
 ### Edge Cases
 
-| Scenario                                                             | Behavior                                                                                                                                                    |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Submitting without a budget selected                                 | The request enters the approval workflow but no encumbrance is tracked. Approvers should verify the funding source manually                                 |
-| Actual amount exceeds estimated amount                               | The budget spent amount reflects the actual amount, which may push the budget into a negative remaining balance                                             |
-| Cancelling an approved request                                       | The encumbered amount is released back to the budget's available balance. The encumbrance release is floored at zero to prevent negative encumbrance values |
-| Marking as paid from Approved status (skipping Ordered and Received) | Permitted -- the system allows direct transition from Approved to Paid                                                                                      |
-| Request with no matching approval chain                              | The request moves to Pending Approval but has no approval step records. It requires manual intervention                                                     |
-| Editing a submitted request                                          | Permitted while in Submitted status (before approval flow begins). Not permitted once in Pending Approval or later                                          |
-| Purchase request linked to an apparatus or facility                  | The linkage is informational -- it helps officers categorize spending by asset but does not affect the approval or budget logic                             |
+| Scenario                                                             | Behavior                                                                                                                                                           |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Submitting without a budget selected                                 | The request enters the approval workflow but no encumbrance is tracked. Approvers should verify the funding source manually                                        |
+| Actual amount exceeds estimated amount                               | Permitted up to what the budget has left once the estimate's encumbrance is released; beyond that, marking it paid is refused with _Insufficient available budget_ |
+| Cancelling an approved request                                       | The encumbered amount is released back to the budget's available balance. The encumbrance release is floored at zero to prevent negative encumbrance values        |
+| Marking as paid from Approved status (skipping Ordered and Received) | Permitted -- the system allows direct transition from Approved to Paid                                                                                             |
+| Request with no matching approval chain                              | The request moves to Pending Approval but has no approval step records. It requires manual intervention                                                            |
+| Editing a submitted request                                          | Permitted while in Submitted status (before approval flow begins). Not permitted once in Pending Approval or later                                                 |
+| Purchase request linked to an apparatus or facility                  | The linkage is informational -- it helps officers categorize spending by asset but does not affect the approval or budget logic                                    |
 
 ---
 
@@ -1227,7 +1242,7 @@ Before closing the fiscal year:
 | "No fiscal years available when creating a request"                   | An active fiscal year must exist. Ask an officer with `finance.manage` permission to create and activate a fiscal year in **Finance > Settings**.                                                                                                                                                                         |
 | "My purchase request was auto-approved with no review"                | No approval chain matched your request (based on entity type, amount, and category). An officer with `finance.configure_approvals` permission should set up approval chains in **Finance > Settings > Approval Chains**. Use the Preview tool to verify chain matching.                                                   |
 | "I submitted a request but no one received the approval notification" | Verify that the approval chain step has a valid approver. For Position-type steps, at least one member must hold that position. For Permission-type steps, at least one member must have the `finance.approve` permission.                                                                                                |
-| "Budget shows negative remaining amount"                              | This means approved and paid requests exceed the budgeted amount. The system allows over-budget approvals. Adjust the budget amount or cancel/deny excess requests.                                                                                                                                                       |
+| "Insufficient available budget"                                       | The approval, payment or check would take the budget's spent plus encumbered past its amount budgeted, and the cap has no override. Raise the budget amount, or cancel or deny other requests against it.                                                                                                                 |
 | "Cannot edit my purchase request"                                     | Purchase requests can only be edited in **Draft** or **Submitted** status. Once in Pending Approval or later, they cannot be modified. Cancel and re-create if changes are needed.                                                                                                                                        |
 | "Dues show as Overdue immediately"                                    | Check the **due date** and **grace period** on the dues schedule. If the due date plus grace period has already passed, newly generated records may appear overdue. Adjust the schedule settings or due date if needed.                                                                                                   |
 | "QuickBooks export is missing some transactions"                      | The export only includes Purchase Requests with Paid status, Check Requests with Issued status, and Expense Reports with Paid status within the selected date range. Verify the transactions have reached the correct terminal status. Also check that account mappings are configured for all categories.                |

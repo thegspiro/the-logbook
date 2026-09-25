@@ -58,10 +58,21 @@ class TestExitStatus:
         prod_env.setenv("SECURITY_ENFORCE_HTTPS", "true")
         prod_env.setenv("SECURITY_REQUIRE_TLS", "false")
         prod_env.setenv("FRONTEND_URL", "http://localhost:3000")
+        # No public origin to fall back on either.
+        prod_env.setenv("ALLOWED_ORIGINS", "http://localhost:3000")
         assert preflight_main([]) == 1
         out = capsys.readouterr().out
         assert "will NOT start" in out
         assert "CRITICAL: FRONTEND_URL" in out
+
+    def test_localhost_frontend_url_with_a_public_origin_starts(self, prod_env, capsys):
+        # The Unraid template and setup-env.py name the public address only in
+        # ALLOWED_ORIGINS; email links borrow it rather than refusing to boot.
+        prod_env.setenv("SECURITY_ENFORCE_HTTPS", "true")
+        prod_env.setenv("SECURITY_REQUIRE_TLS", "false")
+        prod_env.setenv("FRONTEND_URL", "http://localhost:3000")
+        assert preflight_main([]) == 0
+        assert "CRITICAL: FRONTEND_URL" not in capsys.readouterr().out
 
     def test_malformed_value_is_reported_not_raised(self, prod_env, capsys):
         # An empty string for a bool otherwise surfaces as a pydantic

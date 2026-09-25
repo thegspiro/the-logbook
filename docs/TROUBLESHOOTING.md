@@ -603,8 +603,10 @@ either installer; `unraid-setup.sh` now writes the HTTPS address it asks for,
 and `install.sh` and `universal-install.sh` require one (`--public-url`).
 
 **Check**: Since 2026-09-25 a production backend refuses to start in this
-state, and `python -m app.preflight` lists it under "BLOCKING" (staging and
-development are not checked):
+state unless `ALLOWED_ORIGINS` names a public address, which is then used
+instead. `python -m app.preflight` lists it under "BLOCKING". Staging and
+development do not block; with `EMAIL_ENABLED=true` they report it as a
+warning:
 
 ```
 CRITICAL: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...

@@ -417,8 +417,9 @@ breached password, CAPTCHA — with the "on failure" column highlighted.]**
 > one down thinking it's redundant, it usually isn't."
 
 > "**Rate limiting** counts all attempts in a short window, per IP. **Account
-> lockout** counts consecutive failures against one user — five, then thirty
-> minutes. That pair sounds complete, and it isn't."
+> lockout** counts consecutive failures against one user — five, then fifteen
+> minutes by default. Both numbers are settings. That pair sounds complete, and
+> it isn't."
 
 **[CALLOUT: "Lockout is per-user. Spraying one password across a thousand
 accounts never reaches five failures on any of them."]**

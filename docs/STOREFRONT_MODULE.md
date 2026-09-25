@@ -572,4 +572,4 @@ on their own order; this records an external method and does not settle payment.
 Canonical product locks prevent option/variant spellings from creating distinct
 locks. Notification and test-send responses never include recipient addresses.
 See [the three-day audit](./CHANGE_AUDIT_2026-08-12_TO_14.md#release-map) and the
-[operator lesson](./training/19-august-2026-release-changes.md#storefront).
+[storefront training guide](./training/18-storefront.md#working-the-orders).

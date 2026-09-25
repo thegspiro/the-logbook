@@ -1,5 +1,25 @@
 # Script currency
 
+## Flagged by the 2026-09-25 guide 19 fold
+
+Guide 19, the August release lesson, was folded into the module guides
+([#2713](https://github.com/thegspiro/the-logbook/pull/2713)), and every claim
+was checked against the application as it moved. No script links to guide 19
+or 20, so nothing needed repointing. The corrections the fold made to the
+guides also had to be made to the scripts that repeated the same wrong facts:
+
+| Script | Beat                                     | Was                                                                                     | Now                                                                                                                                                                                                   | Class     |
+| ------ | ---------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| **03** | Attack protection, rate limit vs lockout | "five, then thirty minutes"                                                             | Five in a row, then **fifteen minutes by default**; both are settings (`MAX_LOGIN_ATTEMPTS`, `ACCOUNT_LOCKOUT_DURATION_MINUTES`). Thirty minutes belongs to the login rate limit                      | **Wrong** |
+| **04** | Creating an election, voting method      | "Choose your voting method … supermajority are also available"                          | The create form has one dropdown, **How is the Winner Determined?**, with six options that set counting and the win condition together                                                                | **Wrong** |
+| **06** | Dashboard walkthrough, messages          | Department Messages and Notifications side by side; a **Clear All** in the header       | **Needs you** holds a message waiting for **Acknowledge**; **My Updates** is one feed — pinned, then persistent, then newest, five rows and **Older Items**. There is no Clear All                    | **Wrong** |
+| **12** | Voting methods chapter and Short 12j     | "Four voting methods" on "the voting-method dropdown", Supermajority as a fourth method | Three ways of counting behind the six options of **How is the Winner Determined?**; **Supermajority Required (2/3)** is one mark per voter with a two-thirds bar and a Supermajority Percentage field | **Wrong** |
+| **12** | Paper ballots, two `[SCREEN]` cues       | "The Paper Batches panel"                                                               | **Paper-Ballot Batches** (the panel's title)                                                                                                                                                          | **Wrong** |
+
+**All five were wrong before the fold; it found them, it did not cause them.**
+Script 12's re-worded chapter reads a few seconds longer; re-time Chapter 3 when
+it is next recorded.
+
 ## Flagged by the 2026-09-25 email redesign
 
 The default email templates moved to a new shell: the department's logo and
