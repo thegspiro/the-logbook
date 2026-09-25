@@ -211,7 +211,11 @@ should say, and the copies had drifted apart. Both are now indexes:
 (August 31 – September 23) and
 [#2713](https://github.com/thegspiro/the-logbook/pull/2713) folded guide 19
 (August 12–31), with a last correction to guide 04 following in
-[#2725](https://github.com/thegspiro/the-logbook/pull/2725).
+[#2725](https://github.com/thegspiro/the-logbook/pull/2725). Guide 20's index
+now points to both passages that correction fixed, under _Corrections folded
+in on September 25, 2026_
+([#2740](https://github.com/thegspiro/the-logbook/pull/2740)), so a trainer
+who starts from the index lands on the corrected text.
 
 - **Teach from the module guides.** Each one now describes how its screens work
   today, in one place. Guides 19 and 20 remain only as lists of where each topic

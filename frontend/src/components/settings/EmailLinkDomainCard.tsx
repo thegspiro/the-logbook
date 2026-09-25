@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { AlertTriangle, Copy, Globe } from 'lucide-react';
+import { AlertTriangle, Copy, Globe, Loader2 } from 'lucide-react';
 import { Collapsible } from '../ux/Collapsible';
 import { Skeleton } from '../ux/Skeleton';
 import { EmailLinkDomainSource } from '../../constants/enums';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import { organizationService } from '../../services/userServices';
+import { useAuthStore } from '../../stores/authStore';
 import type { EmailLinkDomain } from '../../types/user';
 import { copyToClipboard } from '../../utils/clipboard';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -33,6 +35,13 @@ const sourceDescription = (domain: EmailLinkDomain): React.ReactNode => {
           <code>FRONTEND_URL</code> to choose the address explicitly.
         </>
       );
+    case EmailLinkDomainSource.OVERRIDE:
+      return (
+        <>
+          Set on this screen by an IT administrator. Without it, links would use{' '}
+          <code>{domain.deployment_url || '(not set)'}</code> from the server&apos;s configuration.
+        </>
+      );
     case EmailLinkDomainSource.UNRESOLVED_LOOPBACK:
       return (
         <>
@@ -43,17 +52,164 @@ const sourceDescription = (domain: EmailLinkDomain): React.ReactNode => {
   }
 };
 
+/** The permission that lets an IT administrator change the address here. */
+export const MANAGE_LINK_DOMAIN_PERMISSION = 'system.manage_link_domain';
+
+interface LinkDomainEditorProps {
+  domain: EmailLinkDomain;
+  viewingOrigin: string | null;
+  onChange: (next: EmailLinkDomain) => void;
+}
+
+/**
+ * The override form. The backend accepts only a host this server already
+ * serves and says why when it refuses, so the reason is shown as it came
+ * rather than re-derived here.
+ */
+const LinkDomainEditor: React.FC<LinkDomainEditorProps> = ({ domain, viewingOrigin, onChange }) => {
+  const { confirm } = useConfirm();
+  const [url, setUrl] = useState(domain.override_url || domain.effective_url);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    const next = url.trim();
+    if (!next) {
+      setError('Enter the address members use to reach this site.');
+      return;
+    }
+    const ok = await confirm({
+      title: 'Change the email link address?',
+      message: (
+        <>
+          Every email sent from now on — including password resets and ballots — will link to <code>{next}</code>.
+          Emails already sent keep the old address.
+        </>
+      ),
+      confirmLabel: 'Change address',
+      cancelLabel: 'Keep current address',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await organizationService.setEmailLinkDomain(next);
+      onChange(updated);
+      setUrl(updated.override_url || updated.effective_url);
+      toast.success('Email link address changed');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Could not change the email link address.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRevert = async () => {
+    const ok = await confirm({
+      title: 'Go back to the server setting?',
+      message: (
+        <>
+          Emails will link to <code>{domain.deployment_url || '(not set)'}</code>, the address in the server&apos;s
+          configuration.
+        </>
+      ),
+      confirmLabel: 'Use server setting',
+      cancelLabel: 'Keep this address',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await organizationService.clearEmailLinkDomain();
+      onChange(updated);
+      setUrl(updated.effective_url);
+      toast.success('Email links use the server setting again');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Could not change the email link address.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border-theme-surface-border space-y-2 border-t pt-3">
+      <label htmlFor="email-link-domain-input" className="form-label">
+        Change address
+      </label>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input
+          id="email-link-domain-input"
+          type="url"
+          inputMode="url"
+          autoComplete="off"
+          className="form-input sm:flex-1"
+          placeholder="https://logbook.yourdept.org"
+          value={url}
+          maxLength={255}
+          disabled={saving}
+          aria-describedby="email-link-domain-hint"
+          onChange={(e) => {
+            setUrl(e.target.value);
+            setError(null);
+          }}
+        />
+        <button type="button" className="btn-primary" disabled={saving} onClick={() => void handleSave()}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+          Save
+        </button>
+      </div>
+      {viewingOrigin && viewingOrigin !== url.trim() && (
+        <button
+          type="button"
+          className="text-theme-accent-blue text-xs underline"
+          disabled={saving}
+          onClick={() => {
+            setUrl(viewingOrigin);
+            setError(null);
+          }}
+        >
+          Use the address I&apos;m on now ({viewingOrigin})
+        </button>
+      )}
+      <p id="email-link-domain-hint" className="text-theme-text-muted text-xs">
+        {domain.allowed_hosts.length > 0 ? (
+          <>
+            Must be an address this server accepts: <code>{domain.allowed_hosts.join(', ')}</code>.
+          </>
+        ) : (
+          <>
+            This server has no public address configured yet, so one has to be added to <code>ALLOWED_ORIGINS</code>{' '}
+            first.
+          </>
+        )}
+      </p>
+      {error && (
+        <p role="alert" className="text-theme-alert-danger-text text-sm">
+          {error}
+        </p>
+      )}
+      {domain.override_url && (
+        <button type="button" className="btn-secondary btn-sm" disabled={saving} onClick={() => void handleRevert()}>
+          Go back to the server setting
+        </button>
+      )}
+    </div>
+  );
+};
+
 /**
  * Shows the address every emailed link (password resets, ballots, approvals,
- * reminders) is built from. It is deployment configuration read at startup,
- * not an organization setting, so this card reports it and explains where to
- * change it rather than offering a field: links are deliberately pinned to
- * server configuration so that no request — and no stored setting an account
- * could alter — decides where a password-reset link sends someone.
+ * reminders) is built from, and lets an IT administrator holding
+ * system.manage_link_domain change it. Everyone else with access to email
+ * settings sees it read-only: the value redirects password-reset links for the
+ * whole deployment, so it is gated above settings.manage.
  */
 const EmailLinkDomainCard: React.FC = () => {
   const [domain, setDomain] = useState<EmailLinkDomain | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const canEdit = useAuthStore((s) => s.checkPermission)(MANAGE_LINK_DOMAIN_PERMISSION);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,12 +318,16 @@ const EmailLinkDomainCard: React.FC = () => {
                 </div>
               )}
 
-              <Collapsible title="How to change this address" className="text-sm">
+              {canEdit && <LinkDomainEditor domain={domain} viewingOrigin={viewingOrigin} onChange={setDomain} />}
+
+              <Collapsible title="Changing it on the server instead" className="text-sm">
                 <div className="text-theme-text-secondary space-y-3 text-sm">
                   <p>
-                    Set the <code>FRONTEND_URL</code> environment variable on the backend to the full public address,
-                    for example <code>https://logbook.yourdept.org</code>, then restart the backend. The change cannot
-                    be made from this screen because it is read when the server starts.
+                    {canEdit
+                      ? 'An address saved above takes priority. To set the default the server uses when nothing is saved here,'
+                      : 'An IT administrator can change this address here. To set it on the server instead,'}{' '}
+                    set the <code>FRONTEND_URL</code> environment variable on the backend to the full public address,
+                    for example <code>https://logbook.yourdept.org</code>, then restart the backend.
                   </p>
                   <ul className="list-disc space-y-2 pl-5">
                     <li>

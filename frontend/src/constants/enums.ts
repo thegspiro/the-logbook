@@ -877,6 +877,7 @@ export const EmailLinkDomainSource = {
   FRONTEND_URL: 'frontend_url',
   ALLOWED_ORIGINS: 'allowed_origins',
   UNRESOLVED_LOOPBACK: 'unresolved_loopback',
+  OVERRIDE: 'override',
 } as const;
 export type EmailLinkDomainSource = (typeof EmailLinkDomainSource)[keyof typeof EmailLinkDomainSource];
 

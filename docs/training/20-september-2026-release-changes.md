@@ -72,3 +72,13 @@
 | Label printing and "Needs a label"                    | [05 — Inventory](./05-inventory.md) (Label Printing)                          |
 | Medical screening's Add Record dialog                 | [13 — Medical Screening](./13-medical-screening.md) (Recording a Screening)   |
 | `FRONTEND_URL` and emailed links                      | [UPGRADING](../UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25) |
+
+# Corrections folded in on September 25, 2026
+
+Two passages in guide 04 still described screens that August releases had
+already replaced. Both now match the application.
+
+| Topic                                                              | Now in                                                                                                                                  |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| A ballot item has no voting method or number of winners of its own | [04 — Events & Meetings](./04-events-meetings.md#creating-elections-officers) and [14 — Elections](./14-elections.md)                   |
+| The dashboard has no Clear All; event notices land in My Updates   | [04 — Events & Meetings](./04-events-meetings.md#dashboard-notification-management) and [00 — Getting Started](./00-getting-started.md) |

@@ -177,9 +177,26 @@ To see the address a running installation uses, open **Settings → Email** as
 an administrator. The _Email link address_ card shows it, says whether it came
 from `FRONTEND_URL` or was picked from `ALLOWED_ORIGINS`, warns when it is a
 loopback or `http://` address or differs from the address you are browsing
-from, and lists where to change it. It is read-only: the value is deployment
-configuration read at startup, so changing it means setting `FRONTEND_URL` and
-restarting the backend.
+from, and lists where to change it.
+
+An IT administrator can also change it on that card, with no restart. Two limits
+apply, both deliberate because the address decides where password-reset and
+ballot links send people:
+
+- **Who:** only a position holding `system.manage_link_domain`. No default role
+  has it. The System Owner (`it_manager`, wildcard) matches it, and a chief can
+  grant it to another position. Everyone else with email-settings access sees the
+  card read-only.
+- **What:** only a host this server already accepts traffic on, meaning its
+  `TRUSTED_HOSTS`, or the `ALLOWED_ORIGINS` hostnames when those are not set.
+  Loopback is always refused. To use a new name, add it to the server's
+  configuration first.
+
+A saved address takes priority over `FRONTEND_URL` for the whole installation
+until someone uses _Go back to the server setting_. Every change is written to
+the audit log as `email_link_domain_changed`. If the saved host is later removed
+from the server's configuration, the saved address is ignored and links use
+`FRONTEND_URL` again.
 
 ### Which configuration wins _(2026-09-15)_
 

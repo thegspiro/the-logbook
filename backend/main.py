@@ -1540,6 +1540,19 @@ async def lifespan(app: FastAPI):
 
     await geoip_invalidation_listener.start()
 
+    # Apply the email link domain an IT administrator saved in the app before
+    # the scheduled loops below start sending, then keep it in step with
+    # changes made on other workers.
+    from app.core.link_domain_sync import link_domain_listener, refresh_link_domain
+
+    try:
+        await refresh_link_domain()
+    except Exception as e:
+        # Pre-onboarding or a database that is not ready: emails keep the
+        # deployment's own address, and the listener retries.
+        logger.warning(f"Could not load the saved email link domain: {e}")
+    await link_domain_listener.start()
+
     # Helper: use Redis SETNX to ensure a background task runs on only one worker.
     # Returns True if this worker should run the task.
     async def _try_claim_background_task(task_name: str, ttl: int = 300) -> bool:
@@ -1837,6 +1850,7 @@ async def lifespan(app: FastAPI):
             pass
     await ws_manager.stop_listener()
     await geoip_invalidation_listener.stop()
+    await link_domain_listener.stop()
     await database_manager.disconnect()
     await cache_manager.disconnect()
     logger.info("Shutdown complete")

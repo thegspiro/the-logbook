@@ -833,6 +833,13 @@ class Settings(BaseSettings):
     # it. Empty when the configured value was used as-is.
     _frontend_url_configured: str = PrivateAttr(default="")
 
+    # FRONTEND_URL as the environment resolved it, captured the first time an
+    # administrator's saved link domain replaces it so clearing the override
+    # can put it back. Empty until an override has been applied.
+    _frontend_url_deployment: str = PrivateAttr(default="")
+    # The saved link domain currently applied to FRONTEND_URL, or empty.
+    _frontend_url_override: str = PrivateAttr(default="")
+
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
     def parse_allowed_origins(cls, v):
@@ -898,10 +905,13 @@ class Settings(BaseSettings):
         the substitution in resolve_frontend_url is otherwise reported only in
         the startup log, and an IT admin looking at a wrong link in an email has
         no way to tell whether FRONTEND_URL was set, picked from
-        ALLOWED_ORIGINS, or left at the shipped default.
+        ALLOWED_ORIGINS, left at the shipped default, or overridden in the app.
         """
         effective = (self.FRONTEND_URL or "").strip()
-        if self._frontend_url_configured:
+        deployment = self._frontend_url_deployment or effective
+        if self._frontend_url_override:
+            source = "override"
+        elif self._frontend_url_configured:
             source = "allowed_origins"
         elif _is_loopback_url(effective):
             source = "unresolved_loopback"
@@ -909,12 +919,111 @@ class Settings(BaseSettings):
             source = "frontend_url"
         return {
             "effective_url": effective,
-            "configured_url": self._frontend_url_configured or effective,
+            "configured_url": self._frontend_url_configured or deployment,
+            "deployment_url": deployment,
+            "override_url": self._frontend_url_override or None,
             "source": source,
             "is_loopback": _is_loopback_url(effective),
             "is_https": effective.lower().startswith("https://"),
             "email_enabled": bool(self.EMAIL_ENABLED),
+            "allowed_hosts": self.link_domain_allowed_hosts(),
         }
+
+    def link_domain_allowed_hosts(self) -> list[str]:
+        """Hostnames an administrator may point emailed links at.
+
+        SEC: limited to hosts this deployment already serves, so an account
+        that can change the setting cannot aim password-reset and ballot
+        links at a look-alike site. The trusted-host allowlist is that set;
+        when it is disabled ("*"), the public ALLOWED_ORIGINS hostnames are
+        used instead, never "anything". Loopback is never offered: a
+        recipient cannot open it.
+        """
+        from urllib.parse import urlparse
+
+        hosts = self.get_trusted_hosts()
+        if "*" in hosts:
+            origins = (
+                self.ALLOWED_ORIGINS
+                if isinstance(self.ALLOWED_ORIGINS, list)
+                else [self.ALLOWED_ORIGINS]
+            )
+            hosts = [
+                urlparse(str(o)).hostname or ""
+                for o in origins
+                if str(o).strip() != "*"
+            ]
+        allowed = []
+        for host in hosts:
+            host = (host or "").strip().lower()
+            if not host or host == "*":
+                continue
+            if _is_loopback_url(f"http://{host.lstrip('*.')}"):
+                continue
+            allowed.append(host)
+        return sorted(set(allowed))
+
+    def validate_link_domain(self, url: str) -> str:
+        """Normalize an administrator-supplied link domain, or raise ValueError.
+
+        Accepts an http(s) origin only, optionally with a port. A path, query,
+        fragment or credentials would be appended to by every link builder
+        (they concatenate ``f"{FRONTEND_URL}/..."``), so they are refused
+        rather than silently stripped.
+        """
+        value = (url or "").strip().rstrip("/")
+        try:
+            parts = urlsplit(value)
+            port = parts.port
+        except ValueError:
+            raise ValueError(
+                "Enter a full address, such as https://logbook.example.org."
+            )
+        if parts.scheme not in ("https", "http") or not parts.hostname:
+            raise ValueError(
+                "Enter a full address, such as https://logbook.example.org."
+            )
+        if parts.username or parts.password:
+            raise ValueError("The address cannot contain a user name or password.")
+        if parts.path or parts.query or parts.fragment:
+            raise ValueError(
+                "Enter the site address only, without a path — for example "
+                "https://logbook.example.org."
+            )
+        if _is_loopback_url(value):
+            raise ValueError(
+                "That address only works on the server itself, so links in "
+                "emails would not open for anyone who receives them."
+            )
+        host = parts.hostname.lower()
+        allowed = self.link_domain_allowed_hosts()
+        if not any(
+            host == pattern or (pattern.startswith("*.") and host.endswith(pattern[1:]))
+            for pattern in allowed
+        ):
+            raise ValueError(
+                f"{host} is not an address this server accepts traffic on. "
+                "Add it to TRUSTED_HOSTS or ALLOWED_ORIGINS first, then set it "
+                "here."
+            )
+        netloc = host if port is None else f"{host}:{port}"
+        return f"{parts.scheme}://{netloc}"
+
+    def apply_link_domain_override(self, url: str | None) -> None:
+        """Point FRONTEND_URL at a saved link domain, or back at the deployment's.
+
+        Every link builder reads ``settings.FRONTEND_URL`` when it runs, so
+        this is the one place the saved value has to reach; it is re-applied in
+        every worker by app.core.link_domain_sync.
+        """
+        if not self._frontend_url_deployment:
+            self._frontend_url_deployment = self.FRONTEND_URL
+        if url:
+            self._frontend_url_override = url
+            self.FRONTEND_URL = url
+        else:
+            self._frontend_url_override = ""
+            self.FRONTEND_URL = self._frontend_url_deployment
 
     # SEC: Host-header allowlist for TrustedHostMiddleware. When left empty,
     # the effective allowlist is derived from ALLOWED_ORIGINS' hostnames (plus
