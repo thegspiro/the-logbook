@@ -1190,6 +1190,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
+    path: '/inventory/kiosk',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/inventory/admin/not-seen',
     source: 'src/modules/inventory/routes.tsx',
     coverage: 'ratchet',

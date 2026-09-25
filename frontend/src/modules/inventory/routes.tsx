@@ -46,6 +46,7 @@ const InventoryPutAwayPage = lazyWithRetry(() => import('./pages/InventoryPutAwa
 const InventoryShelfAuditPage = lazyWithRetry(() => import('./pages/InventoryShelfAuditPage'));
 const InventoryNfcEnrollPage = lazyWithRetry(() => import('./pages/InventoryNfcEnrollPage'));
 const InventoryNotSeenPage = lazyWithRetry(() => import('./pages/InventoryNotSeenPage'));
+const InventoryKioskPage = lazyWithRetry(() => import('./pages/InventoryKioskPage'));
 
 // Equipment checklists — the whole feature, authoring through performing.
 // Scheduling links in from a shift; it hosts none of this.
@@ -463,6 +464,18 @@ export const getInventoryRoutes = () => {
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryNotSeenPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* The self-service kiosk: a grant of its own, not inventory.manage —
+          a department decides who may open one on a shared tablet. */}
+      <Route
+        path="/inventory/kiosk"
+        element={
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.kiosk">
+            <Suspense fallback={null}>
+              <InventoryKioskPage />
             </Suspense>
           </ProtectedRoute>
         }

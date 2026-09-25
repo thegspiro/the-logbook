@@ -133,6 +133,7 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/inventory/shelf-audit': { label: 'Shelf Audit', permissions: ['inventory.manage'] },
   '/inventory/admin/nfc/enroll': { label: 'Tag Items in Bulk', permissions: ['inventory.manage'] },
   '/inventory/admin/not-seen': { label: 'Items Not Seen', permissions: ['inventory.manage'] },
+  '/inventory/kiosk': { label: 'Self-Service Kiosk', permissions: ['inventory.kiosk'] },
   '/inventory/items': { permissions: ['inventory.manage'] },
   '/inventory/storage-areas': { label: 'Storage Areas', permissions: ['inventory.manage'] },
   '/onboarding/modules': {},

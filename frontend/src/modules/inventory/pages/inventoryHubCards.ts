@@ -39,6 +39,7 @@ import {
   MapPin,
   Nfc,
   Package,
+  PackageCheck,
   Ruler,
   ShoppingBag,
   SlidersHorizontal,
@@ -500,6 +501,19 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
     section: 'Setup & Tools',
     tone: 'indigo',
     permission: 'inventory.manage',
+    requiresModule: 'inventory',
+  },
+  {
+    // Its own grant, like the route: a quartermaster does not hold it unless
+    // a department gives it, and a kiosk officer need not manage inventory.
+    id: 'nfc-kiosk',
+    label: 'Self-Service Kiosk',
+    description: 'Members check loaner gear out and back in by tapping their ID card',
+    path: '/inventory/kiosk',
+    icon: PackageCheck,
+    section: 'Setup & Tools',
+    tone: 'indigo',
+    permission: 'inventory.kiosk',
     requiresModule: 'inventory',
   },
   {

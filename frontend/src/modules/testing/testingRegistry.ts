@@ -540,6 +540,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'inventory',
       },
       {
+        path: '/inventory/kiosk',
+        label: 'Self-service checkout kiosk',
+        permission: 'inventory.kiosk',
+        module: 'inventory',
+      },
+      {
         path: '/inventory/admin/not-seen',
         label: 'Items not seen report',
         permission: 'inventory.manage',

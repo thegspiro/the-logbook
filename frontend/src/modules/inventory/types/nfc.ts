@@ -263,3 +263,51 @@ export interface InventoryAuditScheduleListResponse {
   items: InventoryAuditScheduleRow[];
   total: number;
 }
+
+// ---------------------------------------------------------------------------
+// Self-service kiosk
+// ---------------------------------------------------------------------------
+
+export interface KioskLoan {
+  checkout_id: string;
+  item_id: string;
+  item_name: string;
+  checked_out_at: string;
+  due_at: string | null;
+}
+
+export interface KioskIdentifyResponse {
+  member_name: string;
+  loans: KioskLoan[];
+}
+
+export type KioskAction = 'checkout' | 'return';
+
+export interface KioskPreviewResponse {
+  action: KioskAction;
+  item_id: string;
+  item_name: string;
+  /** Checkout: when it will be due back. Return: when it was due. */
+  due_at: string | null;
+}
+
+export interface KioskActionResponse {
+  action: KioskAction;
+  checkout_id: string;
+  item_id: string;
+  item_name: string;
+  member_name: string;
+  due_at: string | null;
+  damaged: boolean;
+}
+
+/** What was read off the member's card and, for an item action, the tag. */
+export interface KioskItemRequest {
+  card: InventoryNfcResolveRequest;
+  item: InventoryNfcResolveRequest;
+}
+
+export interface KioskReturnRequest extends KioskItemRequest {
+  damaged: boolean;
+  damage_notes?: string | undefined;
+}
