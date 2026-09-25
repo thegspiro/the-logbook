@@ -110,6 +110,9 @@ GUARDED_CALLS = [
     ("POST", "/inventory/nfc/resolve-member", RESOLVE_BODY),
     ("GET", "/inventory/nfc/untagged", None),
     ("GET", "/inventory/nfc/audit-schedule", None),
+    ("POST", "/inventory/nfc/resolve-check", {**RESOLVE_BODY, "template_id": "t-1"}),
+    ("GET", "/inventory/check-compartments/c-1/nfc-tags", None),
+    ("POST", "/inventory/check-compartments/c-1/nfc-tags", LINK_BODY),
     (
         "PUT",
         "/inventory/storage-areas/area-1/audit-schedule",
@@ -184,8 +187,13 @@ class TestSettingsSchema:
 
 
 class TestPermissionGates:
-    def test_reading_the_switch_needs_only_view(self):
-        assert _permission_set("/nfc/settings", "GET") == {"inventory.view"}
+    def test_reading_the_switch_needs_only_view_or_a_check_permission(self):
+        """The check form and builder read it for crews without view."""
+        assert _permission_set("/nfc/settings", "GET") == {
+            "inventory.view",
+            "inventory.check_submit",
+            "inventory.check_manage",
+        }
 
     def test_resolving_a_tap_matches_the_barcode_lookup(self):
         assert _permission_set("/nfc/resolve", "POST") == {"inventory.view"}
@@ -197,8 +205,13 @@ class TestPermissionGates:
         assert _permission_set("/items/{item_id}/nfc-tags", "POST") == {
             "inventory.manage"
         }
-        assert _permission_set("/nfc-tags/{tag_id}", "PATCH") == {"inventory.manage"}
-        assert _permission_set("/nfc-tags/{tag_id}", "DELETE") == {"inventory.manage"}
+
+    def test_the_shared_tag_routes_admit_either_manager(self):
+        """Which one a tag needs is decided per tag; see
+        test_inventory_nfc_compartment_endpoints.py."""
+        both = {"inventory.manage", "inventory.check_manage"}
+        assert _permission_set("/nfc-tags/{tag_id}", "PATCH") == both
+        assert _permission_set("/nfc-tags/{tag_id}", "DELETE") == both
 
     def test_a_tap_that_may_name_a_shelf_needs_only_view(self):
         """The tag page resolves through it for every member."""

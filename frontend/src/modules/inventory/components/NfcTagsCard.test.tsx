@@ -9,6 +9,8 @@ const {
   linkItemNfcTag,
   getStorageAreaNfcTags,
   linkStorageAreaNfcTag,
+  getCheckCompartmentNfcTags,
+  linkCheckCompartmentNfcTag,
   updateNfcTag,
   unlinkNfcTag,
   scanner,
@@ -18,6 +20,8 @@ const {
   linkItemNfcTag: vi.fn(),
   getStorageAreaNfcTags: vi.fn(),
   linkStorageAreaNfcTag: vi.fn(),
+  getCheckCompartmentNfcTags: vi.fn(),
+  linkCheckCompartmentNfcTag: vi.fn(),
   updateNfcTag: vi.fn(),
   unlinkNfcTag: vi.fn(),
   scanner: {
@@ -35,6 +39,8 @@ vi.mock('../../../services/api', () => ({
     linkItemNfcTag,
     getStorageAreaNfcTags,
     linkStorageAreaNfcTag,
+    getCheckCompartmentNfcTags,
+    linkCheckCompartmentNfcTag,
     updateNfcTag,
     unlinkNfcTag,
   },
@@ -254,5 +260,52 @@ describe('NfcTagsCard on a storage area', () => {
       'area-1',
       expect.objectContaining({ credential_type: 'written' })
     );
+  });
+});
+
+describe('NfcTagsCard on an equipment-check compartment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCheckCompartmentNfcTags.mockReset();
+    getCheckCompartmentNfcTags.mockResolvedValue({
+      items: [{ ...TAG, item_id: null, check_compartment_id: 'comp-1', label: 'Door hinge' }],
+      total: 1,
+    });
+    linkCheckCompartmentNfcTag.mockReset();
+    linkCheckCompartmentNfcTag.mockResolvedValue(TAG);
+    getItemNfcTags.mockReset();
+    linkItemNfcTag.mockReset();
+    getStorageAreaNfcTags.mockReset();
+    linkStorageAreaNfcTag.mockReset();
+    scanner.supported = true;
+    scanner.onTag = null;
+  });
+
+  const renderCompartment = () =>
+    renderWithRouter(<NfcTagsCard targetKind="check_compartment" targetId="comp-1" targetName="Driver side 1" />);
+
+  it('lists the compartment’s tags through the compartment endpoint', async () => {
+    renderCompartment();
+    expect(await screen.findByText('Door hinge')).toBeInTheDocument();
+    expect(getCheckCompartmentNfcTags).toHaveBeenCalledWith('comp-1');
+    expect(getItemNfcTags).not.toHaveBeenCalled();
+    expect(getStorageAreaNfcTags).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/Where the new tag is on the compartment/)).toBeInTheDocument();
+    expect(screen.getByText(/jump straight to this compartment/)).toBeInTheDocument();
+  });
+
+  it('links a read serial to the compartment', async () => {
+    renderCompartment();
+    await screen.findByText('Door hinge');
+    scanner.onTag?.({ serialNumber: '04:a2:24:5b', payload: null });
+    await waitFor(() =>
+      expect(linkCheckCompartmentNfcTag).toHaveBeenCalledWith('comp-1', {
+        tag_uid: '04A2245B',
+        credential_type: 'serial',
+        label: undefined,
+      })
+    );
+    expect(linkItemNfcTag).not.toHaveBeenCalled();
+    expect(linkStorageAreaNfcTag).not.toHaveBeenCalled();
   });
 });

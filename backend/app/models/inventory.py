@@ -2599,12 +2599,14 @@ class InventoryNfcTagStatus(str, enum.Enum):
 
 
 class InventoryNfcTag(Base):
-    """An NFC tag physically attached to an inventory item or a storage area.
+    """An NFC tag physically attached to an inventory item, a storage area, or
+    an apparatus compartment on an equipment checklist.
 
-    Exactly one of ``item_id`` / ``storage_area_id`` is set (enforced by
-    ``ck_inventory_nfc_tags_one_target``). An item tag names a thing; a
-    storage-area tag names a place, and tapping one during put-away is what
-    moves items onto that shelf.
+    Exactly one of ``item_id`` / ``storage_area_id`` / ``check_compartment_id``
+    is set (enforced by ``ck_inventory_nfc_tags_one_target``). An item tag
+    names a thing; a storage-area tag names a place, and tapping one during
+    put-away is what moves items onto that shelf; a compartment tag names a
+    place on a truck, and tapping one during an equipment check jumps to it.
 
     Only in use when the organization has switched NFC tracking on (see
     ``app/utils/inventory_nfc.py``); the table exists regardless.
@@ -2640,6 +2642,17 @@ class InventoryNfcTag(Base):
     storage_area_id = Column(
         String(36),
         ForeignKey("storage_areas.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    # Compartments belong to a checklist template, not directly to the
+    # organization, so a compartment tag is scoped through its template
+    # (Pitfall #14a, shape b). CASCADE: replacing a template's compartments
+    # wholesale (a preset or an import) recreates them with new ids, and the
+    # tags on the old ones go with them.
+    check_compartment_id = Column(
+        String(36),
+        ForeignKey("check_template_compartments.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )
@@ -2694,8 +2707,12 @@ class InventoryNfcTag(Base):
         ),
         Index("idx_inventory_nfc_tag_org_item", "organization_id", "item_id"),
         CheckConstraint(
-            "(item_id IS NOT NULL AND storage_area_id IS NULL) OR "
-            "(item_id IS NULL AND storage_area_id IS NOT NULL)",
+            "(item_id IS NOT NULL AND storage_area_id IS NULL "
+            "AND check_compartment_id IS NULL) OR "
+            "(item_id IS NULL AND storage_area_id IS NOT NULL "
+            "AND check_compartment_id IS NULL) OR "
+            "(item_id IS NULL AND storage_area_id IS NULL "
+            "AND check_compartment_id IS NOT NULL)",
             name="one_target",
         ),
     )

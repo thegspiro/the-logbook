@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**277 tables · 4610 columns · 899 foreign keys**
+**277 tables · 4611 columns · 900 foreign keys**
 
 ---
 
@@ -323,7 +323,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_nfc_audit_items`](#inventory_nfc_audit_items) | `InventoryNfcAuditItem` | 10 | One item's line in a shelf audit. |
 | [`inventory_nfc_audits`](#inventory_nfc_audits) | `InventoryNfcAudit` | 12 | One shelf audit: the items tapped on a storage area, compared with the |
 | [`inventory_nfc_scans`](#inventory_nfc_scans) | `InventoryNfcScan` | 9 | One staff tap of an NFC tag on an item — the "last seen" trail. |
-| [`inventory_nfc_tags`](#inventory_nfc_tags) | `InventoryNfcTag` | 13 | An NFC tag physically attached to an inventory item or a storage area. |
+| [`inventory_nfc_tags`](#inventory_nfc_tags) | `InventoryNfcTag` | 14 | An NFC tag physically attached to an inventory item, a storage area, or |
 | [`inventory_notification_queue`](#inventory_notification_queue) | `InventoryNotificationQueue` | 15 | Queues inventory change events for delayed, consolidated email |
 | [`inventory_vendor_contacts`](#inventory_vendor_contacts) | `InventoryVendorContact` | 12 | A named person at a vendor — sales rep, service desk, accounts receivable. |
 | [`inventory_vendors`](#inventory_vendors) | `InventoryVendor` | 21 | Vendor model |
@@ -5012,7 +5012,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **InventoryNfcTag** · `app/models/inventory.py`
 
-> An NFC tag physically attached to an inventory item or a storage area. Exactly one of ``item_id`` / ``storage_area_id`` is set (enforced by ``ck_inventory_nfc_tags_one_target``). An item tag names a thing; a storage-area tag names a place, and tapping one during put-away is what moves items onto that shelf. Only in use when the organization has switched NFC tracking on (see ``app/utils/inventory_nfc.py``); the table exists regardless. An item may carry several tags — one on the item, one on its case, a replacement for one that is wearing out — but a tag names exactly one item within an organization. The identifier is stored **hashed**, as it is for member ID cards (``models/nfc_tag.py``), even though an inventory tag grants nothing. The reason is the reader, not the tag: the quartermaster linking a tag holds the same phone that reads ID cards, and a member's card tapped here by mistake would otherwise leave that card's serial — which is the whole of its credential — in clear text in this table. Hashing with the same helper means that mistake leaks nothing.
+> An NFC tag physically attached to an inventory item, a storage area, or an apparatus compartment on an equipment checklist. Exactly one of ``item_id`` / ``storage_area_id`` / ``check_compartment_id`` is set (enforced by ``ck_inventory_nfc_tags_one_target``). An item tag names a thing; a storage-area tag names a place, and tapping one during put-away is what moves items onto that shelf; a compartment tag names a place on a truck, and tapping one during an equipment check jumps to it. Only in use when the organization has switched NFC tracking on (see ``app/utils/inventory_nfc.py``); the table exists regardless. An item may carry several tags — one on the item, one on its case, a replacement for one that is wearing out — but a tag names exactly one item within an organization. The identifier is stored **hashed**, as it is for member ID cards (``models/nfc_tag.py``), even though an inventory tag grants nothing. The reason is the reader, not the tag: the quartermaster linking a tag holds the same phone that reads ID cards, and a member's card tapped here by mistake would otherwise leave that card's serial — which is the whole of its credential — in clear text in this table. Hashing with the same helper means that mistake leaks nothing.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -5020,6 +5020,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `item_id` | VARCHAR(36) | yes | FK, IDX |  | → `inventory_items.id` ON DELETE CASCADE |
 | `storage_area_id` | VARCHAR(36) | yes | FK, IDX |  | → `storage_areas.id` ON DELETE CASCADE |
+| `check_compartment_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_template_compartments.id` ON DELETE CASCADE |
 | `uid_hash` | VARCHAR(64) | no |  |  |  |
 | `uid_preview` | VARCHAR(8) | no |  |  |  |
 | `credential_type` | ENUM(`serial`, `written`) | no |  | `serial` |  |
@@ -5033,13 +5034,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_inventory_nfc_tag_org_item` (`organization_id`, `item_id`)
+- `ix_inventory_nfc_tags_check_compartment_id` (`check_compartment_id`)
 - `ix_inventory_nfc_tags_item_id` (`item_id`)
 - `ix_inventory_nfc_tags_organization_id` (`organization_id`)
 - `ix_inventory_nfc_tags_storage_area_id` (`storage_area_id`)
 
 **Constraints**
 
-- CHECK `ck_inventory_nfc_tags_one_target`: `(item_id IS NOT NULL AND storage_area_id IS NULL) OR (item_id IS NULL AND storage_area_id IS NOT NULL)`
+- CHECK `ck_inventory_nfc_tags_one_target`: `(item_id IS NOT NULL AND storage_area_id IS NULL AND check_compartment_id IS NULL) OR (item_id IS NULL AND storage_area_id IS NOT NULL AND check_compartment_id IS NULL) OR (item_id IS NULL AND storage_area_id IS NULL AND check_compartment_id IS NOT NULL)`
 - UNIQUE `uq_inventory_nfc_tag_org_uid` (`organization_id`, `uid_hash`)
 
 ### `inventory_notification_queue`
@@ -10478,6 +10480,17 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_submissions` | `training_record_id` | SET NULL | yes |
 | `xapi_statements` | `training_record_id` | SET NULL | yes |
 
+### → `check_template_compartments` (6 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_template_compartments` | `parent_compartment_id` | SET NULL | yes |
+| `check_template_items` | `compartment_id` | CASCADE | no |
+| `equipment_check_bulk_delete_requests` | `compartment_id` | CASCADE | no |
+| `equipment_check_bulk_requests` | `compartment_id` | CASCADE | no |
+| `inventory_nfc_tags` | `check_compartment_id` | CASCADE | yes |
+| `shift_equipment_check_seals` | `template_compartment_id` | SET NULL | yes |
+
 ### → `elections` (6 references)
 
 | From table | Column | On delete | Nullable |
@@ -10521,16 +10534,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `program_milestones` | `phase_id` | CASCADE | yes |
 | `program_requirements` | `phase_id` | CASCADE | yes |
 | `training_sessions` | `phase_id` | SET NULL | yes |
-
-### → `check_template_compartments` (5 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `check_template_compartments` | `parent_compartment_id` | SET NULL | yes |
-| `check_template_items` | `compartment_id` | CASCADE | no |
-| `equipment_check_bulk_delete_requests` | `compartment_id` | CASCADE | no |
-| `equipment_check_bulk_requests` | `compartment_id` | CASCADE | no |
-| `shift_equipment_check_seals` | `template_compartment_id` | SET NULL | yes |
 
 ### → `fiscal_years` (5 references)
 

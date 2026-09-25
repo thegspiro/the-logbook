@@ -1,8 +1,8 @@
 """
 Inventory NFC Tag Pydantic Schemas
 
-Request/response shapes for NFC tags attached to inventory items and storage
-areas, put-away, and the staff tap log. Snake-case on the wire, like the rest
+Request/response shapes for NFC tags attached to inventory items, storage
+areas and equipment-check compartments, put-away, and the staff tap log. Snake-case on the wire, like the rest
 of the inventory API.
 """
 
@@ -71,6 +71,7 @@ class InventoryNfcTagResponse(UTCResponseBase):
     # Exactly one of these is set.
     item_id: Optional[str] = None
     storage_area_id: Optional[str] = None
+    check_compartment_id: Optional[str] = None
     uid_preview: str
     credential_type: NfcCredentialType
     label: Optional[str] = None
@@ -145,6 +146,28 @@ class InventoryNfcResolveAnyResponse(BaseModel):
     tag_uid_preview: str
     item: Optional[InventoryItemResponse] = None
     storage_area: Optional[InventoryNfcStorageAreaSummary] = None
+
+
+class InventoryNfcResolveCheckRequest(InventoryNfcResolveRequest):
+    """A tap made during an equipment check of one template."""
+
+    template_id: str = Field(..., min_length=1, max_length=36)
+
+
+class InventoryNfcResolveCheckResponse(BaseModel):
+    """What a tap during a check named.
+
+    ``compartment``: jump the form to ``compartment_id``. ``item``: the
+    checklist entries in ``template_item_ids`` are the ones linked to the
+    tapped inventory item, in checklist order.
+    """
+
+    kind: Literal["compartment", "item"]
+    tag_id: str
+    compartment_id: Optional[str] = None
+    compartment_name: Optional[str] = None
+    item_name: Optional[str] = None
+    template_item_ids: List[str] = Field(default_factory=list)
 
 
 class InventoryNfcPutAwayRequest(BaseModel):

@@ -1,5 +1,6 @@
 /**
- * NFC tags attached to inventory items and storage areas, put-away, and the
+ * NFC tags attached to inventory items, storage areas and equipment-check
+ * compartments, put-away, and the
  * staff tap log. Mirrors
  * `backend/app/schemas/inventory_nfc.py`; snake_case like the rest of the
  * inventory API.
@@ -16,9 +17,10 @@ import type { InventoryItem } from './index';
 
 export interface InventoryNfcTag {
   id: string;
-  /** Exactly one of `item_id` / `storage_area_id` is set. */
+  /** Exactly one of `item_id` / `storage_area_id` / `check_compartment_id` is set. */
   item_id: string | null;
   storage_area_id: string | null;
+  check_compartment_id: string | null;
   /** Last four characters of the identifier; the identifier itself is never returned. */
   uid_preview: string;
   credential_type: NfcCredentialType;
@@ -57,7 +59,7 @@ export interface InventoryNfcSettings {
 }
 
 /** What a tag is linked to. */
-export type InventoryNfcTagTargetKind = 'item' | 'storage_area';
+export type InventoryNfcTagTargetKind = 'item' | 'storage_area' | 'check_compartment';
 
 export interface InventoryNfcResolveAnyRequest extends InventoryNfcResolveRequest {
   /** False from the put-away screen, whose move is logged on its own. */
@@ -73,11 +75,30 @@ export interface InventoryNfcStorageAreaSummary {
 
 /** Exactly one of `item` / `storage_area` is set, per `kind`. */
 export interface InventoryNfcResolveAnyResponse {
-  kind: InventoryNfcTagTargetKind;
+  /** Never `check_compartment`: those resolve only during a check. */
+  kind: 'item' | 'storage_area';
   tag_id: string;
   tag_uid_preview: string;
   item: InventoryItem | null;
   storage_area: InventoryNfcStorageAreaSummary | null;
+}
+
+/** A tap made during an equipment check of `template_id`. */
+export interface InventoryNfcResolveCheckRequest extends InventoryNfcResolveRequest {
+  template_id: string;
+}
+
+/**
+ * `compartment`: jump to `compartment_id`. `item`: the checklist entries in
+ * `template_item_ids` are linked to the tapped item, in checklist order.
+ */
+export interface InventoryNfcResolveCheckResponse {
+  kind: 'compartment' | 'item';
+  tag_id: string;
+  compartment_id: string | null;
+  compartment_name: string | null;
+  item_name: string | null;
+  template_item_ids: string[];
 }
 
 export interface InventoryNfcPutAwayRequest {

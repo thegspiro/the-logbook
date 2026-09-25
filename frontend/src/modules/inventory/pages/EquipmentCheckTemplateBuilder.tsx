@@ -50,6 +50,7 @@ import {
   Smartphone,
   Signal,
   BatteryFull,
+  Nfc,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
@@ -79,6 +80,9 @@ import {
 import { EquipmentCheckForm } from './EquipmentCheckForm';
 import { DialogPortal } from '@/components/DialogPortal';
 import { DialogPanel } from '@/components/ux/DialogPanel';
+import { Modal } from '@/components/Modal';
+import { NfcTagsCard } from '@/modules/inventory/components/NfcTagsCard';
+import { useInventoryNfcEnabled } from '@/modules/inventory/hooks/useInventoryNfcEnabled';
 import InventoryItemPicker from '@/modules/inventory/components/InventoryItemPicker';
 import CatalogQuickAdd from '@/modules/inventory/components/CatalogQuickAdd';
 import InventoryMatchModal from '@/modules/inventory/components/InventoryMatchModal';
@@ -478,6 +482,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // scheduling officer without it is offered linking but not creation —
   // showing the affordance anyway would just produce a 403 they cannot act on.
   const canManageInventory = useAuthStore((s) => s.checkPermission)('inventory.manage');
+  // Only a saved compartment can carry a tag, so a new template has nothing
+  // to ask about until it is saved.
+  const { enabled: nfcEnabled } = useInventoryNfcEnabled(isEditing);
+  const [nfcCompartment, setNfcCompartment] = useState<{ id: string; name: string } | null>(null);
 
   // State
   const [form, setForm] = useState<TemplateFormState>(defaultTemplateForm);
@@ -4291,6 +4299,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   <Package className="h-4 w-4" aria-hidden="true" /> Add a location inside
                 </button>
               )}
+              {nfcEnabled && comp.id && (
+                <button
+                  type="button"
+                  className={mobileMenuItemClass}
+                  onClick={() => setNfcCompartment({ id: comp.id ?? '', name: comp.name || 'Compartment' })}
+                >
+                  <Nfc className="h-4 w-4" aria-hidden="true" /> NFC tags
+                </button>
+              )}
               {comp.items.length > 0 && (
                 <button
                   type="button"
@@ -6350,6 +6367,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </p>
           </div>
         </div>
+      )}
+
+      {nfcCompartment && (
+        <Modal isOpen onClose={() => setNfcCompartment(null)} title={`NFC tags: ${nfcCompartment.name}`} size="lg">
+          <NfcTagsCard targetKind="check_compartment" targetId={nfcCompartment.id} targetName={nfcCompartment.name} />
+        </Modal>
       )}
     </div>
   );

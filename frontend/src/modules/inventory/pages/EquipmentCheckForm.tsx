@@ -74,11 +74,16 @@ import {
   CHECK_TYPE_LABELS,
   countedOnTruck,
   ExpiredStockDisposition,
+  normalizeCheckType,
   soonestExpiration,
   submitterMaySwap,
   targetQuantity,
 } from '../types/equipmentCheck';
 import { flattenCompartmentTree } from '../utils/compartmentTree';
+import CheckNfcTap from '../components/CheckNfcTap';
+import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
+import type { InventoryNfcResolveCheckResponse } from '../types/nfc';
+import { isNfcSupported } from '../../../constants/nfc';
 import LotsAboardPanel from '../components/LotsAboardPanel';
 import SealPanel from '../components/SealPanel';
 import type { SealState } from '../components/SealPanel';
@@ -1555,6 +1560,154 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
 
   // --------------------------------------------------------------------------
+  // NFC taps — a compartment tag jumps to it, an item tag answers it
+  // --------------------------------------------------------------------------
+
+  // Not in the builder's preview: nothing there is a real check, and the
+  // preview must not send requests on the template author's behalf.
+  const { enabled: nfcEnabled } = useInventoryNfcEnabled(!previewMode);
+  const nfcSupported = useMemo(() => isNfcSupported(), []);
+  const showNfcTap = nfcEnabled && nfcSupported && !previewMode && Boolean(template.id);
+  const compartmentRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  /** The first answerable item in a compartment or anything stored inside it. */
+  const firstItemUnder = useCallback(
+    (compartmentId: string): CheckTemplateItem | undefined => {
+      const raw = template.compartments ?? [];
+      const queue = [compartmentId];
+      const seen = new Set<string>();
+      while (queue.length > 0) {
+        const id = queue.shift() ?? '';
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const compartment = raw.find((c) => c.id === id);
+        const item = (compartment?.items ?? [])
+          .slice()
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .find((i) => i.checkType !== 'header' && i.checkType !== 'text');
+        if (item) return item;
+        raw
+          .filter((c) => c.parentCompartmentId === id)
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .forEach((c) => queue.push(c.id));
+      }
+      return undefined;
+    },
+    [template.compartments]
+  );
+
+  /** Scroll the accordion to a compartment card, or to one item inside a card. */
+  const revealInAccordion = useCallback(
+    (cardId: string | undefined, itemId: string | undefined) => {
+      if (cardId && collapsedCompartments.has(cardId)) {
+        setCollapsedCompartments((prev) => {
+          const next = new Set(prev);
+          next.delete(cardId);
+          return next;
+        });
+      }
+      // After the expand has rendered, as focusNextItem does.
+      setTimeout(() => {
+        const el = (itemId ? itemRefs.current[itemId] : null) ?? (cardId ? compartmentRefs.current[cardId] : null);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    },
+    [collapsedCompartments]
+  );
+
+  /**
+   * Where a compartment or item sits in the sweep: the stop, and the pocket
+   * within it. Pockets deeper than one level are shown inside their pocket.
+   */
+  const locateInSweep = useCallback(
+    (match: (stop: LapStop) => boolean): { stop: number; pocket: number } | null => {
+      const within = (stop: LapStop): boolean => match(stop) || (stop.children ?? []).some(within);
+      for (let i = 0; i < sweepStops.length; i++) {
+        const stop = sweepStops[i];
+        if (!stop) continue;
+        if (match(stop)) return { stop: i, pocket: 0 };
+        const pocket = (stop.children ?? []).findIndex(within);
+        if (pocket !== -1) return { stop: i, pocket };
+      }
+      return null;
+    },
+    [sweepStops]
+  );
+
+  const goToInSweep = useCallback((where: { stop: number; pocket: number }) => {
+    setSweepStopIndex(where.stop);
+    setSweepPocketIndex(where.pocket);
+    setSweepScreen('walk');
+  }, []);
+
+  /**
+   * Act on a tap. An item tap answers only pass/fail rows nobody has answered
+   * yet: a tag proves the tool is on the truck, which is what those rows ask,
+   * but it cannot count stock, read a gauge or confirm a date — those rows are
+   * brought on screen for the crew to finish — and it never overwrites an
+   * answer, a failure least of all.
+   */
+  const handleNfcTap = useCallback(
+    (tap: InventoryNfcResolveCheckResponse): string => {
+      if (tap.kind === 'compartment' && tap.compartment_id) {
+        const compartmentId = tap.compartment_id;
+        const name = tap.compartment_name ?? 'Compartment';
+        if (experience === 'sweep') {
+          const where = locateInSweep((stop) => stop.id === compartmentId);
+          if (!where) return `${name} has nothing to check on this list.`;
+          goToInSweep(where);
+          return `${name}.`;
+        }
+        const card = compartments.find((c) => c.id === compartmentId);
+        const item = card ? undefined : firstItemUnder(compartmentId);
+        const cardId = card?.id ?? compartments.find((c) => c.items.some((i) => i.id === item?.id))?.id;
+        if (!cardId) return `${name} has nothing to check on this list.`;
+        revealInAccordion(cardId, item?.id);
+        return `${name}.`;
+      }
+
+      const name = tap.item_name ?? 'Item';
+      const byId = new Map(effectiveCheckableItems.map((item) => [item.id, item]));
+      const onList = tap.template_item_ids.filter((id) => byId.has(id));
+      let marked = 0;
+      for (const id of onList) {
+        const item = byId.get(id);
+        if (!item || normalizeCheckType(item.checkType) !== 'function') continue;
+        if ((results[id]?.status ?? 'not_checked') !== 'not_checked') continue;
+        updateResult(id, { status: 'pass' });
+        marked += 1;
+      }
+      const first = onList[0];
+      if (first) {
+        if (experience === 'sweep') {
+          const where = locateInSweep((stop) => stop.items.some((i) => i.id === first));
+          if (where) goToInSweep(where);
+        } else {
+          revealInAccordion(compartments.find((c) => c.items.some((i) => i.id === first))?.id, first);
+        }
+      }
+      if (marked > 0) return `${name}: marked present.`;
+      if (onList.some((id) => normalizeCheckType(byId.get(id)?.checkType) !== 'function')) {
+        return `${name} found. Finish its check on screen.`;
+      }
+      return `${name} is already answered.`;
+    },
+    [
+      experience,
+      locateInSweep,
+      goToInSweep,
+      compartments,
+      firstItemUnder,
+      revealInAccordion,
+      effectiveCheckableItems,
+      results,
+      updateResult,
+    ]
+  );
+
+  const nfcTap = showNfcTap ? <CheckNfcTap templateId={template.id} onResolved={handleNfcTap} /> : null;
+
+  // --------------------------------------------------------------------------
   // Submit
   // --------------------------------------------------------------------------
 
@@ -2434,7 +2587,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               const visibleItems = sealCleared ? comp.items.filter((item) => !clearedIds.has(item.id)) : comp.items;
 
               return (
-                <div key={comp.id}>
+                <div
+                  key={comp.id}
+                  ref={(el) => {
+                    compartmentRefs.current[comp.id] = el;
+                  }}
+                >
                   {/* Compartment header — collapsible */}
                   {/* Sticky: the compartment heading scrolled away, so a member
                       a dozen items into "Cab" had nothing on screen saying so. */}
@@ -2778,63 +2936,69 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     // button reaches for an `onBack` the preview never passes.
     return (
       <div className={`${previewMode ? 'absolute' : 'fixed'} inset-0 z-40 flex flex-col`}>
-        {sweepScreen === 'finish' ? (
-          <CheckFinish
-            stops={sweepStops}
-            answers={sweepAnswers}
-            onJump={goTo}
-            // previewMode promises nothing is submitted, and both builder
-            // previews pass shiftId="preview" — a real POST from here files
-            // against a shift that does not exist.
-            onSubmit={previewMode ? () => undefined : () => void handleSubmit()}
-            onBack={() => setSweepScreen('walk')}
-            submittingAs={user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'you'}
-            submitting={submitting || alreadyFiled}
-            overallNotes={overallNotes}
-            onOverallNotesChange={setOverallNotes}
-          />
-        ) : (
-          <CheckSweep
-            stops={sweepStops}
-            answers={sweepAnswers}
-            stopIndex={sweepStopIndex}
-            onStopIndexChange={setSweepStopIndex}
-            pocketIndex={sweepPocketIndex}
-            onPocketIndexChange={setSweepPocketIndex}
-            onBulkClaim={handleSweepBulkClaim}
-            onOpenJump={() => setSweepScreen('jump')}
-            onFinish={() => setSweepScreen('finish')}
-            onClose={() => onBack?.()}
-            unitName={shiftContext?.apparatusName ?? ''}
-            templateName={template.name}
-            saveState={sweepSaveState}
-            disabled={submitting}
-            renderStop={(current, openPocketIndex) => (
-              <CheckSweepStop
-                stop={current}
+        {nfcTap && <div className="border-theme-surface-border bg-theme-surface border-b px-3.5 py-2">{nfcTap}</div>}
+        {/* The sweep and the finish screen are each h-full; below the tap strip
+            they get the space that is left rather than the whole screen. */}
+        <div className="relative min-h-0 flex-1">
+          <div className="absolute inset-0">
+            {sweepScreen === 'finish' ? (
+              <CheckFinish
+                stops={sweepStops}
                 answers={sweepAnswers}
-                onAnswer={handleSweepAnswer}
-                onSeal={previewMode ? undefined : handleSweepSeal}
+                onJump={goTo}
+                // previewMode promises nothing is submitted, and both builder
+                // previews pass shiftId="preview" — a real POST from here files
+                // against a shift that does not exist.
+                onSubmit={previewMode ? () => undefined : () => void handleSubmit()}
+                onBack={() => setSweepScreen('walk')}
+                submittingAs={user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'you'}
+                submitting={submitting || alreadyFiled}
+                overallNotes={overallNotes}
+                onOverallNotesChange={setOverallNotes}
+              />
+            ) : (
+              <CheckSweep
+                stops={sweepStops}
+                answers={sweepAnswers}
+                stopIndex={sweepStopIndex}
+                onStopIndexChange={setSweepStopIndex}
+                pocketIndex={sweepPocketIndex}
+                onPocketIndexChange={setSweepPocketIndex}
+                onBulkClaim={handleSweepBulkClaim}
+                onOpenJump={() => setSweepScreen('jump')}
+                onFinish={() => setSweepScreen('finish')}
+                onClose={() => onBack?.()}
+                unitName={shiftContext?.apparatusName ?? ''}
+                templateName={template.name}
+                saveState={sweepSaveState}
                 disabled={submitting}
-                openPocketIndex={openPocketIndex}
-                onSwap={
-                  previewMode
-                    ? undefined
-                    : (itemId) => {
-                        const raw = compartments.flatMap((c) => c.items).find((i) => i.id === itemId);
-                        if (raw) void openSwap(applyOverride(raw));
-                      }
-                }
-                canSwap={canSwapStock}
-                canManageSwap={canManageStock}
-                // The organization's calendar day, so an expiry verdict does
-                // not move with the phone's timezone.
-                today={new Date(`${today}T00:00:00`)}
+                renderStop={(current, openPocketIndex) => (
+                  <CheckSweepStop
+                    stop={current}
+                    answers={sweepAnswers}
+                    onAnswer={handleSweepAnswer}
+                    onSeal={previewMode ? undefined : handleSweepSeal}
+                    disabled={submitting}
+                    openPocketIndex={openPocketIndex}
+                    onSwap={
+                      previewMode
+                        ? undefined
+                        : (itemId) => {
+                            const raw = compartments.flatMap((c) => c.items).find((i) => i.id === itemId);
+                            if (raw) void openSwap(applyOverride(raw));
+                          }
+                    }
+                    canSwap={canSwapStock}
+                    canManageSwap={canManageStock}
+                    // The organization's calendar day, so an expiry verdict does
+                    // not move with the phone's timezone.
+                    today={new Date(`${today}T00:00:00`)}
+                  />
+                )}
               />
             )}
-          />
-        )}
-
+          </div>
+        </div>
         {sweepScreen === 'jump' && (
           <CheckJumpSheet
             stops={sweepStops}
@@ -2957,6 +3121,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           )}
         </div>
       )}
+      {nfcTap && <div className="card-secondary p-3">{nfcTap}</div>}
       {/* Offline banner */}
       {!isOnline && !previewMode && (
         <div className="border-theme-alert-warning-border bg-theme-alert-warning-bg text-theme-alert-warning-text flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
