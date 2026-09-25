@@ -28,6 +28,7 @@ print_info() { echo "INFO:$1"; }
 
 _HELPERS = (
     "frontend_url_is_loopback",
+    "env_has_public_frontend_url",
     "validate_public_url",
     "prompt_public_url",
     "write_frontend_url",
@@ -97,9 +98,11 @@ class TestPublicUrlArgument:
             "https://a.org/#x",
             "https://a'.org",
             "https://a`.org",
+            "http://localhost:3000",
+            "https://127.0.0.1",
         ],
     )
-    def test_urls_that_would_corrupt_the_env_file_are_refused(self, url):
+    def test_urls_that_would_corrupt_the_env_file_or_not_boot_are_refused(self, url):
         result = _bash(
             _functions("frontend_url_is_loopback", "validate_public_url"),
             'validate_public_url "$1"',
@@ -129,6 +132,37 @@ class TestPublicUrlArgument:
         )
         assert result.returncode == 1
         assert "must start with http:// or https://" in result.stdout
+
+    def test_no_url_without_a_terminal_fails_before_anything_is_installed(
+        self, tmp_path
+    ):
+        # A copy, so SCRIPT_DIR (and the .env it looks for) is the empty tmp dir.
+        script = tmp_path / "install.sh"
+        shutil.copy(INSTALL, script)
+        result = subprocess.run(
+            ["bash", str(script), "--docker"],
+            input="",
+            capture_output=True,
+            text=True,
+            timeout=20,
+            env={"PATH": "/usr/bin:/bin"},
+        )
+        assert result.returncode == 1
+        assert "A public URL is required" in result.stdout
+        assert "INSTALLATION" not in result.stdout
+
+    def test_help_needs_no_url(self, tmp_path):
+        script = tmp_path / "install.sh"
+        shutil.copy(INSTALL, script)
+        result = subprocess.run(
+            ["bash", str(script), "--help"],
+            input="",
+            capture_output=True,
+            text=True,
+            timeout=20,
+            env={"PATH": "/usr/bin:/bin"},
+        )
+        assert "A public URL is required" not in result.stdout
 
     def test_missing_value_is_an_error(self):
         result = subprocess.run(
@@ -162,7 +196,7 @@ class TestPublicUrlArgument:
 
 @pytest.mark.unit
 class TestSetupEnvironment:
-    def _run(self, tmp_path, public_url: str, stdin: str = "") -> str:
+    def _run(self, tmp_path, public_url: str, stdin: str = "", ok: bool = True) -> str:
         shutil.copy(ENV_EXAMPLE, tmp_path / ".env.example")
         result = _bash(
             _functions(*_HELPERS, "setup_environment"),
@@ -172,16 +206,17 @@ class TestSetupEnvironment:
             public_url,
             stdin=stdin,
         )
-        assert result.returncode == 0, result.stdout + result.stderr
+        assert (result.returncode == 0) == ok, result.stdout + result.stderr
         return (tmp_path / ".env").read_text()
 
     def test_new_env_takes_the_public_url(self, tmp_path):
         env = self._run(tmp_path, "https://logbook.org")
         assert _frontend_url(env) == ["https://logbook.org"]
 
-    def test_new_env_without_one_keeps_the_example_default(self, tmp_path):
-        env = self._run(tmp_path, "")
-        assert _frontend_url(env) == ["http://localhost:3000"]
+    def test_new_env_without_one_stops_the_install(self, tmp_path):
+        # Reachable only when a .env existed and was then overwritten without
+        # a terminal; require_public_url stops every other route earlier.
+        self._run(tmp_path, "", ok=False)
 
     def test_url_with_sed_metacharacters_survives(self, tmp_path):
         env = self._run(tmp_path, "https://a.org/x|y&z")
@@ -196,6 +231,14 @@ class TestSetupEnvironment:
         assert _frontend_url(env) == ["https://l.org"]
         assert env.startswith("A=1\n")
 
+    def test_kept_env_localhost_without_a_url_stops_the_install(self, tmp_path):
+        original = (
+            "FRONTEND_URL=http://localhost:3000\nSECURITY_REQUIRE_TLS=false\n"
+            "COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml\n"
+        )
+        (tmp_path / ".env").write_text(original)
+        assert self._run(tmp_path, "", stdin="n", ok=False) == original
+
     def test_kept_env_public_value_is_never_rewritten(self, tmp_path):
         original = (
             "FRONTEND_URL=https://mine.org\nSECURITY_REQUIRE_TLS=false\n"
@@ -206,24 +249,36 @@ class TestSetupEnvironment:
 
 
 @pytest.mark.unit
-class TestClosingWarning:
-    def _warn(self, tmp_path, value: str) -> str:
-        (tmp_path / ".env").write_text(f"FRONTEND_URL={value}\n")
-        result = _bash(
-            _functions("frontend_url_is_loopback", "warn_if_frontend_url_is_loopback"),
-            'SCRIPT_DIR="$1"; warn_if_frontend_url_is_loopback',
+class TestRequirePublicUrl:
+    def _require(self, tmp_path, env: str | None, public_url: str = ""):
+        if env is not None:
+            (tmp_path / ".env").write_text(env)
+        return _bash(
+            _functions(
+                "frontend_url_is_loopback",
+                "env_has_public_frontend_url",
+                "require_public_url",
+            ),
+            'SCRIPT_DIR="$1"; PUBLIC_URL="$2"; require_public_url',
             str(tmp_path),
-        )
-        assert result.returncode == 0
-        return result.stdout
-
-    def test_warns_on_localhost(self, tmp_path):
-        assert "link to this machine only" in self._warn(
-            tmp_path, "http://localhost:3000"
+            public_url,
         )
 
-    def test_silent_on_a_public_url(self, tmp_path):
-        assert self._warn(tmp_path, "https://logbook.org") == ""
+    @pytest.mark.parametrize(
+        "env", [None, "FRONTEND_URL=http://localhost:3000\n", "A=1\n"]
+    )
+    def test_refuses_without_one(self, tmp_path, env):
+        result = self._require(tmp_path, env)
+        assert result.returncode == 1
+        assert "--public-url" in result.stdout
 
-    def test_both_deployment_paths_print_it(self):
-        assert INSTALL.read_text().count("    warn_if_frontend_url_is_loopback\n") == 2
+    def test_accepts_the_flag(self, tmp_path):
+        assert self._require(tmp_path, None, "https://l.org").returncode == 0
+
+    def test_accepts_a_preserved_public_env(self, tmp_path):
+        env = "FRONTEND_URL=https://mine.org\n"
+        assert self._require(tmp_path, env).returncode == 0
+
+    def test_the_closing_localhost_warning_is_gone(self):
+        # Superseded: an install can no longer finish with a loopback URL.
+        assert "warn_if_frontend_url_is_loopback" not in INSTALL.read_text()

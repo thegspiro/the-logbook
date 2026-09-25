@@ -490,17 +490,18 @@ class Settings(BaseSettings):
 
         # --- Additional production/staging checks ---
         if self.ENVIRONMENT in ("production", "staging"):
-            # Advisory, not CRITICAL: a wrong FRONTEND_URL breaks emailed links
-            # but weakens no control, and blocking would stop existing installs
-            # that shipped with the default from booting after an upgrade.
-            # Production only: staging is often reached on an internal or
-            # loopback address on purpose, where this would be noise.
+            # Blocking: every emailed link (password resets, ballots,
+            # approvals, reminders) is built from FRONTEND_URL, and a loopback
+            # value sends each recipient to their own machine. The failure is
+            # silent — mail goes out, nothing errors — so a log warning was
+            # read by nobody. Production only: staging is often reached on an
+            # internal or loopback address on purpose.
             if self.ENVIRONMENT == "production" and _is_loopback_url(self.FRONTEND_URL):
                 warnings.append(
-                    f"WARNING: FRONTEND_URL is {self.FRONTEND_URL!r}, which "
+                    f"CRITICAL: FRONTEND_URL is {self.FRONTEND_URL!r}, which "
                     "points at this machine. Every link in an outgoing email "
                     "(password resets, ballots, approvals, reminders) is built "
-                    "from it, so recipients will get links that do not open. "
+                    "from it, so recipients would get links that do not open. "
                     "Set FRONTEND_URL to the site's public URL, e.g. "
                     "https://logbook.yourdept.org."
                 )

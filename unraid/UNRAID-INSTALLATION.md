@@ -382,8 +382,12 @@ FRONTEND_URL=https://logbook.yourdomain.com
 ```
 
 In production, a `FRONTEND_URL` that still points at `localhost` (or any
-loopback address) logs `WARNING: FRONTEND_URL ...` at startup and appears under
-"Advisory" in `python -m app.preflight`. It does not stop the container.
+loopback address) **stops the backend from starting**: it logs
+`CRITICAL: FRONTEND_URL ...` and appears under "BLOCKING" in
+`python -m app.preflight`. The setup script refuses a `localhost` HTTPS origin,
+and its update path (option 2) stops before restarting anything when the kept
+`.env` still has a loopback `FRONTEND_URL`. See
+[UPGRADING.md](../docs/UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
 
 ### Database / Redis TLS (`DB_SSL` / `REDIS_SSL`)
 

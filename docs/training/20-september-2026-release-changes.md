@@ -1630,13 +1630,20 @@ nobody. New installs now set it: the Unraid setup script uses the HTTPS address
 it asks for, and the universal installer takes `--public-url`.
 
 As of September 24, a production backend logs this at startup, and the
-preflight check lists it under "Advisory":
+preflight check lists it under "Advisory". As first shipped it was a
+`WARNING: FRONTEND_URL ...` line and did not stop the service from starting.
+
+_(2026-09-25)_ It now **blocks startup**: a production backend with a loopback
+`FRONTEND_URL` refuses to start, preflight lists it under "BLOCKING", and the
+line reads:
 
 ```
-WARNING: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...
+CRITICAL: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...
 ```
 
-It does not stop the service from starting.
+The universal installer and `install.sh` now require `--public-url` (or an
+existing `.env` with a public `FRONTEND_URL`) and refuse a `localhost` address.
+See the [upgrade note](../UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
 
 **What to do:** set `FRONTEND_URL` in `.env` to the address members use (for
 example `https://logbook.yourdept.org`), confirm it reaches the container with
