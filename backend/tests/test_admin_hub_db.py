@@ -721,7 +721,9 @@ class TestSummaryShape:
         member = await _member(db_session, org)
 
         summary = await AdminHubService(db_session).get_summary("members", member)
-        assert summary.timezone == "UTC"
+        # The scheduling default every other view falls back to, so the hub
+        # and the compliance percentage beside it count the same day.
+        assert summary.timezone == "America/New_York"
 
 
 # ── Which three metrics an admin sees ───────────────────────────────────────

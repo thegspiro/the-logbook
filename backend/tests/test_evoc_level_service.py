@@ -110,6 +110,15 @@ class TestDeleteLevel:
 
 
 class TestDriverEligibility:
+    @pytest.fixture(autouse=True)
+    def _department_today(self, monkeypatch):
+        # The mocked session answers only the apparatus and operator queries;
+        # the org's date comes from here rather than a third result.
+        monkeypatch.setattr(
+            "app.services.evoc_level_service.resolve_org_today",
+            AsyncMock(return_value=date.today()),
+        )
+
     async def test_no_required_level_is_eligible(self):
         db = _db([_one(_apparatus(None))])
         out = await EvocLevelService(db).check_driver_evoc_eligibility("u", "ap1", "o")

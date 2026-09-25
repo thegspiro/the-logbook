@@ -18,6 +18,7 @@ from app.models.training import TrainingProgram
 from app.schemas.apparatus import EvocLevelCreate, EvocLevelUpdate
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import resolve_org_today
 
 # The NFPA 1451 / national EVOC tiering most departments start from. Seeded
 # per-organization (rather than as org-agnostic system rows) because each level
@@ -323,7 +324,9 @@ class EvocLevelService:
         # EVOC certification still counted as valid (nothing flips is_active
         # off on expiry), letting an out-of-cert member drive without a
         # warning.
-        as_of = on_date or date.today()
+        # The department's date: a card is good through its expiration day on
+        # the department's calendar, the same day the eligibility roster uses.
+        as_of = on_date or await resolve_org_today(self.db, organization_id)
         current_cert = (
             ApparatusOperator.is_active.is_(True),
             ApparatusOperator.is_certified.is_(True),

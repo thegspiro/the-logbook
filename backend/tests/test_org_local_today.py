@@ -46,6 +46,7 @@ class _ServerDate(date):
 def _frozen_clock(monkeypatch):
     from app.services import (
         cert_alert_service,
+        evoc_level_service,
         inventory_service,
         qualification_service,
         reports_service,
@@ -65,6 +66,7 @@ def _frozen_clock(monkeypatch):
     monkeypatch.setattr(training_service, "date", _ServerDate)
     monkeypatch.setattr(reports_service, "date", _ServerDate)
     monkeypatch.setattr(qualification_service, "date", _ServerDate)
+    monkeypatch.setattr(evoc_level_service, "date", _ServerDate)
 
 
 def _org(tz="America/New_York", **extra):
@@ -488,3 +490,55 @@ class TestShiftEligibilityDate:
         from app.services.shift_eligibility_service import ShiftEligibilityService
 
         assert ShiftEligibilityService._shift_date(None, _org()) == LOCAL_TODAY
+
+
+class TestOperatorCertificates:
+    async def test_the_evoc_check_uses_the_departments_date(self):
+        """A card good through today must still clear a driver this evening;
+        the UTC date (a day on) would have filtered it out."""
+        from app.services.evoc_level_service import EvocLevelService
+
+        apparatus = SimpleNamespace(
+            required_evoc_level_id="lvl-2",
+            required_evoc_level=SimpleNamespace(
+                id="lvl-2", level_number=2, name="EVOC II", is_cumulative=True
+            ),
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_one(apparatus), _one(_org()), _scalars([])]
+        )
+
+        await EvocLevelService(db).check_driver_evoc_eligibility("u1", "ap1", "org-1")
+
+        query = db.execute.await_args_list[2].args[0]
+        bound = set(query.compile().params.values())
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+    async def test_the_roster_uses_the_same_date(self):
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await ShiftEligibilityService(db)._get_operator_map("org-1")
+
+        query = db.execute.await_args_list[1].args[0]
+        bound = set(query.compile().params.values())
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+
+class TestOperationsDashboardAge:
+    def test_an_evening_row_is_aged_on_the_departments_calendar(self):
+        """02:30 UTC on Oct 6 is 10:30 PM on Oct 5 in New York: a day old on
+        Oct 6 locally, where its UTC date read it as brand new."""
+        from zoneinfo import ZoneInfo
+
+        from app.api.v1.endpoints.dashboard import _age_days
+
+        created = datetime(2026, 10, 6, 2, 30)  # naive, as func.min returns it
+        assert _age_days(created, LOCAL_TODAY, ZoneInfo("America/New_York")) == 1

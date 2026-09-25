@@ -48,7 +48,12 @@ from app.utils.membership import (
     is_administrative,
     is_operational,
 )
-from app.utils.org_timezone import local_date, org_today, scheduling_timezone
+from app.utils.org_timezone import (
+    local_date,
+    org_today,
+    resolve_org_today,
+    scheduling_timezone,
+)
 
 # Mapping from training program target_position values to the shift
 # position they unlock upon completion.
@@ -589,7 +594,9 @@ class ShiftEligibilityService:
         slug_map = await self._get_slug_eligibility_map(organization_id)
         await self._get_held_position_map(organization_id)
         training_map = await self._get_training_program_map(organization_id, position)
-        operator_map = await self._get_operator_map(organization_id)
+        operator_map = await self._get_operator_map(
+            organization_id, today=org_today(org)
+        )
         # The department's date, from the org already in hand.
         qualification_map = await QualificationService(self.db).get_current_by_member(
             organization_id, as_of=org_today(org)
@@ -728,15 +735,18 @@ class ShiftEligibilityService:
         return by_user
 
     async def _get_operator_map(
-        self, organization_id: str
+        self, organization_id: str, today: Optional[date] = None
     ) -> Dict[str, List[Dict[str, Any]]]:
         """user_id -> current apparatus operator records, newest cert first.
 
         Only *current* certifications count, matching
         ``EvocLevelService.check_driver_evoc_eligibility``: active, certified,
         and not past expiration. An expired card must not read as cleared.
+        ``today`` is the department's date, as ``check_driver_evoc_eligibility``
+        uses, so the roster and the signup check agree on the same card.
         """
-        today = date.today()
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
         result = await self.db.execute(
             select(ApparatusOperator, Apparatus.unit_number)
             .join(Apparatus, ApparatusOperator.apparatus_id == Apparatus.id)
