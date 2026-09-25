@@ -659,8 +659,10 @@ async function main() {
       // branding mock stayed on the reused page and put every later admin
       // shot in the top bar — 400 pages in one run, each 21px too wide.
       // Dropping every route before the next shot installs its own makes a
-      // mock last exactly one shot, whatever manifest order does.
-      await page.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {});
+      // mock last exactly one shot, whatever manifest order does. Not caught:
+      // if the mocks cannot be dropped, the next shot could inherit one, so
+      // the shot must fail rather than photograph whatever leaked.
+      await page.unrouteAll({ behavior: "ignoreErrors" });
       if (shot.beforeNavigate) {
         // Install route mocks before the first document request. This is used
         // sparingly for provider-controlled configuration states (for example,
