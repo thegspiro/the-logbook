@@ -206,7 +206,9 @@ class FiscalYear(Base):
         default=FiscalYearStatus.DRAFT,
     )
     is_locked = Column(Boolean, nullable=False, default=False)
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -305,7 +307,9 @@ class Budget(Base):
         ForeignKey("facilities.id", ondelete="SET NULL"),
         nullable=True,
     )
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -367,7 +371,9 @@ class ApprovalChain(Base):
     )
     is_default = Column(Boolean, nullable=False, default=False)
     is_active = Column(Boolean, nullable=False, default=True)
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -536,7 +542,9 @@ class PurchaseRequest(Base):
         ForeignKey("budgets.id", ondelete="SET NULL"),
         nullable=True,
     )
-    requested_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    requested_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     title = Column(String(300), nullable=False)
     description = Column(Text, nullable=True)
     vendor = Column(String(300), nullable=True)
@@ -636,7 +644,9 @@ class ExpenseReport(Base):
         nullable=False,
     )
     report_number = Column(String(20), nullable=False)
-    submitted_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    submitted_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     fiscal_year_id = Column(
         String(36),
         ForeignKey("fiscal_years.id", ondelete="CASCADE"),
@@ -749,7 +759,9 @@ class CheckRequest(Base):
         nullable=False,
     )
     request_number = Column(String(20), nullable=False)
-    requested_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    requested_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     fiscal_year_id = Column(
         String(36),
         ForeignKey("fiscal_years.id", ondelete="CASCADE"),
@@ -849,7 +861,9 @@ class DuesSchedule(Base):
     applies_to_membership_types = Column(JSON, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     notes = Column(Text, nullable=True)
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -1078,7 +1092,9 @@ class ExportLog(Base):
         ),
         nullable=False,
     )
-    exported_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    exported_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     exported_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

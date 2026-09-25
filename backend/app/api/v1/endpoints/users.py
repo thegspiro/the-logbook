@@ -1863,8 +1863,8 @@ async def delete_user(
     deleted_full_name = user.full_name
 
     if hard:
-        # Attribution columns that were never given an ondelete (`created_by`,
-        # `approved_by`, `issued_by`, ...) are RESTRICT in MySQL, so any member
+        # Attribution columns declared ondelete="RESTRICT" (`created_by`,
+        # `approved_by`, `issued_by`, ...) block the DELETE, so any member
         # who has ever created a record would otherwise fail the DELETE with
         # errno 1451. Clear the nullable ones; refuse when a record cannot be
         # left ownerless. See user_deletion_service for the full rationale.

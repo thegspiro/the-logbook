@@ -126,7 +126,9 @@ class MembershipPipeline(Base):
     )
     report_stage_groups = Column(JSON, default=list)
 
-    created_by = Column(String(36), ForeignKey("users.id"), index=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

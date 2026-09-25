@@ -129,12 +129,14 @@ class IPException(Base):
 
     # Request submitted
     requested_by = Column(
-        String(36), ForeignKey("users.id"), nullable=False
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )  # User who submitted request
     requested_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Approval by IT Administrator
-    approved_by = Column(String(36), ForeignKey("users.id"))  # IT admin who approved
+    approved_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )  # IT admin who approved
     approved_at = Column(DateTime(timezone=True))
     approval_notes = Column(Text)  # IT admin notes on approval
     approved_duration_days = Column(
@@ -142,12 +144,14 @@ class IPException(Base):
     )  # Actual approved duration (may differ from requested)
 
     # Rejection (if applicable)
-    rejected_by = Column(String(36), ForeignKey("users.id"))  # IT admin who rejected
+    rejected_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )  # IT admin who rejected
     rejected_at = Column(DateTime(timezone=True))
     rejection_reason = Column(Text)  # Required when rejecting
 
     # Revocation (if exception needs to be ended early)
-    revoked_by = Column(String(36), ForeignKey("users.id"))
+    revoked_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
     revoked_at = Column(DateTime(timezone=True))
     revoke_reason = Column(Text)
 
@@ -259,7 +263,7 @@ class BlockedAccessAttempt(Base):
     country_name = Column(String(100))
 
     # Associated user (if authenticated)
-    user_id = Column(String(36), ForeignKey("users.id"))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Block reason
     block_reason = Column(String(100), nullable=False, index=True)
@@ -306,12 +310,14 @@ class CountryBlockRule(Base):
     risk_level = Column(String(20))  # low, medium, high, critical
 
     # Audit trail
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    updated_by = Column(String(36), ForeignKey("users.id"))
+    updated_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Statistics
     blocked_attempts_count = Column(Integer, default=0)
@@ -347,7 +353,9 @@ class IPExceptionAuditLog(Base):
     )  # requested, approved, rejected, revoked, expired, used
 
     # Who performed the action
-    performed_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    performed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
 
     # When
     performed_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -85,7 +85,9 @@ class Location(Base):
     )
 
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
