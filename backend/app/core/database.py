@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 
 from loguru import logger
-from sqlalchemy import DateTime, MetaData, event
+from sqlalchemy import DateTime, MetaData, event, inspect
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm.attributes import set_committed_value
@@ -43,12 +43,21 @@ def _stamp_utc(target) -> None:
     is used.  Without tzinfo Pydantic serialises the value without a ``Z``
     or ``+00:00`` suffix, causing JavaScript ``new Date()`` to treat it as
     browser-local time instead of UTC.
+
+    Reads only values already present in the instance's state, never through
+    ``getattr``. This runs inside a load/refresh handler, and a partial
+    refresh (``session.refresh(obj, ["positions"])``) leaves the object's
+    other expired columns unloaded -- a ``getattr`` on one of them would emit
+    a second SELECT from within the handler, which SQLAlchemy flags with
+    "Loading context ... has changed within a load/refresh handler". Nothing
+    is missed by skipping them: loading an expired attribute later fires its
+    own ``"refresh"`` event, which stamps it then.
     """
-    mapper = type(target).__mapper__
-    for col in mapper.columns:
+    loaded = inspect(target).dict
+    for col in type(target).__mapper__.columns:
         if isinstance(col.type, DateTime) and col.type.timezone:
             attr = col.key
-            val = getattr(target, attr, None)
+            val = loaded.get(attr)
             if isinstance(val, datetime) and val.tzinfo is None:
                 set_committed_value(target, attr, val.replace(tzinfo=timezone.utc))
 
@@ -95,7 +104,7 @@ class DatabaseManager:
 
         Uses exponential backoff for retries to handle MySQL startup delays.
         """
-        last_exception = None
+        last_exception: Exception | None = None
         last_exception_type: str | None = None
         last_scrubbed_detail: str | None = None
         retry_delay = settings.DB_CONNECT_RETRY_DELAY
