@@ -36,7 +36,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from loguru import logger
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -53,6 +54,7 @@ from app.models.suggestion import (
     SuggestionForward,
     SuggestionMessage,
     SuggestionStatusEvent,
+    SuggestionVote,
 )
 from app.models.user import Organization, Position, User, user_positions
 from app.schemas.suggestion import (
@@ -195,6 +197,7 @@ class SuggestionService:
             anonymity_mode=data.anonymity_mode,
             follow_up_enabled=data.follow_up_enabled,
             is_active=data.is_active,
+            public_board_enabled=bool(data.public_board_enabled),
             created_by=str(actor_id),
             # Initialized so _replace_grants never lazy-loads a collection on
             # a new instance, which an async session cannot do.
@@ -220,6 +223,8 @@ class SuggestionService:
         box.anonymity_mode = data.anonymity_mode
         box.follow_up_enabled = data.follow_up_enabled
         box.is_active = data.is_active
+        if data.public_board_enabled is not None:
+            box.public_board_enabled = data.public_board_enabled
         self._replace_reviewers(box, organization_id, data)
         self._replace_watchers(box, organization_id, data)
         await self.db.commit()
@@ -463,6 +468,7 @@ class SuggestionService:
             "reviewer_members": reviewer_members,
             "watcher_positions": watcher_positions,
             "watcher_members": watcher_members,
+            "public_board_enabled": bool(box.public_board_enabled),
             "created_at": box.created_at,
             "updated_at": box.updated_at,
         }
@@ -925,6 +931,12 @@ class SuggestionService:
             "via_forward": not can_forward,
             "forwards": await self.list_forwards(suggestion),
             "timeline": await self.timeline(suggestion),
+            "board_enabled": bool(suggestion.box.public_board_enabled),
+            "can_publish": can_forward and bool(suggestion.box.public_board_enabled),
+            "published_at": suggestion.published_at,
+            "published_title": suggestion.published_title,
+            "published_summary": suggestion.published_summary,
+            "vote_count": await self._vote_count(suggestion.id),
         }
 
     # ------------------------------------------------------------------
@@ -1244,6 +1256,226 @@ class SuggestionService:
             )
         )
         return sorted(str(row[0]) for row in result.all())
+
+    # ------------------------------------------------------------------
+    # Idea board
+    # ------------------------------------------------------------------
+
+    async def publish(
+        self, suggestion: Suggestion, actor_id: str, title: str, summary: str
+    ) -> bool:
+        """Put a reviewer-written copy on the board, or replace the copy
+        already there. Returns True when it was not published before."""
+        if not suggestion.box.public_board_enabled:
+            raise ValueError("This box does not have an idea board.")
+        now = datetime.now(timezone.utc)
+        first = suggestion.published_at is None
+        suggestion.published_title = title
+        suggestion.published_summary = summary
+        suggestion.published_by = str(actor_id)
+        if first:
+            suggestion.published_at = now
+        suggestion.updated_at = now
+        await self.db.commit()
+        return first
+
+    async def unpublish(self, suggestion: Suggestion) -> bool:
+        """Take a suggestion off the board. Its votes are kept, so publishing
+        it again does not wipe the support it had. Returns False when it was
+        not published."""
+        if suggestion.published_at is None:
+            return False
+        suggestion.published_at = None
+        suggestion.published_by = None
+        suggestion.published_title = None
+        suggestion.published_summary = None
+        suggestion.updated_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        return True
+
+    @staticmethod
+    def _board_filters(organization_id: str) -> List[Any]:
+        # A published suggestion leaves the board when its box is archived
+        # or the board is switched off, without anyone unpublishing it.
+        return [
+            Suggestion.organization_id == str(organization_id),
+            Suggestion.published_at.is_not(None),
+            SuggestionBox.is_active,
+            SuggestionBox.public_board_enabled,
+        ]
+
+    async def list_board(
+        self,
+        organization_id: str,
+        user_id: str,
+        *,
+        box_id: Optional[str] = None,
+        disposition: Optional[str] = None,
+        sort: str = "top",
+        skip: int = 0,
+        limit: int = 25,
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        filters = self._board_filters(organization_id)
+        if box_id:
+            filters.append(Suggestion.box_id == str(box_id))
+        if disposition == "open":
+            filters.append(Suggestion.disposition.in_(OPEN_DISPOSITIONS))
+        elif disposition:
+            filters.append(Suggestion.disposition == disposition)
+        total = await self.db.scalar(
+            select(func.count(Suggestion.id))
+            .join(SuggestionBox, SuggestionBox.id == Suggestion.box_id)
+            .where(*filters)
+        )
+        votes = self._vote_count_column()
+        order = (
+            [votes.desc(), Suggestion.published_at.desc(), Suggestion.id.desc()]
+            if sort == "top"
+            else [Suggestion.published_at.desc(), Suggestion.id.desc()]
+        )
+        rows = (
+            await self.db.execute(
+                select(
+                    Suggestion,
+                    SuggestionBox.name,
+                    votes,
+                    self._has_voted_column(user_id),
+                )
+                .join(SuggestionBox, SuggestionBox.id == Suggestion.box_id)
+                .where(*filters)
+                .order_by(*order)
+                .offset(skip)
+                .limit(limit)
+            )
+        ).all()
+        return await self._board_entries(rows), int(total or 0)
+
+    async def get_board_entry(
+        self, organization_id: str, user_id: str, suggestion_id: str
+    ) -> Optional[Dict[str, Any]]:
+        rows = (
+            await self.db.execute(
+                select(
+                    Suggestion,
+                    SuggestionBox.name,
+                    self._vote_count_column(),
+                    self._has_voted_column(user_id),
+                )
+                .join(SuggestionBox, SuggestionBox.id == Suggestion.box_id)
+                .where(
+                    *self._board_filters(organization_id),
+                    Suggestion.id == str(suggestion_id),
+                )
+            )
+        ).all()
+        entries = await self._board_entries(rows)
+        return entries[0] if entries else None
+
+    async def set_vote(
+        self, organization_id: str, user_id: str, suggestion_id: str, on: bool
+    ) -> Optional[Dict[str, Any]]:
+        """Add or withdraw the member's vote; either is idempotent. Returns
+        None when the suggestion is not on a board the member can see."""
+        entry = await self.get_board_entry(organization_id, user_id, suggestion_id)
+        if entry is None:
+            return None
+        if on and not entry["has_voted"]:
+            try:
+                # A savepoint, so a double tap that loses the race on the
+                # unique constraint rolls back only its own insert.
+                async with self.db.begin_nested():
+                    self.db.add(
+                        SuggestionVote(
+                            organization_id=str(organization_id),
+                            suggestion_id=str(suggestion_id),
+                            user_id=str(user_id),
+                        )
+                    )
+            except IntegrityError:
+                pass
+        elif not on and entry["has_voted"]:
+            existing = (
+                await self.db.execute(
+                    select(SuggestionVote).where(
+                        SuggestionVote.organization_id == str(organization_id),
+                        SuggestionVote.suggestion_id == str(suggestion_id),
+                        SuggestionVote.user_id == str(user_id),
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing is not None:
+                await self.db.delete(existing)
+        await self.db.commit()
+        return await self.get_board_entry(organization_id, user_id, suggestion_id)
+
+    @staticmethod
+    def _vote_count_column():
+        return (
+            select(func.count(SuggestionVote.id))
+            .where(SuggestionVote.suggestion_id == Suggestion.id)
+            .correlate(Suggestion)
+            .scalar_subquery()
+            .label("vote_count")
+        )
+
+    @staticmethod
+    def _has_voted_column(user_id: str):
+        return (
+            exists()
+            .where(
+                SuggestionVote.suggestion_id == Suggestion.id,
+                SuggestionVote.user_id == str(user_id),
+            )
+            .correlate(Suggestion)
+            .label("has_voted")
+        )
+
+    async def _vote_count(self, suggestion_id: str) -> int:
+        count = await self.db.scalar(
+            select(func.count(SuggestionVote.id)).where(
+                SuggestionVote.suggestion_id == str(suggestion_id)
+            )
+        )
+        return int(count or 0)
+
+    async def _board_entries(self, rows: Sequence[Any]) -> List[Dict[str, Any]]:
+        responses = await self._latest_public_responses([s.id for s, *_ in rows])
+        return [
+            {
+                "id": s.id,
+                "box_id": s.box_id,
+                "box_name": box_name,
+                "title": s.published_title,
+                "summary": s.published_summary,
+                "disposition": s.disposition,
+                "public_response": responses.get(s.id),
+                "vote_count": int(votes or 0),
+                "has_voted": bool(voted),
+                "published_at": s.published_at,
+            }
+            for s, box_name, votes, voted in rows
+        ]
+
+    async def _latest_public_responses(self, ids: List[str]) -> Dict[str, str]:
+        """The newest response reviewers wrote for each suggestion, the one a
+        member reading the board most needs."""
+        if not ids:
+            return {}
+        rows = (
+            await self.db.execute(
+                select(
+                    SuggestionStatusEvent.suggestion_id,
+                    SuggestionStatusEvent.public_response,
+                )
+                .where(
+                    SuggestionStatusEvent.suggestion_id.in_(ids),
+                    SuggestionStatusEvent.public_response.is_not(None),
+                )
+                .order_by(SuggestionStatusEvent.sequence)
+            )
+        ).all()
+        # Ordered by sequence, so the last write per suggestion is the newest.
+        return {suggestion_id: response for suggestion_id, response in rows}
 
     # ------------------------------------------------------------------
     # Attachments and threads

@@ -6,7 +6,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { ChevronRight, Forward, Inbox, Loader2, MessageSquare, Paperclip, X } from 'lucide-react';
+import { ChevronRight, Forward, Inbox, Lightbulb, Loader2, MessageSquare, Paperclip, X } from 'lucide-react';
 import { EmptyState } from '../../../components/ux';
 import {
   SUGGESTION_DISPOSITION_COLORS,
@@ -29,6 +29,7 @@ import type {
 import { formatSuggestionTime } from '../utils/suggestionTime';
 import SuggestionAttachments from './SuggestionAttachments';
 import SuggestionForwardModal from './SuggestionForwardModal';
+import SuggestionPublishModal from './SuggestionPublishModal';
 import SuggestionThread from './SuggestionThread';
 import SuggestionTimeline from './SuggestionTimeline';
 
@@ -59,6 +60,7 @@ const ReviewDetail: React.FC<ReviewDetailProps> = ({ detail, onChange }) => {
   const [response, setResponse] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isForwarding, setIsForwarding] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const { confirm } = useConfirm();
 
   useEffect(() => {
@@ -119,6 +121,23 @@ const ReviewDetail: React.FC<ReviewDetailProps> = ({ detail, onChange }) => {
     }
   };
 
+  const unpublish = async () => {
+    const ok = await confirm({
+      title: 'Take off the idea board?',
+      message:
+        'Members will no longer see this idea or be able to vote on it. Its votes are kept if you publish it again.',
+      confirmLabel: 'Take it off',
+      cancelLabel: 'Keep it published',
+    });
+    if (!ok) return;
+    try {
+      onChange(await suggestionsService.unpublish(detail.id));
+      toast.success('Taken off the idea board');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Unable to take it off the board.'));
+    }
+  };
+
   const reply = async (body: string) => {
     try {
       onChange(await suggestionsService.replyAsReviewer(detail.id, body));
@@ -167,7 +186,11 @@ const ReviewDetail: React.FC<ReviewDetailProps> = ({ detail, onChange }) => {
           <div>
             <label htmlFor="suggestion-response" className="form-label">
               Response to the submitter{' '}
-              <span className="text-theme-text-muted font-normal">(shown on their status history)</span>
+              <span className="text-theme-text-muted font-normal">
+                {detail.publishedAt
+                  ? '(shown on their status history and, while published, on the idea board)'
+                  : '(shown on their status history)'}
+              </span>
             </label>
             <textarea
               id="suggestion-response"
@@ -212,6 +235,50 @@ const ReviewDetail: React.FC<ReviewDetailProps> = ({ detail, onChange }) => {
       <div className="border-theme-surface-border border-t pt-4">
         <SuggestionTimeline entries={detail.timeline} />
       </div>
+
+      {detail.boardEnabled && (
+        <section className="border-theme-surface-border space-y-2 border-t pt-4" aria-label="Idea board">
+          <h3 className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
+            <Lightbulb className="h-4 w-4" aria-hidden="true" />
+            Idea board
+          </h3>
+          {detail.publishedAt ? (
+            <div className="space-y-1">
+              <p className="text-theme-text-primary text-sm">
+                Published as <strong>{detail.publishedTitle}</strong> · {detail.voteCount}{' '}
+                {detail.voteCount === 1 ? 'vote' : 'votes'}
+              </p>
+              {detail.publishedSummary && (
+                <p className="text-theme-text-secondary text-sm whitespace-pre-wrap">{detail.publishedSummary}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-theme-text-muted text-sm">Not on the idea board. Members see only what you publish.</p>
+          )}
+          {detail.canPublish ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-2 px-3 py-1.5 text-sm"
+                onClick={() => setIsPublishing(true)}
+              >
+                {detail.publishedAt ? 'Edit published copy' : 'Publish to the board'}
+              </button>
+              {detail.publishedAt && (
+                <button
+                  type="button"
+                  className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-md border px-3 py-1.5 text-sm"
+                  onClick={() => void unpublish()}
+                >
+                  Take off the board
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="text-theme-text-muted text-xs">Only the box&apos;s reviewers can publish it.</p>
+          )}
+        </section>
+      )}
 
       <section className="border-theme-surface-border space-y-2 border-t pt-4" aria-label="Forwarded to">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -277,6 +344,16 @@ const ReviewDetail: React.FC<ReviewDetailProps> = ({ detail, onChange }) => {
         </div>
       ) : (
         <p className="text-theme-text-muted text-sm">This box is one-way: submitters do not see replies or status.</p>
+      )}
+      {isPublishing && (
+        <SuggestionPublishModal
+          detail={detail}
+          onClose={() => setIsPublishing(false)}
+          onPublished={(updated) => {
+            setIsPublishing(false);
+            onChange(updated);
+          }}
+        />
       )}
       {isForwarding && (
         <SuggestionForwardModal

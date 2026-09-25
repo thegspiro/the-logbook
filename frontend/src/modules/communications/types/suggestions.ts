@@ -22,6 +22,8 @@ export interface SuggestionBoxPublic {
   description?: string | null;
   anonymityMode: SuggestionAnonymityMode;
   followUpEnabled: boolean;
+  /** Members can see and vote on what this box's reviewers publish. */
+  publicBoardEnabled: boolean;
 }
 
 export interface SuggestionBoxAdmin extends SuggestionBoxPublic {
@@ -45,6 +47,7 @@ export interface SuggestionBoxWrite {
   reviewerMemberIds: string[];
   watcherPositionIds: string[];
   watcherMemberIds: string[];
+  publicBoardEnabled: boolean;
 }
 
 export interface ReviewerOptions {
@@ -158,6 +161,14 @@ export interface ReviewSuggestionDetail {
   viaForward: boolean;
   forwards: SuggestionForward[];
   timeline: TimelineEntry[];
+  /** The box has an idea board. */
+  boardEnabled: boolean;
+  /** Only the box's own reviewers publish; a forward recipient never does. */
+  canPublish: boolean;
+  publishedAt?: string | null;
+  publishedTitle?: string | null;
+  publishedSummary?: string | null;
+  voteCount: number;
 }
 
 export interface ReviewSummary {
@@ -175,3 +186,19 @@ export interface DispositionUpdate {
 }
 
 export type ReviewFilter = 'open' | SuggestionDisposition | '';
+
+/** A published suggestion as every member sees it: the reviewer-written copy only. */
+export interface BoardEntry {
+  id: string;
+  boxId: string;
+  boxName: string;
+  title: string;
+  summary: string;
+  disposition: SuggestionDisposition;
+  publicResponse?: string | null;
+  voteCount: number;
+  hasVoted: boolean;
+  publishedAt: string;
+}
+
+export type BoardSort = 'top' | 'new';
