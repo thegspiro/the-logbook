@@ -1,5 +1,25 @@
 # Script currency
 
+## Flagged by the 2026-09-25 email redesign
+
+The default email templates moved to a new shell: the department's logo and
+name centred above a white card, a small coloured status line above the
+title, the key facts in a grey panel with each label above its value, and a
+centred button with the plain link under it. The 5px accent rule, the status
+pill and the details table with a coloured left edge are gone from the
+shipped defaults.
+
+Migration `f0d76814a9ab` moves every template still identical to the
+previous default onto the new design at upgrade. **An untouched template
+changes by itself this time**; an edited one keeps its markup until somebody
+presses Reset.
+
+| Script | Beat                                                 | Was                                                                                      | Now                                                                                                                                                                                   | Class     |
+| ------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| **07** | "Your emails look different now", preview `[SCREEN]` | "the 5px accent rule down the header, the status chip, the details table"                | The centred masthead, the status line, the fact panel, the centred button                                                                                                             | **Wrong** |
+| **07** | "Your emails look different now", upgrade claim      | "If you upgraded from the previous release, none of your existing templates changed."    | Templates nobody edited changed on upgrade; edited ones did not, and Reset moves them across. The banner's "Templates you have never edited already use it" is now true as read aloud | **Wrong** |
+| **07** | Production note on re-shooting previews              | Two states to caption: the pre-2026-08-10 band and the 2026-08-10 → 08-23 rounded header | A third, current state; shots of the accent-rule shell now show only an edited template                                                                                               | **Stale** |
+
 ## Flagged by the 2026-09-24 Event Information fix
 
 The event page's **Event Information** card now shows **Capacity** and **Event

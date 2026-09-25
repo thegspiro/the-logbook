@@ -44,20 +44,25 @@ export const EMAIL_BLOCKS: EmailBlock[] = [
     id: 'details',
     label: 'Details panel',
     icon: 'table',
+    // Labels above values. Two short facts share a row; a long one (an
+    // address, a reason someone types) takes the row alone with colspan="2".
     html: [
-      '<div class="details" style="border-left-color: #b91c1c;">',
-      '    <table>',
-      '        <tr><th>Label</th><td>Value</td></tr>',
-      '        <tr><th>Label</th><td>Value</td></tr>',
-      '    </table>',
-      '</div>',
+      '<table class="facts" role="presentation" cellpadding="0" cellspacing="0">',
+      '    <tr><td class="fact" width="50%"><p class="fact-label">Label</p><p class="fact-value">Value</p></td><td class="fact" width="50%"><p class="fact-label">Label</p><p class="fact-value">Value</p></td></tr>',
+      '    <tr><td class="fact" colspan="2"><p class="fact-label">Label</p><p class="fact-value">A longer value</p></td></tr>',
+      '</table>',
     ].join('\n'),
   },
   {
     id: 'button',
     label: 'Button',
     icon: 'squareMousePointer',
-    html: '<p><a href="{{login_url}}" class="button" style="background-color: #b91c1c;" role="link">Open</a></p>',
+    // The same address again as text under the button, for a client that
+    // strips the button's styling.
+    html: [
+      '<p class="action"><a href="{{login_url}}" class="button" style="background-color: #b91c1c;">Open</a></p>',
+      '<p class="action-link">Or open this link: {{login_url}}</p>',
+    ].join('\n'),
   },
   {
     id: 'alert',

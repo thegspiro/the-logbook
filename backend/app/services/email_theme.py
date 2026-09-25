@@ -1,26 +1,42 @@
 """
 Email Theme — the one place the outgoing mail's look is defined.
 
-Every email the platform sends renders into the same chrome: a header whose
-only colour is a 5px accent rule and a tinted status chip, a white content
-card, and a muted footer.  The stylesheet below is what makes that chrome
-look the way it does, and the accent constants are the only colours a
+Every email the platform sends renders into the same chrome: a centred
+masthead (the department's logo above its name) on a light grey page, then a
+white card holding a small status line, the title and the body, and a
+left-aligned footer under the card.  The stylesheet below is what makes that
+chrome look the way it does, and the accent constants are the only colours a
 template should put on a notice.
 
-The accent appears in exactly four places, all of them inline-overridable so
-one shell serves every category:
+The layout follows published guidance for transactional mail rather than a
+house style: body text is left-aligned (centring is kept to the two short
+blocks at either end of the card — the masthead and the action), key facts
+sit in a panel with each label above its value so they can be found without
+reading prose, body copy is 16px, and the button is at least 44px tall. There
+are no rules or rails between blocks; spacing separates them.
 
-===============  =================================
-Element          Inline override
-===============  =================================
-``.header``      ``border-top-color``
-``.chip``        ``background-color`` + ``color``
-``.details``     ``border-left-color``
-``.button``      ``background-color``
-===============  =================================
+The accent appears in these places, all of them inline so one shell serves
+every category:
 
-:func:`build_shell` writes all four from one accent, so a notice names its
-category and gets the colourway; nothing downstream repeats a hex.
+=================  =================================
+Element            Inline override
+=================  =================================
+``.status-mark``   ``background-color``
+``.status-text``   ``color``
+``.header p``      ``color`` (the optional subtitle)
+``.button``        ``background-color``
+=================  =================================
+
+:func:`build_shell` and :func:`colourway_context` write all of them from one
+accent, so a notice names its category and gets the colourway; nothing
+downstream repeats a hex.
+
+**The classes the previous shell used are still defined.** ``.lockup``,
+``.logomark``, ``.chip`` and a restyled ``.details`` stay in the sheet
+because a template a department edited carries the old markup in its stored
+body, and that body renders against *this* stylesheet. It keeps working and
+picks up the new card, spacing and footer; it keeps its own header lockup
+until the template is reset.
 
 **Why this is its own module.** ``email_template_service`` owns the copy and
 ``email_templates_storefront`` owns the store's copy; the storefront module
@@ -57,17 +73,20 @@ Two constraints on ``DEFAULT_CSS`` that are easy to violate by accident:
    otherwise leak into a label/value panel. Delete one of those and the
    panel's labels come back grey, uppercase and underlined.
 
-``.chip``, ``.alert``, ``.lockup``, ``.logomark`` and ``.fineprint`` are the
-classes 1b added.  Nothing that existed before was renamed, so a department
-that has already customised a body keeps rendering — it simply does not get
-the accent rule or the chip until it resets that template.
+   The fact panel relies on the same property: ``.fact``, ``.fact-label``,
+   ``.fact-value`` and ``.facts`` sit inside ``.content``, so each names every
+   property ``.content td`` / ``.content p`` / ``.content table`` set.
+   Class rules are applied before any ``.parent tag`` rule and therefore win
+   where they speak; where they are silent, the content rule leaks through.
 """
 
 import html as _html
+import re
 
-# Header accents.  White text on each of these clears WCAG 2.1 AA (4.5:1):
+# Accents.  White text on each of these clears WCAG 2.1 AA (4.5:1):
 # red 6.5:1, amber 5.0:1, green 5.5:1, blue 6.7:1, indigo 7.9:1,
-# violet 7.1:1, slate 10.3:1.
+# violet 7.1:1, slate 10.3:1.  Contrast is symmetric, so the same figures hold
+# for the accent-coloured status text and subtitle on the white card.
 ACCENT_RED = "#b91c1c"
 ACCENT_AMBER = "#b45309"
 ACCENT_GREEN = "#047857"
@@ -84,25 +103,37 @@ ACCENT_SLATE = "#334155"
 # well under the 4.5:1 AA floor for small text. The spec picked it to sit
 # quietly under the footer; it sits too quietly to read.
 DEFAULT_CSS = """
-body { margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #334155; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; }
-.container { width: 100%; max-width: 600px; margin: 0 auto; padding: 24px 12px; }
+body { margin: 0; padding: 0; background-color: #eef0f3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #334155; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; }
+.container { max-width: 600px; margin: 0 auto; padding: 28px 12px 24px 12px; }
 .logo { text-align: center; padding: 0 0 20px 0; }
 .logo img { max-height: 72px; max-width: 200px; }
-.header h1 { margin: 20px 0 0 0; font-size: 27px; line-height: 1.22; font-weight: 700; letter-spacing: -0.02em; color: #0f172a; }
-.header p { margin: 8px 0 0 0; font-size: 16px; line-height: 1.4; font-weight: 600; color: #475569; }
-.header { background-color: #ffffff; border: 1px solid #e5e7eb; border-top: 5px solid #b91c1c; border-bottom: none; border-radius: 12px 12px 0 0; padding: 24px 28px 0 28px; }
+.masthead p { margin: 10px 0 0 0; font-size: 15px; line-height: 1.35; font-weight: 700; color: #0f172a; }
+.masthead { text-align: center; padding: 0 0 18px 0; }
+.status-mark { width: 8px; height: 8px; padding: 0; border-radius: 2px; font-size: 0; line-height: 0; }
+.status-text { padding: 0 0 0 8px; font-size: 13px; line-height: 1.3; font-weight: 600; }
+.status-line { border-collapse: collapse; margin: 0 0 10px 0; }
+.header h1 { margin: 0; font-size: 24px; line-height: 1.25; font-weight: 700; letter-spacing: -0.01em; color: #0f172a; }
+.header p { margin: 6px 0 0 0; font-size: 16px; line-height: 1.4; font-weight: 600; color: #475569; }
+.header { background-color: #ffffff; border: none; border-radius: 8px 8px 0 0; padding: 26px 24px 0 24px; }
 .lockup img { display: block; max-width: 36px; max-height: 36px; width: auto; height: auto; border: 0; }
 .lockup td { vertical-align: middle; font-size: 13px; font-weight: 600; color: #0f172a; }
-.lockup { width: 100%; border-collapse: collapse; }
+.lockup { width: 100%; border-collapse: collapse; margin: 0 0 16px 0; }
 .logomark { background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 3px; width: 36px; text-align: center; }
 .chip { display: inline-block; background-color: #f1f5f9; color: #334155; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 10px; border-radius: 20px; }
 .details p { margin: 0 0 12px 0; font-size: 15px; line-height: 1.5; color: #0f172a; }
 .details td { padding: 0 0 12px 0; font-size: 15px; line-height: 1.5; color: #0f172a; vertical-align: top; background-color: transparent; border-bottom: none; }
-.details th { padding: 0 0 12px 0; font-size: 13px; line-height: 1.5; font-weight: 400; color: #64748b; text-align: left; width: 38%; vertical-align: top; background-color: transparent; text-transform: none; letter-spacing: 0; border-bottom: none; }
+.details th { padding: 0 0 12px 0; font-size: 13px; line-height: 1.5; font-weight: 600; color: #4b5563; text-align: left; width: 38%; vertical-align: top; background-color: transparent; text-transform: none; letter-spacing: 0; border-bottom: none; }
 .details table { width: 100%; border-collapse: collapse; margin: 0; font-size: 15px; }
-.details { background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid #b91c1c; border-radius: 8px; padding: 18px 20px; margin: 0 0 22px 0; }
-.alert p { margin: 0; font-size: 15px; line-height: 1.5; color: #92400e; }
-.alert { background-color: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 8px; padding: 14px 16px; margin: 0 0 22px 0; }
+.details { background-color: #f5f6f8; border: none; border-radius: 6px; padding: 16px 18px 4px 18px; margin: 0 0 22px 0; }
+.fact-label { margin: 0 0 3px 0; font-size: 12px; line-height: 1.3; font-weight: 600; color: #4b5563; }
+.fact-value { margin: 0; font-size: 16px; line-height: 1.4; font-weight: 600; color: #0f172a; }
+.fact-mono { margin: 0; font-size: 16px; line-height: 1.4; font-weight: 500; letter-spacing: 0.02em; color: #0f172a; font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Courier New', monospace; }
+.fact { padding: 12px 16px; vertical-align: top; text-align: left; color: #0f172a; background-color: transparent; border-bottom: none; }
+.facts { width: 100%; border-collapse: separate; margin: 0 0 22px 0; font-size: 16px; background-color: #f5f6f8; border-radius: 6px; }
+.alert p { margin: 0; font-size: 15px; line-height: 1.5; color: #7c2d12; }
+.alert { background-color: #fff7ed; border: none; border-radius: 6px; padding: 12px 16px; margin: 0 0 22px 0; }
+.action { margin: 26px 0 0 0; text-align: center; }
+.action-link { margin: 10px 0 18px 0; font-size: 12px; line-height: 1.5; color: #4b5563; text-align: center; word-break: break-all; }
 .content h2 { margin: 24px 0 10px 0; padding: 0 0 8px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e5e7eb; }
 .content-digest h2 { margin: 16px 0 10px 0; padding: 0 0 8px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e5e7eb; }
 .content-receipt h2 { margin: 24px 0 10px 0; padding: 0 0 8px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e5e7eb; }
@@ -112,9 +143,9 @@ body { margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-sys
 .content p { margin: 0 0 18px 0; font-size: 16px; line-height: 1.6; color: #334155; }
 .content-digest p { margin: 0 0 18px 0; font-size: 16px; line-height: 1.6; color: #334155; }
 .content-receipt p { margin: 0 0 18px 0; font-size: 16px; line-height: 1.6; color: #334155; }
-.content li { margin: 0 0 8px 0; font-size: 15px; line-height: 1.6; color: #334155; }
-.content-digest li { margin: 0 0 8px 0; font-size: 15px; line-height: 1.6; color: #334155; }
-.content-receipt li { margin: 0 0 8px 0; font-size: 15px; line-height: 1.6; color: #334155; }
+.content li { margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: #334155; }
+.content-digest li { margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: #334155; }
+.content-receipt li { margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: #334155; }
 .content ul { margin: 0 0 22px 0; padding-left: 22px; }
 .content-digest ul { margin: 0 0 22px 0; padding-left: 22px; }
 .content-receipt ul { margin: 0 0 22px 0; padding-left: 22px; }
@@ -127,13 +158,13 @@ body { margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-sys
 .content table { width: 100%; border-collapse: collapse; margin: 0 0 22px 0; font-size: 14px; }
 .content-digest table { width: 100%; border-collapse: collapse; margin: 0 0 22px 0; font-size: 14px; }
 .content-receipt table { width: 100%; border-collapse: collapse; margin: 0 0 22px 0; font-size: 14px; }
-.content-digest { background-color: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 18px 28px 30px 28px; }
-.content-receipt { background-color: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 18px 14px 30px 14px; }
-.content { background-color: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 18px 28px 30px 28px; }
-.button { display: inline-block; padding: 15px 32px; background-color: #b91c1c; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 17px; font-weight: 700; line-height: 1.2; }
+.content-digest { background-color: #ffffff; border: none; border-radius: 0 0 8px 8px; padding: 16px 24px 28px 24px; }
+.content-receipt { background-color: #ffffff; border: none; border-radius: 0 0 8px 8px; padding: 16px 14px 28px 14px; }
+.content { background-color: #ffffff; border: none; border-radius: 0 0 8px 8px; padding: 16px 24px 28px 24px; }
+.button { display: inline-block; padding: 14px 36px; background-color: #b91c1c; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; line-height: 1.2; }
 .fineprint { margin: 14px 0 18px 0; font-size: 13px; line-height: 1.6; color: #64748b; }
 .footer p { margin: 0 0 6px 0; font-size: 12px; line-height: 1.6; color: #4b5563; }
-.footer { padding: 22px 16px 4px 16px; text-align: center; font-size: 12px; line-height: 1.6; color: #4b5563; }
+.footer { padding: 18px 8px 4px 8px; text-align: left; font-size: 12px; line-height: 1.6; color: #4b5563; }
 .muted { font-size: 11px; line-height: 1.6; color: #4b5563; }
 """
 
@@ -222,11 +253,15 @@ def colourway_context(accent: str, chip: str, layout: str = DEFAULT_LAYOUT) -> d
     matters because ``wrap_email_body`` callers pass hexes that are not
     ``ACCENT_*`` constants.
 
-    ``status_chip_cell`` is the whole ``<td>``, not just its text. The chip
-    is optional and the template system has no conditionals, so a cell
-    written into the shell around an empty ``{{status_chip}}`` renders as a
-    tinted pill with nothing in it — the same reason the logo cell is built
-    as a unit.
+    ``status_line`` is the current shell's category marker — a small accent
+    square and the chip's wording above the title — built whole for the
+    same reason the logo block is: the template system has no conditionals,
+    so markup written around an empty ``{{status_chip}}`` would render a
+    coloured square labelling nothing. An empty chip produces no line.
+
+    ``status_chip_cell`` is the previous shell's pill, still produced because
+    a template a department edited before this shell carries
+    ``{{status_chip_cell}}`` in its stored body and renders it forever.
 
     ``content_class`` is what makes ``layout`` a setting rather than a
     stored value nobody reads: the class has to be chosen when the mail is
@@ -235,17 +270,30 @@ def colourway_context(accent: str, chip: str, layout: str = DEFAULT_LAYOUT) -> d
     """
     tint = CHIP_TINTS.get(accent, CHIP_TINTS[ACCENT_SLATE])
     cell = ""
+    line = ""
     if chip:
+        safe_chip = _html.escape(str(chip))
         cell = (
             '<td style="text-align: right;">'
             f'<span class="chip" style="background-color: {tint}; '
-            f'color: {accent};">{_html.escape(str(chip))}</span></td>'
+            f'color: {accent};">{safe_chip}</span></td>'
+        )
+        # A table rather than an inline-block span: Outlook's Word engine
+        # ignores inline-block, and a table cell is the one box it will
+        # reliably size and fill.
+        line = (
+            '<table class="status-line" role="presentation" cellpadding="0" '
+            'cellspacing="0"><tr>'
+            f'<td class="status-mark" style="background-color: {accent};">&nbsp;</td>'
+            f'<td class="status-text" style="color: {accent};">{safe_chip}</td>'
+            "</tr></table>"
         )
     return {
         "header_accent": accent,
         "chip_tint": tint,
         "status_chip": chip,
         "status_chip_cell": cell,
+        "status_line": line,
         "content_class": _LAYOUT_CONTENT_CLASS.get(
             layout or DEFAULT_LAYOUT, _LAYOUT_CONTENT_CLASS[DEFAULT_LAYOUT]
         ),
@@ -253,7 +301,11 @@ def colourway_context(accent: str, chip: str, layout: str = DEFAULT_LAYOUT) -> d
 
 
 def build_logo_cell(logo_url: str, organization_name: str) -> str:
-    """Build the lockup's logo cell, or an empty string when there is no logo.
+    """Build the previous shell's logo cell, or an empty string when there is no logo.
+
+    Still produced because a template a department edited before the
+    centred-masthead shell carries ``{{organization_logo_cell}}`` in its
+    stored body. The current shell uses :func:`build_logo_block`.
 
     This returns the whole ``<td>`` rather than a bare ``<img>`` for one
     reason: the template system substitutes ``{{name}}`` and has no
@@ -288,6 +340,146 @@ def build_logo_cell(logo_url: str, organization_name: str) -> str:
     )
 
 
+def build_logo_block(logo_url: str, organization_name: str) -> str:
+    """The masthead's centred logo, or an empty string when there is no logo.
+
+    The current shell's counterpart to :func:`build_logo_cell`, which stays
+    for bodies written against the previous shell. Returned whole for the
+    same reason: with no conditionals in the template system, a plate written
+    around an empty image renders as a white square with nothing on it.
+
+    The logo sits on a small white plate. Gmail's apps and Outlook repaint
+    mail in dark colours whatever the message declares, and a crest drawn in
+    dark ink on a transparent background disappears into that; the plate
+    keeps its edges visible either way.
+
+    Sized with ``max-width``/``max-height`` rather than fixed dimensions
+    because a department's logo can be any aspect ratio, and fixed width and
+    height would stretch it. Data URIs are skipped, as in
+    :func:`build_logo_cell`.
+    """
+    url = str(logo_url or "")
+    if not url or url.startswith("data:"):
+        return ""
+    safe_url = _html.escape(url)
+    safe_name = _html.escape(str(organization_name or "Organization"))
+    return (
+        '<table role="presentation" align="center" cellpadding="0" '
+        'cellspacing="0" style="margin:0 auto;"><tr>'
+        '<td style="background-color:#ffffff;border-radius:10px;padding:5px;">'
+        '<img src="' + safe_url + '" alt="' + safe_name + '" '
+        'style="display:block;max-width:48px;max-height:48px;width:auto;'
+        'height:auto;border:0;" /></td></tr></table>'
+    )
+
+
+def fact(label: str, value: str, mono: bool = False) -> tuple:
+    """One label/value pair for :func:`facts`.
+
+    *mono* sets the value in a fixed-width face, for values a member has to
+    type back exactly — a username or a temporary password, where ``l``/``1``
+    and ``O``/``0`` must be told apart.
+    """
+    return (label, value, mono)
+
+
+def facts(rows: list) -> str:
+    """The key-facts panel: labels above values, one or two facts per row.
+
+    *rows* is a list of rows, each a list of one or two :func:`fact` pairs.
+    Which facts share a row is the caller's decision, per template, rather
+    than something worked out here: only the author knows that "Start" and
+    "End" are short and belong together, and that "Reason" is free text a
+    department types and can run to a paragraph. A lone fact spans the row.
+
+    Returned as literal markup, so the stored body carries exactly what an
+    admin will see and can edit in the template editor — there is no macro
+    for the editor to expand.
+    """
+    lines = [
+        '        <table class="facts" role="presentation" cellpadding="0" '
+        'cellspacing="0">'
+    ]
+    for row in rows:
+        if not 1 <= len(row) <= 2:
+            raise ValueError("a facts row holds one or two facts")
+        cells = []
+        for label, value, mono in row:
+            span = ' colspan="2"' if len(row) == 1 else ' width="50%"'
+            value_class = "fact-mono" if mono else "fact-value"
+            cells.append(
+                f'<td class="fact"{span}><p class="fact-label">{label}</p>'
+                f'<p class="{value_class}">{value}</p></td>'
+            )
+        lines.append("            <tr>" + "".join(cells) + "</tr>")
+    lines.append("        </table>")
+    return "\n".join(lines) + "\n"
+
+
+def action(url: str, label: str) -> str:
+    """The centred button and, under it, the same link as plain text.
+
+    The plain link is not decoration: a client that strips styling, a
+    screen reader user skipping between links, and a member reading on a
+    device where the button will not open all need the address itself.
+
+    *url* is a template variable name, written as ``{{name}}`` by the
+    caller. ``{accent}`` is left for :func:`build_shell` to turn into the
+    colourway token.
+    """
+    return (
+        f'        <p class="action"><a href="{url}" class="button" '
+        f'style="background-color: {{accent}};">{label}</a></p>\n'
+        f'        <p class="action-link">Or open this link: {url}</p>\n'
+    )
+
+
+_FACT_VALUE = re.compile(r'<p class="fact-(?:value|mono)">(.*?)</p>', re.S)
+_FACT_ROW = re.compile(r"<tr>(.*?)</tr>", re.S)
+
+# Zero-width non-joiner and a no-break space, repeated: the conventional
+# filler that clients render as nothing but count as preview text.
+_PREHEADER_FILLER = "&zwnj;&nbsp;" * 40
+
+
+def _first_fact_row(content: str) -> str:
+    """The values in the fact panel's first row, joined, with markup removed.
+
+    The first row is where each template puts the fact a member opens the
+    email for (the start time, the expiry date, the return deadline), so it
+    doubles as the inbox preview without every template restating it.
+    """
+    panel = content.find('class="facts"')
+    if panel == -1:
+        return ""
+    row = _FACT_ROW.search(content, panel)
+    if not row:
+        return ""
+    values = [
+        re.sub(r"\s+", " ", re.sub(r"<br\s*/?>", ", ", v)).strip()
+        for v in _FACT_VALUE.findall(row.group(1))
+    ]
+    values = [re.sub(r"<[^>]+>", "", v) for v in values if v]
+    return " · ".join(values)
+
+
+def _preheader(text: str) -> str:
+    """The hidden preview line, first thing in the body.
+
+    Hidden with every property clients are known to honour between them —
+    ``mso-hide`` for Outlook, ``max-height``/``overflow`` for the clients that
+    ignore ``display:none`` on a div — and coloured like the page so a client
+    that shows it anyway shows nothing legible.
+    """
+    return (
+        '<div style="display:none;font-size:1px;line-height:1px;max-height:0;'
+        'max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:#eef0f3;">'
+        + text
+        + _PREHEADER_FILLER
+        + "</div>"
+    )
+
+
 def build_shell(
     title: str,
     content: str,
@@ -297,6 +489,7 @@ def build_shell(
     brand: str = "{{organization_name}}",
     layout: str = DEFAULT_LAYOUT,
     cache: bool = True,
+    preheader: str = "",
 ) -> str:
     """Build the chrome every notice renders into.
 
@@ -307,27 +500,35 @@ def build_shell(
     existed the two files each carried their own copy of the layout, and the
     store's mail drifted a header at a time.
 
-    *accent* drives all four accented elements; the chip's tint is looked up
+    *accent* drives every accented element; the chip's tint is looked up
     in :data:`CHIP_TINTS` rather than passed, so the two halves of a
     colourway cannot disagree. An accent outside the map falls back to the
     slate tint, which reads as deliberate rather than broken.
 
     *chip* and *subtitle* are omitted from the markup entirely when empty —
-    an empty chip would otherwise render as a bare tinted pill, and an empty
-    subline as 8px of dead space under the title.
+    an empty chip would otherwise render as a coloured square labelling
+    nothing, and an empty subline as dead space under the title.
 
     *subtitle* is HTML-escaped here, unlike *title* — every current caller
     passes *title* as either a trusted literal or already escapes it before
     calling in (``wrap_email_body``), but *subtitle* has no such caller-side
     guarantee, so it is escaped at the one place every caller goes through.
 
-    *brand* is the lockup's name cell. The store passes ``{{store_name}}``;
+    *brand* is the masthead's name line. The store passes ``{{store_name}}``;
     everything else takes the department.
 
+    *preheader* is the line an inbox shows beside the subject. Phones show
+    only 30–55 characters of it, so it should lead with the fact the member
+    opened the email for. Left empty it defaults to *subtitle* — the line an
+    author already chose to put under the title — then to the first row of
+    the fact panel; with neither, no preheader is written.
+    The text is followed by invisible filler so a client that runs out of
+    preheader does not continue into the masthead and show the department
+    name twice.
+
     ``{accent}`` inside *content* is substituted with the accent token, so a
-    body writes ``border-left-color: {accent};`` on its panel and
-    ``background-color: {accent};`` on its button and cannot disagree with
-    its own header. A single brace is safe to use for this: template
+    body writes ``background-color: {accent};`` on its button and cannot
+    disagree with its own status line. A single brace is safe to use for this: template
     variables are doubled (``{{name}}``), and the substitution is a plain
     string replace rather than ``str.format``, so a stray brace in prose is
     left alone instead of raising.
@@ -358,21 +559,21 @@ def build_shell(
         raise ValueError(f"unknown layout {layout!r}; expected one of {LAYOUTS}")
     content = content.replace("{accent}", "{{header_accent}}")
 
-    # Both cells are render-time tokens rather than markup decided here: the
-    # logo and the chip are each optional, and which of them a given send
+    # The logo block and the status line are render-time tokens rather than
+    # markup decided here: each is optional, and which of them a given send
     # actually has is not knowable when the body is written.
-    cells = [
-        "            {{organization_logo_cell}}",
-        '            <td style="padding-left: 10px;">' + brand + "</td>",
-        "            {{status_chip_cell}}",
-    ]
-
-    head = [
+    head = []
+    teaser = preheader or _html.escape(subtitle) or _first_fact_row(content)
+    if teaser:
+        head.append(_preheader(teaser))
+    head += [
         '<div class="container">',
-        '    <div class="header" style="border-top-color: {{header_accent}};">',
-        '        <table class="lockup"><tr>',
-        *cells,
-        "        </tr></table>",
+        '    <div class="masthead">',
+        "        {{organization_logo_block}}",
+        "        <p>" + brand + "</p>",
+        "    </div>",
+        '    <div class="header">',
+        "        {{status_line}}",
         "        <h1>" + title + "</h1>",
     ]
     if subtitle:
