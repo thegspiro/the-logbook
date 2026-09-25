@@ -1,5 +1,28 @@
 # Screenshot currency
 
+## The 17 timed-out shots, re-run one at a time, 2026-09-25
+
+Each of the 17 locator timeouts from the full sweep below was run alone, with
+`--only`, against the same demo department.
+
+**Four pass alone — the full run's timing, not drift.** `01-35`, `03-09` and
+`20-13` are committed. The `15-09-` prefix also re-ran
+`15-09-bulk-action-result`, committed with it: it performs a real bulk advance,
+so its counts ("Advanced 2", "Skipped 9") follow the demo's current pipeline.
+`01-31-applicant-documents` captures but reads "No documents yet", the seed gap
+the 2026-08-25 entry already records, so its committed bytes stand.
+
+**Thirteen fail again, identically.** These are selectors that no longer match
+the screen they were written for. Each needs its prepare step repaired against
+the current DOM, one screen at a time.
+
+| Shot | Fails at |
+| ---- | -------- |
+| `03-55-staffing-status-cards`, `02-99-member-locked-requirement`, `20-07-applicant-place-on-stage`, `15-02-board-truncated`, `09-18-finish-with-unscored-steps` | `locator.waitFor`: the element the step waits for never appears |
+| `05-62-generate-variants` | `locator.check`: the checkbox it ticks is not found |
+| `00-14-confirm-dialog`, `08-73-template-builder-preview`, `05-09-receive-stock-modal`, `15-09-convert-modal`, `19-07-member-payment-method` | `locator.click`: the control it opens the screen with is not found |
+| `02-98-requirement-prerequisite`, `17-02-download-my-data` | `locator.screenshot`: the framing element never becomes stable |
+
 ## Email templates re-shot on the centred-masthead shell, 2026-09-25
 
 The ten email template screens held back from the full sweep below were
