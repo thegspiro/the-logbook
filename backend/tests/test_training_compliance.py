@@ -11,6 +11,9 @@ All tests run without a database by using mock requirement/record objects.
 
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
 
 from app.services.training_compliance import requirement_applies_to_member
 from app.services.training_service import TrainingService
@@ -1369,6 +1372,15 @@ def _scalar(val):
 class TestCheckRequirementProgressZeroTarget:
     """A requirement with no positive target must not read as compliant for a
     member with nothing on file — the reported annual-renewal false-compliance."""
+
+    @pytest.fixture(autouse=True)
+    def _department_today(self, monkeypatch):
+        # The mocked session answers only the requirement and record queries;
+        # the org's date is supplied here instead of through a third result.
+        monkeypatch.setattr(
+            "app.services.training_service.resolve_org_today",
+            AsyncMock(return_value=date.today()),
+        )
 
     async def test_hours_no_target_no_records_is_not_complete(self):
         from uuid import uuid4

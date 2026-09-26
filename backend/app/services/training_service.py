@@ -5,7 +5,7 @@ Business logic for training management including courses, records, requirements,
 """
 
 import calendar
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from uuid import UUID
 
@@ -32,6 +32,7 @@ from app.services.training_waiver_service import (
     fetch_user_waivers,
     get_rolling_period_months,
 )
+from app.utils.org_timezone import resolve_org_today
 
 # What a requirement check reads from a completed record; the preload that
 # serves a page of checks loads these and nothing else.
@@ -62,7 +63,10 @@ class TrainingService:
         """
         Get comprehensive training statistics for a user
         """
-        current_year = datetime.now(timezone.utc).year
+        # The department's calendar for both "this year" and the expiry
+        # counts below; the UTC year turns over hours early on New Year's Eve.
+        today = await resolve_org_today(self.db, organization_id)
+        current_year = today.year
 
         # Get all completed training records
         result = await self.db.execute(
@@ -88,7 +92,6 @@ class TrainingService:
         total_certifications = len(certifications)
 
         # Count active, expiring soon, and expired
-        today = date.today()
         ninety_days = today + timedelta(days=90)
 
         active_certifications = sum(
@@ -252,6 +255,7 @@ class TrainingService:
                 str(organization_id),
                 str(user_id),
             )
+            today = await resolve_org_today(self.db, organization_id)
 
             for req in requirements:
                 # Tier-based exemption: treat requirement as met
@@ -269,7 +273,11 @@ class TrainingService:
                         continue
 
                 progress = await self.check_requirement_progress(
-                    user_id, req.id, organization_id, waivers=user_waivers
+                    user_id,
+                    req.id,
+                    organization_id,
+                    waivers=user_waivers,
+                    today=today,
                 )
                 if progress.is_complete:
                     requirements_met.append(req.id)
@@ -868,6 +876,7 @@ class TrainingService:
         waivers: Optional[List[WaiverPeriod]] = None,
         requirement: Optional[TrainingRequirement] = None,
         completed_records: Optional[Sequence[Any]] = None,
+        today: Optional[date] = None,
     ) -> RequirementProgress:
         """
         Check a user's progress towards a specific requirement.
@@ -904,7 +913,11 @@ class TrainingService:
         if not requirement:
             raise ValueError("Requirement not found")
 
-        today = date.today()
+        # The department's date. A caller checking several requirements
+        # resolves it once and passes it, so every check on the page grades
+        # against the same day.
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
         start_date, end_date = self._get_date_window(requirement, today)
         # Every RequirementProgress this method returns carries this, so
         # consumers (the MCP `get_member_requirements_progress` tool
@@ -1348,7 +1361,11 @@ class TrainingService:
             TrainingRecord.organization_id == str(organization_id),
             TrainingRecord.status == TrainingStatus.COMPLETED,
         )
-        window = self._preload_window(requirements, date.today())
+        # One date for the preload window and every check below: resolving it
+        # per check could straddle midnight and grade half the page against
+        # a window the preload never read.
+        today = await resolve_org_today(self.db, organization_id)
+        window = self._preload_window(requirements, today)
         if window is not None:
             start, end = window
             preload = preload.where(
@@ -1368,6 +1385,7 @@ class TrainingService:
                 waivers=user_waivers,
                 requirement=req,
                 completed_records=completed,
+                today=today,
             )
             progress_list.append(progress)
         return progress_list
@@ -1496,7 +1514,7 @@ class TrainingService:
         callers do this — these records carry certification numbers/scores that
         are not roster-public, so a non-officer must not see the whole org).
         """
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         future_date = today + timedelta(days=days_ahead)
 
         query = (

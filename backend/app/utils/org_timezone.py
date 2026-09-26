@@ -93,3 +93,13 @@ def local_day_start_utc(day: date, tz: ZoneInfo) -> datetime:
     next day.
     """
     return datetime.combine(day, time.min, tz).astimezone(timezone.utc)
+
+
+def local_date(value: datetime, tz: ZoneInfo) -> date:
+    """The department's calendar date of a stored UTC timestamp.
+
+    ``value.date()`` on a UTC timestamp is the UTC day, which is already
+    tomorrow for an evening event; a naive value is read as UTC.
+    """
+    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return aware.astimezone(tz).date()

@@ -73,6 +73,12 @@ from app.utils.checklist import (
 from app.utils.json_ids import normalize_id_list
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org
+from app.utils.org_timezone import (
+    local_date,
+    resolve_org_today,
+    resolve_scheduling_timezone,
+    today_in,
+)
 from app.utils.phase_prerequisites import find_cycle
 
 # progress_notes keys written only through officer-gated paths: checklist
@@ -2146,10 +2152,11 @@ class TrainingProgramService:
 
         # Calculate target completion date if not provided
         target_completion_date = enrollment_data.target_completion_date
+        # The department's date: a deadline counted from the UTC day lands a
+        # day late for anyone enrolled in the evening.
+        today = await resolve_org_today(self.db, organization_id)
         if not target_completion_date and program.time_limit_days:
-            target_completion_date = date.today() + timedelta(
-                days=program.time_limit_days
-            )
+            target_completion_date = today + timedelta(days=program.time_limit_days)
 
         # Determine initial phase for phase-based programs
         current_phase_id = None
@@ -2160,9 +2167,7 @@ class TrainingProgramService:
 
         # Schedule the first recert deadline for recert-enabled programs so the
         # member's cycle is tracked from day one.
-        next_recert_reset_at = self._compute_next_recert_date(
-            program, datetime.now(timezone.utc).date()
-        )
+        next_recert_reset_at = self._compute_next_recert_date(program, today)
 
         # Create enrollment
         enrolled_now = datetime.now(timezone.utc)
@@ -2793,13 +2798,18 @@ class TrainingProgramService:
                 str(enrollment.user_id),
             )
 
-            # Determine evaluation window from enrollment period
-            enroll_start = (
-                enrollment.enrolled_at.date()
-                if enrollment.enrolled_at
-                else date.today()
+            # Determine evaluation window from enrollment period, on the
+            # department's calendar: the UTC date of an evening enrollment is
+            # the next day, which would drop that evening's completions.
+            org_tz = await resolve_scheduling_timezone(
+                self.db, enrollment.program.organization_id
             )
-            enroll_end = enrollment.target_completion_date or date.today()
+            enroll_start = (
+                local_date(enrollment.enrolled_at, org_tz)
+                if enrollment.enrolled_at
+                else today_in(org_tz)
+            )
+            enroll_end = enrollment.target_completion_date or today_in(org_tz)
 
             # Calculate percentage based on requirement type (with waiver adjustment)
             requirement = progress.requirement
@@ -3464,7 +3474,11 @@ class TrainingProgramService:
         # quietly defeat it. An undated completion must fail closed when a
         # window is configured because its freshness cannot be verified.
         _, requirement = row
-        cutoff = recency_cutoff(requirement, date.today())
+        # The department's date: a completion from exactly N days ago is still
+        # inside the window for the evening hours when UTC has moved on.
+        cutoff = recency_cutoff(
+            requirement, await resolve_org_today(self.db, organization_id)
+        )
         if cutoff is not None:
             if completed_on is None:
                 return None, (
@@ -3708,6 +3722,7 @@ class TrainingProgramService:
         self,
         enrollment: ProgramEnrollment,
         program: Optional[TrainingProgram],
+        today: Optional[date] = None,
     ) -> None:
         """Core reset mutation shared by the manual and automatic paths: blank
         every requirement row, return the member to ACTIVE at the first phase,
@@ -3745,7 +3760,9 @@ class TrainingProgramService:
         # move the completion target to it so the member isn't instantly "overdue".
         if program is not None and getattr(program, "recert_enabled", False):
             enrollment.last_recert_reset_at = now
-            next_reset = self._compute_next_recert_date(program, now.date())
+            if today is None:
+                today = await resolve_org_today(self.db, enrollment.organization_id)
+            next_reset = self._compute_next_recert_date(program, today)
             enrollment.next_recert_reset_at = next_reset
             if next_reset is not None:
                 enrollment.target_completion_date = next_reset
@@ -3870,13 +3887,19 @@ class TrainingProgramService:
         await self._ensure_program_loaded(enrollment)
         return enrollment, None
 
-    async def auto_reset_if_due(self, enrollment: ProgramEnrollment) -> bool:
+    async def auto_reset_if_due(
+        self, enrollment: ProgramEnrollment, today: Optional[date] = None
+    ) -> bool:
         """If this enrollment's recert deadline has passed, reset it in place for
         a new cycle. Returns True when a reset occurred. Safe to call on every
         progress load — a no-op when recert is disabled or the date is in the
         future."""
         reset_date = getattr(enrollment, "next_recert_reset_at", None)
-        if not reset_date or reset_date > datetime.now(timezone.utc).date():
+        if not reset_date:
+            return False
+        if today is None:
+            today = await resolve_org_today(self.db, enrollment.organization_id)
+        if reset_date > today:
             return False
 
         # Never auto-resurrect a member who has left, failed, or paused the
@@ -3888,19 +3911,23 @@ class TrainingProgramService:
         if not program or not getattr(program, "recert_enabled", False):
             return False
 
-        await self._perform_enrollment_reset(enrollment, program)
+        await self._perform_enrollment_reset(enrollment, program, today=today)
         await self.db.commit()
         await self.db.refresh(enrollment)
         await self._safe_notify_recert_reset(enrollment, program)
         return True
 
     @staticmethod
-    def _is_overdue(enrollment: ProgramEnrollment) -> bool:
-        """Whether an ACTIVE enrollment has run past its completion deadline."""
+    def _is_overdue(enrollment: ProgramEnrollment, today: date) -> bool:
+        """Whether an ACTIVE enrollment has run past its completion deadline.
+
+        ``today`` is the department's date: a deadline is the last day the
+        member has, on their calendar, not UTC's.
+        """
         if enrollment.status != EnrollmentStatus.ACTIVE:
             return False
         target = getattr(enrollment, "target_completion_date", None)
-        return bool(target and target < datetime.now(timezone.utc).date())
+        return bool(target and target < today)
 
     async def _expire_enrollment(self, enrollment: ProgramEnrollment) -> None:
         """Move one overdue enrollment to EXPIRED and tell the people affected."""
@@ -3916,14 +3943,18 @@ class TrainingProgramService:
         except Exception as e:
             logger.error(f"Failed to send enrollment-expiry notification: {e}")
 
-    async def auto_expire_if_overdue(self, enrollment: ProgramEnrollment) -> bool:
+    async def auto_expire_if_overdue(
+        self, enrollment: ProgramEnrollment, today: Optional[date] = None
+    ) -> bool:
         """If this enrollment is past its deadline, mark it EXPIRED in place.
 
         Returns True when it expired. Safe to call on every progress load — the
         same read-time pattern as ``auto_reset_if_due``, so an enrollment nobody
         has swept yet still reports its true state the moment someone opens it.
         """
-        if not self._is_overdue(enrollment):
+        if today is None:
+            today = await resolve_org_today(self.db, enrollment.organization_id)
+        if not self._is_overdue(enrollment, today):
             return False
         await self._expire_enrollment(enrollment)
         return True
@@ -3937,7 +3968,7 @@ class TrainingProgramService:
 
         Returns (expired_count, error_message).
         """
-        today = datetime.now(timezone.utc).date()
+        today = await resolve_org_today(self.db, organization_id)
         result = await self.db.execute(
             select(ProgramEnrollment)
             .join(TrainingProgram, ProgramEnrollment.program_id == TrainingProgram.id)
@@ -3953,7 +3984,7 @@ class TrainingProgramService:
         for enrollment in result.scalars().all():
             # Re-check per row: the WHERE clause and _is_overdue must agree, and
             # the helper is the single definition of "overdue".
-            if not self._is_overdue(enrollment):
+            if not self._is_overdue(enrollment, today):
                 continue
             await self._expire_enrollment(enrollment)
             count += 1
@@ -3980,7 +4011,9 @@ class TrainingProgramService:
             return None, "Only an expired enrollment can be reopened"
 
         if target_completion_date is not None:
-            if target_completion_date < datetime.now(timezone.utc).date():
+            if target_completion_date < await resolve_org_today(
+                self.db, organization_id
+            ):
                 return None, "The new deadline must be in the future"
             enrollment.target_completion_date = target_completion_date
 
@@ -4005,7 +4038,7 @@ class TrainingProgramService:
         """Auto-reset every enrollment in the organization whose recert deadline
         has passed. Intended for a scheduled sweep, but safe to call on demand.
         Returns (reset_count, error_message)."""
-        today = datetime.now(timezone.utc).date()
+        today = await resolve_org_today(self.db, organization_id)
         # Select the parent program alongside each enrollment so the reset loop
         # doesn't issue a per-enrollment program lookup (N+1). Only recertable
         # statuses are eligible so a withdrawn member is never resurrected.
@@ -4029,7 +4062,7 @@ class TrainingProgramService:
             # reactivate a member who has left the program.
             if enrollment.status not in self._RECERTABLE_STATUSES:
                 continue
-            await self._perform_enrollment_reset(enrollment, program)
+            await self._perform_enrollment_reset(enrollment, program, today=today)
             reset_pairs.append((enrollment, program))
             count += 1
 
