@@ -129,7 +129,9 @@ async def _org_todays(db: AsyncSession) -> Dict[str, date]:
     date is UTC, which is already tomorrow for a US department every
     evening, so a single "today" would be wrong for somebody at any hour.
     """
-    result = await db.execute(select(Organization))
+    result = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
     return {str(org.id): org_today(org) for org in result.scalars().all()}
 
 

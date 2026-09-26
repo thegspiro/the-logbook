@@ -16,6 +16,7 @@ issued — a module that is off should cost nothing, not merely be filtered out
 of the response afterwards.
 """
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -27,6 +28,17 @@ from app.api.v1.endpoints.dashboard import (
     get_main_dashboard_widgets,
     get_unified_action_items,
 )
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.dashboard.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+
 
 pytestmark = pytest.mark.asyncio
 
