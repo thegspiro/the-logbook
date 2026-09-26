@@ -46,6 +46,8 @@ class _ServerDate(date):
 def _frozen_clock(monkeypatch):
     from app.services import (
         cert_alert_service,
+        equipment_check_service,
+        equipment_readiness_service,
         evoc_level_service,
         inventory_service,
         qualification_service,
@@ -67,6 +69,8 @@ def _frozen_clock(monkeypatch):
     monkeypatch.setattr(reports_service, "date", _ServerDate)
     monkeypatch.setattr(qualification_service, "date", _ServerDate)
     monkeypatch.setattr(evoc_level_service, "date", _ServerDate)
+    monkeypatch.setattr(equipment_check_service, "date", _ServerDate)
+    monkeypatch.setattr(equipment_readiness_service, "date", _ServerDate)
 
 
 def _org(tz="America/New_York", **extra):
@@ -75,6 +79,17 @@ def _org(tz="America/New_York", **extra):
 
 def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
+
+
+def _bound(query):
+    """Every scalar a compiled statement binds, with IN lists flattened."""
+    values = set()
+    for value in query.compile().params.values():
+        if isinstance(value, (list, tuple)):
+            values.update(value)
+        else:
+            values.add(value)
+    return values
 
 
 def _scalars(items):
@@ -542,3 +557,124 @@ class TestOperationsDashboardAge:
 
         created = datetime(2026, 10, 6, 2, 30)  # naive, as func.min returns it
         assert _age_days(created, LOCAL_TODAY, ZoneInfo("America/New_York")) == 1
+
+
+class TestEquipmentChecks:
+    async def test_tonights_shift_is_still_on_my_checklists(self, monkeypatch):
+        """The UTC date (a day on) dropped tonight's shift from the list the
+        crew opens to start its check."""
+        from app.services import equipment_check_service as module
+
+        monkeypatch.setattr(
+            module, "resolve_apparatus_labels", AsyncMock(return_value={})
+        )
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await module.EquipmentCheckService(db).get_my_checklists("u1", "org-1")
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+    async def test_a_lot_expiring_today_is_not_yet_expired(self):
+        from app.models.apparatus import CheckItemDeployedLot, CheckTemplateItem
+        from app.services.equipment_check_service import EquipmentCheckService
+
+        item = CheckTemplateItem(
+            id="ti-1",
+            compartment_id="comp-1",
+            name="4x4 Gauze",
+            check_type="date_lot",
+            has_expiration=True,
+            expiration_date=LOCAL_TODAY,
+        )
+        item.deployed_lots = [
+            CheckItemDeployedLot(
+                id="lot-a",
+                organization_id="org-1",
+                template_item_id="ti-1",
+                lot_number="A",
+                expiration_date=LOCAL_TODAY,
+                quantity=1,
+            )
+        ]
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org())])
+        service = EquipmentCheckService(db)
+        service._get_item_with_template = AsyncMock(return_value=(item, "tpl-1"))
+
+        result = await service.get_item_deployed_lots("ti-1", "org-1")
+
+        assert result["lots"][0]["is_expired"] is False
+
+    def test_the_verdict_uses_the_date_it_is_given(self):
+        """The submit paths hand in the department's date; an item good
+        through that day passes."""
+        from app.models.apparatus import CheckTemplateItem
+        from app.services.equipment_check_service import EquipmentCheckService
+
+        item = CheckTemplateItem(
+            id="ti-1",
+            compartment_id="comp-1",
+            name="AED pads",
+            check_type="date_lot",
+            has_expiration=True,
+            expiration_date=LOCAL_TODAY,
+        )
+        items = [{"template_item_id": "ti-1", "status": "pass"}]
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            items, {"ti-1": item}, today=LOCAL_TODAY
+        )
+        assert (failed, overall) == (0, "pass")
+
+
+class TestInventoryDates:
+    async def test_maintenance_due_is_counted_from_the_departments_date(self):
+        from app.services.inventory_service import InventoryService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await InventoryService(db).get_maintenance_due(uuid.uuid4(), days_ahead=30)
+
+        query = db.execute.await_args_list[1].args[0]
+        bound = set(query.compile().params.values())
+        assert LOCAL_TODAY + timedelta(days=30) in bound
+        assert FROZEN_UTC.date() + timedelta(days=30) not in bound
+
+    async def test_a_lot_expiring_today_still_counts_as_stock(self):
+        from app.services.inventory_service import InventoryService
+
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await InventoryService(db)._in_date_lot_totals("org-1", ["item-1"])
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+
+class TestFleetReadiness:
+    async def test_the_duty_days_end_on_the_departments_date(self):
+        from app.services.equipment_readiness_service import (
+            EquipmentReadinessService,
+        )
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org())])
+        service = EquipmentReadinessService(db)
+        service._load_fleet = AsyncMock(return_value={"u1": SimpleNamespace()})
+        service._build_occasions = AsyncMock(return_value=([], []))
+        service._grid_rows = MagicMock(return_value=[])
+        service._log_entries = MagicMock(return_value=[])
+        service._log_summary = MagicMock(return_value={})
+
+        await service.get_check_log("org-1")
+
+        assert service._build_occasions.await_args.args[3] == LOCAL_TODAY

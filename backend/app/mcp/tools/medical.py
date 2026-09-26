@@ -41,6 +41,7 @@ from app.models.medical_screening import (
     ScreeningStatus,
 )
 from app.services.medical_screening_service import MedicalScreeningService
+from app.utils.org_timezone import resolve_org_today
 
 
 def register(server: Any) -> None:
@@ -105,7 +106,7 @@ def register(server: Any) -> None:
         days = max(1, min(days, 365))
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
-        today = date.today()
+        today = await resolve_org_today(db, principal.organization_id)
         # The same filter as MedicalScreeningService.get_expiring_soon, which
         # loads the whole window for a dashboard; here it is paged, and
         # restricted to members in SQL: applicants' screenings belong to the
