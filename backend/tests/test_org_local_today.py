@@ -55,6 +55,7 @@ def _frozen_clock(monkeypatch):
         inventory_service,
         qualification_service,
         reports_service,
+        scheduling_service,
         training_enhancement_service,
         training_program_service,
         training_service,
@@ -77,6 +78,7 @@ def _frozen_clock(monkeypatch):
     monkeypatch.setattr(apparatus_service, "date", _ServerDate)
     monkeypatch.setattr(facilities_service, "date", _ServerDate)
     monkeypatch.setattr(driver_exception_service, "date", _ServerDate)
+    monkeypatch.setattr(scheduling_service, "date", _ServerDate)
 
 
 def _org(tz="America/New_York", **extra):
@@ -740,3 +742,52 @@ class TestDriverExceptions:
         bound = _bound(db.execute.await_args_list[1].args[0])
         assert LOCAL_TODAY in bound
         assert FROZEN_UTC.date() not in bound
+
+
+class TestScheduling:
+    async def test_leave_keeps_tonights_shift_in_the_cancellation(self):
+        """A member put on leave this evening is still due on tonight's shift;
+        the UTC date (a day on) left it assigned to someone who is away."""
+        from app.services.scheduling_service import SchedulingService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await SchedulingService(db).cancel_member_assignments_in_range(
+            "org-1", "u1", LOCAL_TODAY - timedelta(days=3)
+        )
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+    async def test_a_swap_offer_is_expired_against_the_departments_date(self):
+        from app.services.scheduling_service import SchedulingService
+
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await SchedulingService(db).expire_stale_swap_offers("org-1")
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY + timedelta(days=1) in bound
+        assert FROZEN_UTC.date() + timedelta(days=1) not in bound
+
+    async def test_tonights_shift_is_not_refused_as_past(self):
+        from app.services.scheduling_service import SchedulingService
+
+        inactive = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), inactive])
+        shift = SimpleNamespace(
+            id="s1", shift_date=LOCAL_TODAY, status="scheduled", is_finalized=False
+        )
+
+        error = await SchedulingService(db)._validate_assignment_candidate(
+            "org-1", shift, "u1", "firefighter", reject_past=True
+        )
+
+        # It gets as far as the member check rather than stopping at "past".
+        assert error == "Participating member is no longer active in this organization"

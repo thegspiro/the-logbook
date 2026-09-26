@@ -26,6 +26,10 @@ import io
 import re
 import textwrap
 import tokenize
+from datetime import date
+from unittest.mock import AsyncMock
+
+import pytest
 
 from app.api.v1.endpoints import member_status
 from app.services import (
@@ -37,6 +41,16 @@ from app.services import (
     storefront_service,
     testing_checklist_service,
 )
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.scheduling_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
 
 
 def _strip_comments(source: str) -> str:
