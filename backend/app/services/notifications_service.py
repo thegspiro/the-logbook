@@ -6,7 +6,7 @@ sending, logging, and preferences.
 """
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -22,6 +22,11 @@ from app.models.notification import (
 )
 from app.utils.cursor_pagination import keyset_before, trim_to_page
 from app.utils.model_updates import apply_updates
+from app.utils.org_timezone import (
+    local_day_start_utc,
+    resolve_scheduling_timezone,
+    today_in,
+)
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 logger = logging.getLogger(__name__)
@@ -555,17 +560,15 @@ class NotificationsService:
         active_rules = active_result.scalar() or 0
 
         # Emails sent this month
-        first_of_month = date.today().replace(day=1)
+        # The month is the department's: bounded at its local midnight, not
+        # UTC's, so the first evening's sends are not filed under last month.
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        month_start = local_day_start_utc(today_in(tz).replace(day=1), tz)
         email_result = await self.db.execute(
             select(func.count(NotificationLog.id))
             .where(NotificationLog.organization_id == str(organization_id))
             .where(NotificationLog.channel == NotificationChannel.EMAIL)
-            .where(
-                NotificationLog.sent_at
-                >= datetime.combine(
-                    first_of_month, datetime.min.time(), tzinfo=timezone.utc
-                )
-            )
+            .where(NotificationLog.sent_at >= month_start)
         )
         emails_this_month = email_result.scalar() or 0
 
@@ -573,12 +576,7 @@ class NotificationsService:
         total_notif_result = await self.db.execute(
             select(func.count(NotificationLog.id))
             .where(NotificationLog.organization_id == str(organization_id))
-            .where(
-                NotificationLog.sent_at
-                >= datetime.combine(
-                    first_of_month, datetime.min.time(), tzinfo=timezone.utc
-                )
-            )
+            .where(NotificationLog.sent_at >= month_start)
         )
         notifications_this_month = total_notif_result.scalar() or 0
 

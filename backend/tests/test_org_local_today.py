@@ -843,3 +843,71 @@ class TestMembership:
         bound = _bound(db.execute.await_args_list[1].args[0])
         assert {LOCAL_TODAY, LOCAL_TODAY + timedelta(days=30)} <= bound
         assert FROZEN_UTC.date() not in bound
+
+
+class TestAdministration:
+    async def test_a_meeting_bridged_from_an_event_keeps_its_wall_clock(self):
+        """7:30 PM Eastern is 23:30Z. Copied across unconverted, the meeting
+        read 11:30 PM; an event after 8 PM landed on the next day."""
+        from app.services.meetings_service import MeetingsService
+
+        event = SimpleNamespace(
+            title="Business meeting",
+            start_datetime=datetime(2026, 10, 7, 0, 30),  # naive UTC, 8:30 PM
+            end_datetime=datetime(2026, 10, 7, 2, 0),
+            actual_start_time=None,
+            actual_end_time=None,
+            location=None,
+            location_id=None,
+        )
+        no_meeting = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_one(event), no_meeting, _one(_org()), _scalars([])]
+        )
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+
+        meeting, error = await MeetingsService(db).create_from_event(
+            uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        )
+
+        assert error is None
+        assert meeting.meeting_date == date(2026, 10, 6)
+        assert meeting.start_time.strftime("%H:%M") == "20:30"
+        assert meeting.end_time.strftime("%H:%M") == "22:00"
+
+    def test_a_dashboard_month_starts_at_the_departments_midnight(self):
+        from zoneinfo import ZoneInfo
+
+        from app.services.dashboard_widget_service import period_bounds
+
+        start, end = period_bounds("month", LOCAL_TODAY, ZoneInfo("America/New_York"))
+
+        assert start == datetime(2026, 10, 1, 4, 0, tzinfo=timezone.utc)
+        assert end == datetime(2026, 10, 7, 4, 0, tzinfo=timezone.utc)
+
+    async def test_overdue_maintenance_is_marked_per_department(self):
+        """The nightly sweep runs at one UTC hour for every timezone; work due
+        today in New York is not overdue until New York's day is over."""
+        from app.services import scheduled_tasks
+
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalars([_org()]),
+                MagicMock(rowcount=0),
+                MagicMock(rowcount=0),
+            ]
+        )
+        db.commit = AsyncMock()
+
+        await scheduled_tasks.run_mark_overdue_maintenance(db)
+
+        for call in db.execute.await_args_list[1:]:
+            bound = _bound(call.args[0])
+            assert LOCAL_TODAY in bound
+            assert FROZEN_UTC.date() not in bound
+            assert "org-1" in bound

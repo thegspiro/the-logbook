@@ -11,7 +11,6 @@ and HTTPException-style error handling rather than tuple returns).
 
 import asyncio
 import os
-from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
 
@@ -38,6 +37,11 @@ from app.models.facilities import FacilityDocument, FacilityPhoto
 from app.models.user import Organization, User
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import (
+    local_day_start_utc,
+    resolve_scheduling_timezone,
+    today_in,
+)
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # Permissions that grant leadership-level access to all folders
@@ -2261,10 +2265,9 @@ class DocumentsService:
         """Get statistics for the folders and active documents a caller can browse."""
         accessible_ids = await self.accessible_folder_ids(organization_id, current_user)
         access_predicate = self._document_access_predicate(accessible_ids)
-        first_of_month = date.today().replace(day=1)
-        month_start = datetime.combine(
-            first_of_month, datetime.min.time(), tzinfo=timezone.utc
-        )
+        # The department's month, bounded at its local midnight.
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        month_start = local_day_start_utc(today_in(tz).replace(day=1), tz)
 
         document_aggregates = select(
             func.count(Document.id),

@@ -24,6 +24,7 @@ from app.models.grant import (
     PledgeStatus,
 )
 from app.utils.model_updates import apply_updates
+from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_ordering import nulls_last_asc
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -655,7 +656,7 @@ class FundraisingService:
 
     async def get_dashboard_data(self, organization_id: str) -> Dict[str, Any]:
         """Aggregate fundraising dashboard data."""
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         year_start = date(today.year, 1, 1)
         twelve_months_ago = today - timedelta(days=365)
 

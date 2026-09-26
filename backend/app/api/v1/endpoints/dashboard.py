@@ -58,7 +58,7 @@ from app.services.inventory_service import InventoryService
 from app.services.organization_service import OrganizationService
 from app.services.training_compliance import compute_org_compliance_pct
 from app.utils.hours import hours_from_minutes
-from app.utils.org_timezone import local_date, scheduling_timezone
+from app.utils.org_timezone import local_date, resolve_org_today, scheduling_timezone
 
 router = APIRouter()
 
@@ -129,7 +129,7 @@ async def get_asset_widgets(
     everybody's dashboard, linking into pages it had chosen to retire.
     """
     org_id = str(current_user.organization_id)
-    today = date.today()
+    today = await resolve_org_today(db, org_id)
     enabled = set(
         (
             await OrganizationService(db).get_enabled_modules(
@@ -1053,7 +1053,7 @@ async def get_admin_summary(
                             ActionItemStatus.IN_PROGRESS.value,
                         ]
                     ),
-                    MeetingActionItem.due_date < date.today(),
+                    MeetingActionItem.due_date < await resolve_org_today(db, org_id),
                 )
             )
             overdue_meeting = result.scalar() or 0
