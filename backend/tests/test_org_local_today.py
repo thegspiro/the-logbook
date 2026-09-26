@@ -45,10 +45,13 @@ class _ServerDate(date):
 @pytest.fixture(autouse=True)
 def _frozen_clock(monkeypatch):
     from app.services import (
+        apparatus_service,
         cert_alert_service,
+        driver_exception_service,
         equipment_check_service,
         equipment_readiness_service,
         evoc_level_service,
+        facilities_service,
         inventory_service,
         qualification_service,
         reports_service,
@@ -71,6 +74,9 @@ def _frozen_clock(monkeypatch):
     monkeypatch.setattr(evoc_level_service, "date", _ServerDate)
     monkeypatch.setattr(equipment_check_service, "date", _ServerDate)
     monkeypatch.setattr(equipment_readiness_service, "date", _ServerDate)
+    monkeypatch.setattr(apparatus_service, "date", _ServerDate)
+    monkeypatch.setattr(facilities_service, "date", _ServerDate)
+    monkeypatch.setattr(driver_exception_service, "date", _ServerDate)
 
 
 def _org(tz="America/New_York", **extra):
@@ -678,3 +684,59 @@ class TestFleetReadiness:
         await service.get_check_log("org-1")
 
         assert service._build_occasions.await_args.args[3] == LOCAL_TODAY
+
+
+class TestApparatusAndFacilities:
+    async def test_apparatus_maintenance_due_counts_from_the_departments_date(self):
+        from app.services.apparatus_service import ApparatusService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await ApparatusService(db).get_maintenance_due(
+            "org-1", days_ahead=30, include_overdue=False
+        )
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert {LOCAL_TODAY, LOCAL_TODAY + timedelta(days=30)} <= bound
+        assert FROZEN_UTC.date() not in bound
+
+    async def test_facility_work_due_today_is_not_overdue_tonight(self):
+        """The UTC date (a day on) flagged it overdue on the day it was due."""
+        from app.models.facilities import FacilityMaintenance
+        from app.schemas.facilities import FacilityMaintenanceUpdate
+        from app.services.facilities_service import FacilitiesService
+
+        record = FacilityMaintenance(
+            id="m-1",
+            organization_id="org-1",
+            due_date=LOCAL_TODAY,
+            is_completed=False,
+            is_overdue=False,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org())])
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        service = FacilitiesService(db)
+        service.get_maintenance_record = AsyncMock(return_value=record)
+
+        await service.update_maintenance_record(
+            "m-1", FacilityMaintenanceUpdate(), "org-1", "u1"
+        )
+
+        assert record.is_overdue is False
+
+
+class TestDriverExceptions:
+    async def test_the_review_queue_keeps_a_request_ending_today(self):
+        from app.services.driver_exception_service import DriverExceptionService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await DriverExceptionService(db).count_pending("org-1")
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
