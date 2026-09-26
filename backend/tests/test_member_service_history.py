@@ -83,9 +83,9 @@ class TestSummarize:
         ):
             if hire > today:
                 continue
-            summary = summarize(_member(hire_date=hire), [])
+            summary = summarize(_member(hire_date=hire), [], today)
             assert summary.credited_years == MembershipTierService.years_of_service(
-                hire
+                hire, today
             )
 
     def test_no_hire_date_and_no_stints_is_zero(self):

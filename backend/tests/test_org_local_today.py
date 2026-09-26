@@ -53,6 +53,9 @@ def _frozen_clock(monkeypatch):
         evoc_level_service,
         facilities_service,
         inventory_service,
+        medical_screening_service,
+        member_service_history_service,
+        membership_tier_service,
         qualification_service,
         reports_service,
         scheduling_service,
@@ -79,6 +82,9 @@ def _frozen_clock(monkeypatch):
     monkeypatch.setattr(facilities_service, "date", _ServerDate)
     monkeypatch.setattr(driver_exception_service, "date", _ServerDate)
     monkeypatch.setattr(scheduling_service, "date", _ServerDate)
+    monkeypatch.setattr(medical_screening_service, "date", _ServerDate)
+    monkeypatch.setattr(member_service_history_service, "date", _ServerDate)
+    monkeypatch.setattr(membership_tier_service, "date", _ServerDate)
 
 
 def _org(tz="America/New_York", **extra):
@@ -791,3 +797,49 @@ class TestScheduling:
 
         # It gets as far as the member check rather than stopping at "past".
         assert error == "Participating member is no longer active in this organization"
+
+
+class TestMembership:
+    async def test_an_anniversary_turns_over_on_the_departments_date(self):
+        """Hired October 7, 2016: tonight in New York they have nine years,
+        and the UTC date (already the anniversary) advanced them a tier."""
+        from app.services.membership_tier_service import MembershipTierService
+
+        org = _org(
+            settings={
+                "membership_tiers": {
+                    "tiers": [
+                        {"id": "probationary", "years_required": 0, "sort_order": 0},
+                        {"id": "life", "years_required": 10, "sort_order": 1},
+                    ]
+                }
+            }
+        )
+        member = SimpleNamespace(
+            id="u1",
+            membership_type="probationary",
+            hire_date=date(2016, 10, 7),
+            status_changed_at=None,
+            deleted_at=None,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_one(org), _scalars([member]), _scalars([])]
+        )
+
+        result = await MembershipTierService(db).advance_all("org-1", "admin")
+
+        assert result["advanced"] == 0
+        assert member.membership_type == "probationary"
+
+    async def test_a_screening_expiring_today_is_still_listed(self):
+        from app.services.medical_screening_service import MedicalScreeningService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await MedicalScreeningService(db).get_expiring_soon("org-1", days=30)
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert {LOCAL_TODAY, LOCAL_TODAY + timedelta(days=30)} <= bound
+        assert FROZEN_UTC.date() not in bound

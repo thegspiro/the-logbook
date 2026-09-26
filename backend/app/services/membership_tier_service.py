@@ -22,6 +22,7 @@ from app.services.member_service_history_service import (
     whole_years,
 )
 from app.utils.membership import is_administrative
+from app.utils.org_timezone import org_today
 
 
 class MembershipTierService:
@@ -138,13 +139,13 @@ class MembershipTierService:
         return sorted(tiers, key=lambda t: t.get("sort_order", 0))
 
     @staticmethod
-    def years_of_service(hire_date: Optional[date]) -> int:
-        """Completed years from hire_date to today, ignoring any time away.
+    def years_of_service(hire_date: Optional[date], today: date) -> int:
+        """Completed years from hire_date to ``today``, ignoring any time away.
 
         Tier advancement uses credited service (``summarize``) instead; this
         is the same anniversary arithmetic for a single unbroken stint.
         """
-        return whole_years(hire_date, date.today())
+        return whole_years(hire_date, today)
 
     def resolve_tier(
         self, tiers: List[Dict[str, Any]], yos: int
@@ -235,7 +236,7 @@ class MembershipTierService:
         stints_by_member = await history.periods_by_user(
             organization_id, [m.id for m in members]
         )
-        today = date.today()
+        today = org_today(organization)
 
         advanced = []
         # Members whose current membership_type is not one of this
