@@ -7,7 +7,7 @@ fields, submissions, public forms, integrations, and reporting.
 
 import html as html_lib
 import re
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -44,6 +44,11 @@ from app.models.forms import (
 from app.models.user import Organization, User, UserStatus
 from app.utils.contact_visibility import ContactPolicy
 from app.utils.model_updates import apply_updates
+from app.utils.org_timezone import (
+    local_day_start_utc,
+    resolve_scheduling_timezone,
+    today_in,
+)
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 if TYPE_CHECKING:
@@ -3132,16 +3137,13 @@ class FormsService:
         total_submissions = total_subs_result.scalar()
 
         # Submissions this month
-        first_of_month = date.today().replace(day=1)
+        # The department's month, bounded at its local midnight.
+        tz = await resolve_scheduling_timezone(self.db, org_id_str)
+        month_start = local_day_start_utc(today_in(tz).replace(day=1), tz)
         month_subs_result = await self.db.execute(
             select(func.count(FormSubmission.id))
             .where(FormSubmission.organization_id == org_id_str)
-            .where(
-                FormSubmission.submitted_at
-                >= datetime.combine(
-                    first_of_month, datetime.min.time(), tzinfo=timezone.utc
-                )
-            )
+            .where(FormSubmission.submitted_at >= month_start)
         )
         submissions_this_month = month_subs_result.scalar()
 

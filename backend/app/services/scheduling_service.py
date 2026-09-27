@@ -70,7 +70,7 @@ from app.utils.apparatus_ref import (
 )
 from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
 from app.utils.membership import is_administrative
-from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.positions import normalize_stored_positions, position_label
 
 
@@ -1228,16 +1228,18 @@ class SchedulingService:
     def _bound_shift_window(
         start_date: Optional[date],
         end_date: Optional[date],
+        today: date,
     ) -> Tuple[date, date]:
         """Close an open-ended range to a bounded window.
 
         Anchored on whichever end the caller gave, so "everything from today"
         looks forward and "everything up to the audit date" looks back — the
-        two ways an open end is actually used.
+        two ways an open end is actually used. ``today`` is the department's
+        date.
         """
         span = timedelta(days=MEMBER_SHIFT_WINDOW_DAYS)
         if start_date is None and end_date is None:
-            start_date = date.today()
+            start_date = today
             end_date = start_date + span
         elif start_date is None:
             start_date = end_date - span
@@ -1269,7 +1271,9 @@ class SchedulingService:
         the officer path on this same endpoint accepts any range, and a member
         should not get a 400 where an officer gets a page.
         """
-        start_date, end_date = self._bound_shift_window(start_date, end_date)
+        start_date, end_date = self._bound_shift_window(
+            start_date, end_date, await resolve_org_today(self.db, organization_id)
+        )
         query = select(Shift).where(
             Shift.organization_id == str(organization_id),
             Shift.shift_date >= start_date,
@@ -1789,7 +1793,7 @@ class SchedulingService:
         Each pattern is clamped to its own active window. Returns the total
         number of shifts created this run.
         """
-        today = reference_date or date.today()
+        today = reference_date or await resolve_org_today(self.db, organization_id)
         try:
             weeks = max(int(horizon_weeks), 1)
         except (TypeError, ValueError):
@@ -1943,7 +1947,7 @@ class SchedulingService:
         (or the most recent past shift if none today), then
         falls back to the next future shift.
         """
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         now = datetime.now(timezone.utc)
 
         today_shift = (
@@ -4019,7 +4023,11 @@ class SchedulingService:
                 return f"{label} was cancelled"
             if shift.is_finalized:
                 return f"{label} was finalized"
-        if reject_past and shift.shift_date and shift.shift_date < date.today():
+        if (
+            reject_past
+            and shift.shift_date
+            and shift.shift_date < await resolve_org_today(self.db, organization_id)
+        ):
             # A *fallback*, not a second opinion. When the caller has already
             # run the instant-based signup window and the shift has a readable
             # start, that window is the precise answer and this day-granular
@@ -5936,7 +5944,9 @@ class SchedulingService:
         parties and the duty officer are notified, because the whole value of
         expiring the offer is that somebody now knows.
         """
-        cutoff = (today or date.today()) + timedelta(days=1)
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
+        cutoff = today + timedelta(days=1)
         result = await self.db.execute(
             select(ShiftSwapRequest, Shift)
             .join(Shift, ShiftSwapRequest.offering_shift_id == Shift.id)
@@ -6472,7 +6482,9 @@ class SchedulingService:
         up as open spots for fill-in or hold-over. Commits when it changes
         anything. Returns the number of assignments cancelled.
         """
-        effective_start = max(start_date, date.today())
+        effective_start = max(
+            start_date, await resolve_org_today(self.db, organization_id)
+        )
         if end_date is not None and end_date < effective_start:
             return 0
 
@@ -7556,7 +7568,7 @@ class SchedulingService:
         per-member progress data.
         """
         if reference_date is None:
-            reference_date = date.today()
+            reference_date = await resolve_org_today(self.db, organization_id)
 
         # 1. Get active shift/hours requirements for this org
         req_result = await self.db.execute(

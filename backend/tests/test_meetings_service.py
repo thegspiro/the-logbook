@@ -7,13 +7,31 @@ management (org membership check), action-item completion stamping, and
 meeting approval. DB mocked; no MySQL.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
+
+import pytest
 
 from app.models.event import RSVPStatus
 from app.models.meeting import ActionItemStatus, MeetingStatus
 from app.services.meetings_service import MeetingsService
+
+
+@pytest.fixture(autouse=True)
+def _utc_department(monkeypatch):
+    """The bridge reads the department's zone to turn an event's UTC times
+    into the meeting's wall clock; answer UTC so the fixtures below read as
+    written. The conversion itself is pinned in test_org_local_today."""
+    monkeypatch.setattr(
+        "app.services.meetings_service.resolve_scheduling_timezone",
+        AsyncMock(return_value=ZoneInfo("UTC")),
+    )
+    monkeypatch.setattr(
+        "app.services.meetings_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
 
 
 def _one(obj):

@@ -23,8 +23,10 @@ How the rows come to exist:
   4. Officers can add, correct or remove stints directly, for history that
      predates this feature.
 
-"Today" is ``date.today()`` throughout, matching the tier service's existing
-years-of-service calculation so the two can never disagree on an anniversary.
+"Today" is the department's date throughout (``resolve_org_today``), the same
+one the tier service's years-of-service calculation uses, so the two can never
+disagree on an anniversary -- and neither turns one over at 8 PM Eastern
+because a UTC container already thinks it is tomorrow.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import MemberServicePeriod, Organization, User, UserStatus
 from app.schemas.organization import RejoinServiceCredit
+from app.utils.org_timezone import resolve_org_today
 
 # Statuses in which a member is away from the department, so time spent in
 # them is not service. Leave, suspension and inactivity are still membership
@@ -133,10 +136,12 @@ def implicit_separation_date(member: Any, today: date) -> date:
 def summarize(
     member: Any,
     periods: Sequence[MemberServicePeriod],
-    today: Optional[date] = None,
+    today: date,
 ) -> ServiceSummary:
-    """Credited and prior service for ``member`` from their recorded stints."""
-    today = today or date.today()
+    """Credited and prior service for ``member`` from their recorded stints.
+
+    ``today`` is the department's date; the caller resolves it.
+    """
     hire_date = getattr(member, "hire_date", None)
     resolved: List[ResolvedPeriod] = []
     is_estimated = False
@@ -327,7 +332,7 @@ class MemberServiceHistoryService:
 
         Raises ValueError for a date the history cannot hold.
         """
-        today = today or date.today()
+        today = today or await resolve_org_today(self.db, member.organization_id)
         if rejoin_date > today:
             raise ValueError("The return date cannot be in the future.")
         credit = credit or await self.get_rejoin_default(member.organization_id)
@@ -409,7 +414,7 @@ class MemberServiceHistoryService:
         the recorded history, and service falls back to ``hire_date``.
         Does not commit.
         """
-        today = today or date.today()
+        today = today or await resolve_org_today(self.db, member.organization_id)
         existing = await self.list_periods(member.organization_id, member.id)
         by_id = {str(p.id): p for p in existing}
 

@@ -13,6 +13,19 @@ from app.services.scheduling_service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    for module in (
+        "app.services.scheduling_service",
+        "app.api.v1.endpoints.scheduling",
+    ):
+        monkeypatch.setattr(
+            f"{module}.resolve_org_today", AsyncMock(return_value=date.today())
+        )
+
+
 @pytest.fixture
 def shifts():
     return [SimpleNamespace(id="ordinary"), SimpleNamespace(id="admin")]
@@ -78,19 +91,25 @@ class TestCandidateWindowIsBounded:
     """
 
     def test_an_open_ended_pair_looks_forward_from_today(self):
-        start, end = SchedulingService._bound_shift_window(None, None)
+        start, end = SchedulingService._bound_shift_window(
+            None, None, date(2026, 10, 6)
+        )
 
-        assert start == date.today()
+        assert start == date(2026, 10, 6)
         assert end - start == timedelta(days=MEMBER_SHIFT_WINDOW_DAYS)
 
     def test_an_open_end_is_anchored_on_the_start_the_caller_gave(self):
-        start, end = SchedulingService._bound_shift_window(date(2026, 3, 1), None)
+        start, end = SchedulingService._bound_shift_window(
+            date(2026, 3, 1), None, date.today()
+        )
 
         assert start == date(2026, 3, 1)
         assert end == date(2026, 3, 1) + timedelta(days=MEMBER_SHIFT_WINDOW_DAYS)
 
     def test_an_open_start_looks_back_from_the_end(self):
-        start, end = SchedulingService._bound_shift_window(None, date(2026, 3, 1))
+        start, end = SchedulingService._bound_shift_window(
+            None, date(2026, 3, 1), date.today()
+        )
 
         assert end == date(2026, 3, 1)
         assert start == date(2026, 3, 1) - timedelta(days=MEMBER_SHIFT_WINDOW_DAYS)
@@ -98,13 +117,13 @@ class TestCandidateWindowIsBounded:
     def test_a_range_inside_the_window_is_left_exactly_as_asked(self):
         given = (date(2026, 3, 1), date(2026, 3, 8))
 
-        assert SchedulingService._bound_shift_window(*given) == given
+        assert SchedulingService._bound_shift_window(*given, date.today()) == given
 
     def test_an_oversized_range_is_clamped_not_rejected(self):
         # A 400 here would mean a member gets an error where an officer, on
         # the same endpoint, gets a page.
         start, end = SchedulingService._bound_shift_window(
-            date(2026, 1, 1), date(2030, 1, 1)
+            date(2026, 1, 1), date(2030, 1, 1), date.today()
         )
 
         assert start == date(2026, 1, 1)
