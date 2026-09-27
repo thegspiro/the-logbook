@@ -50,9 +50,9 @@ export const ExternalApparatusSummary: React.FC<ExternalApparatusSummaryProps> =
 
   return (
     <section className="mt-8" aria-labelledby="external-apparatus-summary-heading">
-      <h3 id="external-apparatus-summary-heading" className="text-theme-text-primary text-lg font-semibold">
+      <h2 id="external-apparatus-summary-heading" className="text-theme-text-primary text-lg font-semibold">
         Outside apparatus staffed
-      </h3>
+      </h2>
       <p className="text-theme-text-muted mb-3 text-sm">
         Shifts members logged on other departments&apos; apparatus in this period, per unit.
       </p>

@@ -101,9 +101,9 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
     <section className="mt-8" aria-labelledby="external-shifts-review-heading">
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h3 id="external-shifts-review-heading" className="text-theme-text-primary text-lg font-semibold">
+          <h2 id="external-shifts-review-heading" className="text-theme-text-primary text-lg font-semibold">
             Shifts with other departments
-          </h3>
+          </h2>
           <p className="text-theme-text-muted text-sm">
             Logged by members for time on another jurisdiction&apos;s apparatus. They count as soon as they&apos;re
             logged{canManage ? '; reject one to take it out of the totals.' : '.'}
