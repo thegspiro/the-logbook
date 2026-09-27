@@ -13,6 +13,7 @@ nobody — requester or coordinator — was told a request had arrived.
 """
 
 import html as _html
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Optional
 
@@ -470,19 +471,30 @@ def render_request_template(
 
     Returns ``(subject, html_body, text_body)``. Shared by the manual send and
     the scheduled reminder so a template renders identically either way.
-    """
-    from app.services.email_service import build_email_logo_img
 
-    # organization_logo_img is markup this module builds (and has already
-    # escaped the url and alt text inside). Escaping it again renders the tag
-    # as literal "<img ...>" text at the top of every template email.
-    raw_html_keys = {"organization_logo_img"}
+    The body a department writes is the message, not the whole email: it is
+    always wrapped in the same shell as every other notice (masthead, accent
+    tab, title card, footer), with the subject as its title and the public
+    footer, since the recipient is a member of the public.
+
+    * ``{{organization_logo_img}}`` fills with nothing. Bodies written before
+      the shell put the logo at the top themselves, and the masthead now
+      carries it; filling it would print the logo twice.
+    * A body written as a complete HTML page is taken apart first
+      (:func:`_message_of`): only what was inside ``<body>`` is kept, and the
+      page's own ``<head>`` and ``<style>`` are dropped, so every request
+      email is in the house design and no document is nested in another.
+    """
+    from app.services.email_service import wrap_email_body
+    from app.services.email_theme import ACCENT_BLUE
+
+    body = _message_of(template.body_html or "")
 
     context = {
         "contact_name": event_request.contact_name,
         "outreach_type": outreach_type_label(org, event_request.outreach_type),
         "organization_name": event_request.organization_name or "",
-        "organization_logo_img": build_email_logo_img(org),
+        "organization_logo_img": "",
         "event_date": (
             _format_local_when(event_request.event_date, org)
             if event_request.event_date
@@ -491,17 +503,46 @@ def render_request_template(
     }
 
     subject = template.subject
-    body = template.body_html
     for key, value in context.items():
         # EV-7: coerce to str before replace/escape — a None base-context value
         # would otherwise raise TypeError -> 500.
         safe_value = "" if value is None else str(value)
         subject = subject.replace(f"{{{{{key}}}}}", safe_value)
-        body = body.replace(
-            f"{{{{{key}}}}}",
-            safe_value if key in raw_html_keys else _html.escape(safe_value),
-        )
+        body = body.replace(f"{{{{{key}}}}}", _html.escape(safe_value))
+    # The colourway of the built-in request-status notice, so every email a
+    # requester receives from the department looks like one series.
+    body = wrap_email_body(
+        org,
+        subject,
+        body,
+        header_color=ACCENT_BLUE,
+        chip="Request update",
+        footer_key="public",
+    )
     return subject, body, template.body_text
+
+
+_BODY_CONTENT = re.compile(
+    r"<body\b[^>]*>(.*?)(?:</body\s*>|\Z)", re.IGNORECASE | re.DOTALL
+)
+_PAGE_ONLY = re.compile(
+    r"<!DOCTYPE[^>]*>|<head\b.*?</head\s*>|<style\b.*?</style\s*>|</?html\b[^>]*>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _message_of(body_html: str) -> str:
+    """The message inside a department's template, without any page around it.
+
+    A fragment comes back unchanged apart from any ``<style>`` block. A whole
+    page comes back as what its ``<body>`` held, with the page's own head and
+    stylesheet removed: the shell supplies the page, and a second stylesheet
+    would fight the house one.
+    """
+    match = _BODY_CONTENT.search(body_html)
+    if match:
+        body_html = match.group(1)
+    return _PAGE_ONLY.sub("", body_html).strip()
 
 
 async def send_request_notification(

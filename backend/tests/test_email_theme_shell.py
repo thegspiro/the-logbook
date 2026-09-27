@@ -31,6 +31,7 @@ from app.services.email_theme import (
     ACCENT_RED,
     ACCENT_SLATE,
     CHIP_TINTS,
+    DARK_CSS,
     DEFAULT_CSS,
     LAYOUTS,
     action,
@@ -214,8 +215,9 @@ class TestPanelsBeatTheDataTable:
         assert _wins(style, "padding: 0 0 12px 0")
 
     def test_panel_table_does_not_carry_the_content_margin(self):
-        # Skipping the lockup and Outlook's ghost table, which carry no class.
-        style = _style_of(self._panel(), r'<table(?![^>]*(?:lockup|width="600"))[^>]*>')
+        # The panel's own table is the one unclassed table: the tab and
+        # Outlook's ghost table both carry attributes before any style.
+        style = _style_of(self._panel(), r'<table style="[^"]*">')
         assert _wins(style, "margin: 0")
 
     def test_fineprint_beats_the_body_paragraph(self):
@@ -237,13 +239,16 @@ class TestBuildShell:
             chip="Reminder",
             subtitle="Tuesday",
         )
-        assert "background-color: {{header_accent}}" in body
-        assert 'style="color: {{header_accent}};"' in body
-        # The status line is a whole deferred block, not a tint and a text
-        # node written here: whether it exists at all depends on the row.
-        assert "{{status_line}}" in body
+        # The tab, the button cell and the button's Outlook border.
+        assert body.count("background-color: {{header_accent}}") == 2
+        assert body.count('bgcolor="{{header_accent}}"') == 2
+        assert "border: 1px solid {{header_accent}};" in body
+        # The summary card takes the tint, and the tab names the chip.
+        assert '<div class="summary" style="background-color: {{chip_tint}};">' in body
+        assert '<td class="tab-label">{{status_chip}}</td>' in body
         # And no hex anywhere, or the column could not be authoritative.
         assert ACCENT_BLUE not in body
+        assert CHIP_TINTS[ACCENT_BLUE] not in body
 
     def test_the_status_line_takes_the_accent_and_escapes_the_chip(self):
         line = colourway_context(ACCENT_BLUE, "<b>Due</b>")["status_line"]
@@ -305,11 +310,15 @@ class TestBuildShell:
         assert '<div class="masthead">' in body
         assert "{{organization_logo_block}}" in body
 
-    def test_exactly_one_header_and_one_content(self):
+    def test_exactly_one_tab_summary_and_content(self):
         body = build_shell("T", "        <p>x</p>", accent=ACCENT_RED, chip="Chip")
-        assert body.count('class="header"') == 1
+        assert body.count('class="tab"') == 1
+        assert body.count('class="summary"') == 1
         assert body.count('class="{{content_class}}"') == 1
         assert body.count("{{footer_html}}") == 1
+        # The previous shell's header and status line are gone from new mail.
+        assert 'class="header"' not in body
+        assert "{{status_line}}" not in body
 
     def test_cache_false_does_not_grow_shell_colourways(self):
         # Pitfall #9: wrap_email_body builds one unique shell per send with
@@ -428,9 +437,11 @@ class TestEveryTemplateRendersIntoTheShell:
         html = defn["html"]
         assert '<div class="logo">' not in html, "the pre-1b centred logo block"
         assert html.count('class="masthead"') == 1
-        assert html.count('class="header"') == 1
+        assert html.count('class="tab"') == 1
+        assert html.count('<td class="tab-label">{{status_chip}}</td>') == 1
+        assert html.count('class="summary"') == 1
         assert html.count('<div class="{{content_class}}">') == 1
-        assert html.count("{{status_line}}") == 1
+        assert 'class="header"' not in html
 
     @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
     def test_no_placeholder_survives_the_sample_render(self, defn):
@@ -882,6 +893,20 @@ class TestSavingATemplateWritesWhatWasSent:
         assert template.default_cc == ["chief@example.test"]
         assert template.header_accent == _DEFS[0]["accent"]
 
+    async def test_a_stylesheet_is_not_saved(self, db_session, template):
+        # Every email uses the built-in stylesheet; a per-template one would
+        # be a stored setting nothing reads.
+        from app.services.email_template_service import EmailTemplateService
+
+        service = EmailTemplateService(db_session)
+        await service.update_template(
+            template_id=template.id,
+            organization_id=template.organization_id,
+            css_styles=".container { color: navy; }",
+        )
+        await db_session.refresh(template)
+        assert template.css_styles is None
+
     async def test_tenancy_columns_are_not_writable_through_an_update(
         self, db_session, template
     ):
@@ -1139,16 +1164,29 @@ class TestTheFactPanel:
 
     def test_the_cell_is_not_a_data_table_cell(self):
         style = _style_of(_inlined(self.PANEL), r'<td class="fact"[^>]*>')
-        assert _wins(style, "padding: 12px 16px")
+        assert _wins(style, "padding: 0 16px 16px 0")
         assert _wins(style, "border-bottom: none")
 
-    def test_the_panel_is_not_a_data_table(self):
+    def test_the_facts_sit_on_the_card_not_a_data_table(self):
         style = _style_of(_inlined(self.PANEL), r'<table class="facts"[^>]*>')
-        assert _wins(style, "margin: 0 0 22px 0")
-        assert _wins(style, "border-collapse: separate")
-        assert _wins(style, "background-color: #f5f6f8")
+        assert _wins(style, "margin: 0 0 6px 0")
+        assert _wins(style, "background-color: transparent")
+        assert _wins(style, "font-size: 16px")
 
-    def test_labels_clear_AA_on_the_panel(self):
+    def test_credentials_go_on_a_panel(self):
+        panel = facts([[fact("Username", "{{username}}", mono=True)]], panel=True)
+        assert '<table class="facts-panel"' in panel
+        assert '<td class="fact-boxed" colspan="2">' in panel
+        html = _inlined(panel)
+        table = _style_of(html, r'<table class="facts-panel"[^>]*>')
+        assert _wins(table, "background-color: #f5f6f8")
+        assert _wins(table, "margin: 0 0 22px 0")
+        cell = _style_of(html, r'<td class="fact-boxed"[^>]*>')
+        assert _wins(cell, "padding: 12px 16px")
+        assert _wins(cell, "border-bottom: none")
+
+    def test_labels_clear_AA_on_the_card_and_the_panel(self):
+        assert _contrast("#4b5563", "#ffffff") >= 4.5
         assert _contrast("#4b5563", "#f5f6f8") >= 4.5
 
 
@@ -1163,21 +1201,29 @@ class TestTheAction:
     def test_the_button_takes_the_colourway(self):
         body = build_shell("T", action("{{event_url}}", "Go"))
         assert (
-            'class="button" style="background-color: {{header_accent}}; '
-            'border: 1px solid {{header_accent}};"'
+            '<td class="cta-cell" bgcolor="{{header_accent}}" '
+            'style="background-color: {{header_accent}};">'
+        ) in body
+        assert (
+            '<a href="{{event_url}}" class="cta-link" '
+            'style="border: 1px solid {{header_accent}};">Go</a>'
         ) in body
 
-    def test_the_action_is_centred_and_the_button_is_a_touch_target(self):
+    def test_the_button_spans_the_card_and_is_a_touch_target(self):
         html = _inlined(action("{{event_url}}", "Go"))
-        assert _wins(_style_of(html, r'<p class="action"[^>]*>'), "text-align: center")
-        assert _wins(
-            _style_of(html, r'<p class="action-link"[^>]*>'), "text-align: center"
-        )
-        # 14px top and bottom around a 16px line at 1.2 is 47px: over the
+        table = _style_of(html, r'<table class="cta"[^>]*>')
+        assert _wins(table, "width: 100%")
+        # The cell must not inherit the data table's padding or rule.
+        cell = _style_of(html, r'<td class="cta-cell"[^>]*>')
+        assert _wins(cell, "padding: 0")
+        assert _wins(cell, "border-bottom: none")
+        # 15px top and bottom around a 16px line at 1.2 is 49px: over the
         # 44px minimum a thumb needs.
-        button = _style_of(html, r'<a [^>]*class="button"[^>]*>')
-        assert _wins(button, "padding: 14px 36px")
-        assert _wins(button, "font-size: 16px")
+        link = _style_of(html, r'<a [^>]*class="cta-link"[^>]*>')
+        assert _wins(link, "display: block")
+        assert _wins(link, "padding: 15px 12px")
+        assert _wins(link, "font-size: 16px")
+        assert _wins(link, "color: #ffffff")
 
 
 class TestThePreheader:
@@ -1214,7 +1260,7 @@ class TestThePreheader:
     def test_every_default_with_something_to_preview_previews_it(self, defn):
         html = defn["html"]
         has_facts = 'class="facts"' in html
-        has_subtitle = re.search(r"</h1>\n\s*<p style=\"color", html) is not None
+        has_subtitle = re.search(r"</h1>\n\s*<p>", html) is not None
         if has_facts or has_subtitle:
             assert self._preheader(html), f"{defn['type'].value} has no preheader"
 
@@ -1335,21 +1381,16 @@ def _bodies(engine) -> dict:
 class TestTheShellMigration:
     """``f0d76814a9ab``: untouched templates move to the new shell."""
 
-    def test_every_shipped_default_is_the_migrations_current_body(self):
-        # If this fails, a default body changed without a migration to carry
-        # the rows already holding the old one. Ship one — a copy of this
-        # revision with its own frozen pair — and point this test at it;
-        # otherwise every installation keeps the old design and newly
-        # badges each untouched template "Edited".
-        #
-        # A type added after this revision is skipped: no installation held
-        # a row of it when the migration ran, so there is no old body to carry.
-        for defn in _DEFS:
-            if defn["type"].value not in _SHELL_MIGRATION.CURRENT_BODIES:
-                continue
-            assert (
-                _SHELL_MIGRATION.CURRENT_BODIES[defn["type"].value] == defn["html"]
-            ), defn["type"].value
+    def test_every_body_it_wrote_is_carried_on_by_a_later_revision(self):
+        # The defaults have changed twice since. b795d1b3401b recognises
+        # every earlier shipped body by digest, so a row this revision
+        # converted is moved on from there; if it did not, the row would be
+        # stranded on this design and newly badged "Edited".
+        later = _load_revision("b795d1b3401b")
+        for template_type, body in _SHELL_MIGRATION.CURRENT_BODIES.items():
+            assert later._is_earlier_default(
+                later.HTML_HISTORY, template_type, body
+            ) or (later.CURRENT[template_type]["html"] == body), template_type
 
     def test_the_two_maps_cover_the_same_types(self):
         assert set(_SHELL_MIGRATION.PREVIOUS_BODIES) == set(
@@ -1488,10 +1529,50 @@ class TestClassicOutlook:
         assert "<o:PixelsPerInch>96</o:PixelsPerInch>" in doc
 
 
-class TestTheDocumentOptsOutOfAutoDarkening:
-    def test_it_declares_light_only(self):
-        # Plain "light" is a preference; Apple Mail only leaves the message
-        # alone when it says "light only".
+class TestTheColourScheme:
+    """The built-in sheet ships a dark rendering; a department's own does not."""
+
+    def test_the_built_in_sheet_declares_both_schemes(self):
         doc = build_email_document("s", "<p>x</p>")
+        assert '<meta name="color-scheme" content="light dark" />' in doc
+        assert '<meta name="supported-color-schemes" content="light dark" />' in doc
+        assert '<style data-inline="false">' in doc
+        assert DARK_CSS in doc
+
+    def test_passing_the_built_in_sheet_explicitly_is_the_same(self):
+        # render() passes ``css_styles or DEFAULT_CSS``, so this is the path a
+        # template on the built-in sheet actually takes.
+        assert build_email_document("s", "<p>x</p>", DEFAULT_CSS) == (
+            build_email_document("s", "<p>x</p>")
+        )
+
+    def test_a_departments_own_sheet_opts_out_of_auto_darkening(self):
+        # Plain "light" is a preference; Apple Mail only leaves the message
+        # alone when it says "light only". And our dark overrides are written
+        # against our colours, not theirs.
+        doc = build_email_document("s", "<p>x</p>", ".container { color: navy; }")
         assert '<meta name="color-scheme" content="light only" />' in doc
         assert '<meta name="supported-color-schemes" content="light only" />' in doc
+        assert "prefers-color-scheme" not in doc
+
+    def test_the_inliner_keeps_the_dark_sheet_and_consumes_the_other(self):
+        out = inline_email_css(
+            build_email_document("s", '<div class="summary">x</div>')
+        )
+        assert out.count("<style") == 1
+        assert '<style data-inline="false">' in out
+        assert "@media (prefers-color-scheme: dark)" in out
+        # The light sheet was still inlined, not skipped along with it.
+        assert _wins(
+            _style_of(out, r'<div class="summary"[^>]*>'),
+            "padding: 20px 24px 22px 24px",
+        )
+
+    def test_the_dark_sheet_is_never_parsed_as_rules(self):
+        # Its selectors are ones the inliner cannot read, and a nested @media
+        # brace would be misparsed; the light sheet must be the only input.
+        out = inline_email_css(
+            build_email_document("s", '<div class="content">x</div>')
+        )
+        style = _style_of(out, r'<div class="content"[^>]*>')
+        assert "!important" not in style

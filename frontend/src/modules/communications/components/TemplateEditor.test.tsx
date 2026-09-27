@@ -133,13 +133,12 @@ describe('TemplateEditor', () => {
     expect(screen.getByPlaceholderText(/plain text version/i)).toHaveValue('Hello {{first_name}}');
   });
 
-  it('shows collapsible CSS styles', async () => {
-    const user = userEvent.setup();
+  it('offers no per-template stylesheet', () => {
+    // Every email renders with the built-in stylesheet; a box for one would
+    // store a setting nothing reads.
     render(<Harness template={makeTemplate()} />);
 
-    await user.click(screen.getByText(/css styles/i));
-
-    expect(screen.getByPlaceholderText(/\.container/i)).toHaveValue('body { color: #333; }');
+    expect(screen.queryByText(/css styles/i)).not.toBeInTheDocument();
   });
 
   describe('colourway controls', () => {
@@ -252,8 +251,6 @@ function makeDraft() {
     setHtmlBody: noop,
     textBody: '',
     setTextBody: noop,
-    cssStyles: '',
-    setCssStyles: noop,
     footerKey: '',
     setFooterKey: noop,
     defaultCc: '',

@@ -46,10 +46,13 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     build_logo_block,
     build_logo_cell,
     build_shell,
+    callout,
     colourway_context,
     colourway_for,
+    countdown_tile,
     fact,
     facts,
+    summary_facts,
 )
 from app.utils.model_updates import apply_updates
 
@@ -423,12 +426,18 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "election_title", "description": "Title of the election"},
         {"name": "performer_name", "description": "Name of the person who rolled back"},
         {"name": "reason", "description": "Reason for the rollback"},
+        {"name": "previous_stage", "description": "Stage the election was in"},
+        {"name": "current_stage", "description": "Stage it was rolled back to"},
+        {"name": "action_time", "description": "When it was rolled back"},
     ],
     "election_deleted": [
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "election_title", "description": "Title of the deleted election"},
         {"name": "performer_name", "description": "Name of the person who deleted it"},
         {"name": "reason", "description": "Reason for deletion"},
+        {"name": "election_status", "description": "Stage it was in when deleted"},
+        {"name": "vote_count", "description": "Votes cast at the time of deletion"},
+        {"name": "action_time", "description": "When it was deleted"},
     ],
     "election_report": [
         {"name": "recipient_name", "description": "Recipient's display name"},
@@ -949,6 +958,9 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "election_title": "Captain Election 2026",
             "performer_name": "Secretary Robert Johnson",
             "reason": "Ballots were distributed to ineligible members",
+            "previous_stage": "Open",
+            "current_stage": "Draft",
+            "action_time": "March 30, 2026 at 02:15 PM",
         }
     ),
     "election_deleted": _sample(
@@ -957,6 +969,9 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "election_title": "Captain Election 2026",
             "performer_name": "Secretary Robert Johnson",
             "reason": "Election created in error — new election will be scheduled",
+            "election_status": "Open",
+            "vote_count": "14",
+            "action_time": "March 30, 2026 at 02:15 PM",
         }
     ),
     "election_report": _sample(
@@ -1185,17 +1200,22 @@ DEFAULT_WELCOME_HTML = build_shell(
 """
     + facts(
         [
-            [
-                fact("Username", "{{username}}", mono=True),
-                fact("Temporary password", "{{temp_password}}", mono=True),
-            ],
-        ]
+            [fact("Username", "{{username}}", mono=True)],
+            [fact("Temporary password", "{{temp_password}}", mono=True)],
+        ],
+        panel=True,
     )
-    + """        <p>For security, please change your password after your first login.</p>
-"""
     + action("{{login_url}}", "Log In Now"),
-    accent=ACCENT_RED,
+    # Green rather than the red it shipped with: red is kept for official
+    # notices (property return, archival), and a welcome is not one.
+    accent=ACCENT_GREEN,
     chip="Account ready",
+    tab_note="Welcome aboard",
+    after=callout(
+        "warning",
+        "Change your password",
+        "For security, please set a new password after your first login.",
+    ),
 )
 
 DEFAULT_WELCOME_TEXT = """Welcome to {{organization_name}}
@@ -1220,11 +1240,15 @@ DEFAULT_PASSWORD_RESET_HTML = build_shell(
     "Reset your password",
     """        <p>Hello {{first_name}},</p>
         <p>We received a request to reset your password for <strong>{{organization_name}}</strong>. This link expires in <strong>{{expiry_minutes}} minutes</strong>.</p>
-"""
-    + action("{{reset_url}}", "Reset Password")
-    + """        <p>If you did not request a password reset, you can safely ignore this email. Your password will not be changed.</p>""",
+""" + action("{{reset_url}}", "Reset Password"),
     accent=ACCENT_SLATE,
     chip="Security",
+    tab_note="Link expires in {{expiry_minutes}} min",
+    after=callout(
+        "neutral",
+        "Didn't ask for this?",
+        "You can safely ignore this email. Your password will not be changed.",
+    ),
 )
 
 DEFAULT_PASSWORD_RESET_TEXT = """Password Reset Request
@@ -1254,15 +1278,7 @@ DEFAULT_MEMBER_DROPPED_HTML = build_shell(
         </p>
         <p><strong>Reason:</strong> {{reason}}</p>
 """
-    + facts(
-        [
-            [fact("Return deadline", "{{return_deadline}}")],
-            [
-                fact("Outstanding items", "{{item_count}} item(s)"),
-                fact("Total assessed value", "${{total_value}}"),
-            ],
-        ]
-    )
+    + facts([[fact("Outstanding items", "{{item_count}} item(s)")]])
     + """        {{items_list_html}}
         <p>
             In accordance with department policy, all department-issued property must be
@@ -1278,6 +1294,14 @@ DEFAULT_MEMBER_DROPPED_HTML = build_shell(
         <p class="fineprint">A copy of this notice has been placed in your member file.</p>""",
     accent=ACCENT_RED,
     chip="Property return",
+    tab_note="Due {{return_deadline}}",
+    summary=summary_facts(
+        [
+            fact("Return deadline", "{{return_deadline}}"),
+            fact("Total assessed value", "${{total_value}}"),
+        ],
+        emphasis=0,
+    ),
 )
 
 DEFAULT_MEMBER_DROPPED_TEXT = """Department Property Return Notice
@@ -1362,25 +1386,26 @@ DEFAULT_INVENTORY_CHANGE_SUBJECT = "Inventory Update — {{organization_name}}"
 
 # Default certification expiration alert email
 DEFAULT_CERT_EXPIRATION_HTML = build_shell(
-    "{{cert_name}} expires in {{days_remaining}} days",
+    "{{cert_name}} expires {{expiration_date}}",
     """        <p>Hello {{recipient_name}}, this is a reminder that your certification is approaching its expiration date.</p>
 """
     + facts(
         [
             [
+                fact("Certification", "{{cert_name}}"),
                 fact("Expiration date", "{{expiration_date}}"),
-                fact("Days remaining", "{{days_remaining}}"),
             ],
-            [fact("Certification", "{{cert_name}}")],
         ]
     )
-    + """        <div class="alert">
-            <p>Renew before it expires to stay compliant for calls and drills.</p>
-        </div>
-"""
     + action("{{renewal_url}}", "View Certifications"),
     accent=ACCENT_AMBER,
     chip="Action required",
+    tab_note="{{days_remaining}} days left",
+    subtitle="Renew to stay compliant for calls and drills",
+    # The subtitle is advice, not the news; the inbox preview leads with
+    # the countdown instead.
+    preheader="{{cert_name}} expires in {{days_remaining}} days",
+    lead=countdown_tile("{{days_remaining}}", "days"),
 )
 
 DEFAULT_CERT_EXPIRATION_TEXT = """Certification Expiration Notice
@@ -1492,12 +1517,8 @@ DEFAULT_PROPERTY_RETURN_REMINDER_HTML = build_shell(
     + facts(
         [
             [
-                fact("Return deadline", "{{return_deadline}}"),
-                fact("Days since separation", "{{days_since_drop}}"),
-            ],
-            [
                 fact("Outstanding items", "{{item_count}} item(s)"),
-                fact("Total assessed value", "${{total_value}}"),
+                fact("Days since separation", "{{days_since_drop}}"),
             ],
         ]
     )
@@ -1505,6 +1526,14 @@ DEFAULT_PROPERTY_RETURN_REMINDER_HTML = build_shell(
         <p>Please contact the department administration to arrange return of these items as soon as possible.</p>""",
     accent=ACCENT_RED,
     chip="Reminder",
+    tab_note="Due {{return_deadline}}",
+    summary=summary_facts(
+        [
+            fact("Return deadline", "{{return_deadline}}"),
+            fact("Total assessed value", "${{total_value}}"),
+        ],
+        emphasis=0,
+    ),
 )
 
 DEFAULT_PROPERTY_RETURN_REMINDER_TEXT = """Property Return Reminder
@@ -1579,16 +1608,27 @@ DEFAULT_ELECTION_ROLLBACK_HTML = build_shell(
     + facts(
         [
             [fact("Election", "{{election_title}}")],
-            [fact("Rolled back by", "{{performer_name}}")],
+            [
+                fact("Moved from", "{{previous_stage}}"),
+                fact("Moved to", "{{current_stage}}"),
+            ],
+            [
+                fact("Rolled back by", "{{performer_name}}"),
+                fact("When", "{{action_time}}"),
+            ],
             [fact("Reason", "{{reason}}")],
         ]
     )
-    + """        <div class="alert">
-            <p>Votes recorded after the stage this election returned to are no longer counted.</p>
-        </div>
-        <p>Please review the election details and coordinate with your team as needed.</p>""",
+    + """        <p>This rollback has been logged in the election's audit trail. Please review the election details and coordinate with your team as needed.</p>
+        <p>If you have questions, please contact {{performer_name}}.</p>""",
     accent=ACCENT_INDIGO,
     chip="Rolled back",
+    tab_note="{{previous_stage}} → {{current_stage}}",
+    after=callout(
+        "warning",
+        "Some votes no longer count",
+        "Votes recorded after the stage this election returned to are no longer counted.",
+    ),
 )
 
 DEFAULT_ELECTION_ROLLBACK_TEXT = """Election Rolled Back
@@ -1598,10 +1638,17 @@ Hello {{recipient_name}},
 An election has been rolled back to a previous stage:
 
 Election: {{election_title}}
+Moved from: {{previous_stage}}
+Moved to: {{current_stage}}
 Rolled back by: {{performer_name}}
+When: {{action_time}}
 Reason: {{reason}}
 
-Please review the election details and coordinate with your team as needed.
+Votes recorded after the stage this election returned to are no longer counted.
+
+This rollback has been logged in the election's audit trail. Please review the
+election details and coordinate with your team as needed. If you have
+questions, please contact {{performer_name}}.
 
 {{footer_text}}"""
 
@@ -1615,16 +1662,27 @@ DEFAULT_ELECTION_DELETED_HTML = build_shell(
     + facts(
         [
             [fact("Election", "{{election_title}}")],
-            [fact("Deleted by", "{{performer_name}}")],
+            [
+                fact("Stage when deleted", "{{election_status}}"),
+                fact("Votes at deletion", "{{vote_count}}"),
+            ],
+            [
+                fact("Deleted by", "{{performer_name}}"),
+                fact("When", "{{action_time}}"),
+            ],
             [fact("Reason", "{{reason}}")],
         ]
     )
-    + """        <div class="alert">
-            <p>All associated ballots and results have been removed. This cannot be undone.</p>
-        </div>
+    + """        <p>This deletion has been logged in the audit trail with critical severity. Please review it and coordinate with your team immediately if it was not authorized.</p>
         <p>If you have questions, please contact {{performer_name}}.</p>""",
     accent=ACCENT_INDIGO,
     chip="Deleted",
+    tab_note="Critical",
+    after=callout(
+        "critical",
+        "This cannot be undone",
+        "All associated ballots and results have been removed.",
+    ),
 )
 
 DEFAULT_ELECTION_DELETED_TEXT = """Election Deleted
@@ -1634,10 +1692,17 @@ Hello {{recipient_name}},
 An election has been permanently deleted:
 
 Election: {{election_title}}
+Stage when deleted: {{election_status}}
+Votes at deletion: {{vote_count}}
 Deleted by: {{performer_name}}
+When: {{action_time}}
 Reason: {{reason}}
 
-All associated ballots and results have been removed.
+All associated ballots and results have been removed. This cannot be undone.
+
+This deletion has been logged in the audit trail with critical severity.
+Please review it and coordinate with your team immediately if it was not
+authorized. If you have questions, please contact {{performer_name}}.
 
 {{footer_text}}"""
 
@@ -1848,12 +1913,18 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = build_shell(
         {{custom_message_html}}
 """
     + action("{{ballot_url}}", "Vote Now")
-    + """        <p class="fineprint">Clicking the link above will automatically log you in to vote.</p>
-        <p>If you have any questions, please contact your election administrator:<br/>
+    + """        <p>If you have any questions, please contact your election administrator:<br/>
         <strong>{{admin_contact_name}}</strong> ({{admin_contact_email}})</p>""",
     accent=ACCENT_INDIGO,
     chip="Ballot open",
     subtitle="Voting closes {{voting_closes}}",
+    tab_note="Closes {{voting_closes}}",
+    after=callout(
+        "info",
+        "This link is yours alone",
+        "It signs you in to vote automatically. Don't forward this email: "
+        "anyone with the link can vote as you.",
+    ),
 )
 
 DEFAULT_BALLOT_NOTIFICATION_TEXT = """Ballot Available: {{election_title}}
@@ -2150,6 +2221,7 @@ DEFAULT_TRAINING_APPROVAL_HTML = build_shell(
     accent=ACCENT_AMBER,
     chip="Approval needed",
     subtitle="Due {{approval_deadline}}",
+    tab_note="Due {{approval_deadline}}",
 )
 
 DEFAULT_TRAINING_APPROVAL_TEXT = """Training Approval Needed
@@ -2199,6 +2271,7 @@ DEFAULT_SHIFT_ASSIGNMENT_HTML = build_shell(
     accent=ACCENT_GREEN,
     chip="Assignment",
     subtitle="{{shift_date}}",
+    tab_note="Please respond",
 )
 
 DEFAULT_SHIFT_ASSIGNMENT_TEXT = """New Shift Assignment
@@ -2499,11 +2572,6 @@ class EmailTemplateService:
             or template.html_body != defn["html"]
             or (template.text_body or "") != (defn["text"] or "")
             or (template.footer_key or None) != defn.get("footer")
-            # A department that changed only the stylesheet has changed how
-            # its mail looks, and Reset would put that back — so leaving it
-            # out labelled the template Default and hid it from the Edited
-            # filter while Reset stood ready to undo their work.
-            or (template.css_styles or None) is not None
         )
 
     async def sent_counts(self, organization_id: str) -> Dict[str, int]:
@@ -2554,12 +2622,11 @@ class EmailTemplateService:
             subject=subject,
             html_body=html_body,
             text_body=text_body,
-            # NULL, not a copy of DEFAULT_CSS. render() falls back to the
-            # current default for a NULL, so a department that never touched
-            # the stylesheet tracks improvements to it; baking a snapshot in
-            # at creation time froze every existing organization on the
-            # stylesheet that shipped the day they signed up.
-            css_styles=css_styles or None,
+            # Always NULL: every email renders with the built-in stylesheet
+            # (see render()). The parameter stays so existing callers and API
+            # clients that still send one are not refused; what they send is
+            # not kept.
+            css_styles=None,
             # The colourway the body was built with. Stored rather than left
             # NULL so the accent swatches have something to show as selected,
             # and so an admin recolouring one notice does not have to
@@ -2616,7 +2683,9 @@ class EmailTemplateService:
             "subject",
             "html_body",
             "text_body",
-            "css_styles",
+            # css_styles is deliberately absent: a per-template stylesheet is
+            # no longer honoured, so accepting one would store a setting
+            # nothing reads (Pitfall #19).
             "description",
             "is_active",
             "allow_attachments",
@@ -2779,9 +2848,10 @@ class EmailTemplateService:
                 template.text_body, ctx, escape_html=False
             )
 
-        full_html = build_email_document(
-            subject, html_body, template.css_styles or DEFAULT_CSS
-        )
+        # Always the built-in stylesheet. A template's own css_styles is not
+        # consulted: every email is in the one house design, and the stored
+        # bodies are written against its classes.
+        full_html = build_email_document(subject, html_body, DEFAULT_CSS)
 
         return subject, full_html, text_body
 
@@ -2968,6 +3038,41 @@ class EmailTemplateService:
         # Create a lightweight instance — render() does not use self.db
         instance = cls.__new__(cls)
         return instance.render(template, context, organization=organization)
+
+    @classmethod
+    def render_default(
+        cls,
+        template_type: EmailTemplateType,
+        context: Dict[str, Any],
+        organization: Optional[Any] = None,
+    ) -> Tuple[str, str, Optional[str]]:
+        """Render a type's shipped default, for a department with no stored row.
+
+        Goes through :meth:`render` on an unsaved row built from the default
+        definition, so the fallback fills exactly what a stored template's
+        render fills — the colourway, the logo, the footer, and the same
+        escaping. Senders used to substitute the context into the default
+        body with their own ``re.sub`` loops, which filled only the caller's
+        variables: every token the shell leaves for the renderer (the tab's
+        ``{{status_chip}}``, ``{{header_accent}}``, ``{{footer_html}}``) was
+        mailed literally, to exactly the departments that had never opened
+        the Email Templates screen.
+        """
+        defn = next(
+            (d for d in cls._DEFAULT_TEMPLATE_DEFS if d["type"] == template_type),
+            None,
+        )
+        if defn is None:
+            raise ValueError(f"no default template for {template_type!r}")
+        template = EmailTemplate(
+            template_type=defn["type"],
+            subject=defn["subject"],
+            html_body=defn["html"],
+            text_body=defn["text"],
+            css_styles=None,
+            footer_key=defn.get("footer"),
+        )
+        return cls.render_static(template, context, organization=organization)
 
     #: Country omitted from a formatted address when it is this one. A US
     #: department's own mail does not say "USA" under every address, and the

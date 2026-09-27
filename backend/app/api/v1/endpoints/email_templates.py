@@ -379,7 +379,7 @@ async def preview_email_template(
     """
     Preview a rendered email template with sample or live data.
 
-    Accepts optional override fields (subject, html_body, css_styles) so the
+    Accepts optional override fields (subject, html_body) so the
     admin can preview unsaved edits. If not provided, uses the stored template.
 
     Live data sources:
@@ -477,11 +477,8 @@ async def preview_email_template(
             if preview_data.text_body is not None
             else template.text_body
         ),
-        css_styles=(
-            preview_data.css_styles
-            if preview_data.css_styles is not None
-            else template.css_styles
-        ),
+        # No css_styles: render() always uses the built-in stylesheet, so a
+        # preview carrying one would show nothing different.
         # Carried through so the preview closes with the footer this template
         # is set to use, not the department's default.
         footer_key=(

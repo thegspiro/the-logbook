@@ -78,8 +78,11 @@ def _stub_integrations(monkeypatch):
         "app.services.cert_alert_service.EmailService",
         lambda org: SimpleNamespace(send_email=AsyncMock(return_value=(1, None))),
     )
+    # The shell reads the organization's logo, footer and colourway; these
+    # tests are about who gets alerted, so the body passes through as is.
     monkeypatch.setattr(
-        "app.services.cert_alert_service.build_email_logo_html", lambda org: ""
+        "app.services.cert_alert_service.wrap_email_body",
+        lambda org, title, body, **_kwargs: body,
     )
 
 

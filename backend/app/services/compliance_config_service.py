@@ -25,7 +25,8 @@ from app.models.compliance_config import (
 from app.models.training import TrainingRequirement
 from app.models.user import Organization, Position
 from app.services.compliance_officer_service import AnnualComplianceReportService
-from app.services.email_service import EmailService
+from app.services.email_service import EmailService, wrap_email_body
+from app.services.email_theme import ACCENT_AMBER, fact, facts
 from app.utils.external_recipients import audit_external_recipients
 from app.utils.model_updates import apply_updates
 
@@ -375,56 +376,44 @@ class ComplianceReportService:
         compliant_members = summary.get("fully_compliant_members", 0)
 
         # Escape attacker-influenceable text before interpolating into the email
-        # HTML. org.name is user-controlled, and report_type/period_label flow
-        # from the report request — an unescaped value would be HTML/script
+        # HTML. org.name is user-controlled, and report_type flows from the
+        # report request (period_label goes in the title, which the shell
+        # escapes) — an unescaped value would be HTML/script
         # injection in the recipient's mail client (CS-9).
         org_name = html.escape(org.name if org else "Your Organization")
         report_type_label = html.escape(str(report.report_type or ""))
-        period_label = html.escape(str(report.period_label or ""))
 
-        html_body = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #1a1a2e;">Compliance Report — {period_label}</h2>
-            <p>The {report_type_label} compliance report for <strong>{org_name}</strong>
+        html_body = wrap_email_body(
+            org,
+            # wrap_email_body escapes the title itself.
+            f"Compliance Report — {report.period_label or ''}",
+            f"""<p>The {report_type_label} compliance report for <strong>{org_name}</strong>
                has been generated.</p>
-
-            <div style="background: #f8f9fa; border-radius: 8px; padding: 20px;
-                        margin: 20px 0;">
-                <h3 style="margin-top: 0; color: #333;">Executive Summary</h3>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <tr>
-                        <td style="padding: 8px 0; color: #666;">Overall Compliance</td>
-                        <td style="padding: 8px 0; text-align: right;">
-                            <strong>{compliance_pct:.1f}%</strong>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px 0; color: #666;">Compliant Members</td>
-                        <td style="padding: 8px 0; text-align: right;">
-                            <strong>{compliant_members} / {total_members}</strong>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px 0; color: #666;">At Risk</td>
-                        <td style="padding: 8px 0; text-align: right;">
-                            <strong>{summary.get('at_risk_members', 0)}</strong>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px 0; color: #666;">Non-Compliant</td>
-                        <td style="padding: 8px 0; text-align: right;">
-                            <strong>{summary.get('non_compliant_members', 0)}</strong>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-
-            <p style="color: #666; font-size: 14px;">
-                Log in to The Logbook to view the full report with detailed
-                member-by-member compliance data.
-            </p>
-        </div>
-        """
+            <h2>Executive summary</h2>
+"""
+            + facts(
+                [
+                    [
+                        fact("Overall compliance", f"{compliance_pct:.1f}%"),
+                        fact(
+                            "Compliant members",
+                            f"{compliant_members} / {total_members}",
+                        ),
+                    ],
+                    [
+                        fact("At risk", str(summary.get("at_risk_members", 0))),
+                        fact(
+                            "Non-compliant",
+                            str(summary.get("non_compliant_members", 0)),
+                        ),
+                    ],
+                ]
+            )
+            + """<p>Log in to The Logbook to view the full report with detailed
+               member-by-member compliance data.</p>""",
+            header_color=ACCENT_AMBER,
+            chip="Compliance report",
+        )
 
         text_body = (
             f"Compliance Report — {report.period_label}\n\n"

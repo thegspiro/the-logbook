@@ -13,6 +13,7 @@ the no-database unit job.
 
 import importlib.util
 import pathlib
+from types import SimpleNamespace
 
 import pytest
 import sqlalchemy as sa
@@ -36,6 +37,8 @@ def _load(pattern: str):
 
 
 MIGRATION = _load("*_b795d1b3401b_*.py")
+# The revision that took over from this one when the defaults next changed.
+SOLID_TAB = _load("*_15c5bc7700aa_*.py")
 SHELL = _load("*_f0d76814a9ab_*.py")
 FEB_WELCOME = _load("20260206_0302_*.py")
 FEB_RESET = _load("20260206_0303_*.py")
@@ -88,16 +91,26 @@ def _rows(engine) -> dict:
 
 
 class TestTheFrozenDefaults:
-    def test_every_shipped_default_is_the_migrations_current(self):
-        # If this fails, a default changed. Ship a new revision that knows
-        # this one's CURRENT as an earlier version, and repoint this test at
-        # it — otherwise rows still on today's default stay on it forever.
+    def test_the_next_revision_carries_on_from_this_ones_current(self):
+        # 15c5bc7700aa resets every row of a shipped type to its own frozen
+        # defaults, so a row this revision wrote is always moved on — as long
+        # as the next revision's defaults differ from it, which is what makes
+        # the row count as needing a reset rather than already current.
         for template_type, frozen in MIGRATION.CURRENT.items():
-            shipped = _DEFAULTS[template_type]
-            assert frozen["html"] == shipped["html"], template_type
-            assert frozen["text"] == shipped["text"], template_type
-            assert frozen["subject"] == shipped["subject"], template_type
-            assert frozen["footer"] == shipped.get("footer"), template_type
+            row = SimpleNamespace(
+                template_type=template_type,
+                subject=frozen["subject"],
+                html_body=frozen["html"],
+                text_body=frozen["text"],
+                css_styles=None,
+                footer_key=frozen["footer"],
+                header_accent=None,
+                status_chip=None,
+                layout=None,
+            )
+            target = SOLID_TAB.target_for(row)
+            assert target, template_type
+            assert target["html_body"] == _DEFAULTS[template_type]["html"]
 
     def test_no_current_default_is_counted_as_an_earlier_one(self):
         # A current value in the history would be rewritten to itself, which
@@ -220,9 +233,9 @@ class TestTheRewrite:
                 {
                     "id": "already-current",
                     "template_type": "welcome",
-                    "subject": _DEFAULTS["welcome"]["subject"],
-                    "html_body": _DEFAULTS["welcome"]["html"],
-                    "text_body": _DEFAULTS["welcome"]["text"],
+                    "subject": MIGRATION.CURRENT["welcome"]["subject"],
+                    "html_body": MIGRATION.CURRENT["welcome"]["html"],
+                    "text_body": MIGRATION.CURRENT["welcome"]["text"],
                 },
                 {"id": "empty", "template_type": "welcome"},
             ]
@@ -232,7 +245,7 @@ class TestTheRewrite:
         engine = self._scenario()
         _run(engine, MIGRATION.upgrade)
         row = _rows(engine)["untouched"]
-        current = _DEFAULTS["welcome"]
+        current = MIGRATION.CURRENT["welcome"]
         assert row["html_body"] == current["html"]
         assert row["text_body"] == current["text"]
         assert row["subject"] == current["subject"]
@@ -245,14 +258,14 @@ class TestTheRewrite:
         rows = _rows(engine)
         assert (
             rows["public-notice"]["html_body"]
-            == _DEFAULTS["event_request_status"]["html"]
+            == MIGRATION.CURRENT["event_request_status"]["html"]
         )
         assert rows["public-notice"]["footer_key"] == "public"
         # A footer somebody chose is theirs, even on a converted body.
         assert rows["footer-chosen"]["footer_key"] == "official"
         assert (
             rows["footer-chosen"]["html_body"]
-            == _DEFAULTS["event_request_status"]["html"]
+            == MIGRATION.CURRENT["event_request_status"]["html"]
         )
 
     def test_each_field_is_judged_on_its_own(self):
@@ -263,12 +276,12 @@ class TestTheRewrite:
 
         reworded = after["reworded-subject"]
         assert reworded["subject"] == before["reworded-subject"]["subject"]
-        assert reworded["html_body"] == _DEFAULTS["welcome"]["html"]
+        assert reworded["html_body"] == MIGRATION.CURRENT["welcome"]["html"]
 
         edited = after["edited-body"]
         assert edited["html_body"] == before["edited-body"]["html_body"]
-        assert edited["text_body"] == _DEFAULTS["welcome"]["text"]
-        assert edited["subject"] == _DEFAULTS["welcome"]["subject"]
+        assert edited["text_body"] == MIGRATION.CURRENT["welcome"]["text"]
+        assert edited["subject"] == MIGRATION.CURRENT["welcome"]["subject"]
 
     def test_what_it_cannot_vouch_for_is_left_alone(self):
         engine = self._scenario()

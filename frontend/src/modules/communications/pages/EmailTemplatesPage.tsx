@@ -235,29 +235,19 @@ const EmailTemplatesPage: React.FC = () => {
    * three layouts the API accepts. Sending it 422'd the preview on every
    * such template, which took the whole live pane down rather than one
    * field. Every other override keeps '' intact: a cleared footer, chip,
-   * plain-text body or stylesheet means "cleared", not "unchanged".
+   * or plain-text body means "cleared", not "unchanged".
    */
   const previewOverrides = useCallback(
     () => ({
       subject: draft.subject,
       html_body: draft.htmlBody,
       text_body: draft.textBody,
-      css_styles: draft.cssStyles,
       footer_key: draft.footerKey,
       header_accent: draft.headerAccent || undefined,
       status_chip: draft.statusChip,
       layout: draft.layout || undefined,
     }),
-    [
-      draft.subject,
-      draft.htmlBody,
-      draft.textBody,
-      draft.cssStyles,
-      draft.footerKey,
-      draft.headerAccent,
-      draft.statusChip,
-      draft.layout,
-    ]
+    [draft.subject, draft.htmlBody, draft.textBody, draft.footerKey, draft.headerAccent, draft.statusChip, draft.layout]
   );
 
   const handlePreview = useCallback(

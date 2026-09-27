@@ -29,14 +29,8 @@ from app.models.inventory import (
     InventoryNotificationQueue,
 )
 from app.models.user import Organization, User
-from app.services.email_service import EmailService, build_email_logo_img
-from app.services.email_template_service import (
-    DEFAULT_CSS,
-    DEFAULT_INVENTORY_CHANGE_HTML,
-    DEFAULT_INVENTORY_CHANGE_SUBJECT,
-    DEFAULT_INVENTORY_CHANGE_TEXT,
-    EmailTemplateService,
-)
+from app.services.email_service import EmailService
+from app.services.email_template_service import EmailTemplateService
 from app.utils.org_timezone import format_in_org_timezone
 
 # Pairs of actions that cancel each other out for the same item
@@ -425,8 +419,6 @@ class InventoryNotificationService:
         context: Dict[str, Any],
     ) -> bool:
         """Render and send the inventory change email."""
-        import re
-
         subject = None
         html_body = None
         text_body = None
@@ -445,36 +437,12 @@ class InventoryNotificationService:
             except Exception as e:
                 logger.warning(f"Failed to load inventory change email template: {e}")
 
-        # Fallback to defaults
+        # Fallback to the shipped default, rendered the same way a stored
+        # template is, so the shell's colourway and footer are filled too.
         if not subject:
-            import html as _html_mod
-
-            context["organization_logo_img"] = build_email_logo_img(org)
-
-            # Variables that are already rendered HTML and must NOT be escaped
-            _html_vars = {
-                "items_issued_html",
-                "items_returned_html",
-                "items_removed_html",
-                "organization_logo_img",
-            }
-
-            def _replace(text: str) -> str:
-                def replacer(match):
-                    var = match.group(1).strip()
-                    value = str(context.get(var, match.group(0)))
-                    if var in _html_vars:
-                        return value
-                    return _html_mod.escape(value)
-
-                return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
-
-            subject = _replace(DEFAULT_INVENTORY_CHANGE_SUBJECT)
-            html_body = (
-                f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head>"
-                f"<body>{_replace(DEFAULT_INVENTORY_CHANGE_HTML)}</body></html>"
+            subject, html_body, text_body = EmailTemplateService.render_default(
+                EmailTemplateType.INVENTORY_CHANGE, context, organization=org
             )
-            text_body = _replace(DEFAULT_INVENTORY_CHANGE_TEXT)
 
         # Send
         email_service = EmailService(organization=org)

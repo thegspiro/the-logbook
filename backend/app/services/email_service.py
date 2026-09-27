@@ -69,6 +69,15 @@ _REPLY_TO_ADDRESS = re.compile(
 )
 
 
+# A <style> block the inliner consumes: any but one marked data-inline="false".
+_INLINABLE_STYLE = re.compile(
+    r'<style(?![^>]*\bdata-inline="false")[^>]*>(.*?)</style>', re.DOTALL
+)
+_INLINABLE_STYLE_WITH_SPACE = re.compile(
+    r'\s*<style(?![^>]*\bdata-inline="false")[^>]*>.*?</style>\s*', re.DOTALL
+)
+
+
 def inline_email_css(html: str) -> str:
     """Inline ``<style>`` CSS into HTML element ``style=""`` attributes.
 
@@ -77,12 +86,19 @@ def inline_email_css(html: str) -> str:
     first ``<style>`` block, converts simple selectors to inline styles,
     and removes the ``<style>`` block.
 
+    A block marked ``<style data-inline="false">`` is neither parsed nor
+    removed. That is the dark-mode stylesheet (``email_theme.DARK_CSS``): an
+    ``@media`` rule has no inline form, so it only works if it reaches the
+    client as a stylesheet. The parser below would also misread it — its
+    rule pattern does not nest braces — so skipping it is required, not
+    merely polite.
+
     Supported selectors:
     * ``body { ... }``
     * ``.classname { ... }``
     * ``.parent child { ... }`` (e.g. ``.header h1``, ``.content p``)
     """
-    style_match = re.search(r"<style[^>]*>(.*?)</style>", html, re.DOTALL)
+    style_match = _INLINABLE_STYLE.search(html)
     if not style_match:
         return html
     css = style_match.group(1)
@@ -133,7 +149,7 @@ def inline_email_css(html: str) -> str:
         html = _style_descendants(html, parent_cls, child_tag, styles)
 
     # --- remove <style> block -----------------------------------------
-    html = re.sub(r"\s*<style[^>]*>.*?</style>\s*", "", html, flags=re.DOTALL)
+    html = _INLINABLE_STYLE_WITH_SPACE.sub("", html)
 
     return html
 
@@ -292,6 +308,7 @@ def wrap_email_body(
     header_color: str = "",
     chip: str = "",
     subtitle: str = "",
+    footer_key: Optional[str] = None,
 ) -> str:
     """Wrap raw HTML content in the standard email template chrome.
 
@@ -308,13 +325,15 @@ def wrap_email_body(
         footer_text: Optional replacement for the whole footer block. Left
             empty — which is the usual case — the department's default footer
             is used, the same one its templates close with.
-        header_color: The accent. Named for the solid header band it used to
-            paint; it now drives the status line, the subtitle and the
-            button. Callers pass hexes that are not ``ACCENT_*`` constants,
+        header_color: The accent. It fills the tab and the button, and its
+            tint fills the summary card under the tab. Callers pass hexes that are not ``ACCENT_*`` constants,
             which is why ``build_shell`` falls back rather than raising on
             an unmapped tint.
-        chip: Optional status text shown above the title.
-        subtitle: Optional accent-coloured subline under the title.
+        chip: The category the tab names. Empty leaves a plain accent band.
+        subtitle: Optional line under the title.
+        footer_key: Which of the department's footers to close with, as a
+            template would name it (``"public"`` for mail to someone outside
+            the department). ``None`` takes the department's default.
     """
     # The department's default footer, so a one-off email from a scheduled
     # task closes the same way its templated mail does. *footer_text*
@@ -323,7 +342,9 @@ def wrap_email_body(
     if footer_text:
         footer_block = f'<div class="footer"><p>{_html.escape(footer_text)}</p></div>'
     else:
-        context = EmailTemplateService.build_context({}, organization)
+        context = EmailTemplateService.build_context(
+            {}, organization, footer_key=footer_key
+        )
         footer_block = str(context.get("footer_html", ""))
 
     accent = header_color or ACCENT_RED
@@ -342,6 +363,12 @@ def wrap_email_body(
     # reading "{{status_chip}}" — to every scheduled task and alert, which
     # are exactly the sends nobody is looking at when they go out.
     for _key, _value in colourway_context(accent, chip).items():
+        # status_chip is the one plain-text value here; the rest are hexes or
+        # markup colourway_context already escaped. The template path escapes
+        # it in _replace_variables, and this path has to do the same, because
+        # the tab writes it straight into the markup.
+        if _key == "status_chip":
+            _value = _html.escape(str(_value))
         body = body.replace("{{" + _key + "}}", str(_value))
     body = body.replace(
         "{{organization_logo_block}}", build_email_logo_block(organization)

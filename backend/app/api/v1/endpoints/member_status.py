@@ -256,49 +256,19 @@ async def _send_property_return_email(
                     f"Failed to load member_dropped template, using default: {tmpl_err}"
                 )
 
-            # Fall back to inline default.
+            # Fall back to the shipped default, rendered through the same
+            # path as a stored template: `member_name`, `reason` and
+            # `performed_by_name` are free text an officer or the member
+            # controls, and `render()` escapes them for the HTML body (and
+            # only there — escaping the plain-text body would corrupt names
+            # like "O'Brien"). It also fills the shell's colourway and footer.
             if not subject:
-                import html as html_lib
-                import re
+                from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import EmailTemplateService
 
-                from app.services.email_template_service import (
-                    DEFAULT_CSS,
-                    DEFAULT_MEMBER_DROPPED_HTML,
-                    DEFAULT_MEMBER_DROPPED_TEXT,
+                subject, html_body, text_body = EmailTemplateService.render_default(
+                    EmailTemplateType.MEMBER_DROPPED, context, organization=org
                 )
-
-                # `member_name`/`reason`/`performed_by_name` are free text an
-                # officer or a member's own profile controls — `render()`'s
-                # template path (above) HTML-escapes them via
-                # `_replace_variables`; this fallback must too, or a `reason`
-                # containing markup reaches this email, and every CC'd admin's
-                # inbox, unescaped. `items_list_html` is the one exception: it
-                # is pre-built, already-escaped markup (`build_items_list_html`),
-                # matching `_RAW_HTML_VARIABLES` in email_template_service.py.
-                # The plain-text body is never escaped — it is not parsed as
-                # markup, and escaping it would corrupt names like "O'Brien".
-                # `str(val)` is passed as a replacement *function*, not a raw
-                # string, so a value containing a literal backslash sequence
-                # (e.g. "\1") can't be misread by `re.sub` as a backreference.
-                subject = f"Notice of Department Property Return — {org_name}"
-                rendered_html = DEFAULT_MEMBER_DROPPED_HTML
-                rendered_text = DEFAULT_MEMBER_DROPPED_TEXT
-                for key, val in context.items():
-                    pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
-                    text_val = str(val)
-                    html_val = (
-                        text_val
-                        if key == "items_list_html"
-                        else html_lib.escape(text_val)
-                    )
-                    rendered_html = re.sub(
-                        pattern, lambda _m, v=html_val: v, rendered_html
-                    )
-                    rendered_text = re.sub(
-                        pattern, lambda _m, v=text_val: v, rendered_text
-                    )
-                html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
-                text_body = rendered_text
 
         # Outbound delivery may block for the SMTP timeout. Do it only after
         # the generator has committed and closed the database session so slow

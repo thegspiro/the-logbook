@@ -454,6 +454,31 @@ deployment with no Redis at all, is corrected within that window. Until then, an
 email sent by one of those workers still uses the previous address. Links already
 sent keep whatever address they were sent with.
 
+## Email Design — What the Solid-Tab Shell Does Not Reach (2026-09-27)
+
+Every email the platform sends renders into the solid-tab shell in
+`app/services/email_theme.py` with the built-in stylesheet: every default
+template, the storefront notices, the event-request templates departments
+write, the election alerts, and every email a service builds inline.
+Revision `15c5bc7700aa` reset every stored template of a shipped type to the
+new default, keeping what it replaced in `email_template_backups` (see
+`docs/UPGRADING.md`). What remains:
+
+- **A custom template keeps whatever markup it has.** A template of type
+  `custom` has no default to reset to. It renders with the built-in
+  stylesheet, which still defines the previous shells' classes, so one built
+  from the editor's blocks keeps working; its header is whatever it was
+  written with.
+- **A backup is restored by hand.** `email_template_backups` holds each reset
+  template's previous content, but no screen reads it yet. Restoring one means
+  copying it back into the editor, or running SQL.
+- **Dark mode is Apple Mail and Outlook.com.** It is a
+  `prefers-color-scheme` stylesheet, which Gmail strips along with every
+  other `<style>`; Gmail's apps and classic Outlook repaint the light
+  rendering themselves. Inside the body card, unclassed fragments that
+  services inject (tables, coloured panels) lose their own backgrounds in the
+  dark, so their text stays legible, and with them their colour coding.
+
 ## Installed App Icons — Three Things the Platforms Decide for Us (2026-09-17)
 
 The department's logo is rendered into the installable app's icons and iOS

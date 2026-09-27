@@ -262,6 +262,55 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Every email template is reset to the new design (2026-09-27)
+
+Every email the platform sends now uses one design: a solid tab naming the
+category, the title on a tinted card, the message card, and a centred footer,
+with a dark rendering for mail apps that support it.
+
+Migration `15c5bc7700aa` **resets every stored email template to its new
+default, including templates your department edited.** Subject lines, both
+bodies, the footer choice and the colour are all put back to what ships. Two
+kinds of row are left alone: a row that already matches the new default, and
+a **custom** template, which has no default to reset to.
+
+**Nothing you wrote is deleted.** Before a row is reset, its previous subject,
+bodies, stylesheet, footer and colour are copied into the new
+`email_template_backups` table, tagged `15c5bc7700aa`. No screen shows them
+yet; to re-apply your wording, read the backup with the query below and paste
+it into that template on **Email Templates**:
+
+```sql
+SELECT template_type, subject, html_body, text_body, created_at
+FROM email_template_backups
+WHERE reason = '15c5bc7700aa' AND organization_id = '<your organization id>';
+```
+
+**Per-template stylesheets are gone.** A template's **CSS Styles** box has
+been removed. Every email renders with the built-in stylesheet, and a
+stylesheet saved on a template before the upgrade is kept only in the backup.
+The API still accepts `css_styles` so older clients are not refused, but it
+is not stored.
+
+Three other changes follow from the same decision:
+
+- **Event-request emails** (the templates on **Events → Settings → Email**)
+  are sent inside the design, with the subject as the heading and the public
+  footer. Write only the message: a template's own
+  `{{organization_logo_img}}` now fills with nothing, because the logo is in
+  the masthead, and a template written as a whole HTML page is reduced to
+  what its `<body>` held.
+- **The election rollback and deletion alerts** now send the
+  **Election Rollback Alert** and **Election Deleted** templates, so an edit
+  made on the Email Templates screen reaches leadership. Both gained
+  variables for the stage change, the time and the vote count.
+- **Welcome emails are green**, not red. Red is kept for official notices.
+
+A downgrade of `15c5bc7700aa` puts every reset row back exactly as it was and
+drops the backup table. Anything edited after the upgrade is overwritten by
+the pre-upgrade values, since only those render correctly on the older
+release.
+
 ### Every inventory item starts out "Needs a label" (2026-09-23)
 
 Inventory items now record when their barcode label was printed. Migration

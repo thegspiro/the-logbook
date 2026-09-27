@@ -38,6 +38,7 @@ from app.models.election import (
     Vote,
     VotingToken,
 )
+from app.models.email_template import EmailTemplateType
 from app.models.membership_pipeline import ProspectElectionPackage
 from app.models.user import Organization, User
 from app.schemas.election import (
@@ -48,10 +49,40 @@ from app.schemas.election import (
     VoterEligibility,
 )
 from app.services.email_service import BuiltMessage, EmailService
+from app.services.email_template_service import (
+    DEFAULT_ELECTION_DELETED_HTML,
+    DEFAULT_ELECTION_DELETED_SUBJECT,
+    DEFAULT_ELECTION_DELETED_TEXT,
+    DEFAULT_ELECTION_ROLLBACK_HTML,
+    DEFAULT_ELECTION_ROLLBACK_SUBJECT,
+    DEFAULT_ELECTION_ROLLBACK_TEXT,
+    EmailTemplateService,
+)
 from app.services.email_theme import TABLE_STYLE, TD_STYLE, TH_STYLE
 from app.utils.org_timezone import resolve_scheduling_timezone, to_local
 
 # " - Runoff Round 2" and friends, only at the very end of a title.
+# The shipped (subject, html, text) of each leadership alert, used when the
+# organization has no stored template of that type.
+_ALERT_DEFAULTS = {
+    EmailTemplateType.ELECTION_ROLLBACK: (
+        DEFAULT_ELECTION_ROLLBACK_SUBJECT,
+        DEFAULT_ELECTION_ROLLBACK_HTML,
+        DEFAULT_ELECTION_ROLLBACK_TEXT,
+    ),
+    EmailTemplateType.ELECTION_DELETED: (
+        DEFAULT_ELECTION_DELETED_SUBJECT,
+        DEFAULT_ELECTION_DELETED_HTML,
+        DEFAULT_ELECTION_DELETED_TEXT,
+    ),
+}
+
+
+def _stage_label(status: str) -> str:
+    """An election status as a reader would name it: ``"open"`` -> ``"Open"``."""
+    return str(status or "").replace("_", " ").title()
+
+
 _RUNOFF_SUFFIX = re.compile(r"\s*-\s*Runoff Round\s+\d+\s*$", re.IGNORECASE)
 
 
@@ -5303,34 +5334,26 @@ class ElectionService:
         organization_id: UUID,
         reason: str,
         *,
-        subject_prefix: str,
-        header_color: str,
-        header_title: str,
-        badge_text: str,
-        badge_css_class: str,
-        detail_items_html: str,
-        detail_items_text: str,
-        reason_label: str,
-        html_preamble: str,
-        text_preamble: str,
-        html_postamble: str,
-        text_postamble: str,
-        footer_text: str,
-        extra_styles: str = "",
+        template_type: EmailTemplateType,
+        extra_context: Dict[str, str],
         skip_performer: bool = False,
         log_label: str = "notification",
     ) -> int:
         """
-        Shared helper that sends a templated leadership email notification.
+        Email every active leadership member one of the election alerts.
 
-        Callers supply the pieces that differ between rollback and deletion
-        alerts; the boilerplate (DB lookups, HTML skeleton, send loop) lives
-        here once.
+        The message is the organization's own ``election_rollback`` /
+        ``election_deleted`` template, falling back to the shipped default,
+        so a department that edits the alert on the Email Templates screen
+        changes what leadership receives. Before, this built its own body
+        and those templates were stored but never sent.
+
+        *extra_context* carries the variables that differ between the two
+        alerts (the stages, the vote count); the ones they share are filled
+        here.
 
         Returns: Number of notifications sent
         """
-        from app.services.email_service import EmailService, build_email_logo_html
-
         leadership_roles = LEADERSHIP_ROLE_SLUGS
 
         # No join to User.roles: it returned one row per position held, so a
@@ -5373,116 +5396,47 @@ class ElectionService:
 
         email_service = EmailService(organization)
 
-        safe_title = html.escape(election.title)
-        safe_performer = html.escape(performer_name)
-        safe_reason = html.escape(reason)
-        safe_org_name = html.escape(organization.name)
-
         org_tz = getattr(organization, "timezone", None) or "America/New_York"
-        formatted_time = (
+        action_time = (
             datetime.now(timezone.utc)
             .astimezone(ZoneInfo(org_tz))
             .strftime("%B %d, %Y at %I:%M %p")
         )
 
-        logo_html = build_email_logo_html(organization)
-
-        # Render detail list items with common variables
-        rendered_detail_html = detail_items_html.format(
-            safe_title=safe_title,
-            safe_performer=safe_performer,
-            formatted_time=formatted_time,
+        # Loaded once rather than per recipient: every leadership member gets
+        # the same template, and _render_with_fallback would otherwise query
+        # for it on every iteration.
+        template = await EmailTemplateService(self.db).get_template(
+            str(organization_id), template_type
         )
-        rendered_detail_text = detail_items_text.format(
-            title=election.title,
-            performer_name=performer_name,
-            formatted_time=formatted_time,
-        )
-
-        details_border = header_color
 
         sent_count = 0
         for user in leadership_users:
             if skip_performer and str(user.id) == str(performed_by):
                 continue
 
-            safe_first_name = html.escape(user.first_name)
-
-            subject = f"{subject_prefix}{election.title}"
-
-            html_body = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: {header_color}; color: white; padding: 20px; text-align: center; }}
-        .{badge_css_class} {{ background-color: #fef2f2; color: #991b1b; padding: 8px 16px; border-radius: 4px; display: inline-block; margin: 10px 0; font-weight: bold; }}
-        .content {{ padding: 20px; background-color: #f9fafb; }}
-        .details {{ background-color: white; padding: 15px; border-left: 4px solid {details_border}; margin: 15px 0; }}
-        .reason {{ background-color: #fffbeb; padding: 15px; border-left: 4px solid #f59e0b; margin: 15px 0; }}
-        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}{extra_styles}
-    </style>
-</head>
-<body>
-    <div class="container">
-        {logo_html}
-        <div class="header">
-            <h1>{header_title}</h1>
-            <div class="{badge_css_class}">{badge_text}</div>
-        </div>
-        <div class="content">
-            <p>Dear {safe_first_name},</p>
-
-            {html_preamble}
-
-            <div class="details">
-                <h3>Election Details:</h3>
-                <ul>
-                    {rendered_detail_html}
-                </ul>
-            </div>
-
-            <div class="reason">
-                <h3>{reason_label}:</h3>
-                <p>{safe_reason}</p>
-            </div>
-
-            {html_postamble.format(safe_performer=safe_performer)}
-
-            <p>Best regards,<br>{safe_org_name} Election System</p>
-        </div>
-        <div class="footer">
-            <p>{footer_text}</p>
-        </div>
-    </div>
-</body>
-</html>
-            """
-
-            text_body_preamble = text_preamble
-            text_body_postamble = text_postamble.format(
-                performer_name=performer_name,
+            # Plain values: the renderer escapes each one for the HTML body
+            # and leaves the subject and plain-text body unescaped.
+            context = {
+                "recipient_name": user.first_name or user.full_name or "",
+                "election_title": election.title,
+                "performer_name": performer_name,
+                "reason": reason,
+                "action_time": action_time,
+                **extra_context,
+            }
+            (
+                subject,
+                html_body,
+                text_body,
+            ) = await email_service._render_with_fallback(
+                template_type=template_type,
+                context=context,
+                template=template,
+                default_subject=_ALERT_DEFAULTS[template_type][0],
+                default_html=_ALERT_DEFAULTS[template_type][1],
+                default_text=_ALERT_DEFAULTS[template_type][2],
             )
-
-            text_body = f"""{subject_prefix}{election.title}
-
-Dear {user.first_name},
-
-{text_body_preamble}
-
-ELECTION DETAILS:
-{rendered_detail_text}
-
-{reason_label.upper()}:
-{reason}
-
-{text_body_postamble}
-
-Best regards,
-{organization.name} Election System
-            """
 
             try:
                 success_count_user, failure_count_user = await email_service.send_email(
@@ -5490,6 +5444,8 @@ Best regards,
                     subject=subject,
                     html_body=html_body,
                     text_body=text_body,
+                    db=self.db,
+                    template_type=template_type.value,
                 )
                 if success_count_user > 0:
                     sent_count += 1
@@ -5511,6 +5467,8 @@ Best regards,
         """
         Send email notifications to leadership about election rollback.
 
+        The member who rolled it back is not emailed about their own action.
+
         Returns: Number of notifications sent
         """
         return await self._notify_leadership(
@@ -5518,54 +5476,11 @@ Best regards,
             performed_by=performed_by,
             organization_id=organization_id,
             reason=reason,
-            subject_prefix="ALERT: Election Rolled Back - ",
-            header_color="#dc2626",
-            header_title="\u26a0\ufe0f Election Rollback Alert",
-            badge_text="REQUIRES ATTENTION",
-            badge_css_class="alert-badge",
-            detail_items_html=(
-                "<li><strong>Title:</strong> {safe_title}</li>"
-                f"<li><strong>Status Changed:</strong> {from_status.upper()}"
-                f" \u2192 {to_status.upper()}</li>"
-                "<li><strong>Performed By:</strong> {safe_performer}</li>"
-                "<li><strong>Date/Time:</strong> {formatted_time}</li>"
-            ),
-            detail_items_text=(
-                "- Title: {title}\n"
-                f"- Status Changed: {from_status.upper()}"
-                f" \u2192 {to_status.upper()}\n"
-                "- Performed By: {performer_name}\n"
-                "- Date/Time: {formatted_time}"
-            ),
-            reason_label="Reason for Rollback",
-            html_preamble=(
-                "<p>This is an important notification regarding"
-                " an election rollback.</p>"
-            ),
-            text_preamble=(
-                "This is an important notification regarding" " an election rollback."
-            ),
-            html_postamble=(
-                "<p>This rollback has been logged in the election's"
-                " audit trail. Please review the election details and"
-                " coordinate with your team as needed.</p>\n\n"
-                "            <p>If you have any questions or concerns"
-                " about this rollback, please contact {safe_performer}"
-                " or review the election at your earliest"
-                " convenience.</p>"
-            ),
-            text_postamble=(
-                "This rollback has been logged in the election's"
-                " audit trail. Please review the election details and"
-                " coordinate with your team as needed.\n\n"
-                "If you have any questions or concerns about this"
-                " rollback, please contact {performer_name} or review"
-                " the election at your earliest convenience."
-            ),
-            footer_text=(
-                "This is an automated notification from the election"
-                " management system."
-            ),
+            template_type=EmailTemplateType.ELECTION_ROLLBACK,
+            extra_context={
+                "previous_stage": _stage_label(from_status),
+                "current_stage": _stage_label(to_status),
+            },
             skip_performer=True,
             log_label="rollback notification",
         )
@@ -5583,75 +5498,21 @@ Best regards,
         election deletion.
 
         This is triggered when a non-draft election (open or closed) is
-        deleted, which is a major red-flag event.
+        deleted, which is a major red-flag event, so the member who deleted
+        it is emailed too.
 
         Returns: Number of notifications sent
         """
-        election_status = election.status.value.upper()
-
         return await self._notify_leadership(
             election=election,
             performed_by=performed_by,
             organization_id=organization_id,
             reason=reason,
-            subject_prefix="CRITICAL: Election DELETED - ",
-            header_color="#7f1d1d",
-            header_title="ELECTION DELETED",
-            badge_text="CRITICAL - REQUIRES IMMEDIATE ATTENTION",
-            badge_css_class="critical-badge",
-            extra_styles=(
-                "\n        .warning { background-color: #fef2f2;"
-                " padding: 15px; border-left: 4px solid #dc2626;"
-                " margin: 15px 0; }"
-            ),
-            detail_items_html=(
-                "<li><strong>Title:</strong> {safe_title}</li>"
-                f"<li><strong>Status at Deletion:</strong>"
-                f" {election_status}</li>"
-                f"<li><strong>Active Votes at Deletion:</strong>"
-                f" {vote_count}</li>"
-                "<li><strong>Deleted By:</strong> {safe_performer}</li>"
-                "<li><strong>Date/Time:</strong> {formatted_time}</li>"
-            ),
-            detail_items_text=(
-                "- Title: {title}\n"
-                f"- Status at Deletion: {election_status}\n"
-                f"- Active Votes at Deletion: {vote_count}\n"
-                "- Deleted By: {performer_name}\n"
-                "- Date/Time: {formatted_time}"
-            ),
-            reason_label="Reason Given",
-            html_preamble=(
-                '<div class="warning">'
-                f"<p><strong>An election has been permanently deleted"
-                f" while in {election_status} status.</strong></p>"
-                "<p>This is a critical action that has been"
-                " automatically flagged. All leadership members have"
-                " been notified.</p>"
-                "</div>"
-            ),
-            text_preamble=(
-                f"An election has been permanently deleted while in"
-                f" {election_status} status.\n"
-                "This is a critical action that has been automatically"
-                " flagged. All leadership members have been notified."
-            ),
-            html_postamble=(
-                "<p>This deletion has been logged in the audit trail"
-                " with <strong>CRITICAL</strong> severity. Please"
-                " review this action and coordinate with your team"
-                " immediately if this was not authorized.</p>"
-            ),
-            text_postamble=(
-                "This deletion has been logged in the audit trail with"
-                " CRITICAL severity. Please review this action and"
-                " coordinate with your team immediately if this was"
-                " not authorized."
-            ),
-            footer_text=(
-                "This is an automated critical notification from the"
-                " election management system."
-            ),
+            template_type=EmailTemplateType.ELECTION_DELETED,
+            extra_context={
+                "election_status": _stage_label(election.status.value),
+                "vote_count": str(vote_count),
+            },
             skip_performer=False,
             log_label="deletion notification",
         )

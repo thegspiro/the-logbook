@@ -362,30 +362,16 @@ class PropertyReturnReminderService:
                 f"Failed to load property_return_reminder template, using default: {tmpl_err}"
             )
 
-        # Fall back to inline default
+        # Fall back to the shipped default, rendered the same way a stored
+        # template is — which also escapes the member's name, as the
+        # template path always did.
         if not subject:
-            import re
+            from app.models.email_template import EmailTemplateType
+            from app.services.email_template_service import EmailTemplateService
 
-            from app.services.email_service import build_email_logo_img
-            from app.services.email_template_service import (
-                DEFAULT_CSS,
-                DEFAULT_PROPERTY_RETURN_REMINDER_HTML,
-                DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT,
-                DEFAULT_PROPERTY_RETURN_REMINDER_TEXT,
+            subject, html_body, text_body = EmailTemplateService.render_default(
+                EmailTemplateType.PROPERTY_RETURN_REMINDER, context, organization=org
             )
-
-            context["organization_logo_img"] = build_email_logo_img(org)
-
-            subject = DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT
-            rendered_html = DEFAULT_PROPERTY_RETURN_REMINDER_HTML
-            rendered_text = DEFAULT_PROPERTY_RETURN_REMINDER_TEXT
-            for key, val in context.items():
-                pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
-                subject = re.sub(pattern, str(val), subject)
-                rendered_html = re.sub(pattern, str(val), rendered_html)
-                rendered_text = re.sub(pattern, str(val), rendered_text)
-            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
-            text_body = rendered_text
 
         # Send email to member
         member_sent = False

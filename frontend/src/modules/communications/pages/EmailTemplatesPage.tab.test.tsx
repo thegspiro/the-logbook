@@ -121,12 +121,12 @@ describe('EmailTemplatesPage editor layout', () => {
   });
 
   it('still sends the fields whose empty string means "cleared"', () => {
-    // The mirror-image bug: the footer, chip, plain-text body and stylesheet
-    // all have a reachable cleared state, and the endpoint distinguishes those
+    // The mirror-image bug: the footer, chip and plain-text body all have
+    // a reachable cleared state, and the endpoint distinguishes those
     // with `is not None`. Coercing them to undefined would preview the saved
     // content while the editor showed an empty box.
     expect(source).toContain('text_body: draft.textBody,');
-    expect(source).toContain('css_styles: draft.cssStyles,');
+    expect(source).not.toContain('css_styles');
     expect(source).toContain('footer_key: draft.footerKey,');
     expect(source).toContain('status_chip: draft.statusChip,');
   });

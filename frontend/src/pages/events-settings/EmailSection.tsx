@@ -88,7 +88,8 @@ const EmailSection: React.FC<EmailSectionProps> = ({
         </div>
         <p className="text-theme-text-muted mb-3 text-xs">
           Reusable email messages for coordinators. Variables: {'{{contact_name}}'}, {'{{outreach_type}}'},{' '}
-          {'{{event_date}}'}.
+          {'{{event_date}}'}. Write only the message: it is sent inside the department&apos;s email design, which adds
+          the logo, the subject as a heading, and the footer.
         </p>
 
         {showTemplateForm && (

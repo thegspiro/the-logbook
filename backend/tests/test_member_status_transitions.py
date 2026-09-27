@@ -17,6 +17,7 @@ from app.api.v1.endpoints.member_status import (
 )
 from app.core.permissions import DEFAULT_POSITIONS
 from app.models.user import UserStatus
+from app.services.email_template_service import EmailTemplateService
 
 
 class TestTransitionGraph:
@@ -124,6 +125,11 @@ async def test_property_return_email_releases_session_before_delivery(monkeypatc
             session_open = False
 
     class TemplateService:
+        # The fallback renders the shipped default through the real
+        # EmailTemplateService.render_default; only the stored-template
+        # lookup is stubbed out.
+        render_default = staticmethod(EmailTemplateService.render_default)
+
         def __init__(self, _session):
             pass
 
@@ -189,6 +195,11 @@ async def test_default_property_return_email_escapes_html_but_not_text(monkeypat
         yield Session()
 
     class TemplateService:
+        # The fallback renders the shipped default through the real
+        # EmailTemplateService.render_default; only the stored-template
+        # lookup is stubbed out.
+        render_default = staticmethod(EmailTemplateService.render_default)
+
         def __init__(self, _session):
             pass
 

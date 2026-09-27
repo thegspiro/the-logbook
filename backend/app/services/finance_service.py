@@ -681,14 +681,22 @@ class FinanceService:
 
         link = f"{settings.FRONTEND_URL.rstrip('/')}/finance/approvals/{token}"
         safe_step = html.escape(step.name or "Approval")
-        html_body = (
-            "<p>An approval is awaiting your response in The Logbook.</p>"
-            f"<p><strong>Step:</strong> {safe_step}</p>"
-            f'<p><a href="{link}">Review and respond</a></p>'
-            "<p>This link expires in 7 days and can be used once.</p>"
-        )
         try:
-            from app.services.email_service import EmailService
+            from app.services.email_service import EmailService, wrap_email_body
+            from app.services.email_theme import ACCENT_AMBER, action
+
+            # No organization: this goes to someone outside the department,
+            # and the send itself is made without one (see below).
+            html_body = wrap_email_body(
+                None,
+                "Approval requested",
+                "<p>An approval is awaiting your response in The Logbook.</p>"
+                f"<p><strong>Step:</strong> {safe_step}</p>"
+                + action(html.escape(link), "Review and respond")
+                + '<p class="fineprint">This link expires in 7 days and can be used once.</p>',
+                header_color=ACCENT_AMBER,
+                chip="Approval needed",
+            )
 
             sent, _failed = await EmailService().send_email(
                 to_emails=[approver_email],

@@ -67,7 +67,12 @@ from app.models.election import (
     Vote,
     VotingToken,
 )
-from app.models.email_template import EmailAttachment, EmailTemplate, EmailTemplateType
+from app.models.email_template import (
+    EmailAttachment,
+    EmailTemplate,
+    EmailTemplateBackup,
+    EmailTemplateType,
+)
 from app.models.error_log import ErrorLog
 from app.models.event import (
     CheckInWindowType,
@@ -429,6 +434,7 @@ __all__ = [
     "OnboardingStatus",
     # Email template models
     "EmailTemplate",
+    "EmailTemplateBackup",
     "EmailAttachment",
     "EmailTemplateType",
     # Location models
