@@ -276,15 +276,13 @@ a **custom** template, which has no default to reset to.
 
 **Nothing you wrote is deleted.** Before a row is reset, its previous subject,
 bodies, stylesheet, footer and colour are copied into the new
-`email_template_backups` table, tagged `15c5bc7700aa`. No screen shows them
-yet; to re-apply your wording, read the backup with the query below and paste
-it into that template on **Email Templates**:
-
-```sql
-SELECT template_type, subject, html_body, text_body, created_at
-FROM email_template_backups
-WHERE reason = '15c5bc7700aa' AND organization_id = '<your organization id>';
-```
+`email_template_backups` table, tagged `15c5bc7700aa`. To bring your wording
+back, open **Email Templates** and select the template: a **Previous version
+(before the redesign)** panel above the editor lists what was saved. **Load
+this wording** puts your subject, message and plain-text body into the new
+design in the editor; check the preview and press **Save** to keep it, or
+**Discard** to drop it. The old header, colours and stylesheet are not brought
+back.
 
 **Per-template stylesheets are gone.** A template's **CSS Styles** box has
 been removed. Every email renders with the built-in stylesheet, and a

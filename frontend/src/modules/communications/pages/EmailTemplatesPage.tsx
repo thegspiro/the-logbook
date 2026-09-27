@@ -52,6 +52,7 @@ import { useFootersStore } from '../store/footersStore';
 import { emailTemplatesService, userService } from '../../../services/api';
 import { TemplateList } from '../components/TemplateList';
 import { TemplateEditor } from '../components/TemplateEditor';
+import { TemplateBackupsPanel } from '../components/TemplateBackupsPanel';
 import { TemplatePreview } from '../components/TemplatePreview';
 import ScheduleEmailForm from '../components/ScheduleEmailForm';
 import ScheduledEmailList from '../components/ScheduledEmailList';
@@ -624,6 +625,7 @@ const EmailTemplatesPage: React.FC = () => {
                   </div>
 
                   <div className="p-5">
+                    <TemplateBackupsPanel templateId={selectedTemplate.id} draft={draft} />
                     <TemplateEditor
                       template={selectedTemplate}
                       draft={draft}

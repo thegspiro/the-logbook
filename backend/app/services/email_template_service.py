@@ -21,6 +21,7 @@ from app.core.constants import (
 )
 from app.models.email_template import (
     EmailTemplate,
+    EmailTemplateBackup,
     EmailTemplateType,
     MessageHistory,
 )
@@ -53,6 +54,8 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     fact,
     facts,
     summary_facts,
+    title_and_message,
+    with_message,
 )
 from app.utils.model_updates import apply_updates
 
@@ -2787,6 +2790,66 @@ class EmailTemplateService:
             updated_by,
         )
         return template
+
+    async def list_backups(
+        self, template_id: str, organization_id: str
+    ) -> Optional[List[Dict[str, Any]]]:
+        """The saved earlier versions of one template, newest first.
+
+        ``None`` when the template is not this organization's (or does not
+        exist), so the endpoint answers 404 rather than an empty list that
+        would confirm the id belongs to someone.
+
+        Each entry carries the backup as saved and the draft Restore loads
+        into the editor: the backed-up subject and plain text, and the
+        backed-up title and message placed inside the template type's
+        current default body. The old header, colours and stylesheet are not
+        carried over; they are the design every email has left.
+        """
+        result = await self.db.execute(
+            select(EmailTemplate).where(
+                EmailTemplate.id == str(template_id),
+                EmailTemplate.organization_id == str(organization_id),
+            )
+        )
+        template = result.scalar_one_or_none()
+        if template is None:
+            return None
+
+        backups = await self.db.execute(
+            select(EmailTemplateBackup)
+            .where(
+                EmailTemplateBackup.template_id == template.id,
+                EmailTemplateBackup.organization_id == str(organization_id),
+            )
+            .order_by(EmailTemplateBackup.created_at.desc())
+        )
+        defn = self.default_for(template.template_type)
+        entries = []
+        for backup in backups.scalars().all():
+            title, message = title_and_message(backup.html_body or "")
+            shell = defn["html"] if defn is not None else template.html_body
+            try:
+                restored_html = with_message(shell, title, message)
+            except ValueError:
+                # A custom template written by hand has no shell to put the
+                # message back into; its message is the whole body.
+                restored_html = message
+            entries.append(
+                {
+                    "id": backup.id,
+                    "template_id": backup.template_id,
+                    "reason": backup.reason,
+                    "created_at": backup.created_at,
+                    "subject": backup.subject,
+                    "html_body": backup.html_body,
+                    "text_body": backup.text_body,
+                    "restored_subject": backup.subject or template.subject,
+                    "restored_html_body": restored_html,
+                    "restored_text_body": backup.text_body,
+                }
+            )
+        return entries
 
     async def delete_template(self, template_id: str, organization_id: str) -> bool:
         """Delete an email template"""

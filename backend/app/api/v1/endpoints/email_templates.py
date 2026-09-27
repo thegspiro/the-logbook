@@ -31,6 +31,7 @@ from app.schemas.email_template import (
     EmailAttachmentResponse,
     EmailFooterLibrary,
     EmailFooterLibraryResponse,
+    EmailTemplateBackupResponse,
     EmailTemplatePreviewRequest,
     EmailTemplatePreviewResponse,
     EmailTemplateResponse,
@@ -328,6 +329,33 @@ async def update_email_template(
         current_user.id,
     )
     return await _with_list_metadata(service, template)
+
+
+@router.get("/{template_id}/backups", response_model=list[EmailTemplateBackupResponse])
+async def list_email_template_backups(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """
+    List the saved earlier versions of an email template, newest first.
+
+    Each carries the version as saved and a restore draft: the department's
+    own wording placed inside the current design, for the editor to load and
+    the admin to review and save. Nothing is changed by this call.
+
+    Requires permission: settings.manage or organization.update_settings
+    """
+    backups = await EmailTemplateService(db).list_backups(
+        template_id, current_user.organization_id
+    )
+    if backups is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"
+        )
+    return backups
 
 
 @router.post("/{template_id}/reset", response_model=EmailTemplateResponse)

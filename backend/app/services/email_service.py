@@ -34,6 +34,7 @@ from app.services.email_theme import (
     build_logo_block,
     build_shell,
     colourway_context,
+    find_element_end,
 )
 from app.utils.email_providers import (
     is_valid_cloudflare_account_id,
@@ -154,31 +155,6 @@ def inline_email_css(html: str) -> str:
     return html
 
 
-def _find_element_end(html: str, start: int, tag_name: str) -> int:
-    """Return the offset of the ``</tag_name>`` that closes an open element.
-
-    *start* is the offset just past the element's opening tag.  Nested
-    elements of the same name are counted so the first ``</div>`` inside a
-    ``<div>`` does not end it.  An unbalanced document ends at EOF rather
-    than raising — malformed HTML in an admin-edited template must still
-    send.
-    """
-    token = re.compile(rf"<(/?){re.escape(tag_name)}\b[^>]*?(/?)>", re.IGNORECASE)
-    depth = 1
-    pos = start
-    while True:
-        match = token.search(html, pos)
-        if not match:
-            return len(html)
-        if match.group(1) == "/":
-            depth -= 1
-            if depth == 0:
-                return match.start()
-        elif match.group(2) != "/":
-            depth += 1
-        pos = match.end()
-
-
 def _style_descendants(html: str, parent_cls: str, child_tag: str, styles: str) -> str:
     """Apply a ``.parent child`` rule to every matching descendant.
 
@@ -204,7 +180,7 @@ def _style_descendants(html: str, parent_cls: str, child_tag: str, styles: str) 
         pos = match.end()
         if match.group(2) == "/":  # self-closing parent has no descendants
             continue
-        end = _find_element_end(html, match.end(), match.group(1))
+        end = find_element_end(html, match.end(), match.group(1))
         out.append(
             child_re.sub(lambda m: _add_style_to_tag(m.group(0), styles), html[pos:end])
         )

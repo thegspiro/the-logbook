@@ -231,6 +231,19 @@ created lots. **Both are all-or-nothing on validation failure**: a partly applie
 delivery is worse than a rejected one, because the caller cannot tell which lines
 landed and re-entering it would double-count whatever did.
 
+### Email template backups _(2026-09-27)_
+
+```
+GET    /api/v1/email-templates/{template_id}/backups   # settings.manage OR organization.update_settings
+```
+
+Read-only. Lists the versions of a template saved before the 2026-09-27
+redesign reset it, newest first, each with the backup as saved and a restore
+draft (`restored_subject`, `restored_html_body`, `restored_text_body`): the
+department's own wording placed inside the current design. The editor loads
+the draft; nothing is written until the admin saves the template. `404` for a
+template outside the caller's organization.
+
 ### Email footer library _(2026-08-10)_
 
 ```

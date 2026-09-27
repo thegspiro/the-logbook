@@ -492,6 +492,28 @@ export interface TemplatePreviewOverrides {
   layout?: string | undefined;
 }
 
+/**
+ * A template as it stood before a release reset it to the shipped default,
+ * with the draft Restore loads into the editor.
+ *
+ * `subject` / `html_body` / `text_body` are the backup as saved. The
+ * `restored_*` fields are the department's own wording placed inside the
+ * current design; nothing is written until the admin saves the draft.
+ */
+export interface EmailTemplateBackup {
+  id: string;
+  template_id: string | null;
+  /** The revision that took the backup. */
+  reason: string;
+  created_at: string;
+  subject: string | null;
+  html_body: string | null;
+  text_body: string | null;
+  restored_subject: string;
+  restored_html_body: string;
+  restored_text_body: string | null;
+}
+
 export interface EmailTemplatePreview {
   subject: string;
   html_body: string;

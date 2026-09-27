@@ -221,6 +221,7 @@ export type {
   EmailTemplate,
   EmailAttachment,
   EmailTemplateUpdate,
+  EmailTemplateBackup,
   EmailTemplatePreview,
   TemplatePreviewOverrides,
   EmailFooter,
