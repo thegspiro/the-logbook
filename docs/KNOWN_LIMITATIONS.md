@@ -487,7 +487,7 @@ is not visible to whoever chooses the setting.
 
 ## "Today" Is the Department's Date — What Still Reads UTC (2026-09-26)
 
-**Resolved for "today"; one related class remains open.** `date.today()` returns
+**Resolved, with one accepted gap (older training records, below).** `date.today()` returns
 the server's date, and a container runs in UTC, so for a US department it is
 already tomorrow every evening (from 7–8 PM Eastern, 4–5 PM Pacific). Anything
 that counts days, decides expired-versus-not, or picks "this month" from it is
@@ -566,18 +566,36 @@ bound only includes more), and two schema validators that refuse a future
 date — they cannot see the organization, and for a US department the server's
 date is never behind its own, so they never refuse a genuine date.
 
-🚩 **Still open: a stored UTC timestamp cut to a date with `.date()`.** The
-same bug in a different shape — `event.start_datetime.date()` is the UTC day,
-already tomorrow for an evening event. The places above that turned one into a
-calendar day use `local_date`, but the pattern is common across the backend
-and not every instance is wrong (some columns hold a UTC-midnight "date"), so
-each needs reading. Known examples: the readiness board's out-of-service days
-from apparatus status history (`equipment_readiness_service._unavailable_dates`),
-`member_service_history_service.implicit_separation_date`, and date-typed
-filters compared against `DateTime` columns (fundraising's year-to-date
-donations). Order and request numbers (`ORD-YYYY-`, `PR-YYYY-`) also take
-their year from UTC, which only differs on the evening of December 31 and
-changes nothing but the prefix.
+**A stored UTC timestamp cut to a date** — the same bug in a different shape:
+`event.start_datetime.date()` is the UTC day, already tomorrow for an evening
+event. Every such place was read (`grep -rn "\.date()" backend/app`, 49 at the
+time) and the ones that name a day a person sees or a rule compares now go
+through `local_date` / `to_local`: training records created from an event, the
+lookups that find them, the mandatory-event leave and hire check, monthly event
+counts, report dates and ranges, cohort end dates, the readiness board's
+out-of-service days, a member's implied last day of service, donor first/last
+donation dates, the election forensics timeline, the event-request activity
+note and the store-order and inventory last-seen CSV exports
+(`tests/test_org_local_today.py::TestDatesFromTimestamps`). The rest are right
+as they stand: already converted to the department's zone first, provider data
+from external training, a store preview, rough "last N days" windows, and
+minutes action items, whose `DateTime` due date holds a plain date at UTC
+midnight — converting that one would move it a day earlier.
+
+**Accepted: training records written before 2026-09-27 keep their UTC date.**
+A record created from an evening session was filed under the next day, which
+for a session on the last day of a month puts it in the next month's
+compliance. New records are dated by the department's calendar, and the
+lookups that find a record for an event accept the old UTC date as well, so a
+record created before the change is updated rather than duplicated. The
+existing rows were deliberately not rewritten: the correct date is derivable
+(the event's start time and the organization's timezone), but a migration
+would change historical compliance results, and that was judged not worth it.
+An officer can correct an individual record's date where it matters.
+
+Still open: order and request numbers (`ORD-YYYY-`, `PR-YYYY-`) take their year
+from UTC, which differs only on the evening of December 31 and changes nothing
+but the prefix.
 
 ## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
 
