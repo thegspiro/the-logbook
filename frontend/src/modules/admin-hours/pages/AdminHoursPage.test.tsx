@@ -321,6 +321,16 @@ describe('AdminHoursPage manual entry times', () => {
     expect(await screen.findByText('2h 0m')).toBeInTheDocument();
   });
 
+  it('tells the member a manual entry goes to review whatever the category says', async () => {
+    await openForm();
+
+    // The backend pins every manual entry to pending (AH-1); an officer who
+    // switched approval off on a category must not read that as a bug.
+    expect(
+      screen.getByText(/go to an officer for review before they count, whatever the category/i)
+    ).toBeInTheDocument();
+  });
+
   it('will not offer a duration before there is a start to measure from', async () => {
     await openForm();
 

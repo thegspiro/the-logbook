@@ -80,6 +80,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               checked={formData.require_approval ?? true}
               onChange={(e) => onChange({ ...formData, require_approval: e.target.checked })}
               className="border-theme-input-border h-4 w-4 rounded-sm"
+              aria-describedby="category-approval-scope"
             />
             <span className="text-theme-text-secondary text-sm">Require approval</span>
           </label>
@@ -116,6 +117,14 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
             />
           </div>
         </div>
+        {/* Manual entries are pinned to PENDING server-side (audit finding AH-1:
+            both times are member-supplied, so auto-approving them would let a
+            member self-credit backdated hours). Say so here, or an officer who
+            switches approval off reads every manual submission as a bug. */}
+        <p id="category-approval-scope" className="text-theme-text-muted -mt-2 text-xs">
+          Approval settings apply to clock-in/clock-out sessions and event attendance credit. Hours a member logs
+          manually always go to an officer for review, because the member enters both the start and end time.
+        </p>
 
         <div className="flex gap-3">
           <button
