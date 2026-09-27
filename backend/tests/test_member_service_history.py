@@ -256,6 +256,9 @@ async def _org(db, settings=None):
         name="Service History Test Department",
         slug=f"svc-hist-{uuid.uuid4().hex[:8]}",
         settings=settings or {},
+        # UTC, so "today" on the department's calendar is the date.today() the
+        # fixtures below are built from, at any hour the suite runs.
+        timezone="UTC",
     )
     db.add(org)
     await db.flush()

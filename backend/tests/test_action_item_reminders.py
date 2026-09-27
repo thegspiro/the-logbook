@@ -32,7 +32,13 @@ pytestmark = pytest.mark.integration
 
 
 async def _make_org(db):
-    org = Organization(name="AI Reminders FD", slug=f"air-{uuid.uuid4().hex[:8]}")
+    org = Organization(
+        name="AI Reminders FD",
+        slug=f"air-{uuid.uuid4().hex[:8]}",
+        # UTC, so "today" on the department's calendar is the date.today() the
+        # fixtures below are built from, at any hour the suite runs.
+        timezone="UTC",
+    )
     db.add(org)
     await db.flush()
     return org
