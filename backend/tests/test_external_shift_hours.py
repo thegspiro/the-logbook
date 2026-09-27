@@ -24,7 +24,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints import external_shift_hours as endpoint
-from app.models.external_shift_hours import ExternalShiftHours
+from app.models.external_shift_hours import (
+    ExternalAgency,
+    ExternalApparatus,
+    ExternalShiftHours,
+)
 from app.models.training import (
     DueDateType,
     RequirementFrequency,
@@ -103,11 +107,43 @@ async def _external(
             shift_date=shift_date,
             duration_minutes=minutes,
             agency_name="Neighbouring FD",
+            apparatus_name="Engine 1",
             status=status,
         )
     )
     await db_session.flush()
     return entry_id
+
+
+async def _unit(
+    db_session: AsyncSession,
+    org_id: str,
+    *,
+    agency: str = "County Fire Company",
+    name: str = "Engine 42",
+    active: bool = True,
+    agency_active: bool = True,
+) -> str:
+    """A unit on the officer-maintained list; returns its id."""
+    agency_id = _uid()
+    unit_id = _uid()
+    db_session.add(
+        ExternalAgency(
+            id=agency_id, organization_id=org_id, name=agency, is_active=agency_active
+        )
+    )
+    await db_session.flush()
+    db_session.add(
+        ExternalApparatus(
+            id=unit_id,
+            organization_id=org_id,
+            agency_id=agency_id,
+            name=name,
+            is_active=active,
+        )
+    )
+    await db_session.flush()
+    return unit_id
 
 
 async def _worked(
@@ -153,14 +189,15 @@ class TestMemberSelfService:
         self, db_session, org_and_member
     ):
         org_id, user_id = org_and_member
+        unit_id = await _unit(db_session, org_id)
         member = await db_session.get(User, user_id)
 
         result = await endpoint.log_external_shift(
             ExternalShiftHoursCreate(
                 shift_date=date(2025, 6, 3),
                 hours=12,
-                agency_name="  County Engine 42  ",
-                apparatus="",
+                external_apparatus_id=unit_id,
+                role="",
             ),
             db_session,
             member,
@@ -169,15 +206,18 @@ class TestMemberSelfService:
         assert result["user_id"] == user_id
         assert result["status"] == "counted"
         assert result["hours"] == 12.0
-        assert result["agency_name"] == "County Engine 42"
-        assert result["apparatus"] is None
+        assert result["external_apparatus_id"] == unit_id
+        assert result["agency_name"] == "County Fire Company"
+        assert result["apparatus_name"] == "Engine 42"
+        assert result["role"] is None
 
         row = await db_session.get(ExternalShiftHours, result["id"])
         assert row.organization_id == org_id
         assert row.duration_minutes == 720
 
     async def test_future_date_is_refused(self, db_session, org_and_member):
-        _, user_id = org_and_member
+        org_id, user_id = org_and_member
+        unit_id = await _unit(db_session, org_id)
         member = await db_session.get(User, user_id)
 
         with pytest.raises(HTTPException) as exc:
@@ -185,7 +225,7 @@ class TestMemberSelfService:
                 ExternalShiftHoursCreate(
                     shift_date=date.today() + timedelta(days=5),
                     hours=8,
-                    agency_name="Somewhere FD",
+                    external_apparatus_id=unit_id,
                 ),
                 db_session,
                 member,
@@ -219,6 +259,7 @@ class TestMemberSelfService:
         self, db_session, org_and_member
     ):
         org_id, user_id = org_and_member
+        unit_id = await _unit(db_session, org_id, agency="Somewhere FD")
         svc = ExternalShiftHoursService(db_session)
         entry = await svc.create(
             org_id,
@@ -226,7 +267,7 @@ class TestMemberSelfService:
             {
                 "shift_date": date(2025, 6, 3),
                 "hours": 8,
-                "agency_name": "Somewhere FD",
+                "external_apparatus_id": unit_id,
                 "notes": "Covered for a sick call",
             },
         )
@@ -476,15 +517,16 @@ class TestPermissionGates:
         assert self._permissions("/{entry_id}/restore", "POST") == {"scheduling.manage"}
 
     def test_create_schema_bounds_hours(self):
+        unit = uuid.uuid4()
         with pytest.raises(ValidationError, match="greater than 0"):
             ExternalShiftHoursCreate(
-                shift_date=date(2025, 1, 1), hours=0, agency_name="X"
+                shift_date=date(2025, 1, 1), hours=0, external_apparatus_id=unit
             )
         with pytest.raises(ValidationError, match="less than or equal to 48"):
             ExternalShiftHoursCreate(
-                shift_date=date(2025, 1, 1), hours=48.5, agency_name="X"
+                shift_date=date(2025, 1, 1), hours=48.5, external_apparatus_id=unit
             )
-        with pytest.raises(ValidationError, match="Agency name is required"):
-            ExternalShiftHoursCreate(
-                shift_date=date(2025, 1, 1), hours=8, agency_name="   "
-            )
+
+    def test_create_schema_requires_an_apparatus(self):
+        with pytest.raises(ValidationError, match="external_apparatus_id"):
+            ExternalShiftHoursCreate(shift_date=date(2025, 1, 1), hours=8)

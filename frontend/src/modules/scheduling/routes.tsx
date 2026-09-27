@@ -233,6 +233,16 @@ export const getSchedulingRoutes = () => {
         }
       />
       <Route
+        path="/scheduling/admin/settings/outside-apparatus"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
+              <SchedulingSettingsPage section="outside-apparatus" />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      <Route
         path="/scheduling/checkin"
         element={
           <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">

@@ -705,6 +705,11 @@ purpose, and a department should know them:
   not scheduling data (see "Shifts completed has three sources of truth"
   above), so outside shifts do not move it. They also do not feed training
   program progress, which reads `ShiftCompletionReport`.
+- **A member can't log a shift on a unit that isn't listed.** The apparatus
+  comes from a list scheduling officers keep (Scheduling → Settings → Outside
+  Apparatus), so that the apparatus summary counts one unit once. A member
+  whose unit is missing has to ask an officer to add it before logging the
+  shift; nothing queues the claim in the meantime.
 
 ## Call Volume Reporting — Five Gaps Between Payload and Screen (2026-08-19)
 

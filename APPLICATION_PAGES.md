@@ -642,24 +642,25 @@ only from a row of cards on the member-facing `/scheduling` page — so an
 administrator opened the schedule to find the settings, and the Administration
 section had no scheduling entry at all. That row is gone.
 
-| URL                                        | Page                           | Permission          |
-| ------------------------------------------ | ------------------------------ | ------------------- |
-| `/scheduling/admin`                        | Scheduling Administration hub  | `scheduling.manage` |
-| `/scheduling/admin/planning`               | Shift Planning — staffing gaps | `scheduling.manage` |
-| `/scheduling/admin/planning/templates`     | Shift Templates Management     | `scheduling.manage` |
-| `/scheduling/admin/planning/patterns`      | Shift Pattern Management       | `scheduling.manage` |
-| `/scheduling/admin/closeout`               | Shift Close-Out — the queue    | `scheduling.manage` |
-| `/scheduling/admin/reports`                | Scheduling Reports             | `scheduling.manage` |
-| `/scheduling/admin/platoons`               | Platoon Management             | `scheduling.manage` |
-| `/scheduling/admin/positions`              | Position Qualification Roster  | `scheduling.manage` |
-| `/scheduling/admin/settings`               | `?tab=` → the section's route  | `scheduling.manage` |
-| `/scheduling/admin/settings/general`       | Scheduling Settings — General  | `scheduling.manage` |
-| `/scheduling/admin/settings/apparatus`     | Settings — Apparatus           | `scheduling.manage` |
-| `/scheduling/admin/settings/platoons`      | Settings — Platoons            | `scheduling.manage` |
-| `/scheduling/admin/settings/eligibility`   | Settings — Eligibility         | `scheduling.manage` |
-| `/scheduling/admin/settings/notifications` | Settings — Notifications       | `scheduling.manage` |
-| `/scheduling/admin/settings/shift-reports` | Settings — Shift Reports       | `scheduling.manage` |
-| `/scheduling/checkin`                      | Shift Check-In                 | Authenticated       |
+| URL                                            | Page                           | Permission          |
+| ---------------------------------------------- | ------------------------------ | ------------------- |
+| `/scheduling/admin`                            | Scheduling Administration hub  | `scheduling.manage` |
+| `/scheduling/admin/planning`                   | Shift Planning — staffing gaps | `scheduling.manage` |
+| `/scheduling/admin/planning/templates`         | Shift Templates Management     | `scheduling.manage` |
+| `/scheduling/admin/planning/patterns`          | Shift Pattern Management       | `scheduling.manage` |
+| `/scheduling/admin/closeout`                   | Shift Close-Out — the queue    | `scheduling.manage` |
+| `/scheduling/admin/reports`                    | Scheduling Reports             | `scheduling.manage` |
+| `/scheduling/admin/platoons`                   | Platoon Management             | `scheduling.manage` |
+| `/scheduling/admin/positions`                  | Position Qualification Roster  | `scheduling.manage` |
+| `/scheduling/admin/settings`                   | `?tab=` → the section's route  | `scheduling.manage` |
+| `/scheduling/admin/settings/general`           | Scheduling Settings — General  | `scheduling.manage` |
+| `/scheduling/admin/settings/apparatus`         | Settings — Apparatus           | `scheduling.manage` |
+| `/scheduling/admin/settings/platoons`          | Settings — Platoons            | `scheduling.manage` |
+| `/scheduling/admin/settings/eligibility`       | Settings — Eligibility         | `scheduling.manage` |
+| `/scheduling/admin/settings/notifications`     | Settings — Notifications       | `scheduling.manage` |
+| `/scheduling/admin/settings/shift-reports`     | Settings — Shift Reports       | `scheduling.manage` |
+| `/scheduling/admin/settings/outside-apparatus` | Settings — Outside Apparatus   | `scheduling.manage` |
+| `/scheduling/checkin`                          | Shift Check-In                 | Authenticated       |
 
 > **The old URLs are gone, with no redirect.** `/scheduling/templates`,
 > `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons`,
@@ -823,14 +824,15 @@ had before.
 Sections are defined in
 `modules/scheduling/components/schedulingSettingsSections.ts`:
 
-| Section         | Route                                      | Description                             | Saved by footer |
-| --------------- | ------------------------------------------ | --------------------------------------- | --------------- |
-| `general`       | `/scheduling/admin/settings/general`       | Shift defaults, overtime, and close-out | Yes             |
-| `apparatus`     | `/scheduling/admin/settings/apparatus`     | Apparatus and resource type defaults    | Yes             |
-| `platoons`      | `/scheduling/admin/settings/platoons`      | Platoon rosters and assignments         | No              |
-| `eligibility`   | `/scheduling/admin/settings/eligibility`   | Who may sign up for a shift             | No              |
-| `notifications` | `/scheduling/admin/settings/notifications` | Shift reminders and alerts              | No              |
-| `shift-reports` | `/scheduling/admin/settings/shift-reports` | End-of-shift reporting options          | No              |
+| Section             | Route                                          | Description                             | Saved by footer |
+| ------------------- | ---------------------------------------------- | --------------------------------------- | --------------- |
+| `general`           | `/scheduling/admin/settings/general`           | Shift defaults, overtime, and close-out | Yes             |
+| `apparatus`         | `/scheduling/admin/settings/apparatus`         | Apparatus and resource type defaults    | Yes             |
+| `platoons`          | `/scheduling/admin/settings/platoons`          | Platoon rosters and assignments         | No              |
+| `eligibility`       | `/scheduling/admin/settings/eligibility`       | Who may sign up for a shift             | No              |
+| `notifications`     | `/scheduling/admin/settings/notifications`     | Shift reminders and alerts              | No              |
+| `shift-reports`     | `/scheduling/admin/settings/shift-reports`     | End-of-shift reporting options          | No              |
+| `outside-apparatus` | `/scheduling/admin/settings/outside-apparatus` | Other departments members ride with     | No              |
 
 > **The Save/Reset footer appears only on the three sections it actually
 > writes** (`LOCALLY_SAVED_SECTIONS`). It used to be shown on all seven while

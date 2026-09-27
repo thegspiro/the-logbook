@@ -24,6 +24,8 @@ from app.models.external_shift_hours import (
     ExternalShiftHoursStatus,
 )
 from app.models.user import User
+from app.services.external_apparatus_service import ExternalApparatusService
+from app.utils.hours import hours_from_minutes
 from app.utils.model_updates import apply_updates
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -51,17 +53,43 @@ class ExternalShiftHoursService:
         if shift_date > datetime.now(tz).date():
             raise ValueError("Shift date cannot be in the future")
 
+    async def _apparatus_snapshot(
+        self, organization_id: str, apparatus_id: Any
+    ) -> Dict[str, str]:
+        """The list entry a member picked, resolved in-org and still active.
+
+        The names are copied onto the shift here so that renaming,
+        deactivating or deleting the unit later leaves what was logged
+        readable as it was logged.
+        """
+        found = await ExternalApparatusService(self.db).get_pickable_apparatus(
+            organization_id, str(apparatus_id)
+        )
+        if found is None:
+            raise ValueError(
+                "Pick an apparatus from the list. If it isn't there, ask a "
+                "scheduling officer to add it."
+            )
+        unit, agency = found
+        return {
+            "external_apparatus_id": unit.id,
+            "agency_name": agency.name,
+            "apparatus_name": unit.name,
+        }
+
     async def create(
         self, organization_id: str, user_id: str, payload: Mapping[str, Any]
     ) -> ExternalShiftHours:
         await self._assert_not_future(organization_id, payload["shift_date"])
+        snapshot = await self._apparatus_snapshot(
+            organization_id, payload["external_apparatus_id"]
+        )
         entry = ExternalShiftHours(
             organization_id=str(organization_id),
             user_id=str(user_id),
             shift_date=payload["shift_date"],
             duration_minutes=minutes_from_hours(payload["hours"]),
-            agency_name=payload["agency_name"],
-            apparatus=payload.get("apparatus"),
+            **snapshot,
             role=payload.get("role"),
             notes=payload.get("notes"),
             status=_COUNTED,
@@ -106,6 +134,15 @@ class ExternalShiftHoursService:
             changes["duration_minutes"] = minutes_from_hours(hours)
         if changes.get("shift_date") is not None:
             await self._assert_not_future(organization_id, changes["shift_date"])
+        if "external_apparatus_id" in changes:
+            picked = changes.pop("external_apparatus_id")
+            if picked is None:
+                raise ValueError("An apparatus is required")
+            # Re-sending the unit already on the entry keeps its snapshot, so
+            # a shift whose unit was since deactivated can still have its
+            # date or hours corrected without being forced onto another one.
+            if str(picked) != (entry.external_apparatus_id or ""):
+                changes.update(await self._apparatus_snapshot(organization_id, picked))
 
         apply_updates(
             entry,
@@ -118,6 +155,8 @@ class ExternalShiftHoursService:
                 "reviewed_by",
                 "reviewed_at",
                 "rejection_reason",
+                "created_at",
+                "updated_at",
             },
         )
         await self.db.commit()
@@ -218,8 +257,9 @@ class ExternalShiftHoursService:
             "member_name": member.full_name if member is not None else None,
             "shift_date": entry.shift_date,
             "hours": round((entry.duration_minutes or 0) / 60, 2),
+            "external_apparatus_id": entry.external_apparatus_id,
             "agency_name": entry.agency_name,
-            "apparatus": entry.apparatus,
+            "apparatus_name": entry.apparatus_name,
             "role": entry.role,
             "notes": entry.notes,
             "status": entry.status,
@@ -337,3 +377,77 @@ class ExternalShiftHoursService:
             }
             for row in result.all()
         }
+
+    async def apparatus_summary(
+        self, organization_id: str, start_date: date, end_date: date
+    ) -> List[Dict[str, Any]]:
+        """Counted outside shifts per agency and apparatus, most hours first.
+
+        Grouped by the list entry where the shift still references one, so a
+        unit renamed after shifts were logged on it reads as one row under its
+        current name. A shift whose unit was since deleted from the list
+        falls back to the names snapshotted when it was logged.
+        """
+        group_key = func.coalesce(
+            ExternalShiftHours.external_apparatus_id,
+            func.concat(
+                ExternalShiftHours.agency_name,
+                "\x1f",
+                ExternalShiftHours.apparatus_name,
+            ),
+        )
+        rows = (
+            await self.db.execute(
+                select(
+                    group_key.label("key"),
+                    func.max(ExternalShiftHours.external_apparatus_id).label(
+                        "apparatus_id"
+                    ),
+                    func.max(ExternalShiftHours.agency_name).label("agency_name"),
+                    func.max(ExternalShiftHours.apparatus_name).label("apparatus_name"),
+                    func.count(ExternalShiftHours.id).label("shifts"),
+                    func.coalesce(
+                        func.sum(ExternalShiftHours.duration_minutes), 0
+                    ).label("minutes"),
+                    func.count(func.distinct(ExternalShiftHours.user_id)).label(
+                        "members"
+                    ),
+                )
+                .where(ExternalShiftHours.organization_id == str(organization_id))
+                .where(ExternalShiftHours.status == _COUNTED)
+                .where(ExternalShiftHours.shift_date >= start_date)
+                .where(ExternalShiftHours.shift_date <= end_date)
+                .group_by(group_key)
+            )
+        ).all()
+
+        # Current names for units still on the list, so a rename shows once.
+        listed = await ExternalApparatusService(self.db).list_agencies(organization_id)
+        current: Dict[str, Dict[str, Any]] = {}
+        for agency in listed:
+            for unit in agency["apparatus"]:
+                current[unit["id"]] = {
+                    "agency_name": agency["name"],
+                    "apparatus_name": unit["name"],
+                    "apparatus_type": unit["apparatus_type"],
+                }
+
+        summary = []
+        for row in rows:
+            names = current.get(row.apparatus_id or "", {})
+            summary.append(
+                {
+                    "external_apparatus_id": row.apparatus_id,
+                    "agency_name": names.get("agency_name", row.agency_name),
+                    "apparatus_name": names.get("apparatus_name", row.apparatus_name),
+                    "apparatus_type": names.get("apparatus_type"),
+                    "shifts": int(row.shifts or 0),
+                    "minutes": int(row.minutes or 0),
+                    "hours": hours_from_minutes(row.minutes or 0),
+                    "members": int(row.members or 0),
+                }
+            )
+        summary.sort(
+            key=lambda r: (-r["minutes"], r["agency_name"], r["apparatus_name"])
+        )
+        return summary

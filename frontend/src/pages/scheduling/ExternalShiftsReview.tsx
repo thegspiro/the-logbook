@@ -152,7 +152,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
                   Date
                 </th>
                 <th scope="col" className="px-4 py-3 font-medium">
-                  Department
+                  Department &amp; apparatus
                 </th>
                 <th scope="col" className="px-4 py-3 text-right font-medium">
                   Hours
@@ -170,7 +170,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
             <tbody>
               {entries.map((entry) => {
                 const rejected = entry.status === 'rejected';
-                const detail = [entry.apparatus, entry.role].filter(Boolean).join(' · ');
+                const detail = [entry.apparatus_name, entry.role].filter(Boolean).join(' · ');
                 return (
                   <tr key={entry.id} className="border-theme-surface-border hover:bg-theme-surface-hover border-b">
                     <td className="rwd-table-lead text-theme-text-primary px-4 py-3 font-medium" data-label="Member">
@@ -179,7 +179,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
                     <td className="text-theme-text-secondary px-4 py-3" data-label="Date">
                       {formatCalendarDate(entry.shift_date)}
                     </td>
-                    <td className="px-4 py-3" data-label="Department">
+                    <td className="px-4 py-3" data-label="Department & apparatus">
                       <p className="text-theme-text-primary">{entry.agency_name}</p>
                       {detail && <p className="text-theme-text-muted text-xs">{detail}</p>}
                       {entry.notes && <p className="text-theme-text-muted text-xs">{entry.notes}</p>}

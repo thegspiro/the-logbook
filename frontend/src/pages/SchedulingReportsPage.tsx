@@ -37,6 +37,7 @@ import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours, formatHoursExact, roundHoursToQuarter, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { DateRangePicker } from '../components/ux/DateRangePicker';
 import { useAuthStore } from '../stores/authStore';
+import { ExternalApparatusSummary } from './scheduling/ExternalApparatusSummary';
 import { ExternalShiftsReview } from './scheduling/ExternalShiftsReview';
 
 type TabView = 'member-hours' | 'coverage' | 'call-volume' | 'availability' | 'compliance';
@@ -131,6 +132,9 @@ export const SchedulingReportsPage: React.FC = () => {
   const { formatRank } = useRanks();
   const checkPermission = useAuthStore((s) => s.checkPermission);
   const canManageSchedule = checkPermission('scheduling.manage');
+  // Bumped when an outside shift is rejected or restored, so the apparatus
+  // summary re-reads alongside the hours table.
+  const [externalRefreshKey, setExternalRefreshKey] = useState(0);
   const [activeTab, setActiveTab] = useState<TabView>('member-hours');
 
   // Date ranges. Defaulted to this month: a report that opens on two empty
@@ -545,11 +549,20 @@ export const SchedulingReportsPage: React.FC = () => {
                 </div>
               )}
 
+              <ExternalApparatusSummary
+                startDate={memberHoursReport.period_start}
+                endDate={memberHoursReport.period_end}
+                refreshKey={externalRefreshKey}
+              />
+
               <ExternalShiftsReview
                 startDate={memberHoursReport.period_start}
                 endDate={memberHoursReport.period_end}
                 canManage={canManageSchedule}
-                onChanged={() => void refreshMemberHours()}
+                onChanged={() => {
+                  setExternalRefreshKey((k) => k + 1);
+                  void refreshMemberHours();
+                }}
               />
             </div>
           ) : (

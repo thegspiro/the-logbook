@@ -118,7 +118,7 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
         <ul className="divide-theme-surface-border divide-y">
           {entries.map((entry) => {
             const rejected = entry.status === 'rejected';
-            const detail = [entry.apparatus, entry.role].filter(Boolean).join(' · ');
+            const detail = [entry.apparatus_name, entry.role].filter(Boolean).join(' · ');
             return (
               <li key={entry.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">

@@ -395,6 +395,13 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: SCHEDULING_ADMIN,
     expectText: 'Scheduling Notifications',
   },
+  {
+    path: '/scheduling/admin/settings/outside-apparatus',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Add a department',
+  },
   // Seven subsections behind an in-page tab strip, all seven now driven and
   // measured. Six of them had never been looked at, and the debt they held was
   // 143 controls under 44px: 99 in Feedback Defaults, 38 in Apparatus Skills, 6
