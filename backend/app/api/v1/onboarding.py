@@ -2852,11 +2852,23 @@ async def reset_onboarding(
             },
         )
 
-        return {
-            "success": True,
-            "message": "Onboarding has been reset. All data has been cleared.",
-            "next_step": "Navigate to /onboarding/start to begin again",
-        }
+        # The caller's auth cookies name a user this reset just deleted. Left
+        # in place they make every later request fail authentication, and
+        # /onboarding/start refuses invalid credentials rather than treating
+        # them as anonymous, so the wizard could not begin again.
+        from fastapi.responses import JSONResponse
+
+        from app.api.v1.endpoints.auth import _clear_auth_cookies
+
+        reset_response = JSONResponse(
+            content={
+                "success": True,
+                "message": "Onboarding has been reset. All data has been cleared.",
+                "next_step": "Navigate to /onboarding/start to begin again",
+            }
+        )
+        _clear_auth_cookies(reset_response)
+        return reset_response
 
     except Exception as e:
         await db.rollback()

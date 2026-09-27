@@ -124,3 +124,38 @@ describe('SetupComplete — what is left', () => {
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/members/admin'));
   });
 });
+
+describe('SetupComplete — what was configured', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSetupChecklist.mockReset();
+    respond([]);
+    useOnboardingStore.setState({ departmentName: 'Engine Co.' });
+  });
+
+  const configured = (label: string) => {
+    const terms = screen.getAllByRole('term').map((term) => term.textContent);
+    return screen.getAllByRole('definition')[terms.indexOf(label)]?.textContent;
+  };
+
+  it('reports a skipped email and storage step as skipped, not as "Other"', async () => {
+    // Both steps store the id `other` for their skip choice.
+    useOnboardingStore.setState({ emailPlatform: 'other', fileStoragePlatform: 'other' });
+
+    renderPage();
+    await screen.findByText(/every essential step is done/i);
+
+    expect(configured('Email platform')).toBe('Not set up yet');
+    expect(configured('File storage')).toBe('Local storage (set up later)');
+  });
+
+  it('names a provider that was chosen', async () => {
+    useOnboardingStore.setState({ emailPlatform: 'selfhosted', fileStoragePlatform: 's3' });
+
+    renderPage();
+    await screen.findByText(/every essential step is done/i);
+
+    expect(configured('Email platform')).toBe('SMTP');
+    expect(configured('File storage')).toBe('Amazon S3');
+  });
+});

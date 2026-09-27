@@ -42,4 +42,13 @@ describe('ProgressIndicator', () => {
 
     expect(screen.getByText(`Step 2 of ${ONBOARDING_STEPS.length}: Administrator Account`)).toBeInTheDocument();
   });
+
+  it('contains its screen-reader labels inside the scrolling strip', () => {
+    // jsdom has no layout, so this pins the mechanism rather than measuring:
+    // the strip must be the containing block for its absolutely positioned
+    // sr-only labels, or they widen the page on a phone (W01-8).
+    render(<ProgressIndicator step="organization" />);
+
+    expect(screen.getByLabelText('Setup steps')).toHaveClass('relative', 'overflow-x-auto');
+  });
 });

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  hasRepeatedCharacters,
+  hasSequentialCharacters,
   validatePassword,
   getPasswordRequirementsText,
   getStrengthColor,
@@ -465,5 +467,27 @@ describe('validatePasswordStrength', () => {
     expect(result.checks.number).toBe(true);
     expect(result.checks.special).toBe(true);
     expect(result.isValid).toBe(true);
+  });
+});
+
+describe('the two run rules a checklist can show before submitting', () => {
+  it('finds an ascending run of three, in any case', () => {
+    expect(hasSequentialCharacters('Abcdef!Hydrant9')).toBe(true);
+    expect(hasSequentialCharacters('Hydrant$Blue123')).toBe(true);
+    expect(hasSequentialCharacters('Hydrant$Blue947')).toBe(false);
+  });
+
+  it('finds a character three times in a row', () => {
+    expect(hasRepeatedCharacters('Hydraaant$Blue9')).toBe(true);
+    expect(hasRepeatedCharacters('Hydrant$Blue947')).toBe(false);
+  });
+
+  it('agrees with validatePassword, which the backend mirrors', () => {
+    expect(validatePassword('Abcdef123!xyzQ').errors).toContain(
+      "Password cannot contain sequential characters (e.g., '123', 'abc')"
+    );
+    expect(validatePassword('Hydrant$Bluuu94').errors).toContain(
+      'Password cannot contain 3 or more repeated characters'
+    );
   });
 });

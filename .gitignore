@@ -240,3 +240,6 @@ scratchRepro*
 # take — a genuine suite ordered last, a module about temporary state — and an
 # ignore that swallows one is silent. A throwaway pytest file goes under one of
 # the prefixes above, or outside the tree entirely.
+
+# Workflow review state: generated keys, seeded accounts, browser sessions, logs
+.workflow-review/

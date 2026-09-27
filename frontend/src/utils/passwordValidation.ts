@@ -120,6 +120,21 @@ const KEYBOARD_PATTERNS = [
 ];
 
 /**
+ * An ascending run of three such as "123" or "abc", which the backend's
+ * `validate_password_strength` refuses. Exported so a screen that lists the
+ * rules can check this one before submitting instead of after.
+ */
+export function hasSequentialCharacters(password: string): boolean {
+  const passwordLower = password.toLowerCase();
+  return SEQUENTIAL_PATTERNS.some((pattern) => passwordLower.includes(pattern));
+}
+
+/** The same character three or more times in a row, which the backend refuses. */
+export function hasRepeatedCharacters(password: string): boolean {
+  return /(.)\1{2,}/.test(password);
+}
+
+/**
  * Validate a password against HIPAA compliance requirements
  */
 export function validatePassword(
@@ -177,19 +192,15 @@ export function validatePassword(
     strengthScore += 1;
   }
 
-  // Check for sequential characters
-  const passwordLower = password.toLowerCase();
-  for (const pattern of SEQUENTIAL_PATTERNS) {
-    if (passwordLower.includes(pattern)) {
-      errors.push("Password cannot contain sequential characters (e.g., '123', 'abc')");
-      break;
-    }
+  if (hasSequentialCharacters(password)) {
+    errors.push("Password cannot contain sequential characters (e.g., '123', 'abc')");
   }
 
-  // Check for repeated characters (3+ in a row)
-  if (/(.)\1{2,}/.test(password)) {
+  if (hasRepeatedCharacters(password)) {
     errors.push('Password cannot contain 3 or more repeated characters');
   }
+
+  const passwordLower = password.toLowerCase();
 
   // Check for common passwords
   if (COMMON_PASSWORDS.includes(passwordLower)) {

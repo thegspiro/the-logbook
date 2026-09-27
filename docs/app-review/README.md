@@ -57,6 +57,9 @@ open and the owner-decision ones are mirrored into
 - [`docs/module-audit/`](../module-audit/PROGRESS.md) — completed 2026-07-26.
   27 modules, security/tenant-isolation focus. Its cross-cutting patterns
   (XC-1/2/3) are inputs to this review, not repeats of it.
+- [`docs/workflow-review/`](../workflow-review/README.md) — the same
+  one-at-a-time rotation, driven in a real browser: each run carries out one
+  user activity as the roles who do it, rather than reading one feature's code.
 - [`docs/review-log.md`](../review-log.md) — the older time-based `/loop`.
 Superseded by this review for feature coverage; its owner-decision list is
 still live.

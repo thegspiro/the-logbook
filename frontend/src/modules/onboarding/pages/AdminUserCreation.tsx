@@ -2,12 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Shield, Eye, EyeOff, CheckCircle, XCircle, Info, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { OnboardingHeader, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
+import {
+  OnboardingHeader,
+  ResetProgressButton,
+  ErrorAlert,
+  AutoSaveNotification,
+  ProgressIndicator,
+} from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 import { isValidEmail } from '../utils/validation';
-import { nextStepPath, previousStepPath } from '../config/steps';
+import { hasRepeatedCharacters, hasSequentialCharacters } from '../../../utils/passwordValidation';
+import { nextStepName, nextStepPath } from '../config/steps';
 
 const SystemOwnerCreation: React.FC = () => {
   const navigate = useNavigate();
@@ -39,7 +46,31 @@ const SystemOwnerCreation: React.FC = () => {
     }
   }, [navigate, departmentName]);
 
-  // Password strength checker
+  // The account is created once; the server refuses a second one. Without
+  // this, Back from Modules reopened an empty form whose only button could
+  // not succeed, and whose own Back bounced off Organization Setup (which is
+  // one-time for the same reason) — a dead end with no way forward. Move on
+  // when the server says the account exists, as Organization Setup does.
+  useEffect(() => {
+    if (!departmentName) return;
+    let cancelled = false;
+    void (async () => {
+      const response = await apiClient.getStatus();
+      if (cancelled) return;
+      const completed = response.data?.steps_completed as Record<string, { completed?: boolean }> | undefined;
+      if (completed?.admin_user?.completed) {
+        void navigate(nextStepPath('system_owner'), { replace: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [departmentName, navigate]);
+
+  // Password strength checker. The last two are rules the server enforces
+  // too; listing them here means a password that breaks one is caught before
+  // submitting, rather than refused afterwards with both fields cleared. They
+  // only read as met once something has been typed.
   const checkPasswordStrength = (password: string) => {
     const checks = {
       length: password.length >= 12,
@@ -47,10 +78,12 @@ const SystemOwnerCreation: React.FC = () => {
       lowercase: /[a-z]/.test(password),
       number: /[0-9]/.test(password),
       special: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password),
+      noSequence: password.length > 0 && !hasSequentialCharacters(password),
+      noRepeat: password.length > 0 && !hasRepeatedCharacters(password),
     };
 
-    const passedChecks = Object.values(checks).filter(Boolean).length;
-    return { checks, passedChecks };
+    const allPassed = Object.values(checks).every(Boolean);
+    return { checks, allPassed };
   };
 
   const passwordStrength = checkPasswordStrength(formData.password);
@@ -85,6 +118,8 @@ const SystemOwnerCreation: React.FC = () => {
         if (!passwordStrength.checks.lowercase) return 'Password must contain at least one lowercase letter';
         if (!passwordStrength.checks.number) return 'Password must contain at least one number';
         if (!passwordStrength.checks.special) return 'Password must contain at least one special character';
+        if (!passwordStrength.checks.noSequence) return "Password cannot contain a run like '123' or 'abc'";
+        if (!passwordStrength.checks.noRepeat) return 'Password cannot repeat a character three times in a row';
         return '';
 
       case 'confirmPassword':
@@ -242,7 +277,7 @@ const SystemOwnerCreation: React.FC = () => {
   const isFormValid =
     requiredFields.every((key) => formData[key].trim() !== '') &&
     Object.values(errors).every((error) => error === '') &&
-    passwordStrength.passedChecks === 5;
+    passwordStrength.allPassed;
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
@@ -257,7 +292,12 @@ const SystemOwnerCreation: React.FC = () => {
         <div className="w-full max-w-2xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
-            <BackButton to={previousStepPath('system_owner')} />
+            {/* The step before this one is created once and moves straight on
+                when revisited, so a Back button here only bounced back to this
+                page. Say where those details can be changed instead. */}
+            <p className="text-theme-text-muted max-w-md text-xs">
+              Organization details are already saved. You can update them from Settings after setup.
+            </p>
             <ResetProgressButton />
           </div>
 
@@ -553,6 +593,32 @@ const SystemOwnerCreation: React.FC = () => {
                       One special character (!@#$%^&*...)
                     </span>
                   </div>
+                  <div className="flex items-center text-sm">
+                    {passwordStrength.checks.noSequence ? (
+                      <CheckCircle aria-hidden="true" className="text-theme-accent-green mr-2 h-4 w-4" />
+                    ) : (
+                      <XCircle className="text-theme-text-muted mr-2 h-4 w-4" />
+                    )}
+                    <span
+                      className={
+                        passwordStrength.checks.noSequence ? 'text-theme-accent-green' : 'text-theme-text-muted'
+                      }
+                    >
+                      No runs like 123 or abc
+                    </span>
+                  </div>
+                  <div className="flex items-center text-sm">
+                    {passwordStrength.checks.noRepeat ? (
+                      <CheckCircle aria-hidden="true" className="text-theme-accent-green mr-2 h-4 w-4" />
+                    ) : (
+                      <XCircle className="text-theme-text-muted mr-2 h-4 w-4" />
+                    )}
+                    <span
+                      className={passwordStrength.checks.noRepeat ? 'text-theme-accent-green' : 'text-theme-text-muted'}
+                    >
+                      No character three times in a row (aaa)
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -633,28 +699,11 @@ const SystemOwnerCreation: React.FC = () => {
 
               {/* Help Text */}
               <p className="text-theme-text-muted mt-4 text-center text-sm">
-                You'll be logged in automatically and continue with IT team setup
+                You'll be logged in automatically and continue with {nextStepName('system_owner')}
               </p>
 
-              {/* Progress Indicator */}
-              <div className="border-theme-nav-border mt-6 border-t pt-6">
-                <div className="text-theme-text-muted mb-2 flex items-center justify-between text-sm">
-                  <span>Setup Progress</span>
-                  <span>Step 7 of 10</span>
-                </div>
-                <div className="bg-theme-surface h-2 w-full rounded-full">
-                  <div
-                    className="h-2 rounded-full bg-linear-to-r from-red-600 to-orange-600 transition-all duration-500"
-                    style={{ width: '70%' }}
-                    role="progressbar"
-                    aria-valuenow={70}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label="Setup progress: 70 percent complete"
-                  />
-                </div>
-                <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
-              </div>
+              <ProgressIndicator step="system_owner" className="border-theme-nav-border mt-6 border-t pt-6" />
+              <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
             </div>
           </form>
         </div>

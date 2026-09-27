@@ -70,9 +70,14 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
           mobile presentation pass, which otherwise reads the 1454px step row as
           content spilling off the screen. The steps are plain divs rather than
           controls, so this one does need `tabIndex` — there is nothing inside
-          it a keyboard could otherwise reach to scroll it. */}
+          it a keyboard could otherwise reach to scroll it.
+          `relative` is load-bearing: each optional step carries an `sr-only`
+          label, which is absolutely positioned. Without a positioned ancestor
+          inside the scroller those labels escaped its clipping and widened the
+          whole page by ~1,450px on a phone, so every onboarding step scrolled
+          sideways. */}
       <div
-        className="scrollbar-thumb-theme-surface-hover scrollbar-track-theme-surface -mx-2 scrollbar-thin overflow-x-auto px-2 pb-2"
+        className="scrollbar-thumb-theme-surface-hover scrollbar-track-theme-surface relative -mx-2 scrollbar-thin overflow-x-auto px-2 pb-2"
         data-mobile-scroll-region
         aria-label="Setup steps"
         tabIndex={0}

@@ -6,7 +6,6 @@ import { apiClient } from '../services/api-client';
 import {
   OnboardingHeader,
   ProgressIndicator,
-  BackButton,
   ResetProgressButton,
   ErrorAlert,
   AutoSaveNotification,
@@ -15,7 +14,7 @@ import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { getUserFacingModules, type ModuleDefinition } from '../config';
 import { FeatureStatus } from '../../../constants/enums';
-import { nextStepPath, previousStepPath } from '../config/steps';
+import { nextStepName, nextStepPath } from '../config/steps';
 
 const ModuleOverview: React.FC = () => {
   const navigate = useNavigate();
@@ -147,7 +146,13 @@ const ModuleOverview: React.FC = () => {
         <div className="mx-auto w-full max-w-6xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
-            <BackButton to={previousStepPath('modules')} />
+            {/* The step before this one is created once and moves straight on
+                when revisited, so a Back button here only bounced back to this
+                page. Say where those details can be changed instead. */}
+            <p className="text-theme-text-muted max-w-md text-xs">
+              Your organization and administrator account are already saved. You can update them from Settings after
+              setup.
+            </p>
             <ResetProgressButton />
           </div>
 
@@ -183,7 +188,7 @@ const ModuleOverview: React.FC = () => {
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
             >
-              {isSaving ? 'Finalizing Setup...' : 'Complete Setup & Go to Dashboard'}
+              {isSaving ? 'Saving...' : `Continue to ${nextStepName('modules')}`}
             </button>
           </div>
 
