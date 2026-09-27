@@ -4278,7 +4278,7 @@ docker-compose restart backend
 
 **Cause (before fix):** The admin hours UI did not provide an edit option for pending entries.
 
-**Status (Fixed 2026-03-01):** Members can now click the edit button on pending entries to update duration, category, and notes before approval.
+**Status (Fixed 2026-03-01, corrected 2026-09-27):** The 2026-03-01 fix added editing to the officer's **Pending Review** tab only; members still had no edit control on their own entries. Members can now edit or withdraw their own entries from **My Hours** while the entry is pending or rejected. Saving a rejected entry resubmits it for review, which is how an officer sends hours back for correction: reject with a reason saying what to fix. Approved entries can only be changed by an officer. Hours credited from event attendance can be withdrawn but not edited; correct the event attendance instead.
 
 ### Problem: Active session shows wrong user's session
 

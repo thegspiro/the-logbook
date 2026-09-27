@@ -143,6 +143,17 @@ export const adminHoursEntryService = {
     return response.data;
   },
 
+  // The member's own entry: pending, or rejected (saving resubmits it).
+  async editMine(entryId: string, data: AdminHoursEntryEdit): Promise<AdminHoursEntry> {
+    const response = await api.patch<AdminHoursEntry>(`/admin-hours/entries/my/${entryId}`, data);
+    return response.data;
+  },
+
+  async withdrawMine(entryId: string): Promise<AdminHoursEntry> {
+    const response = await api.post<AdminHoursEntry>(`/admin-hours/entries/my/${entryId}/withdraw`);
+    return response.data;
+  },
+
   async review(entryId: string, action: 'approve' | 'reject', rejectionReason?: string): Promise<AdminHoursEntry> {
     const response = await api.post<AdminHoursEntry>(`/admin-hours/entries/${entryId}/review`, {
       action,

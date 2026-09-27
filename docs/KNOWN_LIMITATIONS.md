@@ -702,6 +702,33 @@ reader has to know to ask about.
 | **Call-volume report carries no preliminary marker**                    | Open (LOW)                                                  | Unfinalized shifts are labelled preliminary where they surface elsewhere; the call-volume report is not. A docstring claiming otherwise was corrected on 2026-08-19 rather than the marker being added, so the gap is recorded rather than hidden. A period read before the last shift of it is closed out under-reports, with nothing on screen saying so. (SCHED-11)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **`dispatch` / `derived` call sources have no writer**                  | Accepted (forward compatibility)                            | `CallSource.DISPATCH` / `.DERIVED` and the `uq_org_call_external_ref (organization_id, external_ref)` constraint exist so a CAD integration can be added without a migration — the constraint is what would make a re-sync idempotent. Nothing writes either value today; every row is `manual`. (SCHED-12)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
+### Shifts With Other Departments — Counted on Entry (2026-09-27)
+
+Members log shifts they worked on another jurisdiction's apparatus from **My
+Hours** (`/api/v1/scheduling/external-hours`). Three choices were made on
+purpose, and a department should know them:
+
+- **An entry counts as soon as it is saved.** There is no approval queue. An
+  officer with `scheduling.manage` reviews after the fact from **Scheduling
+  Reports → Member Hours** and rejects an entry that should not count, which
+  removes it from every total. The member sees the reason. A department that
+  needs sign-off _before_ credit does not have that option today.
+- **It is reported beside the department's own hours, never inside them.**
+  `hours` / `worked_hours` stay attendance on this department's shifts, and
+  outside time appears as `external_*`. It **is** added into the shift and
+  hours figures of `GET /scheduling/reports/compliance`, since that report
+  measures a member against a requirement.
+- **Training-side compliance does not see it.** A `SHIFTS` or `HOURS`
+  requirement evaluated by the training module counts `TrainingRecord` rows,
+  not scheduling data (see "Shifts completed has three sources of truth"
+  above), so outside shifts do not move it. They also do not feed training
+  program progress, which reads `ShiftCompletionReport`.
+- **A member can't log a shift on a unit that isn't listed.** The apparatus
+  comes from a list scheduling officers keep (Scheduling → Settings → Outside
+  Apparatus), so that the apparatus summary counts one unit once. A member
+  whose unit is missing has to ask an officer to add it before logging the
+  shift; nothing queues the claim in the meantime.
+
 ## Call Volume Reporting — Five Gaps Between Payload and Screen (2026-08-19)
 
 Found by a Codex review of PR #1573, verified against the source, and confirmed

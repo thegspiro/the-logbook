@@ -13,10 +13,11 @@
  * the hub cards and the nav cannot drift into three spellings.
  */
 
-import { Truck, Bell, LayoutTemplate, Shield, FileBarChart, Users } from 'lucide-react';
+import { Truck, Bell, LayoutTemplate, Shield, FileBarChart, Users, Handshake } from 'lucide-react';
 import type { SettingsSection } from '../../../components/settings/SettingsLayout';
 
-export type SettingsTab = 'general' | 'apparatus' | 'platoons' | 'notifications' | 'eligibility' | 'shift-reports';
+export type SettingsTab =
+  'general' | 'apparatus' | 'platoons' | 'notifications' | 'eligibility' | 'shift-reports' | 'outside-apparatus';
 
 export interface SchedulingSettingsSection extends SettingsSection<SettingsTab> {
   /** The route this section is reached at. */
@@ -65,6 +66,13 @@ export const SCHEDULING_SETTINGS_SECTIONS: SchedulingSettingsSection[] = [
     icon: FileBarChart,
     description: 'End-of-shift reporting options',
     path: '/scheduling/admin/settings/shift-reports',
+  },
+  {
+    key: 'outside-apparatus',
+    label: 'Outside Apparatus',
+    icon: Handshake,
+    description: 'Other departments members ride with',
+    path: '/scheduling/admin/settings/outside-apparatus',
   },
 ];
 

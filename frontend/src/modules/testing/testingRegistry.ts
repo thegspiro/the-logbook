@@ -493,6 +493,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'scheduling.manage',
         module: 'scheduling',
       },
+      {
+        path: '/scheduling/admin/settings/outside-apparatus',
+        label: 'Scheduling settings — Outside apparatus',
+        permission: 'scheduling.manage',
+        module: 'scheduling',
+      },
     ],
   },
   {

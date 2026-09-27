@@ -279,6 +279,12 @@ export interface MemberHoursMonth {
   calls: number;
   pending_shifts: number;
   pending_hours: number;
+  /**
+   * Shifts the member logged on another jurisdiction's apparatus. Counted
+   * toward their hours, but reported beside `hours` rather than inside it.
+   */
+  external_shifts?: number;
+  external_hours?: number;
 }
 
 export interface MemberHoursTotals {
@@ -287,6 +293,8 @@ export interface MemberHoursTotals {
   calls: number;
   pending_shifts: number;
   pending_hours: number;
+  external_shifts?: number;
+  external_hours?: number;
 }
 
 export interface MemberHoursHistory {
@@ -459,8 +467,12 @@ export interface MemberComplianceRecord {
   completed_value: number;
   percentage: number;
   compliant: boolean;
+  /** Includes any external shifts below. */
   shift_count: number;
   total_hours: number;
+  /** The part of the totals logged on another jurisdiction's apparatus. */
+  external_shift_count?: number;
+  external_hours?: number;
 }
 
 export interface RequirementComplianceSummary {
@@ -478,11 +490,145 @@ export interface RequirementComplianceSummary {
   compliance_rate: number;
 }
 
+export type ExternalShiftStatus = 'counted' | 'rejected';
+
+/** A shift a member worked outside the department's own schedule. */
+export interface ExternalShiftEntry {
+  id: string;
+  user_id: string;
+  member_name: string | null;
+  /** YYYY-MM-DD, a calendar date rather than an instant. */
+  shift_date: string;
+  hours: number;
+  /** Null once the unit has been deleted from the list. */
+  external_apparatus_id: string | null;
+  /** Names as they were when the shift was logged. */
+  agency_name: string;
+  apparatus_name: string;
+  role: string | null;
+  notes: string | null;
+  status: ExternalShiftStatus;
+  reviewed_by: string | null;
+  reviewer_name: string | null;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExternalShiftList {
+  items: ExternalShiftEntry[];
+  total: number;
+}
+
+export interface ExternalShiftCreate {
+  shift_date: string;
+  hours: number;
+  /** A unit from the officer-maintained list; the agency is the unit's. */
+  external_apparatus_id: string;
+  role?: string | undefined;
+  notes?: string | undefined;
+}
+
+/** Omit a key to leave it alone; `null` clears an optional field. */
+export interface ExternalShiftUpdate {
+  shift_date?: string;
+  hours?: number;
+  external_apparatus_id?: string;
+  role?: string | null;
+  notes?: string | null;
+}
+
+/** One unit on the officer-maintained list of outside apparatus. */
+export interface ExternalApparatus {
+  id: string;
+  agency_id: string;
+  name: string;
+  apparatus_type: string | null;
+  is_active: boolean;
+}
+
+export interface ExternalAgency {
+  id: string;
+  name: string;
+  is_active: boolean;
+  apparatus: ExternalApparatus[];
+}
+
+export interface ExternalAgencyList {
+  agencies: ExternalAgency[];
+}
+
+export interface ExternalAgencyCreate {
+  name: string;
+}
+
+export interface ExternalAgencyUpdate {
+  name?: string;
+  is_active?: boolean;
+}
+
+export interface ExternalApparatusCreate {
+  name: string;
+  apparatus_type?: string | undefined;
+}
+
+export interface ExternalApparatusUpdate {
+  name?: string;
+  apparatus_type?: string | null;
+  is_active?: boolean;
+}
+
+/** Counted outside shifts on one unit over a report period. */
+export interface ExternalApparatusSummaryRow {
+  /** Null when the unit has since been deleted from the list. */
+  external_apparatus_id: string | null;
+  agency_name: string;
+  apparatus_name: string;
+  apparatus_type: string | null;
+  shifts: number;
+  minutes: number;
+  hours: number;
+  /** Distinct members who logged a shift on it. */
+  members: number;
+}
+
+export interface ExternalApparatusSummary {
+  rows: ExternalApparatusSummaryRow[];
+  period_start: string;
+  period_end: string;
+}
+
+export interface ExternalShiftFilters {
+  user_id?: string;
+  start_date?: string;
+  end_date?: string;
+  status?: ExternalShiftStatus;
+  limit?: number;
+  offset?: number;
+}
+
 export interface ShiftComplianceResponse {
   requirements: RequirementComplianceSummary[];
   reference_date: string;
   total_requirements: number;
 }
+
+// The outside-shift screens verify their lists rather than defaulting them to
+// empty: "you haven't logged any" or "no departments yet" over a body that was
+// not a list would state something false, where the callers' error state says
+// what actually happened.
+const externalShiftList = (data: ExternalShiftList, what: string): ExternalShiftList => ({
+  items: expectArray(data?.items, what),
+  total: typeof data?.total === 'number' ? data.total : 0,
+});
+
+const externalAgencyList = (data: ExternalAgencyList, what: string): ExternalAgencyList => ({
+  agencies: expectArray(data?.agencies, what).map((agency) => ({
+    ...agency,
+    apparatus: expectArray(agency.apparatus, `${what} apparatus`),
+  })),
+});
 
 // SEC: Use the shared axios factory to ensure consistent auth (CSRF, cookie
 // credentials, 401 refresh) across all modules.  Do not create manual axios
@@ -643,6 +789,78 @@ export const schedulingService = {
   async getSummary(): Promise<SchedulingSummary> {
     const response = await api.get<SchedulingSummary>('/scheduling/summary');
     return response.data;
+  },
+  /** Log a shift the signed-in member worked for another department. */
+  async logExternalShift(data: ExternalShiftCreate): Promise<ExternalShiftEntry> {
+    const response = await api.post<ExternalShiftEntry>('/scheduling/external-hours', data);
+    return response.data;
+  },
+  async getMyExternalShifts(params?: { limit?: number; offset?: number }): Promise<ExternalShiftList> {
+    const response = await api.get<ExternalShiftList>('/scheduling/external-hours/my', { params });
+    return externalShiftList(response.data, 'outside shifts');
+  },
+  async updateExternalShift(id: string, data: ExternalShiftUpdate): Promise<ExternalShiftEntry> {
+    const response = await api.patch<ExternalShiftEntry>(`/scheduling/external-hours/${id}`, data);
+    return response.data;
+  },
+  async deleteExternalShift(id: string): Promise<void> {
+    await api.delete(`/scheduling/external-hours/${id}`);
+  },
+  /** Every member's entries. Needs scheduling.manage or scheduling.report. */
+  async getExternalShifts(params?: ExternalShiftFilters): Promise<ExternalShiftList> {
+    const response = await api.get<ExternalShiftList>('/scheduling/external-hours', { params });
+    return externalShiftList(response.data, 'outside shifts');
+  },
+  async rejectExternalShift(id: string, reason: string): Promise<ExternalShiftEntry> {
+    const response = await api.post<ExternalShiftEntry>(`/scheduling/external-hours/${id}/reject`, { reason });
+    return response.data;
+  },
+  async restoreExternalShift(id: string): Promise<ExternalShiftEntry> {
+    const response = await api.post<ExternalShiftEntry>(`/scheduling/external-hours/${id}/restore`);
+    return response.data;
+  },
+  /** Active agencies and units, for the member's picker. */
+  async getExternalApparatusOptions(): Promise<ExternalAgencyList> {
+    const response = await api.get<ExternalAgencyList>('/scheduling/external-hours/apparatus-options');
+    return externalAgencyList(response.data, 'apparatus options');
+  },
+  /** The whole list, inactive entries included. Needs scheduling.manage. */
+  async getExternalAgencies(): Promise<ExternalAgencyList> {
+    const response = await api.get<ExternalAgencyList>('/scheduling/external-hours/agencies');
+    return externalAgencyList(response.data, 'outside apparatus');
+  },
+  async createExternalAgency(data: ExternalAgencyCreate): Promise<ExternalAgency> {
+    const response = await api.post<ExternalAgency>('/scheduling/external-hours/agencies', data);
+    return response.data;
+  },
+  async updateExternalAgency(id: string, data: ExternalAgencyUpdate): Promise<ExternalAgency> {
+    const response = await api.patch<ExternalAgency>(`/scheduling/external-hours/agencies/${id}`, data);
+    return response.data;
+  },
+  async deleteExternalAgency(id: string): Promise<void> {
+    await api.delete(`/scheduling/external-hours/agencies/${id}`);
+  },
+  async createExternalApparatus(agencyId: string, data: ExternalApparatusCreate): Promise<ExternalApparatus> {
+    const response = await api.post<ExternalApparatus>(
+      `/scheduling/external-hours/agencies/${agencyId}/apparatus`,
+      data
+    );
+    return response.data;
+  },
+  async updateExternalApparatus(id: string, data: ExternalApparatusUpdate): Promise<ExternalApparatus> {
+    const response = await api.patch<ExternalApparatus>(`/scheduling/external-hours/apparatus/${id}`, data);
+    return response.data;
+  },
+  async deleteExternalApparatus(id: string): Promise<void> {
+    await api.delete(`/scheduling/external-hours/apparatus/${id}`);
+  },
+  /** Shifts, hours and members per outside unit. scheduling.manage or .report. */
+  async getExternalApparatusSummary(params: {
+    start_date: string;
+    end_date: string;
+  }): Promise<ExternalApparatusSummary> {
+    const response = await api.get<ExternalApparatusSummary>('/scheduling/external-hours/summary', { params });
+    return { ...response.data, rows: expectArray(response.data?.rows, 'outside apparatus summary') };
   },
   /** The signed-in member's own hours and calls for a year, month by month. */
   async getMyHoursHistory(year?: number): Promise<MemberHoursHistory> {
