@@ -92,9 +92,15 @@ administrator through `POST /users`, then signs in once and replaces its
 password on the forced-change screen — the path a real member takes — so a
 seed that fails is a finding about those screens, not a fixture problem.
 
-`wr.as(role)` resumes a saved session. When one has expired, `wr.login(role)`
-signs in again and saves the new one. Sign-ins are limited to five a minute per
-address, with a half-hour lockout past that, so do not sign in in a loop.
+`wr.as(role)` resumes a saved session, refreshes it if only the access token
+has lapsed, and signs in afresh when the session is gone. It usually is by the
+next run: the server ends a session after 15 idle minutes
+(`HIPAA_SESSION_TIMEOUT_MINUTES`). Sign-ins are limited to five a minute per
+address, so the driver spaces its own sign-ins 13 seconds apart. A test that
+deliberately trips the limit, or locks an account, should clear what it left
+behind — the `rate_limit:auth:login:*` and `suspicious_ip:*` keys in Redis
+db 3, and the account's `failed_login_attempts` / `locked_until` — so the next
+run can sign in (see W02).
 
 ### What a script can use
 

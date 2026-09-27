@@ -6,7 +6,8 @@ The login endpoint returns the same generic "Incorrect username or password"
 for several distinct causes, so a working password can look rejected. This
 script shows the true state and pinpoints the cause:
 
-  * account lockout (5 failed attempts -> 30 min; correct password still 401s)
+  * account lockout (MAX_LOGIN_ATTEMPTS failures, default 5 -> locked for
+    ACCOUNT_LOCKOUT_DURATION_MINUTES, default 15; correct password still 401s)
   * inactive/suspended account status
   * MFA enabled (password alone is not enough)
   * organization scoping: authenticate_user resolves the org with

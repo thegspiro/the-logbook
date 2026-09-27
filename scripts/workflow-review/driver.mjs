@@ -28,6 +28,7 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import {
   ACCOUNTS_FILE,
+  LOGIN_INTERVAL_MS,
   STATE_DIR,
   apiCall,
   authFile,
@@ -106,6 +107,32 @@ function accounts() {
   return readJson(ACCOUNTS_FILE, {});
 }
 
+// Sign-ins from this driver are spaced LOGIN_INTERVAL_MS apart, so a script
+// that switches roles several times cannot trip the per-IP login limit and
+// its half-hour lockout.
+let lastSignInAt = 0;
+async function pacedSignIn(page, account) {
+  const wait = lastSignInAt + LOGIN_INTERVAL_MS - Date.now();
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  lastSignInAt = Date.now();
+  return signIn(page, account.username, account.password);
+}
+
+/**
+ * Whether the saved session still works, refreshing it if only the access
+ * token has lapsed. The server also ends a session after 15 idle minutes
+ * (HIPAA_SESSION_TIMEOUT_MINUTES), so a session saved by an earlier run is
+ * usually dead by the next one.
+ */
+async function sessionAlive(role) {
+  if ((await apiCall(state.context, "GET", "/auth/me")).status === 200)
+    return true;
+  if ((await apiCall(state.context, "POST", "/auth/refresh")).status !== 200)
+    return false;
+  await state.context.storageState({ path: authFile(role) });
+  return true;
+}
+
 const helpers = {
   /** The current page. A getter, so it is never a page an earlier call closed. */
   get page() {
@@ -121,15 +148,27 @@ const helpers = {
   /** A signed-out browser. `viewport` defaults to a laptop; pass a phone size to review mobile. */
   fresh: (viewport) => open(null, viewport),
 
-  /** A browser signed in as a seeded role (see accounts.json). */
-  as: (role, viewport) => open(role, viewport),
+  /**
+   * A browser signed in as a seeded role (see accounts.json): the saved
+   * session when it still works, otherwise a fresh sign-in.
+   */
+  async as(role, viewport) {
+    if (!existsSync(authFile(role))) {
+      await helpers.login(role, viewport);
+      return state.page;
+    }
+    const page = await open(role, viewport);
+    if (await sessionAlive(role)) return page;
+    await helpers.login(role, viewport);
+    return state.page;
+  },
 
   /** Sign in through the login screen and save the session for `as(role)`. */
-  async login(role) {
+  async login(role, viewport) {
     const account = accounts()[role];
     if (!account) throw new Error(`no account "${role}" in accounts.json`);
-    const page = await open(null);
-    const landed = await signIn(page, account.username, account.password);
+    const page = await open(null, viewport);
+    const landed = await pacedSignIn(page, account);
     await state.context.storageState({ path: authFile(role) });
     state.role = role;
     return landed;

@@ -20,7 +20,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | #   | Activity                                                                   | Acts as           | Starts at                             | Status |
 | --- | -------------------------------------------------------------------------- | ----------------- | ------------------------------------- | ------ |
 | W01 | Fresh-install onboarding, every step, including going Back and resuming    | anonymous → admin | `/`, `/onboarding/*`                  | ✅     |
-| W02 | Sign in, sign out, session timeout, a wrong password, lockout messaging    | member            | `/login`                              | ⬜     |
+| W02 | Sign in, sign out, session timeout, a wrong password, lockout messaging    | member            | `/login`                              | ✅     |
 | W03 | Forgot password and reset by link                                          | anonymous         | `/forgot-password`, `/reset-password` | ⬜     |
 | W04 | My account: profile, password change, MFA enrolment, notification settings | member            | `/account`                            | ⬜     |
 | W05 | Positions and permissions: create a position, grant, assign, revoke        | admin → member    | `/settings/roles`                     | ⬜     |
@@ -162,9 +162,29 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   the answer says (seen under W01-11).
 - **W08** — several Add Member fields have no programmatic label.
 - **W79** — tap targets under 44px on the onboarding Modules, Ranks &
-  Positions and Apparatus steps at 390px wide (W01-13).
+  Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
+  screen's "Forgot your password?", Privacy and Terms links (W02-5).
+- **W75** — password sign-in, failure, lockout and sign-out never reach the
+  audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W02 — Sign in, sign out, session timeout, lockout — 2026-09-27
+
+Driven as: `member`, `member2` and a signed-out visitor, at 1280×900 and
+390×844. Held: sign-out revokes the session server-side and per device, no
+account enumeration, the 15-minute idle timeout (warning, sign-out,
+message, and a keypress keeping the session), account lockout, and the
+per-address limit. Fixed: W02-2 (MED — the sign-in screen ignored the
+server's Retry-After, telling a rate-limited member to wait 4 seconds
+instead of 60); W02-1 (LOW — deep links lost their query after sign-in);
+W02-6 (NIT). Flagged: W02-3 (HIGH — password sign-in, failure, lockout
+and sign-out are never audited); W02-4 (MED — a locked account looks like
+a wrong password and no admin screen shows the lock); both mirrored to
+KNOWN_LIMITATIONS. Open: W02-5 (LOW). Harness: `wr.as` now refreshes or
+re-signs a stale session, paced, since the server ends sessions after 15
+idle minutes. Gate: typecheck, lint and the full frontend suite clean.
+Next: W03.
 
 ### W01 — Fresh-install onboarding — 2026-09-27
 

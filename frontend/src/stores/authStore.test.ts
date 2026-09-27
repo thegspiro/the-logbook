@@ -211,6 +211,24 @@ describe('authStore', () => {
       expect(getState().error).toMatch(/wait/i);
     });
 
+    it("waits as long as the server's Retry-After says, not the client backoff", async () => {
+      // W02-2: a 429 with Retry-After: 60 showed "wait 4 seconds".
+      mockLogin.mockRejectedValue({
+        response: { status: 429, headers: { 'retry-after': '60' }, data: { detail: 'Too many requests.' } },
+      });
+      const before = Date.now();
+
+      await expect(
+        act(async () => {
+          await getState().login({ username: 'bad', password: 'wrong' });
+        })
+      ).rejects.toThrow();
+
+      const lockedUntil = getState().lockedUntil ?? 0;
+      expect(lockedUntil - before).toBeGreaterThanOrEqual(59_000);
+      expect(lockedUntil - before).toBeLessThanOrEqual(61_000);
+    });
+
     it('persists lockout state to sessionStorage on failure', async () => {
       mockLogin.mockRejectedValue(new Error('Invalid credentials'));
 

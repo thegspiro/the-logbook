@@ -48,7 +48,24 @@ interface HttpErrorResponse {
     };
     status?: number;
     statusText?: string;
+    headers?: Record<string, unknown>;
   };
+}
+
+/**
+ * A 429's `Retry-After`, in seconds, when the server sent one as a number.
+ *
+ * It arrives as a header, not in the body, so `details` never held it — and
+ * the sign-in screen, which reads `details.retryAfter` to say how long to
+ * wait, fell back to its own few-second backoff while the server was refusing
+ * every attempt for a minute (workflow review W02-2). The HTTP-date form is
+ * not used by this backend and is ignored.
+ */
+function retryAfterSeconds(response: HttpErrorResponse['response']): number | undefined {
+  if (response.status !== 429) return undefined;
+  const raw = response.headers?.['retry-after'];
+  const seconds = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
 }
 
 /**
@@ -135,11 +152,12 @@ export function toAppError(error: unknown): AppError {
     const message = Array.isArray(data?.detail)
       ? detailText || 'Validation failed'
       : detailText || data?.message || response.statusText || 'Request failed';
+    const retryAfter = retryAfterSeconds(response);
     return {
       message,
       code: data?.code,
       status: response.status,
-      details: data?.details,
+      details: retryAfter === undefined ? data?.details : { ...data?.details, retryAfter },
     };
   }
 

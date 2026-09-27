@@ -90,7 +90,9 @@ half-driven.
   showed, or it is labelled as read from code.
 - Prefer flagging to guessing, above all in permissions, money and member
   records.
-- Sign-ins are rate limited (five a minute, then a half-hour lockout). Resume
-  sessions with `wr.as(role)`; call `wr.login(role)` only when one has expired.
+- Sign-ins are rate limited (five a minute per address). Use `wr.as(role)`,
+  which reuses or refreshes a saved session and signs in again, paced, only
+  when it must. Clear any rate-limit key or account lock a run creates on
+  purpose (see the README).
 - Never point the harness at the application or test database, and never
   commit anything from `.workflow-review/`.
