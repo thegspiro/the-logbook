@@ -12,9 +12,22 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
+import pytest
+
 from app.api.v1.endpoints.scheduling import _enum_value, router
 from app.models.training import ShiftPosition, SwapRequestStatus
 from app.services.scheduling_service import SchedulingService
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.scheduling_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+
 
 ORG = uuid4()
 ME = uuid4()

@@ -95,11 +95,20 @@ def local_day_start_utc(day: date, tz: ZoneInfo) -> datetime:
     return datetime.combine(day, time.min, tz).astimezone(timezone.utc)
 
 
+def to_local(value: datetime, tz: ZoneInfo) -> datetime:
+    """A stored UTC timestamp as wall-clock time in ``tz``.
+
+    MySQL hands some timestamps back naive, so a naive value is read as UTC
+    rather than as local time.
+    """
+    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return aware.astimezone(tz)
+
+
 def local_date(value: datetime, tz: ZoneInfo) -> date:
     """The department's calendar date of a stored UTC timestamp.
 
     ``value.date()`` on a UTC timestamp is the UTC day, which is already
     tomorrow for an evening event; a naive value is read as UTC.
     """
-    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-    return aware.astimezone(tz).date()
+    return to_local(value, tz).date()

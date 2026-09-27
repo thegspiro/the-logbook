@@ -51,6 +51,7 @@ from app.services.shift_eligibility_service import (
     ShiftEligibilityService,
 )
 from app.services.training_program_service import TrainingProgramService
+from app.utils.org_timezone import resolve_org_today
 
 
 class ShiftCompletionService:
@@ -1108,6 +1109,8 @@ class ShiftCompletionService:
         increment progress for shift-based and call-based requirements.
         """
         requirements_progressed = []
+        # Resolved on first use: only a call-type breakdown records a date.
+        history_date: Optional[date] = None
 
         # Find active enrollments for this trainee
         enrollment_query = select(ProgramEnrollment).where(
@@ -1204,10 +1207,14 @@ class ShiftCompletionService:
                     # Track call type breakdown in progress_notes
                     notes = copy.deepcopy(progress.progress_notes or {})
                     if call_type_detail:
+                        if history_date is None:
+                            history_date = await resolve_org_today(
+                                self.db, organization_id
+                            )
                         call_type_history = notes.get("call_type_history", [])
                         call_type_history.append(
                             {
-                                "date": str(date.today()),
+                                "date": str(history_date),
                                 "types": call_type_detail["matched_types"],
                                 "count": len(call_type_detail["matched_types"]),
                             }

@@ -1,6 +1,6 @@
 """Privacy-preserving aggregates for the main dashboard widgets."""
 
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from decimal import Decimal
 
 from sqlalchemy import case, func, select
@@ -26,6 +26,7 @@ from app.models.grant import (
     GrantOpportunity,
     PaymentStatus,
 )
+from app.utils.org_timezone import resolve_scheduling_timezone, today_in
 
 PERIOD_LABELS = {
     "month": "This month",
@@ -41,9 +42,8 @@ PUBLIC_EVENT_TYPES = [
 ]
 
 
-def period_bounds(period: str, today: date | None = None) -> tuple[datetime, datetime]:
-    """Return an inclusive-start, exclusive-end UTC range for a safe period."""
-    today = today or datetime.now(timezone.utc).date()
+def period_dates(period: str, today: date) -> tuple[date, date]:
+    """Inclusive-start, exclusive-end calendar dates for a safe period."""
     if period == "rolling_30":
         start = today - timedelta(days=29)
     elif period == "year":
@@ -52,8 +52,21 @@ def period_bounds(period: str, today: date | None = None) -> tuple[datetime, dat
         start = date(today.year, ((today.month - 1) // 3) * 3 + 1, 1)
     else:
         start = date(today.year, today.month, 1)
-    return datetime.combine(start, time.min, timezone.utc), datetime.combine(
-        today + timedelta(days=1), time.min, timezone.utc
+    return start, today + timedelta(days=1)
+
+
+def period_bounds(
+    period: str, today: date, tz: tzinfo = timezone.utc
+) -> tuple[datetime, datetime]:
+    """The period as a UTC instant range, cut at midnight in ``tz``.
+
+    ``today`` and ``tz`` are the department's: a month that starts at UTC
+    midnight files the first evening's activity under the previous month.
+    """
+    start, end = period_dates(period, today)
+    return (
+        datetime.combine(start, time.min, tz).astimezone(timezone.utc),
+        datetime.combine(end, time.min, tz).astimezone(timezone.utc),
     )
 
 
@@ -61,8 +74,17 @@ class DashboardWidgetService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _period(
+        self, organization_id: str, period: str
+    ) -> tuple[date, datetime, datetime]:
+        """The department's today and the period's UTC instant bounds."""
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = today_in(tz)
+        start, end = period_bounds(period, today, tz)
+        return today, start, end
+
     async def finance(self, organization_id: str, period: str) -> dict:
-        start, end = period_bounds(period)
+        _, start, end = await self._period(organization_id, period)
         now = datetime.now(timezone.utc)
         paid = await self.db.scalar(
             select(func.coalesce(func.sum(DuesPayment.amount), 0)).where(
@@ -144,14 +166,17 @@ class DashboardWidgetService:
         }
 
     async def fundraising(self, organization_id: str, period: str) -> dict:
-        start, end = period_bounds(period)
-        today = datetime.now(timezone.utc).date()
+        today, start, end = await self._period(organization_id, period)
+        # Calendar-date columns compare against the period's dates, not the
+        # UTC instants: those are the department's midnights, whose UTC
+        # date is not the day they begin.
+        first_day, day_after = period_dates(period, today)
         deadlines = await self.db.scalar(
             select(func.count(GrantOpportunity.id)).where(
                 GrantOpportunity.organization_id == organization_id,
                 GrantOpportunity.is_active.is_(True),
-                GrantOpportunity.deadline_date >= max(today, start.date()),
-                GrantOpportunity.deadline_date < end.date(),
+                GrantOpportunity.deadline_date >= max(today, first_day),
+                GrantOpportunity.deadline_date < day_after,
             )
         )
         stages = dict(
@@ -175,10 +200,10 @@ class DashboardWidgetService:
                 FundraisingCampaign.organization_id == organization_id,
                 FundraisingCampaign.status == CampaignStatus.ACTIVE.value,
                 FundraisingCampaign.active.is_(True),
-                FundraisingCampaign.start_date < end.date(),
+                FundraisingCampaign.start_date < day_after,
                 (
                     FundraisingCampaign.end_date.is_(None)
-                    | (FundraisingCampaign.end_date >= start.date())
+                    | (FundraisingCampaign.end_date >= first_day)
                 ),
             )
         )
@@ -203,7 +228,7 @@ class DashboardWidgetService:
         }
 
     async def community(self, organization_id: str, period: str) -> dict:
-        start, end = period_bounds(period)
+        _, start, end = await self._period(organization_id, period)
         public_ids = select(Event.id).where(
             Event.organization_id == organization_id,
             Event.event_type.in_(PUBLIC_EVENT_TYPES),

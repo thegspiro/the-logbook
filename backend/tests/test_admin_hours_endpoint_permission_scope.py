@@ -21,12 +21,24 @@ the same officer to every other admin_hours.manage-gated route in the file.
 DB mocked — this is pure permission-gate logic, no query to exercise.
 """
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.api.v1.endpoints import admin_hours as admin_hours_endpoint
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.admin_hours.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+
 
 pytestmark = [pytest.mark.unit]
 

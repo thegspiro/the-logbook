@@ -48,6 +48,7 @@ from app.schemas.admin_hours import (
     EventHourMappingUpdate,
 )
 from app.services.admin_hours_service import AdminHoursService
+from app.utils.org_timezone import resolve_org_today
 
 router = APIRouter()
 
@@ -1131,7 +1132,6 @@ async def get_user_hours_compliance(
     Returns progress against admin hours requirements defined in
     compliance profiles. Non-admins can only view their own compliance.
     """
-    from datetime import date
 
     # Non-admins can only see their own compliance. Same fix as get_summary
     # above: route through user_has_permission() rather than a hand-rolled
@@ -1145,7 +1145,11 @@ async def get_user_hours_compliance(
         if not has_perm:
             effective_user_id = str(current_user.id)
 
-    effective_year = year if year else date.today().year
+    effective_year = (
+        year
+        if year
+        else (await resolve_org_today(db, current_user.organization_id)).year
+    )
 
     service = AdminHoursService(db)
     try:

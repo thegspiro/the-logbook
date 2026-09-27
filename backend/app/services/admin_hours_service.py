@@ -27,7 +27,11 @@ from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.hours import hours_from_minutes
 from app.utils.model_updates import apply_updates
-from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.org_timezone import (
+    local_day_start_utc,
+    resolve_scheduling_timezone,
+    today_in,
+)
 
 # A single manual admin-hours entry cannot span more than a day — bounds the
 # absurd-duration self-credit vector on client-supplied times.
@@ -2083,7 +2087,10 @@ class AdminHoursService:
         # the caller gets an explicit error rather than a response that
         # looks complete (annual items present) but silently drops the
         # quarterly ones.
-        today = date.today()
+        # The department's calendar: its year and quarters start at its own
+        # midnight, and "this quarter" is the one it is in now.
+        org_tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = today_in(org_tz)
         if year != today.year and any(
             req.get("frequency", "annual") == "quarterly" for req in requirements
         ):
@@ -2095,8 +2102,8 @@ class AdminHoursService:
             )
 
         # Calculate date range for the year
-        year_start = datetime(year, 1, 1, tzinfo=timezone.utc)
-        year_end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        year_start = local_day_start_utc(date(year, 1, 1), org_tz)
+        year_end = local_day_start_utc(date(year + 1, 1, 1), org_tz)
 
         results = []
         for req in requirements:
@@ -2113,12 +2120,12 @@ class AdminHoursService:
             if frequency == "quarterly":
                 # Guaranteed `year == today.year` by the upfront check above.
                 q_start_month = ((today.month - 1) // 3) * 3 + 1
-                period_start = datetime(year, q_start_month, 1, tzinfo=timezone.utc)
+                period_start = local_day_start_utc(date(year, q_start_month, 1), org_tz)
                 if q_start_month + 3 > 12:
-                    period_end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+                    period_end = year_end
                 else:
-                    period_end = datetime(
-                        year, q_start_month + 3, 1, tzinfo=timezone.utc
+                    period_end = local_day_start_utc(
+                        date(year, q_start_month + 3, 1), org_tz
                     )
             else:
                 period_start = year_start

@@ -11,6 +11,7 @@ validation (ordering, no future, minimum duration, overlap). DB mocked.
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -1578,6 +1579,16 @@ class TestQuarterlyComplianceRequestedYear:
     rejected outright with a `ValueError` (-> `HTTPException(400, ...)` at
     the endpoint), before any per-requirement query runs, rather than
     answering with an incomplete list."""
+
+    @pytest.fixture(autouse=True)
+    def _utc_department(self, monkeypatch):
+        """The service reads the department's zone; answer UTC so the
+        ``date.today()`` years these tests are built from keep meaning what
+        they say, and the up-front rejection costs no extra query."""
+        monkeypatch.setattr(
+            "app.services.admin_hours_service.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("UTC")),
+        )
 
     async def test_quarterly_requirement_for_a_past_year_is_rejected(self):
         past_year = date.today().year - 1

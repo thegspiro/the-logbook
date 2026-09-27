@@ -3138,7 +3138,7 @@ class InventoryService:
         equipment-check swap, so two concurrent issuances cannot both pass the
         stock guard on the same units (pitfall #27).
         """
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         result = await self.db.execute(
             select(InventoryLot)
             .where(
@@ -4174,7 +4174,9 @@ class InventoryService:
         self, organization_id: UUID, days_ahead: int = 30
     ) -> List[InventoryItem]:
         """Get items with maintenance due within specified days"""
-        cutoff_date = date.today() + timedelta(days=days_ahead)
+        cutoff_date = await resolve_org_today(self.db, organization_id) + timedelta(
+            days=days_ahead
+        )
 
         result = await self.db.execute(
             select(InventoryItem)
@@ -4451,7 +4453,9 @@ class InventoryService:
         # way. Reuses `item_filters` (org, active, and exclude_item_types via
         # `_outside_domains`) rather than re-deriving them, so this can't
         # drift from what `total_items` etc. above already counted against.
-        maintenance_cutoff = date.today() + timedelta(days=7)
+        maintenance_cutoff = await resolve_org_today(
+            self.db, organization_id
+        ) + timedelta(days=7)
         maintenance_due_result = await self.db.execute(
             select(func.count(InventoryItem.id)).where(
                 *item_filters,
@@ -4581,7 +4585,7 @@ class InventoryService:
         overdue_checkouts = overdue_result.scalar() or 0
 
         # Maintenance due on user's items
-        cutoff_date = date.today() + timedelta(days=7)
+        cutoff_date = await resolve_org_today(self.db, org_id) + timedelta(days=7)
         maint_result = await self.db.execute(
             select(func.count(InventoryItem.id))
             .where(InventoryItem.id.in_(user_item_ids))
@@ -7470,7 +7474,7 @@ class InventoryService:
         """
         if not item_ids:
             return {}
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         result = await self.db.execute(
             select(
                 InventoryLot.inventory_item_id,
@@ -8539,7 +8543,7 @@ class InventoryService:
             lot_number=data.get("lot_number"),
             expiration_date=data.get("expiration_date"),
             quantity=data["quantity"],
-            received_date=date.today(),
+            received_date=await resolve_org_today(self.db, organization_id),
             storage_location=data["storage_location"],
             unit_cost=data["unit_cost"],
             created_by=current_user_id,
@@ -10161,7 +10165,7 @@ class InventoryService:
         if not (related_category_id and user_ids):
             return holdings
 
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
 
         def _record(uid, name, condition, ret_date, retired_by_age):
             cond_val = condition.value if hasattr(condition, "value") else condition
