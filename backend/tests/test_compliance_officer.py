@@ -750,17 +750,22 @@ class TestRecordCompletenessEvaluate:
         # Other 4 fields are 100% => avg = (100+100+100+100+90+90)/6 = 96.7
         assert result["nfpa_1401_compliant"] is True
 
-    async def test_default_date_range(self):
+    async def test_default_date_range(self, monkeypatch):
+        """The default range is the department's year to date."""
         mock_db = AsyncMock()
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = []
         mock_db.execute.return_value = mock_result
+        today = date(2026, 10, 6)
+        monkeypatch.setattr(
+            "app.services.compliance_officer_service.resolve_org_today",
+            AsyncMock(return_value=today),
+        )
 
         service = RecordCompletenessService(mock_db)
         result = await service.evaluate_record_completeness("org-1")
 
-        today = date.today()
-        assert result["period_start"] == date(today.year, 1, 1).isoformat()
+        assert result["period_start"] == "2026-01-01"
         assert result["period_end"] == today.isoformat()
 
     async def test_field_names_in_result(self):

@@ -26,7 +26,9 @@ def _org():
     # optional org attributes and a mock answers every one of them with a
     # MagicMock, which blows up inside the HTML builder rather than in the
     # code under test.
-    return Organization(id="org-1", name="Test FD")
+    # UTC, so the department's "today" is the date.today() YESTERDAY and SOON
+    # are measured from, at any hour the suite runs.
+    return Organization(id="org-1", name="Test FD", timezone="UTC")
 
 
 def _user_with(permissions, user_id="u-1", email="supply@example.org"):
