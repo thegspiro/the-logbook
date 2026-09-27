@@ -44,4 +44,17 @@ describe('next-step button labels', () => {
     // Deduped: a name can match both the step list and the legacy wording.
     expect([...new Set(offenders)], 'use `Continue to ${nextStepName(<key>)}` instead').toEqual([]);
   });
+
+  it('claim to finish setup only where setup finishes', () => {
+    // The Modules step read "Complete Setup & Go to Dashboard" after the
+    // reorder moved it from last to third: the button saved the modules and
+    // went on to Ranks & Positions, with eight steps still ahead. No step
+    // page finishes setup — the completion screen does.
+    const offenders = pageSources()
+      .filter(({ file }) => file !== 'SetupComplete.tsx')
+      .filter(({ text }) => /Complete Setup|Go to Dashboard|Finalizing Setup/.test(text))
+      .map(({ file }) => file);
+
+    expect(offenders).toEqual([]);
+  });
 });

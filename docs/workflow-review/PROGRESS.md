@@ -19,7 +19,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 
 | #   | Activity                                                                   | Acts as           | Starts at                             | Status |
 | --- | -------------------------------------------------------------------------- | ----------------- | ------------------------------------- | ------ |
-| W01 | Fresh-install onboarding, every step, including going Back and resuming    | anonymous → admin | `/`, `/onboarding/*`                  | ⬜     |
+| W01 | Fresh-install onboarding, every step, including going Back and resuming    | anonymous → admin | `/`, `/onboarding/*`                  | ✅     |
 | W02 | Sign in, sign out, session timeout, a wrong password, lockout messaging    | member            | `/login`                              | ⬜     |
 | W03 | Forgot password and reset by link                                          | anonymous         | `/forgot-password`, `/reset-password` | ⬜     |
 | W04 | My account: profile, password change, MFA enrolment, notification settings | member            | `/account`                            | ⬜     |
@@ -151,21 +151,38 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **W01** — the modules step's button reads "Complete Setup & Go to Dashboard"
-  but leads to Ranks & Positions, with four steps still to go.
-- **W01** — the system-owner step reports a step count that disagrees with the
-  progress panel (`AdminUserCreation.tsx`, "Step 7 of 10").
-- **W01** — an email step that was skipped is summarised as "Other" on the
-  completion page (`SetupComplete.tsx`).
 - **W02 / W04** — after a password change the member is returned to the
   sign-in screen with no message saying why.
 - **W04** — the password rules are shown only after typing starts.
 - **W07** — right after onboarding, the administrator's dashboard fires 403s
   on `/integrations/connected` (four times) and `/scheduling/settings` for
   modules that are off.
+- **W03** — `POST /auth/forgot-password` can answer "reset your password
+  through your SSO provider", but the screen shows "Check Your Email" whatever
+  the answer says (seen under W01-11).
 - **W08** — several Add Member fields have no programmatic label.
+- **W79** — tap targets under 44px on the onboarding Modules, Ranks &
+  Positions and Apparatus steps at 390px wide (W01-13).
 
 ## Log
+
+### W01 — Fresh-install onboarding — 2026-09-27
+
+Driven as: anonymous visitor → system owner, at 1280×900 and 390×844, across
+three fresh installs. Held: required-field summaries, one organization per
+double-click, the server refusing a second owner, station rows kept and not
+duplicated, one stored entry per apparatus seat, and a Reset that asks first
+and deletes what it says. Fixed: W01-10 (HIGH — Reset left cookies for the
+deleted owner and the page retried `/onboarding/start` about 75 times a
+second); W01-2, W01-5, W01-6, W01-8 (MED — password rules missing from the
+checklist, a dead end on Back from Modules, apparatus seats unique, ~1,450px
+sideways scroll on phones); W01-1, W01-3, W01-4, W01-7, W01-9 (LOW). Flagged:
+W01-11 (HIGH — Authentik offered with no sign-in behind it; choosing it turns
+off password reset), mirrored to KNOWN_LIMITATIONS. Open: W01-12, 13, 15, 16
+(LOW), W01-14 (NIT). Harness: the seed now waits for each step's heading
+before pressing anything. Gate: typecheck, lint, flake8, black and the
+touched suites clean. The database was reset to drive onboarding and
+re-seeded at the end. Next: W02.
 
 <!-- One entry per run, newest first:
 ### W<nn> — <activity> — <YYYY-MM-DD>

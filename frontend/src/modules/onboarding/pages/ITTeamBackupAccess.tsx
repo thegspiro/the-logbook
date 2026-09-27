@@ -26,9 +26,8 @@ interface ITTeamMember {
   /**
    * Operational rank, optional.
    *
-   * The rank ladder is edited on the next step, so this offers whatever the
-   * department has at this point — the agency defaults, unless it has already
-   * been here and gone back. A rank picked here and then removed from the
+   * The rank ladder is edited on Ranks & Positions, which comes before this
+   * step, so this offers the ladder as the department left it there. A rank picked here and then removed from the
    * ladder is dropped at completion rather than failing setup: an optional
    * field must not be able to block the final Continue.
    */
@@ -335,10 +334,14 @@ const ITTeamBackupAccess: React.FC = () => {
                   <div className="grid gap-4 md:grid-cols-2">
                     {/* Name */}
                     <div>
-                      <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                      <label
+                        htmlFor={`it-contact-${member.id}-name`}
+                        className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                      >
                         Full Name {index === 0 && <span className="text-theme-accent-red">*</span>}
                       </label>
                       <input
+                        id={`it-contact-${member.id}-name`}
                         type="text"
                         value={member.name}
                         onChange={(e) => updateITMember(member.id, 'name', e.target.value)}
@@ -358,8 +361,14 @@ const ITTeamBackupAccess: React.FC = () => {
 
                     {/* Role */}
                     <div>
-                      <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Role/Title</label>
+                      <label
+                        htmlFor={`it-contact-${member.id}-role`}
+                        className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                      >
+                        Role/Title
+                      </label>
                       <input
+                        id={`it-contact-${member.id}-role`}
                         type="text"
                         value={member.role}
                         onChange={(e) => updateITMember(member.id, 'role', e.target.value)}
@@ -385,8 +394,8 @@ const ITTeamBackupAccess: React.FC = () => {
                             The rank list could not be loaded.
                           </p>
                           <p className="text-theme-text-muted mt-1 text-sm">
-                            Your ranks are not shown, not missing. Leave this and set ranks on the next step, or try
-                            again.
+                            Your ranks are not shown, not missing. Leave this and set it after setup from Members →
+                            Settings → Operational Ranks, or try again.
                           </p>
                           <button
                             type="button"
@@ -415,7 +424,7 @@ const ITTeamBackupAccess: React.FC = () => {
                             ))}
                           </select>
                           <p className="text-theme-text-muted mt-1 text-xs">
-                            Optional. You can edit the ladder itself on the next step.
+                            Optional. The ranks themselves are edited under Members → Settings → Operational Ranks.
                           </p>
                         </>
                       )}
@@ -423,10 +432,14 @@ const ITTeamBackupAccess: React.FC = () => {
 
                     {/* Email */}
                     <div>
-                      <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                      <label
+                        htmlFor={`it-contact-${member.id}-email`}
+                        className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                      >
                         Email {index === 0 && <span className="text-theme-accent-red">*</span>}
                       </label>
                       <input
+                        id={`it-contact-${member.id}-email`}
                         type="email"
                         value={member.email}
                         onChange={(e) => updateITMember(member.id, 'email', e.target.value)}
@@ -446,10 +459,14 @@ const ITTeamBackupAccess: React.FC = () => {
 
                     {/* Phone */}
                     <div>
-                      <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                      <label
+                        htmlFor={`it-contact-${member.id}-phone`}
+                        className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                      >
                         Phone {index === 0 && <span className="text-theme-accent-red">*</span>}
                       </label>
                       <input
+                        id={`it-contact-${member.id}-phone`}
                         type="tel"
                         value={member.phone}
                         onChange={(e) => updateITMember(member.id, 'phone', e.target.value)}
@@ -496,7 +513,7 @@ const ITTeamBackupAccess: React.FC = () => {
               <div className="space-y-4">
                 {/* Backup Recovery Email */}
                 <div>
-                  <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                  <label htmlFor="backup-email" className="text-theme-text-secondary mb-2 block text-sm font-medium">
                     Backup Recovery Email <span className="text-theme-accent-red">*</span>
                   </label>
                   <div className="relative">
@@ -505,6 +522,7 @@ const ITTeamBackupAccess: React.FC = () => {
                       className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2"
                     />
                     <input
+                      id="backup-email"
                       type="email"
                       value={backupEmail}
                       onChange={(e) => setBackupEmail(e.target.value)}
@@ -520,7 +538,7 @@ const ITTeamBackupAccess: React.FC = () => {
 
                 {/* Backup Phone */}
                 <div>
-                  <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                  <label htmlFor="backup-phone" className="text-theme-text-secondary mb-2 block text-sm font-medium">
                     Backup Phone Number <span className="text-theme-accent-red">*</span>
                   </label>
                   <div className="relative">
@@ -529,6 +547,7 @@ const ITTeamBackupAccess: React.FC = () => {
                       className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2"
                     />
                     <input
+                      id="backup-phone"
                       type="tel"
                       value={backupPhone}
                       onChange={(e) => setBackupPhone(e.target.value)}
@@ -542,7 +561,10 @@ const ITTeamBackupAccess: React.FC = () => {
 
                 {/* Secondary Admin Email (Optional) */}
                 <div>
-                  <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                  <label
+                    htmlFor="secondary-admin-email"
+                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                  >
                     Secondary Admin Email <span className="text-theme-text-muted">(Optional)</span>
                   </label>
                   <div className="relative">
@@ -551,6 +573,7 @@ const ITTeamBackupAccess: React.FC = () => {
                       className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2"
                     />
                     <input
+                      id="secondary-admin-email"
                       type="email"
                       value={secondaryAdminEmail}
                       onChange={(e) => setSecondaryAdminEmail(e.target.value)}

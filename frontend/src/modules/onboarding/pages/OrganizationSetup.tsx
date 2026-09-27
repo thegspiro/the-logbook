@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Building2,
@@ -234,9 +234,14 @@ const InputField: React.FC<{
       className={`form-input px-3 focus:border-transparent ${error ? 'border-theme-accent-red' : 'border-theme-surface-border'}`}
       aria-required={required}
       aria-invalid={!!error}
+      aria-describedby={error ? `${id}-error` : undefined}
     />
     {helpText && <p className="text-theme-text-muted mt-1 text-xs">{helpText}</p>}
-    {error && <p className="text-theme-accent-red mt-1 text-xs">{error}</p>}
+    {error && (
+      <p id={`${id}-error`} className="text-theme-accent-red mt-1 text-xs">
+        {error}
+      </p>
+    )}
   </div>
 );
 
@@ -262,6 +267,7 @@ const SelectField: React.FC<{
       className={`form-input px-3 focus:border-transparent ${error ? 'border-theme-accent-red' : 'border-theme-surface-border'}`}
       aria-required={required}
       aria-invalid={!!error}
+      aria-describedby={error ? `${id}-error` : undefined}
     >
       {options.map((opt) => (
         <option key={opt.value} value={opt.value}>
@@ -270,7 +276,11 @@ const SelectField: React.FC<{
       ))}
     </select>
     {helpText && <p className="text-theme-text-muted mt-1 text-xs">{helpText}</p>}
-    {error && <p className="text-theme-accent-red mt-1 text-xs">{error}</p>}
+    {error && (
+      <p id={`${id}-error`} className="text-theme-accent-red mt-1 text-xs">
+        {error}
+      </p>
+    )}
   </div>
 );
 
@@ -400,15 +410,25 @@ const OrganizationSetup: React.FC = () => {
   const { error, canRetry, clearError } = useApiRequest();
   const [isSaving, setIsSaving] = useState(false);
 
-  // Initialize session and restore any saved data
-  useEffect(() => {
-    if (!hasSession && !sessionLoading) {
-      initializeSession().catch((err) => {
-        console.error('Failed to initialize session:', err);
-        toast.error('Failed to start onboarding session. Please refresh the page.');
-      });
+  // Start a session once on arrival. A failure ends the attempt rather than
+  // retrying: `sessionLoading` flips back to false when one fails, and keying a
+  // retry on that re-ran this effect in a tight loop — about 75 requests a
+  // second, straight into the endpoint's rate limit, after an onboarding reset
+  // left the browser holding credentials the server refused. Continue retries
+  // on request instead (see handleContinue).
+  const sessionAttempted = useRef(false);
+  const startSession = useCallback(async () => {
+    const started = await initializeSession();
+    if (!started) {
+      toast.error('Could not start the setup session. Press Continue to try again, or refresh the page.');
     }
-  }, [hasSession, sessionLoading, initializeSession]);
+    return started;
+  }, [initializeSession]);
+  useEffect(() => {
+    if (hasSession || sessionLoading || sessionAttempted.current) return;
+    sessionAttempted.current = true;
+    void startSession();
+  }, [hasSession, sessionLoading, startSession]);
 
   // Restore department name from store if available
   useEffect(() => {
@@ -534,9 +554,9 @@ const OrganizationSetup: React.FC = () => {
       errors.mailingState = 'State is required';
     }
     if (!formData.mailingAddress.zipCode.trim()) {
-      errors.mailingZip = 'ZIP/Postal code is required';
+      errors.mailingZipCode = 'ZIP/Postal code is required';
     } else if (!/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(formData.mailingAddress.zipCode.trim())) {
-      errors.mailingZip = 'Enter a valid ZIP code (e.g., 12345 or 12345-6789)';
+      errors.mailingZipCode = 'Enter a valid ZIP code (e.g., 12345 or 12345-6789)';
     }
 
     // Physical address validation (if different)
@@ -551,9 +571,9 @@ const OrganizationSetup: React.FC = () => {
         errors.physicalState = 'State is required';
       }
       if (!formData.physicalAddress.zipCode.trim()) {
-        errors.physicalZip = 'ZIP code is required';
+        errors.physicalZipCode = 'ZIP code is required';
       } else if (!/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(formData.physicalAddress.zipCode.trim())) {
-        errors.physicalZip = 'Enter a valid ZIP code (e.g., 12345 or 12345-6789)';
+        errors.physicalZipCode = 'Enter a valid ZIP code (e.g., 12345 or 12345-6789)';
       }
     }
 
@@ -607,10 +627,10 @@ const OrganizationSetup: React.FC = () => {
     if (errors.email || errors.phone) {
       setExpandedSections((prev) => ({ ...prev, contact: true }));
     }
-    if (errors.mailingLine1 || errors.mailingCity || errors.mailingState || errors.mailingZip) {
+    if (errors.mailingLine1 || errors.mailingCity || errors.mailingState || errors.mailingZipCode) {
       setExpandedSections((prev) => ({ ...prev, mailing: true }));
     }
-    if (errors.physicalLine1 || errors.physicalCity || errors.physicalState || errors.physicalZip) {
+    if (errors.physicalLine1 || errors.physicalCity || errors.physicalState || errors.physicalZipCode) {
       setExpandedSections((prev) => ({ ...prev, physical: true }));
     }
     if (errors.fdid || errors.stateId) {
@@ -628,8 +648,11 @@ const OrganizationSetup: React.FC = () => {
     setHasAttemptedSubmit(true);
 
     // Ensure session is initialized before submitting
-    if (!hasSession || sessionLoading) {
+    if (sessionLoading) {
       toast.error('Please wait for the session to initialize...');
+      return;
+    }
+    if (!hasSession && !(await startSession())) {
       return;
     }
 

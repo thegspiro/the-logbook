@@ -31,8 +31,19 @@ const APPARATUS_TYPES = [
   { value: 'other', label: 'Other' },
 ] as const;
 
-/** Riding positions offered as one-click adds. Free text is allowed too. */
+/**
+ * Riding positions offered as one-click adds. Free text is allowed too.
+ *
+ * Each entry is a seat, so the same position can be added more than once — an
+ * engine riding an officer, a driver and two firefighters is four entries.
+ * The stored seat list is one entry per seat (CLAUDE.md pitfall 20), and
+ * offering each position only once made that ordinary crew impossible to
+ * enter here.
+ */
 const COMMON_POSITIONS = ['officer', 'driver', 'firefighter', 'paramedic', 'emt'];
+
+/** How a stored position reads; `capitalize` alone would show "Emt". */
+const positionLabel = (position: string): string => (position === 'emt' ? 'EMT' : position);
 
 const makeApparatus = (): OnboardingApparatusDraft => ({
   id: crypto.randomUUID(),
@@ -86,17 +97,17 @@ const ApparatusSetup: React.FC = () => {
   const addPosition = (id: string, position: string) => {
     const clean = position.trim().toLowerCase();
     if (!clean) return;
-    const nextRows = rows.map((row) =>
-      row.id === id && !row.positions.includes(clean) ? { ...row, positions: [...row.positions, clean] } : row
-    );
+    const nextRows = rows.map((row) => (row.id === id ? { ...row, positions: [...row.positions, clean] } : row));
     setRows(nextRows);
     setApparatus(nextRows);
     setPositionDrafts((prev) => ({ ...prev, [id]: '' }));
   };
 
-  const removePosition = (id: string, position: string) => {
+  // By index: with repeated seats, removing by name would take every
+  // firefighter off the unit when one was meant.
+  const removePosition = (id: string, seatIndex: number) => {
     const nextRows = rows.map((row) =>
-      row.id === id ? { ...row, positions: row.positions.filter((p: string) => p !== position) } : row
+      row.id === id ? { ...row, positions: row.positions.filter((_p: string, i: number) => i !== seatIndex) } : row
     );
     setRows(nextRows);
     setApparatus(nextRows);
@@ -303,15 +314,15 @@ const ApparatusSetup: React.FC = () => {
 
                     {row.positions.length > 0 && (
                       <div className="mb-2 flex flex-wrap gap-2">
-                        {row.positions.map((position) => (
+                        {row.positions.map((position, seatIndex) => (
                           <span
-                            key={position}
+                            key={`${position}-${seatIndex}`}
                             className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-1 text-xs font-medium text-red-600 capitalize dark:text-red-400"
                           >
-                            {position}
+                            {positionLabel(position)}
                             <button
-                              onClick={() => removePosition(row.id, position)}
-                              aria-label={`Remove ${position} position`}
+                              onClick={() => removePosition(row.id, seatIndex)}
+                              aria-label={`Remove ${positionLabel(position)} (seat ${seatIndex + 1})`}
                               className="hover:text-red-700 dark:hover:text-red-300"
                             >
                               <X className="h-3 w-3" aria-hidden="true" />
@@ -322,13 +333,13 @@ const ApparatusSetup: React.FC = () => {
                     )}
 
                     <div className="mb-2 flex flex-wrap gap-2">
-                      {COMMON_POSITIONS.filter((p) => !row.positions.includes(p)).map((position: string) => (
+                      {COMMON_POSITIONS.map((position: string) => (
                         <button
                           key={position}
                           onClick={() => addPosition(row.id, position)}
                           className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary rounded-md border border-dashed px-2 py-1 text-xs capitalize transition-colors hover:border-red-500/40"
                         >
-                          + {position}
+                          + {positionLabel(position)}
                         </button>
                       ))}
                     </div>

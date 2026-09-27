@@ -206,9 +206,30 @@ async function onboard(page, admin) {
     return true;
   };
 
+  // The route changes before the next step's page replaces the last one's, so
+  // a button list read straight after navigating can belong to the step just
+  // left — and clicking its index on the new page presses something else. It
+  // once pressed "Remove Quartermaster position" on Ranks & Positions that
+  // way. Wait for the heading to change before reading anything.
+  const heading = () =>
+    page
+      .locator("main h1, main h2")
+      .first()
+      .textContent({ timeout: 10000 })
+      .catch(() => "");
+  let previousHeading = "";
   for (let step = 0; step < 20; step++) {
     const path = new URL(page.url()).pathname;
     if (!path.startsWith("/onboarding")) return;
+    await page.waitForFunction(
+      (prev) => {
+        const h = document.querySelector("main h1, main h2");
+        return Boolean(h) && h.textContent !== prev;
+      },
+      previousHeading,
+      { timeout: 15000 },
+    );
+    previousHeading = await heading();
     // A step renders its buttons after its own data loads.
     await page
       .waitForLoadState("networkidle", { timeout: 10000 })

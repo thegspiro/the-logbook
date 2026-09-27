@@ -212,7 +212,9 @@ const EMAIL_LABELS: Record<string, string> = {
   microsoft: 'Microsoft 365',
   selfhosted: 'SMTP',
   cloudflare: 'Cloudflare',
-  other: 'Other',
+  // `other` is the id of the Email step's "Skip for now" choice, not a
+  // provider; "Other" read as though some unnamed service had been set up.
+  other: 'Not set up yet',
 };
 
 const STORAGE_LABELS: Record<string, string> = {
@@ -222,7 +224,9 @@ const STORAGE_LABELS: Record<string, string> = {
   azure: 'Azure Blob Storage',
   gcs: 'Google Cloud Storage',
   local: 'Local storage',
-  other: 'Other',
+  // `other` is File Storage's "Configure Later", which falls back to local
+  // storage until something else is configured.
+  other: 'Local storage (set up later)',
 };
 
 export default SetupComplete;
