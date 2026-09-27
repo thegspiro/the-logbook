@@ -293,7 +293,7 @@ const AdminHoursPage: React.FC = () => {
         clock_out_at: resolveEndUtc(manualData.clock_out_at, manualEndPin, tz),
         description: manualData.description?.trim() || undefined,
       });
-      toast.success('Hours submitted');
+      toast.success('Hours submitted for review');
       setShowManualForm(false);
       setManualData({ category_id: '', clock_in_at: '', clock_out_at: '', description: '' });
       setManualEndPin(null);
@@ -739,7 +739,11 @@ const AdminHoursPage: React.FC = () => {
       {/* Manual Entry Form */}
       {showManualForm && (
         <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md">
-          <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Log Hours Manually</h3>
+          <h3 className="text-theme-text-primary mb-1 text-lg font-semibold">Log Hours Manually</h3>
+          <p className="text-theme-text-secondary mb-4 text-sm">
+            Hours logged manually go to an officer for review before they count, whatever the category. Clock in and out
+            instead to have eligible hours approved automatically.
+          </p>
           <form
             onSubmit={(e) => {
               void handleManualSubmit(e);

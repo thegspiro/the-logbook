@@ -238,8 +238,11 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
                   <p className="text-theme-text-secondary mt-0.5 truncate text-sm">{cat.description}</p>
                 )}
                 <div className="text-theme-text-muted mt-1 flex gap-4 text-xs">
-                  <span>Approval: {cat.requireApproval ? 'Required' : 'Auto-approve'}</span>
-                  {cat.autoApproveUnderHours && <span>Auto-approve under {cat.autoApproveUnderHours}h</span>}
+                  <span>Approval: {cat.requireApproval ? 'Required' : 'Auto-approve clocked sessions'}</span>
+                  {cat.requireApproval && cat.autoApproveUnderHours ? (
+                    <span>Auto-approve clocked sessions under {cat.autoApproveUnderHours}h</span>
+                  ) : null}
+                  <span>Manual entries: reviewed</span>
                   {cat.maxHoursPerSession && <span>Max {cat.maxHoursPerSession}h/session</span>}
                 </div>
               </div>
