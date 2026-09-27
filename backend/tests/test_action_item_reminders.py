@@ -74,8 +74,7 @@ class TestMinutesActionItemReminder:
         db_session.add(minutes)
         await db_session.flush()
 
-        # Due dates are counted on the department's calendar, which is a day
-        # behind UTC every evening in the Americas; `date.today()` is UTC.
+        # "Due tomorrow" is counted from the department's today.
         due_date = datetime.combine(
             org_today(org) + timedelta(days=1),
             datetime.min.time(),

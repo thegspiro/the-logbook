@@ -70,9 +70,8 @@ async def _item(db, org, quantity=0):
 
 
 async def _lot(db, org, item, quantity, expires_in_days=None):
-    # Expiry is judged on the department's calendar, not the server's UTC
-    # date; a lot "expired yesterday" by UTC is still in date for a US
-    # department every evening.
+    # Expiry is judged on the department's calendar, not the runner's UTC
+    # date, which is a day ahead every US evening.
     today = org_today(org)
     lot = InventoryLot(
         id=str(uuid.uuid4()),

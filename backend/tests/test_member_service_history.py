@@ -674,12 +674,11 @@ class TestStatusChangeWritesStints:
         )
 
         org = await _org(db_session)
-        # Stints open and close on the department's calendar date, which is a
-        # day behind UTC every evening in the Americas.
-        today = org_today(org)
         officer = await _user(db_session, org, hire_date=date(2000, 1, 1))
         member = await _user(db_session, org, hire_date=date(2012, 1, 1))
         caller = _caller(org, officer.id)
+        # Retirement and rejoin are dated on the department's calendar.
+        today = org_today(org)
 
         await change_member_status(
             member.id,

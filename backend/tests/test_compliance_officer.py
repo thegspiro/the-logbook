@@ -21,6 +21,7 @@ from app.services.compliance_officer_service import (
     ISOReadinessService,
     RecordCompletenessService,
 )
+from app.utils.org_timezone import org_today
 
 # ============================================
 # ISO_CATEGORIES Structure Tests
@@ -192,7 +193,7 @@ class TestGetISOReadiness:
         service = ISOReadinessService(mock_db)
         result = await service.get_iso_readiness("org-1")
 
-        assert result["year"] == date.today().year
+        assert result["year"] == org_today(None).year
 
 
 # ============================================
@@ -756,19 +757,14 @@ class TestRecordCompletenessEvaluate:
         mock_result.scalars.return_value.all.return_value = []
         mock_db.execute.return_value = mock_result
 
-        # The default window ends on the department's calendar date, not the
-        # test runner's: comparing against `date.today()` failed every evening
-        # in the Americas, once UTC had already rolled over to tomorrow.
-        org_today = date(2026, 9, 26)
         service = RecordCompletenessService(mock_db)
-        with patch(
-            "app.services.compliance_officer_service.resolve_org_today",
-            new=AsyncMock(return_value=org_today),
-        ):
-            result = await service.evaluate_record_completeness("org-1")
+        result = await service.evaluate_record_completeness("org-1")
 
-        assert result["period_start"] == date(2026, 1, 1).isoformat()
-        assert result["period_end"] == org_today.isoformat()
+        # The period ends on the department's today, and the mocked org has
+        # no timezone, so it resolves to the scheduling default.
+        today = org_today(None)
+        assert result["period_start"] == date(today.year, 1, 1).isoformat()
+        assert result["period_end"] == today.isoformat()
 
     async def test_field_names_in_result(self):
         mock_db = AsyncMock()
