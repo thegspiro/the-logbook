@@ -897,7 +897,9 @@ class AdminHoursService:
         if not owner_id:
             return None
         await self.db.execute(
-            select(User.id).where(User.id == owner_id).with_for_update()
+            select(User.id)
+            .where(User.id == owner_id, User.organization_id == organization_id)
+            .with_for_update()
         )
         return owner_id
 

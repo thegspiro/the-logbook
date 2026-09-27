@@ -15,7 +15,7 @@ DB mocked; no MySQL.
 
 from datetime import date, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -126,6 +126,12 @@ class TestReminderConditionsSchema:
             ReminderConditions(send_if_below_percentage=101)
 
 
+# The sweep counts days left from the department's calendar date, not the test
+# runner's: deriving deadlines from `date.today()` put every one of them a day
+# off in the evening in the Americas, once UTC had rolled over to tomorrow.
+ORG_TODAY = date(2026, 9, 26)
+
+
 def _enrollment(days_left, progress, program):
     return SimpleNamespace(
         id="enr-1",
@@ -133,7 +139,7 @@ def _enrollment(days_left, progress, program):
         program_id="prog-1",
         program=program,
         progress_percentage=progress,
-        target_completion_date=date.today() + timedelta(days=days_left),
+        target_completion_date=ORG_TODAY + timedelta(days=days_left),
         deadline_warning_sent=False,
         deadline_warning_sent_at=None,
     )
@@ -152,6 +158,14 @@ class WarningSession:
 
 
 class TestSendDeadlineWarnings:
+    @pytest.fixture(autouse=True)
+    def _pin_org_today(self):
+        with patch(
+            "app.services.struggling_member_service.resolve_org_today",
+            new=AsyncMock(return_value=ORG_TODAY),
+        ):
+            yield
+
     def _service(self, enrollments):
         svc = StrugglingMemberService(WarningSession(enrollments))
         svc._send_deadline_notification = AsyncMock()

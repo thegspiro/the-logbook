@@ -17,8 +17,12 @@ import pytest
 from app.models.user import Organization
 from app.services.scheduled_tasks import run_supply_expiration_alerts
 
-YESTERDAY = date.today() - timedelta(days=1)
-SOON = date.today() + timedelta(days=10)
+# The task dates every count from the department's calendar day, not the test
+# runner's. Fixtures built from `date.today()` drifted a day in the evening in
+# the Americas once UTC had rolled over, turning "yesterday" into "today".
+ORG_TODAY = date(2026, 9, 26)
+YESTERDAY = ORG_TODAY - timedelta(days=1)
+SOON = ORG_TODAY + timedelta(days=10)
 
 
 def _org():
@@ -116,6 +120,8 @@ def sent():
 
     with patch(
         "app.services.email_service.EmailService", return_value=email_svc
+    ), patch(
+        "app.services.scheduled_tasks.org_today", return_value=ORG_TODAY
     ), patch.object(
         __import__(
             "app.services.equipment_check_service", fromlist=["EquipmentCheckService"]
