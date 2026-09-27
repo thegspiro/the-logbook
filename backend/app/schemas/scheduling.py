@@ -624,6 +624,11 @@ class MemberHoursMonth(BaseModel):
     calls: int = 0
     pending_shifts: int = 0
     pending_hours: float = 0.0
+    # Shifts logged on another jurisdiction's apparatus. Counted, but kept
+    # apart from ``hours`` so the department's own shift record is not
+    # silently mixed with time the member reported themselves.
+    external_shifts: int = 0
+    external_hours: float = 0.0
 
 
 class MemberHoursTotals(BaseModel):
@@ -634,6 +639,11 @@ class MemberHoursTotals(BaseModel):
     calls: int = 0
     pending_shifts: int = 0
     pending_hours: float = 0.0
+    # Shifts logged on another jurisdiction's apparatus. Counted, but kept
+    # apart from ``hours`` so the department's own shift record is not
+    # silently mixed with time the member reported themselves.
+    external_shifts: int = 0
+    external_hours: float = 0.0
 
 
 class MemberHoursHistoryResponse(BaseModel):
@@ -1509,6 +1519,10 @@ class MemberComplianceRecord(BaseModel):
     compliant: bool
     shift_count: int
     total_hours: float
+    # The part of shift_count / total_hours that came from shifts logged on
+    # another jurisdiction's apparatus.
+    external_shift_count: int = 0
+    external_hours: float = 0.0
 
 
 class RequirementComplianceSummary(BaseModel):

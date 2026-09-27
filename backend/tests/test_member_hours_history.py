@@ -367,6 +367,8 @@ class TestMyHoursHistory:
             "calls": 0,
             "pending_shifts": 0,
             "pending_hours": 0.0,
+            "external_shifts": 0,
+            "external_hours": 0.0,
         }
 
         assert history["earliest_year"] is None

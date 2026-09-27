@@ -36,6 +36,8 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours, formatHoursExact, roundHoursToQuarter, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { DateRangePicker } from '../components/ux/DateRangePicker';
+import { useAuthStore } from '../stores/authStore';
+import { ExternalShiftsReview } from './scheduling/ExternalShiftsReview';
 
 type TabView = 'member-hours' | 'coverage' | 'call-volume' | 'availability' | 'compliance';
 
@@ -127,6 +129,8 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, icon }) => (
 export const SchedulingReportsPage: React.FC = () => {
   const tz = useTimezone();
   const { formatRank } = useRanks();
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  const canManageSchedule = checkPermission('scheduling.manage');
   const [activeTab, setActiveTab] = useState<TabView>('member-hours');
 
   // Date ranges. Defaulted to this month: a report that opens on two empty
@@ -185,6 +189,22 @@ export const SchedulingReportsPage: React.FC = () => {
       setLoading(false);
     }
   }, [startDate, endDate]);
+
+  // Re-read the report in place after an outside shift is rejected or
+  // restored, without the full-page spinner that would unmount the list the
+  // officer is working through.
+  const refreshMemberHours = useCallback(async () => {
+    if (!memberHoursReport) return;
+    try {
+      const data = await schedulingService.getMemberHoursReport({
+        start_date: memberHoursReport.period_start,
+        end_date: memberHoursReport.period_end,
+      });
+      setMemberHoursReport(data);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to refresh member hours report'));
+    }
+  }, [memberHoursReport]);
 
   // Load Coverage
   const loadCoverage = useCallback(async () => {
@@ -443,7 +463,8 @@ export const SchedulingReportsPage: React.FC = () => {
               <p className="text-theme-text-muted mb-4 text-xs">
                 Hours worked are measured from shift check-in and check-out, counting only shifts whose attendance has
                 been finalized. Scheduled hours are the assigned shift length — shown for comparison, since a shift can
-                run short or long, or be assigned and not worked.
+                run short or long, or be assigned and not worked. Outside hours are shifts members logged on another
+                department&apos;s apparatus; they count toward shift requirements but are not part of hours worked here.
               </p>
 
               {/* Table */}
@@ -465,6 +486,9 @@ export const SchedulingReportsPage: React.FC = () => {
                         </th>
                         <th scope="col" className="text-theme-text-secondary px-4 py-3 text-right font-medium">
                           Hours Worked
+                        </th>
+                        <th scope="col" className="text-theme-text-secondary px-4 py-3 text-right font-medium">
+                          Outside Hours
                         </th>
                         <th scope="col" className="text-theme-text-secondary px-4 py-3 text-right font-medium">
                           Scheduled Hours
@@ -501,6 +525,9 @@ export const SchedulingReportsPage: React.FC = () => {
                               {formatHours(m.worked_hours)}
                             </td>
                             <td className="text-theme-text-secondary px-4 py-3 text-right">
+                              {formatHours(m.external_hours ?? 0)}
+                            </td>
+                            <td className="text-theme-text-secondary px-4 py-3 text-right">
                               {formatHours(m.scheduled_hours)}
                             </td>
                             <td className="text-theme-text-secondary px-4 py-3 text-right">
@@ -517,6 +544,13 @@ export const SchedulingReportsPage: React.FC = () => {
                   </table>
                 </div>
               )}
+
+              <ExternalShiftsReview
+                startDate={memberHoursReport.period_start}
+                endDate={memberHoursReport.period_end}
+                canManage={canManageSchedule}
+                onChanged={() => void refreshMemberHours()}
+              />
             </div>
           ) : (
             <div className="card-secondary py-8 text-center">
@@ -1126,9 +1160,19 @@ export const SchedulingReportsPage: React.FC = () => {
                                     </td>
                                     <td className="text-theme-text-primary px-4 py-2 text-right">
                                       {member.shift_count}
+                                      {(member.external_shift_count ?? 0) > 0 && (
+                                        <span className="text-theme-text-muted block text-xs">
+                                          incl. {member.external_shift_count} outside
+                                        </span>
+                                      )}
                                     </td>
                                     <td className="text-theme-text-primary px-4 py-2 text-right">
                                       {formatHours(member.total_hours)}
+                                      {(member.external_hours ?? 0) > 0 && (
+                                        <span className="text-theme-text-muted block text-xs">
+                                          incl. {formatHours(member.external_hours ?? 0)} outside
+                                        </span>
+                                      )}
                                     </td>
                                     <td className="px-4 py-2 text-right">
                                       <div className="flex items-center justify-end gap-2">

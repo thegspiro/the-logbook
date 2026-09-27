@@ -13,6 +13,10 @@
  * because a member who watched their hours drop after a close-out corrected a
  * check-out time would have no way to tell what happened.
  *
+ * Shifts logged with other departments are a third figure, shown beside the
+ * credited hours rather than added into them: they count toward the member's
+ * requirements, but they are not attendance on this department's shifts.
+ *
  * The three cards read this month, the selected year, and all time. The middle
  * one follows the year picker rather than pinning to the current year, so it
  * can never state a figure the table beneath it contradicts.
@@ -26,6 +30,7 @@ import { useSchedulingStore } from '../../modules/scheduling/store/schedulingSto
 import { formatHours } from '../../utils/hoursFormatting';
 import { formatNumber } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { MyExternalShifts } from './MyExternalShifts';
 
 const MONTH_NAMES = [
   'January',
@@ -58,10 +63,21 @@ interface StatCardProps {
   shifts: number;
   calls: number;
   showCalls: boolean;
+  /** Hours logged with other departments in the same period. */
+  externalHours: number;
   icon: React.ReactNode;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ label, sublabel, hours, shifts, calls, showCalls, icon }) => (
+const StatCard: React.FC<StatCardProps> = ({
+  label,
+  sublabel,
+  hours,
+  shifts,
+  calls,
+  showCalls,
+  externalHours,
+  icon,
+}) => (
   // Grouped and labelled so a screen reader announces which period a figure
   // belongs to; three bare numbers in a row carry that only visually.
   <div className="card p-4" role="group" aria-label={label}>
@@ -82,6 +98,9 @@ const StatCard: React.FC<StatCardProps> = ({ label, sublabel, hours, shifts, cal
       {formatNumber(shifts)} {shifts === 1 ? 'shift' : 'shifts'}
       {showCalls ? ` · ${formatNumber(calls)} ${calls === 1 ? 'call' : 'calls'}` : ''}
     </p>
+    {externalHours > 0 && (
+      <p className="text-theme-text-secondary mt-1 text-sm">+{formatHours(externalHours)} hrs with other departments</p>
+    )}
   </div>
 );
 
@@ -213,6 +232,7 @@ export const MyHoursSummary: React.FC = () => {
           shifts={current.shifts}
           calls={current.calls}
           showCalls={showCalls}
+          externalHours={current.external_hours ?? 0}
           icon={<Flame className="h-5 w-5" />}
         />
         <StatCard
@@ -222,6 +242,7 @@ export const MyHoursSummary: React.FC = () => {
           shifts={totals.shifts}
           calls={totals.calls}
           showCalls={showCalls}
+          externalHours={totals.external_hours ?? 0}
           icon={<TrendingUp className="h-5 w-5" />}
         />
         <StatCard
@@ -231,6 +252,7 @@ export const MyHoursSummary: React.FC = () => {
           shifts={allTime.shifts}
           calls={allTime.calls}
           showCalls={showCalls}
+          externalHours={allTime.external_hours ?? 0}
           icon={<History className="h-5 w-5" />}
         />
       </div>
@@ -311,6 +333,11 @@ export const MyHoursSummary: React.FC = () => {
                       (+{formatHours(m.pending_hours)} pending)
                     </span>
                   )}
+                  {(m.external_hours ?? 0) > 0 && (
+                    <span className="text-theme-text-muted ml-1 text-xs font-normal">
+                      (+{formatHours(m.external_hours ?? 0)} outside)
+                    </span>
+                  )}
                 </td>
                 {showCalls && (
                   <td className="text-theme-text-secondary px-4 py-3 text-right" data-label="Calls">
@@ -344,6 +371,11 @@ export const MyHoursSummary: React.FC = () => {
               </td>
               <td className="px-4 py-3 text-right" data-label="Hours">
                 {formatHours(totals.hours)}
+                {(totals.external_hours ?? 0) > 0 && (
+                  <span className="text-theme-text-muted ml-1 text-xs font-normal">
+                    (+{formatHours(totals.external_hours ?? 0)} outside)
+                  </span>
+                )}
               </td>
               {showCalls && (
                 <td className="px-4 py-3 text-right" data-label="Calls">
@@ -355,6 +387,8 @@ export const MyHoursSummary: React.FC = () => {
           </tfoot>
         </table>
       </div>
+
+      <MyExternalShifts onChanged={() => void load(selectedYear)} />
     </div>
   );
 };

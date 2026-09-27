@@ -279,6 +279,12 @@ export interface MemberHoursMonth {
   calls: number;
   pending_shifts: number;
   pending_hours: number;
+  /**
+   * Shifts the member logged on another jurisdiction's apparatus. Counted
+   * toward their hours, but reported beside `hours` rather than inside it.
+   */
+  external_shifts?: number;
+  external_hours?: number;
 }
 
 export interface MemberHoursTotals {
@@ -287,6 +293,8 @@ export interface MemberHoursTotals {
   calls: number;
   pending_shifts: number;
   pending_hours: number;
+  external_shifts?: number;
+  external_hours?: number;
 }
 
 export interface MemberHoursHistory {
@@ -459,8 +467,12 @@ export interface MemberComplianceRecord {
   completed_value: number;
   percentage: number;
   compliant: boolean;
+  /** Includes any external shifts below. */
   shift_count: number;
   total_hours: number;
+  /** The part of the totals logged on another jurisdiction's apparatus. */
+  external_shift_count?: number;
+  external_hours?: number;
 }
 
 export interface RequirementComplianceSummary {
@@ -476,6 +488,62 @@ export interface RequirementComplianceSummary {
   compliant_count: number;
   non_compliant_count: number;
   compliance_rate: number;
+}
+
+export type ExternalShiftStatus = 'counted' | 'rejected';
+
+/** A shift a member worked outside the department's own schedule. */
+export interface ExternalShiftEntry {
+  id: string;
+  user_id: string;
+  member_name: string | null;
+  /** YYYY-MM-DD, a calendar date rather than an instant. */
+  shift_date: string;
+  hours: number;
+  agency_name: string;
+  apparatus: string | null;
+  role: string | null;
+  notes: string | null;
+  status: ExternalShiftStatus;
+  reviewed_by: string | null;
+  reviewer_name: string | null;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExternalShiftList {
+  items: ExternalShiftEntry[];
+  total: number;
+}
+
+export interface ExternalShiftCreate {
+  shift_date: string;
+  hours: number;
+  agency_name: string;
+  apparatus?: string | undefined;
+  role?: string | undefined;
+  notes?: string | undefined;
+}
+
+/** Omit a key to leave it alone; `null` clears an optional field. */
+export interface ExternalShiftUpdate {
+  shift_date?: string;
+  hours?: number;
+  agency_name?: string;
+  apparatus?: string | null;
+  role?: string | null;
+  notes?: string | null;
+}
+
+export interface ExternalShiftFilters {
+  user_id?: string;
+  start_date?: string;
+  end_date?: string;
+  status?: ExternalShiftStatus;
+  limit?: number;
+  offset?: number;
 }
 
 export interface ShiftComplianceResponse {
@@ -642,6 +710,35 @@ export const schedulingService = {
 
   async getSummary(): Promise<SchedulingSummary> {
     const response = await api.get<SchedulingSummary>('/scheduling/summary');
+    return response.data;
+  },
+  /** Log a shift the signed-in member worked for another department. */
+  async logExternalShift(data: ExternalShiftCreate): Promise<ExternalShiftEntry> {
+    const response = await api.post<ExternalShiftEntry>('/scheduling/external-hours', data);
+    return response.data;
+  },
+  async getMyExternalShifts(params?: { limit?: number; offset?: number }): Promise<ExternalShiftList> {
+    const response = await api.get<ExternalShiftList>('/scheduling/external-hours/my', { params });
+    return response.data;
+  },
+  async updateExternalShift(id: string, data: ExternalShiftUpdate): Promise<ExternalShiftEntry> {
+    const response = await api.patch<ExternalShiftEntry>(`/scheduling/external-hours/${id}`, data);
+    return response.data;
+  },
+  async deleteExternalShift(id: string): Promise<void> {
+    await api.delete(`/scheduling/external-hours/${id}`);
+  },
+  /** Every member's entries. Needs scheduling.manage or scheduling.report. */
+  async getExternalShifts(params?: ExternalShiftFilters): Promise<ExternalShiftList> {
+    const response = await api.get<ExternalShiftList>('/scheduling/external-hours', { params });
+    return response.data;
+  },
+  async rejectExternalShift(id: string, reason: string): Promise<ExternalShiftEntry> {
+    const response = await api.post<ExternalShiftEntry>(`/scheduling/external-hours/${id}/reject`, { reason });
+    return response.data;
+  },
+  async restoreExternalShift(id: string): Promise<ExternalShiftEntry> {
+    const response = await api.post<ExternalShiftEntry>(`/scheduling/external-hours/${id}/restore`);
     return response.data;
   },
   /** The signed-in member's own hours and calls for a year, month by month. */

@@ -485,6 +485,30 @@ joins `Shift` to `ShiftAttendance` so each row embeds `shift_date`,
 `shift_start_time`, and `shift_end_time`, ordered by `shift_date` descending.
 (2026-05)
 
+### Shifts With Other Departments
+
+```
+POST   /api/v1/scheduling/external-hours               # Log own outside shift
+GET    /api/v1/scheduling/external-hours/my            # Own entries
+PATCH  /api/v1/scheduling/external-hours/{id}          # Correct own entry (not once rejected)
+DELETE /api/v1/scheduling/external-hours/{id}          # Delete own entry (not once rejected)
+GET    /api/v1/scheduling/external-hours               # All entries (scheduling.manage or scheduling.report)
+POST   /api/v1/scheduling/external-hours/{id}/reject   # Stop it counting, with a reason (scheduling.manage)
+POST   /api/v1/scheduling/external-hours/{id}/restore  # Count it again (scheduling.manage)
+```
+
+For time on another jurisdiction's apparatus, where there is no shift here to
+check in to. One entry is one shift: a date (not in the future, judged in the
+department's timezone), up to 48 hours, and the agency, with apparatus,
+position and notes optional. An entry counts from the moment it is saved, and
+an officer who rejects one takes it out of every total below.
+
+It is reported as `external_shifts` / `external_hours` in
+`/my-hours-history` and `external_*` in `/reports/member-hours`, **beside**
+the credited or worked figures rather than inside them. `/reports/compliance`
+adds it into each member's `shift_count` / `total_hours` and breaks it out as
+`external_shift_count` / `external_hours`. (2026-09-27)
+
 ### Calls
 
 ```

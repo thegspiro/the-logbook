@@ -83,6 +83,10 @@ from app.models.event_request import (
     EventRequestEmailTemplate,
     EventRequestStatus,
 )
+from app.models.external_shift_hours import (
+    ExternalShiftHours,
+    ExternalShiftHoursStatus,
+)
 from app.models.facilities import (
     DefaultFacilityStatus,
     DefaultFacilityType,
@@ -526,6 +530,9 @@ __all__ = [
     "EventType",
     "RSVPStatus",
     "CheckInWindowType",
+    # External shift hours
+    "ExternalShiftHours",
+    "ExternalShiftHoursStatus",
     # Event request models
     "EventRequest",
     "EventRequestActivity",

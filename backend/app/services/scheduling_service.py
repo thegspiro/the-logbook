@@ -57,6 +57,7 @@ from app.models.user import (
     user_positions,
 )
 from app.services.call_tracking_service import CallTrackingService
+from app.services.external_shift_hours_service import ExternalShiftHoursService
 from app.services.member_leave_service import MemberLeaveService
 from app.services.notifications_service import NotificationsService
 from app.services.shift_eligibility_service import (
@@ -6873,6 +6874,9 @@ class SchedulingService:
                     "shifts_scheduled": 0,
                     "scheduled_minutes": 0,
                     "scheduled_hours": 0.0,
+                    "external_shifts": 0,
+                    "external_minutes": 0,
+                    "external_hours": 0.0,
                 },
             )
 
@@ -6888,10 +6892,42 @@ class SchedulingService:
             entry["worked_minutes"] = int(row.minutes or 0)
             entry["worked_hours"] = hours_from_minutes(row.minutes or 0)
 
+        # Hours worked on another jurisdiction's apparatus, reported beside
+        # worked rather than inside it: worked is attendance on this
+        # department's own shifts, and a reader comparing it with scheduled
+        # needs it to stay that.
+        external = await ExternalShiftHoursService(self.db).counted_totals_by_user(
+            str(organization_id), start_date, end_date
+        )
+        missing = [uid for uid in external if uid not in members]
+        if missing:
+            user_rows = await self.db.execute(
+                select(
+                    User.id.label("user_id"),
+                    User.email,
+                    User.first_name,
+                    User.last_name,
+                )
+                .where(User.id.in_(missing))
+                .where(User.organization_id == str(organization_id))
+            )
+            for row in user_rows.all():
+                _entry(row)
+        for uid, totals in external.items():
+            entry = members.get(uid)
+            if entry is None:
+                continue
+            entry["external_shifts"] = totals["shift_count"]
+            entry["external_minutes"] = totals["minutes"]
+            entry["external_hours"] = hours_from_minutes(totals["minutes"])
+
         # Ordered by the figure the report is about.
         return sorted(
             members.values(),
-            key=lambda m: (m["worked_hours"], m["scheduled_hours"]),
+            key=lambda m: (
+                m["worked_hours"] + m["external_hours"],
+                m["scheduled_hours"],
+            ),
             reverse=True,
         )
 
@@ -6910,6 +6946,8 @@ class SchedulingService:
             "calls": 0,
             "pending_shifts": 0,
             "pending_hours": 0.0,
+            "external_shifts": 0,
+            "external_hours": 0.0,
         }
 
     async def get_member_month_totals(
@@ -6938,6 +6976,12 @@ class SchedulingService:
         the department's report cannot disagree — and ``call_count`` is only
         snapshotted at finalization, so an unfinalized shift has hours the
         member can see are not counted yet and no call credit to show at all.
+
+        **External hours are a third figure beside the other two.** Shifts a
+        member logged on another jurisdiction's apparatus count from the
+        moment they are logged, but they are reported as ``external_*`` rather
+        than folded into ``hours`` so the department's own shift record stays
+        what it says it is.
 
         Scoped through ``Shift.organization_id``: ``shift_attendance`` carries
         no org column of its own, and the shift is the row that has one.
@@ -6980,6 +7024,14 @@ class SchedulingService:
             else:
                 entry["pending_shifts"] = int(row.shift_count or 0)
                 entry["pending_hours"] = hours_from_minutes(row.minutes or 0)
+
+        external = await ExternalShiftHoursService(self.db).counted_totals_by_month(
+            str(organization_id), str(user_id), start_date, end_date
+        )
+        for key, totals in external.items():
+            entry = buckets.setdefault(key, self._empty_month_totals(*key))
+            entry["external_shifts"] = totals["shift_count"]
+            entry["external_hours"] = hours_from_minutes(totals["minutes"])
         return buckets
 
     async def get_my_hours_history(
@@ -7042,11 +7094,16 @@ class SchedulingService:
                 "pending_hours": sum_hours_to_quarter(
                     [b["pending_hours"] for b in buckets]
                 ),
+                "external_shifts": sum(b["external_shifts"] for b in buckets),
+                "external_hours": sum_hours_to_quarter(
+                    [b["external_hours"] for b in buckets]
+                ),
             }
 
         # Any attendance at all, credited or not — the picker offers a year the
         # member worked even while every shift in it is still awaiting
-        # close-out.
+        # close-out. External entries count too: a year the member only rode
+        # with a neighbouring department is still a year they can look at.
         earliest_year = min((k[0] for k in months_by_key), default=None)
 
         return {
@@ -7675,6 +7732,15 @@ class SchedulingService:
                     "total_hours": hours_from_minutes(row.total_minutes),
                 }
 
+            # Shifts worked on another jurisdiction's apparatus count toward
+            # the requirement the same way a shift here does: one entry is
+            # one shift, and its minutes are hours on duty.
+            external_map = await ExternalShiftHoursService(
+                self.db
+            ).counted_totals_by_user(
+                str(organization_id), period_start, period_end, user_ids
+            )
+
             # Pre-load leave months for rolling requirements so we can
             # pro-rate each member's required value.
             is_rolling = (
@@ -7704,16 +7770,20 @@ class SchedulingService:
                 att = attendance_map.get(
                     user.id, {"shift_count": 0, "total_minutes": 0, "total_hours": 0.0}
                 )
+                ext = external_map.get(user.id, {"shift_count": 0, "minutes": 0})
+                shift_count = int(att["shift_count"] or 0) + ext["shift_count"]
+                total_minutes = int(att["total_minutes"] or 0) + ext["minutes"]
+                total_hours = hours_from_minutes(total_minutes)
 
                 if req.requirement_type == RequirementType.SHIFTS.value:
-                    completed_value = att["shift_count"]
+                    completed_value = shift_count
                     compliance_value = completed_value
                 else:
-                    completed_value = att["total_hours"]
+                    completed_value = total_hours
                     # Keep the quarter-hour figure for presentation, but grade
                     # against the attendance actually stored.  Rounding here
                     # can otherwise erase a shortfall of nearly 7.5 minutes.
-                    compliance_value = float(att["total_minutes"]) / 60.0
+                    compliance_value = float(total_minutes) / 60.0
 
                 # Adjust required value for rolling-period requirements
                 # by excluding months the member was on leave.
@@ -7750,8 +7820,10 @@ class SchedulingService:
                         "leave_months": leave_months,
                         "percentage": min(percentage, 100),
                         "compliant": is_compliant,
-                        "shift_count": att["shift_count"],
-                        "total_hours": att["total_hours"],
+                        "shift_count": shift_count,
+                        "total_hours": total_hours,
+                        "external_shift_count": ext["shift_count"],
+                        "external_hours": hours_from_minutes(ext["minutes"]),
                     }
                 )
 
