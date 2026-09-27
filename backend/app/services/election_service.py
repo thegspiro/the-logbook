@@ -48,7 +48,7 @@ from app.schemas.election import (
     VoterEligibility,
 )
 from app.services.email_service import BuiltMessage, EmailService
-from app.services.email_theme import TABLE_STYLE, TD_STYLE, TH_STYLE
+from app.services.email_theme import ACCENT_RED, TABLE_STYLE, TD_STYLE, TH_STYLE
 from app.utils.org_timezone import resolve_scheduling_timezone, to_local
 
 # " - Runoff Round 2" and friends, only at the very end of a title.
@@ -5307,7 +5307,6 @@ class ElectionService:
         header_color: str,
         header_title: str,
         badge_text: str,
-        badge_css_class: str,
         detail_items_html: str,
         detail_items_text: str,
         reason_label: str,
@@ -5316,7 +5315,6 @@ class ElectionService:
         html_postamble: str,
         text_postamble: str,
         footer_text: str,
-        extra_styles: str = "",
         skip_performer: bool = False,
         log_label: str = "notification",
     ) -> int:
@@ -5329,7 +5327,7 @@ class ElectionService:
 
         Returns: Number of notifications sent
         """
-        from app.services.email_service import EmailService, build_email_logo_html
+        from app.services.email_service import EmailService, wrap_email_body
 
         leadership_roles = LEADERSHIP_ROLE_SLUGS
 
@@ -5385,8 +5383,6 @@ class ElectionService:
             .strftime("%B %d, %Y at %I:%M %p")
         )
 
-        logo_html = build_email_logo_html(organization)
-
         # Render detail list items with common variables
         rendered_detail_html = detail_items_html.format(
             safe_title=safe_title,
@@ -5399,8 +5395,6 @@ class ElectionService:
             formatted_time=formatted_time,
         )
 
-        details_border = header_color
-
         sent_count = 0
         for user in leadership_users:
             if skip_performer and str(user.id) == str(performed_by):
@@ -5410,56 +5404,24 @@ class ElectionService:
 
             subject = f"{subject_prefix}{election.title}"
 
-            html_body = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: {header_color}; color: white; padding: 20px; text-align: center; }}
-        .{badge_css_class} {{ background-color: #fef2f2; color: #991b1b; padding: 8px 16px; border-radius: 4px; display: inline-block; margin: 10px 0; font-weight: bold; }}
-        .content {{ padding: 20px; background-color: #f9fafb; }}
-        .details {{ background-color: white; padding: 15px; border-left: 4px solid {details_border}; margin: 15px 0; }}
-        .reason {{ background-color: #fffbeb; padding: 15px; border-left: 4px solid #f59e0b; margin: 15px 0; }}
-        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}{extra_styles}
-    </style>
-</head>
-<body>
-    <div class="container">
-        {logo_html}
-        <div class="header">
-            <h1>{header_title}</h1>
-            <div class="{badge_css_class}">{badge_text}</div>
-        </div>
-        <div class="content">
-            <p>Dear {safe_first_name},</p>
-
-            {html_preamble}
-
-            <div class="details">
-                <h3>Election Details:</h3>
-                <ul>
-                    {rendered_detail_html}
-                </ul>
-            </div>
-
-            <div class="reason">
-                <h3>{reason_label}:</h3>
-                <p>{safe_reason}</p>
-            </div>
-
-            {html_postamble.format(safe_performer=safe_performer)}
-
-            <p>Best regards,<br>{safe_org_name} Election System</p>
-        </div>
-        <div class="footer">
-            <p>{footer_text}</p>
-        </div>
-    </div>
-</body>
-</html>
-            """
+            # The shared shell, so these alerts read like every other notice:
+            # the badge becomes the tab and the accent fills it. What the
+            # alert says is unchanged.
+            html_body = wrap_email_body(
+                organization,
+                header_title,
+                f"<p>Dear {safe_first_name},</p>"
+                f"{html_preamble}"
+                "<h2>Election details</h2>"
+                f"<ul>{rendered_detail_html}</ul>"
+                f"<h2>{html.escape(reason_label)}</h2>"
+                f"<p>{safe_reason}</p>"
+                f"{html_postamble.format(safe_performer=safe_performer)}"
+                f"<p>Best regards,<br>{safe_org_name} Election System</p>",
+                footer_text=footer_text,
+                header_color=header_color,
+                chip=badge_text,
+            )
 
             text_body_preamble = text_preamble
             text_body_postamble = text_postamble.format(
@@ -5519,10 +5481,9 @@ Best regards,
             organization_id=organization_id,
             reason=reason,
             subject_prefix="ALERT: Election Rolled Back - ",
-            header_color="#dc2626",
-            header_title="\u26a0\ufe0f Election Rollback Alert",
-            badge_text="REQUIRES ATTENTION",
-            badge_css_class="alert-badge",
+            header_color=ACCENT_RED,
+            header_title="Election Rollback Alert",
+            badge_text="Requires attention",
             detail_items_html=(
                 "<li><strong>Title:</strong> {safe_title}</li>"
                 f"<li><strong>Status Changed:</strong> {from_status.upper()}"
@@ -5595,15 +5556,9 @@ Best regards,
             organization_id=organization_id,
             reason=reason,
             subject_prefix="CRITICAL: Election DELETED - ",
-            header_color="#7f1d1d",
-            header_title="ELECTION DELETED",
-            badge_text="CRITICAL - REQUIRES IMMEDIATE ATTENTION",
-            badge_css_class="critical-badge",
-            extra_styles=(
-                "\n        .warning { background-color: #fef2f2;"
-                " padding: 15px; border-left: 4px solid #dc2626;"
-                " margin: 15px 0; }"
-            ),
+            header_color=ACCENT_RED,
+            header_title="Election Deleted",
+            badge_text="Critical",
             detail_items_html=(
                 "<li><strong>Title:</strong> {safe_title}</li>"
                 f"<li><strong>Status at Deletion:</strong>"
@@ -5622,7 +5577,7 @@ Best regards,
             ),
             reason_label="Reason Given",
             html_preamble=(
-                '<div class="warning">'
+                '<div class="alert">'
                 f"<p><strong>An election has been permanently deleted"
                 f" while in {election_status} status.</strong></p>"
                 "<p>This is a critical action that has been"

@@ -63,6 +63,11 @@ from app.utils.prospect_fields import (
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
+# The tab on every email the pipeline sends an applicant. One constant so the
+# three senders cannot drift apart, and so the stage editor's preview
+# (AutomatedEmailConfig.tsx) has one wording to mirror.
+_APPLICATION_UPDATE_CHIP = "Application update"
+
 
 @dataclass(frozen=True)
 class _ActivityEvent:
@@ -4155,8 +4160,8 @@ class MembershipPipelineService:
         try:
             import html as _html
 
-            from app.services.email_service import EmailService
-            from app.services.email_template_service import DEFAULT_CSS
+            from app.services.email_service import EmailService, wrap_email_body
+            from app.services.email_theme import ACCENT_BLUE, action
 
             config: Dict[str, Any] = step.config or {}
             org_result = await self.db.execute(
@@ -4167,7 +4172,6 @@ class MembershipPipelineService:
                 logger.error("Cannot send stage email: organization not found")
                 return False
 
-            org_name = _html.escape(org.name or "The Logbook")
             first_name = _html.escape(prospect.first_name or "")
 
             # Resolve subject, substituting {{organization_name}} if present
@@ -4190,10 +4194,8 @@ class MembershipPipelineService:
 
             def _build_faq_link() -> str | None:
                 if config.get("include_faq_link") and config.get("faq_url"):
-                    faq_url = _html.escape(config["faq_url"])
-                    return (
-                        f'<p><a href="{faq_url}" class="button">'
-                        "View Membership FAQ</a></p>"
+                    return action(
+                        _html.escape(config["faq_url"]), "View Membership FAQ"
                     )
                 return None
 
@@ -4232,11 +4234,7 @@ class MembershipPipelineService:
                     status_url = (
                         f"{frontend_url}/application-status" f"/{prospect.status_token}"
                     )
-                    safe_url = _html.escape(status_url)
-                    return (
-                        '<p><a href="' + safe_url + '" class="button">'
-                        "Track Your Application</a></p>"
-                    )
+                    return action(_html.escape(status_url), "Track Your Application")
                 return None
 
             def _build_custom_section_html(
@@ -4295,16 +4293,13 @@ class MembershipPipelineService:
                 else ("<p>Your membership application has been updated.</p>")
             )
 
-            html_body = (
-                f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>"
-                f'<div class="container">'
-                f'<div class="header"><h1>{org_name}</h1></div>'
-                f'<div class="content">'
-                f"<p>Hi {first_name},</p>"
-                f"{body_html}"
-                f"</div>"
-                f'<div class="footer">This email was sent by {org_name}.</div>'
-                f"</div></body></html>"
+            html_body = wrap_email_body(
+                org,
+                subject,
+                f"<p>Hi {first_name},</p>{body_html}",
+                footer_text=f"This email was sent by {org.name or 'The Logbook'}.",
+                header_color=ACCENT_BLUE,
+                chip=_APPLICATION_UPDATE_CHIP,
             )
 
             # Build plain-text version in the same section_order
@@ -4384,8 +4379,8 @@ class MembershipPipelineService:
         try:
             import html as _html
 
-            from app.services.email_service import EmailService
-            from app.services.email_template_service import DEFAULT_CSS
+            from app.services.email_service import EmailService, wrap_email_body
+            from app.services.email_theme import ACCENT_BLUE
 
             org_result = await self.db.execute(
                 select(Organization).where(Organization.id == prospect.organization_id)
@@ -4394,26 +4389,21 @@ class MembershipPipelineService:
             if not org:
                 return False
 
-            org_name = _html.escape(org.name or "The Logbook")
             first_name = _html.escape(prospect.first_name or "")
             step_name = _html.escape(step.name or "")
             subject = f"Application Update — {step.name} Complete"
 
-            html_body = (
-                f"<!DOCTYPE html><html><head>"
-                f"<style>{DEFAULT_CSS}</style></head><body>"
-                f'<div class="container">'
-                f'<div class="header"><h1>{org_name}</h1></div>'
-                f'<div class="content">'
+            html_body = wrap_email_body(
+                org,
+                subject,
                 f"<p>Hi {first_name},</p>"
                 f"<p>We're writing to let you know that the "
                 f"<strong>{step_name}</strong> step of your "
                 f"membership application has been completed.</p>"
-                f"<p>We'll be in touch with next steps soon.</p>"
-                f"</div>"
-                f'<div class="footer">'
-                f"This email was sent by {org_name}.</div>"
-                f"</div></body></html>"
+                f"<p>We'll be in touch with next steps soon.</p>",
+                footer_text=f"This email was sent by {org.name or 'The Logbook'}.",
+                header_color=ACCENT_BLUE,
+                chip=_APPLICATION_UPDATE_CHIP,
             )
             text_body = (
                 f"Hi {prospect.first_name},\n\n"
@@ -4481,8 +4471,8 @@ class MembershipPipelineService:
             import html as _html
 
             from app.core.config import settings as app_settings
-            from app.services.email_service import EmailService
-            from app.services.email_template_service import DEFAULT_CSS
+            from app.services.email_service import EmailService, wrap_email_body
+            from app.services.email_theme import ACCENT_BLUE, action
 
             org_result = await self.db.execute(
                 select(Organization).where(Organization.id == prospect.organization_id)
@@ -4496,27 +4486,21 @@ class MembershipPipelineService:
             status_url = f"{frontend_url}/application-status/{prospect.status_token}"
             custom_message = ((step.config or {}).get("custom_message") or "").strip()
 
-            org_name = _html.escape(org.name or "The Logbook")
             first_name = _html.escape(prospect.first_name or "")
             custom_html = (
                 f"<p>{_html.escape(custom_message)}</p>" if custom_message else ""
             )
-            html_body = (
-                f"<!DOCTYPE html><html><head>"
-                f"<style>{DEFAULT_CSS}</style></head><body>"
-                f'<div class="container">'
-                f'<div class="header"><h1>{org_name}</h1></div>'
-                f'<div class="content">'
+            html_body = wrap_email_body(
+                org,
+                "Track Your Membership Application",
                 f"<p>Hi {first_name},</p>"
                 f"{custom_html}"
                 f"<p>You can now follow the progress of your membership "
                 f"application online.</p>"
-                f'<p><a href="{_html.escape(status_url)}" class="button">'
-                f"Track Your Application</a></p>"
-                f"</div>"
-                f'<div class="footer">'
-                f"This email was sent by {org_name}.</div>"
-                f"</div></body></html>"
+                + action(_html.escape(status_url), "Track Your Application"),
+                footer_text=f"This email was sent by {org.name or 'The Logbook'}.",
+                header_color=ACCENT_BLUE,
+                chip=_APPLICATION_UPDATE_CHIP,
             )
             text_parts = [f"Hi {prospect.first_name},"]
             if custom_message:

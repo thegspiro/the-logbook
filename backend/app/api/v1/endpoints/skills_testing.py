@@ -3173,34 +3173,33 @@ async def email_test_results(
                 f"{criteria_html}</table>"
             )
 
-    from app.services.email_service import EmailService, build_email_logo_html
+    from app.services.email_service import EmailService, wrap_email_body
+    from app.services.email_theme import ACCENT_AMBER, fact, facts
 
-    _logo = build_email_logo_html(org)
-    html_body = f"""
-    <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
-      {_logo}
-      <h2 style="color:#333;">Skills Test Results — {test_type}</h2>
-      <table style="width:100%;margin-bottom:16px;">
-        <tr><td style="padding:4px 0;color:#666;">Template:</td>
-            <td style="padding:4px 0;font-weight:bold;">{html.escape(str(template_name))}</td></tr>
-        <tr><td style="padding:4px 0;color:#666;">Candidate:</td>
-            <td style="padding:4px 0;font-weight:bold;">{html.escape(str(candidate_name))}</td></tr>
-        <tr><td style="padding:4px 0;color:#666;">Examiner:</td>
-            <td style="padding:4px 0;font-weight:bold;">{html.escape(str(examiner_name))}</td></tr>
-        <tr><td style="padding:4px 0;color:#666;">Result:</td>
-            <td style="padding:4px 0;font-weight:bold;">{result_text}</td></tr>
-        <tr><td style="padding:4px 0;color:#666;">Score:</td>
-            <td style="padding:4px 0;font-weight:bold;">{score_text}</td></tr>
-      </table>
-      {sections_html}
-      <hr style="margin:24px 0;border:none;border-top:1px solid #ddd;" />
-      <p style="color:#999;font-size:12px;">
-        {"This was a practice attempt and is not part of official records."
-         if test.is_practice else
-         "This is an official evaluation record."}
-      </p>
-    </div>
-    """
+    html_body = wrap_email_body(
+        org,
+        f"Skills Test Results — {test_type}",
+        facts(
+            [
+                [fact("Template", html.escape(str(template_name)))],
+                [
+                    fact("Candidate", html.escape(str(candidate_name))),
+                    fact("Examiner", html.escape(str(examiner_name))),
+                ],
+                [fact("Result", result_text), fact("Score", score_text)],
+            ]
+        )
+        + sections_html
+        + '<p class="fineprint">'
+        + (
+            "This was a practice attempt and is not part of official records."
+            if test.is_practice
+            else "This is an official evaluation record."
+        )
+        + "</p>",
+        header_color=ACCENT_AMBER,
+        chip="Practice attempt" if test.is_practice else "Skills test",
+    )
 
     email_service = EmailService(organization=org)
     subject = f"Skills Test Results: {template_name} ({test_type})"

@@ -72,7 +72,9 @@ def _quiet_side_effects(monkeypatch):
     import app.services.email_service as email_service
 
     monkeypatch.setattr(email_service, "EmailService", MagicMock())
-    monkeypatch.setattr(email_service, "build_email_logo_html", lambda org: "")
+    monkeypatch.setattr(
+        email_service, "wrap_email_body", lambda org, title, body, **_kwargs: body
+    )
 
 
 class TestAutoArchiveGate:

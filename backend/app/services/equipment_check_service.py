@@ -4812,7 +4812,10 @@ class EquipmentCheckService:
             # Optional email
             if cfg.get("send_email", False):
                 try:
-                    from app.services.email_service import EmailService
+                    from html import escape as _esc
+
+                    from app.services.email_service import EmailService, wrap_email_body
+                    from app.services.email_theme import ACCENT_AMBER, ACCENT_RED
 
                     recip_result = await self.db.execute(
                         select(User.email).where(
@@ -4843,7 +4846,7 @@ class EquipmentCheckService:
                                     qty_info += (
                                         f" (Critical min: " f"{ci['critical_minimum']})"
                                     )
-                            ci_name = ci["name"] + (
+                            ci_name = _esc(str(ci["name"])) + (
                                 " (out of service)" if ci.get("out_of_service") else ""
                             )
                             item_rows_html += (
@@ -4871,7 +4874,7 @@ class EquipmentCheckService:
                             item_rows_html += (
                                 "<tr>"
                                 f"<td style='padding:4px 8px'>"
-                                f"{wi['name']}</td>"
+                                f"{_esc(str(wi['name']))}</td>"
                                 f"<td style='padding:4px 8px;"
                                 f"color:#d97706'>{status_label}</td>"
                                 f"<td style='padding:4px 8px'>"
@@ -4893,19 +4896,26 @@ class EquipmentCheckService:
                                 f"</tr>{item_rows_html}</table>"
                             )
 
+                        # Names are typed by whoever built the template or
+                        # holds the account, so they are escaped here.
                         summary_line = (
-                            f'Equipment check "{template_name}"'
-                            f"{apparatus_label} failed with "
+                            f'Equipment check "{_esc(str(template_name))}"'
+                            f"{_esc(str(apparatus_label))} failed with "
                             f"{failed_count} of {total_count} "
-                            f"items. Checked by {checker_name} "
-                            f"on {shift_date_str}."
+                            f"items. Checked by {_esc(str(checker_name))} "
+                            f"on {_esc(str(shift_date_str))}."
                         )
-                        html_body = (
+                        html_body = wrap_email_body(
+                            org,
+                            "Equipment Check Failed",
                             f"<p>{summary_line}</p>"
                             f"{items_table}"
                             "<p>Please log in to review "
                             "the failed items and take "
-                            "corrective action.</p>"
+                            "corrective action.</p>",
+                            header_color=(ACCENT_RED if has_critical else ACCENT_AMBER),
+                            chip="Critical" if has_critical else "Check failed",
+                            subtitle=f"{template_name}{apparatus_label}",
                         )
                         await email_svc.send_email(
                             to_emails=to_emails,

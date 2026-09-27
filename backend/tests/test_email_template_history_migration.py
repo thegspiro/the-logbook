@@ -36,6 +36,8 @@ def _load(pattern: str):
 
 
 MIGRATION = _load("*_b795d1b3401b_*.py")
+# The revision that took over from this one when the defaults next changed.
+SOLID_TAB = _load("*_15c5bc7700aa_*.py")
 SHELL = _load("*_f0d76814a9ab_*.py")
 FEB_WELCOME = _load("20260206_0302_*.py")
 FEB_RESET = _load("20260206_0303_*.py")
@@ -88,13 +90,17 @@ def _rows(engine) -> dict:
 
 
 class TestTheFrozenDefaults:
-    def test_every_shipped_default_is_the_migrations_current(self):
-        # If this fails, a default changed. Ship a new revision that knows
-        # this one's CURRENT as an earlier version, and repoint this test at
-        # it — otherwise rows still on today's default stay on it forever.
+    def test_the_next_revision_carries_on_from_this_ones_current(self):
+        # The bodies changed again in 15c5bc7700aa, which recognises exactly
+        # the body this revision wrote. If they ever disagree, a row this
+        # revision converted is stranded on it. Subjects, plain-text bodies
+        # and footers did not change, so this revision's copies of those are
+        # still what ships.
         for template_type, frozen in MIGRATION.CURRENT.items():
             shipped = _DEFAULTS[template_type]
-            assert frozen["html"] == shipped["html"], template_type
+            assert (
+                frozen["html"] == SOLID_TAB.PREVIOUS_BODIES[template_type]
+            ), template_type
             assert frozen["text"] == shipped["text"], template_type
             assert frozen["subject"] == shipped["subject"], template_type
             assert frozen["footer"] == shipped.get("footer"), template_type
@@ -220,9 +226,9 @@ class TestTheRewrite:
                 {
                     "id": "already-current",
                     "template_type": "welcome",
-                    "subject": _DEFAULTS["welcome"]["subject"],
-                    "html_body": _DEFAULTS["welcome"]["html"],
-                    "text_body": _DEFAULTS["welcome"]["text"],
+                    "subject": MIGRATION.CURRENT["welcome"]["subject"],
+                    "html_body": MIGRATION.CURRENT["welcome"]["html"],
+                    "text_body": MIGRATION.CURRENT["welcome"]["text"],
                 },
                 {"id": "empty", "template_type": "welcome"},
             ]
@@ -232,7 +238,7 @@ class TestTheRewrite:
         engine = self._scenario()
         _run(engine, MIGRATION.upgrade)
         row = _rows(engine)["untouched"]
-        current = _DEFAULTS["welcome"]
+        current = MIGRATION.CURRENT["welcome"]
         assert row["html_body"] == current["html"]
         assert row["text_body"] == current["text"]
         assert row["subject"] == current["subject"]
@@ -245,14 +251,14 @@ class TestTheRewrite:
         rows = _rows(engine)
         assert (
             rows["public-notice"]["html_body"]
-            == _DEFAULTS["event_request_status"]["html"]
+            == MIGRATION.CURRENT["event_request_status"]["html"]
         )
         assert rows["public-notice"]["footer_key"] == "public"
         # A footer somebody chose is theirs, even on a converted body.
         assert rows["footer-chosen"]["footer_key"] == "official"
         assert (
             rows["footer-chosen"]["html_body"]
-            == _DEFAULTS["event_request_status"]["html"]
+            == MIGRATION.CURRENT["event_request_status"]["html"]
         )
 
     def test_each_field_is_judged_on_its_own(self):
@@ -263,12 +269,12 @@ class TestTheRewrite:
 
         reworded = after["reworded-subject"]
         assert reworded["subject"] == before["reworded-subject"]["subject"]
-        assert reworded["html_body"] == _DEFAULTS["welcome"]["html"]
+        assert reworded["html_body"] == MIGRATION.CURRENT["welcome"]["html"]
 
         edited = after["edited-body"]
         assert edited["html_body"] == before["edited-body"]["html_body"]
-        assert edited["text_body"] == _DEFAULTS["welcome"]["text"]
-        assert edited["subject"] == _DEFAULTS["welcome"]["subject"]
+        assert edited["text_body"] == MIGRATION.CURRENT["welcome"]["text"]
+        assert edited["subject"] == MIGRATION.CURRENT["welcome"]["subject"]
 
     def test_what_it_cannot_vouch_for_is_left_alone(self):
         engine = self._scenario()

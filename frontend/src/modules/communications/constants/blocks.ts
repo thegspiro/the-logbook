@@ -57,11 +57,14 @@ export const EMAIL_BLOCKS: EmailBlock[] = [
     id: 'button',
     label: 'Button',
     icon: 'squareMousePointer',
-    // The same address again as text under the button, for a client that
-    // strips the button's styling. The border, in the button's own colour, is
-    // what makes classic Outlook honour the button's padding.
+    // A full-width cell filled with the colour, holding a block link: the
+    // shape every client, classic Outlook included, renders as a button.
+    // `bgcolor` is for Outlook versions that ignore a CSS background on a
+    // cell, and the border in the button's own colour is what makes Outlook
+    // honour the link's padding. The same address follows as text, for a
+    // client that strips the button's styling.
     html: [
-      '<p class="action"><a href="{{login_url}}" class="button" style="background-color: #b91c1c; border: 1px solid #b91c1c;">Open</a></p>',
+      '<table class="cta" role="presentation" cellpadding="0" cellspacing="0"><tr><td class="cta-cell" bgcolor="#b91c1c" style="background-color: #b91c1c;"><a href="{{login_url}}" class="cta-link" style="border: 1px solid #b91c1c;">Open</a></td></tr></table>',
       '<p class="action-link">Or open this link: {{login_url}}</p>',
     ].join('\n'),
   },

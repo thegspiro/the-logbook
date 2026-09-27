@@ -454,6 +454,41 @@ deployment with no Redis at all, is corrected within that window. Until then, an
 email sent by one of those workers still uses the previous address. Links already
 sent keep whatever address they were sent with.
 
+## Email Design — What the Solid-Tab Shell Does Not Reach (2026-09-27)
+
+Every default template, the storefront notices, and every email a service
+builds inline now renders into the solid-tab shell in
+`app/services/email_theme.py` (masthead, accent tab, tinted summary card, body
+card, stacked callouts, centred footer, dark rendering). Revision
+`15c5bc7700aa` moved each stored template that was still a verbatim copy of
+the previous default. Four things are deliberately left as they are:
+
+- **A template a department edited keeps its own markup.** It renders against
+  the new stylesheet, which still defines every class the previous shells
+  used, so it keeps working and picks up the new body card and footer. It gets
+  the tab and summary card only when an admin presses **Reset** on it. So does
+  a template with its own stylesheet, even if its body is untouched, because
+  that stylesheet was written against the old class names.
+- **Event-request emails are not wrapped.** Their bodies
+  (`EventRequestEmailTemplate`) are written entirely by each department, with
+  no shipped default, and many carry their own `{{organization_logo_img}}`
+  and sign-off. Putting the shell around them would duplicate both. Deciding
+  whether to wrap them, and how to migrate bodies that already carry a logo,
+  is an owner decision.
+- **The election rollback and deletion alerts do not read their templates.**
+  `ElectionService._notify_leadership` builds its own body; the
+  `election_rollback` / `election_deleted` rows an admin can edit on the
+  Email Templates screen are stored but never sent (the Pitfall #19 shape).
+  The alert is now in the shell with its wording unchanged. Switching it to
+  the templates would change what leadership receives (the templates carry
+  less detail), so it is left for a decision.
+- **Dark mode is Apple Mail and Outlook.com.** It is a
+  `prefers-color-scheme` stylesheet, which Gmail strips along with every
+  other `<style>`; Gmail's apps and classic Outlook repaint the light
+  rendering themselves. Inside the body card, unclassed fragments that
+  services inject (tables, coloured panels) lose their own backgrounds in the
+  dark, so their text stays legible, and with them their colour coding.
+
 ## Installed App Icons — Three Things the Platforms Decide for Us (2026-09-17)
 
 The department's logo is rendered into the installable app's icons and iOS

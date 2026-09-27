@@ -2,41 +2,45 @@
 Email Theme — the one place the outgoing mail's look is defined.
 
 Every email the platform sends renders into the same chrome: a centred
-masthead (the department's logo above its name) on a light grey page, then a
-white card holding a small status line, the title and the body, and a
-left-aligned footer under the card.  The stylesheet below is what makes that
-chrome look the way it does, and the accent constants are the only colours a
-template should put on a notice.
+masthead (the department's logo above its name) on a light grey page, a
+solid tab in the notice's accent naming its category and, on the right, the
+one piece of urgency it carries, a card tinted with the accent holding the
+title, the white body card, any callout cards stacked under it, and a centred
+footer.  The stylesheet below is what makes that chrome look the way it does,
+and the accent constants are the only colours a template should put on a
+notice.
 
 The layout follows published guidance for transactional mail rather than a
-house style: body text is left-aligned (centring is kept to the two short
-blocks at either end of the card — the masthead and the action), key facts
-sit in a panel with each label above its value so they can be found without
-reading prose, body copy is 16px, and the button is at least 44px tall. There
-are no rules or rails between blocks; spacing separates them.
+house style: body text is left-aligned, key facts are set with each label
+above its value so they can be found without reading prose, body copy is
+16px, and the button spans the card and is at least 44px tall. There are no
+rules or rails between blocks; spacing separates them.
 
 The accent appears in these places, all of them inline so one shell serves
 every category:
 
-=================  =================================
-Element            Inline override
-=================  =================================
-``.status-mark``   ``background-color``
-``.status-text``   ``color``
-``.header p``      ``color`` (the optional subtitle)
-``.button``        ``background-color``
-=================  =================================
+====================  =================================
+Element               Inline override
+====================  =================================
+``.tab``              ``background-color`` (and ``bgcolor``)
+``.summary``          ``background-color`` — the accent's tint
+``.cta-cell``         ``background-color`` (and ``bgcolor``)
+``.tile-count``       ``background-color``
+====================  =================================
 
 :func:`build_shell` and :func:`colourway_context` write all of them from one
 accent, so a notice names its category and gets the colourway; nothing
 downstream repeats a hex.
 
-**The classes the previous shell used are still defined.** ``.lockup``,
-``.logomark``, ``.chip`` and a restyled ``.details`` stay in the sheet
-because a template a department edited carries the old markup in its stored
-body, and that body renders against *this* stylesheet. It keeps working and
-picks up the new card, spacing and footer; it keeps its own header lockup
-until the template is reset.
+**Dark mode** is a second stylesheet, :data:`DARK_CSS`, kept out of the
+inliner's way; see :func:`_dark_css`.
+
+**The classes the previous shells used are still defined.** ``.header``,
+``.status-line``, ``.lockup``, ``.logomark``, ``.chip``, ``.action`` and
+``.button`` stay in the sheet because a template a department edited carries
+the old markup in its stored body, and that body renders against *this*
+stylesheet. It keeps working and picks up the new body card, spacing and
+footer; it keeps its own header until the template is reset.
 
 **Why this is its own module.** ``email_template_service`` owns the copy and
 ``email_templates_storefront`` owns the store's copy; the storefront module
@@ -75,8 +79,10 @@ Two constraints on ``DEFAULT_CSS`` that are easy to violate by accident:
 
    The fact panel relies on the same property: ``.fact``, ``.fact-label``,
    ``.fact-value`` and ``.facts`` sit inside ``.content``, so each names every
-   property ``.content td`` / ``.content p`` / ``.content table`` set.
-   Class rules are applied before any ``.parent tag`` rule and therefore win
+   property ``.content td`` / ``.content p`` / ``.content table`` set, and so
+   do ``.facts-panel``, ``.fact-boxed``, ``.cta`` and ``.cta-cell``. In the
+   tinted card, ``.summary-fact-label`` and ``.summary-fact-value`` name every
+   property ``.summary p`` sets, for the same reason. Class rules are applied before any ``.parent tag`` rule and therefore win
    where they speak; where they are silent, the content rule leaks through.
 """
 
@@ -85,8 +91,9 @@ import re
 
 # Accents.  White text on each of these clears WCAG 2.1 AA (4.5:1):
 # red 6.5:1, amber 5.0:1, green 5.5:1, blue 6.7:1, indigo 7.9:1,
-# violet 7.1:1, slate 10.3:1.  Contrast is symmetric, so the same figures hold
-# for the accent-coloured status text and subtitle on the white card.
+# violet 7.1:1, slate 10.3:1.  That is what lets the solid tab keep its accent
+# in both colour schemes, and the same figures hold for the accent-coloured
+# countdown tile and the accent-coloured value in a summary box.
 ACCENT_RED = "#b91c1c"
 ACCENT_AMBER = "#b45309"
 ACCENT_GREEN = "#047857"
@@ -95,26 +102,97 @@ ACCENT_INDIGO = "#4338ca"
 ACCENT_VIOLET = "#6d28d9"
 ACCENT_SLATE = "#334155"
 
-# Body copy on white is 14.7:1, muted footer text on the page grey is 6.9:1.
+# The four shapes a callout card takes, plus a neutral one for the "didn't ask
+# for this?" line. Deliberately *not* the accents: a callout's colour says what
+# kind of message it is (a warning is amber on a blue event notice too), so
+# tying it to the notice's colourway would make an election's warning purple.
+# The shades are one step darker than the accents so no body ever carries an
+# ACCENT_* hex — the colourway column must stay the only place those come from.
+# Title on tint: info 8.6:1, success 7.7:1, warning 7.6:1, critical 8.0:1.
+CALLOUT_KINDS = {
+    # kind: (surface, title, text, dark surface, dark title)
+    "info": ("#eff6ff", "#1e40af", "#1e3a8a", "#18223d", "#93b4ff"),
+    "success": ("#f0fdf4", "#065f46", "#064e3b", "#142a22", "#6ee7b7"),
+    "warning": ("#fffbeb", "#92400e", "#78350f", "#2b2414", "#f5b454"),
+    "critical": ("#fef2f2", "#991b1b", "#7f1d1d", "#361a1c", "#fca5a5"),
+    "neutral": ("#ffffff", "#0f172a", "#334155", "#1c1f24", "#f3f4f6"),
+}
+
+
+def _callout_css() -> str:
+    """One container and two paragraph classes per callout kind.
+
+    Generated rather than typed out because the three rules per kind differ
+    only in their colours, and fifteen hand-written lines are fifteen chances
+    for one kind's title to drift from the others. Each paragraph names every
+    property it sets: the callouts sit outside ``.content``, so nothing leaks
+    in, but a department that pastes one inside the body card would otherwise
+    inherit ``.content p``'s colour.
+    """
+    lines = []
+    for kind, (surface, title, text, _dark, _dark_title) in CALLOUT_KINDS.items():
+        lines.append(
+            f".callout-title-{kind} {{ margin: 0 0 2px 0; font-size: 15px; "
+            f"line-height: 1.4; font-weight: 700; color: {title}; }}"
+        )
+        lines.append(
+            f".callout-text-{kind} {{ margin: 0; font-size: 15px; "
+            f"line-height: 1.5; font-weight: 400; color: {text}; }}"
+        )
+        border = "border: 1px solid #e2e8f0; " if kind == "neutral" else ""
+        lines.append(
+            f".callout-{kind} {{ background-color: {surface}; {border}"
+            "border-radius: 12px; padding: 16px 24px; margin: 12px 0 0 0; }"
+        )
+    return "\n".join(lines) + "\n"
+
+
+# Body copy on white is 10.4:1, muted footer text on the page grey is 6.9:1.
 #
 # .muted keeps #4b5563 rather than the #94a3b8 the 1b spec names. At 11px it
 # carries the department's phone number and mailing address — email_footers
 # applies it to the contact line — and #94a3b8 is 2.6:1 on the white card,
 # well under the 4.5:1 AA floor for small text. The spec picked it to sit
 # quietly under the footer; it sits too quietly to read.
-DEFAULT_CSS = """
+#
+# The rules from ``.header`` to ``.chip``, and ``.action`` / ``.button``, are
+# the previous shells' classes. Nothing this module builds uses them any more;
+# they stay because an edited body carries that markup and renders against
+# this sheet (see the module docstring).
+DEFAULT_CSS = (
+    """
 body { margin: 0; padding: 0; background-color: #eef0f3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #334155; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; }
-.container { max-width: 600px; margin: 0 auto; padding: 28px 12px 24px 12px; }
+.container { max-width: 600px; margin: 0 auto; padding: 24px 16px 24px 16px; }
 .logo { text-align: center; padding: 0 0 20px 0; }
 .logo img { max-height: 72px; max-width: 200px; }
-.masthead p { margin: 10px 0 0 0; font-size: 15px; line-height: 1.35; font-weight: 700; color: #0f172a; }
-.masthead { text-align: center; padding: 0 0 18px 0; }
+.masthead p { margin: 8px 0 0 0; font-size: 14px; line-height: 1.35; font-weight: 700; color: #0f172a; }
+.masthead { text-align: center; padding: 0 0 16px 0; }
+.tab-label { padding: 11px 0 11px 24px; font-size: 12px; line-height: 1.2; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #ffffff; text-align: left; }
+.tab-note { padding: 11px 24px 11px 12px; font-size: 13px; line-height: 1.2; font-weight: 600; color: #ffffff; text-align: right; }
+.tab { width: 100%; border-collapse: collapse; border-radius: 12px 12px 0 0; }
+.tile-count-num { padding: 10px 0 0 0; text-align: center; font-size: 26px; line-height: 1; font-weight: 800; color: #ffffff; }
+.tile-count-unit { padding: 4px 0 9px 0; text-align: center; font-size: 11px; line-height: 1.2; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #ffffff; }
+.tile-count { width: 72px; border-collapse: separate; border-radius: 8px; }
+.tile-date-month { padding: 4px 0; text-align: center; font-size: 11px; line-height: 1.2; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #ffffff; border-radius: 8px 8px 0 0; }
+.tile-date-day { padding: 6px 0 8px 0; text-align: center; font-size: 30px; line-height: 1; font-weight: 800; color: #0f172a; }
+.tile-date { width: 72px; border-collapse: separate; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; }
+.summary-lead { width: 72px; padding: 0 18px 0 0; vertical-align: top; }
+.summary-text { vertical-align: top; }
+.summary-row { width: 100%; border-collapse: collapse; }
+.summary-fact-label { margin: 0 0 3px 0; font-size: 12px; line-height: 1.3; font-weight: 600; color: #4b5563; }
+.summary-fact-value { margin: 0; font-size: 18px; line-height: 1.3; font-weight: 700; color: #0f172a; }
+.summary-fact { background-color: #ffffff; border-radius: 8px; padding: 12px 14px; vertical-align: top; text-align: left; }
+.summary-gap { width: 10px; font-size: 0; line-height: 0; }
+.summary-facts { width: 100%; border-collapse: separate; margin: 16px 0 0 0; }
+.summary h1 { margin: 0; font-size: 24px; line-height: 1.25; font-weight: 700; letter-spacing: -0.01em; color: #0f172a; }
+.summary p { margin: 6px 0 0 0; font-size: 16px; line-height: 1.4; font-weight: 600; color: #334155; }
+.summary { padding: 20px 24px 22px 24px; }
 .status-mark { width: 8px; height: 8px; padding: 0; border-radius: 2px; font-size: 0; line-height: 0; }
 .status-text { padding: 0 0 0 8px; font-size: 13px; line-height: 1.3; font-weight: 600; }
 .status-line { border-collapse: collapse; margin: 0 0 10px 0; }
 .header h1 { margin: 0; font-size: 24px; line-height: 1.25; font-weight: 700; letter-spacing: -0.01em; color: #0f172a; }
 .header p { margin: 6px 0 0 0; font-size: 16px; line-height: 1.4; font-weight: 600; color: #475569; }
-.header { background-color: #ffffff; border: none; border-radius: 8px 8px 0 0; padding: 26px 24px 0 24px; }
+.header { background-color: #ffffff; border: none; border-radius: 12px 12px 0 0; padding: 26px 24px 0 24px; }
 .lockup img { display: block; max-width: 36px; max-height: 36px; width: auto; height: auto; border: 0; }
 .lockup td { vertical-align: middle; font-size: 13px; font-weight: 600; color: #0f172a; }
 .lockup { width: 100%; border-collapse: collapse; margin: 0 0 16px 0; }
@@ -124,19 +202,24 @@ body { margin: 0; padding: 0; background-color: #eef0f3; font-family: -apple-sys
 .details td { padding: 0 0 12px 0; font-size: 15px; line-height: 1.5; color: #0f172a; vertical-align: top; background-color: transparent; border-bottom: none; }
 .details th { padding: 0 0 12px 0; font-size: 13px; line-height: 1.5; font-weight: 600; color: #4b5563; text-align: left; width: 38%; vertical-align: top; background-color: transparent; text-transform: none; letter-spacing: 0; border-bottom: none; }
 .details table { width: 100%; border-collapse: collapse; margin: 0; font-size: 15px; }
-.details { background-color: #f5f6f8; border: none; border-radius: 6px; padding: 16px 18px 4px 18px; margin: 0 0 22px 0; }
+.details { background-color: #f5f6f8; border: none; border-radius: 8px; padding: 16px 18px 4px 18px; margin: 0 0 22px 0; }
 .fact-label { margin: 0 0 3px 0; font-size: 12px; line-height: 1.3; font-weight: 600; color: #4b5563; }
 .fact-value { margin: 0; font-size: 16px; line-height: 1.4; font-weight: 600; color: #0f172a; }
-.fact-mono { margin: 0; font-size: 16px; line-height: 1.4; font-weight: 500; letter-spacing: 0.02em; color: #0f172a; font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Courier New', monospace; }
-.fact { padding: 12px 16px; vertical-align: top; text-align: left; color: #0f172a; background-color: transparent; border-bottom: none; }
-.facts { width: 100%; border-collapse: separate; margin: 0 0 22px 0; font-size: 16px; background-color: #f5f6f8; border-radius: 6px; }
-.alert p { margin: 0; font-size: 15px; line-height: 1.5; color: #7c2d12; }
-.alert { background-color: #fff7ed; border: none; border-radius: 6px; padding: 12px 16px; margin: 0 0 22px 0; }
+.fact-mono { margin: 0; font-size: 17px; line-height: 1.4; font-weight: 700; letter-spacing: 0.04em; color: #0f172a; font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Courier New', monospace; }
+.fact-boxed { padding: 12px 16px; vertical-align: top; text-align: left; color: #0f172a; background-color: transparent; border-bottom: none; }
+.fact { padding: 0 16px 16px 0; vertical-align: top; text-align: left; color: #0f172a; background-color: transparent; border-bottom: none; }
+.facts-panel { width: 100%; border-collapse: separate; margin: 0 0 22px 0; font-size: 16px; background-color: #f5f6f8; border-radius: 8px; }
+.facts { width: 100%; border-collapse: collapse; margin: 0 0 6px 0; font-size: 16px; background-color: transparent; border-radius: 0; }
+.alert p { margin: 0; font-size: 15px; line-height: 1.5; color: #78350f; }
+.alert { background-color: #fffbeb; border: none; border-radius: 8px; padding: 14px 18px; margin: 0 0 22px 0; }
+.cta-link { display: block; padding: 15px 12px; font-size: 16px; line-height: 1.2; font-weight: 700; color: #ffffff; text-decoration: none; text-align: center; border-radius: 8px; }
+.cta-cell { padding: 0; border-radius: 8px; border-bottom: none; color: #ffffff; text-align: center; }
+.cta { width: 100%; border-collapse: separate; margin: 24px 0 0 0; font-size: 16px; }
 .action { margin: 26px 0 0 0; text-align: center; }
-.action-link { margin: 10px 0 18px 0; font-size: 12px; line-height: 1.5; color: #4b5563; text-align: center; word-break: break-all; }
-.content h2 { margin: 24px 0 10px 0; padding: 0 0 8px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e5e7eb; }
-.content-digest h2 { margin: 16px 0 10px 0; padding: 0 0 8px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e5e7eb; }
-.content-receipt h2 { margin: 24px 0 10px 0; padding: 0 0 8px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e5e7eb; }
+.action-link { margin: 12px 0 18px 0; font-size: 12px; line-height: 1.5; color: #4b5563; text-align: left; word-break: break-all; }
+.content h2 { margin: 24px 0 10px 0; padding: 0 0 8px 0; font-size: 16px; font-weight: 700; letter-spacing: 0; text-transform: none; color: #0f172a; border-bottom: 1px solid #e5e7eb; }
+.content-digest h2 { margin: 24px 0 10px 0; padding: 0 0 8px 0; font-size: 16px; font-weight: 700; letter-spacing: 0; text-transform: none; color: #0f172a; border-bottom: 1px solid #e5e7eb; }
+.content-receipt h2 { margin: 24px 0 10px 0; padding: 0 0 8px 0; font-size: 16px; font-weight: 700; letter-spacing: 0; text-transform: none; color: #0f172a; border-bottom: 1px solid #e5e7eb; }
 .content h3 { margin: 20px 0 8px 0; font-size: 16px; font-weight: 600; color: #0f172a; }
 .content-digest h3 { margin: 20px 0 8px 0; font-size: 16px; font-weight: 600; color: #0f172a; }
 .content-receipt h3 { margin: 20px 0 8px 0; font-size: 16px; font-weight: 600; color: #0f172a; }
@@ -158,21 +241,19 @@ body { margin: 0; padding: 0; background-color: #eef0f3; font-family: -apple-sys
 .content table { width: 100%; border-collapse: collapse; margin: 0 0 22px 0; font-size: 14px; }
 .content-digest table { width: 100%; border-collapse: collapse; margin: 0 0 22px 0; font-size: 14px; }
 .content-receipt table { width: 100%; border-collapse: collapse; margin: 0 0 22px 0; font-size: 14px; }
-.content-digest { background-color: #ffffff; border: none; border-radius: 0 0 8px 8px; padding: 16px 24px 28px 24px; }
-.content-receipt { background-color: #ffffff; border: none; border-radius: 0 0 8px 8px; padding: 16px 14px 28px 14px; }
-.content { background-color: #ffffff; border: none; border-radius: 0 0 8px 8px; padding: 16px 24px 28px 24px; }
+.content-digest { background-color: #ffffff; border: none; border-radius: 0 0 12px 12px; padding: 22px 24px 24px 24px; }
+.content-receipt { background-color: #ffffff; border: none; border-radius: 0 0 12px 12px; padding: 22px 14px 24px 14px; }
+.content { background-color: #ffffff; border: none; border-radius: 0 0 12px 12px; padding: 22px 24px 24px 24px; }
 .button { display: inline-block; padding: 14px 36px; background-color: #b91c1c; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; line-height: 1.2; }
-.fineprint { margin: 14px 0 18px 0; font-size: 13px; line-height: 1.6; color: #64748b; }
-.footer p { margin: 0 0 6px 0; font-size: 12px; line-height: 1.6; color: #4b5563; }
-.footer { padding: 18px 8px 4px 8px; text-align: left; font-size: 12px; line-height: 1.6; color: #4b5563; }
+.fineprint { margin: 14px 0 0 0; font-size: 13px; line-height: 1.6; color: #64748b; }
+"""
+    + _callout_css()
+    + """.footer p { margin: 0 0 6px 0; font-size: 12px; line-height: 1.6; color: #4b5563; }
+.footer { padding: 18px 8px 4px 8px; text-align: center; font-size: 12px; line-height: 1.6; color: #4b5563; }
 .muted { font-size: 11px; line-height: 1.6; color: #4b5563; }
 """
+)
 
-# The chip's tint, per accent. A notice names its category once and
-# :func:`build_shell` writes both halves of the pair; before this map the
-# seven bodies each carried the tint as a literal, which is how the header
-# and its chip drifted onto two different reds the first time an accent
-# was corrected.
 # The three shapes a notice takes. The stylesheet carries a .content class
 # per layout, because ``inline_email_css`` keys off a single-token class
 # attribute — a variant has to be its own class name, not a second one.
@@ -185,6 +266,12 @@ _LAYOUT_CONTENT_CLASS = {
     "digest": "content-digest",
 }
 
+# The summary card's tint, per accent. A notice names its category once and
+# :func:`build_shell` writes both halves of the pair; before this map the
+# bodies each carried the tint as a literal, which is how a header and its
+# chip drifted onto two different reds the first time an accent was
+# corrected. (Named for the pill the tint first sat under; the column and the
+# ``{{chip_tint}}`` token keep the name so stored bodies keep rendering.)
 CHIP_TINTS = {
     ACCENT_RED: "#fef2f2",
     ACCENT_AMBER: "#fffbeb",
@@ -194,6 +281,135 @@ CHIP_TINTS = {
     ACCENT_VIOLET: "#faf5ff",
     ACCENT_SLATE: "#f1f5f9",
 }
+
+# Dark mode, per accent: the deep version of each tint, and the 300-weight
+# version of the accent for text that sits on it. White on the tab is
+# unchanged in the dark, because it already clears AA on every accent.
+DARK_TINTS = {
+    ACCENT_RED: "#361a1c",
+    ACCENT_AMBER: "#2b2414",
+    ACCENT_GREEN: "#142a22",
+    ACCENT_BLUE: "#18223d",
+    ACCENT_INDIGO: "#1f1d3d",
+    ACCENT_VIOLET: "#27193b",
+    ACCENT_SLATE: "#232830",
+}
+ACCENTS_ON_DARK = {
+    ACCENT_RED: "#fca5a5",
+    ACCENT_AMBER: "#f5b454",
+    ACCENT_GREEN: "#6ee7b7",
+    ACCENT_BLUE: "#93b4ff",
+    ACCENT_INDIGO: "#a5b4fc",
+    ACCENT_VIOLET: "#c4b5fd",
+    ACCENT_SLATE: "#cbd5e1",
+}
+
+# The dark palette's neutrals: page, card, rule, heading, body, label.
+_DARK_PAGE = "#121417"
+_DARK_CARD = "#1c1f24"
+_DARK_RULE = "#2a2e35"
+_DARK_HEADING = "#f3f4f6"
+_DARK_BODY = "#c3c8d0"
+_DARK_LABEL = "#9aa3af"
+
+
+def _dark_css() -> str:
+    """The ``prefers-color-scheme: dark`` rendering, as a stylesheet of its own.
+
+    This is **not** part of ``DEFAULT_CSS`` and never goes through the
+    inliner: an ``@media`` block cannot be written onto a ``style=""``
+    attribute, so it is emitted in a second ``<style data-inline="false">``
+    that ``inline_email_css`` leaves in place. Clients that honour it (Apple
+    Mail on every platform, Outlook.com) render the dark palette; Gmail strips
+    it along with every other ``<style>``, which leaves the inlined light
+    rendering — the same as before.
+
+    Every declaration is ``!important`` because it has to beat an inline
+    style, and the inline styles are the whole of the light rendering.
+
+    Two techniques, for two kinds of markup:
+
+    * **The shell's own blocks are addressed by class.** The inliner keeps
+      ``class`` attributes, so ``.summary``, ``.fact-value``, the callouts
+      and the rest can each be given their exact dark colours. The summary
+      card's tint is set inline from ``{{chip_tint}}``, so its dark version is
+      picked by matching that value inside the style attribute — one rule
+      per accent, generated from :data:`DARK_TINTS`.
+    * **Everything else inside the body card is flattened.** Services inject
+      fragments with their own inline colours and no classes (a pink
+      property-return panel, grey table-header rows, an accent-filled
+      banner). Forcing light text onto those while leaving their light
+      backgrounds in place would make them unreadable, and there is no way
+      to enumerate them. So an unclassed element inside the card loses its
+      background and takes the dark body colour: the colour coding of those
+      islands is lost in the dark, and every word of them stays legible.
+    """
+    cards = (".content", ".content-digest", ".content-receipt")
+
+    def each(suffix: str) -> str:
+        return ", ".join(f"{card} {suffix}" for card in cards)
+
+    rules = [
+        ":root { color-scheme: light dark; supported-color-schemes: light dark; }",
+        f"body, .container {{ background-color: {_DARK_PAGE} !important; }}",
+        f".masthead p {{ color: {_DARK_HEADING} !important; }}",
+        f".content, .content-digest, .content-receipt, .header "
+        f"{{ background-color: {_DARK_CARD} !important; }}",
+        # Flatten the unclassed islands first, so the classed rules below win.
+        f"{each('[style*=background]:not([class])')} "
+        "{ background-color: transparent !important; background-image: none !important; }",
+        f"{each(':not([class])')} {{ color: {_DARK_BODY} !important; "
+        f"border-color: {_DARK_RULE} !important; }}",
+        f"{each('h1:not([class])')}, {each('h2:not([class])')}, "
+        f"{each('h3:not([class])')}, {each('strong:not([class])')}, "
+        f"{each('b:not([class])')}, {each('td:not([class])')} "
+        f"{{ color: {_DARK_HEADING} !important; }}",
+        f"{each('th:not([class])')} {{ background-color: #23272e !important; "
+        f"color: {_DARK_LABEL} !important; }}",
+        f"{each('a:not([class])')} {{ color: {ACCENTS_ON_DARK[ACCENT_BLUE]} !important; }}",
+        f".summary h1, .header h1 {{ color: {_DARK_HEADING} !important; }}",
+        f".summary p, .header p {{ color: {_DARK_BODY} !important; }}",
+        f".fact-label, .summary-fact-label {{ color: {_DARK_LABEL} !important; }}",
+        f".fact-value, .fact-mono, .summary-fact-value "
+        f"{{ color: {_DARK_HEADING} !important; }}",
+        f".facts-panel, .details {{ background-color: {_DARK_PAGE} !important; }}",
+        f".details p, .details td {{ color: {_DARK_HEADING} !important; }}",
+        f".details th {{ color: {_DARK_LABEL} !important; background-color: transparent !important; }}",
+        f".summary-fact {{ background-color: {_DARK_CARD} !important; }}",
+        f".tile-date {{ background-color: {_DARK_CARD} !important; "
+        f"border-color: {_DARK_RULE} !important; }}",
+        f".tile-date-day {{ color: {_DARK_HEADING} !important; }}",
+        f".alert {{ background-color: {DARK_TINTS[ACCENT_AMBER]} !important; }}",
+        f".alert p {{ color: {_DARK_HEADING} !important; }}",
+        f".action-link, .fineprint, .footer p, .footer, .muted "
+        f"{{ color: {_DARK_LABEL} !important; }}",
+        f".footer a {{ color: {_DARK_LABEL} !important; }}",
+    ]
+    for accent, tint in CHIP_TINTS.items():
+        rules.append(
+            f'.summary[style*="{tint}"] '
+            f"{{ background-color: {DARK_TINTS[accent]} !important; }}"
+        )
+        # Anchored to the end of the attribute (``$=``), not a substring:
+        # the inliner merges ``.summary p`` in front, and its colour is
+        # slate's hex, so a substring match would paint every value slate.
+        # The element's own inline colour is always what the attribute ends
+        # with, because the inliner puts class styles first.
+        rules.append(
+            f'.summary-fact-value[style$="color: {accent};"] '
+            f"{{ color: {ACCENTS_ON_DARK[accent]} !important; }}"
+        )
+    for kind, (_surface, _title, _text, dark, dark_title) in CALLOUT_KINDS.items():
+        rules.append(f".callout-{kind} {{ background-color: {dark} !important; ")
+        rules[-1] += (
+            f"border-color: {_DARK_RULE} !important; }}" if kind == "neutral" else "}"
+        )
+        rules.append(f".callout-title-{kind} {{ color: {dark_title} !important; }}")
+        rules.append(f".callout-text-{kind} {{ color: #e5e7eb !important; }}")
+    return "@media (prefers-color-scheme: dark) {\n" + "\n".join(rules) + "\n}"
+
+
+DARK_CSS = _dark_css()
 
 # Table styling for the tables services inject into templates as raw HTML
 # (outstanding property, election results, skipped voters, store orders).
@@ -377,7 +593,7 @@ def build_logo_block(logo_url: str, organization_name: str) -> str:
 
 
 def fact(label: str, value: str, mono: bool = False) -> tuple:
-    """One label/value pair for :func:`facts`.
+    """One label/value pair for :func:`facts` or :func:`summary_facts`.
 
     *mono* sets the value in a fixed-width face, for values a member has to
     type back exactly — a username or a temporary password, where ``l``/``1``
@@ -386,8 +602,8 @@ def fact(label: str, value: str, mono: bool = False) -> tuple:
     return (label, value, mono)
 
 
-def facts(rows: list) -> str:
-    """The key-facts panel: labels above values, one or two facts per row.
+def facts(rows: list, panel: bool = False) -> str:
+    """The key facts: labels above values, one or two facts per row.
 
     *rows* is a list of rows, each a list of one or two :func:`fact` pairs.
     Which facts share a row is the caller's decision, per template, rather
@@ -395,12 +611,20 @@ def facts(rows: list) -> str:
     "End" are short and belong together, and that "Reason" is free text a
     department types and can run to a paragraph. A lone fact spans the row.
 
+    The facts sit directly on the body card, separated by spacing alone.
+    *panel* puts them on a grey panel instead — for credentials, which are
+    the one set of facts a member copies out of the email rather than reads,
+    and which the panel sets apart from the prose around them.
+
     Returned as literal markup, so the stored body carries exactly what an
     admin will see and can edit in the template editor — there is no macro
     for the editor to expand.
     """
+    table_class, cell_class = (
+        ("facts-panel", "fact-boxed") if panel else ("facts", "fact")
+    )
     lines = [
-        '        <table class="facts" role="presentation" cellpadding="0" '
+        f'        <table class="{table_class}" role="presentation" cellpadding="0" '
         'cellspacing="0">'
     ]
     for row in rows:
@@ -411,7 +635,7 @@ def facts(rows: list) -> str:
             span = ' colspan="2"' if len(row) == 1 else ' width="50%"'
             value_class = "fact-mono" if mono else "fact-value"
             cells.append(
-                f'<td class="fact"{span}><p class="fact-label">{label}</p>'
+                f'<td class="{cell_class}"{span}><p class="fact-label">{label}</p>'
                 f'<p class="{value_class}">{value}</p></td>'
             )
         lines.append("            <tr>" + "".join(cells) + "</tr>")
@@ -419,8 +643,91 @@ def facts(rows: list) -> str:
     return "\n".join(lines) + "\n"
 
 
+def summary_facts(pairs: list, emphasis: int = -1) -> str:
+    """One or two facts in white boxes on the tinted summary card.
+
+    For the figure a notice is about — a return deadline and the value at
+    stake, an amount due and the date it is due — lifted out of the body so
+    it is read before anything else. *emphasis* is the index of the one value
+    set in the accent (the deadline, never the amount), or ``-1`` for none.
+
+    The gap between the boxes is a cell of its own because Outlook's Word
+    engine ignores ``border-spacing``.
+    """
+    if not 1 <= len(pairs) <= 2:
+        raise ValueError("a summary holds one or two facts")
+    cells = []
+    for index, (label, value, _mono) in enumerate(pairs):
+        if index:
+            cells.append('<td class="summary-gap">&nbsp;</td>')
+        colour = ' style="color: {accent};"' if index == emphasis else ""
+        width = ' width="50%"' if len(pairs) == 2 else ""
+        cells.append(
+            f'<td class="summary-fact"{width}><p class="summary-fact-label">{label}</p>'
+            f'<p class="summary-fact-value"{colour}>{value}</p></td>'
+        )
+    return (
+        '        <table class="summary-facts" role="presentation" cellpadding="0" '
+        'cellspacing="0"><tr>' + "".join(cells) + "</tr></table>"
+    )
+
+
+def countdown_tile(value: str, unit: str) -> str:
+    """The accent-filled tile that leads a summary with a number: ``12 DAYS``.
+
+    For a notice whose point is how long is left — an expiring
+    certification. The accent is the fill, so a department that recolours
+    the notice recolours the tile with it.
+    """
+    return (
+        '<table class="tile-count" role="presentation" cellpadding="0" '
+        'cellspacing="0" style="background-color: {accent};">'
+        f'<tr><td class="tile-count-num">{value}</td></tr>'
+        f'<tr><td class="tile-count-unit">{unit}</td></tr></table>'
+    )
+
+
+def date_tile(month: str, day: str) -> str:
+    """The calendar-page tile: an accent strip with the month over the day.
+
+    Takes the month and the day separately, because a sender passes each
+    date to a template as one pre-formatted string and there is nothing to
+    split reliably across locales. No shipped template uses it yet: it is here
+    for the first template whose sender supplies the two parts.
+    """
+    return (
+        '<table class="tile-date" role="presentation" cellpadding="0" '
+        'cellspacing="0">'
+        f'<tr><td class="tile-date-month" style="background-color: {{accent}};">{month}</td></tr>'
+        f'<tr><td class="tile-date-day">{day}</td></tr></table>'
+    )
+
+
+def callout(kind: str, title: str, text: str) -> str:
+    """A tinted card stacked under the body card: a heading and one line.
+
+    For the thing a member must not miss, set apart from the notice itself —
+    "change your password", "don't forward this link", "didn't ask for
+    this?". *kind* is one of :data:`CALLOUT_KINDS` and says what sort of
+    message it is; the colour does not follow the notice's accent, because
+    a warning is amber on an election notice too.
+
+    Pass the result to :func:`build_shell` as *after*, not inside the body:
+    the design stacks callouts as separate cards below it.
+    """
+    if kind not in CALLOUT_KINDS:
+        raise ValueError(
+            f"unknown callout kind {kind!r}; expected one of {sorted(CALLOUT_KINDS)}"
+        )
+    return (
+        f'    <div class="callout-{kind}">'
+        f'<p class="callout-title-{kind}">{title}</p>'
+        f'<p class="callout-text-{kind}">{text}</p></div>'
+    )
+
+
 def action(url: str, label: str) -> str:
-    """The centred button and, under it, the same link as plain text.
+    """The full-width button and, under it, the same link as plain text.
 
     The plain link is not decoration: a client that strips styling, a
     screen reader user skipping between links, and a member reading on a
@@ -430,23 +737,29 @@ def action(url: str, label: str) -> str:
     caller. ``{accent}`` is left for :func:`build_shell` to turn into the
     colourway token.
 
-    The border in the button's own colour is for classic Outlook, whose Word
-    engine ignores padding on an inline ``<a>`` unless the element has a
-    border — without it the button collapses to a coloured strip the height
-    of its text. It is written here rather than in ``.button`` so that a
-    template a department edited, whose button carries its own colour and no
-    border, is not given a border in the stylesheet's red.
+    The button is a table cell filled with the accent, holding a block link
+    — the arrangement every client, classic Outlook included, renders as a
+    button. ``bgcolor`` is for Outlook, which ignores a CSS background on a
+    cell in some versions. The link carries a border in its own colour
+    because Outlook's Word engine ignores padding on an ``<a>`` without one,
+    which would shrink the tap target to the height of the label.
     """
     return (
-        f'        <p class="action"><a href="{url}" class="button" '
-        f'style="background-color: {{accent}}; border: 1px solid {{accent}};">'
-        f"{label}</a></p>\n"
+        '        <table class="cta" role="presentation" cellpadding="0" '
+        'cellspacing="0"><tr>'
+        '<td class="cta-cell" bgcolor="{accent}" style="background-color: {accent};">'
+        f'<a href="{url}" class="cta-link" '
+        'style="border: 1px solid {accent};">'
+        f"{label}</a></td></tr></table>\n"
         f'        <p class="action-link">Or open this link: {url}</p>\n'
     )
 
 
-_FACT_VALUE = re.compile(r'<p class="fact-(?:value|mono)">(.*?)</p>', re.S)
+_FACT_VALUE = re.compile(
+    r'<p class="(?:summary-)?fact-(?:value|mono)"[^>]*>(.*?)</p>', re.S
+)
 _FACT_ROW = re.compile(r"<tr>(.*?)</tr>", re.S)
+_FACT_TABLE = re.compile(r'class="(?:facts|facts-panel|summary-facts)"')
 
 # The conventional filler after preview text: characters clients render as
 # nothing but count toward the preview, so it is not topped up with the start
@@ -456,16 +769,18 @@ _PREHEADER_FILLER = "&#847;&zwnj;&nbsp;&#8199;&shy;" * 30
 
 
 def _first_fact_row(content: str) -> str:
-    """The values in the fact panel's first row, joined, with markup removed.
+    """The values in the first row of facts, joined, with markup removed.
 
     The first row is where each template puts the fact a member opens the
     email for (the start time, the expiry date, the return deadline), so it
-    doubles as the inbox preview without every template restating it.
+    doubles as the inbox preview without every template restating it. The
+    summary card's facts come first when there are any, because that is
+    where a template lifts the one it most wants read.
     """
-    panel = content.find('class="facts"')
-    if panel == -1:
+    panel = _FACT_TABLE.search(content)
+    if not panel:
         return ""
-    row = _FACT_ROW.search(content, panel)
+    row = _FACT_ROW.search(content, panel.start())
     if not row:
         return ""
     values = [
@@ -503,8 +818,21 @@ def build_shell(
     layout: str = DEFAULT_LAYOUT,
     cache: bool = True,
     preheader: str = "",
+    tab_note: str = "",
+    lead: str = "",
+    summary: str = "",
+    after: str = "",
 ) -> str:
     """Build the chrome every notice renders into.
+
+    Top to bottom: the masthead (the department's logo on a white plate
+    above its name), a solid tab in the notice's accent naming its category
+    on the left and one piece of urgency on the right, a card tinted with
+    the accent holding the title, then the white body card, any callout
+    cards stacked beneath it, and the centred footer. Only the body and the
+    stacked cards change from notice to notice; everything above them is the
+    same shell, so a member learns to read the category and the urgency
+    before the words.
 
     One function, because there is no import path between the two modules
     that need it: ``email_template_service`` owns the platform's copy and
@@ -513,19 +841,27 @@ def build_shell(
     existed the two files each carried their own copy of the layout, and the
     store's mail drifted a header at a time.
 
-    *accent* drives every accented element; the chip's tint is looked up
-    in :data:`CHIP_TINTS` rather than passed, so the two halves of a
-    colourway cannot disagree. An accent outside the map falls back to the
-    slate tint, which reads as deliberate rather than broken.
+    *accent* drives every accented element; the tint is looked up in
+    :data:`CHIP_TINTS` rather than passed, so the two halves of a colourway
+    cannot disagree.
 
-    *chip* and *subtitle* are omitted from the markup entirely when empty —
-    an empty chip would otherwise render as a coloured square labelling
-    nothing, and an empty subline as dead space under the title.
+    *chip* is the category the tab names. The tab is drawn whatever it
+    holds: with the chip cleared it is a plain accent band, which still
+    carries the colour. *tab_note* is the right-hand side — a deadline or a
+    time limit, written with the template's own variables (``Due
+    {{approval_deadline}}``) — and is left out of the markup when empty.
 
-    *subtitle* is HTML-escaped here, unlike *title* — every current caller
-    passes *title* as either a trusted literal or already escapes it before
-    calling in (``wrap_email_body``), but *subtitle* has no such caller-side
-    guarantee, so it is escaped at the one place every caller goes through.
+    *subtitle* is the line under the title. It is HTML-escaped here, unlike
+    *title* — every current caller passes *title* as either a trusted literal
+    or already escapes it before calling in (``wrap_email_body``), but
+    *subtitle* has no such caller-side guarantee, so it is escaped at the one
+    place every caller goes through. *tab_note*, like *title*, is written by
+    the template author and not escaped.
+
+    *lead* is an optional tile set to the left of the title
+    (:func:`countdown_tile`, :func:`date_tile`), and *summary* optional
+    :func:`summary_facts` under it — both inside the tinted card. *after* is
+    markup stacked under the body card, normally :func:`callout` cards.
 
     *brand* is the masthead's name line. The store passes ``{{store_name}}``;
     everything else takes the department.
@@ -534,26 +870,27 @@ def build_shell(
     only 30–55 characters of it, so it should lead with the fact the member
     opened the email for. Left empty it defaults to *subtitle* — the line an
     author already chose to put under the title — then to the first row of
-    the fact panel; with neither, no preheader is written.
-    The text is followed by invisible filler so a client that runs out of
-    preheader does not continue into the masthead and show the department
-    name twice.
+    facts (the summary card's, if it has any); with neither, no preheader is
+    written. The text is followed by invisible filler so a client that runs
+    out of preheader does not continue into the masthead and show the
+    department name twice.
 
-    ``{accent}`` inside *content* is substituted with the accent token, so a
-    body writes ``background-color: {accent};`` on its button and cannot
-    disagree with its own status line. A single brace is safe to use for this: template
-    variables are doubled (``{{name}}``), and the substitution is a plain
-    string replace rather than ``str.format``, so a stray brace in prose is
-    left alone instead of raising.
+    ``{accent}`` inside *content*, *lead*, *summary* and *after* is
+    substituted with the accent token, so a body writes
+    ``background-color: {accent};`` on its button and cannot disagree with
+    its own tab. A single brace is safe to use for this: template variables
+    are doubled (``{{name}}``), and the substitution is a plain string
+    replace rather than ``str.format``, so a stray brace in prose is left
+    alone instead of raising.
 
     **The accent and the chip text are emitted as template variables, not
-    hexes.** Every place the colourway appears becomes
-    ``{{header_accent}}`` / ``{{chip_tint}}`` / ``{{status_chip}}``, which
-    the renderer fills from the template's own ``header_accent`` and
-    ``status_chip`` columns. That is what makes a colourway something an
-    officer can change from the screen rather than something only a deploy
-    can change — and it keeps one canonical stored shape, because a body
-    never carries a hex for the renderer and a column to disagree with it.
+    hexes.** Every place the colourway appears becomes ``{{header_accent}}``
+    / ``{{chip_tint}}`` / ``{{status_chip}}``, which the renderer fills from
+    the template's own ``header_accent`` and ``status_chip`` columns. That is
+    what makes a colourway something an officer can change from the screen
+    rather than something only a deploy can change — and it keeps one
+    canonical stored shape, because a body never carries a hex for the
+    renderer and a column to disagree with it.
 
     *accent* and *chip* are still taken: they are what a newly created or
     reset template's columns are stamped with, and callers that do not go
@@ -570,15 +907,41 @@ def build_shell(
     """
     if layout not in _LAYOUT_CONTENT_CLASS:
         raise ValueError(f"unknown layout {layout!r}; expected one of {LAYOUTS}")
-    content = content.replace("{accent}", "{{header_accent}}")
 
-    # The logo block and the status line are render-time tokens rather than
-    # markup decided here: each is optional, and which of them a given send
-    # actually has is not knowable when the body is written.
+    def tokens(markup: str) -> str:
+        return markup.replace("{accent}", "{{header_accent}}")
+
+    content, lead, summary, after = (
+        tokens(content),
+        tokens(lead),
+        tokens(summary),
+        tokens(after),
+    )
+
     head = []
-    teaser = preheader or _html.escape(subtitle) or _first_fact_row(content)
+    teaser = preheader or _html.escape(subtitle) or _first_fact_row(summary + content)
     if teaser:
         head.append(_preheader(teaser))
+
+    note = f'<td class="tab-note">{tab_note}</td>' if tab_note else ""
+    heading = ["            <h1>" + title + "</h1>"]
+    if subtitle:
+        heading.append("            <p>" + _html.escape(subtitle) + "</p>")
+    if lead:
+        # The tile and the title side by side. A table, because a floated or
+        # inline-block tile collapses under the title in Outlook.
+        heading = [
+            '        <table class="summary-row" role="presentation" cellpadding="0" '
+            'cellspacing="0"><tr>',
+            '            <td class="summary-lead">' + lead + "</td>",
+            '            <td class="summary-text">',
+            *heading,
+            "            </td>",
+            "        </tr></table>",
+        ]
+    else:
+        heading = [line[4:] for line in heading]
+
     # Classic Outlook ignores max-width on a div and would stretch the card
     # across the whole reading pane; this table, which only Outlook's Word
     # engine sees, holds it at the 600px every other client gets.
@@ -590,16 +953,15 @@ def build_shell(
         "        {{organization_logo_block}}",
         "        <p>" + brand + "</p>",
         "    </div>",
-        '    <div class="header">',
-        "        {{status_line}}",
-        "        <h1>" + title + "</h1>",
+        '    <table class="tab" role="presentation" cellpadding="0" cellspacing="0" '
+        'width="100%" bgcolor="{{header_accent}}" '
+        'style="background-color: {{header_accent}};"><tr>'
+        '<td class="tab-label">{{status_chip}}</td>' + note + "</tr></table>",
+        '    <div class="summary" style="background-color: {{chip_tint}};">',
+        *heading,
     ]
-    if subtitle:
-        head.append(
-            '        <p style="color: {{header_accent}};">'
-            + _html.escape(subtitle)
-            + "</p>"
-        )
+    if summary:
+        head.append(summary.rstrip("\n"))
 
     shell = "\n".join(
         [
@@ -608,6 +970,7 @@ def build_shell(
             '    <div class="{{content_class}}">',
             content.rstrip("\n"),
             "    </div>",
+            *([after.rstrip("\n")] if after else []),
             "    {{footer_html}}",
             "</div>",
             "<!--[if mso]></td></tr></table><![endif]-->",
@@ -620,6 +983,17 @@ def build_shell(
             "layout": layout,
         }
     return shell
+
+
+def uses_default_stylesheet(css: str) -> bool:
+    """Is *css* the built-in stylesheet (or no stylesheet at all)?
+
+    The dark rendering is written against the classes and colours of
+    ``DEFAULT_CSS``. A department that wrote its own stylesheet chose its own
+    colours, and forcing ours over them in the dark would undo that work — so
+    only the built-in sheet gets the dark block.
+    """
+    return not css or css == DEFAULT_CSS
 
 
 def build_email_document(subject: str, body_html: str, css: str = "") -> str:
@@ -636,30 +1010,38 @@ def build_email_document(subject: str, body_html: str, css: str = "") -> str:
       the body as Windows-1252 and the em dashes in almost every subject line
       arrive as ``â€"``.
     * ``meta viewport`` — stops mobile Safari shrinking the 600px card to fit.
-    * ``color-scheme: light only`` — Apple Mail leaves a page that declares it
-      supports light only alone rather than auto-inverting it. The ``only``
-      matters: plain ``light`` is a preference, not a refusal. Gmail's apps
-      and classic Outlook repaint regardless, which the logo plate is for.
+    * ``color-scheme`` — ``light dark`` with the built-in stylesheet, because
+      :data:`DARK_CSS` supplies the dark rendering; a client that sees the
+      declaration uses our dark colours instead of inverting the light ones.
+      ``light only`` with a department's own stylesheet, which has no dark
+      rendering: Apple Mail leaves a page that declares it supports light
+      only alone rather than auto-inverting it. The ``only`` matters: plain
+      ``light`` is a preference, not a refusal. Gmail's apps and classic
+      Outlook repaint regardless, which the logo plate is for.
+    * The dark block is its own ``<style data-inline="false">`` because the
+      inliner removes the stylesheet it inlines; that attribute is what tells
+      it to leave this one in the document.
     * The ``mso`` block pins Outlook's DPI, which otherwise scales the card up
       by 25% on high-DPI Windows. It is Office XML, so it only takes effect
       with the ``o:`` and ``v:`` namespaces declared on ``<html>``.
     """
-    import html as _html
-
     safe_subject = _html.escape(subject)
     safe_subject_attr = _html.escape(subject, quote=True)
+    dark = uses_default_stylesheet(css)
+    scheme = "light dark" if dark else "light only"
+    dark_block = f'<style data-inline="false">\n{DARK_CSS}\n</style>\n' if dark else ""
     return f"""<!DOCTYPE html>
 <html lang="en" dir="ltr" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="color-scheme" content="light only" />
-<meta name="supported-color-schemes" content="light only" />
+<meta name="color-scheme" content="{scheme}" />
+<meta name="supported-color-schemes" content="{scheme}" />
 <title>{safe_subject}</title>
 <style>
 {css or DEFAULT_CSS}
 </style>
-<!--[if mso]>
+{dark_block}<!--[if mso]>
 <noscript>
 <xml>
 <o:OfficeDocumentSettings>

@@ -34,7 +34,8 @@ from app.core.constants import (
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import Organization, User, UserStatus
-from app.services.email_service import EmailService, build_email_logo_html
+from app.services.email_service import EmailService, wrap_email_body
+from app.services.email_theme import ACCENT_AMBER, ACCENT_RED
 from app.services.notifications_service import NotificationsService
 from app.utils.org_timezone import org_today, resolve_org_today
 
@@ -243,7 +244,6 @@ class CertAlertService:
             }
 
         email_service = EmailService(org)
-        logo_html = build_email_logo_html(org)
 
         training_roles = config.get(
             "training_officer_roles", DEFAULT_TRAINING_OFFICER_ROLES
@@ -359,22 +359,24 @@ class CertAlertService:
                             else ""
                         )
 
-                        html_body = f"""
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-    {logo_html}
-    <div style="background-color: {'#dc2626' if days_until <= 7 else '#f59e0b'}; color: white; padding: 20px; text-align: center;">
-        <h2>Certification Expiration {'Warning' if days_until <= 30 else 'Notice'}</h2>
-    </div>
-    <div style="padding: 20px; background-color: #f9fafb;">
-        <p>Hello {e_first},</p>
+                        html_body = wrap_email_body(
+                            org,
+                            "Certification Expiration "
+                            + ("Warning" if days_until <= 30 else "Notice"),
+                            f"""<p>Hello {e_first},</p>
         <p>Your <strong>{e_course}</strong> certification expires on
         <strong>{record.expiration_date.strftime('%B %d, %Y')}</strong>
         ({days_until} day{'s' if days_until != 1 else ''} from today).</p>
         {f'<p><strong>Certification #:</strong> {e_cert_num}</p>' if record.certification_number else ''}
         {f'<p><strong>Issuing Agency:</strong> {e_agency}</p>' if record.issuing_agency else ''}
-        <p>Please renew your certification before it expires. Contact your training officer if you need assistance.</p>
-    </div>
-</div>"""
+        <p>Please renew your certification before it expires. Contact your training officer if you need assistance.</p>""",
+                            # Red inside the last week, amber before it — the
+                            # same split the old banner made.
+                            header_color=(
+                                ACCENT_RED if days_until <= 7 else ACCENT_AMBER
+                            ),
+                            chip="Action required",
+                        )
                         text_body = (
                             f"Certification Expiration Notice\n\n"
                             f"Hello {member.first_name},\n\n"
@@ -493,20 +495,17 @@ class CertAlertService:
                         else ""
                     )
 
-                    html_body = f"""
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-    {logo_html}
-    <div style="background-color: #7f1d1d; color: white; padding: 20px; text-align: center;">
-        <h2>Certification EXPIRED</h2>
-    </div>
-    <div style="padding: 20px; background-color: #fef2f2;">
-        <p><strong>{e_full_name}</strong>'s <strong>{e_course}</strong> certification
+                    html_body = wrap_email_body(
+                        org,
+                        "Certification Expired",
+                        f"""<p><strong>{e_full_name}</strong>'s <strong>{e_course}</strong> certification
         expired on <strong>{record.expiration_date.strftime('%B %d, %Y')}</strong>
         ({days_expired} day{'s' if days_expired != 1 else ''} ago).</p>
         {f'<p><strong>Certification #:</strong> {e_cert_num}</p>' if record.certification_number else ''}
-        <p>No renewal has been logged. This member may need to be taken out of service for activities requiring this certification.</p>
-    </div>
-</div>"""
+        <p>No renewal has been logged. This member may need to be taken out of service for activities requiring this certification.</p>""",
+                        header_color=ACCENT_RED,
+                        chip="Expired",
+                    )
                     text_body = (
                         f"EXPIRED Certification: {record.course_name}\n\n"
                         f"{member.full_name}'s certification expired on "

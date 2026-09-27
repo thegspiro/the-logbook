@@ -53,6 +53,7 @@ def _shell(
     chip: str = "",
     subtitle: str = "",
     layout: str = "notice",
+    tab_note: str = "",
 ) -> str:
     """The house shell, with the store's name in the lockup.
 
@@ -70,6 +71,7 @@ def _shell(
         subtitle=subtitle,
         brand="{{store_name}}",
         layout=layout,
+        tab_note=tab_note,
     )
 
 
@@ -93,6 +95,7 @@ ORDER_CONFIRMATION_HTML = _shell(
     chip="Receipt",
     subtitle="Total {{order_total}}",
     layout="receipt",
+    tab_note="Order {{order_number}}",
 )
 ORDER_CONFIRMATION_TEXT = """Hi {{first_name}},
 
@@ -109,6 +112,7 @@ NEW_ORDER_ADMIN_HTML = _shell(
         {{member_notes_html}}""",
     chip="New order",
     subtitle="{{order_total}}",
+    tab_note="Order {{order_number}}",
 )
 NEW_ORDER_ADMIN_TEXT = (
     """{{customer_name}} placed order {{order_number}} for {{order_total}}.
@@ -151,6 +155,7 @@ PAYMENT_REMINDER_HTML = _shell(
     chip="Payment reminder",
     subtitle="{{balance_due}} outstanding",
     layout="receipt",
+    tab_note="Order {{order_number}}",
 )
 PAYMENT_REMINDER_TEXT = """Order {{order_number}} has a balance of {{balance_due}}.
 """ + _FOOTER_TEXT

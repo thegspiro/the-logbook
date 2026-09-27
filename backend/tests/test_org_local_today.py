@@ -139,7 +139,9 @@ class TestCertificationAlerts:
             "NotificationsService",
             lambda db: SimpleNamespace(log_notification=AsyncMock()),
         )
-        monkeypatch.setattr(module, "build_email_logo_html", lambda org: "")
+        monkeypatch.setattr(
+            module, "wrap_email_body", lambda org, title, body, **_kwargs: body
+        )
         monkeypatch.setattr(
             module,
             "EmailService",
