@@ -11,11 +11,23 @@ roll up). DB mocked; no MySQL.
 from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from app.models.grant import PaymentStatus
 from app.services.fundraising_service import FundraisingService
+
+
+@pytest.fixture(autouse=True)
+def _utc_department(monkeypatch):
+    """The service reads the department's zone; answer UTC so the dates the
+    fixtures here are built from keep meaning what they say."""
+    for module in ("app.services.fundraising_service",):
+        monkeypatch.setattr(
+            f"{module}.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("UTC")),
+        )
 
 
 def _one(obj):

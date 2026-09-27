@@ -28,6 +28,7 @@ from app.services.inventory_last_seen_service import (
     InventoryLastSeenService,
 )
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.org_timezone import resolve_scheduling_timezone, to_local
 
 router = APIRouter()
 
@@ -79,6 +80,8 @@ async def export_not_seen_report(
         limit=MAX_ROWS,
     )
 
+    # Last-seen times in the department's zone, labelled with it on each row.
+    tz = await resolve_scheduling_timezone(db, current_user.organization_id)
     output = io.StringIO()
     writer = SafeCsvWriter(output)
     writer.writerow(
@@ -89,7 +92,7 @@ async def export_not_seen_report(
             "Category",
             "Status",
             "Storage Area",
-            "Last Seen (UTC)",
+            "Last Seen",
             "Last Seen By",
             "Days Since Seen",
         ]
@@ -104,7 +107,11 @@ async def export_not_seen_report(
                 row["category_name"] or "",
                 row["status"].value,
                 row["storage_area_name"] or "",
-                seen_at.strftime("%Y-%m-%d %H:%M") if seen_at else "Never",
+                (
+                    to_local(seen_at, tz).strftime("%Y-%m-%d %H:%M %Z")
+                    if seen_at
+                    else "Never"
+                ),
                 _SOURCE_LABELS.get(row["last_seen_source"] or "", ""),
                 "" if row["days_since_seen"] is None else row["days_since_seen"],
             ]

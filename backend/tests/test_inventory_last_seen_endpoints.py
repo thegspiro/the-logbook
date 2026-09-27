@@ -7,6 +7,7 @@ import io
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import FastAPI
@@ -126,7 +127,14 @@ class TestCsv:
             ),
         ]
         patcher, service = _service(_report(rows))
-        with patcher, patch(f"{MODULE}.log_audit_event", AsyncMock()) as audit:
+        with (
+            patcher,
+            patch(f"{MODULE}.log_audit_event", AsyncMock()) as audit,
+            patch(
+                f"{MODULE}.resolve_scheduling_timezone",
+                AsyncMock(return_value=ZoneInfo("America/New_York")),
+            ),
+        ):
             response = await _get(
                 _app_for(_user()), "/inventory/not-seen/export?days=30"
             )
@@ -135,7 +143,8 @@ class TestCsv:
         assert "inventory_not_seen_30d.csv" in response.headers["content-disposition"]
         parsed = list(csv.reader(io.StringIO(response.text)))
         assert parsed[0][0] == "Name"
-        assert parsed[1][6:] == ["2026-01-02 03:04", "Returned", "265"]
+        # 03:04 UTC on January 2 is 10:04 PM on January 1 in New York.
+        assert parsed[1][6:] == ["2026-01-01 22:04 EST", "Returned", "265"]
         assert parsed[2][0] == "'=HYPERLINK(1)"
         assert parsed[2][6:] == ["Never", "", ""]
         assert audit.await_args.kwargs["event_type"] == "inventory_not_seen_exported"

@@ -5,7 +5,7 @@ Business logic for report generation including member roster,
 training summary, event attendance, and compliance reports.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 from uuid import UUID
 
@@ -45,7 +45,12 @@ from app.utils.hours import (
     round_hours_to_quarter,
     sum_hours_to_quarter,
 )
-from app.utils.org_timezone import resolve_org_today
+from app.utils.org_timezone import (
+    local_date,
+    local_day_start_utc,
+    resolve_org_today,
+    resolve_scheduling_timezone,
+)
 from app.utils.sql_ordering import nulls_last_asc
 
 
@@ -169,6 +174,7 @@ class ReportsService:
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate a member roster report"""
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
         query = (
             select(User)
             .where(
@@ -220,7 +226,9 @@ class ReportsService:
                     "status": status_val,
                     "station": user.station,
                     "joined_date": (
-                        str(user.created_at.date()) if user.created_at else None
+                        str(local_date(user.created_at, tz))
+                        if user.created_at
+                        else None
                     ),
                     "roles": role_names,
                 }
@@ -452,21 +460,22 @@ class ReportsService:
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate an event attendance report"""
+        # The requested dates, and each event's date in the report, are the
+        # department's: bounded at its midnights rather than UTC's, which put an
+        # evening event on the last day outside the range and dated it wrongly.
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
         events_query = select(Event).where(
             Event.organization_id == str(organization_id)
         )
 
         if start_date:
             events_query = events_query.where(
-                Event.start_datetime
-                >= datetime.combine(
-                    start_date, datetime.min.time(), tzinfo=timezone.utc
-                )
+                Event.start_datetime >= local_day_start_utc(start_date, tz)
             )
         if end_date:
             events_query = events_query.where(
                 Event.start_datetime
-                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
+                < local_day_start_utc(end_date + timedelta(days=1), tz)
             )
 
         events_query = events_query.order_by(Event.start_datetime.desc())
@@ -503,7 +512,7 @@ class ReportsService:
                     "event_id": str(event.id),
                     "event_title": event.title or "",
                     "event_date": (
-                        str(event.start_datetime.date())
+                        str(local_date(event.start_datetime, tz))
                         if event.start_datetime
                         else None
                     ),

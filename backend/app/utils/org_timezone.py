@@ -14,7 +14,7 @@ existing departments' shift times.
 """
 
 from datetime import date, datetime, time, timezone
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -112,3 +112,19 @@ def local_date(value: datetime, tz: ZoneInfo) -> date:
     tomorrow for an evening event; a naive value is read as UTC.
     """
     return to_local(value, tz).date()
+
+
+def local_and_utc_dates(value: datetime, tz: ZoneInfo) -> List[date]:
+    """The department's date of ``value``, then its UTC date if that differs.
+
+    For finding a row keyed by a date that older code derived from the UTC
+    timestamp: a row written before its writer moved to the department's
+    calendar carries the UTC date, and a lookup that accepted only the new
+    one would miss it and write a duplicate beside it.
+    """
+    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    dates = [to_local(aware, tz).date()]
+    utc_day = aware.astimezone(timezone.utc).date()
+    if utc_day not in dates:
+        dates.append(utc_day)
+    return dates

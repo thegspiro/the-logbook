@@ -63,6 +63,7 @@ from app.utils.embroidery import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import resolve_scheduling_timezone, to_local
 from app.utils.size_order import size_sort_key, sort_by_size
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 from app.utils.storefront_payments import (
@@ -3184,6 +3185,10 @@ class StorefrontService:
             if len(orders) >= total or not batch:
                 break
             page += 1
+        # Submitted times in the department's zone, labelled with it, like the
+        # other exports -- a treasurer reconciling against the week's orders
+        # reads local time.
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
         output = io.StringIO()
         writer = SafeCsvWriter(output, quoting=csv.QUOTE_MINIMAL)
         writer.writerow(
@@ -3222,7 +3227,11 @@ class StorefrontService:
                 writer.writerow(
                     [
                         order.order_number,
-                        submitted.strftime("%Y-%m-%d %H:%M UTC") if submitted else "",
+                        (
+                            to_local(submitted, tz).strftime("%Y-%m-%d %H:%M %Z")
+                            if submitted
+                            else ""
+                        ),
                         order.customer_name,
                         order.customer_email or "",
                         item.product_name,
