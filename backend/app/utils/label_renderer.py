@@ -314,7 +314,9 @@ class LabelSpec:
     ``barcode_value`` must be non-empty (callers resolve a fallback). ``extra``
     is a single pre-built info line (e.g. "Station 1 | PPE"). ``asset_tag`` and
     ``serial_number`` are shown as "Asset:"/"S/N:" sub-identifiers only when they
-    differ from the barcode value.
+    differ from the barcode value. ``show_name`` False leaves the name line off
+    altogether, giving its height to the code on a small tag; the name is still
+    used in error messages.
     """
 
     name: str
@@ -323,6 +325,7 @@ class LabelSpec:
     serial_number: Optional[str] = None
     extra: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict)
+    show_name: bool = True
 
 
 # Avery 5160: the only sheet format, and the one the print pages lay out.
@@ -426,13 +429,14 @@ def _render_sheet(
         usable_w = label_w - 2 * padding
         y_cursor = y + label_h - padding
 
-        c.setFont("Helvetica-Bold", 7)
-        max_name_chars = int(usable_w / (7 * 0.5))
-        name = spec.name[:max_name_chars] + (
-            "..." if len(spec.name) > max_name_chars else ""
-        )
-        y_cursor -= 7
-        c.drawString(x + padding, y_cursor, name)
+        if spec.show_name:
+            c.setFont("Helvetica-Bold", 7)
+            max_name_chars = int(usable_w / (7 * 0.5))
+            name = spec.name[:max_name_chars] + (
+                "..." if len(spec.name) > max_name_chars else ""
+            )
+            y_cursor -= 7
+            c.drawString(x + padding, y_cursor, name)
 
         info_parts = []
         if spec.asset_tag and spec.asset_tag != barcode_value:
@@ -537,16 +541,17 @@ def _render_thermal(
 
         y_cursor = content_h - padding
 
-        c.setFont("Helvetica-Bold", name_font_size)
-        name_max_chars = int(self_w / (name_font_size * 0.5))
-        name = spec.name[:name_max_chars] + (
-            "..." if len(spec.name) > name_max_chars else ""
-        )
-        y_cursor -= name_font_size
-        if is_landscape:
-            c.drawString(padding, y_cursor, name)
-        else:
-            c.drawCentredString(content_w / 2, y_cursor, name)
+        if spec.show_name:
+            c.setFont("Helvetica-Bold", name_font_size)
+            name_max_chars = int(self_w / (name_font_size * 0.5))
+            name = spec.name[:name_max_chars] + (
+                "..." if len(spec.name) > name_max_chars else ""
+            )
+            y_cursor -= name_font_size
+            if is_landscape:
+                c.drawString(padding, y_cursor, name)
+            else:
+                c.drawCentredString(content_w / 2, y_cursor, name)
 
         info_parts = []
         if spec.asset_tag and spec.asset_tag != barcode_value:

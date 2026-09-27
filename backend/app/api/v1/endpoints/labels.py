@@ -42,7 +42,7 @@ from app.services.label_service import (
     LabelService,
     required_permissions_for_module,
 )
-from app.utils.label_renderer import SYMBOLOGY_CODE128
+from app.utils.label_renderer import SHEET_LABELS_PER_PAGE, SYMBOLOGY_CODE128
 from app.utils.printer_transport import PrinterUnreachableError
 
 router = APIRouter()
@@ -91,6 +91,9 @@ class LabelGenerateBody(BaseModel):
     auto_rotate: Optional[bool] = None
     extra_lines: Optional[List[ExtraLine]] = Field(None, max_length=20)
     symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
+    # Sheet formats only: where the first label lands, so a partly used
+    # Avery sheet can go back in the printer. Rolls ignore it.
+    start_position: int = Field(1, ge=1, le=SHEET_LABELS_PER_PAGE)
 
 
 class LabelPreviewBody(BaseModel):
@@ -202,6 +205,7 @@ async def generate_labels(
             extra_lines=data.extra_lines,
             exclude_ids=hidden_prospect_ids,
             symbology=data.symbology,
+            start_position=data.start_position,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

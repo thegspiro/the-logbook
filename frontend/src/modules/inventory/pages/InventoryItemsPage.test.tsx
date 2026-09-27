@@ -1800,3 +1800,84 @@ describe('InventoryItemsPage — selecting every matching item for labels', () =
     expect(screen.getByText('2 selected')).toBeInTheDocument();
   });
 });
+
+describe('InventoryItemsPage needs-a-label count', () => {
+  const needing = (count: number) => (params: { label_printed?: boolean; limit?: number }) =>
+    Promise.resolve(
+      params.label_printed === false && params.limit === 1 ? { items: [], total: count } : { items: [], total: 0 }
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetItems.mockReset();
+    mockGetItems.mockImplementation(needing(14));
+    mockGetSummary.mockResolvedValue({
+      total_items: 42,
+      non_medical_items: 6,
+      overdue_checkouts: 1,
+      maintenance_due_count: 2,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetItemColors.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(true);
+    window.history.pushState({}, '', '/inventory');
+  });
+
+  it('counts the items that need a label, from the list endpoint', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+
+    expect(await screen.findByText('14 items need a label.')).toBeInTheDocument();
+    expect(mockGetItems).toHaveBeenCalledWith({ label_printed: false, skip: 0, limit: 1 });
+  });
+
+  it('shows them in the list, then gets out of the way', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Show them' }));
+
+    expect(screen.getByLabelText('Filter by label status')).toHaveValue('needed');
+    expect(screen.queryByText('14 items need a label.')).not.toBeInTheDocument();
+  });
+
+  it('opens the print page on the needs-a-label filter', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /Print their labels/ }));
+
+    expect(window.location.pathname).toBe('/inventory/print-labels');
+    expect(new URLSearchParams(window.location.search).get('label_printed')).toBe('false');
+  });
+
+  it('can be put aside', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Not now' }));
+
+    expect(screen.queryByText('14 items need a label.')).not.toBeInTheDocument();
+  });
+
+  it('says nothing when every item is labelled', async () => {
+    mockGetItems.mockImplementation(needing(0));
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('No items found');
+
+    await waitFor(() => expect(mockGetItems).toHaveBeenCalledWith({ label_printed: false, skip: 0, limit: 1 }));
+    expect(screen.queryByText(/need a label/)).not.toBeInTheDocument();
+  });
+
+  it('is not fetched for a member who cannot manage inventory', async () => {
+    mockCheckPermission.mockReturnValue(false);
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('No items found');
+
+    expect(mockGetItems).not.toHaveBeenCalledWith({ label_printed: false, skip: 0, limit: 1 });
+    expect(screen.queryByText(/need a label/)).not.toBeInTheDocument();
+  });
+});

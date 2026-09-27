@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import type { StorageAreaResponse } from '../types';
 
 const mockLookupByCode = vi.fn();
@@ -57,15 +58,17 @@ describe('PutAwayPanel', () => {
     });
   });
 
-  const open = (initialArea: StorageAreaResponse | null = null) =>
+  const open = (initialArea: StorageAreaResponse | null = null, areas = [shelf1, shelf2]) =>
     render(
-      <PutAwayPanel
-        areas={[shelf1, shelf2]}
-        initialArea={initialArea}
-        pathOf={(a) => `Rack A › ${a.name}`}
-        onFiled={onFiled}
-        onClose={onClose}
-      />
+      <MemoryRouter>
+        <PutAwayPanel
+          areas={areas}
+          initialArea={initialArea}
+          pathOf={(a) => `Rack A › ${a.name}`}
+          onFiled={onFiled}
+          onClose={onClose}
+        />
+      </MemoryRouter>
     );
 
   const scan = async (user: ReturnType<typeof userEvent.setup>, code: string) => {
@@ -138,6 +141,66 @@ describe('PutAwayPanel', () => {
     expect(await screen.findByText('Gloves is already in the list.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'File 1 item on Shelf 1' })).toBeInTheDocument();
   }, 10000);
+
+  describe('offering a shelf label', () => {
+    it('offers one after filing onto a shelf picked on screen', async () => {
+      const user = userEvent.setup();
+      open(shelf1);
+      await scan(user, 'INV-1');
+      await screen.findByText('Gloves');
+
+      await user.click(screen.getByRole('button', { name: 'File 1 item on Shelf 1' }));
+
+      expect(await screen.findByRole('link', { name: 'Print shelf label' })).toHaveAttribute(
+        'href',
+        '/inventory/storage-areas/print-labels?ids=shelf-1'
+      );
+    });
+
+    it('says a shelf with no barcode has no label to scan', async () => {
+      const bare = { ...shelf1, barcode: undefined };
+      const user = userEvent.setup();
+      open(bare, [bare, shelf2]);
+      await scan(user, 'INV-1');
+      await screen.findByText('Gloves');
+
+      await user.click(screen.getByRole('button', { name: 'File 1 item on Shelf 1' }));
+
+      expect(await screen.findByText(/has no barcode yet/)).toBeInTheDocument();
+    });
+
+    it('does not offer one for a shelf whose label was just scanned', async () => {
+      const user = userEvent.setup();
+      open();
+      await scan(user, 'SA-000001');
+      await scan(user, 'INV-1');
+      await screen.findByText('Gloves');
+
+      await user.click(screen.getByRole('button', { name: 'File 1 item on Shelf 1' }));
+
+      expect(await screen.findByText(/1 filed/)).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Print shelf label' })).not.toBeInTheDocument();
+    });
+
+    it('does not offer one when nothing was filed', async () => {
+      mockPutAwayItems.mockResolvedValue({
+        storage_area_id: 'shelf-1',
+        moved: [],
+        already_here: ['it-1'],
+        skipped: [],
+        not_found: 0,
+      });
+      const user = userEvent.setup();
+      open(shelf1);
+      await scan(user, 'INV-1');
+      await screen.findByText('Gloves');
+
+      await user.click(screen.getByRole('button', { name: 'File 1 item on Shelf 1' }));
+
+      expect(await screen.findByText(/1 already there/)).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Print shelf label' })).not.toBeInTheDocument();
+    });
+  });
 
   it('keeps the list when filing fails', async () => {
     mockPutAwayItems.mockRejectedValue(new Error('offline'));

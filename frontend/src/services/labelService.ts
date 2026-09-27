@@ -34,6 +34,8 @@ export interface GenerateLabelsOptions {
   auto_rotate?: boolean;
   extra_lines?: string[];
   symbology?: Symbology;
+  /** Sheet formats only: 1-based position of the first label on the sheet. */
+  start_position?: number;
 }
 
 export interface LabelPreviewItem {

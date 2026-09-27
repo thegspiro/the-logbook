@@ -253,7 +253,8 @@ def render_escpos(
         for _ in range(copies):
             out += _INIT
             out += _ALIGN_CENTER
-            out += _text_line(_clean(spec.name) or "Label", characters, double=True)
+            if spec.show_name:
+                out += _text_line(_clean(spec.name) or "Label", characters, double=True)
 
             info = []
             asset_tag = _clean(spec.asset_tag)

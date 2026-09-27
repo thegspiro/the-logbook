@@ -200,6 +200,7 @@ from app.models.inventory import (
     InventoryAuditFrequency,
     InventoryCategory,
     InventoryItem,
+    InventoryLabelPrint,
     InventoryLot,
     InventoryNfcAudit,
     InventoryNfcAuditDigest,
@@ -602,6 +603,7 @@ __all__ = [
     # Inventory models
     "InventoryCategory",
     "InventoryItem",
+    "InventoryLabelPrint",
     "InventoryLot",
     "InventoryAuditFrequency",
     "InventoryNfcAudit",

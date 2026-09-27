@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 
@@ -329,5 +329,50 @@ describe('LabelPrintPage barcode style', () => {
     await waitFor(() =>
       expect(mockSetPreset).toHaveBeenCalledWith('apparatus', expect.objectContaining({ symbology: 'qr' }))
     );
+  });
+});
+
+describe('LabelPrintPage sheet start position', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockPreview.mockReset();
+    mockPreview.mockResolvedValue({
+      items: [{ name: 'Engine 5', barcode_value: 'E5', subtitle: 'Unit 5' }],
+    });
+    mockGetPreset.mockReset();
+    mockGetPreset.mockResolvedValue({ preset: 'letter' });
+    mockSetPreset.mockResolvedValue({ preset: null });
+    mockGenerate.mockReset();
+    mockGenerate.mockResolvedValue({ blob: new Blob(['pdf']), autoPopulated: 0 });
+    mockListPrinters.mockResolvedValue([]);
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:test');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  });
+
+  it('leaves the used positions blank in the preview and the PDF', async () => {
+    const user = userEvent.setup();
+    renderPage('?ids=a1');
+    const start = await screen.findByLabelText('Start at label');
+
+    fireEvent.change(start, { target: { value: '5' } });
+
+    expect(screen.getAllByTestId('skipped-label-position')).toHaveLength(4);
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+    await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1));
+    expect(mockGenerate.mock.calls[0]?.[2]).toMatchObject({ label_format: 'letter', start_position: 5 });
+  });
+
+  it('is not offered for a roll, and a roll PDF carries no position', async () => {
+    mockGetPreset.mockResolvedValue({ preset: 'rollo_4x6' });
+    const user = userEvent.setup();
+    renderPage('?ids=a1');
+    await screen.findAllByText('Engine 5');
+    await waitFor(() => expect(screen.queryByLabelText('Start at label')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+    await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1));
+    expect(mockGenerate.mock.calls[0]?.[2]).not.toHaveProperty('start_position');
   });
 });

@@ -485,6 +485,19 @@ describe('StorageAreasPage', () => {
       expect(screen.getByLabelText(/Scan or type a shelf or item barcode/)).toBeInTheDocument();
     });
 
+    it('opens the contents check on the area in view', async () => {
+      window.history.pushState({}, '', '/inventory/storage-areas?area=shelf-1');
+      const user = userEvent.setup();
+      renderWithRouter(<StorageAreasPage />);
+      await waitFor(() => expect(focusedRow()?.getAttribute('data-storage-area-row')).toBe('shelf-1'));
+
+      await user.click(screen.getByRole('button', { name: 'Check contents' }));
+
+      expect(screen.getByText('Rack A › Shelf 1')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Scan or type a container or item barcode/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Check contents' })).toHaveAttribute('aria-expanded', 'true');
+    });
+
     it.each([1024, 375])('opens straight to an area linked with ?area= at %ipx', async (width) => {
       setViewportWidth(width);
       window.history.pushState({}, '', '/inventory/storage-areas?area=shelf-1');

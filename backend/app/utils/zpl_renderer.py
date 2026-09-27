@@ -238,12 +238,13 @@ def _render_one(
     lines = []
     y = padding
 
-    name = _truncate(_clean_text(spec.name) or "Label", name_height, content_width)
-    lines.append(
-        f"^FO{padding},{y}^A0N,{name_height},{name_height}"
-        f"^FB{content_width},1,0,C,0^FH^FD{_escape_zpl(name)}^FS"
-    )
-    y += name_height + gap
+    if spec.show_name:
+        name = _truncate(_clean_text(spec.name) or "Label", name_height, content_width)
+        lines.append(
+            f"^FO{padding},{y}^A0N,{name_height},{name_height}"
+            f"^FB{content_width},1,0,C,0^FH^FD{_escape_zpl(name)}^FS"
+        )
+        y += name_height + gap
 
     # Asset tag and serial repeat the barcode value often enough that showing
     # them unconditionally wastes the one line a 1" label has to spare.

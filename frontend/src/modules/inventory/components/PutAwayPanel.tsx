@@ -10,7 +10,8 @@
  */
 
 import React, { useState } from 'react';
-import { Loader2, Trash2, X } from 'lucide-react';
+import { Link } from 'react-router';
+import { Loader2, Printer, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '../../../services/api';
 import type { PutAwayResult, StorageAreaResponse } from '../types';
@@ -36,6 +37,9 @@ interface PutAwayPanelProps {
 
 export const PutAwayPanel: React.FC<PutAwayPanelProps> = ({ areas, initialArea, pathOf, onFiled, onClose }) => {
   const [target, setTarget] = useState<StorageAreaResponse | null>(initialArea);
+  // Scanning a shelf's label proves it has one. A shelf picked on screen may
+  // not, and filing items onto it is the moment a label is worth offering.
+  const [targetScanned, setTargetScanned] = useState(false);
   const [queued, setQueued] = useState<QueuedItem[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -63,6 +67,7 @@ export const PutAwayPanel: React.FC<PutAwayPanelProps> = ({ areas, initialArea, 
         return false;
       }
       setTarget(shelf);
+      setTargetScanned(true);
       setMessage(null);
       return true;
     }
@@ -173,6 +178,22 @@ export const PutAwayPanel: React.FC<PutAwayPanelProps> = ({ areas, initialArea, 
             </li>
           ))}
         </ul>
+      )}
+
+      {result && target && !targetScanned && result.moved.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <p className="text-theme-text-secondary">
+            {target.barcode
+              ? 'This shelf was picked on screen, not scanned. If it has no label yet, print one so the next put-away can start with a scan.'
+              : 'This shelf has no barcode yet, so it has no label to scan. Print one to give it a code.'}
+          </p>
+          <Link
+            to={`/inventory/storage-areas/print-labels?ids=${target.id}`}
+            className="btn-secondary btn-sm inline-flex items-center gap-1.5"
+          >
+            <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print shelf label
+          </Link>
+        </div>
       )}
 
       {result && (
