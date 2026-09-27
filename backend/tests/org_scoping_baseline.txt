@@ -54,12 +54,9 @@ app/api/v1/endpoints/external_training.py::perform_sync_task::ExternalTrainingPr
 #     endpoint passes current_user.id; the query is a lock acquisition (Pitfall #27), not a read
 #   - create_manual_entry::User::user_id
 #     endpoint passes current_user.id; lock acquisition, not a read
-#   - edit_pending_entry::User::owner_id
-#     owner_id comes off an entry fetched with an organization_id filter above
 app/services/admin_hours_service.py::bulk_approve::User::member_id
 app/services/admin_hours_service.py::clock_in::User::user_id
 app/services/admin_hours_service.py::create_manual_entry::User::user_id
-app/services/admin_hours_service.py::edit_pending_entry::User::owner_id
 
 # Reviewed 2026-09-06: safe unless noted.
 #   - _reload_operator::ApparatusOperator::operator_id
