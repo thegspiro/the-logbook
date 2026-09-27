@@ -65,6 +65,7 @@ from app.services.admin_continuity_service import (
     assert_not_last_administrator,
     assert_positions_retain_administrator,
 )
+from app.services.email_service import welcome_email_can_send
 from app.services.operational_rank_service import (
     OperationalRankService,
     rank_not_configured_message,
@@ -169,21 +170,6 @@ WELCOME_EMAIL_UNAVAILABLE_DETAIL = (
     "Email is not set up for this department, so a temporary password cannot "
     "be sent to the new member. Set an initial password for them instead."
 )
-
-
-async def _welcome_email_can_send(db: AsyncSession, organization_id: str) -> bool:
-    """Whether a welcome email for this organization would actually be sent.
-
-    Asks EmailService.can_send, the same check its send path applies, so this
-    cannot disagree with what happens when the email is attempted.
-    """
-    from app.models.user import Organization as OrgModel
-    from app.services.email_service import EmailService
-
-    organization = (
-        await db.execute(select(OrgModel).where(OrgModel.id == organization_id))
-    ).scalar_one_or_none()
-    return EmailService(organization).can_send
 
 
 @router.post(
@@ -292,7 +278,7 @@ async def create_member(
         # before anything is written. A create that asks for no welcome email
         # (bulk import with the toggle off) is still allowed — the admin has
         # chosen to set passwords afterwards with a reset.
-        if user_data.send_welcome_email and not await _welcome_email_can_send(
+        if user_data.send_welcome_email and not await welcome_email_can_send(
             db, str(current_user.organization_id)
         ):
             raise HTTPException(
@@ -530,22 +516,27 @@ async def create_member(
 @router.get("/welcome-email-available")
 async def check_welcome_email_available(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.create")),
+    current_user: User = Depends(
+        require_permission(
+            "users.create", "members.manage", "prospective_members.manage"
+        )
+    ),
 ):
     """
     Whether a new member's temporary password can be emailed to them.
 
-    The Add Member and Import Members screens read this to require an initial
-    password, or to turn off welcome emails, before the create is refused.
+    Add Member, Import Members and the prospect Convert dialog read this to
+    require an initial password, or to withdraw the welcome email, before the
+    create is refused. Gated on each permission that can create an account, so
+    a pipeline coordinator converting a prospect can read it too.
 
     **Authentication required**
 
-    **Permissions required:** users.create
+    **Permissions required:** users.create, members.manage or
+    prospective_members.manage
     """
     return {
-        "available": await _welcome_email_can_send(
-            db, str(current_user.organization_id)
-        )
+        "available": await welcome_email_can_send(db, str(current_user.organization_id))
     }
 
 

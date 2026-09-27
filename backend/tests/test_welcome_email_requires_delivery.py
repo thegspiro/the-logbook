@@ -23,7 +23,7 @@ from app.api.v1.endpoints import users as users_ep
 from app.core.config import settings
 from app.models.user import Organization
 from app.schemas.user import AdminUserCreate
-from app.services.email_service import EmailService
+from app.services.email_service import EmailService, welcome_email_can_send
 
 
 class _PastTheCheck(Exception):
@@ -98,7 +98,7 @@ class TestCreateMemberRefusal:
     async def test_no_password_and_no_email_is_refused_before_any_write(self):
         db = _db_with_no_duplicates()
         with patch.object(
-            users_ep, "_welcome_email_can_send", new=AsyncMock(return_value=False)
+            users_ep, "welcome_email_can_send", new=AsyncMock(return_value=False)
         ):
             with pytest.raises(HTTPException) as refused:
                 await _create(_payload(send_welcome_email=True), db)
@@ -110,7 +110,7 @@ class TestCreateMemberRefusal:
     async def test_no_password_is_allowed_when_email_can_send(self):
         db = _db_with_no_duplicates()
         with patch.object(
-            users_ep, "_welcome_email_can_send", new=AsyncMock(return_value=True)
+            users_ep, "welcome_email_can_send", new=AsyncMock(return_value=True)
         ), patch.object(
             users_ep, "_canonical_rank_or_400", new=AsyncMock(side_effect=_PastTheCheck)
         ):
@@ -120,7 +120,7 @@ class TestCreateMemberRefusal:
     async def test_a_given_password_is_allowed_without_email(self):
         db = _db_with_no_duplicates()
         email_check = AsyncMock(return_value=False)
-        with patch.object(users_ep, "_welcome_email_can_send", new=email_check), patch(
+        with patch.object(users_ep, "welcome_email_can_send", new=email_check), patch(
             "app.core.breached_password.check_password_not_breached",
             new=AsyncMock(return_value=(True, None)),
         ), patch.object(
@@ -138,7 +138,7 @@ class TestCreateMemberRefusal:
         db = _db_with_no_duplicates()
         email_check = AsyncMock(return_value=False)
         with patch.object(
-            users_ep, "_welcome_email_can_send", new=email_check
+            users_ep, "welcome_email_can_send", new=email_check
         ), patch.object(
             users_ep, "_canonical_rank_or_400", new=AsyncMock(side_effect=_PastTheCheck)
         ):
@@ -169,7 +169,7 @@ class TestWelcomeEmailAvailability:
         _email_off(monkeypatch)
         org = await self._org(db_session, {"enabled": False})
 
-        assert await users_ep._welcome_email_can_send(db_session, org.id) is False
+        assert await welcome_email_can_send(db_session, org.id) is False
 
     async def test_available_when_the_organization_has_email_on(
         self, db_session, monkeypatch
@@ -177,7 +177,7 @@ class TestWelcomeEmailAvailability:
         _email_off(monkeypatch)
         org = await self._org(db_session, {"enabled": True})
 
-        assert await users_ep._welcome_email_can_send(db_session, org.id) is True
+        assert await welcome_email_can_send(db_session, org.id) is True
 
     async def test_the_endpoint_reports_the_helpers_answer(
         self, db_session, monkeypatch

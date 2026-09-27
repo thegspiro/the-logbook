@@ -1036,15 +1036,20 @@ export const applicantService = {
     if (data.rank) payload.rank = data.rank;
     if (data.station) payload.station = data.station;
     if (data.emergency_contacts?.length) payload.emergency_contacts = data.emergency_contacts;
-    const response = await api.post<{ user_id: string; message?: string }>(
-      `/prospective-members/prospects/${applicantId}/transfer`,
-      payload
-    );
+    if (data.password) payload.password = data.password;
+    const response = await api.post<{
+      user_id: string;
+      message?: string;
+      membership_number?: string | null;
+      welcome_email_sent?: boolean;
+    }>(`/prospective-members/prospects/${applicantId}/transfer`, payload);
     return {
       applicant_id: applicantId,
       user_id: response.data.user_id,
       membership_type: data.target_membership_type,
       message: response.data.message ?? 'Transfer successful',
+      membership_number: response.data.membership_number || undefined,
+      welcome_email_sent: response.data.welcome_email_sent ?? false,
     };
   },
 

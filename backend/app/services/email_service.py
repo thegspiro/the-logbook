@@ -410,6 +410,22 @@ class BuiltMessage(NamedTuple):
 BatchMessage = Union[Tuple[List[str], str], BuiltMessage]
 
 
+async def welcome_email_can_send(db: Any, organization_id: str) -> bool:
+    """Whether a welcome email for this organization would actually be sent.
+
+    For callers that must refuse an action whose only output is an email — a
+    new account whose only password is in the welcome email. Answers with
+    :attr:`EmailService.can_send`, the check the send path itself applies, so
+    the refusal cannot disagree with what happens when the email is attempted.
+    """
+    from sqlalchemy import select
+
+    organization = (
+        await db.execute(select(Organization).where(Organization.id == organization_id))
+    ).scalar_one_or_none()
+    return EmailService(organization).can_send
+
+
 class EmailService:
     """Service for sending emails"""
 
