@@ -16,6 +16,7 @@ DB mocked; no MySQL.
 from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -26,6 +27,27 @@ from app.utils.reminder_conditions import (
     normalize_reminder_conditions,
     should_send_warning,
 )
+
+
+@pytest.fixture(autouse=True)
+def _utc_department(monkeypatch):
+    """The service reads the department's zone; answer UTC so the dates the
+    fixtures here are built from keep meaning what they say."""
+    for module in ("app.services.struggling_member_service",):
+        monkeypatch.setattr(
+            f"{module}.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("UTC")),
+        )
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.struggling_member_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
 
 
 class TestNormalization:
