@@ -55,6 +55,11 @@ const AddMember: React.FC = () => {
 
   // Password fields
   const [useCustomPassword, setUseCustomPassword] = useState(false);
+  // false: email cannot be sent, so the temporary password could never reach
+  // the member and the server refuses a create without one. null: not known
+  // yet, or the check failed — the form behaves as before and the server
+  // still refuses if it has to.
+  const [welcomeEmailAvailable, setWelcomeEmailAvailable] = useState<boolean | null>(null);
   const [initialPassword, setInitialPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -64,6 +69,16 @@ const AddMember: React.FC = () => {
   const [availableStations, setAvailableStations] = useState<Location[]>([]);
 
   useEffect(() => {
+    userService
+      .getWelcomeEmailAvailability()
+      .then(({ available }) => {
+        setWelcomeEmailAvailable(available);
+        if (!available) setUseCustomPassword(true);
+      })
+      .catch(() => {
+        // Non-critical: the create itself is refused if a password is required.
+      });
+
     organizationService
       .previewNextMembershipId()
       .then((data) => {
@@ -574,6 +589,7 @@ const AddMember: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={useCustomPassword}
+                  disabled={welcomeEmailAvailable === false}
                   onChange={(e) => {
                     setUseCustomPassword(e.target.checked);
                     if (!e.target.checked) {
@@ -592,7 +608,9 @@ const AddMember: React.FC = () => {
                 <div>
                   <span className="text-theme-text-primary text-sm font-medium">Set initial password</span>
                   <p className="text-theme-text-muted text-xs">
-                    If unchecked, a temporary password will be generated and emailed to the member.
+                    {welcomeEmailAvailable === false
+                      ? "Required: email isn't set up for this department, so a temporary password can't be sent. Set one here and give it to the member."
+                      : 'If unchecked, a temporary password will be generated and emailed to the member.'}
                   </p>
                 </div>
               </label>

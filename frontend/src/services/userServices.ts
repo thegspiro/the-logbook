@@ -29,6 +29,15 @@ export const userService = {
   },
 
   /**
+   * Whether a new member's temporary password can be emailed to them. When it
+   * cannot, `POST /users` refuses a create that relies on the welcome email.
+   */
+  async getWelcomeEmailAvailability(): Promise<{ available: boolean }> {
+    const response = await api.get<{ available: boolean }>('/users/welcome-email-available');
+    return response.data;
+  },
+
+  /**
    * Check if contact information is enabled
    */
   async checkContactInfoEnabled(): Promise<ContactInfoSettings> {

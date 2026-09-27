@@ -165,6 +165,27 @@ async def list_users(
     return users
 
 
+WELCOME_EMAIL_UNAVAILABLE_DETAIL = (
+    "Email is not set up for this department, so a temporary password cannot "
+    "be sent to the new member. Set an initial password for them instead."
+)
+
+
+async def _welcome_email_can_send(db: AsyncSession, organization_id: str) -> bool:
+    """Whether a welcome email for this organization would actually be sent.
+
+    Asks EmailService.can_send, the same check its send path applies, so this
+    cannot disagree with what happens when the email is attempted.
+    """
+    from app.models.user import Organization as OrgModel
+    from app.services.email_service import EmailService
+
+    organization = (
+        await db.execute(select(OrgModel).where(OrgModel.id == organization_id))
+    ).scalar_one_or_none()
+    return EmailService(organization).can_send
+
+
 @router.post(
     "", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED
 )
@@ -264,6 +285,20 @@ async def create_member(
         initial_password = user_data.password
         password_hash = hash_password(initial_password)
     else:
+        # With no password given, the welcome email is the only place the
+        # generated one is ever written down: it is never returned by the API.
+        # If that email cannot be sent the account is created with a password
+        # nobody knows, and the admin is told it succeeded. Refuse instead,
+        # before anything is written. A create that asks for no welcome email
+        # (bulk import with the toggle off) is still allowed — the admin has
+        # chosen to set passwords afterwards with a reset.
+        if user_data.send_welcome_email and not await _welcome_email_can_send(
+            db, str(current_user.organization_id)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=WELCOME_EMAIL_UNAVAILABLE_DETAIL,
+            )
         initial_password = generate_temporary_password()
         password_hash = hash_password(initial_password)
 
@@ -490,6 +525,28 @@ async def create_member(
     # welcome email, never in API responses (prevents caching/logging leaks).
     response = UserWithRolesResponse.model_validate(new_user)
     return response
+
+
+@router.get("/welcome-email-available")
+async def check_welcome_email_available(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("users.create")),
+):
+    """
+    Whether a new member's temporary password can be emailed to them.
+
+    The Add Member and Import Members screens read this to require an initial
+    password, or to turn off welcome emails, before the create is refused.
+
+    **Authentication required**
+
+    **Permissions required:** users.create
+    """
+    return {
+        "available": await _welcome_email_can_send(
+            db, str(current_user.organization_id)
+        )
+    }
 
 
 @router.get("/contact-info-enabled")
