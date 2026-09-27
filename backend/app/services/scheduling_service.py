@@ -15,7 +15,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from loguru import logger
-from sqlalchemy import and_, case, func, or_, select, text
+from sqlalchemy import and_, case, delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -57,6 +57,7 @@ from app.models.user import (
     user_positions,
 )
 from app.services.call_tracking_service import CallTrackingService
+from app.services.external_shift_hours_service import ExternalShiftHoursService
 from app.services.member_leave_service import MemberLeaveService
 from app.services.notifications_service import NotificationsService
 from app.services.shift_eligibility_service import (
@@ -70,7 +71,7 @@ from app.utils.apparatus_ref import (
 )
 from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
 from app.utils.membership import is_administrative
-from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.positions import normalize_stored_positions, position_label
 
 
@@ -1228,16 +1229,18 @@ class SchedulingService:
     def _bound_shift_window(
         start_date: Optional[date],
         end_date: Optional[date],
+        today: date,
     ) -> Tuple[date, date]:
         """Close an open-ended range to a bounded window.
 
         Anchored on whichever end the caller gave, so "everything from today"
         looks forward and "everything up to the audit date" looks back — the
-        two ways an open end is actually used.
+        two ways an open end is actually used. ``today`` is the department's
+        date.
         """
         span = timedelta(days=MEMBER_SHIFT_WINDOW_DAYS)
         if start_date is None and end_date is None:
-            start_date = date.today()
+            start_date = today
             end_date = start_date + span
         elif start_date is None:
             start_date = end_date - span
@@ -1269,7 +1272,9 @@ class SchedulingService:
         the officer path on this same endpoint accepts any range, and a member
         should not get a 400 where an officer gets a page.
         """
-        start_date, end_date = self._bound_shift_window(start_date, end_date)
+        start_date, end_date = self._bound_shift_window(
+            start_date, end_date, await resolve_org_today(self.db, organization_id)
+        )
         query = select(Shift).where(
             Shift.organization_id == str(organization_id),
             Shift.shift_date >= start_date,
@@ -1789,7 +1794,7 @@ class SchedulingService:
         Each pattern is clamped to its own active window. Returns the total
         number of shifts created this run.
         """
-        today = reference_date or date.today()
+        today = reference_date or await resolve_org_today(self.db, organization_id)
         try:
             weeks = max(int(horizon_weeks), 1)
         except (TypeError, ValueError):
@@ -1943,7 +1948,7 @@ class SchedulingService:
         (or the most recent past shift if none today), then
         falls back to the next future shift.
         """
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         now = datetime.now(timezone.utc)
 
         today_shift = (
@@ -4019,7 +4024,11 @@ class SchedulingService:
                 return f"{label} was cancelled"
             if shift.is_finalized:
                 return f"{label} was finalized"
-        if reject_past and shift.shift_date and shift.shift_date < date.today():
+        if (
+            reject_past
+            and shift.shift_date
+            and shift.shift_date < await resolve_org_today(self.db, organization_id)
+        ):
             # A *fallback*, not a second opinion. When the caller has already
             # run the instant-based signup window and the shift has a readable
             # start, that window is the precise answer and this day-granular
@@ -4330,6 +4339,11 @@ class SchedulingService:
             if validation_error:
                 return None, validation_error
 
+            if user_id:
+                await self._clear_inactive_assignment(
+                    shift_id, user_id, organization_id
+                )
+
             assignment = ShiftAssignment(
                 organization_id=organization_id,
                 shift_id=shift_id,
@@ -4388,6 +4402,36 @@ class SchedulingService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def _clear_inactive_assignment(
+        self, shift_id: UUID, user_id: Any, organization_id: UUID
+    ) -> None:
+        """Remove a member's declined or cancelled row so they can be re-seated.
+
+        ``uq_shift_assignment_shift_user`` admits one row per member per shift,
+        and a decline, a shift cancellation or approved time off leaves that
+        row behind as DECLINED/CANCELLED rather than deleting it. The candidate
+        check treats those rows as absent, so the insert that followed hit the
+        constraint and a member who had stepped away could never take the
+        shift back. The seat they are asking for is a new one: nothing from
+        the abandoned row (confirmation, notes, training slot) carries over.
+
+        Only call this after the candidate check has passed, so a refused
+        signup leaves the old row in place. A Core DELETE is used rather than
+        ``session.delete`` because the unit of work flushes inserts before
+        deletes, which would put the new row in before the old one left.
+        The caller already holds the shift row lock, so no concurrent signup
+        for this shift can interleave.
+        """
+        await self.db.execute(
+            delete(ShiftAssignment)
+            .where(ShiftAssignment.shift_id == str(shift_id))
+            .where(ShiftAssignment.user_id == str(user_id))
+            .where(ShiftAssignment.organization_id == str(organization_id))
+            .where(
+                ShiftAssignment.assignment_status.in_(self.INACTIVE_ASSIGNMENT_STATUSES)
+            )
+        )
 
     async def get_shift_assignments(
         self, shift_id: UUID, organization_id: UUID
@@ -5936,7 +5980,9 @@ class SchedulingService:
         parties and the duty officer are notified, because the whole value of
         expiring the offer is that somebody now knows.
         """
-        cutoff = (today or date.today()) + timedelta(days=1)
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
+        cutoff = today + timedelta(days=1)
         result = await self.db.execute(
             select(ShiftSwapRequest, Shift)
             .join(Shift, ShiftSwapRequest.offering_shift_id == Shift.id)
@@ -6472,7 +6518,9 @@ class SchedulingService:
         up as open spots for fill-in or hold-over. Commits when it changes
         anything. Returns the number of assignments cancelled.
         """
-        effective_start = max(start_date, date.today())
+        effective_start = max(
+            start_date, await resolve_org_today(self.db, organization_id)
+        )
         if end_date is not None and end_date < effective_start:
             return 0
 
@@ -6873,6 +6921,9 @@ class SchedulingService:
                     "shifts_scheduled": 0,
                     "scheduled_minutes": 0,
                     "scheduled_hours": 0.0,
+                    "external_shifts": 0,
+                    "external_minutes": 0,
+                    "external_hours": 0.0,
                 },
             )
 
@@ -6888,10 +6939,42 @@ class SchedulingService:
             entry["worked_minutes"] = int(row.minutes or 0)
             entry["worked_hours"] = hours_from_minutes(row.minutes or 0)
 
+        # Hours worked on another jurisdiction's apparatus, reported beside
+        # worked rather than inside it: worked is attendance on this
+        # department's own shifts, and a reader comparing it with scheduled
+        # needs it to stay that.
+        external = await ExternalShiftHoursService(self.db).counted_totals_by_user(
+            str(organization_id), start_date, end_date
+        )
+        missing = [uid for uid in external if uid not in members]
+        if missing:
+            user_rows = await self.db.execute(
+                select(
+                    User.id.label("user_id"),
+                    User.email,
+                    User.first_name,
+                    User.last_name,
+                )
+                .where(User.id.in_(missing))
+                .where(User.organization_id == str(organization_id))
+            )
+            for row in user_rows.all():
+                _entry(row)
+        for uid, totals in external.items():
+            entry = members.get(uid)
+            if entry is None:
+                continue
+            entry["external_shifts"] = totals["shift_count"]
+            entry["external_minutes"] = totals["minutes"]
+            entry["external_hours"] = hours_from_minutes(totals["minutes"])
+
         # Ordered by the figure the report is about.
         return sorted(
             members.values(),
-            key=lambda m: (m["worked_hours"], m["scheduled_hours"]),
+            key=lambda m: (
+                m["worked_hours"] + m["external_hours"],
+                m["scheduled_hours"],
+            ),
             reverse=True,
         )
 
@@ -6910,6 +6993,8 @@ class SchedulingService:
             "calls": 0,
             "pending_shifts": 0,
             "pending_hours": 0.0,
+            "external_shifts": 0,
+            "external_hours": 0.0,
         }
 
     async def get_member_month_totals(
@@ -6938,6 +7023,12 @@ class SchedulingService:
         the department's report cannot disagree — and ``call_count`` is only
         snapshotted at finalization, so an unfinalized shift has hours the
         member can see are not counted yet and no call credit to show at all.
+
+        **External hours are a third figure beside the other two.** Shifts a
+        member logged on another jurisdiction's apparatus count from the
+        moment they are logged, but they are reported as ``external_*`` rather
+        than folded into ``hours`` so the department's own shift record stays
+        what it says it is.
 
         Scoped through ``Shift.organization_id``: ``shift_attendance`` carries
         no org column of its own, and the shift is the row that has one.
@@ -6980,6 +7071,14 @@ class SchedulingService:
             else:
                 entry["pending_shifts"] = int(row.shift_count or 0)
                 entry["pending_hours"] = hours_from_minutes(row.minutes or 0)
+
+        external = await ExternalShiftHoursService(self.db).counted_totals_by_month(
+            str(organization_id), str(user_id), start_date, end_date
+        )
+        for key, totals in external.items():
+            entry = buckets.setdefault(key, self._empty_month_totals(*key))
+            entry["external_shifts"] = totals["shift_count"]
+            entry["external_hours"] = hours_from_minutes(totals["minutes"])
         return buckets
 
     async def get_my_hours_history(
@@ -7042,11 +7141,16 @@ class SchedulingService:
                 "pending_hours": sum_hours_to_quarter(
                     [b["pending_hours"] for b in buckets]
                 ),
+                "external_shifts": sum(b["external_shifts"] for b in buckets),
+                "external_hours": sum_hours_to_quarter(
+                    [b["external_hours"] for b in buckets]
+                ),
             }
 
         # Any attendance at all, credited or not — the picker offers a year the
         # member worked even while every shift in it is still awaiting
-        # close-out.
+        # close-out. External entries count too: a year the member only rode
+        # with a neighbouring department is still a year they can look at.
         earliest_year = min((k[0] for k in months_by_key), default=None)
 
         return {
@@ -7556,7 +7660,7 @@ class SchedulingService:
         per-member progress data.
         """
         if reference_date is None:
-            reference_date = date.today()
+            reference_date = await resolve_org_today(self.db, organization_id)
 
         # 1. Get active shift/hours requirements for this org
         req_result = await self.db.execute(
@@ -7675,6 +7779,15 @@ class SchedulingService:
                     "total_hours": hours_from_minutes(row.total_minutes),
                 }
 
+            # Shifts worked on another jurisdiction's apparatus count toward
+            # the requirement the same way a shift here does: one entry is
+            # one shift, and its minutes are hours on duty.
+            external_map = await ExternalShiftHoursService(
+                self.db
+            ).counted_totals_by_user(
+                str(organization_id), period_start, period_end, user_ids
+            )
+
             # Pre-load leave months for rolling requirements so we can
             # pro-rate each member's required value.
             is_rolling = (
@@ -7704,16 +7817,20 @@ class SchedulingService:
                 att = attendance_map.get(
                     user.id, {"shift_count": 0, "total_minutes": 0, "total_hours": 0.0}
                 )
+                ext = external_map.get(user.id, {"shift_count": 0, "minutes": 0})
+                shift_count = int(att["shift_count"] or 0) + ext["shift_count"]
+                total_minutes = int(att["total_minutes"] or 0) + ext["minutes"]
+                total_hours = hours_from_minutes(total_minutes)
 
                 if req.requirement_type == RequirementType.SHIFTS.value:
-                    completed_value = att["shift_count"]
+                    completed_value = shift_count
                     compliance_value = completed_value
                 else:
-                    completed_value = att["total_hours"]
+                    completed_value = total_hours
                     # Keep the quarter-hour figure for presentation, but grade
                     # against the attendance actually stored.  Rounding here
                     # can otherwise erase a shortfall of nearly 7.5 minutes.
-                    compliance_value = float(att["total_minutes"]) / 60.0
+                    compliance_value = float(total_minutes) / 60.0
 
                 # Adjust required value for rolling-period requirements
                 # by excluding months the member was on leave.
@@ -7750,8 +7867,10 @@ class SchedulingService:
                         "leave_months": leave_months,
                         "percentage": min(percentage, 100),
                         "compliant": is_compliant,
-                        "shift_count": att["shift_count"],
-                        "total_hours": att["total_hours"],
+                        "shift_count": shift_count,
+                        "total_hours": total_hours,
+                        "external_shift_count": ext["shift_count"],
+                        "external_hours": hours_from_minutes(ext["minutes"]),
                     }
                 )
 

@@ -30,6 +30,7 @@ from app.api.v1.endpoints import (
     error_logs,
     event_requests,
     events,
+    external_shift_hours,
     external_training,
     facilities,
     finance,
@@ -37,6 +38,8 @@ from app.api.v1.endpoints import (
     grants,
     integrations,
     inventory,
+    inventory_kiosk,
+    inventory_last_seen,
     inventory_nfc,
     ip_security,
     labels,
@@ -217,6 +220,18 @@ api_router.include_router(
     dependencies=module_gate("inventory", "Inventory"),
 )
 api_router.include_router(
+    inventory_kiosk.router,
+    prefix="/inventory",
+    tags=["inventory"],
+    dependencies=module_gate("inventory", "Inventory"),
+)
+api_router.include_router(
+    inventory_last_seen.router,
+    prefix="/inventory",
+    tags=["inventory"],
+    dependencies=module_gate("inventory", "Inventory"),
+)
+api_router.include_router(
     inventory_nfc.router,
     prefix="/inventory",
     tags=["inventory"],
@@ -304,6 +319,12 @@ api_router.include_router(
 api_router.include_router(
     scheduling.router,
     prefix="/scheduling",
+    tags=["scheduling"],
+    dependencies=module_gate("scheduling", "Scheduling"),
+)
+api_router.include_router(
+    external_shift_hours.router,
+    prefix="/scheduling/external-hours",
     tags=["scheduling"],
     dependencies=module_gate("scheduling", "Scheduling"),
 )

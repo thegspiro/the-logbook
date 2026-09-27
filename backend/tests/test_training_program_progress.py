@@ -8,15 +8,34 @@ average reaches 100%. Uses a recording fake session so the issued UPDATE
 statements can be counted. DB mocked; no MySQL.
 """
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
+
+import pytest
 
 from app.models.training import EnrollmentStatus, RequirementType
 from app.services.training_program_service import (
     RequirementProgressUpdate,
     TrainingProgramService,
 )
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date and zone; answer with UTC so the
+    date.today()-relative fixtures here keep meaning what they say."""
+    from zoneinfo import ZoneInfo
+
+    monkeypatch.setattr(
+        "app.services.training_program_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+    monkeypatch.setattr(
+        "app.services.training_program_service.resolve_scheduling_timezone",
+        AsyncMock(return_value=ZoneInfo("UTC")),
+    )
 
 
 def _one(obj):

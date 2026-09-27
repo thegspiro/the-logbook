@@ -7,7 +7,7 @@ Terminology
 -----------
 - **Position**: A corporate/organisational position that carries
   permissions (e.g., President, Treasurer, IT Manager).
-- **Operational Rank**: A fire-service rank (e.g., Fire Chief, Captain).
+- **Operational Rank**: A fire-service rank (e.g., Chief, Captain).
   Ranks carry *default* permissions that are combined with position
   permissions at runtime.
 - **Membership Type**: A classification with *no* permissions
@@ -351,6 +351,18 @@ INVENTORY_CHECK_SUBMIT = Permission(
     PermissionCategory.INVENTORY,
 )
 
+# Inventory — self-service checkout kiosk (NFC phase 4b).
+#
+# Opening kiosk mode on a shared tablet, where members check loaner gear out
+# and back in themselves by tapping their ID card and then the item's tag.
+# Seeded to no position: a department decides who may run a kiosk. The
+# ``inventory.*`` module wildcard grants it, like every inventory permission.
+INVENTORY_KIOSK = Permission(
+    "inventory.kiosk",
+    "Open self-service checkout kiosk mode",
+    PermissionCategory.INVENTORY,
+)
+
 # Storefront (optional department store that sits alongside logistics)
 STOREFRONT_VIEW = Permission(
     "storefront.view",
@@ -461,6 +473,15 @@ ADMIN_ACCESS = Permission(
 SYSTEM_RUN_TASKS = Permission(
     "system.run_tasks",
     "Trigger platform-wide background tasks",
+    PermissionCategory.ADMIN,
+)
+# The saved link domain decides where every emailed link — password resets and
+# ballots included — sends its recipient, for the whole deployment. Granted to
+# no default role: only the wildcard "System Owner" (it_manager) matches it, and
+# a chief who wants to delegate it grants it to a position explicitly.
+SYSTEM_MANAGE_LINK_DOMAIN = Permission(
+    "system.manage_link_domain",
+    "Change the address links in outgoing email use",
     PermissionCategory.ADMIN,
 )
 
@@ -722,6 +743,7 @@ ALL_PERMISSIONS: list[Permission] = [
     INVENTORY_CHECK_VIEW,
     INVENTORY_CHECK_MANAGE,
     INVENTORY_CHECK_SUBMIT,
+    INVENTORY_KIOSK,
     STOREFRONT_VIEW,
     STOREFRONT_ORDER,
     STOREFRONT_MANAGE,
@@ -753,6 +775,7 @@ ALL_PERMISSIONS: list[Permission] = [
     # Admin
     ADMIN_ACCESS,
     SYSTEM_RUN_TASKS,
+    SYSTEM_MANAGE_LINK_DOMAIN,
     # Minutes
     MINUTES_VIEW,
     MINUTES_MANAGE,
@@ -1292,8 +1315,12 @@ _LINE_MEMBER_PERMISSIONS = [
 ]
 
 OPERATIONAL_RANKS: dict[str, dict] = {
+    # The code stays ``fire_chief`` — it is stored on users.rank, keys every
+    # registry here and the office catalog — but the title is plain "Chief":
+    # the department's highest operational officer, whatever its discipline.
+    # A department that runs parallel Fire and EMS chiefs adds those beneath it.
     "fire_chief": {
-        "label": "Fire Chief",
+        "label": "Chief",
         "priority": 95,
         "default_permissions": _LEADERSHIP_VIEW_PERMISSIONS
         + [
@@ -1623,7 +1650,6 @@ ALL_DISCIPLINE_CODES: frozenset[str] = frozenset().union(
 # override does not, which is precisely why it is written once.
 LABELS_BY_ORG_TYPE: dict[str, dict[str, str]] = {
     "ems_only": {
-        "fire_chief": "Chief",
         "engineer": "Driver / Operator",
     },
 }
@@ -1673,7 +1699,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
     # Operational rank positions (mirror OPERATIONAL_RANKS permissions)
     # ------------------------------------------------------------------
     "fire_chief": {
-        "name": "Fire Chief",
+        "name": "Chief",
         "slug": "fire_chief",
         "description": "Highest-ranking officer with full operational and administrative authority",
         "is_system": True,
@@ -2559,8 +2585,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
 def default_positions_for(organization_type: str | None) -> dict[str, dict]:
     """The default positions an agency of this type should be seeded.
 
-    An EMS-only service has no firefighters and never will, and its chief is a
-    Chief rather than a Fire Chief. Everything else in the registry is
+    An EMS-only service has no firefighters and never will, and its engineer is
+    a Driver / Operator. Everything else in the registry is
     administrative or universal and is seeded to every agency.
 
     The returned definitions are **shallow** copies, and must stay that way:

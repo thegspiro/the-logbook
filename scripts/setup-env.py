@@ -154,6 +154,16 @@ def main():
         config["ALLOWED_ORIGINS"] = origins
         config["FRONTEND_PORT"] = get_user_input("Frontend port", default="3000")
         config["BACKEND_PORT"] = get_user_input("Backend port", default="3001")
+
+    # Every link in an outgoing email (password resets, ballots, reminders)
+    # is built from FRONTEND_URL. Default to the first allowed origin, which
+    # is the address this setup was just told members use.
+    first_origin = config["ALLOWED_ORIGINS"].split(",")[0].strip()
+    print("   The address members open the site on, used for links in emails")
+    print("   (e.g. https://logbook.yourdept.org).")
+    config["FRONTEND_URL"] = get_user_input(
+        "Public site address", default=first_origin
+    )
     print()
 
     # Timezone

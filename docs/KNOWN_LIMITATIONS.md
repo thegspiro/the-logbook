@@ -440,6 +440,20 @@ named ("N modules you did not enable are hidden") with a control to reveal
 them, so a department that cannot find Inventory learns it is off rather than
 concluding the permission does not exist.
 
+## Email Link Address — How a Change Reaches Every Worker (2026-09-25)
+
+An address saved on **Settings → Email** is applied to `settings.FRONTEND_URL`
+in memory on each uvicorn worker (`app/core/link_domain_sync.py`), because the
+29 places that build an emailed link read that value directly. The worker that
+saves the change applies it at once and announces it on Redis, and the other
+workers re-read it from the database when they hear the announcement.
+
+**Without Redis, the other workers take up to a minute.** Each worker also
+re-reads the saved value every 60 seconds, so a missed announcement, or a
+deployment with no Redis at all, is corrected within that window. Until then, an
+email sent by one of those workers still uses the previous address. Links already
+sent keep whatever address they were sent with.
+
 ## Installed App Icons — Three Things the Platforms Decide for Us (2026-09-17)
 
 The department's logo is rendered into the installable app's icons and iOS
@@ -471,6 +485,118 @@ against the plain one will find the masked version noticeably smaller. Fitting
 it larger means some launchers cut the corners off the crest, which is worse and
 is not visible to whoever chooses the setting.
 
+## "Today" Is the Department's Date — What Still Reads UTC (2026-09-26)
+
+**Resolved, with one accepted gap (older training records, below).** `date.today()` returns
+the server's date, and a container runs in UTC, so for a US department it is
+already tomorrow every evening (from 7–8 PM Eastern, 4–5 PM Pacific). Anything
+that counts days, decides expired-versus-not, or picks "this month" from it is
+off by one day for those hours, and the scheduled jobs that run early in the
+UTC morning are off for the western half of the country every time they run.
+
+**Fixed** (with `org_today` / `today_in` / `resolve_org_today` /
+`local_date` / `local_day_start_utc` in `app/utils/org_timezone.py`):
+
+- The certification expiry alerts, NFPA retirement alerts, expiring-supplies
+  email, the monthly compliance auto-report's "last month", the training
+  report exports' default end date and the certification CSV's status, and
+  the equipment check reports' date range and trend buckets
+  (`tests/test_org_local_today.py`).
+- The whole training compliance engine, moved at once so no two views grade
+  against different days (Pitfall #29): the compliance matrix and its
+  `as_of`, the dashboard and admin-hub compliance percentage
+  (`compute_org_compliance_pct`), member status, compliance summary,
+  requirement progress (`check_requirement_progress`, resolved once per page
+  in `get_requirements_progress_for`), member training stats, expiring
+  certifications, the competency matrix, the annual compliance report, the
+  compliance CSV/PDF "Met / Not Met" cells and forecast, the member's own
+  My Training page, the MCP training tools, and a program requirement's
+  recency window (`tests/test_compliance_engine_org_today.py`).
+- Training program enrollments: the default deadline on enrolling, the
+  recert schedule and resets (read-time and the sweep), expiry of an
+  overdue enrollment (read-time and the sweep), reopening with a new
+  deadline, a requirement's evaluation window, and the progress page's
+  days-left and behind-schedule figures; and the struggling-member and
+  enrollment-deadline warnings. An enrollment's timestamps (`enrolled_at`,
+  `cycle_started_at`) are read as the department's calendar day through
+  `local_date` (`tests/test_org_local_today.py`,
+  `tests/test_struggling_member_service.py`).
+- Recertification renewal tasks (the renewal window) and instructor
+  qualification expiry, both for validating an instructor for a session and
+  for listing a course's qualified instructors (`tests/test_org_local_today.py`).
+- Member qualifications (`qualification_service.py`): a qualification is
+  current through its expiry day when no date is given, and shift
+  eligibility judges one against the shift's day on the department's
+  calendar (an evening shift's UTC start is the next day) — the position
+  roster passes the department's date from the org it already holds. The
+  reports service's certification-expiration report, apparatus inspection
+  due dates and call-volume year-to-date default
+  (`tests/test_org_local_today.py`).
+- Apparatus operator (EVOC) certificate expiry, moved together in
+  `EvocLevelService.check_driver_evoc_eligibility` and the position roster's
+  `_get_operator_map` so signup and the roster agree on the same card; and
+  the administration hub and operations dashboard, which now fall back to the
+  scheduling default rather than UTC for an organization with no (or an
+  invalid) timezone, and age an evening row on the department's calendar
+  (`tests/test_org_local_today.py`).
+
+- Everything else that read "today" off the server, moved one area at a time
+  (`tests/test_org_local_today.py`): equipment checks (the auto-fail on an
+  expired item, observation validation, lots aboard, swaps, the apparatus
+  inventory and my-checklists list), stock lots and NFPA screens, medical
+  supplies, the fleet readiness board; apparatus and facility maintenance
+  (overdue flags, due lists, dashboards, the nightly overdue sweep, run per
+  department), the fleet summary's expiring registrations, driver
+  qualification exceptions; scheduling (open shifts, week and month calendars,
+  the "past shift" signup fallback, auto-generation, swap-offer expiry,
+  cancelling shifts for a leave, the shift/hours compliance report, the iCal
+  feed); membership tiers and service history, rejoin and separation dates,
+  the leave widget, medical screening; grants, meetings (including a meeting
+  bridged from an event, whose date and times are now the department's wall
+  clock rather than the event's UTC timestamp), documents, forms,
+  notification and fundraising summaries, dashboard widget periods, the admin
+  hours year and quarters, action-item reminders (per department), and a few
+  labels and file names.
+
+**Guarded.** `tests/test_server_date_ratchet.py` walks `backend/app` and fails
+on any new `date.today()` / `datetime.now(timezone.utc).date()` /
+`datetime.utcnow().date()`. Three calls remain on purpose, each listed there
+with its reason: the end bound sent to an external training provider (a later
+bound only includes more), and two schema validators that refuse a future
+date — they cannot see the organization, and for a US department the server's
+date is never behind its own, so they never refuse a genuine date.
+
+**A stored UTC timestamp cut to a date** — the same bug in a different shape:
+`event.start_datetime.date()` is the UTC day, already tomorrow for an evening
+event. Every such place was read (`grep -rn "\.date()" backend/app`, 49 at the
+time) and the ones that name a day a person sees or a rule compares now go
+through `local_date` / `to_local`: training records created from an event, the
+lookups that find them, the mandatory-event leave and hire check, monthly event
+counts, report dates and ranges, cohort end dates, the readiness board's
+out-of-service days, a member's implied last day of service, donor first/last
+donation dates, the election forensics timeline, the event-request activity
+note and the store-order and inventory last-seen CSV exports
+(`tests/test_org_local_today.py::TestDatesFromTimestamps`). The rest are right
+as they stand: already converted to the department's zone first, provider data
+from external training, a store preview, rough "last N days" windows, and
+minutes action items, whose `DateTime` due date holds a plain date at UTC
+midnight — converting that one would move it a day earlier.
+
+**Accepted: training records written before 2026-09-27 keep their UTC date.**
+A record created from an evening session was filed under the next day, which
+for a session on the last day of a month puts it in the next month's
+compliance. New records are dated by the department's calendar, and the
+lookups that find a record for an event accept the old UTC date as well, so a
+record created before the change is updated rather than duplicated. The
+existing rows were deliberately not rewritten: the correct date is derivable
+(the event's start time and the organization's timezone), but a migration
+would change historical compliance results, and that was judged not worth it.
+An officer can correct an individual record's date where it matters.
+
+Still open: order and request numbers (`ORD-YYYY-`, `PR-YYYY-`) take their year
+from UTC, which differs only on the evening of December 31 and changes nothing
+but the prefix.
+
 ## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
 
 **Accepted.** An anonymous suggestion is stored with no record of its author:
@@ -487,7 +613,8 @@ What the application cannot promise, and why each is left as it is:
 - **Someone with server access can still correlate by time.** The access log
   records `POST /api/v1/suggestions/boxes/{id}/submissions` with a timestamp
   (and the client IP at debug level), the reviewers' notification email is
-  sent — and logged to `message_history` — at submission time, and session
+  sent — and logged to `message_history` — at submission time, their in-app
+  notification rows carry an exact `sent_at`, and session
   activity is recorded on the member's row. None of these names the submitter
   on its own, but together they can narrow one down for whoever can read the
   server's logs and database. Closing it would mean batching notifications
@@ -574,6 +701,33 @@ reader has to know to ask about.
 | **Count-only call tracking: no cross-unit attach picker**               | Open (MED, feature gap; the report label is the mitigation) | Since 2026-08-18 a department can record call volume without incident detail. Deduplicating one incident two units rolled on requires `attach_call_ids`, and **nothing in the UI sends it**: `get_closeout_state` serves `attachable_calls` deliberately **empty** (`list_calls_in_window` costs two queries per request and no client consumes the result). So two units closing out independently each report their own call, and the department figure is the sum. The mitigation is honest labelling rather than a silent overcount — `GET /scheduling/reports/call-volume` sets `counts_unit_responses: true` and the renderer says **Unit Responses**, **Avg Responses/Day**, **Peak Responses**, with a footnote. The response field stays on the contract so the picker can land without a schema change. Until it does, an accurate department call count in count-only mode requires an API client. (SCHED-10) |
 | **Call-volume report carries no preliminary marker**                    | Open (LOW)                                                  | Unfinalized shifts are labelled preliminary where they surface elsewhere; the call-volume report is not. A docstring claiming otherwise was corrected on 2026-08-19 rather than the marker being added, so the gap is recorded rather than hidden. A period read before the last shift of it is closed out under-reports, with nothing on screen saying so. (SCHED-11)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **`dispatch` / `derived` call sources have no writer**                  | Accepted (forward compatibility)                            | `CallSource.DISPATCH` / `.DERIVED` and the `uq_org_call_external_ref (organization_id, external_ref)` constraint exist so a CAD integration can be added without a migration — the constraint is what would make a re-sync idempotent. Nothing writes either value today; every row is `manual`. (SCHED-12)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+### Shifts With Other Departments — Counted on Entry (2026-09-27)
+
+Members log shifts they worked on another jurisdiction's apparatus from **My
+Hours** (`/api/v1/scheduling/external-hours`). Three choices were made on
+purpose, and a department should know them:
+
+- **An entry counts as soon as it is saved.** There is no approval queue. An
+  officer with `scheduling.manage` reviews after the fact from **Scheduling
+  Reports → Member Hours** and rejects an entry that should not count, which
+  removes it from every total. The member sees the reason. A department that
+  needs sign-off _before_ credit does not have that option today.
+- **It is reported beside the department's own hours, never inside them.**
+  `hours` / `worked_hours` stay attendance on this department's shifts, and
+  outside time appears as `external_*`. It **is** added into the shift and
+  hours figures of `GET /scheduling/reports/compliance`, since that report
+  measures a member against a requirement.
+- **Training-side compliance does not see it.** A `SHIFTS` or `HOURS`
+  requirement evaluated by the training module counts `TrainingRecord` rows,
+  not scheduling data (see "Shifts completed has three sources of truth"
+  above), so outside shifts do not move it. They also do not feed training
+  program progress, which reads `ShiftCompletionReport`.
+- **A member can't log a shift on a unit that isn't listed.** The apparatus
+  comes from a list scheduling officers keep (Scheduling → Settings → Outside
+  Apparatus), so that the apparatus summary counts one unit once. A member
+  whose unit is missing has to ask an officer to add it before logging the
+  shift; nothing queues the claim in the meantime.
 
 ## Call Volume Reporting — Five Gaps Between Payload and Screen (2026-08-19)
 
@@ -4144,7 +4298,7 @@ broken by this and no data is at risk; the fix was still correct, because the
 column is settable through the API and the race was real for anyone who had set
 it. But it means "set your form to one submission per person" must not be
 written into operator documentation as an available step, and it is why
-`docs/training/20-september-2026-release-changes.md` and the wiki handoff for
+`docs/training/07-documents-forms.md` (Public Forms) and the wiki handoff for
 this window say explicitly that the checkbox does not exist.
 
 This is the inverse of CLAUDE.md Pitfall #19 ("a config switch must have a

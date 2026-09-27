@@ -4,6 +4,7 @@
 
 import api from './apiClient';
 import type { Symbology } from './labelService';
+import type { InventoryAuditFrequency } from '../constants/enums';
 import type { LabelSetup, LabelSetupSave } from '../modules/inventory/utils/labelSetups';
 import type {
   ItemPin,
@@ -92,10 +93,18 @@ import type {
   RequestableCatalogResponse,
 } from './eventServices';
 import type {
+  InventoryAuditScheduleListResponse,
+  InventoryAuditScheduleRow,
+  InventoryNfcAuditCreate,
+  InventoryNfcAuditDetail,
+  InventoryNfcAuditListResponse,
+  InventoryNfcMember,
   InventoryNfcPutAwayRequest,
   InventoryNfcPutAwayResponse,
   InventoryNfcResolveAnyRequest,
   InventoryNfcResolveAnyResponse,
+  InventoryNfcResolveCheckRequest,
+  InventoryNfcResolveCheckResponse,
   InventoryNfcResolveRequest,
   InventoryNfcScanListResponse,
   InventoryNfcSettings,
@@ -103,8 +112,16 @@ import type {
   InventoryNfcTagCreate,
   InventoryNfcTagListResponse,
   InventoryNfcTagUpdate,
+  InventoryNfcUntaggedListResponse,
+  KioskActionResponse,
+  KioskIdentifyResponse,
+  KioskItemRequest,
+  KioskPreviewResponse,
+  KioskReturnRequest,
+  NotSeenFilters,
+  NotSeenReport,
 } from '../modules/inventory/types/nfc';
-import { asArray } from '../utils/asArray';
+import { asArray, expectArray } from '../utils/asArray';
 
 export const inventoryService = {
   /**
@@ -639,6 +656,23 @@ export const inventoryService = {
     return response.data;
   },
 
+  async resolveCheckNfcTag(data: InventoryNfcResolveCheckRequest): Promise<InventoryNfcResolveCheckResponse> {
+    const response = await api.post<InventoryNfcResolveCheckResponse>('/inventory/nfc/resolve-check', data);
+    return { ...response.data, template_item_ids: expectArray(response.data?.template_item_ids, 'checklist tap') };
+  },
+
+  async getCheckCompartmentNfcTags(compartmentId: string): Promise<InventoryNfcTagListResponse> {
+    const response = await api.get<InventoryNfcTagListResponse>(
+      `/inventory/check-compartments/${compartmentId}/nfc-tags`
+    );
+    return response.data;
+  },
+
+  async linkCheckCompartmentNfcTag(compartmentId: string, data: InventoryNfcTagCreate): Promise<InventoryNfcTag> {
+    const response = await api.post<InventoryNfcTag>(`/inventory/check-compartments/${compartmentId}/nfc-tags`, data);
+    return response.data;
+  },
+
   async putAwayItem(data: InventoryNfcPutAwayRequest): Promise<InventoryNfcPutAwayResponse> {
     const response = await api.post<InventoryNfcPutAwayResponse>('/inventory/nfc/put-away', data);
     return response.data;
@@ -678,6 +712,104 @@ export const inventoryService = {
 
   async unlinkNfcTag(tagId: string): Promise<void> {
     await api.delete(`/inventory/nfc-tags/${tagId}`);
+  },
+
+  async createNfcAudit(data: InventoryNfcAuditCreate): Promise<InventoryNfcAuditDetail> {
+    const response = await api.post<InventoryNfcAuditDetail>('/inventory/nfc/audits', data);
+    return { ...response.data, items: expectArray(response.data?.items, 'shelf audit') };
+  },
+
+  async getNfcAudits(params?: {
+    storage_area_id?: string | undefined;
+    limit?: number | undefined;
+  }): Promise<InventoryNfcAuditListResponse> {
+    const response = await api.get<InventoryNfcAuditListResponse>('/inventory/nfc/audits', { params });
+    // A history list: rendering nothing beats a dead page.
+    const items = asArray(response.data?.items);
+    return { items, total: items.length };
+  },
+
+  async getNfcAudit(auditId: string): Promise<InventoryNfcAuditDetail> {
+    const response = await api.get<InventoryNfcAuditDetail>(`/inventory/nfc/audits/${auditId}`);
+    return { ...response.data, items: expectArray(response.data?.items, 'shelf audit') };
+  },
+
+  async applyNfcAudit(auditId: string, itemIds: string[]): Promise<InventoryNfcAuditDetail> {
+    const response = await api.post<InventoryNfcAuditDetail>(`/inventory/nfc/audits/${auditId}/apply`, {
+      item_ids: itemIds,
+    });
+    return { ...response.data, items: expectArray(response.data?.items, 'shelf audit') };
+  },
+
+  /** A member ID card tapped at the quartermaster's phone. POST so the serial stays out of access logs. */
+  async resolveNfcMember(data: InventoryNfcResolveRequest): Promise<InventoryNfcMember> {
+    const response = await api.post<InventoryNfcMember>('/inventory/nfc/resolve-member', data);
+    return response.data;
+  },
+
+  async getUntaggedItems(params?: {
+    search?: string | undefined;
+    category_id?: string | undefined;
+    limit?: number | undefined;
+  }): Promise<InventoryNfcUntaggedListResponse> {
+    const response = await api.get<InventoryNfcUntaggedListResponse>('/inventory/nfc/untagged', { params });
+    // An empty list here is a claim ("every item is tagged"), so a bad body fails.
+    const items = expectArray(response.data?.items, 'untagged items');
+    return { items, total: items.length };
+  },
+
+  async getAuditSchedule(params?: { due_only?: boolean | undefined }): Promise<InventoryAuditScheduleListResponse> {
+    const response = await api.get<InventoryAuditScheduleListResponse>('/inventory/nfc/audit-schedule', { params });
+    // The schedule list is a view of what is due, not a claim that nothing
+    // is: a bad body shows no rows rather than taking the page down.
+    const items = asArray(response.data?.items);
+    return { items, total: items.length };
+  },
+
+  /** `null` takes the area off the schedule. */
+  async setAuditSchedule(
+    storageAreaId: string,
+    auditFrequency: InventoryAuditFrequency | null
+  ): Promise<InventoryAuditScheduleRow> {
+    const response = await api.put<InventoryAuditScheduleRow>(
+      `/inventory/storage-areas/${storageAreaId}/audit-schedule`,
+      { audit_frequency: auditFrequency }
+    );
+    return response.data;
+  },
+
+  // Self-service kiosk. Every call carries what was read off the member's
+  // card; the kiosk never names a member itself.
+  async kioskIdentify(card: InventoryNfcResolveRequest): Promise<KioskIdentifyResponse> {
+    const response = await api.post<KioskIdentifyResponse>('/inventory/kiosk/identify', { card });
+    return { ...response.data, loans: asArray(response.data?.loans) };
+  },
+
+  async kioskPreview(data: KioskItemRequest): Promise<KioskPreviewResponse> {
+    const response = await api.post<KioskPreviewResponse>('/inventory/kiosk/preview', data);
+    return response.data;
+  },
+
+  async kioskCheckout(data: KioskItemRequest): Promise<KioskActionResponse> {
+    const response = await api.post<KioskActionResponse>('/inventory/kiosk/checkout', data);
+    return response.data;
+  },
+
+  async kioskReturn(data: KioskReturnRequest): Promise<KioskActionResponse> {
+    const response = await api.post<KioskActionResponse>('/inventory/kiosk/return', data);
+    return response.data;
+  },
+
+  // Not-seen report — not gated by the NFC switch.
+  async getNotSeenReport(params?: NotSeenFilters): Promise<NotSeenReport> {
+    const response = await api.get<NotSeenReport>('/inventory/not-seen', { params });
+    // An empty list here is a claim ("every item has been seen"), so a bad body fails.
+    return { ...response.data, items: expectArray(response.data?.items, 'not-seen report') };
+  },
+
+  async exportNotSeenReport(params?: Omit<NotSeenFilters, 'limit'>): Promise<Blob> {
+    const response = await api.get<Blob>('/inventory/not-seen/export', { params, responseType: 'blob' });
+    return response.data;
   },
 
   async distributeItems(data: DistributeItemsRequest): Promise<DistributeItemsResponse> {

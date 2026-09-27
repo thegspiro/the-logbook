@@ -29,7 +29,8 @@ def _prospect(status=ProspectStatus.ACTIVE, created_at=None, public_enabled=True
         status=status,
         status_token="tok_original",
         status_token_created_at=created_at if created_at is not None else now,
-        pipeline=SimpleNamespace(public_status_enabled=public_enabled),
+        pipeline=SimpleNamespace(public_status_enabled=public_enabled, steps=[]),
+        current_step_id=None,
     )
 
 
@@ -450,6 +451,7 @@ class TestCanWithdrawOnRead:
                 steps=[],
             ),
             current_step=None,
+            current_step_id=None,
             step_progress=[],
         )
 

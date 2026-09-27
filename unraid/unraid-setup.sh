@@ -251,12 +251,16 @@ prompt_https_origin() {
         fi
         case "$HTTPS_ORIGIN" in
             https://?*)
-                if [[ "$HTTPS_ORIGIN" != *[[:space:]]* ]]; then
+                # It also becomes FRONTEND_URL, and the backend refuses to
+                # start in production when that points at this machine.
+                if [[ "$HTTPS_ORIGIN" != *[[:space:]]* ]] \
+                    && ! frontend_url_is_loopback "$HTTPS_ORIGIN"; then
                     return 0
                 fi
                 ;;
         esac
-        print_error "A valid https:// URL is required. Configure an HTTPS reverse proxy before continuing."
+        print_error "A valid https:// URL that members can reach is required (not localhost or"
+        print_error "127.0.0.1). Configure an HTTPS reverse proxy before continuing."
         HTTPS_ORIGIN=""
     done
 }
@@ -319,6 +323,24 @@ ensure_frontend_url() {
     print_success "Set FRONTEND_URL=${origin} (links in outgoing email)"
 }
 
+# ensure_frontend_url cannot always derive an address (no usable
+# ALLOWED_ORIGINS, or an insecure http://localhost one kept on purpose). The
+# backend refuses to start in production with a loopback FRONTEND_URL, so stop
+# the update here with the fix rather than after the containers restart into
+# a boot loop.
+require_public_frontend_url() {
+    local current
+    current=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$ENV_FILE" | tail -n 1)
+    if ! frontend_url_is_loopback "$current"; then
+        return 0
+    fi
+    print_error "FRONTEND_URL in $ENV_FILE is '${current}', which points at this machine."
+    print_error "The backend refuses to start in production with it, because every link"
+    print_error "in outgoing email is built from it. Set FRONTEND_URL to the address"
+    print_error "members use (for example https://logbook.example.com) and re-run."
+    exit 1
+}
+
 # The update path (option 2) keeps the existing .env — but the installs that
 # most need the HTTPS migration are exactly the pre-existing plain-HTTP
 # configs, so validate rather than silently keeping a plaintext posture the
@@ -378,6 +400,7 @@ generate_env() {
     # Check if .env already exists
     if [ -f "$ENV_FILE" ] && [ "$INSTALL_TYPE" == "2" ]; then
         validate_existing_env
+        require_public_frontend_url
         return
     fi
 

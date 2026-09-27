@@ -88,9 +88,11 @@ access to the server's own logs lining up times — is recorded in the repositor
 
 ## Added September 24, after the window
 
-These changes landed a day after the window closed, in
-[#2653](https://github.com/thegspiro/the-logbook/pull/2653) and
-[#2667](https://github.com/thegspiro/the-logbook/pull/2667).
+These changes landed just after the window closed, in
+[#2653](https://github.com/thegspiro/the-logbook/pull/2653),
+[#2667](https://github.com/thegspiro/the-logbook/pull/2667),
+[#2687](https://github.com/thegspiro/the-logbook/pull/2687) and
+[#2699](https://github.com/thegspiro/the-logbook/pull/2699).
 
 **Membership coordinators: one bulk-action bar in Table view** (#2653).
 
@@ -174,9 +176,93 @@ House — Setup Crew"** event is already full, with `nbelhaj` on the waitlist.
 **The two corrections fix old mistakes; the Event Information change did not
 cause them.** Attendee visibility ships set to managers only, so on a default
 install a member never sees a going list, and neither line could be filmed as
-written. Script 04's organizer beat is unchanged: it uses the Statistics card,
-which did not change. `docs/youtube-scripts/SCRIPT_CURRENCY.md` has the
+written. Script 04's Statistics beat is unchanged, because the Statistics card
+did not change. `docs/youtube-scripts/SCRIPT_CURRENCY.md` has the
 before-and-after wording.
+
+**Script 04, creating an event — new beat for the officer's side**
+([#2687](https://github.com/thegspiro/the-logbook/pull/2687)). The walkthrough
+never said who can see the going list, so an officer had no way to learn the
+setting existed. Right after RSVP Settings, it now covers:
+
+- the event form's **Who can see who's going** dropdown: **Use organization
+  default**, **Everyone in the department** or **Only event managers**;
+- that members see names only, never contact details, notes or accessibility
+  information;
+- the department default under **Manage Events → Settings → Attendance**,
+  which starts out as **Only event managers**.
+
+It adds about 20 seconds. Film it as an officer; nothing needs saving.
+
+**The training guides now say the same**
+([#2699](https://github.com/thegspiro/the-logbook/pull/2699)):
+
+- **Guide 04's event-creation steps** have a new step for **Who can see who's
+  going** in RSVP Settings.
+- **Guide 20, the September release lesson,** now says where to switch the
+  going list on, for the whole department or for a single event. Before, it
+  only said that an administrator has to.
+
+## Added September 25: the release lessons became indexes
+
+Two training lessons used to repeat, window by window, what each module guide
+should say, and the copies had drifted apart. Both are now indexes:
+[#2706](https://github.com/thegspiro/the-logbook/pull/2706) folded guide 20
+(August 31 – September 23) and
+[#2713](https://github.com/thegspiro/the-logbook/pull/2713) folded guide 19
+(August 12–31), with a last correction to guide 04 following in
+[#2725](https://github.com/thegspiro/the-logbook/pull/2725). Guide 20's index
+now points to both passages that correction fixed, under _Corrections folded
+in on September 25, 2026_
+([#2740](https://github.com/thegspiro/the-logbook/pull/2740)), so a trainer
+who starts from the index lands on the corrected text.
+
+- **Teach from the module guides.** Each one now describes how its screens work
+  today, in one place. Guides 19 and 20 remain only as lists of where each topic
+  went, so old links still land somewhere useful.
+- **Upgrade steps are in `docs/UPGRADING.md`**, dated. Guide 19's August steps
+  were missing from it until now. The ones worth reading before an upgrade from
+  an August build:
+  - four steps take permissions away from seeded positions;
+  - administrative members lose their operational rank, and a downgrade does not
+    give it back;
+  - rolling back past the org chart keeps only each seat's first holder;
+  - the production compose file needs Docker Compose v2.24.4 or later;
+  - a duplicate active applicant stops the upgrade part way.
+- **Direct label printing needs `LABEL_PRINTER_ALLOWED_NETWORKS`.** The setting
+  arrived on September 14 without an upgrade note, and is empty by default, which
+  turns direct printing off. The **Unraid compose files do not pass it through**,
+  so an Unraid install has to add it to the backend's `environment:` block.
+- **Some guide text was wrong, and is corrected.** Every claim was checked against
+  the application while it moved. The ones a trainer is most likely to have
+  repeated:
+  - **Account lockout** is 5 failed sign-ins and 15 minutes, and the sign-in
+    page says only "Incorrect username or password" while an account is locked.
+    The old 5-in-60-seconds and 30-minute figures belong to the separate per-IP
+    rate limit.
+  - **A budget's cap is enforced.** Finance said three times that approving over
+    budget is allowed; it is refused with "Insufficient available budget".
+  - **The skills-test builder's checkbox is Critical**, not Required, and
+    checklist and timed steps can earn or lose points.
+  - **An election is created with "How is the Winner Determined?"**, where
+    Supermajority is one choice that sets both the counting method and the
+    victory condition.
+  - **Writing a random code to a blank ID card** is the preferred way to issue
+    one; reading the chip serial is the fallback.
+  - **The dashboard staffing tiles need `scheduling.manage`**, not
+    `scheduling.view`.
+  - **A ballot item has no voting method of its own and no number of winners**
+    (guide 04). Each item has a **Vote Type**, **Who Can Vote** and an optional
+    **Victory Condition** override; how votes are counted is the election's
+    **How is the Winner Determined?** choice.
+  - **The dashboard has no Clear All** (guide 04 still described one, and a
+    dismiss button on every card). Event notices land in **My Updates**, where
+    opening a row marks it read. Only holders of `notifications.manage` or
+    `settings.manage` can clear a persistent message, and that clears it for
+    everyone.
+- **Screenshots moved with the text.** Thirty-three images from guide 19 now sit
+  in the guides that describe their screens; nine were left out because a module
+  guide already shows the same screen.
 
 ## Upgrade notes
 
@@ -221,12 +307,12 @@ Both holds carry a Dependabot ignore and a lift condition in
 
 ## Where to read more
 
-| Topic                         | Repository file                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------- |
-| Operator lesson               | `docs/training/20-september-2026-release-changes.md` (September 15–23 section)  |
-| Suggestion boxes walkthrough  | `docs/training/07-documents-forms.md`                                           |
-| Meeting stages                | `docs/training/15-prospective-members.md`, `docs/PROSPECTIVE_MEMBERS_MODULE.md` |
-| Label tracking                | `docs/training/05-inventory.md`, `docs/LABEL_PRINTING_MODULE.md`                |
-| Upgrade notes                 | `docs/UPGRADING.md`                                                             |
-| Screenshots to create/replace | `docs/training/SCREENSHOT_CURRENCY.md`                                          |
-| Video script changes          | `docs/youtube-scripts/SCRIPT_CURRENCY.md`                                       |
+| Topic                         | Repository file                                                                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Operator documentation        | the module guides; `docs/training/19-august-2026-release-changes.md` and `20-september-2026-release-changes.md` index where each topic went |
+| Suggestion boxes walkthrough  | `docs/training/07-documents-forms.md`                                                                                                       |
+| Meeting stages                | `docs/training/15-prospective-members.md`, `docs/PROSPECTIVE_MEMBERS_MODULE.md`                                                             |
+| Label tracking                | `docs/training/05-inventory.md`, `docs/LABEL_PRINTING_MODULE.md`                                                                            |
+| Upgrade notes                 | `docs/UPGRADING.md`                                                                                                                         |
+| Screenshots to create/replace | `docs/training/SCREENSHOT_CURRENCY.md`                                                                                                      |
+| Video script changes          | `docs/youtube-scripts/SCRIPT_CURRENCY.md`                                                                                                   |

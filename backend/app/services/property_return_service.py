@@ -17,7 +17,7 @@ separation; filing it anywhere a plain ``documents.view`` holder can read
 publishes both to the whole department.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from html import escape
 from typing import Any, Dict, List, Optional, Tuple
@@ -36,6 +36,7 @@ from app.models.document import (
 )
 from app.models.inventory import CheckOutRecord, ItemAssignment, ItemIssuance
 from app.models.user import Organization, User
+from app.utils.org_timezone import resolve_org_today
 
 
 class PropertyReturnService:
@@ -207,7 +208,9 @@ class PropertyReturnService:
                 }
             )
 
-        today = date.today()
+        # The effective date and deadline are printed in a notice emailed to
+        # the member, so "today" is the department's day, not the server's.
+        today = datetime.now(org_tz).date()
         return_deadline = today + timedelta(days=return_deadline_days)
 
         report_data = {
@@ -368,10 +371,11 @@ class PropertyReturnService:
             organization_id, created_by
         )
 
+        today = await resolve_org_today(self.db, organization_id)
         doc = Document(
             organization_id=organization_id,
             folder_id=str(folder.id),
-            name=f"Property Return - {member_name} - {date.today().strftime('%Y-%m-%d')}",
+            name=f"Property Return - {member_name} - {today.isoformat()}",
             file_type="text/html",
             document_type=DocumentType.GENERATED,
             status=DocumentStatus.ACTIVE,

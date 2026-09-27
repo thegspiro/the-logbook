@@ -9,7 +9,7 @@ This guide covers all installation methods for The Logbook.
 **Works on any platform!** The universal installer automatically detects your OS and hardware:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 This automatically:
@@ -39,21 +39,21 @@ Choose a profile based on your hardware:
 
 ```bash
 # Raspberry Pi / Low memory (1-2GB)
-curl -sSL .../universal-install.sh | bash -s -- --profile minimal
+curl -sSL .../universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile minimal
 
 # Standard (default, 4GB RAM)
-curl -sSL .../universal-install.sh | bash
+curl -sSL .../universal-install.sh | bash -s -- --public-url https://logbook.example.org
 
 # Full with all features (8GB+ RAM)
-curl -sSL .../universal-install.sh | bash -s -- --profile full
-
-# Set the address members use, for links in outgoing email
-curl -sSL .../universal-install.sh | bash -s -- --public-url https://logbook.example.org
+curl -sSL .../universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile full
 ```
 
-`--public-url` sets `FRONTEND_URL`, which every emailed link (password resets,
-ballots, reminders) is built from. Without it the value stays at
-`http://localhost:3000` and the installer reminds you to change it.
+`--public-url` (or `LOGBOOK_PUBLIC_URL`) is required. It sets `FRONTEND_URL`,
+which every emailed link (password resets, ballots, reminders) is built from.
+Without it the installer exits before installing anything, unless an existing
+`.env` already has a public `FRONTEND_URL`; a `localhost` or `127.0.0.1` URL is
+refused. A production backend will not start with a loopback `FRONTEND_URL` —
+see [UPGRADING.md](../docs/UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
 
 ---
 
@@ -189,8 +189,9 @@ DB_USER=logbook_user
 # CORS Configuration (update with your IP/domain)
 ALLOWED_ORIGINS=http://localhost:3000
 
-# Public site URL — every link in outgoing email is built from it
-FRONTEND_URL=http://localhost:3000
+# Public site URL — every link in outgoing email is built from it.
+# With ENVIRONMENT=production a localhost value stops the backend from starting.
+FRONTEND_URL=https://logbook.yourdomain.com
 
 # Application Settings
 ENVIRONMENT=production
@@ -206,7 +207,7 @@ DEBUG=false
 ### Automatic Installation (Recommended)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --profile minimal
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile minimal
 ```
 
 ### Manual Installation
@@ -249,7 +250,7 @@ docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-com
 
 ```bash
 # SSH to your EC2 instance, then:
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 
 # With managed RDS database:
 # Edit .env to point to RDS endpoint
@@ -271,21 +272,21 @@ docker compose up -d backend frontend
 
 ```bash
 # SSH to your Azure VM, then:
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 ### Google Cloud (Compute Engine)
 
 ```bash
 # SSH to your GCE instance, then:
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 ### DigitalOcean (Droplets)
 
 ```bash
 # SSH to your Droplet, then:
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 **Recommended Droplet sizes:**

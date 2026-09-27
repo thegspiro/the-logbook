@@ -1,0 +1,1020 @@
+"""
+"Today" is the department's date, not the server's.
+
+A container runs in UTC, so ``date.today()`` is already tomorrow for a US
+department every evening, and the scheduled jobs that count days run early in
+the UTC morning — still the previous evening in the west. These pin each
+place that now asks the department's calendar instead.
+
+The clock is frozen at 02:30 UTC on October 7, which is 10:30 PM on October 6
+in New York.
+"""
+
+import uuid
+from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from app.utils import org_timezone
+from app.utils.org_timezone import local_day_start_utc, org_today, scheduling_timezone
+
+pytestmark = pytest.mark.unit
+
+FROZEN_UTC = datetime(2026, 10, 7, 2, 30, tzinfo=timezone.utc)
+LOCAL_TODAY = date(2026, 10, 6)
+
+
+class _Frozen(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        if tz is None:
+            return FROZEN_UTC.replace(tzinfo=None)
+        return FROZEN_UTC.astimezone(tz)
+
+
+class _ServerDate(date):
+    """``date.today()`` as a UTC container answers it at the frozen instant."""
+
+    @classmethod
+    def today(cls):
+        return FROZEN_UTC.date()
+
+
+@pytest.fixture(autouse=True)
+def _frozen_clock(monkeypatch):
+    from app.services import (
+        apparatus_service,
+        cert_alert_service,
+        driver_exception_service,
+        equipment_check_service,
+        equipment_readiness_service,
+        evoc_level_service,
+        facilities_service,
+        inventory_service,
+        medical_screening_service,
+        member_service_history_service,
+        membership_tier_service,
+        qualification_service,
+        reports_service,
+        scheduling_service,
+        training_enhancement_service,
+        training_program_service,
+        training_service,
+    )
+
+    monkeypatch.setattr(org_timezone, "datetime", _Frozen)
+    # The server's own date, so a regression to date.today() is caught at the
+    # hour it differs from the department's rather than passing on the real
+    # calendar.
+    monkeypatch.setattr(cert_alert_service, "date", _ServerDate)
+    monkeypatch.setattr(inventory_service, "date", _ServerDate)
+    monkeypatch.setattr(training_enhancement_service, "date", _ServerDate)
+    monkeypatch.setattr(training_program_service, "date", _ServerDate)
+    monkeypatch.setattr(training_service, "date", _ServerDate)
+    monkeypatch.setattr(reports_service, "date", _ServerDate)
+    monkeypatch.setattr(qualification_service, "date", _ServerDate)
+    monkeypatch.setattr(evoc_level_service, "date", _ServerDate)
+    monkeypatch.setattr(equipment_check_service, "date", _ServerDate)
+    monkeypatch.setattr(equipment_readiness_service, "date", _ServerDate)
+    monkeypatch.setattr(apparatus_service, "date", _ServerDate)
+    monkeypatch.setattr(facilities_service, "date", _ServerDate)
+    monkeypatch.setattr(driver_exception_service, "date", _ServerDate)
+    monkeypatch.setattr(scheduling_service, "date", _ServerDate)
+    monkeypatch.setattr(medical_screening_service, "date", _ServerDate)
+    monkeypatch.setattr(member_service_history_service, "date", _ServerDate)
+    monkeypatch.setattr(membership_tier_service, "date", _ServerDate)
+
+
+def _org(tz="America/New_York", **extra):
+    return SimpleNamespace(id="org-1", name="Oakville FD", timezone=tz, **extra)
+
+
+def _one(obj):
+    return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
+
+
+def _bound(query):
+    """Every scalar a compiled statement binds, with IN lists flattened."""
+    values = set()
+    for value in query.compile().params.values():
+        if isinstance(value, (list, tuple)):
+            values.update(value)
+        else:
+            values.add(value)
+    return values
+
+
+def _scalars(items):
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = items
+    return result
+
+
+class TestHelpers:
+    def test_today_is_the_departments_date(self):
+        assert org_today(_org()) == LOCAL_TODAY
+        assert org_today(_org("UTC")) == date(2026, 10, 7)
+
+    def test_an_unset_zone_uses_the_scheduling_default(self):
+        assert org_today(_org(None)) == LOCAL_TODAY
+
+    def test_a_day_starts_at_the_departments_midnight(self):
+        tz = scheduling_timezone(_org())
+        assert local_day_start_utc(LOCAL_TODAY, tz) == datetime(
+            2026, 10, 6, 4, 0, tzinfo=timezone.utc
+        )
+
+
+class TestCertificationAlerts:
+    async def test_the_tier_is_chosen_from_the_departments_date(self, monkeypatch):
+        """61 days out locally is the 90-day tier; the UTC date (one day on)
+        would have called it 60 days and fired the 60-day tier instead."""
+        from app.services import cert_alert_service as module
+        from app.services.cert_alert_service import CertAlertService
+
+        monkeypatch.setattr(
+            module,
+            "NotificationsService",
+            lambda db: SimpleNamespace(log_notification=AsyncMock()),
+        )
+        monkeypatch.setattr(module, "build_email_logo_html", lambda org: "")
+        monkeypatch.setattr(
+            module,
+            "EmailService",
+            lambda org: SimpleNamespace(send_email=AsyncMock(return_value=(1, None))),
+        )
+        org = _org(settings={"cert_alert_config": {"enabled": True}})
+        record = SimpleNamespace(
+            id="rec-1",
+            user_id="u1",
+            course_name="Firefighter I",
+            certification_number=None,
+            issuing_agency=None,
+            expiration_date=LOCAL_TODAY + timedelta(days=61),
+            alert_90_sent_at=None,
+            alert_60_sent_at=None,
+            alert_30_sent_at=None,
+            alert_7_sent_at=None,
+            escalation_sent_at=None,
+        )
+        member = SimpleNamespace(
+            id="u1",
+            first_name="Jane",
+            full_name="Jane Smith",
+            email="m@x.org",
+            personal_email=None,
+            notification_preferences={"email_notifications": False},
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(org),
+                _scalars([]),
+                _one(org),
+                _scalars([record]),
+                _one(member),
+                _scalars([]),
+            ]
+        )
+        db.commit = AsyncMock()
+
+        await CertAlertService(db).process_alerts("org-1")
+
+        assert record.alert_90_sent_at is not None
+        assert record.alert_60_sent_at is None
+
+
+class TestNfpaRetirement:
+    async def test_tomorrow_locally_is_not_past_due(self):
+        from app.services.inventory_service import InventoryService
+
+        record = SimpleNamespace(
+            item_id="item-1", expected_retirement_date=date(2026, 10, 7)
+        )
+        item = SimpleNamespace(
+            id="item-1",
+            name="Turnout coat",
+            serial_number="S1",
+            asset_tag=None,
+            active=True,
+            assigned_to_user_id=None,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_one(_org()), _scalars([record]), _one(item)]
+        )
+
+        due = await InventoryService(db).get_nfpa_retirement_due_items("org-1")
+
+        # UTC's date would have made this 0 days: past due, a day early.
+        assert due[0]["days_until_retirement"] == 1
+
+
+class TestComplianceAutoReports:
+    async def test_the_first_of_the_month_is_the_departments_first(self):
+        """At 05:30 UTC on Oct 1 it is already Oct 1 in New York but still
+        Sept 30 in Los Angeles: only the eastern department's report for a
+        finished September goes out."""
+        from app.services.scheduled_tasks import run_compliance_auto_reports
+
+        frozen = datetime(2026, 10, 1, 5, 30, tzinfo=timezone.utc)
+
+        class _FirstOfMonth(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return frozen.astimezone(tz) if tz else frozen.replace(tzinfo=None)
+
+        def _config(org_id):
+            return SimpleNamespace(
+                organization_id=org_id,
+                auto_report_frequency="monthly",
+                report_day_of_month=1,
+            )
+
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalars([_config("east"), _config("west")]),
+                _one(_org("America/New_York")),
+                _one(_org("America/Los_Angeles")),
+            ]
+        )
+        db.commit = AsyncMock()
+        generate = AsyncMock()
+
+        with patch.object(org_timezone, "datetime", _FirstOfMonth), patch(
+            "app.services.compliance_config_service.ComplianceReportService"
+            ".generate_report",
+            generate,
+        ):
+            await run_compliance_auto_reports(db)
+
+        assert [c.kwargs["organization_id"] for c in generate.await_args_list] == [
+            "east"
+        ]
+        assert generate.await_args.kwargs["month"] == 9
+
+
+class TestEquipmentCheckReports:
+    async def test_the_range_is_bounded_by_the_departments_midnights(self):
+        from app.services.equipment_check_service import EquipmentCheckService
+
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_one(_org()))
+        service = EquipmentCheckService(db)
+
+        _tz, start, end = await service._report_window(
+            "org-1", None, None, default_days=30
+        )
+
+        assert start == datetime(2026, 9, 6, 4, 0, tzinfo=timezone.utc)
+        assert end == datetime(2026, 10, 7, 4, 0, tzinfo=timezone.utc) - timedelta(
+            microseconds=1
+        )
+
+    async def test_an_evening_check_counts_toward_its_own_day(self):
+        from app.services.equipment_check_service import EquipmentCheckService
+
+        check = SimpleNamespace(
+            id="c-1",
+            shift_id=None,
+            checked_at=FROZEN_UTC,
+            checked_by=None,
+        )
+        item = SimpleNamespace(
+            check_id="c-1",
+            status="pass",
+            item_name="SCBA",
+            quantity_found=None,
+            level_reading=None,
+            serial_number=None,
+            lot_number=None,
+            is_expired=None,
+            notes=None,
+        )
+        rows = MagicMock()
+        rows.all.return_value = [(item, check)]
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+        service = EquipmentCheckService(db)
+        service._get_user_name_map = AsyncMock(return_value={})
+
+        out = await service.get_item_trends("org-1", "tpl-item-1", interval="daily")
+
+        assert [t["period"] for t in out["trends"]] == ["2026-10-06"]
+
+
+class TestTrainingCertificationCsv:
+    async def test_a_cert_expiring_today_locally_is_not_expired(self):
+        from app.services.training_enhancement_service import ReportExportService
+
+        user = SimpleNamespace(
+            id="u1", first_name="Jane", last_name="Smith", email="j@x.org"
+        )
+        record = SimpleNamespace(
+            user_id="u1",
+            course_name="EMT",
+            certification_number="C-1",
+            issuing_agency=None,
+            completion_date=None,
+            expiration_date=LOCAL_TODAY,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_one(_org()), _scalars([user]), _scalars([record])]
+        )
+
+        csv_text = await ReportExportService(db).generate_certification_csv("org-1")
+
+        # Valid through today on the department's calendar; the server's date
+        # (tomorrow) would have printed it Expired at -1 days.
+        assert csv_text.splitlines()[1].endswith(",Expiring Soon,0")
+
+
+class TestTrainingStats:
+    async def test_a_cert_expiring_tomorrow_locally_is_not_counted_expired(self):
+        from app.services.training_service import TrainingService
+
+        cert = SimpleNamespace(
+            certification_number="C-1",
+            # A cert counts as expired on its expiration date; this one is
+            # tomorrow for the department, which is already "today" in UTC.
+            expiration_date=LOCAL_TODAY + timedelta(days=1),
+            hours_completed=8,
+            completion_date=date(2026, 1, 10),
+            training_type=None,
+        )
+        records = MagicMock()
+        records.scalars.return_value.all.return_value = [cert]
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), records])
+
+        stats = await TrainingService(db).get_user_training_stats(uuid.uuid4(), "org-1")
+
+        assert stats.expired == 0
+        assert stats.active_certifications == 1
+
+
+class TestProgramRecencyWindow:
+    async def test_the_window_is_measured_from_the_departments_date(self):
+        """A 180-day window measured from Oct 6 still admits Apr 9; measured
+        from the UTC date (Oct 7) it would reject it."""
+        from app.services.training_program_service import TrainingProgramService
+
+        requirement = SimpleNamespace(id="req-1", recency_days=180)
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(
+                    scalar_one_or_none=MagicMock(
+                        return_value=SimpleNamespace(id="enr-1")
+                    )
+                ),
+                MagicMock(
+                    first=MagicMock(
+                        return_value=(SimpleNamespace(id="p1"), requirement)
+                    )
+                ),
+                _one(_org()),
+            ]
+        )
+
+        ok, error = await TrainingProgramService(db).validate_apply_target(
+            user_id="u1",
+            organization_id="org-1",
+            program_id="prog-1",
+            requirement_id="req-1",
+            completed_on=LOCAL_TODAY - timedelta(days=180),
+        )
+
+        assert ok, error
+
+
+class TestProgramDeadline:
+    async def test_a_deadline_of_today_locally_is_not_expired(self, monkeypatch):
+        """Oct 6 is still the member's last day in New York; the UTC date
+        (Oct 7) would have expired the enrollment that evening."""
+        from app.models.training import EnrollmentStatus
+        from app.services import training_program_service as module
+        from app.services.training_program_service import TrainingProgramService
+
+        monkeypatch.setattr(module, "datetime", _Frozen)
+        enrollment = SimpleNamespace(
+            organization_id="org-1",
+            status=EnrollmentStatus.ACTIVE,
+            target_completion_date=LOCAL_TODAY,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_one(_org()))
+
+        expired = await TrainingProgramService(db).auto_expire_if_overdue(enrollment)
+
+        assert expired is False
+        assert enrollment.status == EnrollmentStatus.ACTIVE
+
+
+class TestInstructorQualification:
+    async def test_a_qualification_expiring_today_locally_is_still_valid(self):
+        """Good through its expiration date on the department's calendar; the
+        UTC date (a day on) would have refused the instructor that evening."""
+        from app.services.training_enhancement_service import (
+            InstructorQualificationService,
+        )
+
+        qual = SimpleNamespace(expiration_date=LOCAL_TODAY)
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(qual), _one(_org())])
+
+        ok = await InstructorQualificationService(db).validate_instructor_for_session(
+            "u1", "course-1", "org-1"
+        )
+
+        assert ok is True
+
+
+class TestRenewalTasks:
+    async def test_the_renewal_window_is_bounded_by_the_departments_date(self):
+        from app.services.training_enhancement_service import RecertificationService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+        db.flush = AsyncMock()
+        service = RecertificationService(db)
+        service.get_pathways = AsyncMock(
+            return_value=[
+                SimpleNamespace(source_requirement_id="req-1", renewal_window_days=0)
+            ]
+        )
+
+        await service.generate_renewal_tasks("org-1")
+
+        query = db.execute.await_args_list[1].args[0]
+        bound = set(query.compile().params.values())
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+
+class TestCertificationExpirationReport:
+    async def test_a_cert_expiring_today_locally_is_not_reported_expired(self):
+        from app.services.reports_service import ReportsService
+
+        record = SimpleNamespace(
+            user_id="u1",
+            course_name="EMT",
+            certification_number="C-1",
+            issuing_agency=None,
+            completion_date=None,
+            expiration_date=LOCAL_TODAY,
+        )
+        user = SimpleNamespace(
+            id="u1", first_name="Jane", last_name="Smith", username="js", rank=None
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_scalars([record]), _scalars([user]), _one(_org())]
+        )
+        service = ReportsService(db)
+        service._get_rank_display_map = AsyncMock(return_value={})
+
+        report = await service._generate_certification_expiration("org-1")
+
+        # Valid through today on the department's calendar; the UTC date
+        # (tomorrow) would have reported it expired at -1 days.
+        entry = report["entries"][0]
+        assert entry["expiry_status"] == "expiring_soon"
+        assert entry["days_until_expiry"] == 0
+
+
+class TestQualificationDefaults:
+    async def test_current_qualifications_default_to_the_departments_date(self):
+        from app.services.qualification_service import QualificationService
+
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await QualificationService(db).get_member_codes("u1", "org-1")
+
+        query = db.execute.await_args_list[1].args[0]
+        bound = set(query.compile().params.values())
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+
+class TestShiftEligibilityDate:
+    def test_an_evening_shift_is_judged_on_its_own_day(self):
+        """A shift starting 10:30 PM Eastern is stored as 02:30 UTC the next
+        day; a qualification lapsing that next day must not be read as lapsed
+        for this shift, nor one lapsing today as still good."""
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        shift = SimpleNamespace(shift_date=None, start_time=FROZEN_UTC)
+
+        assert ShiftEligibilityService._shift_date(shift, _org()) == LOCAL_TODAY
+
+    def test_no_shift_means_the_departments_today(self):
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        assert ShiftEligibilityService._shift_date(None, _org()) == LOCAL_TODAY
+
+
+class TestOperatorCertificates:
+    async def test_the_evoc_check_uses_the_departments_date(self):
+        """A card good through today must still clear a driver this evening;
+        the UTC date (a day on) would have filtered it out."""
+        from app.services.evoc_level_service import EvocLevelService
+
+        apparatus = SimpleNamespace(
+            required_evoc_level_id="lvl-2",
+            required_evoc_level=SimpleNamespace(
+                id="lvl-2", level_number=2, name="EVOC II", is_cumulative=True
+            ),
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_one(apparatus), _one(_org()), _scalars([])]
+        )
+
+        await EvocLevelService(db).check_driver_evoc_eligibility("u1", "ap1", "org-1")
+
+        query = db.execute.await_args_list[2].args[0]
+        bound = set(query.compile().params.values())
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+    async def test_the_roster_uses_the_same_date(self):
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await ShiftEligibilityService(db)._get_operator_map("org-1")
+
+        query = db.execute.await_args_list[1].args[0]
+        bound = set(query.compile().params.values())
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+
+class TestOperationsDashboardAge:
+    def test_an_evening_row_is_aged_on_the_departments_calendar(self):
+        """02:30 UTC on Oct 6 is 10:30 PM on Oct 5 in New York: a day old on
+        Oct 6 locally, where its UTC date read it as brand new."""
+        from zoneinfo import ZoneInfo
+
+        from app.api.v1.endpoints.dashboard import _age_days
+
+        created = datetime(2026, 10, 6, 2, 30)  # naive, as func.min returns it
+        assert _age_days(created, LOCAL_TODAY, ZoneInfo("America/New_York")) == 1
+
+
+class TestEquipmentChecks:
+    async def test_tonights_shift_is_still_on_my_checklists(self, monkeypatch):
+        """The UTC date (a day on) dropped tonight's shift from the list the
+        crew opens to start its check."""
+        from app.services import equipment_check_service as module
+
+        monkeypatch.setattr(
+            module, "resolve_apparatus_labels", AsyncMock(return_value={})
+        )
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await module.EquipmentCheckService(db).get_my_checklists("u1", "org-1")
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+    async def test_a_lot_expiring_today_is_not_yet_expired(self):
+        from app.models.apparatus import CheckItemDeployedLot, CheckTemplateItem
+        from app.services.equipment_check_service import EquipmentCheckService
+
+        item = CheckTemplateItem(
+            id="ti-1",
+            compartment_id="comp-1",
+            name="4x4 Gauze",
+            check_type="date_lot",
+            has_expiration=True,
+            expiration_date=LOCAL_TODAY,
+        )
+        item.deployed_lots = [
+            CheckItemDeployedLot(
+                id="lot-a",
+                organization_id="org-1",
+                template_item_id="ti-1",
+                lot_number="A",
+                expiration_date=LOCAL_TODAY,
+                quantity=1,
+            )
+        ]
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org())])
+        service = EquipmentCheckService(db)
+        service._get_item_with_template = AsyncMock(return_value=(item, "tpl-1"))
+
+        result = await service.get_item_deployed_lots("ti-1", "org-1")
+
+        assert result["lots"][0]["is_expired"] is False
+
+    def test_the_verdict_uses_the_date_it_is_given(self):
+        """The submit paths hand in the department's date; an item good
+        through that day passes."""
+        from app.models.apparatus import CheckTemplateItem
+        from app.services.equipment_check_service import EquipmentCheckService
+
+        item = CheckTemplateItem(
+            id="ti-1",
+            compartment_id="comp-1",
+            name="AED pads",
+            check_type="date_lot",
+            has_expiration=True,
+            expiration_date=LOCAL_TODAY,
+        )
+        items = [{"template_item_id": "ti-1", "status": "pass"}]
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            items, {"ti-1": item}, today=LOCAL_TODAY
+        )
+        assert (failed, overall) == (0, "pass")
+
+
+class TestInventoryDates:
+    async def test_maintenance_due_is_counted_from_the_departments_date(self):
+        from app.services.inventory_service import InventoryService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await InventoryService(db).get_maintenance_due(uuid.uuid4(), days_ahead=30)
+
+        query = db.execute.await_args_list[1].args[0]
+        bound = set(query.compile().params.values())
+        assert LOCAL_TODAY + timedelta(days=30) in bound
+        assert FROZEN_UTC.date() + timedelta(days=30) not in bound
+
+    async def test_a_lot_expiring_today_still_counts_as_stock(self):
+        from app.services.inventory_service import InventoryService
+
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await InventoryService(db)._in_date_lot_totals("org-1", ["item-1"])
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+
+class TestFleetReadiness:
+    async def test_the_duty_days_end_on_the_departments_date(self):
+        from app.services.equipment_readiness_service import (
+            EquipmentReadinessService,
+        )
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org())])
+        service = EquipmentReadinessService(db)
+        service._load_fleet = AsyncMock(return_value={"u1": SimpleNamespace()})
+        service._build_occasions = AsyncMock(return_value=([], []))
+        service._grid_rows = MagicMock(return_value=[])
+        service._log_entries = MagicMock(return_value=[])
+        service._log_summary = MagicMock(return_value={})
+
+        await service.get_check_log("org-1")
+
+        assert service._build_occasions.await_args.args[3] == LOCAL_TODAY
+
+
+class TestApparatusAndFacilities:
+    async def test_apparatus_maintenance_due_counts_from_the_departments_date(self):
+        from app.services.apparatus_service import ApparatusService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await ApparatusService(db).get_maintenance_due(
+            "org-1", days_ahead=30, include_overdue=False
+        )
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert {LOCAL_TODAY, LOCAL_TODAY + timedelta(days=30)} <= bound
+        assert FROZEN_UTC.date() not in bound
+
+    async def test_facility_work_due_today_is_not_overdue_tonight(self):
+        """The UTC date (a day on) flagged it overdue on the day it was due."""
+        from app.models.facilities import FacilityMaintenance
+        from app.schemas.facilities import FacilityMaintenanceUpdate
+        from app.services.facilities_service import FacilitiesService
+
+        record = FacilityMaintenance(
+            id="m-1",
+            organization_id="org-1",
+            due_date=LOCAL_TODAY,
+            is_completed=False,
+            is_overdue=False,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org())])
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        service = FacilitiesService(db)
+        service.get_maintenance_record = AsyncMock(return_value=record)
+
+        await service.update_maintenance_record(
+            "m-1", FacilityMaintenanceUpdate(), "org-1", "u1"
+        )
+
+        assert record.is_overdue is False
+
+
+class TestDriverExceptions:
+    async def test_the_review_queue_keeps_a_request_ending_today(self):
+        from app.services.driver_exception_service import DriverExceptionService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await DriverExceptionService(db).count_pending("org-1")
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+
+class TestScheduling:
+    async def test_leave_keeps_tonights_shift_in_the_cancellation(self):
+        """A member put on leave this evening is still due on tonight's shift;
+        the UTC date (a day on) left it assigned to someone who is away."""
+        from app.services.scheduling_service import SchedulingService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await SchedulingService(db).cancel_member_assignments_in_range(
+            "org-1", "u1", LOCAL_TODAY - timedelta(days=3)
+        )
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+    async def test_a_swap_offer_is_expired_against_the_departments_date(self):
+        from app.services.scheduling_service import SchedulingService
+
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await SchedulingService(db).expire_stale_swap_offers("org-1")
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY + timedelta(days=1) in bound
+        assert FROZEN_UTC.date() + timedelta(days=1) not in bound
+
+    async def test_tonights_shift_is_not_refused_as_past(self):
+        from app.services.scheduling_service import SchedulingService
+
+        inactive = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), inactive])
+        shift = SimpleNamespace(
+            id="s1", shift_date=LOCAL_TODAY, status="scheduled", is_finalized=False
+        )
+
+        error = await SchedulingService(db)._validate_assignment_candidate(
+            "org-1", shift, "u1", "firefighter", reject_past=True
+        )
+
+        # It gets as far as the member check rather than stopping at "past".
+        assert error == "Participating member is no longer active in this organization"
+
+
+class TestMembership:
+    async def test_an_anniversary_turns_over_on_the_departments_date(self):
+        """Hired October 7, 2016: tonight in New York they have nine years,
+        and the UTC date (already the anniversary) advanced them a tier."""
+        from app.services.membership_tier_service import MembershipTierService
+
+        org = _org(
+            settings={
+                "membership_tiers": {
+                    "tiers": [
+                        {"id": "probationary", "years_required": 0, "sort_order": 0},
+                        {"id": "life", "years_required": 10, "sort_order": 1},
+                    ]
+                }
+            }
+        )
+        member = SimpleNamespace(
+            id="u1",
+            membership_type="probationary",
+            hire_date=date(2016, 10, 7),
+            status_changed_at=None,
+            deleted_at=None,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_one(org), _scalars([member]), _scalars([])]
+        )
+
+        result = await MembershipTierService(db).advance_all("org-1", "admin")
+
+        assert result["advanced"] == 0
+        assert member.membership_type == "probationary"
+
+    async def test_a_screening_expiring_today_is_still_listed(self):
+        from app.services.medical_screening_service import MedicalScreeningService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await MedicalScreeningService(db).get_expiring_soon("org-1", days=30)
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert {LOCAL_TODAY, LOCAL_TODAY + timedelta(days=30)} <= bound
+        assert FROZEN_UTC.date() not in bound
+
+
+class TestAdministration:
+    async def test_a_meeting_bridged_from_an_event_keeps_its_wall_clock(self):
+        """7:30 PM Eastern is 23:30Z. Copied across unconverted, the meeting
+        read 11:30 PM; an event after 8 PM landed on the next day."""
+        from app.services.meetings_service import MeetingsService
+
+        event = SimpleNamespace(
+            title="Business meeting",
+            start_datetime=datetime(2026, 10, 7, 0, 30),  # naive UTC, 8:30 PM
+            end_datetime=datetime(2026, 10, 7, 2, 0),
+            actual_start_time=None,
+            actual_end_time=None,
+            location=None,
+            location_id=None,
+        )
+        no_meeting = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_one(event), no_meeting, _one(_org()), _scalars([])]
+        )
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+
+        meeting, error = await MeetingsService(db).create_from_event(
+            uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        )
+
+        assert error is None
+        assert meeting.meeting_date == date(2026, 10, 6)
+        assert meeting.start_time.strftime("%H:%M") == "20:30"
+        assert meeting.end_time.strftime("%H:%M") == "22:00"
+
+    def test_a_dashboard_month_starts_at_the_departments_midnight(self):
+        from zoneinfo import ZoneInfo
+
+        from app.services.dashboard_widget_service import period_bounds
+
+        start, end = period_bounds("month", LOCAL_TODAY, ZoneInfo("America/New_York"))
+
+        assert start == datetime(2026, 10, 1, 4, 0, tzinfo=timezone.utc)
+        assert end == datetime(2026, 10, 7, 4, 0, tzinfo=timezone.utc)
+
+    async def test_overdue_maintenance_is_marked_per_department(self):
+        """The nightly sweep runs at one UTC hour for every timezone; work due
+        today in New York is not overdue until New York's day is over."""
+        from app.services import scheduled_tasks
+
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalars([_org()]),
+                MagicMock(rowcount=0),
+                MagicMock(rowcount=0),
+            ]
+        )
+        db.commit = AsyncMock()
+
+        await scheduled_tasks.run_mark_overdue_maintenance(db)
+
+        for call in db.execute.await_args_list[1:]:
+            bound = _bound(call.args[0])
+            assert LOCAL_TODAY in bound
+            assert FROZEN_UTC.date() not in bound
+            assert "org-1" in bound
+
+
+class TestDatesFromTimestamps:
+    """A stored UTC timestamp read as the department's day. 00:30 UTC on
+    October 7 is 8:30 PM on October 6 in New York."""
+
+    EVENING = datetime(2026, 10, 7, 0, 30)  # naive UTC, as MySQL returns it
+
+    def test_a_lookup_accepts_the_local_day_and_the_old_utc_day(self):
+        from zoneinfo import ZoneInfo
+
+        from app.utils.org_timezone import local_and_utc_dates
+
+        assert local_and_utc_dates(self.EVENING, ZoneInfo("America/New_York")) == [
+            date(2026, 10, 6),
+            date(2026, 10, 7),
+        ]
+        assert local_and_utc_dates(self.EVENING, ZoneInfo("UTC")) == [date(2026, 10, 7)]
+
+    async def test_a_check_in_record_is_dated_by_the_sessions_local_day(self):
+        """The UTC date filed an 8:30 PM drill under the next day -- and on
+        the 31st, the next month's compliance. The duplicate check still
+        finds a record written under the old UTC date."""
+        from app.models.event import EventType
+        from app.services.event_service import EventService
+
+        session = SimpleNamespace(
+            auto_create_records=True,
+            course_id=None,
+            category_id=None,
+            course_name="Pump ops",
+            course_code=None,
+            training_type="continuing_education",
+            credit_hours=2.0,
+            instructor=None,
+            issues_certification=False,
+            issuing_agency=None,
+        )
+        no_record = MagicMock()
+        no_record.scalars.return_value.first.return_value = None
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(session), _one(_org()), no_record])
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        event = SimpleNamespace(
+            id="e1",
+            event_type=EventType.TRAINING,
+            start_datetime=self.EVENING,
+            location=None,
+        )
+
+        await EventService(db)._auto_create_training_record(
+            event, SimpleNamespace(), "u1", "org-1"
+        )
+
+        record = db.add.call_args.args[0]
+        assert record.scheduled_date == date(2026, 10, 6)
+        bound = _bound(db.execute.await_args_list[2].args[0])
+        assert {date(2026, 10, 6), date(2026, 10, 7)} <= bound
+
+    def test_a_member_hired_the_next_day_was_not_expected_at_it(self):
+        from zoneinfo import ZoneInfo
+
+        from app.services.event_service import EventService
+
+        event = SimpleNamespace(start_datetime=self.EVENING)
+        member = SimpleNamespace(hire_date=date(2026, 10, 7), membership_type=None)
+
+        assert (
+            EventService._was_expected_at(
+                event, member, [], ZoneInfo("America/New_York")
+            )
+            is False
+        )
+
+    def test_an_evening_status_change_ends_service_that_day(self):
+        from zoneinfo import ZoneInfo
+
+        from app.services.member_service_history_service import (
+            implicit_separation_date,
+        )
+
+        member = SimpleNamespace(status_changed_at=self.EVENING)
+        assert implicit_separation_date(
+            member, date(2026, 12, 1), ZoneInfo("America/New_York")
+        ) == date(2026, 10, 6)
+
+    async def test_a_rig_down_at_9_pm_was_down_that_day(self):
+        from app.services.equipment_readiness_service import (
+            EquipmentReadinessService,
+        )
+
+        down = SimpleNamespace(
+            apparatus_id="e2", changed_at=datetime(2026, 10, 7, 1, 0)
+        )  # 9 PM Oct 6 in New York
+        rows = MagicMock()
+        rows.all.return_value = [(down, False)]
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[rows, _one(_org())])
+        unit = SimpleNamespace(key="e2", full_id="e2", status_available=True)
+
+        result = await EquipmentReadinessService(db)._unavailable_dates(
+            "org-1", {"e2": unit}, date(2026, 10, 5), date(2026, 10, 7)
+        )
+
+        assert date(2026, 10, 6) in result["e2"]
+        assert date(2026, 10, 5) not in result["e2"]

@@ -17,9 +17,23 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+from zoneinfo import ZoneInfo
+
+import pytest
 
 from app.models.training import ApprovalStatus, EnrollmentStatus
 from app.services.training_session_service import TrainingSessionService
+
+
+@pytest.fixture(autouse=True)
+def _utc_department(monkeypatch):
+    """The service reads the department's zone; answer UTC so the dates the
+    fixtures here are built from keep meaning what they say."""
+    for module in ("app.services.training_session_service",):
+        monkeypatch.setattr(
+            f"{module}.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("UTC")),
+        )
 
 
 def _one(obj):

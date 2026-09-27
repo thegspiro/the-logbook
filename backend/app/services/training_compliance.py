@@ -32,6 +32,7 @@ from app.services.training_waiver_service import (
     fetch_org_waivers,
     get_rolling_period_months,
 )
+from app.utils.org_timezone import resolve_org_today
 
 
 def _get_custom_annual_window(req, today: date):
@@ -828,7 +829,9 @@ async def get_org_include_current_month(db: AsyncSession, org_id: str) -> bool:
     return True if config is None else bool(config.include_current_month)
 
 
-async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
+async def compute_org_compliance_pct(
+    db: AsyncSession, org_id: str, today: Optional[date] = None
+) -> float:
     """Compute organization-wide training compliance percentage.
 
     When a compliance configuration exists with profiles, each member is
@@ -920,7 +923,10 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     # Org-wide evaluation-period default; per-requirement overrides are applied
     # inside the evaluator. Config is already loaded above.
     org_include_current = True if config is None else bool(config.include_current_month)
-    today = date.today()
+    # The department's date, as every other compliance view uses: the dashboard
+    # percentage and the matrix it links to must grade against the same day.
+    if today is None:
+        today = await resolve_org_today(db, org_id)
     compliant_count = 0
 
     for member in members:

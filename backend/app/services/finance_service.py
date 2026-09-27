@@ -69,6 +69,7 @@ from app.services.separation_of_duties import (
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
 # The statuses that genuinely resolve a step, so a later step may become
@@ -2643,13 +2644,25 @@ class FinanceService:
                         ]
                     ]
                 )
+                # Payment dates are UTC timestamps; the ledger wants the
+                # department's calendar day, or an evening payment books on
+                # the next one. Resolved inside the try so a failed lookup is
+                # recorded on the export log like any other interruption.
+                org_tz = await resolve_scheduling_timezone(self.db, org_id)
+
+                def local_day(value: datetime) -> str:
+                    aware = (
+                        value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+                    )
+                    return aware.astimezone(org_tz).strftime("%m/%d/%Y")
+
                 for model, where, ordering, render in (
                     (
                         PurchaseRequest,
                         filters,
                         (PurchaseRequest.paid_at, PurchaseRequest.id),
                         lambda pr: [
-                            pr.paid_at.strftime("%m/%d/%Y"),
+                            local_day(pr.paid_at),
                             "Bill Pmt",
                             pr.request_number,
                             pr.vendor or "",
@@ -2664,7 +2677,7 @@ class FinanceService:
                         cr_filters,
                         (CheckRequest.check_date, CheckRequest.id),
                         lambda cr: [
-                            cr.check_date.strftime("%m/%d/%Y"),
+                            local_day(cr.check_date),
                             "Check",
                             cr.check_number or cr.request_number,
                             cr.payee_name,
@@ -2707,7 +2720,7 @@ class FinanceService:
                     yield csv_chunk(
                         [
                             [
-                                er.paid_at.strftime("%m/%d/%Y"),
+                                local_day(er.paid_at),
                                 "Expense",
                                 er.report_number,
                                 item.merchant or "",

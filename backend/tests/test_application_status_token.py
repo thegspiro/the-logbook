@@ -22,7 +22,9 @@ def _prospect(token="tok_original", created_at=None, public_enabled=True):
     now = datetime.now(timezone.utc)
     # sort_order matters: the timeline is ordered by pipeline position, so a
     # step stub without it is not a faithful stand-in for the model.
-    step = SimpleNamespace(id="s1", public_visible=True, name="Interview", sort_order=0)
+    step = SimpleNamespace(
+        id="s1", public_visible=True, name="Interview", sort_order=0, step_type="note"
+    )
     return SimpleNamespace(
         id="p1",
         first_name="Jane",
@@ -38,6 +40,7 @@ def _prospect(token="tok_original", created_at=None, public_enabled=True):
             steps=[step],
         ),
         current_step=step,
+        current_step_id=step.id,
         step_progress=[
             SimpleNamespace(
                 step_id="s1",
@@ -130,6 +133,7 @@ def _prospect_with_step(step):
             steps=[step],
         ),
         current_step=step,
+        current_step_id=step.id,
         step_progress=[],
     )
 
@@ -137,6 +141,7 @@ def _prospect_with_step(step):
 async def test_calcom_meeting_stage_surfaces_scheduling_action():
     step = SimpleNamespace(
         id="s1",
+        sort_order=0,
         public_visible=True,
         name="Interview",
         step_type="meeting",
@@ -157,6 +162,7 @@ async def test_calcom_meeting_stage_surfaces_scheduling_action():
 async def test_calcom_meeting_without_url_has_no_action():
     step = SimpleNamespace(
         id="s1",
+        sort_order=0,
         public_visible=True,
         name="Interview",
         step_type="meeting",
@@ -172,6 +178,7 @@ async def test_calcom_meeting_without_url_has_no_action():
 async def test_non_http_booking_url_is_rejected():
     step = SimpleNamespace(
         id="s1",
+        sort_order=0,
         public_visible=True,
         name="Interview",
         step_type="meeting",
@@ -190,6 +197,7 @@ async def test_non_http_booking_url_is_rejected():
 async def test_documenso_document_stage_surfaces_signature_note():
     step = SimpleNamespace(
         id="s1",
+        sort_order=0,
         public_visible=True,
         name="Sign Waiver",
         step_type="document_upload",
@@ -207,6 +215,7 @@ async def test_documenso_document_stage_surfaces_signature_note():
 async def test_plain_meeting_stage_has_no_action():
     step = SimpleNamespace(
         id="s1",
+        sort_order=0,
         public_visible=True,
         name="Meet the Chief",
         step_type="meeting",
@@ -223,7 +232,9 @@ def _prospect_with_future_stages(show_future):
     """Three public stages: one done, one current, one not reached yet."""
     now = datetime.now(timezone.utc)
     steps = [
-        SimpleNamespace(id=f"s{i}", public_visible=True, name=name, sort_order=i)
+        SimpleNamespace(
+            id=f"s{i}", public_visible=True, name=name, sort_order=i, step_type="note"
+        )
         for i, name in enumerate(["Interest Form", "Interview", "Vote"])
     ]
     statuses = ["completed", "in_progress", "pending"]
@@ -242,6 +253,7 @@ def _prospect_with_future_stages(show_future):
             steps=steps,
         ),
         current_step=steps[1],
+        current_step_id=steps[1].id,
         step_progress=[
             SimpleNamespace(
                 step_id=step.id,

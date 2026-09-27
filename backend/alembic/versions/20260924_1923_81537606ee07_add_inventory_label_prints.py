@@ -18,7 +18,7 @@ on ``inventory_items``, so only the older history is lost. Downgrading past this
 revision returns the chain to its two parent heads.
 
 Revision ID: 81537606ee07
-Revises: ced0061dedc8, 3c918c06466d
+Revises: 8c47e8945f69, f03c9f236904
 Create Date: 2026-09-24 19:23:03.904331
 """
 
@@ -27,11 +27,11 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "81537606ee07"
-# Two revisions landed on main on the same parent (941e1251ad74): the
-# inventory NFC tags table and the compliance-officer seed. They are
+# Two revisions landed on main on the same parent (b795d1b3401b): the
+# withdrawn admin-hours status and external shift hours. They are
 # independent, so this revision joins them as well as adding its table,
 # leaving the chain with a single head.
-down_revision = ("ced0061dedc8", "3c918c06466d")
+down_revision = ("8c47e8945f69", "f03c9f236904")
 branch_labels = None
 depends_on = None
 

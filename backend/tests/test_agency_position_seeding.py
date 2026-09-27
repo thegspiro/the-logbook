@@ -2,7 +2,7 @@
 
 An EMS-only service has the same officer ladder as anyone else and no fire line
 at all, so seeding it a "Firefighter" position hands it a title nobody there can
-hold, and calling its chief "Fire Chief" is simply wrong. Ranks learned this on
+hold, and calling its engineer an "Engineer" is simply wrong. Ranks learned this on
 2026-08-26; positions are the half that matters more, because positions — not
 ranks — are the primary source of permissions.
 
@@ -133,13 +133,18 @@ class TestTheSeededSetIsSpelledOut:
 
 
 class TestTheAgencyRename:
-    def test_an_ems_service_has_a_chief_not_a_fire_chief(self):
-        seeded = default_positions_for("ems_only")
+    @pytest.mark.parametrize("org_type", sorted(GOLDEN_POSITIONS))
+    def test_every_agency_has_a_chief_not_a_fire_chief(self, org_type):
+        seeded = default_positions_for(org_type)
         # The slug is untouched: it keys the permission registry, the office
         # catalog and the shift-eligibility fallback, so it must mean the same
-        # thing for every agency. Only the wording changes.
+        # thing for every agency. Only the wording is "Chief" — the highest
+        # operational officer, whatever the department's discipline.
         assert seeded["fire_chief"]["name"] == "Chief"
         assert seeded["fire_chief"]["slug"] == "fire_chief"
+
+    def test_the_rank_is_a_chief_too(self):
+        assert OPERATIONAL_RANKS["fire_chief"]["label"] == "Chief"
 
     def test_an_ems_engineer_is_a_driver_operator(self):
         assert default_positions_for("ems_only")["engineer"]["name"] == (
@@ -148,12 +153,11 @@ class TestTheAgencyRename:
 
     def test_a_fire_department_keeps_the_registry_wording(self):
         seeded = default_positions_for("fire_department")
-        assert seeded["fire_chief"]["name"] == "Fire Chief"
         assert seeded["engineer"]["name"] == "Engineer / Driver Operator"
 
     def test_the_rename_does_not_reach_the_registry(self):
         default_positions_for("ems_only")
-        assert DEFAULT_POSITIONS["fire_chief"]["name"] == "Fire Chief"
+        assert DEFAULT_POSITIONS["engineer"]["name"] == "Engineer / Driver Operator"
 
 
 class TestTheCopyIsShallowOnPurpose:

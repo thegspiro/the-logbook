@@ -87,28 +87,29 @@ docker compose --profile with-search --profile with-s3 up -d
 ### One-Command Install (Any Platform)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 ### With Options
 
 ```bash
 # Minimal for low-memory systems
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --profile minimal
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile minimal
 
 # Full installation with all features
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --profile full
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile full
 
 # Custom directory
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --dir /opt/the-logbook
-
-# Address members use — written to FRONTEND_URL, which every emailed link is built from
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org --dir /opt/the-logbook
 ```
 
-Without `--public-url`, `FRONTEND_URL` stays at `http://localhost:3000` and the
-installer says so when it finishes: password resets, ballots and reminders will
-link to that machine only until you set it in `.env`.
+`--public-url` (or the `LOGBOOK_PUBLIC_URL` environment variable) is required:
+it is written to `FRONTEND_URL`, which every emailed link — password resets,
+ballots, reminders — is built from. Without it the installer exits before
+installing anything, unless an existing `.env` in the install directory already
+has a public `FRONTEND_URL`. A `localhost` or `127.0.0.1` URL is refused, and a
+production backend refuses to start with one — see
+[UPGRADING.md](../docs/UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
 
 ### Manual Installation
 
@@ -141,7 +142,7 @@ docker compose logs -f
 
 ```bash
 # Install (uses minimal + ARM profiles automatically)
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --profile minimal
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile minimal
 
 # Or manually
 git clone https://github.com/thegspiro/the-logbook.git
@@ -191,7 +192,7 @@ DB_PORT=3306
 ssh ec2-user@your-instance
 
 # Run universal installer
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 #### AWS with RDS (Production)
@@ -247,7 +248,7 @@ az vm create \
 
 # Connect and install
 ssh azureuser@your-vm-ip
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 #### Azure with Managed Services
@@ -287,7 +288,7 @@ gcloud compute instances create the-logbook \
 
 # Connect and install
 gcloud compute ssh the-logbook
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 #### Cloud Run (Serverless)
@@ -323,7 +324,7 @@ doctl compute droplet create the-logbook \
 
 # Connect and install
 ssh root@your-droplet-ip
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 #### App Platform
@@ -347,7 +348,7 @@ curl -fsSL https://get.docker.com | bash
 sudo usermod -aG docker $USER
 
 # Relogin, then install The Logbook
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 ### CentOS/RHEL/Fedora
@@ -359,7 +360,7 @@ sudo systemctl enable --now docker
 sudo usermod -aG docker $USER
 
 # Relogin, then install
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 ### Traditional Installation (No Docker)

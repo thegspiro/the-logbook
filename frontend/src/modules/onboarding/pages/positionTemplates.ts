@@ -171,7 +171,7 @@ const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
     positions: [
       {
         id: 'fire_chief',
-        name: 'Fire Chief',
+        name: 'Chief',
         description: 'Highest-ranking officer with full operational and administrative authority',
         icon: Flame,
         priority: 95,

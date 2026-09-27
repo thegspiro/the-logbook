@@ -25,6 +25,7 @@ import copy
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from loguru import logger
 from sqlalchemy import case, func, select
@@ -65,6 +66,7 @@ from app.services.event_service import EventService
 from app.services.location_service import LocationService
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import local_date, resolve_scheduling_timezone
 from app.utils.scheduling_dates import (
     DEFAULT_TIMEZONE,
     resolve_class_datetimes,
@@ -181,6 +183,7 @@ class CourseCohortService:
             raise ValueError("This course has no classes on its syllabus yet")
 
         tz_name = await self._get_org_timezone(organization_id)
+        org_tz = await resolve_scheduling_timezone(self.db, organization_id)
         location_service = LocationService(self.db)
 
         classes: List[Dict[str, Any]] = []
@@ -242,9 +245,9 @@ class CourseCohortService:
                     "warnings": class_warnings,
                 }
             )
-            local_date = start_utc.date()
-            if last_date is None or local_date > last_date:
-                last_date = local_date
+            class_date = local_date(start_utc, org_tz)
+            if last_date is None or class_date > last_date:
+                last_date = class_date
 
         if len(classes) > MAX_GENERATED_CLASSES:
             warnings.append(
@@ -1335,9 +1338,10 @@ class CourseCohortService:
             query.order_by(CourseCohort.start_date.desc()).offset(skip).limit(limit)
         )
         rows = result.all()
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
         cohorts: List[Dict[str, Any]] = []
         for cohort, course_name in rows:
-            counts = await self._cohort_counts(cohort.id, organization_id)
+            counts = await self._cohort_counts(cohort.id, organization_id, tz=tz)
             cohorts.append({"cohort": cohort, "course_name": course_name, **counts})
         return cohorts
 
@@ -1346,9 +1350,14 @@ class CourseCohortService:
         cohort_id: str,
         organization_id: UUID,
         *,
+        tz: ZoneInfo,
         include_member_count: bool = True,
     ) -> Dict[str, Any]:
-        """Class/member counts and the cohort's last class date."""
+        """Class/member counts and the cohort's last class date.
+
+        The last class date is its day on the department's calendar: an
+        evening class's UTC start is already the next day.
+        """
         class_result = await self.db.execute(
             select(
                 func.count(CourseCohortClass.id),
@@ -1373,7 +1382,7 @@ class CourseCohortService:
         return {
             "class_count": class_count or 0,
             "member_count": member_count,
-            "end_date": last_start.date() if last_start else None,
+            "end_date": local_date(last_start, tz) if last_start else None,
         }
 
     async def get_cohort_detail(
@@ -1485,6 +1494,7 @@ class CourseCohortService:
         counts = await self._cohort_counts(
             cohort.id,
             organization_id,
+            tz=await resolve_scheduling_timezone(self.db, organization_id),
             include_member_count=include_member_data,
         )
         return {
@@ -1512,9 +1522,10 @@ class CourseCohortService:
             .order_by(CourseCohort.start_date.desc())
         )
         cohorts = []
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
         for cohort, course_name in result.all():
             counts = await self._cohort_counts(
-                cohort.id, organization_id, include_member_count=False
+                cohort.id, organization_id, tz=tz, include_member_count=False
             )
             cohorts.append({"cohort": cohort, "course_name": course_name, **counts})
         return cohorts

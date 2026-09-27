@@ -18,6 +18,9 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from app.models.user import Organization
+from app.utils.org_timezone import format_in_org_timezone
+
 _styles = getSampleStyleSheet()
 
 
@@ -95,14 +98,35 @@ _BASE_TABLE_STYLE = TableStyle(
 )
 
 
-def _now_str() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+def _now_str(organization: Optional[Organization]) -> str:
+    return format_in_org_timezone(
+        datetime.now(timezone.utc), organization, "%Y-%m-%d %H:%M %Z"
+    )
+
+
+def _local(value: Any, organization: Optional[Organization], fmt: str) -> str:
+    """A check timestamp as the department's wall-clock time.
+
+    The report services hand back datetimes and the check-detail endpoint an
+    ISO string; both are UTC. A calendar ``date`` has no zone to convert.
+    """
+    if not value:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    if isinstance(value, datetime):
+        return format_in_org_timezone(value, organization, fmt)
+    return str(value)
 
 
 def generate_compliance_pdf(
     data: Dict[str, Any],
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    organization: Optional[Organization] = None,
 ) -> bytes:
     """Generate a compliance summary PDF."""
     buf = io.BytesIO()
@@ -126,7 +150,7 @@ def generate_compliance_pdf(
         period = f"Through {date_to}"
     elements.append(
         Paragraph(
-            f"Period: {_esc(period) or 'Last 30 days'}  |  Generated: {_now_str()}",
+            f"Period: {_esc(period) or 'Last 30 days'}  |  Generated: {_now_str(organization)}",
             SUBTITLE_STYLE,
         )
     )
@@ -172,9 +196,7 @@ def generate_compliance_pdf(
         ]
         rows = [header]
         for a in apparatus_list:
-            last_dt = a.get("last_check_date", "")
-            if last_dt and isinstance(last_dt, str) and len(last_dt) > 10:
-                last_dt = last_dt[:10]
+            last_dt = _local(a.get("last_check_date"), organization, "%Y-%m-%d")
             rows.append(
                 [
                     str(a.get("apparatus_name", "")),
@@ -230,6 +252,7 @@ def generate_failure_log_pdf(
     data: Dict[str, Any],
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    organization: Optional[Organization] = None,
 ) -> bytes:
     """Generate a failure/deficiency log PDF."""
     buf = io.BytesIO()
@@ -251,7 +274,7 @@ def generate_failure_log_pdf(
         Paragraph(
             f"Period: {_esc(period) or 'Last 30 days'}  |  "
             f"Total failures: {data.get('total', 0)}  |  "
-            f"Generated: {_now_str()}",
+            f"Generated: {_now_str(organization)}",
             SUBTITLE_STYLE,
         )
     )
@@ -275,9 +298,7 @@ def generate_failure_log_pdf(
         ]
         rows = [header]
         for f in items:
-            dt = f.get("checked_at", "")
-            if dt and isinstance(dt, str) and len(dt) > 10:
-                dt = dt[:10]
+            dt = _local(f.get("checked_at"), organization, "%Y-%m-%d")
             notes = str(f.get("notes", "") or "")
             if len(notes) > 60:
                 notes = notes[:57] + "..."
@@ -309,6 +330,7 @@ def generate_failure_log_pdf(
 
 def generate_check_detail_pdf(
     check: Dict[str, Any],
+    organization: Optional[Organization] = None,
 ) -> bytes:
     """Generate an individual check report PDF
     (compartment-by-compartment results)."""
@@ -332,9 +354,7 @@ def generate_check_detail_pdf(
         )
     )
 
-    checked_at = check.get("checked_at", "")
-    if checked_at and isinstance(checked_at, str) and len(checked_at) > 19:
-        checked_at = checked_at[:19]
+    checked_at = _local(check.get("checked_at"), organization, "%Y-%m-%d %H:%M %Z")
     elements.append(
         Paragraph(
             f"Checked by: {_esc(check.get('checked_by_name', 'Unknown'))}  |  "

@@ -428,6 +428,14 @@ class InventoryCategory(Base):
     requires_serial_number = Column(Boolean, default=False)
     requires_maintenance = Column(Boolean, default=False)
     low_stock_threshold = Column(Integer)  # Alert when quantity falls below this
+    # Self-service kiosk (NFC phase 4b): members may check items in this
+    # category out themselves. Off unless a quartermaster turns it on.
+    allow_self_checkout = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    # Days a kiosk loan runs before it is due back (and so can go overdue).
+    # Null: kiosk loans from this category have no due date.
+    self_checkout_loan_days = Column(Integer, nullable=True)
     nfpa_tracking_enabled = Column(
         Boolean, default=False, nullable=False, server_default="0"
     )  # Enable NFPA 1851/1852 lifecycle tracking for this category
@@ -443,7 +451,7 @@ class InventoryCategory(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     items = relationship(
@@ -645,7 +653,7 @@ class InventoryItem(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     category = relationship(
@@ -843,8 +851,8 @@ class ItemAssignment(Base):
     expected_return_date = Column(DateTime(timezone=True))
 
     # Assignment Info
-    assigned_by = Column(String(36), ForeignKey("users.id"))
-    returned_by = Column(String(36), ForeignKey("users.id"))
+    assigned_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    returned_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
     assignment_reason = Column(Text)
     return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
     return_notes = Column(Text)
@@ -915,8 +923,8 @@ class ItemIssuance(Base):
     returned_at = Column(DateTime(timezone=True))
 
     # Audit trail
-    issued_by = Column(String(36), ForeignKey("users.id"))
-    returned_by = Column(String(36), ForeignKey("users.id"))
+    issued_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    returned_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Context
     issue_reason = Column(Text)
@@ -1002,7 +1010,7 @@ class IssuanceAllowance(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     category = relationship("InventoryCategory", foreign_keys=[category_id])
@@ -1057,9 +1065,11 @@ class CheckOutRecord(Base):
 
     # Checkout Info
     checked_out_by = Column(
-        String(36), ForeignKey("users.id")
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
     )  # Who approved/logged the checkout
-    checked_in_by = Column(String(36), ForeignKey("users.id"))  # Who logged the return
+    checked_in_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )  # Who logged the return
     checkout_reason = Column(Text)
 
     # Return Condition
@@ -1130,7 +1140,7 @@ class MaintenanceRecord(Base):
     next_due_date = Column(Date, index=True)
 
     # Details
-    performed_by = Column(String(36), ForeignKey("users.id"))
+    performed_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
     vendor_name = Column(String(255))  # If serviced by external vendor
     cost = Column(Numeric(10, 2))
 
@@ -1158,7 +1168,7 @@ class MaintenanceRecord(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     item = relationship(
@@ -1242,8 +1252,8 @@ class DepartureClearance(Base):
     return_deadline = Column(DateTime(timezone=True))
 
     # Who initiated and who signed off
-    initiated_by = Column(String(36), ForeignKey("users.id"))
-    completed_by = Column(String(36), ForeignKey("users.id"))
+    initiated_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    completed_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Notes / context
     departure_type = Column(
@@ -1322,7 +1332,7 @@ class DepartureClearanceItem(Base):
     )
     return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
     resolved_at = Column(DateTime(timezone=True))
-    resolved_by = Column(String(36), ForeignKey("users.id"))
+    resolved_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
     resolution_notes = Column(Text)
 
     # Timestamps
@@ -1391,7 +1401,7 @@ class InventoryNotificationQueue(Base):
     quantity = Column(Integer, nullable=False, default=1, server_default="1")
 
     # Who performed the action
-    performed_by = Column(String(36), ForeignKey("users.id"))
+    performed_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Processing state
     processed = Column(Boolean, default=False, nullable=False, server_default="0")
@@ -1591,6 +1601,16 @@ class StorageLocationType(str, enum.Enum):
     OTHER = "other"
 
 
+class InventoryAuditFrequency(str, enum.Enum):
+    """How often a storage area should be audited by NFC tap. No frequency
+    (a null column) means the area is not on a schedule."""
+
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    QUARTERLY = "quarterly"
+    YEARLY = "yearly"
+
+
 class StorageArea(Base):
     """
     Storage Area model
@@ -1637,6 +1657,14 @@ class StorageArea(Base):
     # Optional: barcode or QR code for scanning
     barcode = Column(String(255))
 
+    # How often this area should be audited by NFC tap (NFC phase 4). Null:
+    # not on a schedule. Due dates are computed from the latest saved audit
+    # in inventory_nfc_audits, not stored, so they cannot drift from it.
+    audit_frequency = Column(
+        Enum(InventoryAuditFrequency, values_callable=_enum_values),
+        nullable=True,
+    )
+
     # Ordering within parent
     sort_order = Column(Integer, default=0)
 
@@ -1648,7 +1676,7 @@ class StorageArea(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     parent = relationship(
@@ -1824,7 +1852,7 @@ class NFPAItemCompliance(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     item = relationship("InventoryItem", foreign_keys=[item_id])
@@ -1962,7 +1990,7 @@ class NFPAExposureRecord(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     item = relationship("InventoryItem", foreign_keys=[item_id])
@@ -2286,7 +2314,7 @@ class ItemVariantGroup(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     items = relationship(
@@ -2434,7 +2462,7 @@ class EquipmentKit(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     line_items = relationship(
@@ -2614,12 +2642,14 @@ class InventoryNfcTagStatus(str, enum.Enum):
 
 
 class InventoryNfcTag(Base):
-    """An NFC tag physically attached to an inventory item or a storage area.
+    """An NFC tag physically attached to an inventory item, a storage area, or
+    an apparatus compartment on an equipment checklist.
 
-    Exactly one of ``item_id`` / ``storage_area_id`` is set (enforced by
-    ``ck_inventory_nfc_tags_one_target``). An item tag names a thing; a
-    storage-area tag names a place, and tapping one during put-away is what
-    moves items onto that shelf.
+    Exactly one of ``item_id`` / ``storage_area_id`` / ``check_compartment_id``
+    is set (enforced by ``ck_inventory_nfc_tags_one_target``). An item tag
+    names a thing; a storage-area tag names a place, and tapping one during
+    put-away is what moves items onto that shelf; a compartment tag names a
+    place on a truck, and tapping one during an equipment check jumps to it.
 
     Only in use when the organization has switched NFC tracking on (see
     ``app/utils/inventory_nfc.py``); the table exists regardless.
@@ -2655,6 +2685,17 @@ class InventoryNfcTag(Base):
     storage_area_id = Column(
         String(36),
         ForeignKey("storage_areas.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    # Compartments belong to a checklist template, not directly to the
+    # organization, so a compartment tag is scoped through its template
+    # (Pitfall #14a, shape b). CASCADE: replacing a template's compartments
+    # wholesale (a preset or an import) recreates them with new ids, and the
+    # tags on the old ones go with them.
+    check_compartment_id = Column(
+        String(36),
+        ForeignKey("check_template_compartments.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )
@@ -2709,8 +2750,12 @@ class InventoryNfcTag(Base):
         ),
         Index("idx_inventory_nfc_tag_org_item", "organization_id", "item_id"),
         CheckConstraint(
-            "(item_id IS NOT NULL AND storage_area_id IS NULL) OR "
-            "(item_id IS NULL AND storage_area_id IS NOT NULL)",
+            "(item_id IS NOT NULL AND storage_area_id IS NULL "
+            "AND check_compartment_id IS NULL) OR "
+            "(item_id IS NULL AND storage_area_id IS NOT NULL "
+            "AND check_compartment_id IS NULL) OR "
+            "(item_id IS NULL AND storage_area_id IS NULL "
+            "AND check_compartment_id IS NOT NULL)",
             name="one_target",
         ),
     )
@@ -2723,6 +2768,9 @@ class InventoryNfcScanAction(str, enum.Enum):
     LOOKUP = "lookup"
     # An item was moved onto a storage area by tapping.
     PUT_AWAY = "put_away"
+    # An item was tapped during a shelf audit (found there, or found there
+    # unexpectedly). ``storage_area_id`` is the audited shelf.
+    AUDIT = "audit"
 
 
 class InventoryNfcScan(Base):
@@ -2786,4 +2834,156 @@ class InventoryNfcScan(Base):
             "item_id",
             "scanned_at",
         ),
+    )
+
+
+class InventoryNfcAuditResult(str, enum.Enum):
+    """What a shelf audit found for one item."""
+
+    # Recorded on the shelf and tapped there.
+    FOUND = "found"
+    # Recorded on the shelf, not tapped. Only ever listed: an audit never marks
+    # an item lost, because "not tapped today" is not "gone".
+    MISSING = "missing"
+    # Tapped on the shelf, recorded somewhere else (or nowhere).
+    UNEXPECTED = "unexpected"
+
+
+class InventoryNfcAudit(Base):
+    """One shelf audit: the items tapped on a storage area, compared with the
+    items the system says are there.
+
+    Stored so a quartermaster can see when a shelf was last checked and what
+    was off. Names are snapshotted because an audit is a record of a moment:
+    the shelf or an item may be renamed or deleted later, and the audit must
+    still say what it said.
+    """
+
+    __tablename__ = "inventory_nfc_audits"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    storage_area_id = Column(
+        String(36), ForeignKey("storage_areas.id", ondelete="SET NULL"), nullable=True
+    )
+    storage_area_name = Column(String(255), nullable=False)
+
+    expected_count = Column(Integer, nullable=False, default=0, server_default="0")
+    found_count = Column(Integer, nullable=False, default=0, server_default="0")
+    missing_count = Column(Integer, nullable=False, default=0, server_default="0")
+    unexpected_count = Column(Integer, nullable=False, default=0, server_default="0")
+
+    audited_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    audited_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # Set when the quartermaster confirmed moving the unexpected items.
+    applied_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    applied_at = Column(DateTime(timezone=True), nullable=True)
+    # Set by an audit finished offline and sent later from the phone's queue.
+    # A sync whose response was lost is retried with the same id, and the
+    # unique constraint turns that retry into the audit already saved rather
+    # than a second one.
+    client_submission_id = Column(String(64), nullable=True)
+
+    items = relationship(
+        "InventoryNfcAuditItem",
+        back_populates="audit",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_inventory_nfc_audit_org_area_time",
+            "organization_id",
+            "storage_area_id",
+            "audited_at",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "client_submission_id",
+            name="uq_inventory_nfc_audits_client_submission",
+        ),
+    )
+
+
+class InventoryNfcAuditItem(Base):
+    """One item's line in a shelf audit."""
+
+    __tablename__ = "inventory_nfc_audit_items"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    audit_id = Column(
+        String(36),
+        ForeignKey("inventory_nfc_audits.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Denormalized from the audit so every read is org-scoped without a join
+    # (CLAUDE.md pitfall #14).
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    item_name = Column(String(255), nullable=False)
+    result = Column(
+        Enum(InventoryNfcAuditResult, values_callable=_enum_values),
+        nullable=False,
+    )
+    # For an unexpected item: where the system had it when the audit ran.
+    recorded_storage_area_id = Column(
+        String(36), ForeignKey("storage_areas.id", ondelete="SET NULL"), nullable=True
+    )
+    recorded_storage_area_name = Column(String(255), nullable=True)
+    # True once the confirm step moved this unexpected item onto the shelf.
+    moved = Column(Boolean, nullable=False, default=False, server_default="0")
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    audit = relationship("InventoryNfcAudit", back_populates="items")
+
+    __table_args__ = (
+        # An item's audit history: every shelf it was found on, or missing from.
+        Index("idx_inventory_nfc_audit_item_org_item", "organization_id", "item_id"),
+    )
+
+
+class InventoryNfcAuditDigest(Base):
+    """One "shelf audits overdue" digest sent to an organization.
+
+    The scheduler keeps task run times in memory, so a weekly task would fire
+    again after every restart. The digest runs daily instead and sends only
+    when the organization's last row here is a week old, which makes "weekly"
+    true across deploys.
+    """
+
+    __tablename__ = "inventory_nfc_audit_digests"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sent_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    overdue_count = Column(Integer, nullable=False, default=0, server_default="0")
+    recipient_count = Column(Integer, nullable=False, default=0, server_default="0")
+
+    __table_args__ = (
+        Index("idx_inventory_nfc_audit_digest_org_sent", "organization_id", "sent_at"),
     )

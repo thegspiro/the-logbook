@@ -6,6 +6,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { suggestionsService } from '../services/suggestionsService';
 import type { ReviewerOptions, ReviewSuggestionDetail } from '../types/suggestions';
@@ -23,6 +24,7 @@ const SuggestionForwardModal: React.FC<SuggestionForwardModalProps> = ({ detail,
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [memberFilter, setMemberFilter] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const currentUserId = useAuthStore((s) => s.user?.id);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,8 +41,13 @@ const SuggestionForwardModal: React.FC<SuggestionForwardModalProps> = ({ detail,
     };
   }, []);
 
-  // Someone who already has this forward is not offered it again.
-  const already = useMemo(() => new Set(detail.forwards.map((f) => f.targetId ?? '')), [detail.forwards]);
+  // Someone who already has this forward is not offered it again, and nor is
+  // the reviewer doing the forwarding, who can already read it.
+  const already = useMemo(() => {
+    const ids = new Set(detail.forwards.map((f) => f.targetId ?? ''));
+    if (currentUserId) ids.add(currentUserId);
+    return ids;
+  }, [detail.forwards, currentUserId]);
   const positions = (options?.positions ?? []).filter((p) => !already.has(p.id));
   const members = (options?.members ?? []).filter((m) => !already.has(m.id));
 

@@ -8,7 +8,7 @@ and optionally the chief when progress is dangerously low.
 Designed to be triggered weekly via the scheduled task system.
 """
 
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Dict, List
 
 from loguru import logger
@@ -25,6 +25,12 @@ from app.models.training import (
     TrainingProgram,
 )
 from app.models.user import User
+from app.utils.org_timezone import (
+    local_date,
+    resolve_org_today,
+    resolve_scheduling_timezone,
+    today_in,
+)
 from app.utils.reminder_conditions import (
     normalize_reminder_conditions,
     should_send_warning,
@@ -58,6 +64,10 @@ class StrugglingMemberService:
         enrollments = list(result.scalars().all())
 
         now = datetime.now(timezone.utc)
+        # Deadlines are days on the department's calendar, and this runs from
+        # a UTC-morning cron that is still yesterday in the west.
+        org_tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = today_in(org_tz)
         flagged_members = []
 
         for enrollment in enrollments:
@@ -65,9 +75,7 @@ class StrugglingMemberService:
 
             # Check deadline proximity
             if enrollment.target_completion_date:
-                days_until_deadline = (
-                    enrollment.target_completion_date - date.today()
-                ).days
+                days_until_deadline = (enrollment.target_completion_date - today).days
                 progress_pct = enrollment.progress_percentage or 0.0
 
                 if days_until_deadline <= 30 and progress_pct < 75.0:
@@ -88,10 +96,11 @@ class StrugglingMemberService:
                 # a member fresh off a recert reset isn't flagged behind on day one.
                 cycle_start = enrollment.cycle_started_at or enrollment.enrolled_at
                 if cycle_start and enrollment.target_completion_date:
+                    cycle_start_day = local_date(cycle_start, org_tz)
                     total_days = (
-                        enrollment.target_completion_date - cycle_start.date()
+                        enrollment.target_completion_date - cycle_start_day
                     ).days
-                    elapsed_days = (date.today() - cycle_start.date()).days
+                    elapsed_days = (today - cycle_start_day).days
                     if total_days > 0 and elapsed_days > 0:
                         time_pct = (elapsed_days / total_days) * 100
                         if time_pct > 50 and progress_pct < 25:
@@ -221,8 +230,11 @@ class StrugglingMemberService:
         enrollments = list(result.scalars().all())
 
         warnings_sent = 0
+        # "N days left" is counted on the department's calendar; the warning
+        # sweep runs in the UTC morning, still the previous evening out west.
+        today = await resolve_org_today(self.db, organization_id)
         for enrollment in enrollments:
-            days_left = (enrollment.target_completion_date - date.today()).days
+            days_left = (enrollment.target_completion_date - today).days
             program = getattr(enrollment, "program", None)
             conditions = normalize_reminder_conditions(
                 getattr(program, "reminder_conditions", None),

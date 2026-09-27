@@ -91,6 +91,12 @@ ICON_VARIANTS: dict[str, IconVariant] = {
     "apple-touch": IconVariant(size=180, content_fraction=0.88, plate=True),
 }
 
+# The logo in an email's masthead. Twice the 48px it is displayed at, so it is
+# sharp on a high-density screen, and transparent: the email puts it on its own
+# white plate. Deliberately not in ICON_VARIANTS — that map is the set of URLs
+# the web app's manifest and index.html ask for, and the reverse proxy routes.
+EMAIL_LOGO_VARIANT = IconVariant(size=96, content_fraction=1.0, plate=False)
+
 # Device pixel geometries of the apple-touch-startup-image links in
 # frontend/index.html. iOS has no scaling fallback — a launch image is used only
 # by a device whose geometry matches exactly — so rendering an arbitrary

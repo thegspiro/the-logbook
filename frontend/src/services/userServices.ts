@@ -11,6 +11,7 @@ import type {
   ContactInfoSettings,
   ContactInfoUpdate,
   EmailConnectionTestResult,
+  EmailLinkDomain,
   EmailServiceSettings,
   FileStorageSettings,
   User,
@@ -459,6 +460,30 @@ export const organizationService = {
    */
   async updateEmailSettings(settings: EmailServiceSettings): Promise<EmailServiceSettings> {
     const response = await api.patch<EmailServiceSettings>('/organization/settings/email', settings);
+    return response.data;
+  },
+
+  /**
+   * The address links in outgoing email are built from, and where the
+   * deployment's configuration got it.
+   */
+  async getEmailLinkDomain(): Promise<EmailLinkDomain> {
+    const response = await api.get<EmailLinkDomain>('/organization/settings/email/link-domain');
+    return response.data;
+  },
+
+  /**
+   * Save an override for the address emailed links use. The backend refuses a
+   * host this server does not serve. Requires system.manage_link_domain.
+   */
+  async setEmailLinkDomain(url: string): Promise<EmailLinkDomain> {
+    const response = await api.put<EmailLinkDomain>('/organization/settings/email/link-domain', { url });
+    return response.data;
+  },
+
+  /** Remove a saved override so links use the server's own address again. */
+  async clearEmailLinkDomain(): Promise<EmailLinkDomain> {
+    const response = await api.delete<EmailLinkDomain>('/organization/settings/email/link-domain');
     return response.data;
   },
 

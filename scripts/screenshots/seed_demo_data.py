@@ -108,6 +108,8 @@ DEMO_MEMBER_PASSWORD = "DemoMember!2026"
 # account whose own records have to be worth picturing. Keep it in step with
 # DEMO_MEMBER_CREDENTIALS in manifest.mjs.
 DEMO_MEMBER_USERNAME = "nbelhaj"
+# As the enrollments list reports it (`user_name`), which carries no username.
+DEMO_MEMBER_FULL_NAME = "Nadia Belhaj"
 
 # EQUIPMENT_REQUESTS still describes each row by how the quartermaster hands the
 # item over, which is the useful thing to read. The API wants the member's side
@@ -135,6 +137,20 @@ GUEST_EMAIL = "rosa.delgado@example.com"
 # test and three screenshots timed out waiting for a queue that was never
 # non-empty. `rduarte` is a firefighter, which does not.
 DEMO_PEER_EXAMINER_USERNAME = "rduarte"
+
+# The member appointed Compliance Officer. The position is seeded by onboarding
+# and reviews the default Compliance suggestion box, so without a holder the box
+# takes reports nobody can read and the Officers tab shows the office vacant.
+#
+# Three constraints decided who:
+#
+#   * No capture names them. No shot in `manifest.mjs` mentions `lnakamura` or
+#     "Nakamura", so appointing her cannot change an image already verified.
+#   * Not a capture account (`nbelhaj`, `okittredge`, `cfrazier`). The position
+#     grants training.manage, and those accounts are chosen for what they lack.
+#   * Not `DEMO_PEER_EXAMINER_USERNAME`. An examiner holding training.manage
+#     validates their own result and empties the validation queue.
+COMPLIANCE_OFFICER_USERNAME = "lnakamura"
 
 # The one member enrolled in TOTP, so the login page's authentication-code step
 # and the members admin page's Reset MFA action have something to picture.
@@ -5371,18 +5387,18 @@ class Seeder:
             "Purchase Request Approval",
             [
                 (1, "Company officer review", "Captain"),
-                (2, "Chief approval", "Fire Chief"),
+                (2, "Chief approval", "Chief"),
             ],
         ),
         (
             "expense_report",
             "Expense Reimbursement Approval",
-            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Fire Chief")],
+            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Chief")],
         ),
         (
             "check_request",
             "Check Request Approval",
-            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Fire Chief")],
+            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Chief")],
         ),
     ]
 
@@ -7621,6 +7637,9 @@ class Seeder:
         signature title differs from the default.
         """
         by_username = {m.get("username"): m for m in members}
+        # The office auto-detects its holder from this position, but linking it
+        # below as well pictures the office the way the others are: assigned.
+        self._ensure_role(COMPLIANCE_OFFICER_USERNAME, "Compliance Officer")
         assignments = [
             ("chief", "chief", None),
             ("deputy_chief", "mbell", None),
@@ -7632,6 +7651,7 @@ class Seeder:
             ("secretary", "aosei", None),
             ("treasurer", "tlindqvist", None),
             ("quartermaster", "whalloway", None),
+            ("compliance_officer", COMPLIANCE_OFFICER_USERNAME, None),
         ]
         directory = items(self.api.get("/officers"), "offices")
         filled = {
@@ -7785,6 +7805,7 @@ class Seeder:
             "anonymity_mode": "allowed",
             "follow_up_enabled": True,
             "reviewer_positions": ["Secretary", "Training Officer"],
+            "public_board_enabled": True,
         },
         {
             "name": "Station concerns",
@@ -7832,6 +7853,10 @@ class Seeder:
             "submitter_reply": "Happy to. I'll bring the step chocks from Engine 2.",
             "disposition": "accepted",
             "internal_note": "Added to next month's drill calendar.",
+            "public_response": (
+                "Scheduled for the second Tuesday next month, with Engine 2 "
+                "lighting the scene. Thanks for suggesting it."
+            ),
         },
         {
             "box": "Training ideas",
@@ -7874,6 +7899,43 @@ class Seeder:
             "screenshot": False,
         },
     ]
+
+    # Published by the reviewer after the submissions exist. The copy is the
+    # reviewer's own words, as the guide tells reviewers to write it: no
+    # submitter, no details lifted from the original.
+    SUGGESTION_BOARD_ENTRIES = [
+        {
+            "title": "Night-time vehicle extrication drill",
+            "board_title": "Night-time extrication drill",
+            "summary": (
+                "Run one extrication drill after dark, lit by Engine 2, so crews "
+                "practise cribbing and tool placement the way most bypass calls "
+                "actually happen."
+            ),
+        },
+        {
+            "title": "More hands-on SCBA time for probationary members",
+            "board_title": "Regular hands-on SCBA sessions for probies",
+            "summary": (
+                "A recurring drill-night session on donning, emergency "
+                "procedures and air consumption for members past their air-pack "
+                "sign-off."
+            ),
+        },
+    ]
+    # Who has voted for which board entry, by username. The demo member votes
+    # for the first and not the second, so the board shot shows both button
+    # states; the uneven counts make Top ordering visible.
+    SUGGESTION_BOARD_VOTES = {
+        "Night-time vehicle extrication drill": [
+            DEMO_MEMBER_USERNAME,
+            SUGGESTION_REVIEWER_USERNAME,
+            SUGGESTION_FORWARD_MEMBER_USERNAME,
+        ],
+        "More hands-on SCBA time for probationary members": [
+            SUGGESTION_REVIEWER_USERNAME,
+        ],
+    }
 
     def _user_id(self, username: str) -> str:
         users = items(self.api.get("/users?limit=200"), "users")
@@ -7957,8 +8019,10 @@ class Seeder:
                     "is_active": True,
                     "reviewer_position_ids": reviewer_ids,
                     "reviewer_member_ids": [],
+                    "public_board_enabled": box.get("public_board_enabled", False),
                 },
             )
+        self._enable_suggestion_boards()
 
         # `member_session`, not a bare `login_as`: an account the administrator
         # created is flagged must-change-password, and every call after the
@@ -8046,6 +8110,7 @@ class Seeder:
                     {
                         "disposition": entry["disposition"],
                         "internal_note": entry.get("internal_note"),
+                        "public_response": entry.get("public_response"),
                     },
                 )
             if entry.get("forward_to") and entry["forward_to"] in position_ids:
@@ -8056,6 +8121,7 @@ class Seeder:
             follow_up_key = None
 
         self._seed_suggestion_member_forward(reviewer)
+        self._seed_suggestion_board(reviewer)
 
     def _seed_suggestion_member_forward(self, reviewer: Api) -> None:
         """Forward one submission to a member who reviews no box.
@@ -8103,6 +8169,74 @@ class Seeder:
             self.blocked.append(
                 f"suggestion boxes: {username} does not see {title!r} as forwarded"
             )
+
+    def _enable_suggestion_boards(self) -> None:
+        """Switch the idea board on for a box a previous seed created without it.
+
+        The create above skips an existing box, so without this a database
+        seeded before the board existed would never show the Idea board tab.
+        The write carries the box's current settings, because an update
+        replaces the reviewer set rather than merging into it.
+        """
+        wanted = {
+            b["name"] for b in self.SUGGESTION_BOXES if b.get("public_board_enabled")
+        }
+        for box in items(self.api.get("/suggestions/admin/boxes"), "boxes"):
+            if pick(box, "name") not in wanted:
+                continue
+            if pick(box, "public_board_enabled", "publicBoardEnabled"):
+                continue
+            positions = pick(box, "reviewer_positions", "reviewerPositions") or []
+            members = pick(box, "reviewer_members", "reviewerMembers") or []
+            self.api.put(
+                f"/suggestions/admin/boxes/{pick(box, 'id')}",
+                {
+                    "name": pick(box, "name"),
+                    "description": pick(box, "description"),
+                    "anonymity_mode": pick(box, "anonymity_mode", "anonymityMode"),
+                    "follow_up_enabled": pick(
+                        box, "follow_up_enabled", "followUpEnabled"
+                    ),
+                    "is_active": pick(box, "is_active", "isActive"),
+                    "reviewer_position_ids": [str(pick(p, "id")) for p in positions],
+                    "reviewer_member_ids": [str(pick(m, "id")) for m in members],
+                    "public_board_enabled": True,
+                },
+            )
+
+    def _seed_suggestion_board(self, reviewer: Api) -> None:
+        """Publish two Training ideas submissions and cast the demo votes.
+
+        Runs on every seed. Publishing again replaces the copy with the same
+        text, and a vote already cast is kept, so a re-run changes nothing.
+        """
+        by_title = {
+            pick(s, "title"): str(pick(s, "id"))
+            for s in items(reviewer.get("/suggestions/review?limit=200"), "items")
+        }
+        for entry in self.SUGGESTION_BOARD_ENTRIES:
+            suggestion_id = by_title.get(entry["title"])
+            if not suggestion_id:
+                self.blocked.append(
+                    f"suggestion board: {entry['title']!r} not visible to its reviewer"
+                )
+                continue
+            reviewer.post(
+                f"/suggestions/review/{suggestion_id}/publish",
+                {"title": entry["board_title"], "summary": entry["summary"]},
+            )
+
+        sessions: dict[str, Api] = {self.SUGGESTION_REVIEWER_USERNAME: reviewer}
+        for title, usernames in self.SUGGESTION_BOARD_VOTES.items():
+            suggestion_id = by_title.get(title)
+            if not suggestion_id:
+                continue
+            for username in usernames:
+                if username not in sessions:
+                    sessions[username] = self.member_session(
+                        self.base_url, self._user_id(username), username
+                    )
+                sessions[username].post(f"/suggestions/board/{suggestion_id}/vote", {})
 
     def seed_legal_documents(self) -> list[dict]:
         """One published notice and one draft, so the two states differ on screen.
@@ -8898,6 +9032,9 @@ class Seeder:
             program_id = pick(program, "id")
             if not program_id:
                 continue
+            gate_names = set(
+                PROGRAM_GATE_REQUIREMENTS.get(str(pick(program, "name") or ""), ())
+            )
             enrollments = items(
                 self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
                 "enrollments",
@@ -8906,6 +9043,14 @@ class Seeder:
                 enrollment_id = pick(enrollment, "id")
                 if not enrollment_id:
                     continue
+                # The demo member's gates stay unfinished: a satisfied gate
+                # locks nothing, and the member-facing "Locked until you
+                # finish …" line is photographed from this member's session.
+                # Every other enrollee still finishes theirs, which is what
+                # gives the officer-side test panel a recorded score to show.
+                keep_gates_open = (
+                    str(pick(enrollment, "user_name") or "") == DEMO_MEMBER_FULL_NAME
+                )
                 detail = self.api.get(f"/training/programs/enrollments/{enrollment_id}")
                 rows = items(detail, "requirement_progress")
                 if not rows:
@@ -8962,7 +9107,10 @@ class Seeder:
                         ),
                         None,
                     )
-                    complete = index < done and not is_checklist
+                    is_open_gate = keep_gates_open and (
+                        str(pick(requirement, "name") or "") in gate_names
+                    )
+                    complete = index < done and not is_checklist and not is_open_gate
                     # A knowledge test is completed by *recording a score*, not
                     # by setting a status: the score fills in the "Last score"
                     # line and spends one of the requirement's attempts, and a
@@ -15122,7 +15270,7 @@ class Seeder:
         if not items(self.api.get("/store/orders/mine"), "orders"):
             self._place_admin_store_order(products)
         self._seed_member_store_orders(products, members)
-        self._spread_store_order_states()
+        self._spread_store_order_states(self._demo_member_id(members))
         return items(self.api.get("/store/orders/mine"), "orders")
 
     def _place_admin_store_order(self, products: list[dict]) -> None:
@@ -15172,7 +15320,12 @@ class Seeder:
         demo fixtures in a throwaway database, never real accounts.
         """
         existing = items(self.api.get("/store/orders"), "orders")
-        if len(existing) >= 4:
+        demo_member_id = self._demo_member_id(members)
+        demo_member_ordered = any(
+            str(pick(order, "user_id", "userId") or "") == demo_member_id
+            for order in existing
+        )
+        if len(existing) >= 4 and demo_member_ordered:
             return
 
         line_products = [
@@ -15188,7 +15341,13 @@ class Seeder:
         # and POST /users/{id}/reset-password refuses your own account -- "Use
         # the change-password endpoint to change your own password". The roster
         # is returned admin-first, so members[:3] reached it every time.
-        orderers = [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME][:3]
+        candidates = [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME]
+        # The demo member first: 19-07 pictures the member changing the payment
+        # method on their own order, and the `auth: "member"` shots sign in as
+        # them, so an order placed only by other members leaves My Orders empty.
+        candidates.sort(key=lambda m: m.get("username") != DEMO_MEMBER_USERNAME)
+        ordered_by = {str(pick(order, "user_id", "userId") or "") for order in existing}
+        orderers = [m for m in candidates[:3] if str(pick(m, "id")) not in ordered_by]
         for member in orderers:
             user_id = pick(member, "id")
             username = member.get("username")
@@ -15218,7 +15377,18 @@ class Seeder:
                     raise
                 self.blocked.append(f"store order for {username}: {exc}")
 
-    def _spread_store_order_states(self) -> None:
+    @staticmethod
+    def _demo_member_id(members: list[dict]) -> str:
+        return next(
+            (
+                str(pick(m, "id"))
+                for m in members
+                if m.get("username") == DEMO_MEMBER_USERNAME
+            ),
+            "",
+        )
+
+    def _spread_store_order_states(self, demo_member_id: str) -> None:
         """Leave the order list sitting in more than one state.
 
         Store Admin's activity cards count orders by status and its list filters
@@ -15241,10 +15411,14 @@ class Seeder:
             pick(order, "id")
             for order in items(self.api.get("/store/orders/mine"), "orders")
         }
+        # The demo member's order stays unpaid for the same reason: 19-07
+        # pictures its "Change payment method" control, which a paid order
+        # (no balance left) does not offer.
         orders = [
             order
             for order in items(self.api.get("/store/orders"), "orders")
             if pick(order, "id") not in mine
+            and str(pick(order, "user_id", "userId") or "") != demo_member_id
         ]
         if len(orders) < 2:
             return

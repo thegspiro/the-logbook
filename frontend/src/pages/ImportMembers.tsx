@@ -89,7 +89,7 @@ const TEMPLATE_HEADERS = [
  * explanatory to whoever opens it.
  *
  * The instructions say to replace it, and when it was left in it imported as a
- * real member — a John Doe with a working password-setup link. The importer
+ * real member — a John Doe emailed a working temporary password. The importer
  * recognizes its own example and rejects that row instead.
  */
 const TEMPLATE_EXAMPLE: Record<(typeof TEMPLATE_HEADERS)[number], string> = {
@@ -647,7 +647,7 @@ const ImportMembers: React.FC = () => {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   /**
-   * Off by default, deliberately. Creating a member sends a password-setup link
+   * Off by default, deliberately. Creating a member emails a temporary password
    * the moment the record exists, and an import creates them by the dozen — a
    * roster loaded for staging, or from a list with stale addresses, would put
    * mail no one can recall in front of every one of them.
@@ -1141,9 +1141,9 @@ const ImportMembers: React.FC = () => {
                 <span className="text-sm">
                   <span className="text-theme-text-primary font-medium">Send welcome emails now</span>
                   <span className="text-theme-text-muted block">
-                    Each member is emailed a password-setup link the moment their record is created, and it cannot be
-                    recalled. Left off, the roster imports quietly and you issue credentials later from Member
-                    Management.
+                    Each member is emailed a temporary password the moment their record is created, and the email cannot
+                    be recalled. They must change it at first sign-in. Left off, the roster imports quietly and you set
+                    passwords later with Reset Password in Member Management.
                   </span>
                 </span>
               </label>

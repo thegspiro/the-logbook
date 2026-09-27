@@ -6,9 +6,9 @@
 
 import { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { AxiosError } from 'axios';
 import { eventService } from '../services/api';
 import type { NotificationType, NotificationTarget } from '../components/event-detail/EventNotificationPanel';
+import { getErrorDetail } from '../utils/errorHandling';
 
 interface LastNotification {
   type: string;
@@ -47,8 +47,7 @@ export const useEventNotifications = (eventId: string | undefined) => {
       });
       setNotificationMessage('');
     } catch (err) {
-      const axiosErr = err as AxiosError<{ detail?: string }>;
-      toast.error(axiosErr.response?.data?.detail || 'Failed to send notification');
+      toast.error(getErrorDetail(err) || 'Failed to send notification');
     } finally {
       setSendingNotification(false);
     }
@@ -64,8 +63,7 @@ export const useEventNotifications = (eventId: string | undefined) => {
         const result = await eventService.sendReminders(eventId, reminderType);
         toast.success(`${result.sent_count} reminder(s) queued`);
       } catch (err) {
-        const axiosErr = err as AxiosError<{ detail?: string }>;
-        toast.error(axiosErr.response?.data?.detail || 'Failed to send reminders');
+        toast.error(getErrorDetail(err) || 'Failed to send reminders');
       } finally {
         setSendingReminders(false);
       }

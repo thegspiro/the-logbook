@@ -123,7 +123,12 @@ After your first login, you will be prompted to change your temporary password. 
 
 ## Understanding the Interface
 
-The Logbook uses a sidebar navigation layout. The main areas of the screen are:
+The Logbook uses a sidebar navigation layout by default. Your department can
+switch everyone to a top bar instead, under **Settings → General → Profile →
+Navigation Layout**; the choice applies to every member from their next page
+load. On a screen too narrow for every menu group, the top bar keeps the ones
+that fit and puts the rest under **More** at its right-hand end, in the same
+order. The main areas of the screen are:
 
 1. **Sidebar (Left)** - Navigation menu for all modules
 2. **Main Content Area (Center)** - The active page you are working on
@@ -191,28 +196,31 @@ These links are available to all active members:
 Three of them are **groups** that expand when you click them, rather than links
 of their own — Training, Operations and Governance:
 
-| Menu Item            | Description                                                                                     |
-| -------------------- | ----------------------------------------------------------------------------------------------- |
-| **Dashboard**        | Your home page with quick stats and upcoming items                                              |
-| **Learning Center**  | Short task-based paths through the app — open a task, do it, tick it off                        |
-| **Members**          | Department roster and member profiles                                                           |
-| **Events**           | Upcoming and past department events                                                             |
-| **Documents**        | Shared files, SOPs, and policies                                                                |
-| **Training** ▾       | My Training, Submit Training, Course Library, Programs, Skills Testing                          |
-| **Admin Hours**      | Log administrative work hours (if module enabled)                                               |
-| **Shift Scheduling** | Duty roster, your shifts, and open shifts                                                       |
-| **Operations** ▾     | My Issued Gear, Gear & Uniforms, Apparatus, Facilities (Department Store is its own item above) |
-| **Governance** ▾     | Elections, Minutes, Action Items                                                                |
-| **Notifications**    | Your inbox, with an unread count on the item itself                                             |
-| **Messages**         | Department messages and announcements                                                           |
-| **My Account**       | Your own settings — account, password, security, emergency contacts, appearance, notifications  |
-| **My ID Card**       | Your digital member ID, with its QR code and barcode                                            |
+| Menu Item            | Description                                                                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dashboard**        | Your home page with quick stats and upcoming items                                                                                                                                                       |
+| **Learning Center**  | Short task-based paths through the app — open a task, do it, tick it off                                                                                                                                 |
+| **Members**          | Department roster and member profiles                                                                                                                                                                    |
+| **Events**           | Upcoming and past department events                                                                                                                                                                      |
+| **Documents**        | Shared files, SOPs, and policies                                                                                                                                                                         |
+| **Training** ▾       | My Training, Submit Training, Course Library, Programs, Skills Testing                                                                                                                                   |
+| **Admin Hours**      | Log administrative work hours (if module enabled)                                                                                                                                                        |
+| **Shift Scheduling** | Duty roster, your shifts, and open shifts                                                                                                                                                                |
+| **Operations** ▾     | My Issued Gear, My Checklists, Apparatus Inventory, and — if your position grants them — Inventory, Medical Supplies, Fleet Readiness, Apparatus and Facilities (Department Store is its own item above) |
+| **Governance** ▾     | Org Chart, Elections, Minutes, Action Items, Legal Documents                                                                                                                                             |
+| **Notifications**    | Your inbox, with an unread count on the item itself                                                                                                                                                      |
+| **Messages**         | Department messages and announcements                                                                                                                                                                    |
+| **Suggestions**      | Send an idea, question or concern to one of your department's suggestion boxes, and follow your own submissions                                                                                          |
+| **My Account**       | Your own settings — account, password, security, emergency contacts, appearance, notifications                                                                                                           |
+| **My ID Card**       | Your digital member ID, with its QR code and barcode                                                                                                                                                     |
 
 Which of the grouped items appear depends on the modules your department has
 enabled: a department not running elections has no Elections link under
 Governance, and so on.
 
 ![The navigation sidebar with the member-facing sections expanded](./images/00-15-sidebar-member.png)
+
+![An ordinary member's view: the Suggestions item in the sidebar just below Messages, and the Suggestions page open on its Submit tab with the Training ideas box chosen and its description showing — no Review tab](./images/20-15-suggestions-sidebar-submit.png)
 
 ### Administration Section
 
@@ -222,13 +230,13 @@ If you have administrative permissions (officers, IT Manager, etc.), you will se
 | --------------------------- | --------------------------------------------------------------------------------------------- |
 | **Department Setup**        | Guided checklist for initial configuration                                                    |
 | **Members** ▾               | Prospective, Pipeline Settings, Member Management, Scan Member ID, Waivers, Medical Screening |
-| **Events Admin**            | Create events, view analytics                                                                 |
+| **Manage Events**           | Create events, view analytics, event settings                                                 |
 | **Training Admin**          | Review submissions, manage requirements, compliance                                           |
 | **Scheduling Admin**        | Shift planning, platoons, positions, scheduling reports and settings (`scheduling.manage`)    |
 | **Inventory Admin**         | Manage gear and uniform items, equipment checklists, view member issued equipment             |
 | **Store Admin**             | Storefront products, order windows, and fulfilment — opens the **Department Store** console   |
 | **Admin Hours**             | Review and approve administrative hours                                                       |
-| **Forms & Comms** ▾         | Email Templates, Messages, Forms, Integrations                                                |
+| **Forms & Comms** ▾         | Email Templates, Messages, Suggestion Boxes, Photo Use Consent, Forms, Integrations           |
 | **Reports**                 | Generate department reports                                                                   |
 | **Organization Settings** ▾ | Organization settings, roles, public portal                                                   |
 
@@ -255,10 +263,16 @@ The dashboard is your landing page after login. It provides an at-a-glance view 
 - **Upcoming Events** - The next few scheduled events
 - **Upcoming Shifts** - Your next assigned shifts
 - **Recent Activity** - Latest actions across the department
-- **Notifications** - Unread alerts and reminders with **Clear All** and individual dismiss (X) buttons. Persistent department messages (set by administrators) cannot be dismissed by regular members and show a "Persistent" badge
-- **Department Messages** - Organization-wide announcements you haven't dealt with yet. Urgent messages are highlighted (every message also reaches you by email, urgent ones by text too), some ask you to **Acknowledge** them, and persistent messages remain visible until an admin clears them. Once you've read or acknowledged a message it clears off the card; your full message history lives on the **Messages** page (megaphone icon)
+- **Needs you** - Anything you are on the hook for, including a department message that asks you to **Acknowledge** it (the button is on the row)
+- **My Updates** - One feed holding both department messages and your own notifications, with an unread count. Pinned messages come first, then persistent ones (badged **Persistent**), then everything else newest first. Five rows show; **Older Items** opens your full inbox. A message you have read drops off on the next load, except a persistent one, which stays until a manager clears it with the ✕ (regular members do not see that control). Every department message also reaches you by email, urgent ones by text too; your full message history lives on the **Messages** page (megaphone icon)
+- **Scheduling Operations** (on the **My Department** view, for members with `scheduling.manage` when Scheduling is enabled) - Seven staffing tiles: Today's Staffing, Future Coverage Gaps, Open Slots, Pending Changes, Incomplete Closeouts, Workload Balance and Special Operations. Each tile opens the schedule already filtered to what it counted, and each keeps its own window, station and platoon settings for you
 
 ![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
+
+**[SCREENSHOT — REPLACE `00-04-dashboard-overview.png` and
+`00-07-dashboard-panels.png`.** The scheduling tiles are new. **Caption which
+permissions the capturing account held** — what a reader sees depends on their
+own grants.**]**
 
 > **Training Compliance is all-or-nothing, and that is why it reads 0%**
 > _(2026-08-13)_. The card counts the share of active members who satisfy
@@ -313,6 +327,16 @@ page with the correct tab and shift selected.
 > reminders, recurring-series warnings, action-item reminders and event-update
 > notices were all being saved that way and now carry their destination.
 
+A notification that asks you to do something is archived once that thing is
+done. Finalizing an event's attendance archives that event's "validate
+attendance" prompt, and finalizing a shift archives that shift's post-shift
+validation prompt. Only the notification tied to that same event or shift goes;
+unrelated notifications stay where they are.
+
+![The notification inbox with an unread 'Validate attendance' prompt for a just-ended event, beside an unrelated shift-assignment notification](./images/19-31-notification-before-action.png)
+
+![The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there](./images/19-32-notification-after-action.png)
+
 > **Edge case:** If you expand a notification card to read it but navigate away before collapsing, the notification remains unread.
 
 ---
@@ -343,21 +367,21 @@ From here you can:
 
 ## Login & Session Edge Cases
 
-| Scenario                                | What Happens                                                                                                                                                                                                            |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Too many failed login attempts          | After 5 failed attempts within 60 seconds, you are locked out for 30 minutes. The lock screen shows a countdown.                                                                                                        |
-| Forgot password, requested reset twice  | Only the first request sends an email. Subsequent requests within 30 minutes return a success message but no email is sent — this is an anti-enumeration security measure. Wait 30 minutes or use the first email link. |
-| Session expires while working           | Your access token expires after 30 minutes of inactivity. The system automatically refreshes it in the background. If the refresh fails, you are redirected to the login page.                                          |
-| Multiple tabs open                      | Keep the number of open tabs reasonable. If your session refreshes simultaneously in multiple tabs, a race condition can log you out of all tabs. Refreshing the page resolves this.                                    |
-| Admin changed your role while logged in | The server enforces the new permissions immediately. However, menu items and buttons may not update until you refresh the page.                                                                                         |
-| "Too many requests" error               | Rate limiting is active. Wait for the duration shown in the error message before trying again.                                                                                                                          |
+| Scenario                                | What Happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Too many failed login attempts          | After 5 failed attempts in a row (your department's operator can change the number), the server locks the account for 15 minutes (also configurable). While it is locked, the sign-in page still says only "Incorrect username or password" — the same as a wrong password — unless the operator has chosen to reveal lockouts. Separately, after 5 failures in the same browser tab the **Sign in** button reads **Wait Ns** and counts down: 2 seconds, doubling with each further failure up to 5 minutes. |
+| Forgot password, requested reset twice  | Only the first request sends an email. Subsequent requests within 30 minutes return a success message but no email is sent — this is an anti-enumeration security measure. Wait 30 minutes or use the first email link.                                                                                                                                                                                                                                                                                       |
+| Session expires while working           | Your access token expires after 30 minutes of inactivity. The system automatically refreshes it in the background. If the refresh fails, you are redirected to the login page.                                                                                                                                                                                                                                                                                                                                |
+| Multiple tabs open                      | Keep the number of open tabs reasonable. If your session refreshes simultaneously in multiple tabs, a race condition can log you out of all tabs. Refreshing the page resolves this.                                                                                                                                                                                                                                                                                                                          |
+| Admin changed your role while logged in | The server enforces the new permissions immediately. However, menu items and buttons may not update until you refresh the page.                                                                                                                                                                                                                                                                                                                                                                               |
+| "Too many requests" error               | Rate limiting is active. Wait for the duration shown in the error message before trying again.                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ---
 
 ## Getting Help
 
 - **Forgot your password?** Use the "Forgot Password?" link on the login page. You will receive a reset link by email. If no email arrives, wait 30 minutes and try again (a cooldown prevents duplicate emails).
-- **Locked out?** Wait for the lockout period to expire (30 minutes), or ask your IT Manager to unlock your account.
+- **Locked out?** If the correct password keeps being refused after several failed attempts, the account is probably locked — the message will not say so. Wait 15 minutes (unless your department set a different period) and try once more, reset it yourself with "Forgot Password?", or ask your IT Manager to reset your password, which also clears the lock.
 - **Missing a module?** Some modules may be disabled by your department. Contact your administrator to enable them.
 - **Permission denied?** If you see a "Not Authorized" message, the action requires a role you have not been assigned. Contact your officer or IT Manager.
 - **Something looks wrong?** Your department may have an error monitoring dashboard (Settings > Error Monitor) where administrators can review issues.
@@ -383,8 +407,9 @@ Because Oakville FD requires multi-factor authentication, Jake is redirected to 
 After completing setup, the dashboard loads with personalized widgets:
 
 - **Hours this month** — four figures across the top: total, training, standby and administrative
-- **Department Messages** — what he hasn't read or acknowledged yet, plus any persistent standing notices, pinned items first
-- **Notifications** — the most recent, with an unread count and Clear All
+- **My Updates** — department messages and his notifications in one feed with
+  an unread count: pinned messages first, then persistent standing notices,
+  then the newest, five at a time with **Older Items** for the rest
 - **My Upcoming Shifts** — his next five shifts with dates, times, and the officer on each
 - **Open Shifts** — shifts he can sign up for. **Five at a time**, with a line
   underneath saying how many more there are in the next 30 days; **View
@@ -483,11 +508,14 @@ If you are following an older walkthrough, four things are in different places.
 | Gear Admin                                                                  | **Inventory Admin** — the same place, renamed                                          |
 | The Department Store console                                                | Inside Inventory Admin, at `/inventory/admin/store`                                    |
 
-> **⚠️ Old links land on the dashboard, not on an error.** Thirteen addresses
-> stop resolving with no redirect, and the catch-all makes that silent — so a
+> **⚠️ Old links land on the wrong page, not on an error.** Fourteen addresses
+> stop resolving with no redirect. Thirteen land on the dashboard, and
+> `/scheduling?tab=equipment-checks` opens Scheduling on its Schedule tab — so a
 > bookmark or an SOP link appears to work and simply shows you the wrong page.
-> The full before/after tables are in
-> [20 — September release changes](./20-september-2026-release-changes.md#where-everything-moved).
+> The full before/after tables are in the upgrade notes for the
+> [equipment checklists](../UPGRADING.md#equipment-checklists-moved-to-inventory-eight-addresses-and-three-permissions-renamed-2026-08-31)
+> and for
+> [scheduling administration](../UPGRADING.md#scheduling-administration-moved-and-six-addresses-stop-working-2026-09-05).
 
 ![The sidebar as an officer, clipped to the navigation: Operations expanded to My Issued Gear, Inventory, Medical Supplies, My Checklists, Fleet Readiness, Apparatus Inventory, Apparatus and Facilities, and below it the Administration section with Scheduling Admin and Inventory Admin](./images/00-26-sidebar-officer-operations.png)
 
@@ -508,6 +536,6 @@ so a member account will not see:
   everyone
 
 That is the intended state, not a fault. An administrator can re-grant either on
-the positions screen. See
-[20 — September release changes](./20-september-2026-release-changes.md#six-upgrade-steps-take-permissions-away)
+the positions screen. See the
+[upgrade note](../UPGRADING.md#six-upgrade-steps-take-permissions-away-2026-09-05)
 for why those grants were there in the first place.

@@ -148,7 +148,7 @@ class Form(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     published_at = Column(DateTime(timezone=True))
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
 
     # Relationships
     fields = relationship(

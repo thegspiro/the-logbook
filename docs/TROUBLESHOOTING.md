@@ -600,14 +600,22 @@ cannot reach). The send itself reports success.
 never from the address the request arrived on. The shipped default is
 `http://localhost:3000`. Installs made before 2026-09-24 never had it set by
 either installer; `unraid-setup.sh` now writes the HTTPS address it asks for,
-and `universal-install.sh` writes it only when given `--public-url`.
+and `install.sh` and `universal-install.sh` require one (`--public-url`).
 
-**Check**: In production the backend logs this at startup, and
-`python -m app.preflight` lists it under "Advisory":
+**Check**: Since 2026-09-25 a production backend refuses to start in this
+state unless `ALLOWED_ORIGINS` names a public address, which is then used
+instead. `python -m app.preflight` lists it under "BLOCKING". Staging and
+development do not block; with `EMAIL_ENABLED=true` they report it as a
+warning:
 
 ```
-WARNING: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...
+CRITICAL: FRONTEND_URL is 'http://localhost:3000', which points at this machine. ...
 ```
+
+An administrator can also check the address from the app: **Settings → Email**
+shows the _Email link address_ in use and where it came from. A System Owner can
+change it there too, to any address the server already accepts traffic on. That
+takes effect without a restart and takes priority over `FRONTEND_URL`.
 
 **Solution**:
 
@@ -617,7 +625,9 @@ WARNING: FRONTEND_URL is 'http://localhost:3000', which points at this machine. 
    If nothing prints, add `FRONTEND_URL: ${FRONTEND_URL}` to the backend
    service's `environment:` block — a hand-maintained compose file (including
    Unraid Compose Manager) does not pick up variables it does not list.
-3. Restart the backend.
+3. Restart the backend. See
+   [UPGRADING.md](UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25)
+   if a production backend will not start with this message.
 4. Links already sent keep the old address. Re-send what is still needed —
    members request a new password reset, the secretary re-sends ballots.
 
@@ -4268,7 +4278,7 @@ docker-compose restart backend
 
 **Cause (before fix):** The admin hours UI did not provide an edit option for pending entries.
 
-**Status (Fixed 2026-03-01):** Members can now click the edit button on pending entries to update duration, category, and notes before approval.
+**Status (Fixed 2026-03-01, corrected 2026-09-27):** The 2026-03-01 fix added editing to the officer's **Pending Review** tab only; members still had no edit control on their own entries. Members can now edit or withdraw their own entries from **My Hours** while the entry is pending or rejected. Saving a rejected entry resubmits it for review, which is how an officer sends hours back for correction: reject with a reason saying what to fix. Approved entries can only be changed by an officer. Hours credited from event attendance can be withdrawn but not edited; correct the event attendance instead.
 
 ### Problem: Active session shows wrong user's session
 
@@ -6785,7 +6795,7 @@ import.
 ### Problem: An import sent welcome emails I did not want sent
 
 **Cause (Fixed 2026-08-07):** The importer hardcoded `send_welcome_email: true`,
-so every created member was emailed a password-setup link immediately. Loading a
+so every created member was emailed a temporary password immediately. Loading a
 roster for staging, or from a list with stale addresses, put mail in front of
 every one of them, and it cannot be recalled.
 
@@ -8537,7 +8547,7 @@ Pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so bare 
 
 ### Problem: A departed member asks to be erased
 
-**Fix:** `POST /users/{id}/anonymize` scrubs names, contacts, address, DOB, photo, emergency contacts, credentials and MFA material, and the applicant-era prospect record — while keeping operational history (training completions, attendance, dues) as the department's record. `users.anonymized_at` records the event.
+**Fix:** On the member's profile, **Anonymize member** under **Status** (Dropped or Archived members only, `members.manage`; added 2026-09-25), or `POST /users/{id}/anonymize`. It scrubs names, contacts, address, DOB, photo, emergency contacts, credentials and MFA material, and the applicant-era prospect record — while keeping operational history (training completions, attendance, dues) as the department's record. `users.anonymized_at` records the event.
 
 **Edge Case:** Audit logs and election records are deliberately untouched — rewriting them would be tampering. Documents and meeting minutes are excluded from automatic retention deletion for the same reason: destroying official records stays a human decision.
 

@@ -261,7 +261,7 @@ See [Communications](Module-Communications#email-footer-library-2026-08-10).
   reasons in a leading column. Fix and re-upload; it holds only the failures, so
   it cannot collide with what already imported.
 - **Welcome emails are off by default for imports.** Loading a roster used to put
-  an unrecallable password-setup link in front of every address on it.
+  an unrecallable temporary password in front of every address on it.
 - **Progress, and a Stop button.** Rows not reached are listed as stopped, so the
   error report is exactly the work left.
 - **Collisions with your existing roster are caught up front**, naming who owns

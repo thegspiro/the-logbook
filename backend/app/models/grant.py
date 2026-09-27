@@ -304,7 +304,9 @@ class GrantOpportunity(Base):
     notes = Column(Text, nullable=True)
 
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -444,7 +446,9 @@ class GrantApplication(Base):
     notes = Column(Text, nullable=True)
 
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -591,7 +595,9 @@ class GrantExpenditure(Base):
     notes = Column(Text, nullable=True)
 
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -680,7 +686,9 @@ class GrantComplianceTask(Base):
     notes = Column(Text, nullable=True)
 
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -733,7 +741,9 @@ class GrantNote(Base):
     note_metadata = Column("metadata", JSON, nullable=True)
 
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -818,7 +828,9 @@ class FundraisingCampaign(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
 
     # Relationships
     donations = relationship("Donation", back_populates="campaign")
@@ -990,7 +1002,9 @@ class Donation(Base):
     custom_fields = Column(JSON, nullable=True)
 
     # Recorded by
-    recorded_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    recorded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
 
     # Metadata
     created_at = Column(
@@ -1067,7 +1081,9 @@ class Pledge(Base):
     notes = Column(Text, nullable=True)
 
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -1152,7 +1168,9 @@ class FundraisingEvent(Base):
     notes = Column(Text, nullable=True)
 
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

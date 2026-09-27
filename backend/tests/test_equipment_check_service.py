@@ -11,6 +11,7 @@ Mocked sessions/getters — no DB — so it runs in the sandbox.
 """
 
 import asyncio
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -18,6 +19,16 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.services.equipment_check_service import EquipmentCheckService
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.equipment_check_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
 
 
 @pytest.fixture
@@ -726,7 +737,9 @@ class TestOperationalInventoryTemplateVisibility:
             new_callable=AsyncMock,
             return_value={},
         ):
-            await service.get_supply_overview("org-1")
+            # An explicit date keeps the org-timezone lookup out of the
+            # first execute, which is the query this test inspects.
+            await service.get_supply_overview("org-1", today=date(2026, 10, 6))
 
         self.assert_active_filter(mock_db.execute.await_args_list[0].args[0])
 
@@ -1586,7 +1599,9 @@ class TestSnapshottedTargetQuantity:
         item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 1}
         EquipmentCheckService._snapshot_from_template(item, template)
 
-        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            [item], today=date.today()
+        )
 
         assert item["status"] == "fail"
         assert failed == 1
@@ -1603,7 +1618,9 @@ class TestSnapshottedTargetQuantity:
         item = {"template_item_id": "ti-1", "status": "fail", "quantity_found": 1}
         EquipmentCheckService._snapshot_from_template(item, template)
 
-        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            [item], today=date.today()
+        )
 
         assert item["status"] == "fail"
         assert failed == 1
@@ -1617,7 +1634,9 @@ class TestSnapshottedTargetQuantity:
         item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 1}
         EquipmentCheckService._snapshot_from_template(item, template)
 
-        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            [item], today=date.today()
+        )
 
         assert item["status"] == "fail"
         assert failed == 1
@@ -1628,7 +1647,9 @@ class TestSnapshottedTargetQuantity:
         item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 4}
         EquipmentCheckService._snapshot_from_template(item, template)
 
-        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            [item], today=date.today()
+        )
 
         assert item["status"] == "pass"
         assert failed == 0

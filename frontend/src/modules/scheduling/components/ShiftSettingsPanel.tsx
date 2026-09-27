@@ -31,6 +31,7 @@ import { CallTypesCard } from './CallTypesCard';
 import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';
+import { OutsideApparatusSettings } from './OutsideApparatusSettings';
 
 /**
  * The three ways a department can record call volume.
@@ -757,6 +758,9 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           <ShiftReportsSettingsPanel />
         </div>
       )}
+
+      {/* ─── Outside Apparatus Tab ─── */}
+      {activeTab === 'outside-apparatus' && <OutsideApparatusSettings />}
 
       {/* Save Actions — only on the sections this button actually writes. */}
       {LOCALLY_SAVED_SECTIONS.includes(activeTab) && (

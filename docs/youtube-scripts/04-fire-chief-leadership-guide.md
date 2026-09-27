@@ -133,6 +133,20 @@ event participation, member activity]**
 
 **[SCREEN: Configure RSVP settings]**
 
+> "Right below that, **Who can see who's going**. Leave it on **Use
+> organization default**, or pick **Everyone in the department** for a drill
+> where members want to know who else is coming. They see names only — never
+> contact details, notes or accessibility information. The department-wide
+> default lives under **Manage Events → Settings → Attendance**, and it starts
+> out as **Only event managers**."
+
+**[SCREEN: The Who can see who's going dropdown on the event form, open on its
+three choices; then Manage Events → Settings → Attendance.]**
+
+**EDITOR (2026-09-24):** This beat adds about 0:20 to Chapter 3. Fold it into
+the re-timing of later chapters that the elections note below already calls
+for, rather than re-timing twice.
+
 > "**QR Check-In** — enable this and the system generates a unique QR code for
 > the event. Members scan it with their phone when they arrive for instant,
 > contactless attendance tracking."
@@ -405,11 +419,13 @@ stage. Both buttons carry the same gate, so the refusal is the same.]**
 
 **[SCREEN: Fill in the election creation form]**
 
-> "Choose your voting method. Simple majority is the most common — each voter
-> picks one candidate per office. Ranked choice, approval voting — where members
-> can approve as many candidates as they like — and supermajority are also
-> available. And if you enable runoffs, the system automatically creates a
-> runoff election when no candidate meets the victory condition."
+> "Then **How is the Winner Determined?** One dropdown sets both how votes are
+> counted and what it takes to win. Most Votes Wins is the most common — each
+> voter picks one candidate per office, and the plurality wins. Majority
+> Required, Supermajority Required — two-thirds — Ranked Choice, Approval
+> Voting, where members can approve as many candidates as they like, and a
+> custom threshold are the others. And if you enable runoffs, the system
+> automatically creates a runoff election when no candidate meets the bar."
 
 > "Set eligibility rules — who can vote? Active members only? Minimum tenure of
 > one year? The system automatically determines eligible voters based on your

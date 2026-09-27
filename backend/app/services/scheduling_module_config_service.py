@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from pydantic.alias_generators import to_camel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.scheduling_module_config import SchedulingModuleConfig
@@ -152,12 +153,15 @@ class SchedulingModuleConfigService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def _get_row(self, organization_id: str) -> Optional[SchedulingModuleConfig]:
-        result = await self.db.execute(
-            select(SchedulingModuleConfig).where(
-                SchedulingModuleConfig.organization_id == str(organization_id)
-            )
+    async def _get_row(
+        self, organization_id: str, for_update: bool = False
+    ) -> Optional[SchedulingModuleConfig]:
+        query = select(SchedulingModuleConfig).where(
+            SchedulingModuleConfig.organization_id == str(organization_id)
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalars().first()
 
     async def get_settings(
@@ -204,8 +208,7 @@ class SchedulingModuleConfigService:
         """
         row = await self._get_row(organization_id)
         if row is None:
-            row = SchedulingModuleConfig(organization_id=str(organization_id))
-            self.db.add(row)
+            row = await self._create_row(organization_id)
 
         # by_alias keeps nested keys camelCase in the JSON columns (the wire
         # shape the frontend reads back verbatim); scalar columns take the
@@ -227,6 +230,33 @@ class SchedulingModuleConfigService:
         await self.db.refresh(row)
         settings, _ = await self.get_settings(organization_id)
         return settings
+
+    async def _create_row(self, organization_id: str) -> SchedulingModuleConfig:
+        """Insert the organization's row, or adopt one a concurrent save inserted.
+
+        The first save for an organization is a get-or-create, and the unique
+        index on ``organization_id`` is what decides between two saves that
+        both found no row — the settings screen issues two on its first load
+        when it migrates a browser's local copy. The savepoint keeps the
+        loser's session usable, and the loser then writes over the winner's
+        row, which is what a wholesale replace means for two saves anyway.
+
+        The re-read must lock: under InnoDB's REPEATABLE READ a plain SELECT
+        answers from the snapshot taken at this transaction's first read,
+        which is the one that found no row. A locking read sees the committed
+        row and holds it for the write that follows.
+        """
+        row = SchedulingModuleConfig(organization_id=str(organization_id))
+        try:
+            async with self.db.begin_nested():
+                self.db.add(row)
+                await self.db.flush()
+        except IntegrityError:
+            existing = await self._get_row(organization_id, for_update=True)
+            if existing is None:
+                raise
+            return existing
+        return row
 
     async def reset_settings(self, organization_id: str) -> None:
         """Delete the organization's stored settings (back to defaults)."""

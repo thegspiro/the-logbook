@@ -143,12 +143,62 @@ class TestUnraidSetup:
         assert body.count("ensure_frontend_url") == 3
         assert 'ensure_frontend_url "$HTTPS_ORIGIN" yes' in body
 
+    def _prompt(self, answers: str):
+        return subprocess.run(
+            [
+                "bash",
+                "-c",
+                _functions(
+                    UNRAID_SETUP, "frontend_url_is_loopback", "prompt_https_origin"
+                )
+                + '\nprint_error() { echo "ERROR:$1"; }\n'
+                'prompt_https_origin; echo "GOT=$HTTPS_ORIGIN"',
+            ],
+            input=answers,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+
+    def test_a_loopback_https_origin_is_asked_for_again(self):
+        result = self._prompt("https://localhost\nhttps://127.0.0.1\nhttps://l.org\n")
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.count("ERROR:A valid https:// URL") == 2
+        assert "GOT=https://l.org" in result.stdout
+
+    def _require(self, tmp_path, env: str):
+        env_file = tmp_path / ".env"
+        env_file.write_text(env)
+        return _bash(
+            _functions(
+                UNRAID_SETUP, "frontend_url_is_loopback", "require_public_frontend_url"
+            )
+            + '\nprint_error() { echo "ERROR:$1"; }\n',
+            f'ENV_FILE="{env_file}"; require_public_frontend_url; echo PASSED',
+        )
+
+    @pytest.mark.parametrize(
+        "env", ["FRONTEND_URL=http://localhost:3000\n", "FRONTEND_URL=\n", "A=1\n"]
+    )
+    def test_an_update_that_would_not_boot_stops(self, tmp_path, env):
+        result = self._require(tmp_path, env)
+        assert result.returncode == 1
+        assert "refuses to start" in result.stdout
+        assert "PASSED" not in result.stdout
+
+    def test_an_update_with_a_public_url_continues(self, tmp_path):
+        result = self._require(tmp_path, "FRONTEND_URL=https://l.org\n")
+        assert result.returncode == 0
+        assert "PASSED" in result.stdout
+
+    def test_the_update_path_checks_it_after_reconciling(self):
+        body = _functions(UNRAID_SETUP, "generate_env")
+        assert "validate_existing_env\n        require_public_frontend_url\n" in body
+
 
 @pytest.mark.unit
 class TestUniversalInstall:
-    @pytest.mark.parametrize(
-        "url", ["https://logbook.org", "http://10.0.0.5:3000", "http://localhost"]
-    )
+    @pytest.mark.parametrize("url", ["https://logbook.org", "http://10.0.0.5:3000"])
     def test_plain_urls_are_accepted(self, url):
         result = _bash(
             _functions(
@@ -172,9 +222,11 @@ class TestUniversalInstall:
             'https://a".org',
             "https://a`.org",
             "https://a\\b.org",
+            "http://localhost",
+            "https://127.0.0.1:3000",
         ],
     )
-    def test_urls_that_would_corrupt_the_env_file_are_refused(self, url):
+    def test_urls_that_would_corrupt_the_env_file_or_not_boot_are_refused(self, url):
         result = _bash(
             _functions(
                 UNIVERSAL_INSTALL, "frontend_url_is_loopback", "validate_public_url"
@@ -208,6 +260,43 @@ class TestUniversalInstall:
         assert result.returncode == 1
         assert "must start with http:// or https://" in result.stdout
 
+    def test_no_public_url_fails_before_anything_is_installed(self, tmp_path):
+        result = subprocess.run(
+            ["bash", str(UNIVERSAL_INSTALL), "--dir", str(tmp_path)],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            env={"PATH": "/usr/bin:/bin"},
+        )
+        assert result.returncode == 1
+        assert "A public URL is required" in result.stdout
+        assert "Detected" not in result.stdout
+
+    def _require(self, tmp_path, env: str | None, public_url: str = ""):
+        if env is not None:
+            (tmp_path / ".env").write_text(env)
+        return _bash(
+            _functions(
+                UNIVERSAL_INSTALL, "frontend_url_is_loopback", "require_public_url"
+            ),
+            'INSTALL_DIR="$1"; PUBLIC_URL="$2"; require_public_url',
+            str(tmp_path),
+            public_url,
+        )
+
+    @pytest.mark.parametrize(
+        "env", [None, "FRONTEND_URL=http://localhost:3000\n", "A=1\n"]
+    )
+    def test_require_public_url_refuses_without_one(self, tmp_path, env):
+        assert self._require(tmp_path, env).returncode == 1
+
+    def test_require_public_url_accepts_the_flag(self, tmp_path):
+        assert self._require(tmp_path, None, "https://l.org").returncode == 0
+
+    def test_require_public_url_accepts_a_preserved_public_env(self, tmp_path):
+        env = "FRONTEND_URL=https://mine.org\n"
+        assert self._require(tmp_path, env).returncode == 0
+
     def test_public_url_without_a_value_is_an_error(self):
         result = subprocess.run(
             ["bash", str(UNIVERSAL_INSTALL), "--public-url"],
@@ -229,8 +318,7 @@ class TestUniversalInstall:
         result = _bash(
             prelude,
             'generate_secrets() { :; }; INSTALL_DIR="$1"; PROFILE=standard; '
-            'PUBLIC_URL="$2"; DEFAULT_FRONTEND_URL=http://localhost:3000; '
-            "COMPOSE_FILE_LIST=x; create_env_file",
+            'PUBLIC_URL="$2"; COMPOSE_FILE_LIST=x; create_env_file',
             str(tmp_path),
             public_url,
         )
@@ -241,11 +329,7 @@ class TestUniversalInstall:
         env = self._create_env(tmp_path, "https://logbook.org")
         assert "\nFRONTEND_URL=https://logbook.org\n" in env
 
-    def test_new_env_without_public_url_writes_the_default_explicitly(self, tmp_path):
-        env = self._create_env(tmp_path, "")
-        assert "\nFRONTEND_URL=http://localhost:3000\n" in env
-
-    def _reconcile(self, tmp_path, env: str, public_url: str):
+    def _reconcile(self, tmp_path, env: str, public_url: str, ok: bool = True):
         env_file = tmp_path / ".env"
         env_file.write_text(env)
         result = _bash(
@@ -259,7 +343,7 @@ class TestUniversalInstall:
             str(env_file),
             public_url,
         )
-        assert result.returncode == 0, result.stderr
+        assert (result.returncode == 0) == ok, result.stdout + result.stderr
         return env_file.read_text(), result.stdout
 
     def test_preserved_env_localhost_is_replaced_by_public_url(self, tmp_path):
@@ -275,7 +359,9 @@ class TestUniversalInstall:
         assert env == "FRONTEND_URL=https://mine.org\n"
         assert "keeping it" in out
 
-    def test_preserved_env_localhost_without_public_url_warns(self, tmp_path):
-        env, out = self._reconcile(tmp_path, "FRONTEND_URL=http://localhost:3000\n", "")
+    def test_preserved_env_localhost_without_public_url_is_an_error(self, tmp_path):
+        env, out = self._reconcile(
+            tmp_path, "FRONTEND_URL=http://localhost:3000\n", "", ok=False
+        )
         assert env == "FRONTEND_URL=http://localhost:3000\n"
         assert "--public-url" in out

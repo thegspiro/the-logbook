@@ -5,7 +5,7 @@ Business logic for report generation including member roster,
 training summary, event attendance, and compliance reports.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 from uuid import UUID
 
@@ -44,6 +44,12 @@ from app.utils.hours import (
     round_hours_exact,
     round_hours_to_quarter,
     sum_hours_to_quarter,
+)
+from app.utils.org_timezone import (
+    local_date,
+    local_day_start_utc,
+    resolve_org_today,
+    resolve_scheduling_timezone,
 )
 from app.utils.sql_ordering import nulls_last_asc
 
@@ -168,6 +174,7 @@ class ReportsService:
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate a member roster report"""
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
         query = (
             select(User)
             .where(
@@ -219,7 +226,9 @@ class ReportsService:
                     "status": status_val,
                     "station": user.station,
                     "joined_date": (
-                        str(user.created_at.date()) if user.created_at else None
+                        str(local_date(user.created_at, tz))
+                        if user.created_at
+                        else None
                     ),
                     "roles": role_names,
                 }
@@ -451,21 +460,22 @@ class ReportsService:
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate an event attendance report"""
+        # The requested dates, and each event's date in the report, are the
+        # department's: bounded at its midnights rather than UTC's, which put an
+        # evening event on the last day outside the range and dated it wrongly.
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
         events_query = select(Event).where(
             Event.organization_id == str(organization_id)
         )
 
         if start_date:
             events_query = events_query.where(
-                Event.start_datetime
-                >= datetime.combine(
-                    start_date, datetime.min.time(), tzinfo=timezone.utc
-                )
+                Event.start_datetime >= local_day_start_utc(start_date, tz)
             )
         if end_date:
             events_query = events_query.where(
                 Event.start_datetime
-                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
+                < local_day_start_utc(end_date + timedelta(days=1), tz)
             )
 
         events_query = events_query.order_by(Event.start_datetime.desc())
@@ -502,7 +512,7 @@ class ReportsService:
                     "event_id": str(event.id),
                     "event_title": event.title or "",
                     "event_date": (
-                        str(event.start_datetime.date())
+                        str(local_date(event.start_datetime, tz))
                         if event.start_datetime
                         else None
                     ),
@@ -663,7 +673,10 @@ class ReportsService:
     ) -> Dict[str, Any]:
         """Generate an annual training report with hours, completions, shift reports, and member breakdown."""
         # Default to current year if no dates provided
-        year = _safe_int((filters or {}).get("year"), datetime.now(timezone.utc).year)
+        year = _safe_int(
+            (filters or {}).get("year"),
+            (await resolve_org_today(self.db, organization_id)).year,
+        )
         if not start_date:
             start_date = date(year, 1, 1)
         if not end_date:
@@ -864,7 +877,9 @@ class ReportsService:
             for u in users
         }
 
-        today = date.today()
+        # The department's date: a certificate is valid through its expiration
+        # day on the department's calendar, not UTC's.
+        today = await resolve_org_today(self.db, organization_id)
         soon_threshold = _safe_int((filters or {}).get("expiring_soon_days"), 90)
 
         entries = []
@@ -973,7 +988,7 @@ class ReportsService:
             for row in wo_result.all():
                 wo_counts[str(row[0])] = row[1]
 
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         in_service = 0
         out_of_service = 0
         maint_due = 0
@@ -1264,8 +1279,11 @@ class ReportsService:
         supposed to reconcile: a 400-call department can legitimately show 380
         engine runs and 240 medic runs, because both rolled on the same MVA.
         """
-        period_start = start_date or date(date.today().year, 1, 1)
-        period_end = end_date or date.today()
+        # Default to the department's year-to-date, not UTC's: on New Year's
+        # Eve evening UTC has already started the next year.
+        today = await resolve_org_today(self.db, organization_id)
+        period_start = start_date or date(today.year, 1, 1)
+        period_end = end_date or today
 
         call_service = CallTrackingService(self.db)
         tracking = await call_service.get_settings(str(organization_id))
@@ -1567,10 +1585,9 @@ class ReportsService:
         from app.models.minute import MeetingMinutes, MinutesActionItemStatus
 
         org_id = str(organization_id)
-        period_start = (
-            start_date or (datetime.now(timezone.utc) - timedelta(days=365)).date()
-        )
-        period_end = end_date or datetime.now(timezone.utc).date()
+        today = await resolve_org_today(self.db, org_id)
+        period_start = start_date or today - timedelta(days=365)
+        period_end = end_date or today
 
         # ── Members ──
         total_result = await self.db.execute(

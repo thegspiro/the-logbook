@@ -27,6 +27,7 @@ from app.api.v1.email_test_helper import (
     test_smtp_connection,
 )
 from app.core.audit import log_audit_event
+from app.core.config import settings as app_settings
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
@@ -36,6 +37,8 @@ from app.schemas.organization import (
     AuthSettings,
     ContactInfoSettings,
     EmailConnectionTestResponse,
+    EmailLinkDomainResponse,
+    EmailLinkDomainUpdate,
     EmailServiceSettings,
     EnabledModulesResponse,
     FileStorageSettings,
@@ -299,6 +302,94 @@ async def update_email_settings(
         # secret whose connection identity changed, and the form must show
         # that rather than a marker for a password that no longer exists.
         return updated.email_service.redacted()
+
+
+@router.get("/settings/email/link-domain", response_model=EmailLinkDomainResponse)
+async def get_email_link_domain(
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """
+    Report the address that links in outgoing email are built from
+
+    It is the deployment's FRONTEND_URL (or the public ALLOWED_ORIGINS entry
+    substituted for a loopback one), unless an IT administrator has saved an
+    override with PUT on this path.
+
+    **Authentication and admin permission required**
+    """
+    return EmailLinkDomainResponse(**app_settings.describe_frontend_url())
+
+
+async def _audit_link_domain_change(
+    db: AsyncSession, current_user: User, previous: str, new: str, action: str
+) -> None:
+    await log_audit_event(
+        db=db,
+        event_type="email_link_domain_changed",
+        event_category="administration",
+        severity="warning",
+        event_data={"action": action, "previous_url": previous, "new_url": new},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
+@router.put("/settings/email/link-domain", response_model=EmailLinkDomainResponse)
+async def set_email_link_domain(
+    update: EmailLinkDomainUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("system.manage_link_domain")),
+):
+    """
+    Change the address that links in outgoing email are built from
+
+    The address must be one this server already accepts traffic on (its
+    TRUSTED_HOSTS, or the ALLOWED_ORIGINS hostnames), so it cannot be used to
+    send password-reset or ballot links to another site. It overrides
+    FRONTEND_URL for the whole deployment until cleared with DELETE.
+
+    **Requires system.manage_link_domain (platform System Owner).**
+    """
+    from app.core.link_domain_sync import publish_link_domain_invalidation
+    from app.services.email_link_domain_service import set_link_domain
+
+    try:
+        previous, new = await set_link_domain(
+            db, str(current_user.organization_id), update.url, str(current_user.id)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
+    await publish_link_domain_invalidation()
+    await _audit_link_domain_change(db, current_user, previous, new, "set")
+    return EmailLinkDomainResponse(**app_settings.describe_frontend_url())
+
+
+@router.delete("/settings/email/link-domain", response_model=EmailLinkDomainResponse)
+async def clear_email_link_domain(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("system.manage_link_domain")),
+):
+    """
+    Remove a saved email link address and go back to the server's own
+
+    Links are built from FRONTEND_URL (or ALLOWED_ORIGINS) again.
+
+    **Requires system.manage_link_domain (platform System Owner).**
+    """
+    from app.core.link_domain_sync import publish_link_domain_invalidation
+    from app.services.email_link_domain_service import clear_link_domain
+
+    try:
+        previous, new = await clear_link_domain(db, str(current_user.organization_id))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
+    await publish_link_domain_invalidation()
+    await _audit_link_domain_change(db, current_user, previous, new, "cleared")
+    return EmailLinkDomainResponse(**app_settings.describe_frontend_url())
 
 
 # A connection test opens a socket to whatever host the admin typed. The same

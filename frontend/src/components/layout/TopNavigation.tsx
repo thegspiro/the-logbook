@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import {
   LogOut,
@@ -28,6 +28,7 @@ import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
+import { fitNavItems } from './topNavigationOverflow';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -53,6 +54,18 @@ interface NavItem {
   subItems?: SubNavItem[];
   isSectionLabel?: boolean;
 }
+
+/** A group the viewer may see, with its sub-items already filtered. */
+interface VisibleNavItem {
+  item: NavItem;
+  /** Null for a plain link; the permitted sub-items, dividers cleaned, for a group. */
+  subItems: SubNavItem[] | null;
+}
+
+/** `openDropdown` key for the overflow menu; no group label can collide with it. */
+const MORE_MENU = '__more__';
+/** Tailwind `space-x-1` between two groups, in px. */
+const NAV_GAP_PX = 4;
 
 export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, logoPreview, onLogout }) => {
   const navigate = useNavigate();
@@ -369,6 +382,144 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     .filter((item) => item.path !== '#' && isActive(item.path))
     .sort((a, b) => b.path.length - a.path.length)[0];
 
+  // The groups this viewer may see, filtered once so the bar, the More menu and
+  // the measuring copy all agree on the list.
+  const visibleNavItems: VisibleNavItem[] = navItems.flatMap((item) => {
+    // Filter sub-items by permission (strip dividers whose neighbours are all hidden)
+    const visibleSubItems = item.subItems?.filter(
+      (sub) =>
+        sub.isDivider ||
+        ((!sub.permission || checkPermission(sub.permission)) &&
+          (!sub.anyPermission || sub.anyPermission.some((p) => checkPermission(p))))
+    );
+
+    // Strip leading, trailing, and consecutive dividers
+    const cleanedSubItems = visibleSubItems?.filter((sub, i, arr) => {
+      if (!sub.isDivider) return true;
+      if (i === 0 || i === arr.length - 1) return false;
+      return !arr[i - 1]?.isDivider;
+    });
+
+    // Skip top-level permission-gated items
+    if (item.permission && !checkPermission(item.permission)) return [];
+    if (item.anyPermission && !item.anyPermission.some((p) => checkPermission(p))) return [];
+
+    // Skip parent groups where all sub-items are hidden
+    const realSubItems = cleanedSubItems?.filter((s) => !s.isDivider);
+    if (item.subItems && realSubItems && realSubItems.length === 0) return [];
+
+    const hasSubItems = !!cleanedSubItems && cleanedSubItems.length > 0;
+    return [{ item, subItems: hasSubItems && cleanedSubItems ? cleanedSubItems : null }];
+  });
+
+  // How many leading groups fit in the bar; the rest go into More. Starts at
+  // "all" so the first paint is the full bar, then the layout effect measures
+  // before the browser paints.
+  const navRegionRef = useRef<HTMLDivElement>(null);
+  const navMeasureRef = useRef<HTMLDivElement>(null);
+  const [shownCount, setShownCount] = useState(Number.MAX_SAFE_INTEGER);
+  const navSignature = visibleNavItems.map((entry) => entry.item.label).join('|');
+
+  useLayoutEffect(() => {
+    const region = navRegionRef.current;
+    const measure = navMeasureRef.current;
+    if (!region || !measure) return undefined;
+    const fit = () => {
+      const triggers = Array.from(measure.children) as HTMLElement[];
+      const more = triggers.pop();
+      setShownCount(
+        fitNavItems(
+          triggers.map((trigger) => trigger.offsetWidth),
+          more?.offsetWidth ?? 0,
+          region.clientWidth,
+          NAV_GAP_PX
+        )
+      );
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(region);
+    return () => observer.disconnect();
+  }, [navSignature]);
+
+  const shownNavItems = visibleNavItems.slice(0, shownCount);
+  const overflowNavItems = visibleNavItems.slice(shownCount);
+  const moreActive = overflowNavItems.some((entry) => isParentActive(entry.item));
+
+  const renderSubLinks = ({ item, subItems }: VisibleNavItem) =>
+    (subItems ?? []).map((subItem, idx) => {
+      if (subItem.isDivider) {
+        return <div key={`div-${idx}`} className="border-theme-surface-border my-1 border-t" role="separator" />;
+      }
+      const subActive = isSubItemActive(
+        subItem.path,
+        (item.subItems || []).filter((s) => !s.isDivider)
+      );
+      return (
+        <a
+          key={subItem.path}
+          href={subItem.path}
+          onClick={(e) => handleNavigation(subItem.path, e)}
+          aria-current={subActive ? 'page' : undefined}
+          className={`focus:ring-theme-focus-ring block px-4 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
+            subActive
+              ? 'bg-red-800 text-white'
+              : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
+          }`}
+        >
+          {subItem.label}
+        </a>
+      );
+    });
+
+  const renderNavEntry = (entry: VisibleNavItem) => {
+    const { item } = entry;
+    const active = isParentActive(item);
+
+    if (entry.subItems) {
+      return (
+        <div key={item.label} className="relative shrink-0">
+          <button
+            onClick={() => setOpenDropdown(openDropdown === item.label ? null : item.label)}
+            aria-expanded={openDropdown === item.label}
+            aria-haspopup="true"
+            className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
+              active ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+            }`}
+          >
+            {item.label}
+            <ChevronDown
+              className={`h-3 w-3 transition-transform ${openDropdown === item.label ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            />
+          </button>
+
+          {openDropdown === item.label && (
+            <div
+              className={`popover-panel animate-scale-in absolute top-full z-50 mt-1 py-1 ${item.label === 'Admin' ? 'right-0 w-56' : 'left-0 w-48'}`}
+            >
+              {renderSubLinks(entry)}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <a
+        key={item.label}
+        href={item.path}
+        onClick={(e) => handleNavigation(item.path, e)}
+        aria-current={active ? 'page' : undefined}
+        className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring shrink-0 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
+          active ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+        }`}
+      >
+        {item.label}
+      </a>
+    );
+  };
+
   return (
     <>
       {/* Mobile menu backdrop — tap anywhere outside the menu to dismiss.
@@ -385,7 +536,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       <header
         // While the menu is open the header (which carries the menu and its
         // opaque background) is lifted above the backdrop rendered above.
-        className={`safe-top border-b${mobileMenuOpen ? 'relative z-50' : ''}`}
+        className={`safe-top border-b ${mobileMenuOpen ? 'relative z-50' : ''}`}
         style={{ backgroundColor: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }}
         role="banner"
       >
@@ -412,109 +563,104 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
             </a>
 
             {/* Desktop Navigation */}
-            <nav className="hidden items-center space-x-1 md:flex" ref={dropdownRef} aria-label="Main navigation">
-              {navItems.map((item) => {
-                // Filter sub-items by permission (strip dividers whose neighbours are all hidden)
-                const visibleSubItems = item.subItems?.filter(
-                  (sub) =>
-                    sub.isDivider ||
-                    ((!sub.permission || checkPermission(sub.permission)) &&
-                      (!sub.anyPermission || sub.anyPermission.some((p) => checkPermission(p))))
-                );
+            <nav
+              className="ml-4 hidden min-w-0 flex-1 items-center md:flex"
+              ref={dropdownRef}
+              aria-label="Main navigation"
+            >
+              {/* The groups take whatever width the logo leaves, and those that
+                  do not fit move into More — see topNavigationOverflow. */}
+              <div ref={navRegionRef} className="relative flex min-w-0 flex-1 items-center justify-end space-x-1">
+                {shownNavItems.map((entry) => renderNavEntry(entry))}
 
-                // Strip leading, trailing, and consecutive dividers
-                const cleanedSubItems = visibleSubItems?.filter((sub, i, arr) => {
-                  if (!sub.isDivider) return true;
-                  if (i === 0 || i === arr.length - 1) return false;
-                  return !arr[i - 1]?.isDivider;
-                });
+                {overflowNavItems.length > 0 && (
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => setOpenDropdown(openDropdown === MORE_MENU ? null : MORE_MENU)}
+                      aria-expanded={openDropdown === MORE_MENU}
+                      aria-haspopup="true"
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
+                        moreActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                      }`}
+                    >
+                      More
+                      <ChevronDown
+                        className={`h-3 w-3 transition-transform ${openDropdown === MORE_MENU ? 'rotate-180' : ''}`}
+                        aria-hidden="true"
+                      />
+                    </button>
 
-                // Skip top-level permission-gated items
-                if (item.permission && !checkPermission(item.permission)) return null;
-                if (item.anyPermission && !item.anyPermission.some((p) => checkPermission(p))) return null;
+                    {openDropdown === MORE_MENU && (
+                      <div className="popover-panel animate-scale-in absolute top-full right-0 z-50 mt-1 max-h-[70vh] w-56 overflow-y-auto py-1">
+                        {overflowNavItems.map((entry, index) => {
+                          // A group is divided from its neighbours, and so is a
+                          // link straight after one, or the link reads as one of
+                          // that group's pages.
+                          const divided = index > 0 && (!!entry.subItems || !!overflowNavItems[index - 1]?.subItems);
+                          return (
+                            <React.Fragment key={entry.item.label}>
+                              {divided && (
+                                <div className="border-theme-surface-border my-1 border-t" role="separator" />
+                              )}
+                              {entry.subItems ? (
+                                <div role="group" aria-label={entry.item.label}>
+                                  <p
+                                    className="text-theme-text-muted px-4 pt-2 pb-1 text-[10px] font-bold tracking-widest uppercase"
+                                    aria-hidden="true"
+                                  >
+                                    {entry.item.label}
+                                  </p>
+                                  {renderSubLinks(entry)}
+                                </div>
+                              ) : (
+                                <a
+                                  href={entry.item.path}
+                                  onClick={(e) => handleNavigation(entry.item.path, e)}
+                                  aria-current={isParentActive(entry.item) ? 'page' : undefined}
+                                  className={`focus:ring-theme-focus-ring block px-4 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
+                                    isParentActive(entry.item)
+                                      ? 'bg-red-800 text-white'
+                                      : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
+                                  }`}
+                                >
+                                  {entry.item.label}
+                                </a>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                // Skip parent groups where all sub-items are hidden
-                const realSubItems = cleanedSubItems?.filter((s) => !s.isDivider);
-                if (item.subItems && realSubItems && realSubItems.length === 0) return null;
-
-                const hasSubItems = !!cleanedSubItems && cleanedSubItems.length > 0;
-                const active = isParentActive(item);
-
-                if (hasSubItems) {
-                  return (
-                    <div key={item.label} className="relative">
-                      <button
-                        onClick={() => setOpenDropdown(openDropdown === item.label ? null : item.label)}
-                        aria-expanded={openDropdown === item.label}
-                        aria-haspopup="true"
-                        className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
-                          active ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
-                        }`}
+                {/* An invisible copy of every trigger, so each group's width is
+                    known whether or not it is currently in the bar. Measured
+                    bold, so a group becoming active never tips the row over.
+                    Spans rather than buttons: nothing here is focusable. The
+                    zero-size clip keeps the copy from widening the page, which
+                    is the bug this whole mechanism exists to remove. */}
+                <div className="absolute h-0 w-0 overflow-hidden" aria-hidden="true">
+                  <div ref={navMeasureRef} className="flex w-max items-center space-x-1">
+                    {visibleNavItems.map((entry) => (
+                      <span
+                        key={entry.item.label}
+                        className="flex shrink-0 items-center gap-1 px-3 py-2 text-sm font-bold whitespace-nowrap"
                       >
-                        {item.label}
-                        <ChevronDown
-                          className={`h-3 w-3 transition-transform ${openDropdown === item.label ? 'rotate-180' : ''}`}
-                          aria-hidden="true"
-                        />
-                      </button>
-
-                      {openDropdown === item.label && (
-                        <div
-                          className={`popover-panel animate-scale-in absolute top-full z-50 mt-1 py-1 ${item.label === 'Admin' ? 'right-0 w-56' : 'left-0 w-48'}`}
-                        >
-                          {cleanedSubItems.map((subItem, idx) => {
-                            if (subItem.isDivider) {
-                              return (
-                                <div
-                                  key={`div-${idx}`}
-                                  className="border-theme-surface-border my-1 border-t"
-                                  role="separator"
-                                />
-                              );
-                            }
-                            const subActive = isSubItemActive(
-                              subItem.path,
-                              (item.subItems || []).filter((s) => !s.isDivider)
-                            );
-                            return (
-                              <a
-                                key={subItem.path}
-                                href={subItem.path}
-                                onClick={(e) => handleNavigation(subItem.path, e)}
-                                aria-current={subActive ? 'page' : undefined}
-                                className={`focus:ring-theme-focus-ring block px-4 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
-                                  subActive
-                                    ? 'bg-red-800 text-white'
-                                    : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
-                                }`}
-                              >
-                                {subItem.label}
-                              </a>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-
-                return (
-                  <a
-                    key={item.label}
-                    href={item.path}
-                    onClick={(e) => handleNavigation(item.path, e)}
-                    aria-current={active ? 'page' : undefined}
-                    className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
-                      active ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
-                    }`}
-                  >
-                    {item.label}
-                  </a>
-                );
-              })}
+                        {entry.item.label}
+                        {entry.subItems && <ChevronDown className="h-3 w-3" />}
+                      </span>
+                    ))}
+                    <span className="flex shrink-0 items-center gap-1 px-3 py-2 text-sm font-bold whitespace-nowrap">
+                      More
+                      <ChevronDown className="h-3 w-3" />
+                    </span>
+                  </div>
+                </div>
+              </div>
 
               {/* ── Utility icons ── */}
-              <div className="border-theme-surface-border ml-1 flex items-center space-x-1 border-l pl-2">
+              <div className="border-theme-surface-border ml-1 flex shrink-0 items-center space-x-1 border-l pl-2">
                 {(!isOnline || pendingSyncCount > 0) &&
                   (pendingSyncCount > 0 && isOnline ? (
                     <button

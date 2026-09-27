@@ -62,6 +62,11 @@ from app.models.training import (
     ShiftTemplateEquipmentCheck,
 )
 from app.models.user import User
+from app.utils.org_timezone import (
+    local_date,
+    resolve_org_today,
+    resolve_scheduling_timezone,
+)
 
 # Item outcomes that mean the crew found something wrong. "not_checked" is an
 # unanswered question rather than a finding, and "not_applicable" means the
@@ -179,7 +184,7 @@ class EquipmentReadinessService:
         matrix of one member's checks would read as fleet coverage.
         """
         dates = max(1, min(dates, MAX_LOG_DATES))
-        today = today or date.today()
+        today = today or await resolve_org_today(self.db, organization_id)
 
         fleet = await self._load_fleet(organization_id)
         if apparatus_id:
@@ -214,7 +219,7 @@ class EquipmentReadinessService:
     ) -> Dict[str, Any]:
         """One readiness row per apparatus for the fleet board."""
         strip_dates = max(1, min(strip_dates, MAX_LOG_DATES))
-        today = today or date.today()
+        today = today or await resolve_org_today(self.db, organization_id)
 
         fleet = await self._load_fleet(organization_id)
         if not fleet:
@@ -578,13 +583,17 @@ class EquipmentReadinessService:
             )
             .order_by(ApparatusStatusHistory.changed_at.asc())
         )
+        # A change's day is the department's: the duty-day columns are, and a
+        # rig put out of service at 9 PM was down that evening, not from the
+        # next day its UTC timestamp falls on.
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
         transitions: Dict[str, List[Tuple[date, bool]]] = {}
         for history, is_available in result.all():
             changed = history.changed_at
             if changed is None:
                 continue
             transitions.setdefault(str(history.apparatus_id), []).append(
-                (changed.date(), bool(is_available))
+                (local_date(changed, tz), bool(is_available))
             )
 
         unavailable: Dict[str, Set[date]] = {}

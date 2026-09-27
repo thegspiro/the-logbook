@@ -9,16 +9,20 @@ that split and the no-op when nothing is expiring.
 Mocked sessions and mail — no DB — so they run in the sandbox.
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.models.user import Organization
 from app.services.scheduled_tasks import run_supply_expiration_alerts
+from app.utils.org_timezone import org_today
 
-YESTERDAY = date.today() - timedelta(days=1)
-SOON = date.today() + timedelta(days=10)
+# The alert judges expiry on the department's calendar, and _org() sets no
+# timezone, so these are anchored to the scheduling default rather than the
+# runner's UTC date, which is a day ahead every US evening.
+YESTERDAY = org_today(None) - timedelta(days=1)
+SOON = org_today(None) + timedelta(days=10)
 
 
 def _org():
@@ -92,7 +96,7 @@ def _lot(item_name="4x4 Gauze", expiration=SOON, quantity=6, lot_id=None):
 def _lots_by_domain(medical, gear):
     """Answer ``get_expiring_lots`` per its ``item_types`` argument."""
 
-    async def _side_effect(_org, _days=30, item_types=None):
+    async def _side_effect(_org, _days=30, item_types=None, today=None):
         return list(medical) if item_types else list(medical) + list(gear)
 
     return _side_effect

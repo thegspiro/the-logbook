@@ -10,7 +10,6 @@ Stints are also written by the status lifecycle (member_status.py): leaving
 closes the current one and rejoining opens a new one.
 """
 
-from datetime import date
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -35,6 +34,7 @@ from app.services.member_service_history_service import (
     MemberServiceHistoryService,
     summarize,
 )
+from app.utils.org_timezone import resolve_scheduling_timezone, today_in
 
 router = APIRouter()
 
@@ -54,7 +54,8 @@ async def _history_response(
     svc: MemberServiceHistoryService, member: User
 ) -> ServiceHistoryResponse:
     periods = await svc.list_periods(member.organization_id, member.id)
-    summary = summarize(member, periods, date.today())
+    tz = await resolve_scheduling_timezone(svc.db, member.organization_id)
+    summary = summarize(member, periods, today_in(tz), tz)
     return ServiceHistoryResponse(
         user_id=str(member.id),
         hire_date=member.hire_date,

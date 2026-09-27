@@ -6,7 +6,7 @@ including an admin-level summary for Chiefs and department leaders.
 """
 
 from datetime import date, datetime, time, timedelta, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
 from loguru import logger
@@ -58,6 +58,7 @@ from app.services.inventory_service import InventoryService
 from app.services.organization_service import OrganizationService
 from app.services.training_compliance import compute_org_compliance_pct
 from app.utils.hours import hours_from_minutes
+from app.utils.org_timezone import local_date, resolve_org_today, scheduling_timezone
 
 router = APIRouter()
 
@@ -128,7 +129,14 @@ async def get_asset_widgets(
     everybody's dashboard, linking into pages it had chosen to retire.
     """
     org_id = str(current_user.organization_id)
-    today = date.today()
+    # Looked up on first use: a caller who sees no asset block costs no query.
+    resolved_today: list[date] = []
+
+    async def department_today() -> date:
+        if not resolved_today:
+            resolved_today.append(await resolve_org_today(db, org_id))
+        return resolved_today[0]
+
     enabled = set(
         (
             await OrganizationService(db).get_enabled_modules(
@@ -145,6 +153,7 @@ async def get_asset_widgets(
         inventory = InventoryService(db)
         summary = await inventory.get_inventory_summary(org_id)
         low_stock = await inventory.get_low_stock_items(org_id)
+        today = await department_today()
         expiring = await db.scalar(
             select(func.count(InventoryLot.id))
             .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
@@ -252,6 +261,7 @@ async def get_asset_widgets(
         )
     ):
         fleet = await ApparatusService(db).get_fleet_summary(org_id)
+        today = await department_today()
         defects = await db.scalar(
             select(func.count(Apparatus.id)).where(
                 Apparatus.organization_id == org_id,
@@ -314,6 +324,7 @@ async def get_asset_widgets(
         user_has_permission(current_user, "facilities.manage")
         or user_has_permission(current_user, "settings.manage")
     ):
+        today = await department_today()
         maintenance = await db.scalar(
             select(func.count(FacilityMaintenance.id))
             .join(Facility, Facility.id == FacilityMaintenance.facility_id)
@@ -504,12 +515,19 @@ def _has_any(current_user: User, permissions: tuple[str, ...]) -> bool:
     )
 
 
-def _age_days(value: date | datetime | None, today: date) -> int | None:
+def _age_days(
+    value: date | datetime | None, today: date, org_tz: ZoneInfo
+) -> int | None:
+    """Age in whole days on the department's calendar.
+
+    A timestamp is read as the department's day before subtracting: its UTC
+    date is already tomorrow for an evening row, which aged it a day short
+    against a local ``today``.
+    """
     if value is None:
         return None
-    return max(
-        0, (today - (value.date() if isinstance(value, datetime) else value)).days
-    )
+    day = local_date(value, org_tz) if isinstance(value, datetime) else value
+    return max(0, (today - day).days)
 
 
 async def _count_and_oldest(db: AsyncSession, model, *criteria, date_column):
@@ -534,11 +552,10 @@ async def get_operations_dashboard(
     org = (
         await db.execute(select(Organization).where(Organization.id == org_id))
     ).scalar_one_or_none()
-    timezone_name = (org.timezone if org else None) or "UTC"
-    try:
-        org_tz = ZoneInfo(timezone_name)
-    except ZoneInfoNotFoundError:
-        timezone_name, org_tz = "UTC", timezone.utc
+    # The scheduling default, not UTC, for an unset or invalid timezone: the
+    # same zone the compliance percentage and every other view resolve.
+    org_tz = scheduling_timezone(org)
+    timezone_name = org_tz.key
     now = datetime.now(timezone.utc)
     local_today = now.astimezone(org_tz).date()
     local_midnight = datetime.combine(local_today, time.min, org_tz).astimezone(
@@ -569,7 +586,7 @@ async def get_operations_dashboard(
                         label="Today's shifts",
                         severity="info",
                         count=count,
-                        oldest_age_days=_age_days(oldest, local_today),
+                        oldest_age_days=_age_days(oldest, local_today, org_tz),
                         href="/scheduling",
                     )
                 ],
@@ -594,7 +611,7 @@ async def get_operations_dashboard(
                 label="Shifts without an officer",
                 severity="critical" if count else "ok",
                 count=count,
-                oldest_age_days=_age_days(oldest, local_today),
+                oldest_age_days=_age_days(oldest, local_today, org_tz),
                 most_urgent="Next shift without an officer" if count else None,
                 href="/scheduling",
             )
@@ -616,7 +633,7 @@ async def get_operations_dashboard(
                 label="Overdue action items",
                 severity="critical" if count else "ok",
                 count=count,
-                oldest_age_days=_age_days(oldest, local_today),
+                oldest_age_days=_age_days(oldest, local_today, org_tz),
                 most_urgent="Oldest overdue action item" if count else None,
                 href="/action-items?status=overdue",
             )
@@ -646,7 +663,7 @@ async def get_operations_dashboard(
                 label="Minutes action items",
                 severity="critical" if count else "ok",
                 count=count or 0,
-                oldest_age_days=_age_days(oldest, local_today),
+                oldest_age_days=_age_days(oldest, local_today, org_tz),
                 most_urgent="Oldest overdue minutes action item" if count else None,
                 href="/action-items?source=minutes&status=overdue",
             )
@@ -669,7 +686,7 @@ async def get_operations_dashboard(
                 label="Failed equipment checks",
                 severity="critical" if count else "ok",
                 count=count,
-                oldest_age_days=_age_days(oldest, local_today),
+                oldest_age_days=_age_days(oldest, local_today, org_tz),
                 most_urgent="Oldest unresolved equipment check" if count else None,
                 # All three outcomes this count can become, and only rows a
                 # crew actually submitted.
@@ -709,7 +726,7 @@ async def get_operations_dashboard(
                 label="Notification failures",
                 severity="critical" if count else "ok",
                 count=count,
-                oldest_age_days=_age_days(oldest, local_today),
+                oldest_age_days=_age_days(oldest, local_today, org_tz),
                 most_urgent="Oldest delivery failure" if count else None,
                 href="/notifications/manage?status=failed",
             )
@@ -839,7 +856,7 @@ async def get_operations_dashboard(
                         label="Admin hours",
                         severity="warning" if count else "ok",
                         count=count,
-                        oldest_age_days=_age_days(oldest, local_today),
+                        oldest_age_days=_age_days(oldest, local_today, org_tz),
                         most_urgent="Oldest pending submission" if count else None,
                         href="/admin-hours/manage?status=pending",
                     )
@@ -1046,7 +1063,7 @@ async def get_admin_summary(
                             ActionItemStatus.IN_PROGRESS.value,
                         ]
                     ),
-                    MeetingActionItem.due_date < date.today(),
+                    MeetingActionItem.due_date < await resolve_org_today(db, org_id),
                 )
             )
             overdue_meeting = result.scalar() or 0

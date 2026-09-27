@@ -22,12 +22,19 @@ export interface SuggestionBoxPublic {
   description?: string | null;
   anonymityMode: SuggestionAnonymityMode;
   followUpEnabled: boolean;
+  /** Members can see and vote on what this box's reviewers publish. */
+  publicBoardEnabled: boolean;
 }
 
 export interface SuggestionBoxAdmin extends SuggestionBoxPublic {
   isActive: boolean;
   reviewerPositions: ReviewerRef[];
   reviewerMembers: ReviewerRef[];
+  /** Told of new submissions; cannot read them. */
+  watcherPositions: ReviewerRef[];
+  watcherMembers: ReviewerRef[];
+  /** What a permanent delete would destroy. */
+  submissionCount: number;
   createdAt?: string | null;
   updatedAt?: string | null;
 }
@@ -40,6 +47,9 @@ export interface SuggestionBoxWrite {
   isActive: boolean;
   reviewerPositionIds: string[];
   reviewerMemberIds: string[];
+  watcherPositionIds: string[];
+  watcherMemberIds: string[];
+  publicBoardEnabled: boolean;
 }
 
 export interface ReviewerOptions {
@@ -81,6 +91,14 @@ export interface MySuggestionSummary {
   createdAt: string;
 }
 
+/** One step on a submission's timeline. The first is always receipt. */
+export interface TimelineEntry {
+  disposition: SuggestionDisposition;
+  publicResponse?: string | null;
+  createdAt: string;
+  timestampPrecision: TimestampPrecision;
+}
+
 export interface SubmitterSuggestionDetail {
   id: string | null;
   boxName: string;
@@ -91,6 +109,8 @@ export interface SubmitterSuggestionDetail {
   disposition?: SuggestionDisposition | null;
   attachments: SuggestionAttachment[];
   messages: ThreadMessage[];
+  /** Empty in a one-way box, where the submitter sees no status. */
+  timeline: TimelineEntry[];
   createdAt: string;
   timestampPrecision: TimestampPrecision;
 }
@@ -142,6 +162,15 @@ export interface ReviewSuggestionDetail {
   canForward: boolean;
   viaForward: boolean;
   forwards: SuggestionForward[];
+  timeline: TimelineEntry[];
+  /** The box has an idea board. */
+  boardEnabled: boolean;
+  /** Only the box's own reviewers publish; a forward recipient never does. */
+  canPublish: boolean;
+  publishedAt?: string | null;
+  publishedTitle?: string | null;
+  publishedSummary?: string | null;
+  voteCount: number;
 }
 
 export interface ReviewSummary {
@@ -154,6 +183,24 @@ export interface ReviewSummary {
 export interface DispositionUpdate {
   disposition?: SuggestionDisposition | undefined;
   internalNote?: string | null | undefined;
+  /** Each response is a new step; omit to add none. */
+  publicResponse?: string | undefined;
 }
 
 export type ReviewFilter = 'open' | SuggestionDisposition | '';
+
+/** A published suggestion as every member sees it: the reviewer-written copy only. */
+export interface BoardEntry {
+  id: string;
+  boxId: string;
+  boxName: string;
+  title: string;
+  summary: string;
+  disposition: SuggestionDisposition;
+  publicResponse?: string | null;
+  voteCount: number;
+  hasVoted: boolean;
+  publishedAt: string;
+}
+
+export type BoardSort = 'top' | 'new';

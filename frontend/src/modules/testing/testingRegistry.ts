@@ -493,6 +493,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'scheduling.manage',
         module: 'scheduling',
       },
+      {
+        path: '/scheduling/admin/settings/outside-apparatus',
+        label: 'Scheduling settings — Outside apparatus',
+        permission: 'scheduling.manage',
+        module: 'scheduling',
+      },
     ],
   },
   {
@@ -524,6 +530,30 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/inventory/put-away',
         label: 'Put away by NFC',
+        permission: 'inventory.manage',
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/shelf-audit',
+        label: 'Shelf audit by NFC',
+        permission: 'inventory.manage',
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/admin/nfc/enroll',
+        label: 'Tag items in bulk',
+        permission: 'inventory.manage',
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/kiosk',
+        label: 'Self-service checkout kiosk',
+        permission: 'inventory.kiosk',
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/admin/not-seen',
+        label: 'Items not seen report',
         permission: 'inventory.manage',
         module: 'inventory',
       },

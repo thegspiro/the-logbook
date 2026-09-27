@@ -78,9 +78,13 @@ DEFAULT_FOOTERS: List[Dict[str, Any]] = [
         "key": "internal",
         "name": "Internal — members",
         "description": "Routine automated mail to members. The default.",
+        # No "please do not reply": replies go to the department's own
+        # address (EmailService.default_reply_to), and when it has none they
+        # go to the sending address, as they always did. Either way the line
+        # would be telling a member not to do the thing most likely to get
+        # them an answer.
         "lines": [
             "This is an automated message from {{organization_name}}.",
-            "Please do not reply to this email.",
         ],
         "show_contact": True,
         "show_mailing_address": False,

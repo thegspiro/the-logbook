@@ -184,19 +184,19 @@ Shipped in PR #2649. User-facing walkthrough:
 
 ### Code map
 
-| Layer    | Where                                                                                                                                                 |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Model    | `app/models/suggestion.py` — `SuggestionBox`, `SuggestionBoxReviewer`, `Suggestion`, `SuggestionAttachment`, `SuggestionMessage`, `SuggestionForward` |
-| Service  | `app/services/suggestion_service.py`                                                                                                                  |
-| API      | `app/api/v1/endpoints/suggestions.py`, mounted at `/api/v1/suggestions`                                                                               |
-| Frontend | `modules/communications/pages/SuggestionsPage.tsx`, `SuggestionBoxesAdminPage.tsx`, `components/Suggestion*.tsx`, `services/suggestionsService.ts`    |
+| Layer    | Where                                                                                                                                                                         |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model    | `app/models/suggestion.py` — `SuggestionBox`, `SuggestionBoxReviewer`, `SuggestionBoxWatcher`, `Suggestion`, `SuggestionAttachment`, `SuggestionMessage`, `SuggestionForward` |
+| Service  | `app/services/suggestion_service.py`                                                                                                                                          |
+| API      | `app/api/v1/endpoints/suggestions.py`, mounted at `/api/v1/suggestions`                                                                                                       |
+| Frontend | `modules/communications/pages/SuggestionsPage.tsx`, `SuggestionBoxesAdminPage.tsx`, `components/Suggestion*.tsx`, `services/suggestionsService.ts`                            |
 
 ### Pages
 
-| Route                              | Gate                 | Purpose                                                                                                                                                                                                        |
-| ---------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/suggestions`                     | Signed in            | Tabs **Submit**, **My submissions**, **Follow up with a key**, and **Review** (only when `GET /review/summary` reports the caller a reviewer). Reads `?tab=` and `?id=`, which the notification emails link to |
-| `/communications/suggestion-boxes` | `suggestions.manage` | Box configuration. Sidebar: **Administration → Forms & Comms → Suggestion Boxes**                                                                                                                              |
+| Route                              | Gate                 | Purpose                                                                                                                                                                                                                                                            |
+| ---------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/suggestions`                     | Signed in            | Tabs **Submit**, **Idea board** (only when an open box has a board), **My submissions**, **Follow up with a key**, and **Review** (only when `GET /review/summary` reports the caller a reviewer). Reads `?tab=` and `?id=`, which the notification emails link to |
+| `/communications/suggestion-boxes` | `suggestions.manage` | Box configuration. Sidebar: **Administration → Forms & Comms → Suggestion Boxes**                                                                                                                                                                                  |
 
 ### Authorization model
 
@@ -263,21 +263,81 @@ Dispositions: `new`, `under_review`, `accepted`, `implemented`, `declined`,
 submitter's response schema. In a one-way box (`allow_follow_up` false) the
 submitter sees neither disposition nor messages.
 
-Emails go through the background task `send_suggestion_notice` to active members
-only, template type `suggestion_box`, and **carry a link and never the content**:
+**Status history.** In a follow-up box the submitter also sees a timeline:
+receipt, then each step reviewers took, from `suggestion_status_events`. A step
+is written when the disposition changes or a reviewer adds a **public
+response** (`publicResponse` on `PATCH /review/{id}`, at most 2,000
+characters), and a status change plus response saved together are one step.
+An internal-note edit alone adds nothing. Steps name no reviewer: the submitter
+sees "Reviewers", and who acted is in the audit log. Receipt is the
+suggestion's own `created_at`, so an anonymous submission's receipt stays
+day-precise. Steps are ordered by a per-suggestion `sequence` taken under a row
+lock, because MySQL timestamps are whole seconds. A response is refused in a
+one-way box, and the reviewer screen offers none where the submitter can't come
+back to read it (anonymous with no key).
 
-| Event              | Recipients                                 |
-| ------------------ | ------------------------------------------ |
-| New submission     | The box's reviewers                        |
-| Submitter reply    | The box's reviewers and forward recipients |
-| Disposition change | Named submitter, follow-up boxes only      |
-| Reviewer reply     | Named submitter                            |
-| Forward            | The new recipients                         |
+Notices go through the background task `send_suggestion_notice` to active
+members only. Each recipient gets an in-app notification (category
+`suggestions`, linking to the submission), a web push where push is configured,
+and **their own email**, so no recipient sees another's address. Every channel
+**carries a link and never the content**, and nothing identifying the submitter
+goes into the notification row. Email is not gated on the member's email
+preference: for a reviewer it is the channel of record (CLAUDE.md pitfall #18).
 
-Anonymous submitters are never emailed. Audit events: `suggestion_box_created`,
+| Event                                 | Recipients                                                     | Email template                                |
+| ------------------------------------- | -------------------------------------------------------------- | --------------------------------------------- |
+| New submission                        | The box's reviewers                                            | `suggestion_submitted` (editable)             |
+| New submission                        | The box's notified people ("Also notify"), minus its reviewers | `suggestion_box` (fixed; no link to the item) |
+| Submitter reply                       | The box's reviewers and forward recipients                     | `suggestion_box`                              |
+| Disposition change or public response | Named submitter, follow-up boxes only                          | `suggestion_box`                              |
+| Reviewer reply                        | Named submitter                                                | `suggestion_box`                              |
+| Forward                               | The new recipients                                             | `suggestion_box`                              |
+
+**Notified people are not reviewers.** `suggestion_box_watchers` names positions
+or members told that a box received something; they cannot open it, and their
+notice links to `/suggestions`, not to the submission. A chief who asks to know
+the Compliance box is in use must not become able to read a complaint about
+themselves by asking. An update that omits both `watcherPositionIds` and
+`watcherMemberIds` leaves them unchanged, so a client older than the field does
+not clear them.
+
+**The new-submission notices can be switched off** under Notification Rules
+(trigger `suggestion_submitted`). No rule means on. The switch covers only the
+two new-submission rows above; replies, forwards and status changes are the
+conversation itself and always go out.
+
+Anonymous submitters are never notified. Audit events: `suggestion_box_created`,
 `suggestion_box_updated`, `suggestion_submitted` (named only),
 `suggestion_disposition_changed`, `suggestion_forwarded`,
 `suggestion_forward_withdrawn`.
+
+### Idea board
+
+A box with **Public idea board** on (`suggestion_boxes.public_board_enabled`,
+default off) lets its reviewers publish a suggestion for every member to see
+and vote on.
+
+- **Only a reviewer-written copy is published.** `POST /review/{id}/publish`
+  takes a title and summary, stored as `published_title` and
+  `published_summary`. The board (`GET /board`) returns only that copy, the
+  status, the latest public response, the vote count and whether the caller
+  voted. The details, screenshots and submitter are never included:
+  `BoardEntry` has no field for them. The original may name people, and its
+  wording can identify an anonymous author.
+- **The latest public response is shown with a published idea.** Reviewers
+  write those responses to the submitter, so the reviewer screen says so
+  while an idea is published.
+- **Only the box's own reviewers publish or unpublish.** A forward recipient
+  gets 403.
+- **Nothing is published automatically.**
+- **Votes:** `POST` and `DELETE /board/{id}/vote` are idempotent, one per member
+  (unique on suggestion and user). Only counts and the caller's own vote are
+  exposed. Unpublishing keeps the votes, so republishing restores its support.
+- **Hiding without unpublishing.** An idea leaves the board when its box is
+  archived or the board is switched off. An update that omits
+  `publicBoardEnabled` leaves the setting unchanged.
+- **Audit events:** `suggestion_published`, `suggestion_publication_edited`,
+  `suggestion_unpublished`.
 
 ### Deliberate decisions
 
@@ -287,16 +347,30 @@ Anonymous submitters are never emailed. Audit events: `suggestion_box_created`,
   `DELIBERATELY_UNGATED` in `tests/test_module_api_gating.py`.
 - **`/suggestions` is in `UNCACHEABLE_PREFIXES`** — a cached thread would hide a
   reply, and the payload is sensitive.
-- **Boxes are never deleted**; `is_active` closes one. An active box must have at
-  least one reviewer.
+- **Closing a box and deleting one are different.** `is_active` closes a box
+  and keeps everything in it. `DELETE /admin/boxes/{id}` (`suggestions.manage`)
+  removes the box.
+  - An empty box deletes directly.
+  - A box that has received submissions deletes only with `confirm_name` equal
+    to its name. Otherwise the endpoint returns 409 and the screen offers
+    archiving first.
+  - Deletion cascades through every submission, screenshot row, message,
+    forward and status step. Screenshot files are removed after the commit.
+  - It is audited as `suggestion_box_deleted`, with the number of submissions
+    lost, at `warning` severity when that number is above zero.
+  - The admin list reports `submissionCount` for this.
+- **An active box must have at least one reviewer.**
 
 ### Suggestion box migrations
 
-| Revision       | What it does                                                                                                                                          | Downgrade                                                                                                            |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `80e2004cd691` | Creates the five box/suggestion tables, each guarded on absence (no-op after `create_all`)                                                            | Drops them — **every suggestion, attachment record and message**; files under `uploads/suggestions` are left on disk |
-| `394600cbfae2` | Adds `suggestions.manage` to `is_system` rows for `fire_chief`, `deputy_chief`, `assistant_chief`, `president`, `communications_officer` where absent | Removes it from the same rows, including a deliberate post-upgrade grant                                             |
-| `9cb132ad83dc` | Creates `suggestion_forwards`                                                                                                                         | Drops it — every forward, suggestions intact                                                                         |
+| Revision       | What it does                                                                                                                                                      | Downgrade                                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `80e2004cd691` | Creates the five box/suggestion tables, each guarded on absence (no-op after `create_all`)                                                                        | Drops them — **every suggestion, attachment record and message**; files under `uploads/suggestions` are left on disk |
+| `394600cbfae2` | Adds `suggestions.manage` to `is_system` rows for `fire_chief`, `deputy_chief`, `assistant_chief`, `president`, `communications_officer` where absent             | Removes it from the same rows, including a deliberate post-upgrade grant                                             |
+| `9cb132ad83dc` | Creates `suggestion_forwards`                                                                                                                                     | Drops it — every forward, suggestions intact                                                                         |
+| `e79309de6735` | Adds `suggestion_boxes.public_board_enabled` (default off), the four `suggestions.published_*` columns, and `suggestion_votes`; every step guarded                | Drops them — **every vote and every published copy**; submissions untouched                                          |
+| `0010291816fd` | Creates `suggestion_status_events`; backfills one step for each suggestion already past `new`, dated `disposition_updated_at` (earlier steps were never recorded) | Drops it — **every public response**; dispositions on `suggestions` survive                                          |
+| `1ae1ffbc445e` | Widens `notification_rules.trigger` and the two `template_type` enums with `suggestion_submitted`; creates `suggestion_box_watchers`                              | Deletes rules and templates of that value, narrows the enums, drops the watchers table                               |
 
 ## User documentation
 

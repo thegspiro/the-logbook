@@ -28,7 +28,6 @@ export const DISCIPLINE_POSITIONS_BY_ORG_TYPE: Record<OrganizationType, readonly
 /** Anything absent keeps the template's own wording. */
 export const POSITION_LABELS_BY_ORG_TYPE: Partial<Record<OrganizationType, Record<string, string>>> = {
   ems_only: {
-    fire_chief: 'Chief',
     engineer: 'Driver / Operator',
   },
 };

@@ -681,7 +681,12 @@ user_positions = Table(
     Column(
         "assigned_at", DateTime(timezone=True), server_default=func.now(), index=True
     ),
-    Column("assigned_by", String(36), ForeignKey("users.id"), index=True),
+    Column(
+        "assigned_by",
+        String(36),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        index=True,
+    ),
 )
 
 
@@ -804,7 +809,9 @@ class MemberLeaveOfAbsence(Base):
     end_date = Column(Date, nullable=True)  # None = permanent leave
 
     # Approval
-    granted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    granted_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     granted_at = Column(DateTime(timezone=True), nullable=True)
 
     active = Column(Boolean, default=True, nullable=False, server_default="1")

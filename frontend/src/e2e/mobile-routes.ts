@@ -244,6 +244,30 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['inventory.manage'],
   },
   {
+    path: '/inventory/shelf-audit',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+  },
+  {
+    path: '/inventory/admin/nfc/enroll',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+  },
+  {
+    path: '/inventory/kiosk',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.kiosk'],
+  },
+  {
+    path: '/inventory/admin/not-seen',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+  },
+  {
     path: '/inventory/admin/nfc',
     maxSmallTargets: 0,
     maxTinyText: 0,
@@ -370,6 +394,13 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxTinyText: 0,
     permissions: SCHEDULING_ADMIN,
     expectText: 'Scheduling Notifications',
+  },
+  {
+    path: '/scheduling/admin/settings/outside-apparatus',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Add a department',
   },
   // Seven subsections behind an in-page tab strip, all seven now driven and
   // measured. Six of them had never been looked at, and the debt they held was

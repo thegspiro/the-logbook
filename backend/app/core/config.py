@@ -10,7 +10,7 @@ from functools import lru_cache
 from urllib.parse import quote, urlsplit
 
 from loguru import logger
-from pydantic import field_validator
+from pydantic import PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -488,19 +488,37 @@ class Settings(BaseSettings):
                 "Set it via the DB_PASSWORD environment variable."
             )
 
+        # Outside production the loopback check below does not block, because
+        # a development or staging machine is often reached on localhost on
+        # purpose. Once real mail is being sent, though, its links still go
+        # to people on other machines, so say so rather than stay silent.
+        if (
+            self.ENVIRONMENT != "production"
+            and self.EMAIL_ENABLED
+            and _is_loopback_url(self.FRONTEND_URL)
+        ):
+            warnings.append(
+                f"WARNING: EMAIL_ENABLED is True but FRONTEND_URL is "
+                f"{self.FRONTEND_URL!r} and ALLOWED_ORIGINS has no public "
+                "address, so links in outgoing email point at this machine. "
+                "Set FRONTEND_URL to the address recipients use."
+            )
+
         # --- Additional production/staging checks ---
         if self.ENVIRONMENT in ("production", "staging"):
-            # Advisory, not CRITICAL: a wrong FRONTEND_URL breaks emailed links
-            # but weakens no control, and blocking would stop existing installs
-            # that shipped with the default from booting after an upgrade.
-            # Production only: staging is often reached on an internal or
-            # loopback address on purpose, where this would be noise.
+            # Blocking: every emailed link (password resets, ballots,
+            # approvals, reminders) is built from FRONTEND_URL, and a loopback
+            # value sends each recipient to their own machine. The failure is
+            # silent — mail goes out, nothing errors — so a log warning was
+            # read by nobody. Production only: staging is often reached on an
+            # internal or loopback address on purpose.
             if self.ENVIRONMENT == "production" and _is_loopback_url(self.FRONTEND_URL):
                 warnings.append(
-                    f"WARNING: FRONTEND_URL is {self.FRONTEND_URL!r}, which "
-                    "points at this machine. Every link in an outgoing email "
+                    f"CRITICAL: FRONTEND_URL is {self.FRONTEND_URL!r}, which "
+                    "points at this machine, and ALLOWED_ORIGINS has no public "
+                    "address to use instead. Every link in an outgoing email "
                     "(password resets, ballots, approvals, reminders) is built "
-                    "from it, so recipients will get links that do not open. "
+                    "from it, so recipients would get links that do not open. "
                     "Set FRONTEND_URL to the site's public URL, e.g. "
                     "https://logbook.yourdept.org."
                 )
@@ -806,8 +824,21 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
     ]
 
-    # Frontend URL for generating links in emails
+    # Frontend URL for generating links in emails. When this is left at a
+    # loopback address, the first public origin in ALLOWED_ORIGINS is used
+    # instead — see resolve_frontend_url below.
     FRONTEND_URL: str = "http://localhost:3000"
+
+    # What FRONTEND_URL was configured as, when resolve_frontend_url replaced
+    # it. Empty when the configured value was used as-is.
+    _frontend_url_configured: str = PrivateAttr(default="")
+
+    # FRONTEND_URL as the environment resolved it, captured the first time an
+    # administrator's saved link domain replaces it so clearing the override
+    # can put it back. Empty until an override has been applied.
+    _frontend_url_deployment: str = PrivateAttr(default="")
+    # The saved link domain currently applied to FRONTEND_URL, or empty.
+    _frontend_url_override: str = PrivateAttr(default="")
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
@@ -824,6 +855,175 @@ class Settings(BaseSettings):
                 "This allows any origin to make credentialed requests."
             )
         return origins
+
+    @model_validator(mode="after")
+    def resolve_frontend_url(self) -> "Settings":
+        """Point email links at a public address when FRONTEND_URL is loopback.
+
+        Every link in an outgoing email is built from FRONTEND_URL, and it
+        defaults to localhost. Not every install path sets it: the Unraid
+        Community Apps template and scripts/setup-env.py ask only for the
+        allowed origins, and the Compose files default it to localhost. Those
+        installs already name the address members reach the site on — in
+        ALLOWED_ORIGINS, which CORS needs anyway — so the first origin there
+        that is not loopback is used instead, rather than mailing recipients
+        links to their own machine.
+
+        Resolved here, once, rather than at each of the call sites that build
+        a link, so a link added later cannot miss it. An explicitly public
+        FRONTEND_URL always wins; with no public origin either, the value is
+        left alone and validate_security_config reports it.
+        """
+        if not _is_loopback_url(self.FRONTEND_URL):
+            return self
+        origins = self.ALLOWED_ORIGINS
+        if isinstance(origins, str):
+            origins = [o.strip() for o in origins.split(",") if o.strip()]
+        for origin in origins:
+            candidate = origin.strip().rstrip("/")
+            if not candidate.startswith(("https://", "http://")):
+                continue
+            if _is_loopback_url(candidate):
+                continue
+            self._frontend_url_configured = self.FRONTEND_URL
+            self.FRONTEND_URL = candidate
+            logger.info(
+                "FRONTEND_URL is {!r}, which only this machine can open; "
+                "email links will use {} from ALLOWED_ORIGINS instead. Set "
+                "FRONTEND_URL to the site's public address to choose it "
+                "explicitly.",
+                self._frontend_url_configured,
+                candidate,
+            )
+            break
+        return self
+
+    def describe_frontend_url(self) -> dict:
+        """Where the address emailed links are built from came from.
+
+        Shown to settings administrators on the Email settings screen, because
+        the substitution in resolve_frontend_url is otherwise reported only in
+        the startup log, and an IT admin looking at a wrong link in an email has
+        no way to tell whether FRONTEND_URL was set, picked from
+        ALLOWED_ORIGINS, left at the shipped default, or overridden in the app.
+        """
+        effective = (self.FRONTEND_URL or "").strip()
+        deployment = self._frontend_url_deployment or effective
+        if self._frontend_url_override:
+            source = "override"
+        elif self._frontend_url_configured:
+            source = "allowed_origins"
+        elif _is_loopback_url(effective):
+            source = "unresolved_loopback"
+        else:
+            source = "frontend_url"
+        return {
+            "effective_url": effective,
+            "configured_url": self._frontend_url_configured or deployment,
+            "deployment_url": deployment,
+            "override_url": self._frontend_url_override or None,
+            "source": source,
+            "is_loopback": _is_loopback_url(effective),
+            "is_https": effective.lower().startswith("https://"),
+            "email_enabled": bool(self.EMAIL_ENABLED),
+            "allowed_hosts": self.link_domain_allowed_hosts(),
+        }
+
+    def link_domain_allowed_hosts(self) -> list[str]:
+        """Hostnames an administrator may point emailed links at.
+
+        SEC: limited to hosts this deployment already serves, so an account
+        that can change the setting cannot aim password-reset and ballot
+        links at a look-alike site. The trusted-host allowlist is that set;
+        when it is disabled ("*"), the public ALLOWED_ORIGINS hostnames are
+        used instead, never "anything". Loopback is never offered: a
+        recipient cannot open it.
+        """
+        from urllib.parse import urlparse
+
+        hosts = self.get_trusted_hosts()
+        if "*" in hosts:
+            origins = (
+                self.ALLOWED_ORIGINS
+                if isinstance(self.ALLOWED_ORIGINS, list)
+                else [self.ALLOWED_ORIGINS]
+            )
+            hosts = [
+                urlparse(str(o)).hostname or ""
+                for o in origins
+                if str(o).strip() != "*"
+            ]
+        allowed = []
+        for host in hosts:
+            host = (host or "").strip().lower()
+            if not host or host == "*":
+                continue
+            if _is_loopback_url(f"http://{host.lstrip('*.')}"):
+                continue
+            allowed.append(host)
+        return sorted(set(allowed))
+
+    def validate_link_domain(self, url: str) -> str:
+        """Normalize an administrator-supplied link domain, or raise ValueError.
+
+        Accepts an http(s) origin only, optionally with a port. A path, query,
+        fragment or credentials would be appended to by every link builder
+        (they concatenate ``f"{FRONTEND_URL}/..."``), so they are refused
+        rather than silently stripped.
+        """
+        value = (url or "").strip().rstrip("/")
+        try:
+            parts = urlsplit(value)
+            port = parts.port
+        except ValueError:
+            raise ValueError(
+                "Enter a full address, such as https://logbook.example.org."
+            )
+        if parts.scheme not in ("https", "http") or not parts.hostname:
+            raise ValueError(
+                "Enter a full address, such as https://logbook.example.org."
+            )
+        if parts.username or parts.password:
+            raise ValueError("The address cannot contain a user name or password.")
+        if parts.path or parts.query or parts.fragment:
+            raise ValueError(
+                "Enter the site address only, without a path — for example "
+                "https://logbook.example.org."
+            )
+        if _is_loopback_url(value):
+            raise ValueError(
+                "That address only works on the server itself, so links in "
+                "emails would not open for anyone who receives them."
+            )
+        host = parts.hostname.lower()
+        allowed = self.link_domain_allowed_hosts()
+        if not any(
+            host == pattern or (pattern.startswith("*.") and host.endswith(pattern[1:]))
+            for pattern in allowed
+        ):
+            raise ValueError(
+                f"{host} is not an address this server accepts traffic on. "
+                "Add it to TRUSTED_HOSTS or ALLOWED_ORIGINS first, then set it "
+                "here."
+            )
+        netloc = host if port is None else f"{host}:{port}"
+        return f"{parts.scheme}://{netloc}"
+
+    def apply_link_domain_override(self, url: str | None) -> None:
+        """Point FRONTEND_URL at a saved link domain, or back at the deployment's.
+
+        Every link builder reads ``settings.FRONTEND_URL`` when it runs, so
+        this is the one place the saved value has to reach; it is re-applied in
+        every worker by app.core.link_domain_sync.
+        """
+        if not self._frontend_url_deployment:
+            self._frontend_url_deployment = self.FRONTEND_URL
+        if url:
+            self._frontend_url_override = url
+            self.FRONTEND_URL = url
+        else:
+            self._frontend_url_override = ""
+            self.FRONTEND_URL = self._frontend_url_deployment
 
     # SEC: Host-header allowlist for TrustedHostMiddleware. When left empty,
     # the effective allowlist is derived from ALLOWED_ORIGINS' hostnames (plus

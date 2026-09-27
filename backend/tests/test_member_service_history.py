@@ -30,6 +30,7 @@ from app.services.member_service_history_service import (
     whole_years,
 )
 from app.services.membership_tier_service import MembershipTierService
+from app.utils.org_timezone import org_today
 
 TODAY = date(2026, 9, 24)
 
@@ -63,7 +64,7 @@ def _stint(start, end=None, counts=True, sep=None, pid=None):
 class TestSummarize:
     def test_no_stints_is_one_unbroken_stint_from_hire(self):
         hire = date(2016, 3, 15)
-        summary = summarize(_member(hire_date=hire), [], TODAY)
+        summary = summarize(_member(hire_date=hire), [], TODAY, tz=timezone.utc)
 
         assert summary.effective_service_start == hire
         assert summary.credited_years == 10
@@ -83,13 +84,13 @@ class TestSummarize:
         ):
             if hire > today:
                 continue
-            summary = summarize(_member(hire_date=hire), [])
+            summary = summarize(_member(hire_date=hire), [], today, tz=timezone.utc)
             assert summary.credited_years == MembershipTierService.years_of_service(
-                hire
+                hire, today
             )
 
     def test_no_hire_date_and_no_stints_is_zero(self):
-        summary = summarize(_member(), [], TODAY)
+        summary = summarize(_member(), [], TODAY, tz=timezone.utc)
         assert (summary.credited_days, summary.credited_years) == (0, 0)
         assert summary.effective_service_start is None
         assert summary.periods == []
@@ -105,6 +106,7 @@ class TestSummarize:
             ),
             [],
             TODAY,
+            tz=timezone.utc,
         )
         assert summary.periods[0].end == date(2020, 1, 1)
         assert summary.credited_days == (date(2020, 1, 1) - hire).days
@@ -116,7 +118,9 @@ class TestSummarize:
             _stint(date(2015, 9, 24), date(2020, 9, 24), sep="dropped_voluntary"),
             _stint(date(2024, 9, 24)),
         ]
-        summary = summarize(_member(hire_date=date(2015, 9, 24)), stints, TODAY)
+        summary = summarize(
+            _member(hire_date=date(2015, 9, 24)), stints, TODAY, tz=timezone.utc
+        )
 
         assert summary.credited_days == (
             (date(2020, 9, 24) - date(2015, 9, 24)).days
@@ -130,7 +134,9 @@ class TestSummarize:
             _stint(date(2015, 9, 24), date(2020, 9, 24), counts=False),
             _stint(date(2024, 9, 24)),
         ]
-        summary = summarize(_member(hire_date=date(2015, 9, 24)), stints, TODAY)
+        summary = summarize(
+            _member(hire_date=date(2015, 9, 24)), stints, TODAY, tz=timezone.utc
+        )
 
         assert summary.credited_years == 2
         assert summary.effective_service_start == date(2024, 9, 24)
@@ -138,7 +144,9 @@ class TestSummarize:
 
     def test_a_hire_linked_stint_follows_the_hire_date(self):
         stints = [_stint(None, date(2020, 1, 1)), _stint(date(2022, 1, 1))]
-        summary = summarize(_member(hire_date=date(2010, 1, 1)), stints, TODAY)
+        summary = summarize(
+            _member(hire_date=date(2010, 1, 1)), stints, TODAY, tz=timezone.utc
+        )
 
         first = summary.periods[0]
         assert (first.start, first.start_is_hire_date) == (date(2010, 1, 1), True)
@@ -249,6 +257,9 @@ async def _org(db, settings=None):
         name="Service History Test Department",
         slug=f"svc-hist-{uuid.uuid4().hex[:8]}",
         settings=settings or {},
+        # UTC, so "today" on the department's calendar is the date.today() the
+        # fixtures below are built from, at any hour the suite runs.
+        timezone="UTC",
     )
     db.add(org)
     await db.flush()
@@ -343,7 +354,7 @@ class TestLifecycleHooks:
         assert (prior.start_date, prior.end_date) == (None, date(2020, 9, 24))
         assert prior.counts_toward_service is True
         assert (current.start_date, current.end_date) == (date(2024, 9, 24), None)
-        summary = summarize(member, [prior, current], TODAY)
+        summary = summarize(member, [prior, current], TODAY, tz=timezone.utc)
         assert summary.credited_years == 7
 
     async def test_rejoin_restarting_keeps_earlier_service_as_prior(self, db_session):
@@ -364,7 +375,7 @@ class TestLifecycleHooks:
         prior, current = await _stints(db_session, member)
         assert prior.counts_toward_service is False
         assert prior.separation_status == "dropped_voluntary"
-        summary = summarize(member, [prior, current], TODAY)
+        summary = summarize(member, [prior, current], TODAY, tz=timezone.utc)
         assert summary.credited_years == 2
         assert summary.prior_days == (date(2020, 9, 24) - date(2015, 9, 24)).days
 
@@ -676,6 +687,8 @@ class TestStatusChangeWritesStints:
         officer = await _user(db_session, org, hire_date=date(2000, 1, 1))
         member = await _user(db_session, org, hire_date=date(2012, 1, 1))
         caller = _caller(org, officer.id)
+        # Retirement and rejoin are dated on the department's calendar.
+        today = org_today(org)
 
         await change_member_status(
             member.id,
@@ -686,16 +699,14 @@ class TestStatusChangeWritesStints:
         )
         [closed] = await _stints(db_session, member)
         assert (closed.end_date, closed.separation_status) == (
-            date.today(),
+            today,
             "retired",
         )
 
         with pytest.raises(HTTPException) as exc:
             await change_member_status(
                 member.id,
-                MemberStatusChangeRequest(
-                    new_status="active", rejoin_date=date.today()
-                ),
+                MemberStatusChangeRequest(new_status="active", rejoin_date=today),
                 BackgroundTasks(),
                 db=db_session,
                 current_user=caller,
@@ -706,7 +717,7 @@ class TestStatusChangeWritesStints:
         assert member.status == UserStatus.RETIRED
 
         # Back-date the retirement so a rejoin today is after it.
-        closed.end_date = date.today() - timedelta(days=30)
+        closed.end_date = today - timedelta(days=30)
         await db_session.flush()
         await change_member_status(
             member.id,
@@ -720,7 +731,7 @@ class TestStatusChangeWritesStints:
 
         prior, current = await _stints(db_session, member)
         assert prior.counts_toward_service is False
-        assert (current.start_date, current.end_date) == (date.today(), None)
+        assert (current.start_date, current.end_date) == (today, None)
         await db_session.refresh(member)
         assert member.status == UserStatus.ACTIVE
 

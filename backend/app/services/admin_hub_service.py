@@ -93,6 +93,7 @@ from app.services.scheduling_service import (
     open_ended_cushion_hours,
 )
 from app.services.training_compliance import compute_org_compliance_pct
+from app.utils.org_timezone import scheduling_timezone
 
 #: The always-on fourth slot. Reported by every module, chosen by none.
 ATTENTION_METRIC_KEY = "needs_attention"
@@ -2225,11 +2226,11 @@ class AdminHubService:
         org = (
             await self.db.execute(select(Organization).where(Organization.id == org_id))
         ).scalar_one_or_none()
-        timezone_name = (org.timezone if org else None) or "UTC"
-        try:
-            org_tz: ZoneInfo | timezone = ZoneInfo(timezone_name)
-        except ZoneInfoNotFoundError:
-            timezone_name, org_tz = "UTC", timezone.utc
+        # The same zone every other view resolves: an unset or invalid timezone
+        # falls back to the scheduling default, not UTC, so the hub's cards and
+        # the compliance percentage beside them count the same day.
+        org_tz = scheduling_timezone(org)
+        timezone_name = org_tz.key
         local_today = datetime.now(timezone.utc).astimezone(org_tz).date()
         local_midnight = datetime.combine(local_today, time.min, org_tz).astimezone(
             timezone.utc

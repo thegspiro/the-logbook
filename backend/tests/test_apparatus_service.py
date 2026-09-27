@@ -11,6 +11,7 @@ cross-tenant read leak, not merely a dangling reference.
 Uses mocked sessions/helpers — no DB — so it runs in the sandbox.
 """
 
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -26,6 +27,16 @@ from app.schemas.apparatus import (
     ApparatusUpdate,
 )
 from app.services.apparatus_service import ApparatusService
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.apparatus_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
 
 
 @pytest.fixture

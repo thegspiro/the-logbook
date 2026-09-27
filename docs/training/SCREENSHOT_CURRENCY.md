@@ -1,5 +1,244 @@
 # Screenshot currency
 
+## Suggestion boxes re-shot after notifications, history, board and delete, 2026-09-25
+
+The suggestion-box shots in guide 07 predated four changes to those screens:
+submission notifications and **Also notify** (#2720), the submitter's status
+history and the response to the submitter (#2730, which also carried the idea
+board), and deleting a box (#2734). All ten were taken against a freshly
+seeded demo department.
+
+| Shot | State |
+| ---- | ----- |
+| `07-14-suggestion-box-dialog` | **Re-shot.** The dialog now has **Public idea board** (ticked in the frame) and the **Also notify** pickers, so the frame is taller and the caption names both. The image moved up to sit after the setup steps rather than after the new delete paragraph |
+| `07-15-suggestion-submit-anonymous`, `07-16-suggestion-follow-up-key` | Re-run; byte-identical, so no change |
+| `07-17-suggestion-review` | **Re-shot.** Adds **Response to the submitter**, **Status history** and the **Idea board** section with the published copy |
+| `07-18-suggestion-forwarded-to-you` | **Re-shot.** The idea board section reads "Only the box's reviewers can publish it"; the manifest now fails the shot if a forward recipient is offered publishing |
+| `07-20-suggestion-status-history` | **New.** The demo member's accepted idea under **My submissions**, its history with the reviewers' response |
+| `07-21-suggestion-idea-board` | **New.** Top sort, 3 votes against 1, one voted for and one not — the shot fails if the seed leaves both buttons in the same state |
+| `07-22-suggestion-publish-dialog` | **New.** **Edit published copy**, opened and never saved |
+| `07-23-suggestion-box-delete-dialog` | **New.** The typed-name dialog with **Archive instead**; the shot fails if **Delete permanently** is enabled before a name is typed. Never confirmed |
+| `07-24-suggestion-notification-rule` | **New.** **Create Notification Rule** with **Suggestion Submitted** chosen; never saved |
+
+**Seeder:** Training ideas has the board on (switched on for a box an earlier
+seed created without it), the accepted night drill carries a response to its
+submitter, two entries are published and the votes are cast. Every step is
+safe to re-run.
+
+`07-19-suggestion-review-phone` is still a placeholder, for the reason the full
+sweep below records.
+
+## The 17 timed-out shots, re-run one at a time, 2026-09-25
+
+Each of the 17 locator timeouts from the full sweep below was run alone, with
+`--only`, against the same demo department.
+
+**Four pass alone — the full run's timing, not drift.** `01-35`, `03-09` and
+`20-13` are committed. The `15-09-` prefix also re-ran
+`15-09-bulk-action-result`, committed with it: it performs a real bulk advance,
+so its counts ("Advanced 2", "Skipped 9") follow the demo's current pipeline.
+`01-31-applicant-documents` captures but reads "No documents yet", the seed gap
+the 2026-08-25 entry already records, so its committed bytes stand.
+
+**Thirteen failed again, identically, and all thirteen are fixed.** Each was
+re-run with a harness copy that saved the page and its accessibility tree at the
+moment of failure. Nine were selectors or copy the screen had moved past; three
+were demo data the shot depends on and a previous run had used up or never
+seeded; one needs an opt-in seed step.
+
+| Shot | Cause | Fix |
+| ---- | ----- | --- |
+| `03-55-staffing-status-cards` | The week board's chips read "2 open", "Full 4/4", "You + 2/4" or "3 on"; the wait wanted an `n/m` ratio, which only some chips print | Waits for any chip. The guide's table described the retired cards (ratio, CheckCircle2 icon, template-colour overrides) and now lists the board's legend and chip labels, taken from `statusStyles.ts` and `chipLabel` |
+| `05-62-generate-variants` | The category `<select>` no longer contains the word "category", and the variants toggle is a `role="switch"` button | Category by its label, preferring Uniforms (Structural PPE sorted first for a polo shirt); the switch by its name; the item name by its label |
+| `02-98-requirement-prerequisite` | The phase card is the shared `card` utility, not `rounded-lg border` | Frame selector |
+| `00-14-confirm-dialog` | Checklist templates moved from Checklist Settings to the checklists page | Route. The dialog is opened and never confirmed |
+| `08-73-template-builder-preview` | At 1440px the preview is a rail beside the builder; the Tools menu's Preview only renders on a narrower canvas | Picks the rail's Crew view tab and frames the rail card. The guide's 2026-08-12 correction ("nothing renders beside the editor") is superseded by a 2026-09-25 one |
+| `05-09-receive-stock-modal` | The item picker's result buttons were matched page-wide, and the items list behind the dialog now has a button per row | Scoped to the dialog |
+| `15-09-convert-modal` | `/convert/i` matched the board's "Converted" tab before the drawer's Convert button | Scoped to the drawer, exact name |
+| `09-18-finish-with-unscored-steps` | The dialog is now "Some steps have no result", offering Keep scoring or Review them, and says the test cannot be submitted until every step has one | Wait text and caption; the guide's two notes are merged into one describing what the dialog says, and "Complete Test" is now "Finish & Review" in both places the guide names it |
+| `17-02-download-my-data` | Your Data moved from Account → Security to Account → Privacy | Route, caption, and the guide's step 1 |
+| `02-99-member-locked-requirement` | The seeder completed the demo member's Written Exam, which is the gate: a satisfied gate locks nothing | **Seeder:** `_advance_pipeline_progress` no longer completes the demo member's gate requirements. `02-95-knowledge-test-entry`, which needed a scored exam from the same member, now looks up any enrollee whose exam is scored (Saoirse Nolan here). This demo's row was reset with the officer's Reset action |
+| `19-07-member-payment-method` | The demo member had no store order: member orders went to the first three non-admin members | **Seeder:** the demo member orders first, and their order is left out of the state spread so it stays unpaid |
+| `20-07-applicant-place-on-stage` | Marcus Webb, the one applicant seeded with no stage, had been placed by earlier runs of `15-09-bulk-action-result`, which really advances applicants | None to the shot: on a fresh seed it runs before 15-09. This demo's row was put back |
+| `15-02-board-truncated` | Needs a pipeline past the board's 200-card ceiling, which only `seed_demo_data.py --bulk-prospects` creates | Ran that step. The demo pipeline now holds 247 applicants, which buries the named ones, so it is the last prospective-member shot to take on a database |
+
+`20-07` came back byte-identical to its committed image.
+
+## Email templates re-shot on the centred-masthead shell, 2026-09-25
+
+The ten email template screens held back from the full sweep below were
+re-captured after migration `f0d76814a9ab` was applied to the demo database.
+Nine are committed; `08-37-email-officers` came back identical and keeps its
+bytes.
+
+| Image | What changed |
+| ----- | ------------ |
+| `08-67-email-preview-design` | The preview is the new shell: organization name centred above a white card on a grey page, an accent-barred label in place of the header band, and the facts in a two-column panel rather than a details table. Its caption, the note under it and its manifest alt said "header band and details table" and now say "centred masthead and fact panel" |
+| `08-34`, `08-36`, `08-56`, `08-57`, `08-58`, `08-65`, `08-66` | The same shell in their preview panes, and the HTML body now opens with the hidden preheader. `08-34` and `08-36` also list eight Members & Accounts templates rather than seven |
+| `08-64-email-footers-tab` | The internal footer carries one line rather than two, and the public footer's count reads 3 templates |
+
+**A second harness leak, fixed in the same change.** The first pass of `08-34`
+came back with its **Officers** tab lit: `08-37` had just clicked that tab on the
+same reused page, and the pointer stayed over it. `capture.mjs` now moves the
+mouse to (0, 0), where a fresh page starts, beside the route reset that closed
+the first leak. Re-run in the same order, `08-34` renders with only
+**Templates** active. Shots in the 2026-09-25 sweep ran before this fix; any of
+them could carry a hover state from the shot before, and none was seen in
+review.
+
+## Full sweep, 2026-09-25 — 479 images refreshed, 16 held back, 24 shots that did not run
+
+Every entry in the manifest was re-captured from a freshly seeded demo
+department and compared, image by image, with the committed file. The last full
+pass was 2026-08-25; a month of seed-data work shows here more than any UI
+change does. Screens that used to be photographed empty — medical screening
+records, skills test records, the store activity feed, an event's attendance
+list, a member profile's certifications — now carry the data their captions
+describe.
+
+**The first attempt was discarded, and the harness is fixed (#2719).** Every
+admin shot after `08-62-topnav-bell-badge` came back 21px too wide and in the
+top-bar layout. `08-62` mocks `/auth/branding`, which is where the navigation
+layout has come from since 2026-09-11, and route mocks outlived their shot on
+the reused page. `capture.mjs` now drops every route before each shot. None of
+that run's images were kept.
+
+### How the 494 changed images were judged
+
+Dimensions first, as the 2026-08-25 entry recommends: every image that shrank
+was opened next to its committed version, as were the largest growers and
+every shot the capture flagged as an empty state. Most of the empty-state
+flags were placeholder text in a form ("No folder", "No preference", "No
+personal information") and the images are good.
+
+**Held back — the committed image stands:**
+
+| Image | Why |
+| ----- | --- |
+| `04-42-cast-ballot`, `14-26-candidates-as-member`, `19-21-candidates-as-member` | The ballot is replaced by "Your meeting attendance is 0.0% … below the 50% minimum required to vote". The voting member has no meeting attendance in the seed, so the frame shows the gate rather than the ballot its caption describes. A seed gap |
+| `02-34-shift-report-analytics` | The monthly trend chart, which the text above it describes, is gone: every seeded report now falls in one month. The new rating-scale line is real and will arrive with the next capture |
+| `03-97-shift-reminder-expanded` | The expanded reminder reads "No equipment checklists are assigned for this shift"; its caption promises the apparatus checklists |
+| `08-34`, `08-36`, `08-37`, `08-56`, `08-57`, `08-58`, `08-64`, `08-65`, `08-66`, `08-67` (the email template screens) | Captured before migration `f0d76814a9ab` (centred-masthead shell) was applied to the demo database, so the stored template bodies are the previous design. They need re-shooting once the demo has been migrated; committing them would picture the retired shell |
+
+**Kept with a real UI change**, among others: `05-02` and `05-53` (items
+list split into Available / Unavailable, variants grouped under an expandable
+row), `05-85` (label printer picker on the print page), `09-23` and `09-24`
+(Not Observed column on the printed scorecard), `15-14` (the drawer's Back
+button), `07-16` (the follow-up key panel is narrower), and breadcrumbs above
+page titles throughout.
+
+**Filled:** `07-18-suggestion-forwarded-to-you`, the forward recipient's view
+of Suggestions → Review, which had been a placeholder in
+`07-documents-forms.md`.
+
+### Did not run — the committed bytes stand
+
+A shot that fails never reaches `page.screenshot`, so these are unchanged.
+
+| Shot | Failure |
+| ---- | ------- |
+| `07-19-suggestion-review-phone`, `03-103-shift-details-modal-phone` | The subject is outside the captured frame: the page scrolls itself (`useScrollDetailIntoView`) after the frame is measured. `07-19` is still a placeholder |
+| `04-40-end-event` | No running event has anyone checked in |
+| `06-21-apparatus-evoc-level`, `06-23-add-operator-member-picker` | No Intermediate EVOC level is defined in the demo |
+| `01-08-member-audit-history` | The page renders "No events match the selected" filter |
+| `19-32-notification-after-action` | `New Shift Assignment` matches three notifications; the selector needs narrowing |
+| `03-55`, `05-62`, `02-98`, `02-99`, `00-14`, `20-13`, `20-07`, `01-35`, `01-31`, `15-02`, `08-73`, `05-09`, `03-09`, `17-02`, `15-09`, `09-18`, `19-07` | Locator timeouts. Not re-run individually in this pass, so drift and timing are not yet told apart |
+
+### Found, not fixed here
+
+Five pages scroll sideways at the width they are shot:
+`08-62-topnav-bell-badge` (the top navigation bar is 21px wider than a 1440px
+viewport), `08-06-reports`, `02-65-print-compliance`,
+`03-82-call-volume-count-only` and `03-83-call-volume-detailed`. All five have
+the same dimensions as their committed images, so the overflow predates this
+pass.
+
+## Guide 19 folded into the module guides, 2026-09-25
+
+The August release lesson is now an index too, so its screenshots moved into
+the module guides that describe their screens. No image was re-captured; each
+keeps its file name, and its manifest entry's `doc` names its new guide.
+
+| Images                                                                                   | Now in                         |
+| ---------------------------------------------------------------------------------------- | ------------------------------ |
+| `19-31`, `19-32` (notification before and after the action)                              | `00-getting-started.md`        |
+| `19-37`, `19-38` (ID cards, check-in station)                                            | `01-membership.md`             |
+| `19-29` (training-session linkage)                                                       | `02-training.md`               |
+| `19-34`, `19-36`, `19-40` (schedule board, standing shift, seal panel)                   | `03-scheduling.md`             |
+| `19-24` (outreach form picker)                                                           | `04-events-meetings.md`        |
+| `19-33` (label printers)                                                                 | `05-inventory.md`              |
+| `19-04`, `19-05`, `19-23` (QR directory, regenerate warning, crew seats)                 | `06-apparatus-facilities.md`   |
+| `19-42` (message page)                                                                   | `07-documents-forms.md`        |
+| `19-16`, `19-22`, `19-28`, `19-39`, `19-41` (legal editor, admin-hours summary, My Updates, metrics, My Admin Hours) | `08-admin-reports.md` |
+| `19-30` (point deduction)                                                                | `09-skills-testing.md`         |
+| `19-11`, `19-35` (dark gutter, board on a phone)                                         | `10-mobile-pwa.md`             |
+| `19-25`, `19-26` (saved ballot before and after)                                         | `14-elections.md`              |
+| `19-03`, `19-43` (privacy notice, photo-use consent)                                     | `17-privacy-data-rights.md`    |
+| `19-06`, `19-07`, `19-08` (store orders, payment method, store activity)                 | `18-storefront.md`             |
+
+`19-01`, `19-09`, `19-10` and `19-27` were already embedded in module guides.
+
+**Not carried over — the module guide already shows the same state:**
+`19-12` (03-78), `19-13` (03-79), `19-14` (03-80), `19-15` (10-17), `19-17`
+(08-78), `19-18` (17-03), `19-19` (17-04, byte-identical), `19-20` (14-25) and
+`19-21` (14-26). Their files and manifest entries stay, pointing at the index,
+so nothing that captures them breaks.
+
+**Manifest order.** `19-25`, `19-26` and `19-27` keep `doc` on the index even
+though guide 14 shows them: `19-26` and `14-24-ballot-send-skipped` both mutate
+the seeded data, and the manifest allows one mutating shot per guide. `19-24`
+moved ahead of `04-49-early-checkin-notice` for the same rule; it only reads the
+seeded outreach form.
+
+## Guide 20 folded into the module guides, 2026-09-25
+
+The September release lesson is now an index, so its 18 `20-*` images moved
+into the module guides that describe their screens. No image was re-captured;
+each keeps its file name, and its manifest entry's `doc` now names its new
+guide.
+
+| Images                                  | Now in                         |
+| --------------------------------------- | ------------------------------ |
+| `20-01`–`20-03`, `20-08`–`20-10` (setup wizard) | `08-admin-reports.md` (The setup steps) |
+| `20-04` (Navigation Layout), `20-05` (Members Administration → Settings), `20-18` (Test Connection, simulated result) | `08-admin-reports.md` |
+| `20-11` (SMTP preset)                   | `08-admin-reports.md` (already there) |
+| `20-06`, `20-16`, `20-17` (close-out queue, admin hub, staffing gaps) | `03-scheduling.md` (Scheduling Administration) |
+| `20-07`, `20-12`, `20-13`, `20-14` (applicant drawer, stage picker) | `15-prospective-members.md` |
+| `20-15` (Suggestions sidebar)           | `00-getting-started.md`        |
+
+`20-05` had been placed only in guide 20. It is kept, beside the narrower
+`08-79`, because it is the one frame that shows all five sections of the screen.
+
+The wizard section of `08-admin-reports.md` used to say the wizard could not be
+pictured; it now carries the six frames `wizard-walk.mjs` captures against an
+empty database, and that note is gone.
+
+## Disposition for September 24-25, 2026 - the Compliance Officer
+
+The Compliance Officer arrived as a seeded position (#2673), an active default
+**Compliance** suggestion box it reviews (#2678), an email signature office
+(#2682), and a demo holder, Lila Nakamura (#2693). Seven candidate shots were
+re-captured from a freshly seeded demo and diffed against the committed images;
+one showed the change.
+
+| Image                         | Outcome                                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `08-37-email-officers`        | **Re-shot.** New Compliance Officer row with Lila Nakamura assigned, and Signature Variables 48 → 52. Also replaces the older frame in which every office was vacant |
+| `07-14-suggestion-box-dialog` | Unchanged. The reviewer-positions list is a scroll box, captured scrolled to the ticked Secretary and Training Officer; Compliance Officer sits above the fold |
+| `08-04-role-management`       | Unchanged by this. Compliance Officer is 15th of 31 by priority, below the fold                                                                              |
+| `08-57`, `08-65`, `08-66`     | Unchanged by this. The Officer Signature Variables header, whose count moved, is outside the frame                                                            |
+| `08-56-template-discard`      | **Corrected 09-25:** this one scrolls down to the HTML body, and the header is in frame. It was judged unaffected from the other three; the 09-25 re-shot below now reads "(52)" |
+
+**Found along the way, re-shot 2026-09-25.** The four template-editor shots and
+`08-04` no longer matched the shipped UI for reasons unrelated to this change:
+the breadcrumb now sits above the page title rather than beside it, the template
+filter pills were restyled, Members & Accounts lists eight templates rather than
+seven, and the role cards' "+N more" permission counts moved. All five were
+re-shot from a freshly seeded demo on `main` and each checked against its
+caption: `08-04-role-management`, `08-56-template-discard`,
+`08-57-template-reset-dialog`, `08-65-template-footer-selector`,
+`08-66-template-variable-palette`.
+
 ## Remaining placeholders, filled 2026-09-24 — 44 down to 0
 
 Every open placeholder in the guides was worked in one pass, and all but one

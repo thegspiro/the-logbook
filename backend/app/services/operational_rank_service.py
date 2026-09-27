@@ -56,7 +56,7 @@ _CHIEF_POSITIONS = [p for p in _ALL_POSITIONS if p != "paramedic"]
 # Default ranks seeded for new organizations.
 # Format: (rank_code, display_name, sort_order, eligible_positions)
 DEFAULT_RANKS = [
-    ("fire_chief", "Fire Chief", 0, _CHIEF_POSITIONS),
+    ("fire_chief", "Chief", 0, _CHIEF_POSITIONS),
     ("deputy_chief", "Deputy Chief", 1, _CHIEF_POSITIONS),
     ("assistant_chief", "Assistant Chief", 2, _CHIEF_POSITIONS),
     (
@@ -157,8 +157,8 @@ class OperationalRankService:
 
         The set depends on what kind of agency this is. An EMS-only service
         has lieutenants and captains like anyone else, but it has no
-        firefighters and no engine, so seeding it "Firefighter", "Engineer"
-        and "Fire Chief" hands it a ladder its members can never be on — and
+        firefighters and no engine, so seeding it "Firefighter" and
+        "Engineer" hands it a ladder its members can never be on — and
         because the seed only ever fires into an empty table, whatever it
         writes on day one is what the department lives with.
         """

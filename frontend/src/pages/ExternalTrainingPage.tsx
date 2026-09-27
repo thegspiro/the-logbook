@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDialog } from '../hooks/useDialog';
 import toast from 'react-hot-toast';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { formatDateTime } from '../utils/dateFormatting';
@@ -645,7 +645,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
       onClose();
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'Failed to update provider');
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const detail = getErrorDetail(err);
       setError(detail || message);
     } finally {
       setIsSubmitting(false);

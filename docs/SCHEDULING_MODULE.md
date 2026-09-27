@@ -485,6 +485,53 @@ joins `Shift` to `ShiftAttendance` so each row embeds `shift_date`,
 `shift_start_time`, and `shift_end_time`, ordered by `shift_date` descending.
 (2026-05)
 
+### Shifts With Other Departments
+
+```
+POST   /api/v1/scheduling/external-hours               # Log own outside shift
+GET    /api/v1/scheduling/external-hours/my            # Own entries
+PATCH  /api/v1/scheduling/external-hours/{id}          # Correct own entry (not once rejected)
+DELETE /api/v1/scheduling/external-hours/{id}          # Delete own entry (not once rejected)
+GET    /api/v1/scheduling/external-hours               # All entries (scheduling.manage or scheduling.report)
+POST   /api/v1/scheduling/external-hours/{id}/reject   # Stop it counting, with a reason (scheduling.manage)
+POST   /api/v1/scheduling/external-hours/{id}/restore  # Count it again (scheduling.manage)
+GET    /api/v1/scheduling/external-hours/summary       # Shifts, hours, members per unit (scheduling.manage or .report)
+
+GET    /api/v1/scheduling/external-hours/apparatus-options        # Active list, for the member's picker
+GET    /api/v1/scheduling/external-hours/agencies                 # Whole list, inactive included (scheduling.manage)
+POST   /api/v1/scheduling/external-hours/agencies                 # Add a department (scheduling.manage)
+PATCH  /api/v1/scheduling/external-hours/agencies/{id}            # Rename / turn off (scheduling.manage)
+DELETE /api/v1/scheduling/external-hours/agencies/{id}            # Only if unused, else 409 (scheduling.manage)
+POST   /api/v1/scheduling/external-hours/agencies/{id}/apparatus  # Add a unit (scheduling.manage)
+PATCH  /api/v1/scheduling/external-hours/apparatus/{id}           # Rename / retype / turn off (scheduling.manage)
+DELETE /api/v1/scheduling/external-hours/apparatus/{id}           # Only if unused, else 409 (scheduling.manage)
+```
+
+For time on another jurisdiction's apparatus, where there is no shift here to
+check in to. One entry is one shift: a date (not in the future, judged in the
+department's timezone), up to 48 hours, and **an apparatus picked from the
+department's list**, with position and notes optional. An entry counts from
+the moment it is saved, and an officer who rejects one takes it out of every
+total below.
+
+**The apparatus list** is kept under Scheduling → Settings → Outside
+Apparatus (`/scheduling/admin/settings/outside-apparatus`): departments, and
+the units at each. Members can only pick an active unit of an active
+department; one that isn't listed has to be added by a scheduling officer. Each
+entry stores the unit's id and a snapshot of the department and unit names, so
+turning a unit off, renaming it or deleting it never changes what an existing
+entry says. Deleting is refused with a 409 while any shift references the unit,
+so the summary cannot quietly lose history; turning it off is the way to
+retire it.
+
+It is reported as `external_shifts` / `external_hours` in
+`/my-hours-history` and `external_*` in `/reports/member-hours`, **beside**
+the credited or worked figures rather than inside them. `/reports/compliance`
+adds it into each member's `shift_count` / `total_hours` and breaks it out as
+`external_shift_count` / `external_hours`. `/external-hours/summary` totals
+counted shifts per unit — a renamed unit reads as one row under its current
+name, and a deleted one falls back to the names on its entries. (2026-09-27)
+
 ### Calls
 
 ```
@@ -2392,7 +2439,7 @@ for display only. Completion/report flows remain available to authorized
 members after equipment-check administration was tightened. Related completion
 actions archive matching notifications by organization plus entity/action ID,
 not by presentation text. See
-[training lesson 19](./training/19-august-2026-release-changes.md#apparatus-crew-seats-and-scheduling-settings).
+[Crew Seats](./training/06-apparatus-facilities.md#crew-seats) in the apparatus training guide.
 
 ---
 

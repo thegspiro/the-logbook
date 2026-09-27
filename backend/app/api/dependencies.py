@@ -12,6 +12,7 @@ from fastapi import Cookie, Depends, Header, HTTPException, Query, Request, stat
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import HTTPConnection
 
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
@@ -425,7 +426,7 @@ def require_secretary():
 
 
 async def get_request_enabled_modules(
-    request: Request,
+    connection: HTTPConnection,
     authorization: str | None = Header(None),
     access_token: str | None = Cookie(None),
     db: AsyncSession = Depends(get_db),
@@ -458,7 +459,19 @@ async def get_request_enabled_modules(
     Memoized on ``request.state`` because a single request can ask more than
     once — a router-level ``require_module`` plus an endpoint that consults the
     set itself, for instance — and each resolution is a database read.
+
+    **A WebSocket handshake stands aside**, as ``verify_csrf_token`` does.
+    Typed as ``HTTPConnection`` because FastAPI cannot supply a ``Request`` to
+    a WebSocket route, and a ``Request``-typed parameter here failed every
+    handshake on a gated router with a ``TypeError`` (a 500, before the
+    handler ran). A socket on a gated router authenticates inside its own
+    handler — after ``accept()``, so the client receives a close code instead
+    of a bare handshake failure — and must check the module flag there, once
+    it knows the user. ``inventory_websocket`` is the one that exists.
     """
+    if not isinstance(connection, Request):
+        return None
+    request = connection
     try:
         current_user = await get_optional_current_user(
             request, authorization, access_token, db

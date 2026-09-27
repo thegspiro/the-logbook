@@ -38,8 +38,9 @@ defaults, which is the failure mode where production runs with a development
 setting and nothing says so.
 
 Items listed under **"Advisory, does not prevent startup"** boot normally but
-name something that works worse than intended. In production that includes
-`FRONTEND_URL` still pointing at `localhost` — see
+name something that works worse than intended. _(2026-09-25)_ A
+`FRONTEND_URL` still pointing at `localhost` used to be one of these; in
+production it is now a blocking item that stops startup — see
 [Application Settings](#application-settings).
 
 Full procedure: [`docs/UPGRADING.md`](../docs/UPGRADING.md).
@@ -86,15 +87,20 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
 > from the address a request arrived on, because that comes from the
 > client-controlled `Host` header. Set it to the address members actually use
 > (e.g. `https://logbook.yourdept.org`). Left at the default, every emailed link
-> points at `localhost` and opens for nobody. In `production` the backend logs a
-> non-blocking `WARNING: FRONTEND_URL ...` at startup, and preflight lists it
-> as advisory, when the host is `localhost`, `*.localhost`, a loopback address
-> (`127.x.x.x`, `::1`), `0.0.0.0`, or cannot be parsed.
+> points at `localhost` and opens for nobody. _(2026-09-25)_ In `production`
+> the backend **refuses to start** — `CRITICAL: FRONTEND_URL ...`, listed as
+> blocking by preflight — when the host is `localhost`, `*.localhost`, a
+> loopback address (`127.x.x.x`, `::1`), `0.0.0.0`, or cannot be parsed.
+> Staging and development are not checked, and there is no waiver flag; for a
+> single-machine trial use `ENVIRONMENT=development`. A LAN address such as
+> `http://192.168.1.50:7880` is fine.
 > `unraid/unraid-setup.sh` writes it from the HTTPS URL it asks for.
-> `scripts/universal-install.sh` writes it from `--public-url <url>` (or the
-> `LOGBOOK_PUBLIC_URL` environment variable) and otherwise leaves the localhost default
-> and says so at the end. Neither installer rewrites a public value already in
-> an existing `.env`.
+> `install.sh` and `scripts/universal-install.sh` require `--public-url <url>`
+> (or the `LOGBOOK_PUBLIC_URL` environment variable; `install.sh` asks when run
+> from a terminal) and stop before installing without one, unless an existing
+> `.env` already has a public `FRONTEND_URL`. All three refuse a `localhost`
+> address, and none rewrites a public value already in an existing `.env`. See
+> [UPGRADING.md](../docs/UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
 
 > **`COMPOSE_FILE`** _(2026-07)_: production installs (via `install.sh`) pin
 > `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so that

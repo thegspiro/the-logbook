@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+// The link-address card fetches its own data and has its own tests; this file
+// covers the form.
+vi.mock('./EmailLinkDomainCard', () => ({ default: () => null }));
+
 import EmailSettingsSection from './EmailSettingsSection';
 import type { EmailServiceSettings } from '../../types/user';
 

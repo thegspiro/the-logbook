@@ -7,7 +7,7 @@ sharing. Kept separate from the service so the layout logic lives in one
 place and can be unit-tested without a database.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Dict, List, Optional
 from xml.sax.saxutils import escape
@@ -97,12 +97,12 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
     story: List[Any] = []
     story.append(Paragraph("Inventory Impact Plan", title_style))
 
-    generated_at: datetime = meta.get("generated_at") or datetime.utcnow()
+    generated_at: datetime = meta.get("generated_at") or datetime.now(timezone.utc)
     org_name = meta.get("org_name") or ""
     story.append(
         Paragraph(
             f"{escape(str(org_name))} &middot; Generated "
-            f"{generated_at.strftime('%Y-%m-%d %H:%M UTC')}",
+            f"{generated_at.strftime('%Y-%m-%d %H:%M %Z').rstrip()}",
             sub_style,
         )
     )

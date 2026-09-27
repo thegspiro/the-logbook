@@ -134,7 +134,7 @@ class Event(Base):
 
     # Location (new system with location_id FK, or legacy free-text location for "Other")
     location_id = Column(
-        String(36), ForeignKey("locations.id"), nullable=True
+        String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
     )  # FK to Location table
     location = Column(
         String(300), nullable=True
@@ -246,10 +246,10 @@ class Event(Base):
         Boolean, nullable=False, default=False, server_default="0"
     )  # Auto-extend series on a rolling 12-month window
     recurrence_parent_id = Column(
-        String(36), ForeignKey("events.id"), nullable=True
+        String(36), ForeignKey("events.id", ondelete="RESTRICT"), nullable=True
     )  # Links instances to their parent
     template_id = Column(
-        String(36), ForeignKey("event_templates.id"), nullable=True
+        String(36), ForeignKey("event_templates.id", ondelete="RESTRICT"), nullable=True
     )  # Created from a template
 
     # Custom fields
@@ -280,8 +280,12 @@ class Event(Base):
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
 
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    updated_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -393,7 +397,7 @@ class EventRSVP(Base):
         Integer, nullable=True
     )  # Manual override of duration
     overridden_by = Column(
-        String(36), ForeignKey("users.id"), nullable=True
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )  # Who made the override
     overridden_at = Column(
         DateTime(timezone=True), nullable=True
@@ -444,7 +448,9 @@ class EventTemplate(Base):
         String(200), nullable=True
     )  # Default title for events created from template
     default_description = Column(Text, nullable=True)
-    default_location_id = Column(String(36), ForeignKey("locations.id"), nullable=True)
+    default_location_id = Column(
+        String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
+    )
     default_location = Column(String(300), nullable=True)
     default_location_details = Column(Text, nullable=True)
     default_duration_minutes = Column(Integer, nullable=True)  # Default event duration
@@ -480,8 +486,12 @@ class EventTemplate(Base):
 
     # Metadata
     is_active = Column(Boolean, nullable=False, default=True, server_default="1")
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    updated_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

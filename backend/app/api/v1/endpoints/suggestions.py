@@ -12,6 +12,9 @@ Four audiences, grouped by path so the access rule for each is in one place:
   permission; only a box's own reviewers forward or withdraw.
 * ``/admin`` — ``suggestions.manage``: configure boxes and reviewers. That
   grant never reads submissions (see ``app/models/suggestion.py``).
+* ``/board`` — any signed-in member: the idea board of board-enabled boxes,
+  showing only the reviewer-written copy of what a box's reviewers chose to
+  publish, and one vote per member.
 
 Anonymous submissions write no audit entry: an audit row carries the actor,
 and one without an actor would still record the exact moment of the
@@ -40,15 +43,19 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import ensure_found, handle_service_errors
+from app.models.notification import NotificationTrigger
 from app.models.suggestion import Suggestion
 from app.models.user import User
 from app.schemas.suggestion import (
+    BoardEntry,
+    BoardList,
     DispositionUpdate,
     FollowUpKeyRequest,
     FollowUpMessageCreate,
     ForwardCreate,
     MessageCreate,
     MySuggestionSummary,
+    PublishRequest,
     ReviewerOptions,
     ReviewSuggestionDetail,
     ReviewSuggestionList,
@@ -59,6 +66,7 @@ from app.schemas.suggestion import (
     SuggestionBoxPublic,
     SuggestionBoxWrite,
 )
+from app.services.notification_rules import NotificationRuleResolver
 from app.services.suggestion_service import (
     MAX_SCREENSHOT_BYTES,
     MAX_SCREENSHOTS,
@@ -68,6 +76,7 @@ from app.services.suggestion_service import (
     reviewer_notice,
     send_suggestion_notice,
     submitter_notice,
+    watcher_notice,
 )
 from app.utils.upload_limits import read_upload_limited
 
@@ -182,13 +191,24 @@ async def submit_suggestion(
             user_id=str(current_user.id),
             username=current_user.username,
         )
-    recipients = await service.reviewer_recipient_ids(box.organization_id, box.id)
-    background_tasks.add_task(
-        send_suggestion_notice,
-        box.organization_id,
-        recipients,
-        reviewer_notice(box.name, suggestion.id, reply=False),
-    )
+    if await NotificationRuleResolver(db).is_enabled(
+        box.organization_id, NotificationTrigger.SUGGESTION_SUBMITTED
+    ):
+        reviewers = await service.reviewer_recipient_ids(box.organization_id, box.id)
+        watchers = await service.watcher_recipient_ids(box.organization_id, box.id)
+        background_tasks.add_task(
+            send_suggestion_notice,
+            box.organization_id,
+            reviewers,
+            reviewer_notice(box.name, suggestion.id, reply=False),
+        )
+        if watchers:
+            background_tasks.add_task(
+                send_suggestion_notice,
+                box.organization_id,
+                watchers,
+                watcher_notice(box.name),
+            )
     return {
         "id": None if suggestion.is_anonymous else suggestion.id,
         "is_anonymous": bool(suggestion.is_anonymous),
@@ -428,11 +448,11 @@ async def update_disposition(
     suggestion = await _for_review(service, current_user, suggestion_id)
     fields = data.model_dump(exclude_unset=True)
     async with handle_service_errors("Failed to update submission"):
-        previous = await service.update_disposition(
+        previous, responded = await service.update_disposition(
             suggestion, str(current_user.id), fields
         )
     refreshed = await _for_review(service, current_user, suggestion_id)
-    if previous is not None:
+    if previous is not None or responded:
         await log_audit_event(
             db=db,
             event_type="suggestion_disposition_changed",
@@ -441,8 +461,9 @@ async def update_disposition(
             event_data={
                 "suggestion_id": refreshed.id,
                 "box_id": refreshed.box_id,
-                "from": previous,
+                "from": previous or refreshed.disposition,
                 "to": refreshed.disposition,
+                "public_response": responded,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -455,7 +476,10 @@ async def update_disposition(
                 refreshed.organization_id,
                 [refreshed.submitted_by],
                 submitter_notice(
-                    refreshed.box.name, refreshed.id, disposition=refreshed.disposition
+                    refreshed.box.name,
+                    refreshed.id,
+                    disposition=refreshed.disposition if previous else None,
+                    responded=responded,
                 ),
             )
     return await service.reviewer_view(refreshed, str(current_user.id))
@@ -487,8 +511,8 @@ async def reply_as_reviewer(
     return await service.reviewer_view(refreshed, str(current_user.id))
 
 
-async def _for_forwarding(
-    service: SuggestionService, current_user: User, suggestion_id: str
+async def _as_box_reviewer(
+    service: SuggestionService, current_user: User, suggestion_id: str, action: str
 ) -> Suggestion:
     suggestion = await _for_review(service, current_user, suggestion_id)
     if not await service.is_box_reviewer(
@@ -496,9 +520,17 @@ async def _for_forwarding(
     ):
         raise HTTPException(
             status_code=403,
-            detail="Only the box's reviewers can forward or withdraw a forward.",
+            detail=f"Only the box's reviewers can {action}.",
         )
     return suggestion
+
+
+async def _for_forwarding(
+    service: SuggestionService, current_user: User, suggestion_id: str
+) -> Suggestion:
+    return await _as_box_reviewer(
+        service, current_user, suggestion_id, "forward or withdraw a forward"
+    )
 
 
 @router.post(
@@ -644,6 +676,40 @@ async def update_box(
     return box
 
 
+@router.delete("/admin/boxes/{box_id}", status_code=204)
+async def delete_box(
+    box_id: str,
+    confirm_name: Optional[str] = Query(None, max_length=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("suggestions.manage")),
+):
+    """Delete a box. One holding submissions needs ``confirm_name`` equal to
+    its name, and takes every submission with it."""
+    service = SuggestionService(db)
+    box = ensure_found(
+        await service.get_box(current_user.organization_id, box_id), "Suggestion box"
+    )
+    name = box.name
+    try:
+        deleted = await service.delete_box(box, confirm_name)
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await log_audit_event(
+        db=db,
+        event_type="suggestion_box_deleted",
+        event_category="suggestions",
+        # Deleting submissions destroys records; flag it so it stands out.
+        severity="warning" if deleted else "info",
+        event_data={
+            "box_id": box_id,
+            "name": name,
+            "submissions_deleted": deleted,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 async def _audit_box(
     db: AsyncSession, current_user: User, event_type: str, box: dict
 ) -> None:
@@ -662,7 +728,118 @@ async def _audit_box(
             "is_active": box["is_active"],
             "reviewer_position_ids": [p["id"] for p in box["reviewer_positions"]],
             "reviewer_member_ids": [m["id"] for m in box["reviewer_members"]],
+            "watcher_position_ids": [p["id"] for p in box["watcher_positions"]],
+            "watcher_member_ids": [m["id"] for m in box["watcher_members"]],
         },
         user_id=str(current_user.id),
         username=current_user.username,
     )
+
+
+# ---------------------------------------------------------------------------
+# Idea board
+# ---------------------------------------------------------------------------
+
+
+@router.post("/review/{suggestion_id}/publish", response_model=ReviewSuggestionDetail)
+async def publish_suggestion(
+    suggestion_id: str,
+    data: PublishRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Publish, or edit the published copy of, a suggestion. Box reviewers
+    only: a forward extends one suggestion to someone for review, not the say
+    over what the whole department reads about it."""
+    service = SuggestionService(db)
+    suggestion = await _as_box_reviewer(
+        service, current_user, suggestion_id, "publish to the idea board"
+    )
+    async with handle_service_errors("Failed to publish"):
+        first = await service.publish(
+            suggestion, str(current_user.id), data.title, data.summary
+        )
+    await log_audit_event(
+        db=db,
+        event_type="suggestion_published" if first else "suggestion_publication_edited",
+        event_category="suggestions",
+        severity="info",
+        event_data={"suggestion_id": suggestion.id, "box_id": suggestion.box_id},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    refreshed = await _for_review(service, current_user, suggestion_id)
+    return await service.reviewer_view(refreshed, str(current_user.id))
+
+
+@router.delete("/review/{suggestion_id}/publish", response_model=ReviewSuggestionDetail)
+async def unpublish_suggestion(
+    suggestion_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = SuggestionService(db)
+    suggestion = await _as_box_reviewer(
+        service, current_user, suggestion_id, "take a suggestion off the idea board"
+    )
+    if await service.unpublish(suggestion):
+        await log_audit_event(
+            db=db,
+            event_type="suggestion_unpublished",
+            event_category="suggestions",
+            severity="info",
+            event_data={"suggestion_id": suggestion.id, "box_id": suggestion.box_id},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    refreshed = await _for_review(service, current_user, suggestion_id)
+    return await service.reviewer_view(refreshed, str(current_user.id))
+
+
+@router.get("/board", response_model=BoardList)
+async def list_board(
+    box_id: Optional[str] = Query(None),
+    disposition: Optional[str] = Query(
+        None,
+        pattern="^(open|new|under_review|accepted|implemented|declined|duplicate)$",
+    ),
+    sort: str = Query("top", pattern="^(top|new)$"),
+    pagination: PaginationParams = Depends(),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    items, total = await SuggestionService(db).list_board(
+        current_user.organization_id,
+        str(current_user.id),
+        box_id=box_id,
+        disposition=disposition,
+        sort=sort,
+        skip=pagination.skip,
+        limit=pagination.limit,
+    )
+    return {"items": items, "total": total}
+
+
+@router.post("/board/{suggestion_id}/vote", response_model=BoardEntry)
+async def vote(
+    suggestion_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Idempotent: voting twice leaves one vote."""
+    entry = await SuggestionService(db).set_vote(
+        current_user.organization_id, str(current_user.id), suggestion_id, True
+    )
+    return ensure_found(entry, _NOT_FOUND)
+
+
+@router.delete("/board/{suggestion_id}/vote", response_model=BoardEntry)
+async def withdraw_vote(
+    suggestion_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    entry = await SuggestionService(db).set_vote(
+        current_user.organization_id, str(current_user.id), suggestion_id, False
+    )
+    return ensure_found(entry, _NOT_FOUND)

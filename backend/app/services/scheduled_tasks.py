@@ -98,11 +98,11 @@ Recommended crontab (add to host or container cron):
 
 import copy
 import html as _html
-from datetime import datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
-from sqlalchemy import or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.call_tracking import CallTrackingMode
@@ -117,8 +117,22 @@ from app.services.email_service import _redact_email
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.email_providers import stored_email_section
 from app.utils.hours import hours_from_minutes
+from app.utils.org_timezone import org_today
 from app.utils.positions import position_label
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
+
+
+async def _org_todays(db: AsyncSession) -> Dict[str, date]:
+    """Today's date for every organization, each on its own calendar.
+
+    For a job that sweeps every department in one query: the container's
+    date is UTC, which is already tomorrow for a US department every
+    evening, so a single "today" would be wrong for somebody at any hour.
+    """
+    result = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
+    return {str(org.id): org_today(org) for org in result.scalars().all()}
 
 
 def _resolve_event_reminder_target(event: Any) -> str:
@@ -319,6 +333,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:30",
         "cron": "30 7 * * *",
+    },
+    "inventory_audit_digest": {
+        "description": "Email inventory managers a list of shelves overdue for an NFC shelf audit. Checked daily, sent at most once a week per department, and only when something is overdue",
+        "frequency": "daily check, weekly send",
+        "recommended_time": "08:00",
+        "cron": "0 8 * * *",
     },
     "nfpa_retirement_alerts": {
         "description": "Send weekly alerts for PPE approaching NFPA 1851 10-year retirement date (180/90/30-day tiers)",
@@ -854,7 +874,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     Checks both meeting_action_items and minutes_action_items tables.
     Sends notifications at 3 days before, 1 day before, and on overdue.
     """
-    from datetime import date, timedelta
+    from datetime import timedelta
     from datetime import timezone as _tz_reminders
 
     from sqlalchemy.orm import selectinload
@@ -863,8 +883,11 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.models.minute import ActionItem as MinutesActionItem
     from app.models.minute import MinutesActionItemStatus
 
-    today = date.today()
-    three_days = today + timedelta(days=3)
+    todays = await _org_todays(db)
+    fallback_today = org_today(None)
+    # The SQL bound only narrows the scan; each item's day count uses its own
+    # department's date below. The latest calendar anywhere bounds them all.
+    three_days = max(todays.values(), default=fallback_today) + timedelta(days=3)
     total_reminders = 0
 
     # ── Meeting action items ──
@@ -879,6 +902,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     )
     for item in meeting_items.scalars().all():
         if item.assigned_to:
+            today = todays.get(str(item.organization_id), fallback_today)
             days_until = (item.due_date - today).days if item.due_date else None
             if days_until is not None and days_until in (3, 1, 0, -1):
                 # Log notification for the assignee
@@ -937,6 +961,10 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                 item.due_date.date()
                 if hasattr(item.due_date, "date")
                 else item.due_date
+            )
+            today = todays.get(
+                str(item.minutes.organization_id) if item.minutes else "",
+                fallback_today,
             )
             days_until = (due_d - today).days if due_d else None
             if days_until is not None and days_until in (3, 1, 0, -1):
@@ -4282,6 +4310,124 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "inventory_low_stock_alerts", process)
 
 
+# A digest is weekly; the hour of slack absorbs the daily check drifting a few
+# minutes later each day, which would otherwise push a send to the eighth day.
+AUDIT_DIGEST_MIN_GAP = timedelta(days=7) - timedelta(hours=1)
+AUDIT_DIGEST_ROWS_SHOWN = 50
+
+
+async def run_inventory_audit_digest(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Email inventory managers the shelves overdue for an NFC shelf audit.
+
+    Runs daily but sends at most once a week per organization: the in-process
+    scheduler forgets its last run on every restart, so the week is measured
+    from the last ``inventory_nfc_audit_digests`` row instead. Nothing is sent
+    when nothing is overdue, when NFC tracking is switched off (an audit cannot
+    be done then), or when nobody holds ``inventory.manage``.
+    """
+    from app.core.config import settings
+    from app.models.inventory import InventoryNfcAuditDigest
+    from app.services.email_service import EmailService, wrap_email_body
+    from app.services.inventory_audit_schedule_service import (
+        InventoryAuditScheduleService,
+    )
+    from app.utils.inventory_nfc import nfc_tracking_enabled_in
+    from app.utils.org_timezone import scheduling_timezone
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        org_id = str(org.id)
+        if not nfc_tracking_enabled_in(org.settings):
+            return 0
+
+        now = datetime.now(timezone.utc)
+        last_sent = (
+            await db_session.execute(
+                select(func.max(InventoryNfcAuditDigest.sent_at)).where(
+                    InventoryNfcAuditDigest.organization_id == org_id
+                )
+            )
+        ).scalar_one_or_none()
+        if last_sent is not None:
+            if last_sent.tzinfo is None:
+                last_sent = last_sent.replace(tzinfo=timezone.utc)
+            if now - last_sent < AUDIT_DIGEST_MIN_GAP:
+                return 0
+
+        due = await InventoryAuditScheduleService(db_session).list_schedule(
+            org_id, due_only=True, now=now
+        )
+        if not due:
+            return 0
+
+        recipients = await _stock_alert_recipients(
+            db_session, org_id, permissions=GEAR_STOCK_PERMISSIONS
+        )
+        emails = [u.email for u in recipients if u.email]
+        if not emails:
+            return 0
+
+        tz = scheduling_timezone(org)
+        cell = "padding:6px 12px;border-bottom:1px solid #eee;"
+        rows_html = ""
+        for row in due[:AUDIT_DIGEST_ROWS_SHOWN]:
+            last = row["last_audited_at"]
+            place = row["storage_area_name"] + (
+                f" ({row['location_name']})" if row["location_name"] else ""
+            )
+            rows_html += (
+                f"<tr><td style='{cell}'>{_html.escape(place)}</td>"
+                f"<td style='{cell}'>{row['audit_frequency'].value.title()}</td>"
+                f"<td style='{cell}'>"
+                + (last.astimezone(tz).strftime("%b %d, %Y") if last else "Never")
+                + "</td></tr>"
+            )
+        more = len(due) - AUDIT_DIGEST_ROWS_SHOWN
+        audit_url = f"{settings.FRONTEND_URL}/inventory/shelf-audit"
+        html_body = wrap_email_body(
+            org,
+            "Shelf Audits Overdue",
+            f"<p>{len(due)} storage area(s) are due an NFC shelf audit:</p>"
+            '<table style="width:100%;border-collapse:collapse;margin:16px 0;">'
+            '<thead><tr style="background:#f3f4f6;">'
+            '<th style="padding:8px 12px;text-align:left;">Storage area</th>'
+            '<th style="padding:8px 12px;text-align:left;">Schedule</th>'
+            '<th style="padding:8px 12px;text-align:left;">Last audited</th>'
+            f"</tr></thead><tbody>{rows_html}</tbody></table>"
+            + (f"<p>…and {more} more.</p>" if more > 0 else "")
+            + f'<p><a href="{_html.escape(audit_url)}">Open Shelf Audit</a></p>',
+            footer_text=(
+                "You receive this weekly while any shelf is overdue because you "
+                "manage inventory."
+            ),
+        )
+        success_count, _ = await EmailService(organization=org).send_email(
+            to_emails=emails,
+            subject=f"Shelf audits overdue — {len(due)} storage area(s)",
+            html_body=html_body,
+            text_body=(
+                f"{len(due)} storage area(s) are due an NFC shelf audit. "
+                f"Open Shelf Audit: {audit_url}"
+            ),
+        )
+        if success_count <= 0:
+            # Not recorded, so tomorrow's check tries again.
+            return 0
+
+        db_session.add(
+            InventoryNfcAuditDigest(
+                organization_id=org_id,
+                sent_at=now,
+                overdue_count=len(due),
+                recipient_count=success_count,
+            )
+        )
+        await db_session.commit()
+        return 1
+
+    return await _for_each_org(db, "inventory_audit_digest", process)
+
+
 async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
     Send email alerts for overdue checkouts. Daily at 07:30.
@@ -4379,6 +4525,7 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
         items_due = await service.get_nfpa_retirement_due_items(
             organization_id=org.id,
             days_ahead=180,
+            today=org_today(org),
         )
         if not items_due:
             return 0
@@ -4474,8 +4621,6 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
     its apparatus on every check and notifies through that path, so this alert
     exists to get ahead of the date, and a daily version of it would be noise.
     """
-    from datetime import date as _date
-
     from app.services.email_service import EmailService, wrap_email_body
     from app.services.equipment_check_service import EquipmentCheckService
     from app.services.inventory_service import InventoryService
@@ -4495,8 +4640,13 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
         return f"<strong style='color:{color};'>{text}</strong>"
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
+        # One department-local date for every count in the email; the job runs
+        # early in the UTC morning, which is still yesterday in the west.
+        today = org_today(org)
         check_service = EquipmentCheckService(db_session)
-        overview = await check_service.get_supply_overview(str(org.id), window_days)
+        overview = await check_service.get_supply_overview(
+            str(org.id), window_days, today=today
+        )
         deployed = overview.get("items", [])
 
         inventory_service = InventoryService(db_session)
@@ -4504,9 +4654,11 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
         # email body, so a medical-only officer receiving the whole list would
         # be mailed gear lot numbers and counts the API refuses them.
         medical_lots = await inventory_service.get_expiring_lots(
-            str(org.id), window_days, item_types=MEDICAL_ITEM_TYPES
+            str(org.id), window_days, item_types=MEDICAL_ITEM_TYPES, today=today
         )
-        all_lots = await inventory_service.get_expiring_lots(str(org.id), window_days)
+        all_lots = await inventory_service.get_expiring_lots(
+            str(org.id), window_days, today=today
+        )
         medical_lot_ids = {lot.id for lot, _ in medical_lots}
         gear_lots = [
             (lot, name) for lot, name in all_lots if lot.id not in medical_lot_ids
@@ -4515,8 +4667,6 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
 
         if not deployed and not lot_rows:
             return 0
-
-        today = _date.today()
 
         # Split by whether a replacement is actually on hand: "swap it" and
         # "order it" are different jobs, and the officer plans the week around
@@ -4663,16 +4813,11 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     On January 1st, generates yearly reports.
     """
     import calendar
-    from datetime import timezone as _tz_compliance
 
     from app.models.compliance_config import ComplianceConfig
     from app.services.compliance_config_service import ComplianceReportService
+    from app.utils.org_timezone import resolve_org_today
 
-    today = datetime.now(_tz_compliance.utc)
-    # Clamp the configured report day to the current month's length so a
-    # report_day of 29/30/31 still fires on the last day of shorter months
-    # (e.g. Feb 28) instead of being silently skipped.
-    days_in_month = calendar.monthrange(today.year, today.month)[1]
     results = []
     total_generated = 0
 
@@ -4693,8 +4838,17 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
         try:
             freq = config.auto_report_frequency
             report_day = config.report_day_of_month or 1
-            effective_day = min(report_day, days_in_month)
             org_id = str(config.organization_id)
+            # The department's date, not UTC's. This runs at 06:30 UTC, which
+            # on the 1st is still the last day of the previous month on the
+            # West Coast: a UTC date would send, and label, a report for a
+            # month the department has not finished.
+            today = await resolve_org_today(db, org_id)
+            # Clamp the configured report day to the current month's length so
+            # a report_day of 29/30/31 still fires on the last day of shorter
+            # months (e.g. Feb 28) instead of being silently skipped.
+            days_in_month = calendar.monthrange(today.year, today.month)[1]
+            effective_day = min(report_day, days_in_month)
 
             should_generate_monthly = (
                 freq in ("monthly", "quarterly") and today.day == effective_day
@@ -5573,27 +5727,28 @@ async def run_mark_overdue_maintenance(db: AsyncSession) -> Dict[str, Any]:
     and in is_overdue-filtered lists. Runs daily, flipping only False -> True
     (completion and rescheduling already recompute the flag on their own paths).
     """
-    from datetime import date
-
     from sqlalchemy import update as sa_update
 
     from app.models.apparatus import ApparatusMaintenance
     from app.models.facilities import FacilityMaintenance
 
-    today = date.today()
     total = 0
-    for model in (ApparatusMaintenance, FacilityMaintenance):
-        result = await db.execute(
-            sa_update(model)
-            .where(
-                model.is_completed == False,  # noqa: E712
-                model.due_date.isnot(None),
-                model.due_date < today,
-                model.is_overdue == False,  # noqa: E712
+    # Per department: work due today is not overdue until that department's
+    # day is over, and this runs at one UTC hour for every timezone.
+    for org_id, today in (await _org_todays(db)).items():
+        for model in (ApparatusMaintenance, FacilityMaintenance):
+            result = await db.execute(
+                sa_update(model)
+                .where(
+                    model.organization_id == org_id,
+                    model.is_completed.is_(False),
+                    model.due_date.isnot(None),
+                    model.due_date < today,
+                    model.is_overdue.is_(False),
+                )
+                .values(is_overdue=True)
             )
-            .values(is_overdue=True)
-        )
-        total += result.rowcount or 0
+            total += result.rowcount or 0
     await db.commit()
     if total:
         logger.info("Marked {} maintenance record(s) overdue", total)
@@ -6135,6 +6290,7 @@ TASK_RUNNERS = {
     "storefront_payment_reminders": run_storefront_payment_reminders,
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
+    "inventory_audit_digest": run_inventory_audit_digest,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "supply_expiration_alerts": run_supply_expiration_alerts,
     "compliance_auto_reports": run_compliance_auto_reports,
@@ -6190,6 +6346,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "action_item_reminders": 86400,
     "inventory_low_stock_alerts": 86400,
     "inventory_overdue_alerts": 86400,
+    # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).
+    "inventory_audit_digest": 86400,
     "property_return_reminders": 86400,
     "storefront_payment_reminders": 86400,
     "compliance_auto_reports": 86400,

@@ -77,7 +77,7 @@ const renderStep = () =>
  * query the screen directly rather than reaching for a container element.
  */
 const openPermissions = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(screen.getByRole('button', { name: /^Fire Chief - click to expand permissions$/ }));
+  await user.click(screen.getByRole('button', { name: /^Chief - click to expand permissions$/ }));
   await screen.findByText('Click to toggle permissions for each module:');
 };
 

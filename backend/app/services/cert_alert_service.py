@@ -36,6 +36,7 @@ from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import Organization, User, UserStatus
 from app.services.email_service import EmailService, build_email_logo_html
 from app.services.notifications_service import NotificationsService
+from app.utils.org_timezone import org_today, resolve_org_today
 
 # Alert tiers: (days_before, field_name, cc_officers)
 ALERT_TIERS = [
@@ -78,30 +79,40 @@ class CertAlertService:
         self,
         organization_id: UUID,
         within_days: int = 90,
+        today: Optional[date] = None,
     ) -> List[TrainingRecord]:
-        """Find all training records with certifications expiring within N days."""
-        cutoff = date.today() + timedelta(days=within_days)
+        """Find all training records with certifications expiring within N days.
+
+        ``today`` is the department's date; it is resolved from the org when
+        the caller has not already done so.
+        """
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
+        cutoff = today + timedelta(days=within_days)
         result = await self.db.execute(
             select(TrainingRecord)
             .where(TrainingRecord.organization_id == organization_id)
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
             .where(TrainingRecord.expiration_date.isnot(None))
             .where(TrainingRecord.expiration_date <= cutoff)
-            .where(TrainingRecord.expiration_date >= date.today())
+            .where(TrainingRecord.expiration_date >= today)
         )
         return list(result.scalars().all())
 
     async def get_expired_certifications(
         self,
         organization_id: UUID,
+        today: Optional[date] = None,
     ) -> List[TrainingRecord]:
         """Find all expired certifications that haven't been escalated yet."""
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
         result = await self.db.execute(
             select(TrainingRecord)
             .where(TrainingRecord.organization_id == organization_id)
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
             .where(TrainingRecord.expiration_date.isnot(None))
-            .where(TrainingRecord.expiration_date < date.today())
+            .where(TrainingRecord.expiration_date < today)
             .where(TrainingRecord.escalation_sent_at.is_(None))
         )
         return list(result.scalars().all())
@@ -250,8 +261,11 @@ class CertAlertService:
         errors = 0
 
         # Process tiered alerts for expiring certifications
-        expiring = await self.get_expiring_certifications(organization_id)
-        today = date.today()
+        # The department's date, not the server's: this runs at 06:00 UTC,
+        # which is still yesterday across the western US, and every "N days"
+        # count and tier boundary below is measured from it.
+        today = org_today(org)
+        expiring = await self.get_expiring_certifications(organization_id, today=today)
 
         for record in expiring:
             days_until = (record.expiration_date - today).days
@@ -397,7 +411,7 @@ class CertAlertService:
                 break
 
         # Process escalations for already-expired certifications
-        expired = await self.get_expired_certifications(organization_id)
+        expired = await self.get_expired_certifications(organization_id, today=today)
         include_personal_email = config.get("include_personal_email_on_final", False)
 
         for record in expired:

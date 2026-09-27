@@ -62,11 +62,7 @@ const renderTab = async () => {
   await screen.findByText('Usage Statistics');
 };
 
-const tile = (title: string): HTMLElement => {
-  const card = screen.getByText(title).closest('div.card');
-  if (!card) throw new Error(`no tile found for ${title}`);
-  return card as HTMLElement;
-};
+const tile = (title: string): HTMLElement => screen.getByRole('group', { name: title });
 
 describe('UsageStatsTab', () => {
   // States its own default rather than inheriting one (CLAUDE.md #28).

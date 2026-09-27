@@ -128,7 +128,7 @@ Reports catalog with member, training, event, and compliance report categories.
 Works on Linux (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch), macOS, and Raspberry Pi:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 This automatically:
@@ -153,13 +153,13 @@ Choose a profile based on your hardware:
 
 ```bash
 # Raspberry Pi / Low memory
-curl -sSL .../universal-install.sh | bash -s -- --profile minimal
+curl -sSL .../universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile minimal
 
 # Standard (default)
-curl -sSL .../universal-install.sh | bash
+curl -sSL .../universal-install.sh | bash -s -- --public-url https://logbook.example.org
 
 # Full with Elasticsearch, S3 storage
-curl -sSL .../universal-install.sh | bash -s -- --profile full
+curl -sSL .../universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile full
 ```
 
 ### Platform-Specific Guides
@@ -189,7 +189,7 @@ docker compose up -d
 
 ```bash
 # Automatic (recommended)
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --profile minimal
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile minimal
 
 # Manual with ARM + minimal profiles
 git clone https://github.com/thegspiro/the-logbook.git
@@ -205,7 +205,7 @@ docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-com
 
 ```bash
 # EC2/VM - SSH in, then:
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 
 # With managed database (RDS/Azure SQL/Cloud SQL):
 # Edit .env to point to your managed database

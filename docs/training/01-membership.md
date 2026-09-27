@@ -94,6 +94,11 @@ Position names appear as badges in the header; the permissions they carry are no
 
 ![Member profile page with the photo, compliance summary, and detail panels](./images/01-02-member-profile.png)
 
+**[SCREENSHOT — REPLACE the member profile capture.** Assigned Inventory is
+absent for a viewer without `inventory.manage`. **Caption the capturing
+account's grants** — the page differs by viewer, and an uncaptioned shot reads
+as a promise.**]**
+
 ### Profile Photo Upload
 
 Members and officers can upload a profile photo:
@@ -405,11 +410,34 @@ among them. If the member owns any of these, permanent deletion is **refused**
 with a message explaining why. It does not list the specific records.
 
 That is not a failure to work around. The correct route for a member with
-financial history is to **deactivate, then anonymize** them: it strips their
+financial history is to **archive, then anonymize** them: it strips their
 personal information while leaving those records owned, so the department's
-financial trail stays intelligible. **Anonymizing has no button in the app
-yet** — it is available only through the API (`POST /users/{id}/anonymize`,
-`members.manage`).
+financial trail stays intelligible. See
+[Anonymizing a Former Member](#anonymizing-a-former-member-2026-09-25).
+
+### Anonymizing a Former Member _(2026-09-25)_
+
+Anonymizing permanently removes a departed member's personal information while
+keeping the department's record of what they did.
+
+1. Open the member's profile. They must be **Dropped** (voluntary or
+   involuntary) or **Archived**; change their status first if not.
+2. In the **Membership** card, under **Status**, select **Anonymize member**.
+   It appears only to people with `members.manage`, never on your own profile,
+   and not for a Retired, Inactive or Active member — the server refuses those.
+3. Read what is removed and what is kept, type the member's name to confirm,
+   and select **Anonymize**.
+
+**Removed:** name, email, phone numbers, address, date of birth, photo,
+emergency contacts, sign-in credentials, medical screening details, leave and
+waiver reasons, and their original application.
+**Kept:** training, attendance, hours, equipment custody and dues history,
+linked to a placeholder named "Former Member". Audit logs and election records
+are never rewritten.
+
+> **Warning:** Anonymizing cannot be undone. The member also leaves the
+> roster — like a deactivated member, they no longer appear anywhere in the app
+> and cannot be reactivated.
 
 > **If you tried to permanently delete a member before 2026-08-07 and got
 > "Unable to permanently delete the member" with no detail, that was this — the
@@ -531,20 +559,20 @@ in the membership process. The stage type is chosen from a grid of tiles in the
 Add Pipeline Stage / Edit Stage dialog, and picking one swaps the configuration panel
 below it.
 
-| Stage Type                | Purpose                                | What Happens                                                                                                                                                                                                                       |
-| ------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Form Submission**       | Collect information from the applicant | Links to a form from the Forms module. Can auto-advance when the form is submitted                                                                                                                                                 |
-| **Document Upload**       | Collect required documents             | Applicant uploads documents (ID, background check, etc.). Can auto-advance when all documents are uploaded                                                                                                                         |
-| **Meeting**               | Schedule interview/orientation         | Requires attendance at or scheduling of a meeting; links to upcoming events                                                                                                                                                        |
-| **Election / Vote**       | Membership vote                        | Advancing an applicant onto this stage with **Advance** (or by dragging the card) creates an election package for the Elections module. Advance All, Skip and auto-advance do not; create the package from the drawer in that case |
-| **Manual Approval**       | Coordinator sign-off                   | An admin or designated role manually marks this stage as complete                                                                                                                                                                  |
-| **Enable Status Page**    | Turn on public tracking                | Stores an enable/disable setting, but nothing acts on it yet. Whether applicants can use the public status page is set for the whole pipeline in Pipeline Settings > **Public Application Status Page**                            |
-| **Automated Email**       | Send a notification email              | Sends a configurable email when the prospect reaches this stage. Configure subject, welcome message, FAQ link, meeting details and custom sections                                                                                 |
-| **Reference Check**       | Collect references                     | Collect and verify personal or professional references                                                                                                                                                                             |
-| **Checklist**             | Multi-item sign-off                    | A checklist of items (orientation, gear issue, etc.) rather than a single approval                                                                                                                                                 |
-| **Interview Requirement** | Require N interviews                   | Requires a set number of interviews before the prospect can advance                                                                                                                                                                |
-| **Multi-Signer Approval** | Several roles must agree               | Requires multiple designated roles to all sign off                                                                                                                                                                                 |
-| **Medical Screening**     | Physical or medical clearance          | Requires a physical exam or medical clearance before advancing                                                                                                                                                                     |
+| Stage Type                | Purpose                                | What Happens                                                                                                                                                                                                                                    |
+| ------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Form Submission**       | Collect information from the applicant | Links to a form from the Forms module. Can auto-advance when the form is submitted                                                                                                                                                              |
+| **Document Upload**       | Collect required documents             | Applicant uploads documents (ID, background check, etc.). Can auto-advance when all documents are uploaded                                                                                                                                      |
+| **Meeting**               | Schedule interview/orientation         | Requires attendance at or scheduling of a meeting; links to upcoming events                                                                                                                                                                     |
+| **Election / Vote**       | Membership vote                        | Advancing an applicant onto this stage with **Advance** (or by dragging the card) creates an election package for the Elections module. Advance All, Skip and auto-advance do not; create the package from the drawer in that case              |
+| **Manual Approval**       | Coordinator sign-off                   | An admin or designated role manually marks this stage as complete                                                                                                                                                                               |
+| **Enable Status Page**    | Turn public tracking on or off         | When the applicant reaches it, switches their public status page on (and emails them the link) or off, overriding the pipeline setting for them. Then completes itself — see [Enable Status Page Stages](#enable-status-page-stages-2026-09-25) |
+| **Automated Email**       | Send a notification email              | Sends a configurable email when the prospect reaches this stage. Configure subject, welcome message, FAQ link, meeting details and custom sections                                                                                              |
+| **Reference Check**       | Collect references                     | Collect and verify personal or professional references                                                                                                                                                                                          |
+| **Checklist**             | Multi-item sign-off                    | A checklist of items (orientation, gear issue, etc.) rather than a single approval                                                                                                                                                              |
+| **Interview Requirement** | Require N interviews                   | Requires a set number of interviews before the prospect can advance                                                                                                                                                                             |
+| **Multi-Signer Approval** | Several roles must agree               | Requires multiple designated roles to all sign off                                                                                                                                                                                              |
+| **Medical Screening**     | Physical or medical clearance          | Requires a physical exam or medical clearance before advancing                                                                                                                                                                                  |
 
 > **Corrected 2026-08-10.** This table previously listed seven types, one of
 > which — "Form Dropdown" — has never existed; it described the form picker
@@ -580,7 +608,8 @@ When a prospect advances to an automated email stage, the system sends the confi
 - **Membership FAQ Link** — link to your department's FAQ page
 - **Next Meeting Details** — the event type plus free text for date, time and location
 - **Application Tracker Link** — a link to the prospect's public status page. It
-  requires the public status page to be enabled, and says so under the checkbox
+  is included only while that prospect's page is on — the pipeline setting, or
+  an Enable Status Page stage they have passed — and says so under the checkbox
 - **Add custom section** — titled content blocks (e.g. "What to Bring",
   "Parking Information")
 
@@ -593,6 +622,37 @@ field for it.
 ![The automated-email stage configuration with its subject, welcome message and custom sections](./images/01-28-stage-email-config.png)
 
 > **Edge case:** If email is not configured (Settings > Email) or the send fails, no email goes out and the applicant **stays on the automated email stage** instead of moving past it. An applicant sitting on an email stage is the sign to check your email settings.
+
+#### Enable Status Page Stages _(2026-09-25)_
+
+The pipeline's **Public Application Status Page** setting decides whether
+applicants can track their application online. An **Enable Status Page** stage
+lets you decide that per applicant, at a point in the process — for example,
+reveal the tracker once someone has passed their interview.
+
+- **Enabling stage** (the default): when the applicant reaches it, their status
+  page is switched on — even if the pipeline setting is off — and they are
+  emailed the link, with the stage's optional message. The stage then completes
+  itself and the applicant moves to the next stage.
+- **Disabling stage** (untick **Enable public status page at this stage**):
+  their page is switched off and the link stops working, even if the pipeline
+  setting is on. Nothing is sent, and the stage completes itself.
+- The **latest** such stage an applicant has reached decides for them. An
+  applicant who has reached none follows the pipeline setting. Moving an
+  applicant back before the stage undoes it.
+
+> **Edge case:** If the link email cannot be sent — email is not configured, or
+> the applicant has no email address — the applicant **stays on the stage**.
+> Their page is still on; fix the problem and complete the stage yourself.
+> A stage marked as the final stage never completes itself, since completing
+> the final stage is the department's approval.
+>
+> **Edge case:** The email is sent, and the stage completes itself, only when an
+> applicant reaches it by completing the stage before it — the same as an
+> Automated Email stage. An applicant who starts on it (it is the first stage),
+> is placed on it directly, or is moved back onto it still gets the stage's
+> on/off setting, but is not emailed the link, and the stage waits for you to
+> complete it.
 
 ### Pipeline Configuration
 
@@ -821,7 +881,7 @@ happen automatically — the dialog has no per-change options for them.
 
 When a member is dropped, the system automatically:
 
-1. Generates a **property return report** listing all assigned equipment and saves it to Documents
+1. Generates a **property return report** listing all assigned equipment and saves it to Documents, in the leadership-only **Member Separations** folder — not Reports, because it names the member, the reason for the separation and their home address
 2. Emails the report to the member (and any CC recipients your drop-notification settings name)
 3. Opens a **departure clearance** to track outstanding items
 4. Archives the member automatically once every item is returned **and** the departure clearance has been completed
@@ -829,6 +889,13 @@ When a member is dropped, the system automatically:
 The 30- and 90-day reminder emails are sent only when
 `POST /users/property-return-reminders/process` is called; nothing runs it on a
 schedule.
+
+**Reminders.** A daily scheduled task emails the member when they pass **30
+days** and again at **90 days** since the drop with property still out, and
+copies the department's administrative officers. Each run sends a member at
+most one reminder — the latest mark they have passed — so a member first
+picked up at day 100 receives the 90-day reminder only, never a late 30-day
+one. A reminder already sent is never repeated.
 
 > **Hint:** Overdue property returns are tracked by the API
 > (`GET /users/property-return-reminders/overdue`) but **have no screen** as of
@@ -1091,6 +1158,13 @@ date may be in the future.
 
 ![The Members Admin hub, captured before its Settings tab was added](./images/01-22-member-lifecycle.png)
 
+**What sits above the tabs.** Members Administration opens with the same frame
+as the Training, Inventory and Events administration pages: a header, **four
+headline metrics**, a **Needs attention** queue, then the tabs. Three of the
+metrics are the department's to choose, on the hub's **Settings** tab; the
+fourth is always the count the queue is about — see
+[Choosing the metrics](./08-admin-reports.md#choosing-the-metrics).
+
 ### Where Each Lifecycle Operation Actually Lives
 
 Verified against the code on 2026-09-24:
@@ -1179,7 +1253,7 @@ their expiration date — and compares it against that requirement.
 | CSV import rows failing                                              | As of 2026-08-07 every row is checked when you select the file, before anything is created, and each rejection names the column and the value. Use **Download Error Report** to get the failed rows back with the reasons in a leading `errorReason` column — fix them, delete that column, and upload that file.                                                |
 | A phone number was imported as a member's email                      | Fixed 2026-08-07 — a comma inside an _unquoted_ value shifted every later column one place right. Rows whose value count does not match the header are now rejected, and any email column holding a phone number is called out. Keep values containing commas wrapped in double quotes.                                                                          |
 | "Email already exists" for a member who is not in the system         | The address appears twice in your file. As of 2026-08-07 repeats of email, username and membershipNumber are caught before importing, naming the line the value was first used on. Two different addresses can still collide on username, since it is derived from the part before the `@` — add a `username` column to separate them.                           |
-| Importing sent welcome emails I did not want sent                    | As of 2026-08-07 **Send welcome emails now** sits on the review step and is **off by default** for imports — the roster loads without sending anything, and you issue credentials afterwards from Member Management → Reset Password. Tick the box to email everyone a password-setup link as they are created.                                                  |
+| Importing sent welcome emails I did not want sent                    | As of 2026-08-07 **Send welcome emails now** sits on the review step and is **off by default** for imports — the roster loads without sending anything, and you issue credentials afterwards from Member Management → Reset Password. Tick the box to email everyone a temporary password as they are created; they must change it at first sign-in.             |
 | A member is already on the roster                                    | As of 2026-08-07 the current roster is checked when you select the file, so a row matching an existing member's email, username or membership number is reported up front, naming who owns the value. Useful when re-uploading a corrected file.                                                                                                                 |
 | The import created a member called John Doe                          | The template's example row was left in the file. As of 2026-08-07 the importer recognizes its own example and rejects that row; delete it from the file.                                                                                                                                                                                                         |
 | A large import seems to hang, or was started by mistake              | The review step shows "Importing 23 of 47" and a **Stop importing** button. Members already created stay created. Rows not reached appear in the error report as "Not imported — the import was stopped before this row", so that file is exactly what remains and can be uploaded to finish.                                                                    |
@@ -1294,6 +1368,17 @@ profile too, as `#021` beneath their name.
 > membership coordinator permission to change; and the number must be unique within your
 > department, so saving a number another active member already holds is refused
 > with "A member with this membership number already exists".
+
+Saving any restricted field without `members.manage` is refused (403) with:
+
+> Only leadership, the secretary, or the membership coordinator can update hire
+> date, rank, station, platoon, membership number, or membership class and
+> status
+
+Every position in the shipped catalogue that grants `users.edit` also grants
+`members.manage`, so no default role meets that refusal. It applies once a
+department builds a custom role that separates the two — a records clerk who
+maintains contact details but does not set rank or hire date, for example.
 
 > **Edge case:** If a member's old number has been given to someone else, reactivation leaves the member without a membership number and keeps the old one in `previous_membership_number`; assign a new number on the Admin Edit page.
 
@@ -1655,9 +1740,6 @@ Administration section for the scanner to appear in.
 
 ## Member ID Cards and the Check-In Station _(2026-08-23)_
 
-Full operator walkthrough and screenshot states:
-[release lesson](./19-august-2026-release-changes.md#id-cards-officers-issue-them-stations-read-them).
-
 > **Turn it on first.** Settings → Integrations → **NFC ID Cards**. It starts
 > off, and nothing appears until it is on. The check is enforced on the server,
 > not only in the interface, so nothing is reachable while it is off.
@@ -1667,7 +1749,19 @@ Full operator walkthrough and screenshot states:
 Member profile → **ID Cards**, with `members.manage_id_cards`. Bind a physical
 card to a member, label it, and later suspend it, report it lost, or revoke it.
 
-Cards ship blank, so **the tag's serial number is the credential**.
+**Issue card** offers two ways to bind one, and the first is the better one:
+
+| Option                           | Use it when                            | What becomes the credential                       |
+| -------------------------------- | -------------------------------------- | ------------------------------------------------- |
+| **Write a code to a blank card** | The tag is writable — a sticker, a fob | A freshly generated 128-bit code, written onto it |
+| **Read a printed card's serial** | The card is already made and locked    | The chip's own serial number                      |
+
+Prefer writing a code: it is unguessable, it is not printed anywhere on the
+card, and the tag can be rewritten and reissued to somebody else later — a card
+identified only by its chip serial is that member's for good. A written card
+shows **Written** beside its status. On a desktop with no NFC radio, hold the
+card against a USB reader with the cursor in the serial box, or type the serial
+printed on the card; writing a code needs Chrome on Android over HTTPS.
 
 **Your department stores a hash, not the number.** Nobody — officer,
 administrator, or somebody who obtains a database backup — can read a member's
@@ -1677,6 +1771,8 @@ an officer can tell two of a member's cards apart on screen.
 **Revoking or reporting a card lost is permanent.** Neither card is ever reactivated; issue a
 replacement instead. **Suspension is the reversible state**, for a card a
 member has mislaid and may still find.
+
+![The ID Cards panel on a demo member's profile: one active card and one revoked, each showing only the last four characters of its serial](./images/19-37-member-id-cards.png)
 
 ### The station
 
@@ -1703,11 +1799,15 @@ offers targets the check-in itself would accept. An unregistered card, a member
 already checked in, or a closed window are shown on screen and the station
 **stays armed** — those are outcomes, not errors.
 
+![The check-in station armed against a drill night on a tablet, with one successful tap already in the session list](./images/19-38-check-in-station-armed.png)
+
 ### In the record
 
 A card tapped at a station is recorded with entry method **`nfc_station`**, not
 `qr_scan`. Those are different acts by different people: `qr_scan` means the
-member scanned a category's QR code with their own phone. **Historical rows are
+member scanned a category's QR code with their own phone. The distinction is
+what lets an admin-hours audit tell a card tap at a station from a member's
+own scan. **Historical rows are
 not rewritten** — a `qr_scan` recorded before this really was written by the QR
 path.
 

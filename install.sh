@@ -102,23 +102,49 @@ validate_public_url() {
             ;;
     esac
     if frontend_url_is_loopback "$url"; then
-        print_warning "$url points at this machine; emailed links will not open elsewhere"
+        print_error "$url points at this machine. The backend refuses to start in production"
+        print_error "with it, because emailed links would not open anywhere else."
+        return 1
     fi
     return 0
 }
 
-# Asked only when nobody supplied one and there is a terminal to answer from;
-# an empty answer keeps the localhost default, which is reported at the end.
+# Whether $1 is an existing .env whose FRONTEND_URL is already public.
+env_has_public_frontend_url() {
+    local current
+    [[ -f "$1" ]] || return 1
+    current=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$1" | tail -n 1)
+    ! frontend_url_is_loopback "$current"
+}
+
+# Both deployment paths write ENVIRONMENT=production, where the backend refuses
+# to start while FRONTEND_URL points at this machine. Without a terminal to
+# ask from, a missing address is refused before anything is installed rather
+# than after a full install that can never boot.
+require_public_url() {
+    if [[ -n "$PUBLIC_URL" || -t 0 ]] || env_has_public_frontend_url "$SCRIPT_DIR/.env"; then
+        return 0
+    fi
+    print_error "A public URL is required: the address members open the site at."
+    print_error "Every link in outgoing email is built from it, and the backend refuses"
+    print_error "to start in production without one. Re-run with"
+    print_error "  --public-url https://logbook.example.org   (or set LOGBOOK_PUBLIC_URL)"
+    return 1
+}
+
+# Asked only when nobody supplied one and there is a terminal to answer from.
+# There is no "set it later": production will not start until it is set.
 prompt_public_url() {
     local answer
     if [[ -n "$PUBLIC_URL" || ! -t 0 ]]; then
         return 0
     fi
     while :; do
-        read -r -p "Public URL members will use (e.g. https://logbook.example.org), or Enter to set it later: " answer
+        read -r -p "Public URL members will use (e.g. https://logbook.example.org): " answer
         answer="${answer%/}"
         if [[ -z "$answer" ]]; then
-            return 0
+            print_error "A public URL is required; the backend will not start without one."
+            continue
         fi
         if validate_public_url "$answer"; then
             PUBLIC_URL="$answer"
@@ -140,7 +166,7 @@ write_frontend_url() {
 
 # A preserved .env is the operator's, so an existing public FRONTEND_URL is
 # never rewritten. One that is absent or still points at this machine is
-# replaced when a public URL was given, and reported otherwise.
+# replaced with the public URL, and refused when there is none.
 reconcile_frontend_url() {
     local env_file="$1" current
     current=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$env_file" | tail -n 1)
@@ -153,18 +179,11 @@ reconcile_frontend_url() {
     if [[ -n "$PUBLIC_URL" ]]; then
         write_frontend_url "$env_file" "$PUBLIC_URL"
         print_info "Set FRONTEND_URL=$PUBLIC_URL in .env"
+        return 0
     fi
-}
-
-# Printed with the closing instructions of both deployment paths.
-warn_if_frontend_url_is_loopback() {
-    local current
-    current=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$SCRIPT_DIR/.env" | tail -n 1)
-    if frontend_url_is_loopback "$current"; then
-        print_warning "FRONTEND_URL is '${current}', so password resets, ballots and reminders"
-        print_warning "will link to this machine only. Set FRONTEND_URL in .env to the address"
-        print_warning "members use, then restart the backend."
-    fi
+    print_error "Your .env has no public FRONTEND_URL, and the backend refuses to start in"
+    print_error "production without one. Re-run with --public-url <address members use>."
+    return 1
 }
 
 check_root() {
@@ -304,7 +323,7 @@ EOF
                 print_warning "plaintext services (traffic stays on the internal Docker network)."
             fi
             prompt_public_url
-            reconcile_frontend_url "$SCRIPT_DIR/.env"
+            reconcile_frontend_url "$SCRIPT_DIR/.env" || exit 1
             return
         fi
     fi
@@ -385,12 +404,9 @@ EOF
     fi
 
     # Every link the app emails is built from FRONTEND_URL; .env.example ships
-    # it as localhost.
+    # it as localhost, which production refuses to start with.
     prompt_public_url
-    if [[ -n "$PUBLIC_URL" ]]; then
-        write_frontend_url "$SCRIPT_DIR/.env" "$PUBLIC_URL"
-        print_info "Set FRONTEND_URL=$PUBLIC_URL in .env"
-    fi
+    reconcile_frontend_url "$SCRIPT_DIR/.env" || exit 1
 
     print_success "Environment configured with secure secrets"
     print_warning "Please review and update .env file with your specific settings"
@@ -440,7 +456,6 @@ docker_deployment() {
     print_info "2. Configure SSL/HTTPS for production (see docs/DEPLOYMENT.md)"
     print_info "3. Set up automated backups (see docs/BACKUP.md)"
     print_info "4. Review security settings in .env"
-    warn_if_frontend_url_is_loopback
 }
 
 traditional_deployment() {
@@ -522,7 +537,6 @@ EOF
     print_info "2. Set up SSL with: sudo certbot --nginx -d yourdomain.com"
     print_info "3. Configure firewall"
     print_info "4. Set up automated backups"
-    warn_if_frontend_url_is_loopback
 }
 
 show_help() {
@@ -537,9 +551,11 @@ Options:
     --traditional       Install directly on server
     --public-url <url>  Address members open the site at (for example
                         https://logbook.example.org). Written to FRONTEND_URL,
-                        which every link in outgoing email is built from.
-                        Also read from LOGBOOK_PUBLIC_URL; asked for
-                        interactively when neither is given.
+                        which every link in outgoing email is built from; the
+                        backend refuses to start in production while it points
+                        at this machine. Also read from LOGBOOK_PUBLIC_URL;
+                        asked for interactively when neither is given, and
+                        required when there is no terminal to ask from.
     --help              Show this help message
 
 Interactive Mode:
@@ -590,6 +606,10 @@ main() {
     if [[ -n "$PUBLIC_URL" ]]; then
         validate_public_url "$PUBLIC_URL" || exit 1
     fi
+    case "${1:-}" in
+        --help|-h) ;;
+        *) require_public_url || exit 1 ;;
+    esac
 
     print_header "THE LOGBOOK - INSTALLATION"
 

@@ -54,6 +54,25 @@ def _has_column(table: str, column: str) -> bool:
     return column in {c["name"] for c in inspector.get_columns(table)}
 
 
+def _foreign_keys_on(table: str, column: str) -> list:
+    """Names of the foreign keys constraining ``table.column``, as stored.
+
+    The name depends on who built the table. When this migration adds the
+    column, the key is ``fk_event_requests_staffing_shift``; when
+    ``create_all`` builds ``event_requests`` from the model — the usual case,
+    see ``_has_table`` — the metadata naming convention names it
+    ``fk_event_requests_staffing_shift_id_shifts``. Dropping a hard-coded name
+    failed with MySQL 1091 on every database built the second way.
+    """
+    if not _has_table(table):
+        return []
+    return [
+        fk["name"]
+        for fk in sa.inspect(op.get_bind()).get_foreign_keys(table)
+        if fk.get("name") and column in fk.get("constrained_columns", [])
+    ]
+
+
 def upgrade() -> None:
     if _has_table("event_requests") and not _has_column(
         "event_requests", "staffing_shift_id"
@@ -99,7 +118,6 @@ def downgrade() -> None:
     if _has_column("event_requests", "volunteer_call_sent_at"):
         op.drop_column("event_requests", "volunteer_call_sent_at")
     if _has_column("event_requests", "staffing_shift_id"):
-        op.drop_constraint(
-            "fk_event_requests_staffing_shift", "event_requests", type_="foreignkey"
-        )
+        for name in _foreign_keys_on("event_requests", "staffing_shift_id"):
+            op.drop_constraint(name, "event_requests", type_="foreignkey")
         op.drop_column("event_requests", "staffing_shift_id")

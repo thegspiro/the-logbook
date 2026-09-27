@@ -485,11 +485,15 @@ class SecureApiClient {
       /** Operational rank code, or '' for none. Applied when the account is created. */
       rank?: string;
     }>;
-    backup_access: {
-      email: string;
-      phone: string;
-      secondary_admin_email?: string | undefined;
-    };
+    // `{}` is what a skipped step saves — the same empty value the backend's
+    // ITTeamSettings defaults to for a department that never filled it in.
+    backup_access:
+      | {
+          email: string;
+          phone: string;
+          secondary_admin_email?: string | undefined;
+        }
+      | Record<string, never>;
   }): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/session/it-team', data, true);
   }

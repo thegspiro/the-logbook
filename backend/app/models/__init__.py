@@ -83,6 +83,12 @@ from app.models.event_request import (
     EventRequestEmailTemplate,
     EventRequestStatus,
 )
+from app.models.external_shift_hours import (
+    ExternalAgency,
+    ExternalApparatus,
+    ExternalShiftHours,
+    ExternalShiftHoursStatus,
+)
 from app.models.facilities import (
     DefaultFacilityStatus,
     DefaultFacilityType,
@@ -191,10 +197,15 @@ from app.models.inventory import (
     EquipmentRequest,
     ExposureType,
     InventoryActionType,
+    InventoryAuditFrequency,
     InventoryCategory,
     InventoryItem,
     InventoryLabelPrint,
     InventoryLot,
+    InventoryNfcAudit,
+    InventoryNfcAuditDigest,
+    InventoryNfcAuditItem,
+    InventoryNfcAuditResult,
     InventoryNfcScan,
     InventoryNfcScanAction,
     InventoryNfcTag,
@@ -335,9 +346,12 @@ from app.models.suggestion import (
     SuggestionAuthorRole,
     SuggestionBox,
     SuggestionBoxReviewer,
+    SuggestionBoxWatcher,
     SuggestionDisposition,
     SuggestionForward,
     SuggestionMessage,
+    SuggestionStatusEvent,
+    SuggestionVote,
 )
 from app.models.testing_checklist import (
     TestingAccessExpectation,
@@ -519,6 +533,11 @@ __all__ = [
     "EventType",
     "RSVPStatus",
     "CheckInWindowType",
+    # External shift hours
+    "ExternalAgency",
+    "ExternalApparatus",
+    "ExternalShiftHours",
+    "ExternalShiftHoursStatus",
     # Event request models
     "EventRequest",
     "EventRequestActivity",
@@ -586,6 +605,11 @@ __all__ = [
     "InventoryItem",
     "InventoryLabelPrint",
     "InventoryLot",
+    "InventoryAuditFrequency",
+    "InventoryNfcAudit",
+    "InventoryNfcAuditDigest",
+    "InventoryNfcAuditItem",
+    "InventoryNfcAuditResult",
     "InventoryNfcScan",
     "InventoryNfcScanAction",
     "InventoryNfcTag",
@@ -763,9 +787,12 @@ __all__ = [
     "SuggestionAuthorRole",
     "SuggestionBox",
     "SuggestionBoxReviewer",
+    "SuggestionBoxWatcher",
     "SuggestionDisposition",
     "SuggestionForward",
     "SuggestionMessage",
+    "SuggestionStatusEvent",
+    "SuggestionVote",
     # Testing checklist models
     "TestingAccessExpectation",
     "TestingCheckStatus",

@@ -9,21 +9,23 @@
  * `?tab=` and `?id=` are what the notification emails link to.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { Lightbulb } from 'lucide-react';
 import { Breadcrumbs } from '../../../components/ux';
 import FollowUpKeyPanel from '../components/FollowUpKeyPanel';
 import MySuggestionsPanel from '../components/MySuggestionsPanel';
+import SuggestionBoardPanel from '../components/SuggestionBoardPanel';
 import SuggestionReviewPanel from '../components/SuggestionReviewPanel';
 import SuggestionSubmitForm from '../components/SuggestionSubmitForm';
 import { suggestionsService } from '../services/suggestionsService';
-import type { ReviewSummary } from '../types/suggestions';
+import type { ReviewSummary, SuggestionBoxPublic } from '../types/suggestions';
 
-type Tab = 'submit' | 'mine' | 'key' | 'review';
+type Tab = 'submit' | 'board' | 'mine' | 'key' | 'review';
 
 const TAB_LABELS: Record<Tab, string> = {
   submit: 'Submit',
+  board: 'Idea board',
   mine: 'My submissions',
   key: 'Follow up with a key',
   review: 'Review',
@@ -31,6 +33,7 @@ const TAB_LABELS: Record<Tab, string> = {
 
 // Shorter labels for phones, where four full labels overflow the tab strip.
 const SHORT_TAB_LABELS: Partial<Record<Tab, string>> = {
+  board: 'Ideas',
   mine: 'Mine',
   key: 'Follow up',
 };
@@ -38,7 +41,9 @@ const SHORT_TAB_LABELS: Partial<Record<Tab, string>> = {
 const SuggestionsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [summary, setSummary] = useState<ReviewSummary | null>(null);
+  const [summaryFailed, setSummaryFailed] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [boardBoxes, setBoardBoxes] = useState<SuggestionBoxPublic[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,19 +54,54 @@ const SuggestionsPage: React.FC = () => {
       })
       .catch(() => {
         // Not being able to tell reviewer status only hides the Review tab;
-        // submitting is unaffected, so this stays quiet.
-        if (!cancelled) setSummary(null);
+        // submitting is unaffected, so this stays quiet unless the member was
+        // sent straight to the Review tab (below).
+        if (!cancelled) setSummaryFailed(true);
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const tabs: Tab[] = summary?.isReviewer ? ['submit', 'mine', 'key', 'review'] : ['submit', 'mine', 'key'];
+  useEffect(() => {
+    let cancelled = false;
+    suggestionsService
+      .listBoxes()
+      .then((boxes) => {
+        if (!cancelled) setBoardBoxes(boxes.filter((b) => b.publicBoardEnabled));
+      })
+      .catch(() => {
+        // Only the Idea board tab depends on this; the Submit tab reports its
+        // own failure to load boxes.
+        if (!cancelled) setBoardBoxes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Keeps the open-count badge honest after a reviewer closes something. A
+  // failure here keeps the last count rather than hiding the tab mid-review.
+  const refreshSummary = useCallback(() => {
+    suggestionsService
+      .getReviewSummary()
+      .then(setSummary)
+      .catch(() => undefined);
+  }, []);
+
+  const hasBoard = (boardBoxes?.length ?? 0) > 0;
+  const tabs: Tab[] = [
+    'submit',
+    ...(hasBoard ? (['board'] as const) : []),
+    'mine',
+    'key',
+    ...(summary?.isReviewer ? (['review'] as const) : []),
+  ];
   const requested = searchParams.get('tab') as Tab | null;
-  // A review link opened before the summary arrives should not bounce to Submit.
-  const active: Tab =
-    requested && (tabs.includes(requested) || (requested === 'review' && summary === null)) ? requested : 'submit';
+  // A link opened before the data deciding its tab arrives should not bounce
+  // to Submit.
+  const stillLoading = (requested === 'review' && summary === null) || (requested === 'board' && boardBoxes === null);
+  const active: Tab = requested && (tabs.includes(requested) || stillLoading) ? requested : 'submit';
   const selectedId = searchParams.get('id') ?? '';
 
   const activeTabRef = useRef<HTMLButtonElement>(null);
@@ -115,12 +155,23 @@ const SuggestionsPage: React.FC = () => {
 
       <div role="tabpanel" aria-label={TAB_LABELS[active]}>
         {active === 'submit' && <SuggestionSubmitForm onSubmitted={() => setRefreshToken((t) => t + 1)} />}
+        {active === 'board' && hasBoard && <SuggestionBoardPanel boxes={boardBoxes ?? []} />}
         {active === 'mine' && (
           <MySuggestionsPanel selectedId={selectedId} onSelect={selectItem('mine')} refreshToken={refreshToken} />
         )}
         {active === 'key' && <FollowUpKeyPanel />}
         {active === 'review' && summary?.isReviewer && (
-          <SuggestionReviewPanel boxes={summary.boxes} selectedId={selectedId} onSelect={selectItem('review')} />
+          <SuggestionReviewPanel
+            boxes={summary.boxes}
+            selectedId={selectedId}
+            onSelect={selectItem('review')}
+            onReviewed={refreshSummary}
+          />
+        )}
+        {active === 'review' && summaryFailed && (
+          <p role="alert" className="alert-danger text-sm">
+            Unable to load the boxes you review. Please reload the page to try again.
+          </p>
         )}
       </div>
     </div>

@@ -19,6 +19,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+import pytest
+
 from app.models.training import EnrollmentStatus
 from app.services.scheduled_tasks import (
     SCHEDULE,
@@ -26,6 +28,16 @@ from app.services.scheduled_tasks import (
     run_enrollment_expiry,
 )
 from app.services.training_program_service import TrainingProgramService
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with UTC so the
+    date.today()-relative fixtures here keep meaning what they say."""
+    monkeypatch.setattr(
+        "app.services.training_program_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
 
 
 def _one(obj):
@@ -71,17 +83,22 @@ def _enrollment(status=EnrollmentStatus.ACTIVE, days_from_today=-1):
 
 class TestIsOverdue:
     def test_active_past_its_deadline_is_overdue(self):
-        assert TrainingProgramService._is_overdue(_enrollment()) is True
+        assert TrainingProgramService._is_overdue(_enrollment(), date.today()) is True
 
     def test_deadline_today_is_not_overdue(self):
         # The member has until the end of the day they were given.
         assert (
-            TrainingProgramService._is_overdue(_enrollment(days_from_today=0)) is False
+            TrainingProgramService._is_overdue(
+                _enrollment(days_from_today=0), date.today()
+            )
+            is False
         )
 
     def test_no_deadline_never_expires(self):
         assert (
-            TrainingProgramService._is_overdue(_enrollment(days_from_today=None))
+            TrainingProgramService._is_overdue(
+                _enrollment(days_from_today=None), date.today()
+            )
             is False
         )
 
@@ -95,7 +112,10 @@ class TestIsOverdue:
             EnrollmentStatus.EXPIRED,
         ):
             assert (
-                TrainingProgramService._is_overdue(_enrollment(status=status)) is False
+                TrainingProgramService._is_overdue(
+                    _enrollment(status=status), date.today()
+                )
+                is False
             )
 
 

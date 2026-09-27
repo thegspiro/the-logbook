@@ -87,6 +87,7 @@ const AllEntriesTab: React.FC = () => {
           <option value="approved">Approved</option>
           <option value="pending">Pending</option>
           <option value="rejected">Rejected</option>
+          <option value="withdrawn">Withdrawn</option>
           <option value="active">Active</option>
         </select>
         <select
@@ -186,7 +187,9 @@ const AllEntriesTab: React.FC = () => {
                               ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
                               : entry.status === 'rejected'
                                 ? 'bg-red-500/20 text-red-700 dark:text-red-400'
-                                : 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
+                                : entry.status === 'withdrawn'
+                                  ? 'bg-theme-surface-hover text-theme-text-secondary'
+                                  : 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
                         }`}
                       >
                         {entry.status}

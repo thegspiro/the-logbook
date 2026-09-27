@@ -222,19 +222,22 @@ wildcard, exactly as `view_medical` / `manage_medical` already were.
 
 ### Core Tables
 
-| Table                       | Purpose                                                                                                                                                                                                                               |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `inventory_categories`      | Item categories with type, requirements, low-stock thresholds                                                                                                                                                                         |
-| `inventory_items`           | Items with serial/barcode/asset tag, condition, status, tracking type. `label_printed_at` / `label_printed_by` _(2026-09-23, migration `5a70c5dcd138`)_ record a confirmed label print and are cleared when the printed value changes |
-| `inventory_lots`            | A dated batch of a consumable held as ready stock: lot number, expiration, quantity, received date. **The source of "on hand" for any item that has lots** _(documented 2026-08-10)_                                                  |
-| `item_assignments`          | Permanent/temporary assignments of individual items to members                                                                                                                                                                        |
-| `item_issuances`            | Pool item issuance records (quantity tracking)                                                                                                                                                                                        |
-| `checkout_records`          | Temporary checkout records with expected return dates                                                                                                                                                                                 |
-| `maintenance_records`       | Maintenance history (inspection, repair, calibration, etc.)                                                                                                                                                                           |
-| `inventory_vendors`         | Suppliers: name (unique per organization), account number, phone/email/fax/website, address, payment terms, preferred and active flags _(2026-08-16)_                                                                                 |
-| `inventory_vendor_contacts` | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag _(2026-08-16)_                                                                                                          |
-| `inventory_nfc_tags`        | NFC tags on items or storage areas: hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization _(2026-09-24)_                                                                               |
-| `inventory_nfc_scans`       | Staff NFC taps on items (lookups and put-aways): who, when, which tag, to and from which storage area _(2026-09-24)_                                                                                                                  |
+| Table                         | Purpose                                                                                                                                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inventory_categories`        | Item categories with type, requirements, low-stock thresholds                                                                                                                                                                         |
+| `inventory_items`             | Items with serial/barcode/asset tag, condition, status, tracking type. `label_printed_at` / `label_printed_by` _(2026-09-23, migration `5a70c5dcd138`)_ record a confirmed label print and are cleared when the printed value changes |
+| `inventory_lots`              | A dated batch of a consumable held as ready stock: lot number, expiration, quantity, received date. **The source of "on hand" for any item that has lots** _(documented 2026-08-10)_                                                  |
+| `item_assignments`            | Permanent/temporary assignments of individual items to members                                                                                                                                                                        |
+| `item_issuances`              | Pool item issuance records (quantity tracking)                                                                                                                                                                                        |
+| `checkout_records`            | Temporary checkout records with expected return dates                                                                                                                                                                                 |
+| `maintenance_records`         | Maintenance history (inspection, repair, calibration, etc.)                                                                                                                                                                           |
+| `inventory_vendors`           | Suppliers: name (unique per organization), account number, phone/email/fax/website, address, payment terms, preferred and active flags _(2026-08-16)_                                                                                 |
+| `inventory_vendor_contacts`   | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag _(2026-08-16)_                                                                                                          |
+| `inventory_nfc_tags`          | NFC tags on items, storage areas or equipment-check compartments (`check_compartment_id`, 2026-09-25): hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization _(2026-09-24)_            |
+| `inventory_nfc_scans`         | Staff NFC taps on items (lookups and put-aways): who, when, which tag, to and from which storage area _(2026-09-24)_                                                                                                                  |
+| `inventory_nfc_audits`        | Shelf audits: the storage area (name snapshotted), who ran it, expected / found / missing / unexpected counts, who confirmed moving items _(2026-09-24)_                                                                              |
+| `inventory_nfc_audit_items`   | One line per item a shelf audit judged: found, missing or unexpected, where it was recorded, whether it was moved _(2026-09-24)_                                                                                                      |
+| `inventory_nfc_audit_digests` | One row per weekly "shelf audits overdue" email sent: when, how many areas, how many recipients _(2026-09-24)_                                                                                                                        |
 
 ### Workflow Tables
 
@@ -353,20 +356,41 @@ Off until an administrator turns it on at **Inventory → Administration → NFC
 Tags** (`/inventory/admin/nfc`, which needs `settings.manage` or
 `organization.update_settings`). The switch is stored as
 `inventory.nfc_tracking_enabled` in the organization settings. While it is off,
-every endpoint below except `GET /nfc/settings` answers 403.
+every endpoint below except `GET /nfc/settings` answers 403. The not-seen
+report is the exception: it lives outside the NFC router and works with the
+switch off.
 
 ```
-GET    /api/v1/inventory/nfc/settings                    # Is it on? (inventory.view)
+GET    /api/v1/inventory/nfc/settings                    # Is it on? (inventory.view, check_submit or check_manage)
 POST   /api/v1/inventory/nfc/resolve                     # Tapped tag -> item, exact match (inventory.view)
 GET    /api/v1/inventory/items/{id}/nfc-tags             # Tags on an item (inventory.manage)
 POST   /api/v1/inventory/items/{id}/nfc-tags             # Link a tag (inventory.manage)
-PATCH  /api/v1/inventory/nfc-tags/{tag_id}               # Relabel, mark lost/found (inventory.manage)
-DELETE /api/v1/inventory/nfc-tags/{tag_id}               # Unlink (inventory.manage)
+PATCH  /api/v1/inventory/nfc-tags/{tag_id}               # Relabel, mark lost/found (inventory.manage; check_manage for a compartment tag)
+DELETE /api/v1/inventory/nfc-tags/{tag_id}               # Unlink (inventory.manage; check_manage for a compartment tag)
 POST   /api/v1/inventory/nfc/resolve-any                 # Tapped tag -> item or storage area (inventory.view)
 POST   /api/v1/inventory/nfc/put-away                    # Move an item onto a storage area (inventory.manage)
 GET    /api/v1/inventory/items/{id}/nfc-scans            # Tap log, newest first (inventory.manage)
 GET    /api/v1/inventory/storage-areas/{id}/nfc-tags     # Tags on a storage area (inventory.manage)
 POST   /api/v1/inventory/storage-areas/{id}/nfc-tags     # Link a tag to a storage area (inventory.manage)
+POST   /api/v1/inventory/nfc/audits                      # Save a shelf audit: shelf + items tapped, <= 500 (inventory.manage)
+GET    /api/v1/inventory/nfc/audits                      # Audits, newest first; ?storage_area_id= (inventory.manage)
+GET    /api/v1/inventory/nfc/audits/{id}                 # One audit with its lines (inventory.manage)
+POST   /api/v1/inventory/nfc/audits/{id}/apply           # Move chosen unexpected items onto the shelf (inventory.manage)
+POST   /api/v1/inventory/nfc/resolve-member              # Tapped member ID card -> member; needs NFC ID Cards too (inventory.manage)
+GET    /api/v1/inventory/nfc/untagged                    # Active items with no working tag; ?search=&category_id= (inventory.manage)
+GET    /api/v1/inventory/nfc/audit-schedule              # Scheduled areas, overdue first; ?due_only= (inventory.manage)
+PUT    /api/v1/inventory/storage-areas/{id}/audit-schedule # {"audit_frequency": "weekly"|...|null} (inventory.manage)
+POST   /api/v1/inventory/nfc/put-away/replay         # Put-away taps made offline, applied in order; per-tap outcome (inventory.manage)
+POST   /api/v1/inventory/nfc/audits/replay           # Shelf audit finished offline; resend-safe by client_submission_id (inventory.manage)
+GET    /api/v1/inventory/check-compartments/{id}/nfc-tags # Tags on a checklist compartment (inventory.check_manage)
+POST   /api/v1/inventory/check-compartments/{id}/nfc-tags # Link a tag to a checklist compartment (inventory.check_manage)
+POST   /api/v1/inventory/nfc/resolve-check               # Tap during a check of template_id -> compartment or checklist rows (check_submit or check_manage)
+POST   /api/v1/inventory/kiosk/identify                  # Card -> member + open loans (inventory.kiosk)
+POST   /api/v1/inventory/kiosk/preview                   # Card + item -> checkout or return, or 409 why not (inventory.kiosk)
+POST   /api/v1/inventory/kiosk/checkout                  # Borrow (inventory.kiosk)
+POST   /api/v1/inventory/kiosk/return                    # Return; damaged + note marks the item damaged (inventory.kiosk)
+GET    /api/v1/inventory/not-seen                        # Items not seen in ?days= (default 180) (inventory.manage; not NFC-gated)
+GET    /api/v1/inventory/not-seen/export                 # The same as CSV, up to 5,000 rows (inventory.manage; not NFC-gated)
 ```
 
 - **Two ways to link a tag.** _Write a link_: the phone writes
@@ -384,9 +408,22 @@ POST   /api/v1/inventory/storage-areas/{id}/nfc-tags     # Link a tag to a stora
   retired item resolves to nothing.
 - **Browser support.** Web NFC exists only in Chrome on Android, over HTTPS. That
   is the browser's limit, not the app's.
-- **Shelves carry tags too** (linked from the storage area editor). A tag names
-  exactly one item or one storage area; the database enforces it
-  (`ck_inventory_nfc_tags_one_target`).
+- **Shelves carry tags too** (linked from the storage area editor), and so do
+  **equipment-check compartments** (linked from the checklist builder). A tag
+  names exactly one item, one storage area or one compartment; the database
+  enforces it (`ck_inventory_nfc_tags_one_target`). A compartment tag is read
+  only during a check of its own template (`/nfc/resolve-check`); the item and
+  put-away lookups refuse it. Deleting a compartment deletes its tags, and so
+  does replacing a template's contents from a vehicle preset, JSON or CSV
+  import, because that recreates every compartment.
+- **Offline taps** (put-away and shelf audits only). The phone keeps raw reads
+  in the generic offline queue (`genericOfflineQueue.ts`, purged at sign-out)
+  and never what a tag names; the `/replay` routes resolve them on arrival and
+  apply the online rules in order. A put-away session is one queue entry,
+  marked held while the screen adds to it and sent once it is released (or
+  after 30 minutes idle). An offline audit carries a `client_submission_id`,
+  unique per organization (`inventory_nfc_audits.client_submission_id`), so a
+  resend after a lost response returns the audit already saved.
 - **Put away** (`/inventory/put-away`). Tapping a shelf first _opens_ it: every
   item tapped afterwards goes onto it. Tapping an item first holds it until a
   shelf is tapped, moves it there, and leaves no shelf open. The move is the
@@ -399,6 +436,54 @@ POST   /api/v1/inventory/storage-areas/{id}/nfc-tags     # Link a tag to a stora
   put-away with where the item came from. A member opening a written tag from
   their own phone is not recorded. The item page shows the most recent taps as
   **Last Seen (NFC)**.
+- **Shelf audits** (`/inventory/shelf-audit`). The expected set is the active
+  items recorded on exactly that storage area (not its children) whose status
+  does not already place them elsewhere (assigned, checked out, lost, stolen,
+  retired). Saving an audit moves nothing. **Missing** items are only listed;
+  an audit never marks an item lost. **Unexpected** items move onto the shelf
+  only when ticked and confirmed (`/apply`), through `put_away_items`, so an
+  assigned item is skipped with the reason. Every tapped item is logged in the
+  tap log as `audit`, on the audited shelf.
+- **Audit schedules.** `storage_areas.audit_frequency` (weekly, monthly,
+  quarterly, yearly; null = not scheduled). The next audit is due one calendar
+  period (`relativedelta`) after the area's latest saved audit, or now if it
+  has none; this is computed on read, never stored. The
+  `inventory_audit_digest` scheduled task checks daily and emails
+  `inventory.manage` holders the overdue areas at most once a week per
+  department, measured from `inventory_nfc_audit_digests` because the
+  in-process scheduler forgets its run times on restart. It sends nothing
+  when nothing is overdue or NFC is off, and a failed send is retried the
+  next day.
+- **Self-service kiosk** (`/inventory/kiosk`, `inventory.kiosk`, seeded to
+  no position). Needs the NFC switch and the NFC ID Cards integration, checked
+  on every kiosk route. Every request carries the card read, and the server
+  re-reads it: the kiosk never sends a member id. Items qualify only when their
+  category has `allow_self_checkout` (default false); pool items, items not
+  `available`, and items failing the rank/position restriction
+  (`InventoryService.member_clears_restrictions`, the request catalog's rule)
+  are refused with a 409 and the reason. A checkout is
+  `InventoryService.checkout_item`, with the member as `user_id`, the kiosk
+  officer as `checked_out_by`, reason "Self-service kiosk", and
+  `expected_return_at` = now + the category's `self_checkout_loan_days` (none
+  when blank). A return is accepted only from the member the item is checked
+  out to. Damaged requires a note and sets the item's condition to `damaged`;
+  otherwise the condition is unchanged. Audit events:
+  `inventory_kiosk_checkout`, and `inventory_kiosk_return` (a warning when
+  damaged).
+- **Member ID card lookup.** With the NFC ID Cards integration connected, the
+  member scanner on the inventory screens (distribute, return, member lookup)
+  shows **Or tap their ID card**. The card resolves through the same hash and
+  rules as the check-in station: a lost card or an inactive member is refused
+  with the reason. Card taps are not written to the equipment tap log.
+- **Bulk enrollment** (`/inventory/admin/nfc/enroll`) lists active items with
+  no working tag (an item whose only tag is lost counts as untagged) and links
+  one after another, by written link or by serial.
+- **Not seen** (`/inventory/admin/not-seen`). An item's last-seen time is the
+  latest of a staff tap (any action), an assignment or its return, a checkout
+  or check-in, and a pool issuance or its return. Editing the item record does
+  not count. A barcode put-away does not count either: it is recorded only as
+  an audit-log event, with no per-item row to read. Retired items are left out;
+  lost and stolen items are listed, since not seeing them is the point.
 
 ### Label Generation
 

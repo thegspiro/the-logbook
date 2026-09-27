@@ -4565,7 +4565,9 @@ class TestThirtiethRoundFindings:
         # The waivers and the member's completed records are read once for
         # the page, however many requirements are on it.
         assert len(statements) == short_page
-        assert short_page <= 3
+        # Waivers, the preload, and the org's timezone for "today" — still a
+        # fixed count, whatever the page size.
+        assert short_page <= 4
         # The preload carries only the columns the checks read, and stops
         # at the earliest window on the page: these are annual
         # requirements, so records older than a year are not loaded.

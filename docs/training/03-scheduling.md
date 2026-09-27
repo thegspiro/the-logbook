@@ -114,6 +114,10 @@ Each shift is displayed as a colored block on the calendar showing:
 
 Click on any shift to open the **Shift Detail Panel** with full information, attendance records, and actions.
 
+The view and the date you are looking at are kept in the page address
+(`?view=month&date=…`), so refreshing the page or opening a copied link
+returns to the same week or month rather than to today.
+
 ![Month calendar of shifts with the week and month view toggle](./images/03-44-month-calendar.png)
 
 ![Shift detail panel with the crew roster and shift information](./images/03-02-shift-detail-panel.png)
@@ -436,17 +440,13 @@ Hazmat, Service Call, Alarm / Good Intent, Mutual Aid, and Other. A department
 can define its own instead.
 
 **You can rename a type freely without touching history.** What gets stored on
-each call is the type's internal slug, not the label you see — so fixing a typo
-in a label does not orphan last year's calls. What you should _not_ do casually
-is delete a type: existing calls keep the deleted slug, and it will show as
-unclassified.
-
-> **A rename is invisible in the Call Volume report.** That report prints the
-> stored **slug**, not your label — so a type whose slug is `mva` reads as "mva"
-> there no matter what you call it on screen, and `mutual_aid` reads as "mutual
-> aid". Only the close-out wizard uses your labels. Bear it in mind when
-> choosing the slug for a new type: that string is what a reader sees in the
-> report.
+each call is the type's permanent slug, not the label you see — so fixing a typo
+in a label does not orphan last year's calls, and reports, the CSV export, the
+shift-report badges, the printable report and the end-of-shift summary email all
+show your current label. A type with calls behind it can be **retired** but not
+deleted, so its history keeps its name. The editor is at **Administration →
+Scheduling Admin → General → Call types**; see
+[Name your own call types](#name-your-own-call-types-2026-09-05).
 
 ### The three numbers, and why they will not add up
 
@@ -995,7 +995,9 @@ Organization Settings and Event Settings: a **section list down the left** on a
 computer, a **scrollable tab strip across the top** on a phone, and one heading
 rather than the two stacked titles it used to show.
 
-Seven sections, of which six are always present:
+Six sections, of which five are always present. They live under
+**Administration → Scheduling Admin → Settings**, and each is its own address,
+`/scheduling/admin/settings/<section>`:
 
 | Section           | What it holds                                             |
 | ----------------- | --------------------------------------------------------- |
@@ -1004,12 +1006,15 @@ Seven sections, of which six are always present:
 | **Platoons**      | Platoon rosters and assignments                           |
 | **Eligibility**   | Which membership types may sign themselves up for a shift |
 | **Notifications** | Shift reminders and alerts                                |
-| **Equipment**     | Check requirements and templates                          |
 | **Shift Reports** | End-of-shift reporting options                            |
+
+Equipment-check requirements and templates are not here: they are managed in
+Inventory, from the checklist console in **Inventory Admin**
+(`/inventory/admin/checklists`).
 
 **Platoons only appears once platoon scheduling is switched on**, from the
 toggle at the top of **General**. A department that does not run A/B/C
-rotations sees six sections and no empty platoon screen — and turning the
+rotations sees five sections and no empty platoon screen — and turning the
 feature off while you are on that section returns you to General rather than
 leaving you on a page that has gone.
 
@@ -1019,15 +1024,22 @@ leaving you on a page that has gone.
 
 ### Two things that changed with it
 
-**The Save button only appears where it saves something.** General, Apparatus and
-Equipment have the Save/Reset footer. The other four sections each have their own
-save control. Until this change the footer was shown on all seven while saving
-only three — so on Notifications and Shift Reports you could press **Save**, see
-"Settings saved", and have changed nothing.
+**The Save button only appears where it saves something.** General and
+Apparatus have the Save/Reset footer. The other sections each have their own
+save control.
 
-**A section can now be linked to.** Selecting a section puts it in the address
-bar, so you can bookmark it, refresh into it, and go **back** to the section you
-came from. It previously read the address on load but never wrote it.
+**The settings belong to the department, not the browser.** What General and
+Apparatus save — shift defaults, position names, apparatus-type crew defaults —
+is stored for the organization on the server, so every administrator sees the
+same values from any device. The browser keeps only a copy of the last-saved
+values, labelled with the organization, for when the server cannot be reached;
+a different department signing in on the same station terminal never sees the
+previous department's values.
+
+**A section can be linked to.** Each section is its own address, so you can
+bookmark it, refresh into it, and go **back** to the section you came from. An
+older link of the form `/scheduling/admin/settings?tab=…` forwards to the
+section it names, or to General.
 
 > **Eligibility here is not the same screen as rank eligibility.** This section
 > governs which **membership types** may sign themselves up for a shift. Which
@@ -1170,13 +1182,18 @@ opened the schedule to find the settings. That strip is gone.
 | `/scheduling/admin/planning`           | Shift Planning          | Every upcoming short shift, with the assignment on the row         |
 | `/scheduling/admin/planning/templates` | Shift Templates         | Manage shift templates                                             |
 | `/scheduling/admin/planning/patterns`  | Shift Patterns          | Create and manage shift patterns                                   |
+| `/scheduling/admin/closeout`           | Shift Close-Out         | Every ended shift not yet closed out, oldest first, beside the close-out settings |
 | `/scheduling/admin/reports`            | Scheduling Reports      | Hours, coverage and compliance reports                             |
 | `/scheduling/admin/platoons`           | Platoons                | Department-wide roster and bulk assignment                         |
 | `/scheduling/admin/positions`          | Who Can Fill What       | Position eligibility roster                                        |
 | `/scheduling/admin/settings/<section>` | Settings (six sections) | `general`, `apparatus`, `platoons`, `eligibility`, `notifications`, `shift-reports` |
 
 Every page here requires `scheduling.manage` — the hub, the settings sections
-and the position roster alike.
+and the position roster alike. The position roster's API
+(`GET /scheduling/eligibility/roster`) requires it too, so a training officer
+without it cannot read the roster from the API either. A named shift officer
+still closes out their own shift from the shift itself; the close-out queue is
+the department-wide view.
 
 > **⚠️ Six old URLs no longer resolve, and there is no redirect.**
 > `/scheduling/settings`, `/scheduling/templates`, `/scheduling/patterns`,
@@ -1196,9 +1213,12 @@ page's own state reads cannot be linked to.
 **Shift Planning** is the screen the rest was reorganised around. It lists every
 upcoming shift carrying fewer people than it asks for, over a date range, with
 the assignment control on the row — filling ten gaps used to be ten trips
-through the month grid, the day, the shift drawer and back. Templates and
-patterns are sections of that screen rather than screens beside it, because the
-reason to open a template is a shift that keeps coming up short.
+through the month grid, the day, the shift and back. Assigning from a row goes
+through the same call as **Shift Details**, so it shows the same **EVOC and
+overtime advisories** and opens the same **driver-exception** dialog. Templates
+and patterns are sections of that screen rather than screens beside it, each at
+its own address, because the reason to open a template is a shift that keeps
+coming up short.
 
 > **One thing to know about the numbers.** The gaps list is built from the same
 > rules the shift board uses, so it cannot answer differently about a shift than
@@ -1207,6 +1227,12 @@ reason to open a template is a shift that keeps coming up short.
 > board, and is **not listed** here — while the hub's Short-staffed metric does
 > count it. The hub number can exceed the rows on this screen for a department
 > that states no crew size anywhere; the fix is to state one.
+
+![The Scheduling Administration hub: the headline metrics To close out, Short-staffed, Hours this month and Needs attention, the Needs attention queue, and the card grid grouped Before the shift, On the shift, After the shift, People & eligibility, Reporting and Department settings](./images/20-16-scheduling-admin-hub.png)
+
+![Shift Planning on its Staffing gaps tab: a date range, the count of short shifts and open seats, and each short shift with its empty seats and an assign control, beside the Templates and Patterns tabs](./images/20-17-staffing-gaps.png)
+
+![The shift close-out queue — ended shifts that were never closed out, oldest first, beside the close-out settings](./images/20-06-scheduling-closeout-queue.png)
 
 ![A scheduling admin sub-page with its back arrow and page header](./images/03-51-admin-subpage-header.png)
 
@@ -1252,10 +1278,9 @@ arranged them, which the shift reminder also follows.
 
 #### For Administrators: Building Templates
 
-Navigate to **Inventory Admin > Equipment Checklists** to see the template list, then click **Create Template** to open the template builder.
+Navigate to **Inventory Admin > Equipment Checklists** to see the template list, then click **Create Template** to open the template builder. The builder is one list you scroll; its full walkthrough is under [Building a Check Template: One List You Scroll](#building-a-check-template-one-list-you-scroll-2026-08-30). The essentials:
 
-1. Set the template name, timing (start or end of shift), and type (equipment, vehicle, or combined)
-2. Optionally assign to a specific apparatus or apparatus type
+1. Name the template, then set what it applies to with the **Applies to** chips beneath the name — timing (**Start of shift** or **End of shift**), scope (equipment, vehicle or combined check, optionally for one apparatus or a whole apparatus type), positions (**Whole crew** unless you name them — e.g. only the Driver/Operator sees this checklist) and a description. Each chip opens the template settings.
 
    **The two do not add up — a named apparatus replaces its type.** A shift
    resolves its checklists by looking for templates naming its apparatus, and
@@ -1267,25 +1292,27 @@ Navigate to **Inventory Admin > Equipment Checklists** to see the template list,
    template list, still active, and silently never asked for. Give a truck with
    its own template the full set by name.
 
-3. Optionally restrict to specific positions (e.g., only Driver/Operator sees this checklist)
-4. Add **compartments** — named sections representing physical areas (e.g., "Officer Door Entry", "Pump Panel", "Cab Interior")
-5. Within each compartment, add **items** with one of 7 check types:
+2. Build the checklist in the order a crew walks the rig: **Add location** for a physical area (e.g., "Officer Door Entry", "Pump Panel", "Cab Interior") and **Add section** for a heading. To store one location inside another, use the **indent** button on its row.
+3. In a location's box, type an item and press **Enter** — or paste a whole list, one per line. Each item asks for one of four kinds of answer, picked in the row:
 
-| Check Type     | What It Records                | Example                        |
-| -------------- | ------------------------------ | ------------------------------ |
-| **Pass/Fail**  | Binary pass or fail            | "Fire extinguisher pin intact" |
-| **Present**    | Item is present or missing     | "Traffic cones (6)"            |
-| **Functional** | Item works or doesn't          | "PA system"                    |
-| **Quantity**   | Numeric count                  | "SCBA bottles — required: 4"   |
-| **Level**      | Fill level with unit           | "Fuel — gallons"               |
-| **Date/Lot**   | Expiration date and lot number | "EpiPen — exp: 2026-09"        |
-| **Reading**    | Numeric reading with unit      | "Pump engine hours — hours"    |
+| In the row | Type         | What It Records                | Example                        |
+| ---------- | ------------ | ------------------------------ | ------------------------------ |
+| **Works**  | **Function** | Pass / fail                    | "PA system"                    |
+| **Count**  | **Count**    | A quantity against a par       | "SCBA bottles — par 4"         |
+| **Level**  | **Level**    | A reading against a minimum    | "Fuel — gallons"               |
+| **Date**   | **Expiry**   | The expiration date on record  | "EpiPen — exp: 2026-09"        |
 
-6. Items can track serial numbers, lot numbers, expiration dates (with warning windows), and required quantities
-7. Use **drag-and-drop** to reorder compartments and items
-8. On a **vehicle** or **combined** template, **Load Vehicle Preset** offers nine pre-built checks — Engine/Pumper, Ladder/Tower, Ambulance/Rescue, Tanker/Water Tender, Rescue/Heavy Rescue, Brush/Wildland, Boat/Watercraft, Utility/Command and Generic Vehicle — each showing how many sections and items it will add before you pick it
+   A **Statement** (text the crew reads) and a **Section Header** are layout rows, not checks.
+
+4. The number an answer is graded against (par, minimum level, expiry warning window) is edited in the row. Description, serial and lot numbers, image, critical minimum and the inventory link sit behind the row's disclosure.
+5. Drag a saved row by its handle to reorder it among its siblings; tick **Sealed** on a location that is a tamper-sealed bag or kit (see [Sealed containers](#sealed-containers)).
+6. On a **vehicle** or **combined** template, **Use a vehicle layout** offers nine pre-built checks — Engine / Pumper, Ladder / Tower, Ambulance / Rescue, Tanker / Water Tender, Rescue / Heavy Rescue, Brush / Wildland, Boat / Watercraft, Utility / Command and Generic Vehicle — each showing how many locations and items it will add before you pick it
 
 ![Equipment check template builder with the template header and sections](./images/03-22-equipment-check-builder.png)
+
+> **[SCREENSHOT — REPLACE the equipment check template builder capture, wide
+> canvas.** This capture predates the one-list builder. See the capture brief
+> under [The preview](#the-preview).**]**
 
 ![The vehicle preset picker listing each pre-built check with its section and item counts](./images/03-50-vehicle-preset-picker.png)
 
@@ -1299,18 +1326,17 @@ During a shift, members see pending equipment checks on their dashboard or on **
    **Unscheduled checklist**, at the top of the page, offers every active
    template and starts a check with no shift attached.
 2. Work through each compartment and item:
-   - **Pass/Fail**: Tap pass or fail
-   - **Quantity**: Enter the count
-   - **Level**: Enter the level reading
-   - **Date/Lot**: Verify expiration date and lot number
-   - **Reading**: Enter the reading value
+   - **Function**: Tap pass or fail
+   - **Count**: Enter the count with the stepper
+   - **Level**: Enter the reading, then pass or fail
+   - **Expiry**: Check the serial, lot and expiration date on record, then pass or fail
 3. Optionally attach photos to any item (up to 3 per item). The button is
    inside the item's note panel — tap **Note** first, then **Add photo**.
 4. Submit the completed check
 
-Every item also offers **Not on truck**, and a pass/fail item adds **Out of
+Once an item is marked failed, it also offers **Not on truck** and **Out of
 service** — a rig that has the tool but cannot use it is not the same as one
-that never had it.
+that never had it. Neither is offered on an expired item.
 
 ![Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below](./images/03-72-check-item-controls.png)
 
@@ -1981,13 +2007,15 @@ When a shift is created from a template (either directly or via pattern-based
 generation), the template's `positions` and `min_staffing` values are copied to
 the new shift, and the crew board is built from them.
 
-> **In practice the shift's own positions are always what you see.** The panel
-> is written to prefer the linked apparatus's riding positions and fall back to
-> the shift's, but the full Apparatus module does not model riding positions at
-> all — it reports them as "not specified" by design. So on a department using
-> the full module, the fallback is the only path, and a shift created without
-> positions has no crew board at all. The board's subheading names both sources
-> ("Positions from E-2 + shift customizations") regardless.
+> **The crew board prefers the apparatus's riding positions.** On the full
+> Apparatus module, each apparatus carries its own crew positions, chosen in
+> riding order on the apparatus form; the board shows those whenever the
+> shift's apparatus has any, and falls back to the shift's own positions when
+> it has none. A shift created for an apparatus with no positions given copies
+> the apparatus's crew positions. The board's subheading names the rig
+> ("Crew positions for E-2") and adds ", adjusted for this shift" when the
+> shift carries positions of its own. With positions on neither, the shift has
+> no crew board.
 
 The board is pictured under
 [Structured Position Slots & Decline Handling](#structured-position-slots--decline-handling),
@@ -2326,21 +2354,25 @@ Swap and time-off request cards now show **Approve** and **Deny** buttons direct
 
 ### Staffing Status on Shift Cards
 
-Shift cards now show staffing status at a glance:
+Each shift on the schedule is a chip tinted by its staffing, with a legend
+above the grid:
 
-| Visual                        | Meaning                                     |
-| ----------------------------- | ------------------------------------------- |
-| Green CheckCircle2 icon       | Shift is fully staffed                      |
-| Green background in crew info | All positions filled                        |
-| Amber background in crew info | Below minimum staffing                      |
-| Staffing ratio (e.g., "4/4")  | Filled / required positions                 |
-| Green tint on shift card      | Overrides template color when fully staffed |
-| Amber tint on shift card      | Overrides template color when understaffed  |
+| Tint  | Legend            | Meaning                                                 |
+| ----- | ----------------- | ------------------------------------------------------- |
+| Red   | 2+ seats open     | Two or more positions still unfilled                    |
+| Amber | 1 seat open       | One position still unfilled                             |
+| Green | Fully staffed     | Every position filled                                   |
+| Blue  | You're on it      | You hold a seat on this shift                           |
+| Grey  | Crew size not set | No crew size configured, so there is nothing to measure |
 
-A shift with no minimum staffing configured keeps its template colour and
-shows no ratio at all — there is nothing to measure it against.
+The chip reads **N open** while a shift is short, **Full 4/4** once every
+seat is taken, and **You + 2/4** on a shift you are on. A shift that has
+already run, or is closed to signups, is greyed and struck through and reads
+**N on** — there is nothing on it for anyone to act on — as does a shift with
+no crew size, which has no seats to count against. **Crew size not set**
+only appears in the legend when a shift on screen is in that state.
 
-![The weekly schedule, its cards tinted green when fully staffed and amber when short](./images/03-55-staffing-status-cards.png)
+![The weekly schedule, each shift a chip tinted by its staffing, with the legend above the grid](./images/03-55-staffing-status-cards.png)
 
 ### Position-First Assignment Flow
 
@@ -2412,11 +2444,11 @@ A scheduled task runs every 30 minutes to send reminders to members assigned to 
 - Configurable lookahead window (default: 2 hours before shift start)
 - Optional email in addition to in-app notification
 
-Department settings for reminders are under **Settings > Scheduling > Notifications > Start-of-Shift Reminders**.
+Department settings for reminders are under **Scheduling Admin → Settings → Notifications → Start-of-Shift Reminders**.
 
 ![Scheduling notification settings showing the start-of-shift reminder options](./images/03-39-notifications-reminders.png)
 
-> **Edge case:** A shift that has already started is skipped. Reminders are sent only once per shift (tracked via `activities.start_reminder_sent`).
+> **Edge case:** A shift that has already started is skipped. Reminders are sent only once per shift (tracked via `activities.start_reminder_sent`). A shift with no currently active assigned members is not marked as reminded, so a member added or reactivated later in the window still gets the reminder.
 
 ### Selected Shift Highlight
 
@@ -2807,9 +2839,10 @@ When submitting an equipment check with unanswered items, a **confirmation dialo
 
 ### Resuming In-Progress Checks
 
-Previously, if you started an equipment check but couldn't finish it, the check was stuck in an incomplete state. Now:
+A check you started and could not finish is kept, answers and all — including
+when you leave the page mid-check. To pick it up again:
 
-1. Open the **Equipment Checks** tab — as a member it is headed **My Equipment Checklists**
+1. Open **Operations → My Checklists** — the page is headed **My Equipment Checklists**
 2. Each card shows the rig, whether it is a start- or end-of-shift check, the date, and how many of its items are answered, with a progress bar. An untouched one reads **Not Started**; a part-answered one reads **In Progress** with its percentage; a finished one reads **Passed**
 3. The button follows the state: **Continue checklist** on a part-answered card, **Open checklist** otherwise. Continuing opens the form with the answered items already filled in
 4. Complete what is left and submit
@@ -2944,17 +2977,26 @@ ahead — no need to press "Generate" each cycle.
 
 ## August 12–14, 2026 update
 
-Scheduling settings, rank-backed apparatus seats, checklist access, and calendar-context changes from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#apparatus-crew-seats-and-scheduling-settings), including its screenshot requirement and cross-organization cache edge case.
+Scheduling settings are stored per organization — see
+[Finding Your Way Around Scheduling Settings](#finding-your-way-around-scheduling-settings-2026-08-09).
+The calendar keeps its view and date in the page address — see
+[Calendar Views](#calendar-views). Rank-backed crew seats on the apparatus
+form are covered in [Apparatus & Facilities](./06-apparatus-facilities.md), and
+how a shift's crew board uses them in
+[Template Positions Carry to Crew Roster](#template-positions-carry-to-crew-roster).
 
 ## August 19–23, 2026 update — request review and pagination
 
-Full detail, with edge cases and screenshot states, is in the
-[August 19–23 section of the release lesson](./19-august-2026-release-changes.md#scheduling-you-can-no-longer-approve-your-own-swap).
+**You cannot review a request you are part of.** On a swap, two people are
+blocked: the member who raised it **and** the member it targets. On time-off,
+the requester is blocked. Holding `scheduling.manage` does not override this —
+a permission grant is not a second person. It bites hardest on a small
+combination department, where the officer asking for Saturday off is very often
+the only person who could approve it; that is precisely the situation the rule
+exists for.
 
-**You can no longer review a request you are part of.** On a swap, two people
-are blocked: the member who raised it **and** the member it targets. On
-time-off, the requester is blocked. Holding `scheduling.manage` does not
-override this — a permission grant is not a second person.
+You may still review a swap between two **other** members, even on a shift you
+are working yourself — only the requester and the target are blocked.
 
 A blocked attempt changes nothing: the request stays pending for somebody else
 to action.
@@ -3022,10 +3064,9 @@ check, one set of answers._
 
 ## The Schedule Board and Standing Shifts _(2026-08-23 → 08-24)_
 
-The Schedule tab is a **board**, not a grid of cards. Full operator walkthrough
-and screenshot states are in the
-[release lesson](./19-august-2026-release-changes.md#scheduling-the-calendar-says-which-shifts-need-people-and-claiming-one-is-a-tap);
-what follows is what a trainer needs in the flow of this guide.
+The Schedule tab is a **board**, not a grid of cards. The phone layout is
+pictured in
+[The schedule on a phone](./10-mobile-pwa.md#the-schedule-on-a-phone).
 
 ### Reading the month
 
@@ -3043,16 +3084,29 @@ that claims the first open seat you are cleared for**. There is no position
 dropdown to find. Filters dim rather than hide, so the month keeps its shape.
 On a phone: a bar grid, a day sheet, a confirmation screen.
 
+The button reads **Take a seat on this shift**, or **Join this shift** on a
+shift that never stated a crew size. Where it would be, the panel says why
+instead when you cannot claim: **This crew is full. Nothing to claim here.**,
+**You are not cleared for any seat on this shift.**, or **The open seats need a
+qualification you do not hold yet.** — a named reason rather than a greyed-out
+control, so the page tells a member what to go and earn.
+
 **Teach the grey chip explicitly.** A shift naming neither positions nor a
 minimum staffing level used to be assumed to want four people, so it showed
 "4 open" in critical red — a department that configures neither opened the page
 to a wall of meaningless red. Grey means "nobody said how many"; the shift can
 still be joined and it stays out of the open-seat count and the urgent flag.
 
-Cancelled, finalized and past shifts read as **closed** and offer nothing. Each
-shift still carries a **details link** — editing, attendance and finalization
-live in the detail panel, which a fully staffed shift an officer is not
-assigned to had no other route into.
+Cancelled, finalized and past shifts read as **closed** — the panel says
+**This shift was cancelled.**, **This shift has been finalized.**, or why
+signups have closed (for example **This shift has already started.**) — and
+offer no claim button. Their empty seats are
+not counted toward the day's open seats or its urgent flag. Each shift still
+carries a **details link** — editing, attendance and finalization live in the
+detail panel, which a fully staffed shift an officer is not assigned to has no
+other route into.
+
+![The September board: urgent days of red open-seat chips, the member's own blue You + 0 chip, past days struck through as closed, and the selected day's panel listing each crew's open seats, one badged Closed to signups](./images/19-34-schedule-board-desktop.png)
 
 ### Standing shifts
 
@@ -3078,7 +3132,9 @@ Four edge cases worth teaching:
   standing shifts exist for.
 - A standing claim goes through **the same checks as claiming a shift by hand**
   — eligibility, seat capacity, whether the shift is open, whether the date has
-  passed. It previously bypassed all of them.
+  passed.
+
+![The Add a standing shift dialog on a Tuesday night shift: every week, the horizon left at its default a year out, a preview of the dates it will claim, and the dialog's own action row in frame](./images/19-36-standing-shift-dialog.png)
 
 ### Trades somebody can actually accept
 
@@ -3094,8 +3150,10 @@ there isn't one, which is the shape every one-way offer has.
 - **You cannot give up a seat while your own offer of it stands.** Withdraw
   first — releasing or re-offering it would leave the first recipient holding
   an offer that can no longer be honoured.
-- **An offer left pending is closed the day before the shift**, and both
-  members and the duty officer are told.
+- **A pending offer holds the seat with the member who made it.** They stay on
+  the roster, and nobody else can claim the seat, until the recipient accepts
+  or the offer closes. **An offer left pending is closed the day before the
+  shift**, and both members and the duty officer are told.
 - **A training seat cannot be traded.** It carries the trainee's program and
   evaluating officer; moving only the member would file one member's training
   against another. Approved time off is rechecked at acceptance, not only when
@@ -3123,7 +3181,9 @@ expire with the shift, which is why that rule still applies.
 Seven staffing tiles — Today's Staffing, Future Coverage Gaps, Open Slots,
 Pending Changes, Incomplete Closeouts, Workload Balance, Special Operations —
 each linking into the schedule already filtered to what it counted. Each keeps
-its own horizon and filters, per person. Requires `scheduling.view`.
+its own horizon and filters, per person. The tiles sit on the dashboard's
+**My Department** view and need `scheduling.manage` with the Scheduling module
+on.
 
 ### Also fixed
 
@@ -3145,8 +3205,8 @@ to do. There are now four:
 | Type         | Stores            | Passing means                                                                                                                                                                           |
 | ------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Level**    | The number itself | Compared to a threshold. The reading is kept, because the trend is the useful part. An empty box means "not read yet", not zero                                                         |
-| **Function** | Pass / fail       | A fail opens a note and a photo, and **neither blocks the walk** — a crew held at a text box at 07:00 abandons the check, so an unwritten note is flagged on the finished check instead |
-| **Count**    | A quantity        | Short of par is a **restock line, not a failure**                                                                                                                                       |
+| **Function** | Pass / fail       | A fail **never blocks the walk**: the form moves on to the next item, and a note or photo is optional behind **Note**                                                                   |
+| **Count**    | A quantity        | Short of par files as a **failure on the check record**; the crew Sweep preview lists it as a restock line instead                                                                      |
 | **Expiry**   | A date            | Confirms the date already on record. Amber on every shift inside the pull window                                                                                                        |
 
 Headings and free text are untouched — they are layout, not checks. The builder
@@ -3180,12 +3240,20 @@ Three rules, each of which is the reason the shortcut is safe:
 A sealed bag inside a sealed bag gets **its own card**: a broken outer seal
 says nothing about an intact inner one.
 
+![Two sealed bags on one check: the drug bag's tag matches the last count and offers Seal intact — clear 1 check; the trauma bag's number differs and offers only Record seal, so its contents are counted by hand](./images/19-40-seal-panel.png)
+
 ### What is not here yet
 
 **Walking a check as a lap** — stop by stop in walking order, finished stops
 collapsed to a line — is built and tested but **not connected to the check
 screen**, which still shows the flat compartment list. Do not teach it,
 screenshot it, or promise it in this release.
+
+**The crew "Sweep"** — walking a check one stop at a time, with a map of the
+truck across the top, a single claim per stop, and the check finishing on the
+exceptions — is **not switched on for crews**. It is visible only in the
+template builder's preview, so a department can see it against its own
+templates first. Do not narrate it as the current member experience.
 
 ### Swapping stock during a check
 

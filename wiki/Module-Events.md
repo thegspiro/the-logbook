@@ -323,7 +323,7 @@ DELETE /api/v1/event-requests/email-templates/{id}         # Delete template
 - **Event deletion FK fix**: Deleting events with linked meeting minutes no longer fails — cascade properly handles the FK constraint
 - **Check-in monitoring consistency**: Fixed monitoring page using different time window logic than QR self-check-in
 - **Event request form publish status**: Request forms show publish status badges on Events Settings page
-- **Dashboard notifications**: Clear/dismiss buttons on dashboard notification cards; persistent department messages only admins can clear
+- **Dashboard notifications**: event notices appear in the dashboard's **My Updates** feed, one list of unread notifications and department messages — opening a row marks it read, and **Older Items** opens the full inbox. Only holders of `notifications.manage` or `settings.manage` can clear a persistent department message, and clearing it removes it for everyone. _(The per-card clear and dismiss buttons this entry first described were replaced by that feed on 2026-08-16; there is no Clear All.)_
 - **Notification channel filter**: Notifications page includes channel filter (email, in-app, SMS)
 - **Email deliverability improvements**: Message-ID headers, batch rate limiting, inline CSS, SMTP reuse, Gmail clipping fix
 

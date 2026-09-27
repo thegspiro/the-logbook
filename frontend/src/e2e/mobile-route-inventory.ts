@@ -1147,6 +1147,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
+    path: '/scheduling/admin/settings/outside-apparatus',
+    source: 'src/modules/scheduling/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/scheduling/admin/settings/shift-reports',
     source: 'src/modules/scheduling/routes.tsx',
     coverage: 'ratchet',
@@ -1173,6 +1179,30 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/inventory/put-away',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/inventory/shelf-audit',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/inventory/admin/nfc/enroll',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/inventory/kiosk',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/inventory/admin/not-seen',
     source: 'src/modules/inventory/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet',

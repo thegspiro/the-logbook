@@ -408,6 +408,15 @@ class OrganizationService:
         if not org:
             raise ValueError("Organization not found")
 
+        # SEC: the saved email link domain decides where password-reset and
+        # ballot links send people for the whole deployment, and has its own
+        # endpoint behind system.manage_link_domain. The settings schemas allow
+        # extra keys, so without this a settings.manage holder could write it
+        # here and skip that permission and its allowed-host check.
+        settings_update = {
+            k: v for k, v in settings_update.items() if k != "email_link_domain"
+        }
+
         # Deep copy to avoid mutating SQLAlchemy's committed state
         current_settings = copy.deepcopy(org.settings or {})
 

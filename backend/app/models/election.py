@@ -216,7 +216,9 @@ class Election(Base):
     is_runoff = Column(Boolean, nullable=False, default=False, server_default="0")
     # Indicates this election is a runoff from another election
 
-    parent_election_id = Column(String(36), ForeignKey("elections.id"), nullable=True)
+    parent_election_id = Column(
+        String(36), ForeignKey("elections.id", ondelete="RESTRICT"), nullable=True
+    )
     # Reference to parent election if this is a runoff
 
     runoff_round = Column(Integer, nullable=False, default=0, server_default="0")

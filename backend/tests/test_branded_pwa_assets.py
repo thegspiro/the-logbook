@@ -331,6 +331,196 @@ class TestBrandedAssetEndpoints:
         assert excinfo.value.status_code == 404
 
 
+@pytest.mark.unit
+class TestEmailLogoEndpoint:
+    """The logo an email's masthead loads, with the organization lookup stubbed."""
+
+    @staticmethod
+    def _request(headers: dict[str, str] | None = None):
+        return SimpleNamespace(headers=headers or {})
+
+    @pytest.fixture
+    def org_with_logo(self, monkeypatch):
+        branding = SimpleNamespace(name="Test FD", logo=_logo_data_uri(), settings=None)
+        monkeypatch.setattr(
+            branding_service,
+            "get_primary_branding",
+            AsyncMock(return_value=branding),
+        )
+        return branding
+
+    async def test_serves_the_logo_at_the_digest_the_email_carries(self, org_with_logo):
+        digest = branding_service.logo_digest(org_with_logo.logo)
+        response = await branding_api.get_email_logo(self._request(), v=digest, db=None)
+
+        assert response.status_code == 200
+        assert response.media_type == "image/png"
+        image = Image.open(BytesIO(response.body))
+        # Twice the 48px it is shown at, and transparent: the email supplies
+        # the white plate it sits on.
+        assert image.size == (96, 96)
+        assert image.mode == "RGBA"
+        assert image.getpixel((0, 0))[3] == 0
+
+    async def test_the_digest_makes_it_cacheable_for_good(self, org_with_logo):
+        digest = branding_service.logo_digest(org_with_logo.logo)
+        response = await branding_api.get_email_logo(self._request(), v=digest, db=None)
+
+        assert "immutable" in response.headers["cache-control"]
+        assert response.headers["etag"] == f'"{digest}"'
+
+    @pytest.mark.parametrize("v", ["", "0000000000000000", "not-a-digest"])
+    async def test_any_other_digest_is_a_404(self, v, org_with_logo):
+        # A replaced logo, or an organization this deployment does not serve:
+        # the mail client shows the alt text, never somebody else's crest.
+        with pytest.raises(HTTPException) as excinfo:
+            await branding_api.get_email_logo(self._request(), v=v, db=None)
+
+        assert excinfo.value.status_code == 404
+
+    async def test_a_department_with_no_logo_is_a_404(self, monkeypatch):
+        monkeypatch.setattr(
+            branding_service,
+            "get_primary_branding",
+            AsyncMock(
+                return_value=SimpleNamespace(name="Test FD", logo=None, settings=None)
+            ),
+        )
+        with pytest.raises(HTTPException) as excinfo:
+            await branding_api.get_email_logo(self._request(), v="x", db=None)
+
+        assert excinfo.value.status_code == 404
+
+    def test_the_route_has_no_png_extension(self):
+        # frontend/nginx.conf serves any URL ending in .png from disk, ahead of
+        # its /api proxy; an extension would make this route unreachable.
+        assert not branding_service.EMAIL_LOGO_PATH.endswith(".png")
+        conf = NGINX_CONF.read_text()
+        assert re.search(r"location ~\*? \\\.\((?:[a-z0-9]+\|)*png", conf), (
+            "the static-asset rule this test guards against has changed; "
+            "re-check whether the email logo route still needs to be extensionless"
+        )
+
+    def test_it_has_its_own_rate_limit_budget(self):
+        # Mail proxies fetch from a few addresses; sharing the icons' 120/min
+        # would break the logo for whoever opened a department-wide email last.
+        route = next(
+            r
+            for r in branding_api.router.routes
+            if getattr(r, "path", "").endswith("/email-logo")
+            and "GET" in getattr(r, "methods", set())
+        )
+        dependencies = [d.dependency for d in route.dependencies]
+        assert branding_api._rate_limit_email_logo in dependencies
+        assert branding_api._rate_limit_branding not in dependencies
+
+
+@pytest.mark.unit
+class TestEmailLogoSrc:
+    """Where an email loads the logo from."""
+
+    def test_an_uploaded_logo_becomes_the_hosted_address(self, monkeypatch):
+        monkeypatch.setattr(
+            branding_service.settings, "FRONTEND_URL", "https://fd.example.org/"
+        )
+        logo = _logo_data_uri()
+        src = branding_service.email_logo_src(logo)
+
+        assert src == (
+            "https://fd.example.org/api/public/v1/branding/email-logo?v="
+            + branding_service.logo_digest(logo)
+        )
+
+    def test_a_new_upload_gets_a_new_address(self, monkeypatch):
+        monkeypatch.setattr(
+            branding_service.settings, "FRONTEND_URL", "https://fd.example.org"
+        )
+        first = branding_service.email_logo_src(_logo_data_uri())
+        second = branding_service.email_logo_src(
+            _logo_data_uri(colour=(10, 10, 200, 255))
+        )
+        assert first != second
+
+    @pytest.mark.parametrize(
+        "frontend_url",
+        ["http://localhost:3000", "http://127.0.0.1", "", "not a url"],
+    )
+    def test_no_public_address_means_no_logo(self, monkeypatch, frontend_url):
+        # A recipient cannot load an image from a loopback host, and a broken
+        # image is worse than none.
+        monkeypatch.setattr(branding_service.settings, "FRONTEND_URL", frontend_url)
+        assert branding_service.email_logo_src(_logo_data_uri()) == ""
+
+    def test_a_logo_stored_as_an_address_is_used_as_it_is(self):
+        assert (
+            branding_service.email_logo_src("https://cdn.example.org/crest.png")
+            == "https://cdn.example.org/crest.png"
+        )
+
+    @pytest.mark.parametrize("logo", [None, ""])
+    def test_no_logo_means_nothing(self, logo):
+        assert branding_service.email_logo_src(logo) == ""
+
+    def test_the_masthead_of_a_rendered_email_carries_it(self, monkeypatch):
+        from app.models.email_template import EmailTemplate
+        from app.services.email_template_service import EmailTemplateService
+
+        monkeypatch.setattr(
+            branding_service.settings, "FRONTEND_URL", "https://fd.example.org"
+        )
+        logo = _logo_data_uri()
+        org = SimpleNamespace(
+            name="Test FD",
+            logo=logo,
+            phone="",
+            email="",
+            website="",
+            settings={},
+            physical_address_same=True,
+            mailing_address_line1="",
+            mailing_city="",
+            mailing_state="",
+            mailing_zip="",
+        )
+        defn = EmailTemplateService._DEFAULT_TEMPLATE_DEFS[0]
+        template = EmailTemplate(
+            template_type=defn["type"],
+            subject=defn["subject"],
+            html_body=defn["html"],
+            text_body=defn["text"],
+        )
+        _subject, html, _text = EmailTemplateService(None).render(template, {}, org)
+
+        masthead = html.split('class="masthead"', 1)[1].split("</div>", 1)[0]
+        assert branding_service.email_logo_src(logo) in masthead
+        assert "data:image" not in html
+
+    def test_a_one_off_email_carries_it_too(self, monkeypatch):
+        from app.services.email_service import wrap_email_body
+
+        monkeypatch.setattr(
+            branding_service.settings, "FRONTEND_URL", "https://fd.example.org"
+        )
+        logo = _logo_data_uri()
+        org = SimpleNamespace(
+            name="Test FD",
+            logo=logo,
+            phone="",
+            email="",
+            website="",
+            settings={},
+            physical_address_same=True,
+            mailing_address_line1="",
+            mailing_city="",
+            mailing_state="",
+            mailing_zip="",
+        )
+        html = wrap_email_body(org, "Low stock", "<p>Gloves are low.</p>")
+
+        assert branding_service.email_logo_src(logo) in html
+        assert "data:image" not in html
+
+
 @pytest.mark.integration
 class TestPrimaryOrganizationLookup:
     """The one rule this shares with the login page's branding endpoint."""

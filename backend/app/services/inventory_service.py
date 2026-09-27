@@ -108,6 +108,7 @@ from app.utils.label_renderer import (
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
+from app.utils.org_timezone import resolve_org_today, scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # How many of a low-stock category's items a report names.
@@ -3182,7 +3183,7 @@ class InventoryService:
         equipment-check swap, so two concurrent issuances cannot both pass the
         stock guard on the same units (pitfall #27).
         """
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         result = await self.db.execute(
             select(InventoryLot)
             .where(
@@ -4218,7 +4219,9 @@ class InventoryService:
         self, organization_id: UUID, days_ahead: int = 30
     ) -> List[InventoryItem]:
         """Get items with maintenance due within specified days"""
-        cutoff_date = date.today() + timedelta(days=days_ahead)
+        cutoff_date = await resolve_org_today(self.db, organization_id) + timedelta(
+            days=days_ahead
+        )
 
         result = await self.db.execute(
             select(InventoryItem)
@@ -4495,7 +4498,9 @@ class InventoryService:
         # way. Reuses `item_filters` (org, active, and exclude_item_types via
         # `_outside_domains`) rather than re-deriving them, so this can't
         # drift from what `total_items` etc. above already counted against.
-        maintenance_cutoff = date.today() + timedelta(days=7)
+        maintenance_cutoff = await resolve_org_today(
+            self.db, organization_id
+        ) + timedelta(days=7)
         maintenance_due_result = await self.db.execute(
             select(func.count(InventoryItem.id)).where(
                 *item_filters,
@@ -4625,7 +4630,7 @@ class InventoryService:
         overdue_checkouts = overdue_result.scalar() or 0
 
         # Maintenance due on user's items
-        cutoff_date = date.today() + timedelta(days=7)
+        cutoff_date = await resolve_org_today(self.db, org_id) + timedelta(days=7)
         maint_result = await self.db.execute(
             select(func.count(InventoryItem.id))
             .where(InventoryItem.id.in_(user_item_ids))
@@ -7274,7 +7279,7 @@ class InventoryService:
     async def get_return_requests(
         self,
         organization_id: UUID,
-        status_filter: Optional[str] = None,
+        status_filter: Optional[str | ReturnRequestStatus] = None,
         requester_id: Optional[UUID] = None,
     ) -> List[ReturnRequest]:
         """List return requests, optionally filtered by status or requester."""
@@ -7574,7 +7579,7 @@ class InventoryService:
         """
         if not item_ids:
             return {}
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         result = await self.db.execute(
             select(
                 InventoryLot.inventory_item_id,
@@ -8248,13 +8253,17 @@ class InventoryService:
         organization_id: str,
         days_ahead: int = 30,
         item_types: Optional[Iterable[ItemType]] = None,
+        today: Optional[date] = None,
     ) -> List[Tuple[InventoryLot, str]]:
         """Get in-stock lots expiring within N days, with the item name.
 
         ``item_types`` narrows the result to one domain so the medical-supply
         page reports its own expiring stock and not the whole department's.
+        ``today`` is the department's date, resolved from the org if omitted.
         """
-        cutoff = date.today() + timedelta(days=days_ahead)
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
+        cutoff = today + timedelta(days=days_ahead)
         query = (
             select(InventoryLot, InventoryItem.name)
             .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
@@ -8304,11 +8313,18 @@ class InventoryService:
         self,
         organization_id: UUID,
         days_ahead: int = 180,
+        today: Optional[date] = None,
     ) -> List[Dict[str, Any]]:
-        """Get PPE items approaching NFPA 10-year retirement date."""
+        """Get PPE items approaching NFPA 10-year retirement date.
+
+        ``today`` is the department's date, resolved from the org if omitted:
+        the days-until count decides the Past Due bucket in the alert email.
+        """
         from app.models.inventory import NFPAItemCompliance
 
-        cutoff = date.today() + timedelta(days=days_ahead)
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
+        cutoff = today + timedelta(days=days_ahead)
 
         result = await self.db.execute(
             select(NFPAItemCompliance)
@@ -8326,7 +8342,7 @@ class InventoryService:
             )
             item = item_result.scalar_one_or_none()
             if item and item.active:
-                days_until = (rec.expected_retirement_date - date.today()).days
+                days_until = (rec.expected_retirement_date - today).days
                 items_due.append(
                     {
                         "item_id": item.id,
@@ -8632,7 +8648,7 @@ class InventoryService:
             lot_number=data.get("lot_number"),
             expiration_date=data.get("expiration_date"),
             quantity=data["quantity"],
-            received_date=date.today(),
+            received_date=await resolve_org_today(self.db, organization_id),
             storage_location=data["storage_location"],
             unit_cost=data["unit_cost"],
             created_by=current_user_id,
@@ -9548,6 +9564,15 @@ class InventoryService:
             item.min_rank_order, item.restricted_to_positions, organization_id, user
         )
 
+    async def member_clears_restrictions(
+        self, item: InventoryItem, organization_id: UUID, user: User
+    ) -> bool:
+        """Public form of the rank/position restriction rule, for callers
+        outside this service that hand an item to a member themselves (the
+        self-service kiosk). One rule, so the kiosk cannot let a member take
+        what the request catalog would refuse them."""
+        return await self._member_may_request(item, organization_id, user)
+
     async def _passes_restrictions(
         self,
         min_rank_order: Optional[int],
@@ -10245,7 +10270,7 @@ class InventoryService:
         if not (related_category_id and user_ids):
             return holdings
 
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
 
         def _record(uid, name, condition, ret_date, retired_by_age):
             cond_val = condition.value if hasattr(condition, "value") else condition
@@ -11171,7 +11196,10 @@ class InventoryService:
 
         meta = {
             "org_name": org_name,
-            "generated_at": datetime.now(timezone.utc),
+            # Printed on the plan, so it reads in the department's zone.
+            "generated_at": datetime.now(timezone.utc).astimezone(
+                scheduling_timezone(org)
+            ),
             "parameters": parameters,
             "show_size": bool(size_field),
             "show_existing": bool(filters.get("related_category_id")),

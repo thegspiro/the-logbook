@@ -64,6 +64,9 @@ const ITTeamBackupAccess: React.FC = () => {
 
   // Validation errors (local state - no need to persist)
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Which action the error banner's Retry repeats — a failed Skip must not
+  // retry as a Continue, which would validate the form it was skipping.
+  const [lastAction, setLastAction] = useState<'submit' | 'skip'>('submit');
 
   useEffect(() => {
     if (!departmentName) {
@@ -184,6 +187,7 @@ const ITTeamBackupAccess: React.FC = () => {
     }
 
     setErrors({});
+    setLastAction('submit');
 
     // Prepare data to save
     const itTeamData = {
@@ -224,6 +228,31 @@ const ITTeamBackupAccess: React.FC = () => {
     if (apiError) {
       return;
     }
+  };
+
+  // The step is optional (config/steps.ts, and `required: False` on the
+  // backend), and the sidebar tells the admin "Skip is a complete answer" —
+  // so there has to be a Skip. It saves an empty step rather than merely
+  // navigating, so contacts entered on an earlier pass and then abandoned
+  // are not carried into setup completion, where each becomes an account.
+  const handleSkip = async () => {
+    clearError();
+    setErrors({});
+    setLastAction('skip');
+    await execute(
+      async () => {
+        const response = await apiClient.saveITTeam({ it_team: [], backup_access: {} });
+        if (response.error) {
+          throw new Error(response.error);
+        }
+        void navigate(nextStepPath('it_team'));
+        return response;
+      },
+      {
+        step: 'IT Team & Backup Access',
+        action: 'Skip IT team and backup access',
+      }
+    );
   };
 
   const currentYear = new Date().getFullYear();
@@ -547,6 +576,10 @@ const ITTeamBackupAccess: React.FC = () => {
                     message={error}
                     canRetry={canRetry}
                     onRetry={() => {
+                      if (lastAction === 'skip') {
+                        void handleSkip();
+                        return;
+                      }
                       void handleSubmit({ preventDefault: () => {} } as React.FormEvent);
                     }}
                     onDismiss={clearError}
@@ -564,6 +597,14 @@ const ITTeamBackupAccess: React.FC = () => {
                 }`}
               >
                 {isSaving ? 'Saving Securely...' : `Continue to ${nextStepName('it_team')}`}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSkip()}
+                disabled={isSaving}
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target mt-3 w-full rounded-lg border px-4 py-3 transition-colors disabled:opacity-50"
+              >
+                Skip for now
               </button>
             </div>
 

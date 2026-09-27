@@ -38,6 +38,7 @@ class AdminHoursEntryStatus(str, Enum):
     PENDING = "pending"  # Submitted, awaiting approval
     APPROVED = "approved"
     REJECTED = "rejected"
+    WITHDRAWN = "withdrawn"  # Retracted by the member; counts toward nothing
 
 
 class AdminHoursCategory(Base):
@@ -76,8 +77,12 @@ class AdminHoursCategory(Base):
     sort_order = Column(Integer, nullable=False, default=0, server_default="0")
 
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    updated_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -159,7 +164,9 @@ class AdminHoursEntry(Base):
         default=AdminHoursEntryStatus.ACTIVE,
         server_default="active",
     )
-    approved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    approved_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     approved_at = Column(DateTime(timezone=True), nullable=True)
     rejection_reason = Column(Text, nullable=True)
 
@@ -222,7 +229,9 @@ class EventHourMapping(Base):
     percentage = Column(Integer, nullable=False, default=100, server_default="100")
 
     is_active = Column(Boolean, nullable=False, default=True, server_default="1")
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -6,10 +6,10 @@
 
 import { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { AxiosError } from 'axios';
 import { eventService } from '../services/api';
 import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import type { RSVP, RSVPOverride } from '../types/event';
+import { getErrorDetail } from '../utils/errorHandling';
 
 interface UseOverrideAttendanceOptions {
   eventId: string | undefined;
@@ -85,9 +85,7 @@ export const useOverrideAttendance = ({
         await onSuccess();
         toast.success('Attendance times updated');
       } catch (err) {
-        setSubmitError(
-          (err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to update attendance'
-        );
+        setSubmitError(getErrorDetail(err) || 'Failed to update attendance');
       } finally {
         setSubmitting(false);
       }

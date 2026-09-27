@@ -95,13 +95,17 @@ Administrative]**
 > "If you're looking for your hours going all the way back, that's on **My
 > Training**, not here. This card is the current month only."
 
-**[SCREEN: Scroll to Department Messages and Notifications, side by side]**
+**[SCREEN: Scroll to the Needs you panel, then the My Updates feed beside it]**
 
-> "**Department Messages** — announcements from leadership. Some of these ask
-> you to acknowledge that you've read them, and those stay put until you do."
+> "**Needs you** is anything you're on the hook for — including a department
+> message that asks you to acknowledge it. It has its own **Acknowledge**
+> button, and it stays there until you press it."
 
-> "**Notifications** — reminders and alerts. The ✕ on a card marks it read.
-> There's a Clear All in the header if you want the lot gone."
+> "**My Updates** is everything else, messages and notifications in one feed,
+> with an unread count at the top. Pinned messages come first, then the ones
+> leadership has marked to stay, then the newest. You see five; **Older
+> Items** opens the rest. Once you've read something, it drops off the next
+> time the page loads — unless it's one of those marked to stay."
 
 **[SCREEN: Scroll to the two shift panels]**
 

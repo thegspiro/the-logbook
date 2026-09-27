@@ -152,6 +152,16 @@ def _apply_service(requirement):
 
 
 class TestApplyTargetRespectsWindow:
+    @pytest.fixture(autouse=True)
+    def _department_today(self, monkeypatch):
+        # The service asks the org for its date; answer with the same TODAY
+        # the records are dated against, so the window is measured from it
+        # rather than from whatever day the suite happens to run.
+        monkeypatch.setattr(
+            "app.services.training_program_service.resolve_org_today",
+            AsyncMock(return_value=TODAY),
+        )
+
     async def test_stale_record_is_rejected(self):
         svc = _apply_service(_requirement(recency_days=180))
         ok, error = await svc.validate_apply_target(

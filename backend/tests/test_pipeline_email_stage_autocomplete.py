@@ -64,7 +64,7 @@ class TestAdvanceReportsSentEmailStage:
 
         result = await svc._advance_current_step(_prospect(steps), "s1")
 
-        assert result == "s2"
+        assert result == ("s2", "stage_email_sent")
 
     async def test_returns_none_when_send_fails(self):
         steps = [
@@ -105,7 +105,9 @@ class TestCompleteSentEmailStage:
         svc = MembershipPipelineService(SimpleNamespace())
         svc.complete_step = AsyncMock(return_value="completed")
 
-        result = await svc._complete_sent_email_step("p-1", "org-1", "s2")
+        result = await svc._complete_on_arrival_step(
+            "p-1", "org-1", "s2", "stage_email_sent"
+        )
 
         assert result == "completed"
         kwargs = svc.complete_step.await_args.kwargs
@@ -113,13 +115,19 @@ class TestCompleteSentEmailStage:
         assert kwargs["completed_by"] is None
         assert kwargs["automated"] is True
         assert kwargs["action_result"]["trigger"] == "stage_email_sent"
+        assert kwargs["action_result"]["email_sent"] is True
+        assert (
+            kwargs["notes"] == "Completed automatically when the stage email was sent"
+        )
 
     async def test_gate_refusal_leaves_the_stage_open(self):
         svc = MembershipPipelineService(SimpleNamespace())
         svc.complete_step = AsyncMock(side_effect=ValueError("gate"))
         svc.get_prospect = AsyncMock(return_value="unchanged")
 
-        result = await svc._complete_sent_email_step("p-1", "org-1", "s2")
+        result = await svc._complete_on_arrival_step(
+            "p-1", "org-1", "s2", "stage_email_sent"
+        )
 
         assert result == "unchanged"
         svc.get_prospect.assert_awaited_once_with("p-1", "org-1")

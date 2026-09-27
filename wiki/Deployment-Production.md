@@ -39,7 +39,7 @@ Best practices for deploying The Logbook in a production environment.
 - [ ] Set `ENVIRONMENT=production`
 - [ ] Set `DEBUG=false`
 - [ ] Configure `ALLOWED_ORIGINS` for your domain only
-- [ ] Set `FRONTEND_URL` to your public site URL — every emailed link is built from it, and a `localhost` value logs a startup warning
+- [ ] Set `FRONTEND_URL` to your public site URL — every emailed link is built from it, and a `localhost` value stops a production backend from starting
 - [ ] Enable HTTPS with valid SSL certificate
 - [ ] Review all `.env` settings
 - [ ] Ensure `.env` is in `.gitignore`

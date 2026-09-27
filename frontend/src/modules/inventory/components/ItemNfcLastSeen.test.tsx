@@ -64,4 +64,13 @@ describe('ItemNfcLastSeen', () => {
     expect(screen.getByText('Tag tapped')).toBeInTheDocument();
     expect(screen.getAllByText(/Pat Quartermaster/)).toHaveLength(4);
   });
+
+  it('describes a shelf-audit tap by the shelf it was found on', async () => {
+    getItemNfcScans.mockResolvedValue({
+      total: 1,
+      items: [scan({ action: 'audit', storage_area_id: 'c', storage_area_name: 'Cabinet C' })],
+    });
+    render(<ItemNfcLastSeen itemId="item-1" />);
+    expect(await screen.findByText('Found on Cabinet C during a shelf audit')).toBeInTheDocument();
+  });
 });

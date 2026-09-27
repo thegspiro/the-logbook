@@ -44,6 +44,12 @@ The Documents page provides:
 - **Grid and List view** toggles
 - **Search** across all documents
 
+An empty library or folder shows its "get started" instruction — upload a file,
+create a folder — only to someone who can act on it; everyone else sees that it
+is empty. A search or filter that matches nothing is reported to everyone. If
+your permission to upload, create folders or delete is withdrawn while one of
+those dialogs is open, the dialog closes.
+
 ![Documents page with the folder tree, file list, and search bar](./images/07-01-documents.png)
 
 ---
@@ -54,11 +60,20 @@ Documents are organized into folders. The system provides default folders, and a
 
 **System Folders** (created automatically):
 
-- SOPs
+- Meeting Minutes
+- SOPs & Procedures
 - Policies
+- Forms & Templates
+- Reports
 - Training Materials
-- Forms
-- Templates
+- General Documents
+- Member Files
+- Apparatus Files
+- Facility Files
+- Event Attachments
+- **Member Separations** — leadership only. Property-return reports are filed
+  here, because each names a departed member, the reason for the separation and
+  their home address.
 
 ### Creating Folders
 
@@ -222,6 +237,28 @@ Public forms can be accessed without a login:
 3. Share the URL or QR code externally.
 4. Submissions are collected and linked to the form.
 
+> **There is no "one submission per person" setting to switch on.** The form
+> builder has no control for it, and every form a department creates allows
+> multiple submissions — so a public form will offer _Submit Another Response_
+> after each one. A form that was set to one submission per person through the
+> API is held to it on the public link, even when two submissions arrive at the
+> same moment; the limit does not apply to submissions made from inside the
+> app. See [Known Limitations](../KNOWN_LIMITATIONS.md).
+
+**Each public form takes a limited number of submissions a day.** The ceiling
+is a server setting (`PUBLIC_FORM_DAILY_LIMIT`, 500 per form per day unless the
+operator changes it). Only accepted submissions count toward it: one that fails
+validation — a required answer missing, a value too long — and one caught as a
+bot are turned away without using up the day's allowance, so a flood of junk
+cannot lock genuine submitters out. Once the ceiling is reached, a visitor is
+told _"This form is not accepting further submissions today."_
+
+**The full catalog of forms is the Forms page**, which requires `forms.manage`.
+Event administrators who look after the public outreach request form do not
+need it: **Manage Events → Settings → Public Form** lists only the forms wired
+to the event request pipeline, under `events.manage` — see
+[Events & Meetings → Public Request Form](./04-events-meetings.md#public-request-form).
+
 ![Form sharing dialog with the public URL and its QR code](./images/07-05-form-sharing.png)
 
 > **Hint:** Public forms are great for community feedback, mutual aid incident reports, or application forms linked from your department's public portal.
@@ -266,11 +303,11 @@ Navigate to **Notifications** in the sidebar (`/notifications`) to manage notifi
 
 The Notifications page uses a three-tab layout:
 
-| Tab                    | Purpose                                                                 |
-| ---------------------- | ----------------------------------------------------------------------- |
-| **Notification Rules** | Create and manage rules that define when and how notifications are sent |
-| **Email Templates**    | Link to email template management for customizing notification formats  |
-| **Send Log**           | View delivery history with channel filtering (All / Email / In-App)     |
+| Tab                    | Purpose                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| **Notification Rules** | Create and manage rules that define when and how notifications are sent                    |
+| **Email Templates**    | Link to email template management for customizing notification formats                     |
+| **Send Log**           | Your own delivery history, email and in-app, with channel filtering (All / Email / In-App) |
 
 ![Notification rules and logs page with summary cards and the rules list](./images/07-08-notification-rules.png)
 
@@ -278,14 +315,15 @@ The Notifications page uses a three-tab layout:
 
 Notification rules define when and how you are alerted. Rules can be set for:
 
-| Trigger             | Description                                           | Default Category | Default Channel |
-| ------------------- | ----------------------------------------------------- | ---------------- | --------------- |
-| **event_reminder**  | Alerts before upcoming events                         | Events           | In-App          |
-| **training_expiry** | Warnings when certifications are expiring             | Training         | Email           |
-| **schedule_change** | Alerts for shift changes or new assignments           | Scheduling       | In-App          |
-| **new_member**      | Notification when a new member is added               | Members          | In-App          |
-| **maintenance_due** | Alerts for upcoming equipment or facility maintenance | Maintenance      | Email           |
-| **form_submitted**  | Alerts when a form receives a new submission          | General          | In-App          |
+| Trigger                  | Description                                                                                                        | Default Category | Default Channel  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------ | ---------------- | ---------------- |
+| **event_reminder**       | Alerts before upcoming events                                                                                      | Events           | In-App           |
+| **training_expiry**      | Warnings when certifications are expiring                                                                          | Training         | Email            |
+| **schedule_change**      | Alerts for shift changes or new assignments                                                                        | Scheduling       | In-App           |
+| **new_member**           | Notification when a new member is added                                                                            | Members          | In-App           |
+| **maintenance_due**      | Alerts for upcoming equipment or facility maintenance                                                              | Maintenance      | Email            |
+| **form_submitted**       | Alerts when a form receives a new submission                                                                       | General          | In-App           |
+| **suggestion_submitted** | Tells a suggestion box's reviewers and notified people that a submission arrived; disabling it stops those notices | General          | In-App and email |
 
 ### Creating a Rule
 
@@ -302,15 +340,18 @@ Rules can be enabled/disabled individually with toggle switches. The summary car
 
 ### Send Log
 
-The **Send Log** tab shows notification delivery history with:
+The **Send Log** tab shows **your own** delivery history — the email and in-app
+notifications sent to you — and every member can open it. It lists:
 
 - Date and time
-- Recipient
 - Subject and message content
 - Channel (email or in-app)
 - Delivery status (sent, read, failed)
 - **Channel filter** — filter by All, Email only, or In-App only
 - **Mark All Read** button to bulk-clear unread notifications
+
+The department-wide view of every member's deliveries, for checking that mail is
+getting through, requires `notifications.manage`.
 
 ![Notification send log with channel filters and delivery status](./images/07-09-notification-send-log.png)
 
@@ -373,7 +414,8 @@ guaranteed record of notice (see the caveats below). The dashboard card shows
 what still needs your attention:
 unread messages, acknowledgment-required messages you haven't acknowledged,
 and persistent notices. Once you resolve a message it clears off the card on
-your next visit; the full history stays on the **Messages** page. Urgent
+your next visit — never while you are reading it; the full history stays on the
+**Messages** page. Urgent
 messages are additionally **escalated** to SMS:
 
 | Priority / flag         | In-app (bell, inbox, dashboard) | Email | SMS |
@@ -408,6 +450,21 @@ who was never asked counts as _not_ consented), **and** their text-message
 preference is on. A member who turns off or never grants SMS is still included
 in the email escalation, subject to the caveats above. The author of a message
 is not notified about their own post.
+
+### Opening a message
+
+Each message has its own page at `/messages/:id`, opened from the inbox or the
+dashboard card, so a link to a message works: paste it into an email or a chat
+and the recipient lands on that message. The breadcrumb leads back to
+**Messages**. Opening the page marks the message read, and an
+acknowledgment-required message carries its **Acknowledge** button there.
+
+The page needs no permission beyond signing in, and that is safe rather than
+loose: the server serves a message only to a member it was targeted at. Anyone
+else — or anyone opening a message that has expired or been removed — sees
+**Message unavailable** with a way back to the inbox.
+
+![A department message on its own page: the breadcrumb back to Messages, the title, sender and sent date, and a body several paragraphs long](./images/19-42-message-detail.png)
 
 ### Requiring acknowledgment
 
@@ -491,6 +548,8 @@ in-app notification is always delivered regardless of these settings.
 | Editing an already-sent message             | Saves changes in place; it is **not** re-sent or re-escalated.                                                             |
 | Urgent message when Twilio isn't configured | Still delivered in-app and by email; SMS is skipped.                                                                       |
 | Very high volume of urgent/ack messages     | Email/SMS escalation is rate-limited per department to prevent runaway sends; the in-app notification is always delivered. |
+| Sending is retried for a message            | Each member gets the email (and any SMS) once; a send already made to them is not repeated.                                |
+| A send to a member fails                    | It is recorded as failed, never as delivered.                                                                              |
 
 ---
 
@@ -533,13 +592,26 @@ positions.
    one-way box: reviewers read every submission but do not reply or report a
    status.
 5. Pick the reviewers: any mix of **Reviewer positions** (whoever holds that
-   position) and **Reviewer members**. An active box needs at least one.
+   position) and **Reviewer members**. An active box needs at least one. They
+   are the only people who will ever read it, so choose them with the box's
+   purpose in mind — a complaints box reviewed by the people most likely to be
+   complained about will not be used.
 6. Leave **Accepting submissions** ticked, and **Save box**.
 
-Boxes are never deleted — untick **Accepting submissions** to close one. Its
-existing submissions stay readable by its reviewers.
+![The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below](./images/07-14-suggestion-box-dialog.png)
 
-![The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up ticked, the note that managing boxes does not let you read them, and two reviewer positions ticked](./images/07-14-suggestion-box-dialog.png)
+To close a box, untick **Accepting submissions**. Its existing submissions stay
+readable by its reviewers.
+
+To remove a box you no longer need, press **Delete** on it:
+
+- **A box that never received a submission** is deleted after you confirm.
+- **A box with submissions** shows how many it holds and offers **Archive
+  instead**, which closes it and keeps everything. Deleting it permanently
+  removes every submission, screenshot and reply in it, cannot be undone, and
+  asks you to type the box's name first.
+
+![The Delete "Training ideas"? dialog: the warning giving how many submissions the box holds and that deleting removes them all, the Archive instead button, and the field for typing the box's name, with Delete permanently still disabled](./images/07-23-suggestion-box-delete-dialog.png)
 
 ### Submitting a suggestion (every member)
 
@@ -552,7 +624,12 @@ existing submissions stay readable by its reviewers.
 5. Press **Submit** (or **Submit anonymously**).
 
 Named submissions appear under **My submissions**, where you can follow the
-status and reply if the box allows follow-up.
+status and reply if the box allows follow-up. In a follow-up box, **Status
+history** shows when your submission was received, each status it has moved
+through, and any response the reviewers wrote for you. An anonymous submission
+shows the same history when you open it with its follow-up key.
+
+![Suggestions → My submissions with the accepted night-time extrication drill open: its Status history running from Received through Accepted, with the reviewers' response to the submitter under the Accepted step](./images/07-20-suggestion-status-history.png)
 
 ![Suggestions → Submit with the Training ideas box chosen, its description and anonymity hint showing, a title and details filled in, one screenshot attached, and Submit anonymously ticked with the warning to check screenshots for your name](./images/07-15-suggestion-submit-anonymous.png)
 
@@ -593,6 +670,27 @@ reconnect you to it.
 > [Known Limitations](../KNOWN_LIMITATIONS.md). If that matters for what you
 > want to report, say so to your department's leadership through another route.
 
+### The idea board
+
+Some boxes have an **Idea board** tab on the Suggestions page. It shows ideas
+the box's reviewers chose to share with everyone, written up by them, never
+the original submission, its screenshots or who sent it. Press the arrow on
+an idea to vote for it; press it again to take your vote back. Sort by
+**Top** (most votes) or **New**, and filter by status. When reviewers have
+responded to an idea, their latest response is shown with it.
+
+![Suggestions → Idea board sorted by Top: the night-time extrication drill with three votes, already voted for, marked Accepted with the reviewers' response, above the SCBA sessions idea with one vote, marked Under review](./images/07-21-suggestion-idea-board.png)
+
+Reviewers of a board-enabled box see an **Idea board** section when they open a
+submission. **Publish to the board** asks for a title and summary in your own
+words, so write it without names or anything that identifies the sender.
+**Edit published copy** changes it and **Take off the board** removes it. Its
+votes are kept if you publish it again. While an idea is published, your
+latest response to the submitter is shown on the board too. Administrators
+turn the board on per box with **Public idea board** in the box's settings.
+
+![The Edit published copy dialog opened from a submission's Idea board section: the note that every member can read it and that the submission, its screenshots and its sender are never shown, then the public title and summary](./images/07-22-suggestion-publish-dialog.png)
+
 ### Reviewing submissions
 
 Reviewers see a **Review** tab on the Suggestions page, with a count of open
@@ -604,12 +702,31 @@ Open a submission to:
 - set its **Disposition** — **New**, **Under review**, **Accepted**,
   **Implemented**, **Declined** or **Duplicate**. In a follow-up box, a named
   submitter is emailed when it changes;
+- write a **Response to the submitter**, in a follow-up box. It appears on the
+  submitter's **Status history** under "Reviewers", never with your name, and
+  they are notified that you responded. Each response is added as a new step;
+  use it to explain a decision or what happens next;
 - keep an **Internal note (reviewers only)** — never shown to the submitter;
 - reply in the **Follow-up** thread, if the box allows follow-up. An anonymous
   author appears as **Anonymous submitter**.
 
-Reviewers are emailed when a submission or a submitter's reply arrives. **The
-email carries a link, never the submission's content.**
+Reviewers get a notification in the app (and a push notification, where your
+department has them switched on) and an email of their own when a submission or
+a submitter's reply arrives. **Neither carries the submission's content, only a
+link to it.** A department can turn the new-submission notices off under
+**Notifications → Notification Rules** with a **Suggestion Submitted** rule; replies and
+status changes still go out.
+
+![Notifications → Create Notification Rule with the trigger event set to Suggestion Submitted, and the note under it saying it tells the box's reviewers, and anyone the box notifies, that a submission arrived, and that replies and status updates still go out when it is switched off](./images/07-24-suggestion-notification-rule.png)
+
+**Telling someone about new submissions without letting them read them.** In a
+box's settings, **Also notify** names positions or members who are told when
+something arrives in that box. They cannot open it: their notice says which box
+received a submission and that its reviewers have it, nothing more. Use it for
+someone who needs to know a box is being used, such as a chief who wants to know
+the Compliance box has something in it, without making them a reviewer. The
+email reviewers receive is editable under **Communications → Email Templates →
+Suggestion Boxes → Suggestion Submitted**.
 
 **Forwarding one suggestion to somebody else.** A box's reviewer can press
 **Forward** and choose members and/or positions. They can read **that
@@ -619,18 +736,14 @@ They are emailed a link, and see a **Forwarded to you** badge. Reviewers see who
 it was forwarded to and can **Withdraw** a forward. An anonymous submitter stays
 anonymous when forwarded. Forwards and withdrawals are audit-logged.
 
-![Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the internal note, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply](./images/07-17-suggestion-review.png)
+![Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the Response to the submitter and internal note fields, the Status history from Received to Under review, the Idea board section with its published copy and the Edit published copy and Take off the board buttons, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply](./images/07-17-suggestion-review.png)
 
 The person it was forwarded to finds it on their own **Review** tab, even if
 they review no box. Only the suggestions forwarded to them appear there, each
 marked **Forwarded to you**, and the **Forward** button is replaced by a note
 that only the box's reviewers can forward it.
 
-> **Screenshot needed:**
-> _[What a forward recipient sees: Suggestions → **Review** for a member who
-> reviews no box, with the one forwarded submission marked **Forwarded to you**
-> and open, and under **Forwarded to** the note that only the box's reviewers can
-> forward it — no **Forward** button.]_
+![Suggestions → Review as a member who reviews no box: the one submission forwarded to them, marked Forwarded to you, open on the right with its disposition, internal note and thread, its Idea board section saying only the box's reviewers can publish it, and under Forwarded to the note that only the box's reviewers can forward it, with no Forward button](./images/07-18-suggestion-forwarded-to-you.png)
 
 **On a phone** the list and the open submission stack rather than sitting side
 by side. Tap a submission and the page scrolls down to it; scroll back up for the
@@ -780,12 +893,11 @@ She uses the form builder to add fields by clicking **Add Field** for each one. 
 
 Capt. Zhao configures the form settings:
 
-| Setting                        | Value                                                                                    |
-| ------------------------------ | ---------------------------------------------------------------------------------------- |
-| **Status**                     | Active                                                                                   |
-| **Public Access**              | Off (internal only — requires login)                                                     |
-| **Allow Multiple Submissions** | Yes (one per day per apparatus)                                                          |
-| **Submission Notification**    | On — notify Safety Officer when a submission includes "Minor Issues" or "Out of Service" |
+| Setting                     | Value                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------- |
+| **Status**                  | Active                                                                                   |
+| **Public Access**           | Off (internal only — requires login)                                                     |
+| **Submission Notification** | On — notify Safety Officer when a submission includes "Minor Issues" or "Out of Service" |
 
 She clicks **Save**. The form is now live and accessible to all logged-in members.
 
@@ -841,7 +953,7 @@ She clicks **Export CSV** to download the data for the monthly operations report
 | Public form URL not working                                    | Verify that Public Access is enabled on the form. The form must be in Active status. Ensure the URL uses the correct format: `/f/{slug}`.                                                                                                                                        |
 | Form builder drag-and-drop not working                         | The builder uses `@dnd-kit` for reordering. Clear browser cache and reload. If the issue persists, run `cd frontend && npm install` to ensure dependencies are installed.                                                                                                        |
 | Public form shows 404 error                                    | Fixed in March 2026 — a doubled `/v1` in the API URL path has been corrected. Pull latest code and rebuild.                                                                                                                                                                      |
-| Forms page not visible in navigation                           | The Forms page now requires `forms.view` permission (changed from `settings.manage` in March 2026). Ask your administrator to grant `forms.view` to your role.                                                                                                                   |
+| Forms page not visible in navigation                           | The Forms page requires `forms.manage` permission. Ask your administrator to grant `forms.manage` to your role.                                                                                                                                                                  |
 | Integration reprocessing fails                                 | Check that the target module (Membership or Inventory) is enabled and the field mapping is correct. Review the error details on the failed submission.                                                                                                                           |
 | Not receiving email notifications                              | Check your notification preferences in My Account > Notifications. Verify your email address is correct. Check your spam folder. If using Cloudflare Email Service, verify the API token is valid in Administration > Organization Settings > Email tab.                         |
 | Slack integration not posting                                  | Verify the webhook URL is correct and the Slack channel exists. Check the integration logs for errors.                                                                                                                                                                           |
@@ -855,7 +967,7 @@ She clicks **Export CSV** to download the data for the monthly operations report
 | Form submission does not auto-advance prospect                 | As of 2026-03-14, auto-advance must be explicitly enabled in the pipeline stage configuration. Open Pipeline Settings, edit the form_submission stage, and check "Auto-advance when form is submitted".                                                                          |
 | Automated pipeline email not sent on form submission           | The email is triggered when advancing to an `automated_email` stage, not when submitting a form. Verify the pipeline has an `automated_email` stage after the `form_submission` stage and that SMTP is configured. _(added 2026-03-14)_                                          |
 | "Required field '…' is missing" on a question nobody could see | Fixed 2026-09-23. A required question hidden by its conditional-visibility rule is no longer enforced. If it still happens, check the rule: an operator the server does not recognise counts as **visible**, so the field stays required rather than silently becoming optional. |
-| Public form submission by bot                                  | The system uses a hidden honeypot field for bot detection. If filled, the submission returns HTTP 200 with no body (fake success) — no record is created. Legitimate users never see this field.                                                                                 |
+| Public form submission by bot                                  | The system uses a hidden honeypot field for bot detection. If filled, the submission is answered with an ordinary thank-you (fake success) — no record is created. Legitimate users never see this field.                                                                        |
 
 ---
 
@@ -863,4 +975,4 @@ She clicks **Export CSV** to download the data for the monthly operations report
 
 ## August 12–14, 2026 update
 
-The event-scoped public-outreach form catalog and its permission/data-sharing boundaries are covered in [the August 12–14 release lesson](./19-august-2026-release-changes.md#events-reminders-check-in-and-outreach-forms).
+The public-outreach form list event administrators see, and how it differs from the Forms catalog, is covered under [Public Forms](#public-forms).

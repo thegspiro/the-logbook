@@ -8,7 +8,19 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router';
-import { ArrowLeft, Tag, Plus, Pencil, RefreshCw, Settings, Shield, Wrench, Hash, AlertTriangle } from 'lucide-react';
+import {
+  ArrowLeft,
+  Tag,
+  Plus,
+  Pencil,
+  RefreshCw,
+  Settings,
+  Shield,
+  Wrench,
+  Hash,
+  AlertTriangle,
+  Nfc,
+} from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { InventoryCategory, InventoryCategoryCreate } from '../types';
 import { ITEM_TYPES } from '../types';
@@ -44,6 +56,8 @@ interface CategoryFormData {
   requires_assignment: boolean;
   nfpa_tracking_enabled: boolean;
   low_stock_threshold: string;
+  allow_self_checkout: boolean;
+  self_checkout_loan_days: string;
 }
 
 const EMPTY_FORM: CategoryFormData = {
@@ -55,6 +69,8 @@ const EMPTY_FORM: CategoryFormData = {
   requires_assignment: false,
   nfpa_tracking_enabled: false,
   low_stock_threshold: '',
+  allow_self_checkout: false,
+  self_checkout_loan_days: '',
 };
 
 const inputClass = 'form-input w-full';
@@ -105,6 +121,8 @@ const InventoryCategoriesPage: React.FC = () => {
       requires_assignment: category.requires_assignment,
       nfpa_tracking_enabled: category.nfpa_tracking_enabled,
       low_stock_threshold: category.low_stock_threshold != null ? String(category.low_stock_threshold) : '',
+      allow_self_checkout: category.allow_self_checkout ?? false,
+      self_checkout_loan_days: category.self_checkout_loan_days != null ? String(category.self_checkout_loan_days) : '',
     });
     setShowModal(true);
   };
@@ -130,6 +148,7 @@ const InventoryCategoriesPage: React.FC = () => {
       // was being lost behind a success toast (CLAUDE.md pitfall #1).
       const { text, num } = formCoercions(Boolean(editingCategory));
       const threshold = parseInt(formData.low_stock_threshold, 10);
+      const loanDays = parseInt(formData.self_checkout_loan_days, 10);
       const payload: InventoryCategoryCreate = {
         name: formData.name.trim(),
         description: text(formData.description),
@@ -139,6 +158,10 @@ const InventoryCategoriesPage: React.FC = () => {
         requires_assignment: formData.requires_assignment,
         nfpa_tracking_enabled: formData.nfpa_tracking_enabled,
         low_stock_threshold: isNaN(threshold) ? num('') : threshold,
+        allow_self_checkout: formData.allow_self_checkout,
+        // Only meaningful with self-checkout on; sent (as null when blank) on
+        // edit so clearing the box actually removes the due date.
+        self_checkout_loan_days: isNaN(loanDays) ? num('') : loanDays,
       };
       if (editingCategory) {
         await inventoryService.updateCategory(editingCategory.id, payload);
@@ -293,6 +316,12 @@ const InventoryCategoriesPage: React.FC = () => {
                     <Shield className="h-3 w-3" /> NFPA
                   </span>
                 )}
+                {cat.allow_self_checkout && (
+                  <span className="text-theme-text-muted bg-theme-surface-hover inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs">
+                    <Nfc className="h-3 w-3" /> Kiosk
+                    {cat.self_checkout_loan_days ? ` · ${cat.self_checkout_loan_days}d` : ''}
+                  </span>
+                )}
               </div>
               {cat.low_stock_threshold != null && cat.low_stock_threshold > 0 && (
                 <div className="border-theme-surface-border mt-auto flex items-center gap-1.5 border-t pt-2 text-xs text-amber-600 dark:text-amber-400">
@@ -384,6 +413,35 @@ const InventoryCategoriesPage: React.FC = () => {
               checked={formData.nfpa_tracking_enabled}
               onChange={(v) => setFormData((prev) => ({ ...prev, nfpa_tracking_enabled: v }))}
             />
+          </div>
+          <div className="space-y-2">
+            <ToggleSwitch
+              id="cat-self-checkout"
+              label="Allow self-checkout at the kiosk"
+              checked={formData.allow_self_checkout}
+              onChange={(v) => setFormData((prev) => ({ ...prev, allow_self_checkout: v }))}
+            />
+            {formData.allow_self_checkout && (
+              <div>
+                <label htmlFor="cat-loan-days" className={labelClass}>
+                  Kiosk loan period (days)
+                </label>
+                <input
+                  id="cat-loan-days"
+                  type="number"
+                  min="1"
+                  max="365"
+                  value={formData.self_checkout_loan_days}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, self_checkout_loan_days: e.target.value }))}
+                  className={inputClass}
+                  placeholder="e.g. 14"
+                />
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Items checked out at the kiosk are due back after this many days, and are flagged overdue after that.
+                  Leave empty for no due date.
+                </p>
+              </div>
+            )}
           </div>
           <div>
             <label htmlFor="cat-threshold" className={labelClass}>

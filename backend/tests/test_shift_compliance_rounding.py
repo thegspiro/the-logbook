@@ -11,6 +11,16 @@ from app.models.training import RequirementType
 from app.services.scheduling_service import SchedulingService
 
 
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.scheduling_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+
+
 class _Result:
     def __init__(self, *, scalar_rows=None, rows=None):
         self._scalar_rows = scalar_rows or []
@@ -51,6 +61,8 @@ async def test_hours_compliance_uses_raw_minutes_before_display_rounding():
                 _Result(scalar_rows=[user]),
                 _Result(rows=[]),
                 _Result(rows=[attendance]),
+                # external_shift_hours: none logged
+                _Result(rows=[]),
             ]
         )
     )

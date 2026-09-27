@@ -484,7 +484,7 @@ def render_request_template(
         "organization_name": event_request.organization_name or "",
         "organization_logo_img": build_email_logo_img(org),
         "event_date": (
-            event_request.event_date.strftime("%B %d, %Y at %I:%M %p")
+            _format_local_when(event_request.event_date, org)
             if event_request.event_date
             else "TBD"
         ),
@@ -558,7 +558,7 @@ async def send_request_notification(
 
             org_name = org.name if org else "Department"
             event_date = (
-                event_request.event_date.strftime("%B %d, %Y at %I:%M %p")
+                _format_local_when(event_request.event_date, org)
                 if event_request.event_date
                 else ""
             )
@@ -745,6 +745,12 @@ def _org_timezone(org: Optional[Organization]):
         return ZoneInfo(name)
     except (ZoneInfoNotFoundError, ValueError):
         return timezone.utc
+
+
+def _format_local_when(value: datetime, org: Optional[Organization]) -> str:
+    """An event request's date as the department reads it, for an email body."""
+    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return aware.astimezone(_org_timezone(org)).strftime("%B %d, %Y at %I:%M %p")
 
 
 def outreach_type_label(org: Optional[Organization], outreach_type: str) -> str:

@@ -28,7 +28,11 @@ class TestEnumConsistency:
         enums = {}
 
         # Pattern to match: sa.Enum('value1', 'value2', ..., name='enumname')
-        enum_pattern = r"sa\.Enum\((.*?name=['\"](\w+)['\"].*?)\)"
+        # The match stays inside one call. A lazy ".*?" under DOTALL let an
+        # unnamed sa.Enum(*values) run on to the next name= anywhere later in
+        # the file (a UniqueConstraint's), sweeping ondelete="CASCADE" in as an
+        # enum value.
+        enum_pattern = r"sa\.Enum\(([^()]*?name=['\"](\w+)['\"][^()]*)\)"
 
         for migration_file in migrations_dir.glob("*.py"):
             content = migration_file.read_text()

@@ -105,7 +105,10 @@ const UNCACHEABLE_PREFIXES = [
   // puts in the colour column, this dropdown-options endpoint echoes back
   '/inventory/nfc', // NFC tag switch and tag records (also covers /inventory/nfc-tags/): the switch
   // must read fresh the moment an administrator flips it, not 90s later, and a
-  // tag record names the member who linked it
+  // tag record names the member who linked it. Also covers /inventory/nfc/audits
+  // (who audited a shelf) and /nfc/resolve-member (a member found by their card)
+  '/inventory/not-seen', // reconciliation report: an item put away a minute ago must drop
+  // off it on the next load, and a stale copy sends somebody hunting for it
   '/inventory/charges', // per-member cost-recovery / financial liability (PII)
   '/inventory/allowances/check/', // GET /allowances/check/{user_id}/{category_id}: a named member's entitlement
   '/inventory/clearances', // departure clearances: who is leaving, departure type, notes, value still owed (PII)

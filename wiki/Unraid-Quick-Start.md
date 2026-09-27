@@ -218,8 +218,9 @@ This stack runs in **production posture**. The setup script configures a
   outgoing email (password resets, ballots, reminders) is built from it. The
   setup script writes it from the HTTPS URL you give it, and on an update fills
   it in when it is missing or still points at `localhost`; if you change your
-  public address later, change it here too. A `localhost` value logs a
-  `WARNING: FRONTEND_URL ...` line at startup.
+  public address later, change it here too. A `localhost` value stops the
+  backend from starting (`CRITICAL: FRONTEND_URL ...`), and the update path
+  stops before restarting anything if the kept `.env` still has one.
 - **API docs (`/docs`) are OFF by default** — enabling them blocks boot in production.
 - **Leave `TRUSTED_PROXY_IPS` empty** — the compose publishes the backend port
   directly, so the connecting peer is the real client. Only set it when you add a

@@ -72,6 +72,10 @@ ALLOWED = {
         "training.manage",
     ),
     ("training_sessions.py", "POST", "/approve/{token}", "training.manage"),
+    # `inventory.check_view` lifts a submitter's restriction to their assigned
+    # templates, exactly as GET /equipment-checks/templates/{id} does. Tapping
+    # a tag during a check is part of performing one, which view alone cannot.
+    ("inventory_nfc.py", "POST", "/nfc/resolve-check", "inventory.check_view"),
 }
 
 

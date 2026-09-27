@@ -513,7 +513,9 @@ class MinutesTemplate(Base):
     # Document footer config: {left_text, center_text, right_text, show_page_numbers, confidentiality_notice}
     footer_config = Column(JSON, nullable=True)
 
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -608,11 +610,17 @@ class MeetingMinutes(Base):
         server_default="draft",
     )
     submitted_at = Column(DateTime(timezone=True), nullable=True)
-    submitted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    submitted_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     approved_at = Column(DateTime(timezone=True), nullable=True)
-    approved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    approved_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     rejected_at = Column(DateTime(timezone=True), nullable=True)
-    rejected_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    rejected_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     rejection_reason = Column(Text, nullable=True)
 
     # Link to event (optional — minutes can be linked to a business_meeting event)
@@ -626,7 +634,9 @@ class MeetingMinutes(Base):
     )
 
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -770,7 +780,9 @@ class ActionItem(Base):
 
     # Item details
     description = Column(Text, nullable=False)
-    assignee_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    assignee_id = Column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     assignee_name = Column(String(200), nullable=True)
     due_date = Column(DateTime(timezone=True), nullable=True)
     priority = Column(

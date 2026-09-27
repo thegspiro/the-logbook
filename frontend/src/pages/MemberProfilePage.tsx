@@ -27,7 +27,7 @@ import { adminHoursEntryService, adminHoursComplianceService } from '../modules/
 import type { AdminHoursComplianceItem } from '../modules/admin-hours/types';
 import type { AdminHoursSummary } from '../modules/admin-hours/types';
 import type { LeaveOfAbsenceResponse } from '../services/api';
-import { CreditCard, Pencil } from 'lucide-react';
+import { CreditCard, EyeOff, Pencil } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
@@ -49,7 +49,7 @@ import type {
 import type { TrainingRecord, ComplianceSummary } from '../types/training';
 import { AVAILABLE_MODULES } from '../types/modules';
 import { MAX_AVATAR_SIZE } from '../constants/config';
-import { SEPARATED_STATUSES, UserStatus } from '../constants/enums';
+import { ANONYMIZABLE_STATUSES, SEPARATED_STATUSES, UserStatus } from '../constants/enums';
 import TrainingSection from '../components/member-profile/TrainingSection';
 import AdminHoursSection from '../components/member-profile/AdminHoursSection';
 import ContactInfoSection from '../components/member-profile/ContactInfoSection';
@@ -58,6 +58,7 @@ import { VisibilityControl } from '../components/member-profile/VisibilityContro
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
 import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
+import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
 import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
@@ -154,6 +155,7 @@ export const MemberProfilePage: React.FC = () => {
   // Status change modal state
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [reactivateModalOpen, setReactivateModalOpen] = useState(false);
+  const [anonymizeModalOpen, setAnonymizeModalOpen] = useState(false);
 
   // Takes the fixed mobile bottom bar off this overlay while it is open.
   useOverlaySurface(statusModalOpen);
@@ -1257,6 +1259,18 @@ export const MemberProfilePage: React.FC = () => {
                         Shown to you because you manage members. Other members do not see an active status.
                       </p>
                     )}
+                    {/* Only a departed member can be anonymized; the backend
+                        refuses every other status and the caller's own record. */}
+                    {!isSelf && (ANONYMIZABLE_STATUSES as readonly string[]).includes(user.status) && (
+                      <button
+                        type="button"
+                        onClick={() => setAnonymizeModalOpen(true)}
+                        className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-red-700 hover:underline dark:text-red-400"
+                      >
+                        <EyeOff className="h-4 w-4" />
+                        Anonymize member
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1426,6 +1440,18 @@ export const MemberProfilePage: React.FC = () => {
               name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username,
             }}
             onReactivated={() => fetchUserData(userId)}
+          />
+        )}
+
+        {canManageMembers && user && userId && (
+          <AnonymizeMemberModal
+            isOpen={anonymizeModalOpen}
+            onClose={() => setAnonymizeModalOpen(false)}
+            member={{
+              id: userId,
+              name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username,
+            }}
+            onAnonymized={() => navigate('/members')}
           />
         )}
       </div>

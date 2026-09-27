@@ -30,6 +30,7 @@ from app.models.grant import (
 from app.models.user import User
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_ordering import nulls_last_asc
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -524,8 +525,7 @@ class GrantService:
                     ),
                     due_date=(
                         application.grant_end_date
-                        if application.grant_end_date
-                        else date.today()
+                        or await resolve_org_today(self.db, application.organization_id)
                     ),
                     status=ComplianceTaskStatus.PENDING,
                     priority="medium",
@@ -978,7 +978,7 @@ class GrantService:
             and old_status != ComplianceTaskStatus.COMPLETED
             and not task.completed_date
         ):
-            task.completed_date = date.today()
+            task.completed_date = await resolve_org_today(self.db, organization_id)
 
         # Log completion as a grant note
         if (
@@ -1076,7 +1076,7 @@ class GrantService:
 
     async def get_dashboard_data(self, organization_id: str) -> Dict[str, Any]:
         """Aggregate data for the grants dashboard."""
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
 
         # Active grants (status = active or reporting)
         active_statuses = [ApplicationStatus.ACTIVE, ApplicationStatus.REPORTING]

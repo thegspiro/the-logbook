@@ -53,6 +53,7 @@ from app.models.inventory import (
     ItemType,
     NFPAExposureRecord,
     NFPAItemCompliance,
+    ReturnRequestStatus,
     StorageArea,
 )
 from app.models.location import Location
@@ -199,6 +200,7 @@ from app.services.label_service import UNSET, LabelService
 from app.services.organization_service import OrganizationService
 from app.utils import label_renderer
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import resolve_org_today
 from app.utils.upload_limits import read_upload_limited
 from app.utils.websocket_origin import is_websocket_origin_allowed
 
@@ -5513,7 +5515,7 @@ async def get_nfpa_summary(
     from sqlalchemy import func as sa_func
 
     org_id = str(current_user.organization_id)
-    today = datetime.utcnow().date()
+    today = await resolve_org_today(db, org_id)
     from datetime import timedelta
 
     retirement_warning_date = today + timedelta(days=180)
@@ -5591,7 +5593,8 @@ async def get_nfpa_retirement_due(
     from datetime import timedelta
 
     org_id = str(current_user.organization_id)
-    cutoff = datetime.utcnow().date() + timedelta(days=days_ahead)
+    today = await resolve_org_today(db, org_id)
+    cutoff = today + timedelta(days=days_ahead)
 
     result = await db.execute(
         select(NFPAItemCompliance, InventoryItem)
@@ -5624,9 +5627,7 @@ async def get_nfpa_retirement_due(
                     else None
                 ),
                 "days_remaining": (
-                    (
-                        compliance.expected_retirement_date - datetime.utcnow().date()
-                    ).days
+                    (compliance.expected_retirement_date - today).days
                     if compliance.expected_retirement_date
                     else None
                 ),
@@ -5706,8 +5707,20 @@ async def inventory_websocket(
                 await websocket.close(code=4001, reason="Invalid or revoked session")
                 return
             org_id = user.organization_id
+
+            # The router's module gate stands aside for WebSocket handshakes
+            # (see get_request_enabled_modules), so the switch is enforced
+            # here, once the user and therefore the organization are known.
+            enabled = (
+                await OrganizationService(db).get_enabled_modules(org_id)
+            ).enabled_modules
     except Exception:
         await websocket.close(code=4001, reason="Invalid or expired token")
+        return
+
+    if "inventory" not in enabled:
+        # 4003 is final on the client: useInventoryWebSocket does not retry it.
+        await websocket.close(code=4003, reason="Inventory module is not enabled")
         return
 
     if not await ws_manager.connect(websocket, org_id):
@@ -6208,7 +6221,9 @@ async def create_return_request(
     response_model=List[ReturnRequestResponse],
 )
 async def list_return_requests(
-    request_status: Optional[str] = Query(None, alias="status"),
+    # Typed as the enum so an unknown status is a 422 naming the valid values,
+    # not a ValueError raised from the service's enum conversion as a 500.
+    request_status: Optional[ReturnRequestStatus] = Query(None, alias="status"),
     mine_only: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -7326,13 +7341,11 @@ async def list_expiring_lots(
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """List in-stock lots expiring within N days, with item name."""
-    from datetime import date as _date
-
     service = InventoryService(db)
+    today = await resolve_org_today(db, current_user.organization_id)
     rows = await service.get_expiring_lots(
-        str(current_user.organization_id), days_ahead
+        str(current_user.organization_id), days_ahead, today=today
     )
-    today = _date.today()
     result: list[ExpiringLotResponse] = []
     for lot, item_name in rows:
         days_until = (lot.expiration_date - today).days if lot.expiration_date else None

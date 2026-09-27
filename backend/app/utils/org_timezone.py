@@ -13,7 +13,8 @@ always used, and generation writes real timestamps — changing it would move
 existing departments' shift times.
 """
 
-from typing import Optional
+from datetime import date, datetime, time, timezone
+from typing import List, Optional
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -37,6 +38,22 @@ def scheduling_timezone(organization: Optional[Organization]) -> ZoneInfo:
         return ZoneInfo(DEFAULT_SCHEDULING_TIMEZONE)
 
 
+def format_in_org_timezone(
+    value: datetime,
+    organization: Optional[Organization],
+    fmt: str = "%B %d, %Y at %I:%M %p",
+) -> str:
+    """Render a stored timestamp as wall-clock time in the department's zone.
+
+    Timestamps are stored as UTC, and MySQL hands some of them back naive, so
+    a naive value is read as UTC rather than as local time. Emails have no
+    browser to localize for the reader, so this is the only conversion an
+    emailed time ever gets.
+    """
+    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return aware.astimezone(scheduling_timezone(organization)).strftime(fmt)
+
+
 async def resolve_scheduling_timezone(
     db: AsyncSession, organization_id: UUID | str
 ) -> ZoneInfo:
@@ -45,3 +62,69 @@ async def resolve_scheduling_timezone(
         select(Organization).where(Organization.id == str(organization_id))
     )
     return scheduling_timezone(result.scalar_one_or_none())
+
+
+def org_today(organization: Optional[Organization]) -> date:
+    """Today's date on the department's calendar.
+
+    ``date.today()`` is the server's date, and a container runs in UTC, which
+    is already tomorrow for a US department every evening. Anything that
+    counts days, picks "last month", or decides expired-versus-not has to ask
+    the department's calendar instead.
+    """
+    return today_in(scheduling_timezone(organization))
+
+
+def today_in(tz: ZoneInfo) -> date:
+    """Today's date in ``tz``, for a caller that has already resolved it."""
+    return datetime.now(tz).date()
+
+
+async def resolve_org_today(db: AsyncSession, organization_id: UUID | str) -> date:
+    """Load the organization and return today's date in its timezone."""
+    return today_in(await resolve_scheduling_timezone(db, organization_id))
+
+
+def local_day_start_utc(day: date, tz: ZoneInfo) -> datetime:
+    """The UTC instant at which ``day`` begins on the department's calendar.
+
+    A date filter against a UTC timestamp column has to be bounded by the
+    department's midnight, not UTC's, or an evening row is filed under the
+    next day.
+    """
+    return datetime.combine(day, time.min, tz).astimezone(timezone.utc)
+
+
+def to_local(value: datetime, tz: ZoneInfo) -> datetime:
+    """A stored UTC timestamp as wall-clock time in ``tz``.
+
+    MySQL hands some timestamps back naive, so a naive value is read as UTC
+    rather than as local time.
+    """
+    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return aware.astimezone(tz)
+
+
+def local_date(value: datetime, tz: ZoneInfo) -> date:
+    """The department's calendar date of a stored UTC timestamp.
+
+    ``value.date()`` on a UTC timestamp is the UTC day, which is already
+    tomorrow for an evening event; a naive value is read as UTC.
+    """
+    return to_local(value, tz).date()
+
+
+def local_and_utc_dates(value: datetime, tz: ZoneInfo) -> List[date]:
+    """The department's date of ``value``, then its UTC date if that differs.
+
+    For finding a row keyed by a date that older code derived from the UTC
+    timestamp: a row written before its writer moved to the department's
+    calendar carries the UTC date, and a lookup that accepted only the new
+    one would miss it and write a duplicate beside it.
+    """
+    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    dates = [to_local(aware, tz).date()]
+    utc_day = aware.astimezone(timezone.utc).date()
+    if utc_day not in dates:
+        dates.append(utc_day)
+    return dates

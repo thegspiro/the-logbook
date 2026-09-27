@@ -300,9 +300,25 @@ events page.
 1. Set the **event type**, **title**, **date**, **start time**, and **end time**.
 2. Add a **location** and **description**.
 3. Configure **check-in settings** (QR code, manual, or both).
-4. Set **reminder schedule** — choose one or more reminder times (e.g., 24 hours before, 1 hour before). Members who RSVP'd will receive notifications at these times.
-5. Optionally attach files (agendas, maps, etc.).
-6. Click **Create Event**.
+4. In **RSVP Settings**, choose **Who can see who's going**. The options are
+   **Use organization default**, **Everyone in the department** or **Only
+   event managers**.
+   - Members only ever see names, never contact details, notes or
+     accessibility information.
+   - The department default is set under **Manage Events → Settings →
+     Attendance**, and starts out as **Only event managers**.
+   - See
+     [Who's going, RSVP and the waitlist](#whos-going-rsvp-and-the-waitlist-2026-09-01).
+5. Set **reminder schedule** — choose one or more reminder times (e.g., 24 hours before, 1 hour before). Members who RSVP'd will receive notifications at these times.
+6. Optionally attach files (agendas, maps, etc.).
+7. Click **Create Event**.
+
+**Mandatory attendance.** Ticking **Mandatory attendance** opens **Mandatory
+for**, a checklist of your department's configured membership tiers; the form
+refuses to save until at least one is ticked. The event is mandatory only for
+members whose membership type is ticked. A member hired after the event date,
+on approved leave that day, or with no membership type recorded is not counted
+as having been required to attend.
 
 ![Create Event form with type, title, date, location, and reminder fields](./images/04-05-create-event.png)
 
@@ -672,6 +688,18 @@ Business meeting events can be converted to minutes:
 2. Click **Create Minutes from Event**.
 3. The attendee list is automatically imported from the event check-in records.
 
+### Submitting and Approving Minutes
+
+**Required Permission:** `minutes.manage`
+
+A draft (or rejected) record is sent for approval with **Submit for Approval**
+on its detail page. A submitted record shows **Approve Minutes** and **Reject
+Minutes**. **Approval is refused on minutes you submitted yourself** — the
+server answers _"You cannot approve your own meeting minutes. Separation of
+duties requires a second person, so this must go to another authorized
+approver."_ A secretary who writes and submits the minutes therefore needs a
+second officer holding `minutes.manage` to approve them.
+
 ---
 
 ## Action Items
@@ -689,6 +717,10 @@ Action items have:
 ![Action Items page listing tasks with assignee, due date, and status](./images/04-15-action-items.png)
 
 > **Hint:** Members see their own action items prominently. Officers can view and manage all action items across the department.
+
+**Reminders.** An open or in-progress action item with a due date sends its
+assignee a reminder three days before it is due, one day before, and once it is
+overdue. The check runs once a day.
 
 ### Attendance Dashboard (Secretary)
 
@@ -777,10 +809,14 @@ Each election shows:
    - _(2026-08-12)_ Or apply one of **your saved ballots** — a whole ballot your department saved from a previous election. See [Elections & Voting > Saved Ballot Templates](./14-elections.md#saved-ballot-templates) for how to save one and what it does and does not carry
    - Each position can only have one ballot item (the dropdown shows only unused positions)
    - Positions load from your organization's operational ranks (Chief, Captain, etc.) with type-ahead filtering
-4. For each item, add **candidates** and configure options:
-   - Allow write-ins (auto-fills name with "Write-in Candidate")
-   - Voting method (simple majority, ranked choice, approval, supermajority) and victory condition (most votes, majority, supermajority, threshold)
-   - Number of winners
+4. For each item, set its **Vote Type** (Candidate Selection, or Approval for a
+   yes/no question) and **Who Can Vote**, then add **candidates**:
+   - Tick **Write-in candidate** to add a write-in slot (the name fills in as
+     "Write-in Candidate")
+   - Optionally override the **Victory Condition** for this item — Most Votes,
+     Majority, Supermajority or Threshold, with a percentage for the last two.
+     How votes are counted comes from the election's **How is the Winner
+     Determined?** choice in step 2; an item cannot change it
    - Move candidates between positions using the position dropdown in the edit form
 5. Configure **proxy voting** in Election Settings if needed (enable/disable, set max proxies per person).
 6. Optionally enable **email ballots** for members who cannot access the system.
@@ -820,18 +856,22 @@ The Events module includes a **Public Outreach Request Pipeline** that lets comm
 
 **Required Permission:** `events.manage`
 
-1. Navigate to **Events Admin > Settings**.
-2. Under **Outreach Types**, add the program types your department offers:
+1. Navigate to **Manage Events → Settings**.
+2. Under **Pipeline**, switch on **Accept Public Requests**. It gates **both**
+   ways a request arrives: the public request API and a Forms-module event
+   request form (the kind **Generate Event Request Form** produces). While it
+   is off, a published form stops creating requests.
+3. Under **Outreach Types**, add the program types your department offers:
    - Click **Add Type**, enter a key (e.g., `fire_safety_demo`) and label (e.g., "Fire Safety Demonstration")
    - These appear as options on the public request form
-3. Under **Request Pipeline**, configure:
+4. Under **Request Pipeline**, configure:
    - **Default Coordinator** — Select a member who will be auto-assigned all new requests
    - **Pipeline Tasks** — Add custom checklist steps (e.g., "Chief Approval", "Email Volunteer Signup", "Prep Equipment"). Use the up/down arrows to reorder.
    - **Public Progress Visibility** — Toggle whether the requester can see task progress on their status page (off by default)
-4. Under **Email Triggers**, configure which status changes send notifications:
+5. Under **Email Triggers**, configure which status changes send notifications:
    - Toggle each trigger on/off (e.g., "On Submitted", "On Scheduled", "On Postponed")
    - Each trigger can notify the requester, the assigned coordinator, or both
-5. Under **Email Templates**, create reusable email messages:
+6. Under **Email Templates**, create reusable email messages:
    - Example: "How to Find Our Building" email with directions and parking info
    - Templates support variables: `{{contact_name}}`, `{{event_date}}`, `{{organization_name}}`, etc.
    - Optionally set a trigger (e.g., "7 days before event") for automatic sending
@@ -860,6 +900,23 @@ The public form is created through the **Forms module** with an `EVENT_REQUEST` 
 2. Enable **Public Access** and set a **public slug** (e.g., `request-event`).
 3. Under **Integrations**, add an `EVENT_REQUEST` integration to connect the form to the pipeline.
 4. Share the form URL (`/f/request-event`) on your website, social media, or print materials.
+
+The quicker route is **Manage Events → Settings → Public Form**, where
+**Generate Event Request Form** creates a public form already carrying the
+`EVENT_REQUEST` integration. The same section lists the department's request
+forms, grouped as published, draft and archived, each with its public URL.
+
+That list is not the Forms catalog. It asks `/event-requests/forms`, which
+returns only **this department's** forms wired to the request pipeline — one
+made by the generate button, or any form given an **Event Request** integration
+on the Forms page — so the department's other published forms (a near-miss
+report, a gear-sizing survey) never appear in it. Answers to a form with no
+such integration are collected as submissions and stop there; they do not open
+requests. Both the Settings screen and that list require `events.manage`, so
+the section is shown only to event administrators, and an event administrator
+does not need any Forms permission to see it.
+
+![Events Settings > Public Form: the generated outreach form listed as published and accepting submissions, with its public URL](./images/19-24-outreach-form-section.png)
 
 The form collects:
 
@@ -1336,6 +1393,13 @@ The new **End Event** button on the event detail page checks out all currently c
 3. Confirm the bulk checkout
 4. All checked-in attendees are marked as checked out with the current timestamp
 
+Ending the event also records the current time as its actual end and
+**finalizes attendance**, so each attendee's time is credited up to that
+moment even when the event ends before its scheduled end time. See
+[Post-Event Notifications](#post-event-notifications) for what finalizing locks.
+A cancelled event, an event already ended, or one whose attendance is already
+finalized cannot be ended.
+
 ![The End Event action on an event that is currently running](./images/04-40-end-event.png)
 
 > **Edge case:** If no attendees are currently checked in, the button shows an informational message ("No attendees to check out") and performs no action.
@@ -1389,15 +1453,15 @@ When members attend events with configured mappings, their attendance hours are 
 
 ### Dashboard Notification Management
 
-Dashboard notification cards now include **clear** and **dismiss** buttons, allowing you to manage notifications without navigating to the full Notifications page.
+Event reminders and notices reach the dashboard's **My Updates** feed, one list
+of unread notifications and department messages. Opening a row marks it read
+and takes you to what it announces. Five rows show; **Older Items** opens the
+full Notifications inbox, which is where marking everything read lives — the
+feed has no per-card dismiss and no Clear All.
 
-- **Dismiss**: Hides the notification from your dashboard (personal action, doesn't affect others)
-- **Clear**: Marks the notification as read
-
-The dashboard panel is pictured under
-[Administration & Reports → Dashboard Notification Management](./08-admin-reports.md#dashboard-notification-management);
-this guide does not repeat the screenshot. Each card carries one control, the
-✕, which marks it read; **Clear All** in the panel header does the lot.
+The feed, its order (pinned, then persistent, then newest) and who may clear a
+persistent message are described and pictured under
+[Administration & Reports → Dashboard Notification Management](./08-admin-reports.md#dashboard-notification-management).
 
 ### Department Messages
 
@@ -1406,7 +1470,7 @@ Messages** — with priority-based email/SMS escalation, required acknowledgment
 scheduling, and targeting. See the full how-to in
 [Documents, Forms & Communications → Department Messages](./07-documents-forms.md#department-messages).
 
-> **Edge case:** Non-admin users cannot dismiss persistent messages — the dismiss button is not shown. Only users with `notifications.manage` see the "Clear" action.
+> **Edge case:** Only holders of `notifications.manage` or `settings.manage` see the ✕ that clears a persistent message, and clearing it takes it down for everyone. Other members cannot remove one; it stays in their feed after they read it.
 
 ### Notification Channel Filter
 
@@ -1602,7 +1666,7 @@ This replaces the previous workaround of reusing the `sendBallotEmail` endpoint 
 
 ## August 12–14, 2026 update
 
-Event outreach-form discovery, configured membership tiers, and early-end attendance behavior from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#events-reminders-check-in-and-outreach-forms), including the required event-admin screenshot.
+The outreach-form list under Event Settings is described in [Public Request Form](#public-request-form), mandatory attendance by membership tier in [Creating Events](#creating-events-officers), and closing out an event that ended early in ["End Event" — Bulk Checkout](#end-event--bulk-checkout) and [Post-Event Notifications](#post-event-notifications).
 
 ## Reminder Audience and One-Hour Check-In Default (August 14, 2026)
 
@@ -1695,9 +1759,6 @@ reached from the page written for it.)_
 
 ## August 19–23, 2026 update — the Recruitment event type
 
-Full detail and edge cases:
-[release lesson](./19-august-2026-release-changes.md#events-a-recruitment-type-that-feeds-the-pipeline).
-
 Open houses and recruitment nights now have their own event type. Before this,
 departments filed them under **Public Education** or **Other**, so a
 membership-pipeline stage could not point at "the next recruitment event"
@@ -1776,7 +1837,8 @@ walkthrough is in
 
 **What matters for events:** a station is armed against a specific event or
 meeting, retired and on-leave members are accepted (they attend meetings and
-banquets), and suspended, dropped, archived and deleted members are not. A tap
+banquets), and inactive, suspended, dropped, archived and deleted members are
+not. A tap
 from an unregistered card, or a member already checked in, is shown on screen
 and the station stays armed for the next person.
 
@@ -1786,8 +1848,9 @@ The Events administration page now opens with the shared frame: a header, four
 headline metrics, a **Needs attention** queue, then its existing tabs. Its
 built-in three metrics are **Upcoming**, **RSVPs this week** and **Check-ins
 logged**; the fourth slot is always the count the queue is about. Access is
-`events.manage`. See the
-[shared frame section of the release lesson](./19-august-2026-release-changes.md#every-administration-page-opens-the-same-way).
+`events.manage`. Choosing the three metrics, and who may see the queue, are
+covered in
+[Administration & Reports → Every Administration Page Opens the Same Way](./08-admin-reports.md#every-administration-page-opens-the-same-way-2026-08-23).
 
 ## Who's going, RSVP and the waitlist _(2026-09-01)_
 

@@ -11,6 +11,7 @@ import math
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from uuid import NAMESPACE_URL, uuid5
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_
 from sqlalchemy import delete as sa_delete
@@ -48,6 +49,12 @@ from app.utils.check_types import COUNT, EXPIRY, LEVEL, normalize_check_type
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import best_matches
 from app.utils.org_scoping import is_in_org
+from app.utils.org_timezone import (
+    local_day_start_utc,
+    resolve_org_today,
+    resolve_scheduling_timezone,
+    today_in,
+)
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
@@ -257,12 +264,13 @@ class EquipmentCheckService:
         if template is not None:
             items = [i for c in template.compartments for i in c.items]
             await self._attach_unit_labels(organization_id, items)
+            today = await resolve_org_today(self.db, organization_id)
             # Sorted and stripped of spent rows here rather than letting the
             # response read the raw relationship: the crew needs them in the
             # order they should be drawn from, and a schema field bound to the
             # ORM collection could not carry the expired flag.
             for item in items:
-                item.lots_aboard = self._deployed_lot_payload(item)
+                item.lots_aboard = self._deployed_lot_payload(item, today)
         return template
 
     async def _attach_unit_labels(
@@ -1440,6 +1448,8 @@ class EquipmentCheckService:
         cls,
         items_data: List[Dict[str, Any]],
         template_items_map: Optional[Dict[str, CheckTemplateItem]] = None,
+        *,
+        today: date,
     ) -> tuple:
         """Auto-fail expired/under-quantity items and compute aggregate counts.
 
@@ -1450,9 +1460,12 @@ class EquipmentCheckService:
         ``item["expiration_date"]`` are
         normalized in place so the stored result agrees with the verdict.
 
+        ``today`` is the department's date: a UTC date is already tomorrow for
+        a US department every evening, which would fail an item on the last
+        day it is in date.
+
         Returns (total, completed, failed, overall_status).
         """
-        today = date.today()
         template_items_map = template_items_map or {}
         for item in items_data:
             tmpl_item = template_items_map.get(item.get("template_item_id") or "")
@@ -1696,6 +1709,8 @@ class EquipmentCheckService:
         items_data: List[Dict[str, Any]],
         template_items_map: Dict[str, CheckTemplateItem],
         require_all: bool = True,
+        *,
+        today: date,
     ) -> None:
         """Validate answers and snapshot their authoritative question rows."""
         submitted_ids: List[str] = []
@@ -1724,7 +1739,7 @@ class EquipmentCheckService:
         for item, template_item_id in zip(items_data, submitted_ids):
             item["template_item_id"] = template_item_id
             EquipmentCheckService._validate_and_normalize_observation(
-                item, template_items_map[template_item_id]
+                item, template_items_map[template_item_id], today
             )
             EquipmentCheckService._snapshot_from_template(
                 item, template_items_map[template_item_id]
@@ -1732,7 +1747,7 @@ class EquipmentCheckService:
 
     @staticmethod
     def _validate_and_normalize_observation(
-        item: Dict[str, Any], template_item: CheckTemplateItem
+        item: Dict[str, Any], template_item: CheckTemplateItem, today: date
     ) -> None:
         """Validate the answer shape selected by the authoritative template."""
         check_type = normalize_check_type(template_item.check_type)
@@ -1775,7 +1790,7 @@ class EquipmentCheckService:
                 template_item.expiration_date if template_item.has_expiration else None
             )
             if expiration is not None:
-                observation_passes = expiration >= date.today()
+                observation_passes = expiration >= today
 
         # One direction only. A measurement can refute a "pass" — a cylinder
         # reading below the minimum is not a serviceable cylinder, whatever
@@ -1855,6 +1870,7 @@ class EquipmentCheckService:
         shift = result.scalars().first()
         if not shift:
             raise ValueError("Shift not found")
+        today = await resolve_org_today(self.db, organization_id)
 
         # A submit grant permits members to perform checks, but does not grant
         # org-wide authority over every shift.  Limit ordinary submitters to
@@ -1931,7 +1947,9 @@ class EquipmentCheckService:
             template_items_map = await self._load_checkable_template_items(
                 organization_id, str(template_id)
             )
-            self._validate_and_snapshot_submission(items_data, template_items_map)
+            self._validate_and_snapshot_submission(
+                items_data, template_items_map, today=today
+            )
         else:
             # Shift checks without a template have no authoritative item set.
             template_items_map = {}
@@ -1984,7 +2002,7 @@ class EquipmentCheckService:
         # from the template item (see _compute_check_status), so the map has to
         # exist before any item can be force-failed.
         total, completed, failed, overall_status = self._compute_check_status(
-            items_data, template_items_map
+            items_data, template_items_map, today=today
         )
 
         # shifts.apparatus_id is polymorphic — it holds an apparatus.id for a
@@ -2194,11 +2212,12 @@ class EquipmentCheckService:
         # every row still takes the shared observation-validation and snapshot
         # path. Without this, serial and lot numbers reached the stored result
         # (and every report reading it) straight from the request.
+        today = await resolve_org_today(self.db, organization_id)
         self._validate_and_snapshot_submission(
-            items_data, template_items_map, require_all=False
+            items_data, template_items_map, require_all=False, today=today
         )
         total, completed, failed, overall_status = self._compute_check_status(
-            items_data, template_items_map
+            items_data, template_items_map, today=today
         )
 
         check = ShiftEquipmentCheck(
@@ -2302,8 +2321,10 @@ class EquipmentCheckService:
         template_items_map = await self._load_checkable_template_items(
             organization_id, str(check.template_id)
         )
-        self._validate_and_snapshot_submission(items_data, template_items_map)
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
+        self._validate_and_snapshot_submission(
+            items_data, template_items_map, today=today
+        )
 
         for item_data in items_data:
             tmpl_id = item_data.get("template_item_id")
@@ -2527,6 +2548,7 @@ class EquipmentCheckService:
         organization_id: str,
     ) -> List[Dict[str, Any]]:
         """Get pending + recently completed checklists for a user."""
+        today = await resolve_org_today(self.db, organization_id)
         # Get user's active shift assignments with shift data. Same status
         # filter as the submit guard in submit_check: a declined/cancelled
         # assignment can't submit a check, so listing its checklists here
@@ -2537,7 +2559,7 @@ class EquipmentCheckService:
             .where(
                 ShiftAssignment.user_id == user_id,
                 Shift.organization_id == organization_id,
-                Shift.shift_date >= date.today(),
+                Shift.shift_date >= today,
                 ShiftAssignment.assignment_status.in_(
                     [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED]
                 ),
@@ -2819,11 +2841,18 @@ class EquipmentCheckService:
     # ------------------------------------------------------------------
 
     async def get_supply_overview(
-        self, organization_id: str, days_ahead: int = 30
+        self,
+        organization_id: str,
+        days_ahead: int = 30,
+        today: Optional[date] = None,
     ) -> Dict[str, Any]:
         """Supply-officer view: checklist items expiring soon on apparatus,
-        joined with the ready replacement stock available to swap in."""
-        today = date.today()
+        joined with the ready replacement stock available to swap in.
+
+        ``today`` is the department's date, resolved from the org if omitted.
+        """
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
         cutoff = today + timedelta(days=days_ahead)
 
         result = await self.db.execute(
@@ -2988,7 +3017,7 @@ class EquipmentCheckService:
         in a bracket. Forcing that through a check submission is what left
         mid-shift consumption unrecorded until the next morning.
         """
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
 
         apparatus = await self.db.scalar(
             select(Apparatus).where(
@@ -3068,7 +3097,7 @@ class EquipmentCheckService:
                     "quantity_on_truck": self._on_truck(item),
                     "is_short": self._is_short(item),
                     "unit_of_measure": getattr(item, "unit_of_measure", None),
-                    "deployed_lots": self._deployed_lot_payload(item),
+                    "deployed_lots": self._deployed_lot_payload(item, today),
                     "serial_number": item.serial_number,
                     "lot_number": self._soonest_lot_number(item),
                     "expiration_date": exp,
@@ -3393,7 +3422,9 @@ class EquipmentCheckService:
             if lot.quantity < 1:
                 item.deployed_lots.remove(lot)
 
-    def _deployed_lot_payload(self, item: CheckTemplateItem) -> List[Dict[str, Any]]:
+    def _deployed_lot_payload(
+        self, item: CheckTemplateItem, today: date
+    ) -> List[Dict[str, Any]]:
         """Each lot aboard, in the order a crew should draw from it."""
         return [
             {
@@ -3401,9 +3432,7 @@ class EquipmentCheckService:
                 "lot_number": lot.lot_number,
                 "expiration_date": lot.expiration_date,
                 "quantity": lot.quantity,
-                "is_expired": bool(
-                    lot.expiration_date and lot.expiration_date < date.today()
-                ),
+                "is_expired": bool(lot.expiration_date and lot.expiration_date < today),
             }
             for lot in self._deployed_lots(item)
         ]
@@ -3415,6 +3444,7 @@ class EquipmentCheckService:
         item, _ = await self._get_item_with_template(template_item_id, organization_id)
         if item is None:
             return None
+        today = await resolve_org_today(self.db, organization_id)
         return {
             "template_item_id": item.id,
             "item_name": item.name,
@@ -3422,7 +3452,7 @@ class EquipmentCheckService:
             "quantity_on_truck": self._on_truck(item),
             "is_short": self._is_short(item),
             "unit_of_measure": getattr(item, "unit_of_measure", None),
-            "lots": self._deployed_lot_payload(item),
+            "lots": self._deployed_lot_payload(item, today),
         }
 
     async def update_deployed_lot(
@@ -3705,7 +3735,7 @@ class EquipmentCheckService:
         from: the officer is holding the item and needs to know which trucks
         carry it and what is on each of them right now.
         """
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         result = await self.db.execute(
             select(
                 CheckTemplateItem,
@@ -3822,6 +3852,7 @@ class EquipmentCheckService:
         )
         if item is None:
             return None
+        today = await resolve_org_today(self.db, organization_id)
 
         # Lock this position's rows aboard before the shelf lot, and always in
         # that order. Both this swap's increment of the incoming row and the
@@ -3861,11 +3892,10 @@ class EquipmentCheckService:
                     replaceable = sum(
                         deployed.quantity
                         for deployed in (item.deployed_lots or [])
-                        if deployed.expiration_date
-                        and deployed.expiration_date < date.today()
+                        if deployed.expiration_date and deployed.expiration_date < today
                     )
                     if not item.deployed_lots and (
-                        item.expiration_date and item.expiration_date < date.today()
+                        item.expiration_date and item.expiration_date < today
                     ):
                         replaceable = self._on_truck(item)
                 if quantity > replaceable:
@@ -3904,7 +3934,7 @@ class EquipmentCheckService:
                 if lot.quantity
                 else "No stock available in this lot"
             )
-        if lot.expiration_date and lot.expiration_date < date.today():
+        if lot.expiration_date and lot.expiration_date < today:
             # Deploying expired stock would fail the item on the next check and
             # put expired supplies in service; refuse rather than record it.
             raise ValueError("This stock lot has expired and cannot be deployed")
@@ -3977,7 +4007,6 @@ class EquipmentCheckService:
         # above, so the incoming units cannot be expired today — but it is what
         # stops a lot being named as its own replacement.
         incoming = existing if existing is not None else item.deployed_lots[-1]
-        today = date.today()
         replaced_lot_number: Optional[str] = None
         if replaced_deployed_lot_id:
             replaced = next(
@@ -4085,7 +4114,7 @@ class EquipmentCheckService:
             # several lots is exposed by the earliest of them — a reader that
             # trusted the scalars would call an item in date while an older
             # box was still aboard.
-            "lots_aboard": self._deployed_lot_payload(item),
+            "lots_aboard": self._deployed_lot_payload(item, today),
             "replaced_lot_number": replaced_lot_number,
             "disposition": disposition,
         }
@@ -4898,6 +4927,33 @@ class EquipmentCheckService:
     # Report Queries
     # ============================================
 
+    async def _report_window(
+        self,
+        organization_id: str,
+        date_from: Optional[date],
+        date_to: Optional[date],
+        default_days: int,
+    ) -> Tuple[ZoneInfo, datetime, datetime]:
+        """The UTC instants bounding a report's date range, and the org's zone.
+
+        The dates a user picks — and the default "last N days" — are days on
+        the department's calendar, so each bound is the department's midnight.
+        Bounding at UTC midnight filed every evening check under the next day
+        and dropped the last evening of the range.
+        """
+        from datetime import timedelta
+
+        org_tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = today_in(org_tz)
+        date_from = date_from or today - timedelta(days=default_days)
+        date_to = date_to or today
+        start = local_day_start_utc(date_from, org_tz)
+        # Inclusive upper bound, matching the <= comparisons in the callers.
+        end = local_day_start_utc(date_to + timedelta(days=1), org_tz) - timedelta(
+            microseconds=1
+        )
+        return org_tz, start, end
+
     async def get_compliance_report(
         self,
         organization_id: str,
@@ -4905,18 +4961,8 @@ class EquipmentCheckService:
         date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         """Aggregated compliance stats by apparatus + date range."""
-        from datetime import timedelta
-
-        if not date_from:
-            date_from = date.today() - timedelta(days=30)
-        if not date_to:
-            date_to = date.today()
-
-        date_to_end = datetime.combine(date_to, datetime.max.time()).replace(
-            tzinfo=timezone.utc
-        )
-        date_from_start = datetime.combine(date_from, datetime.min.time()).replace(
-            tzinfo=timezone.utc
+        _, date_from_start, date_to_end = await self._report_window(
+            organization_id, date_from, date_to, default_days=30
         )
 
         # All checks in the date range
@@ -5033,18 +5079,8 @@ class EquipmentCheckService:
         offset: int = 0,
     ) -> Dict[str, Any]:
         """Paginated failure log with filters."""
-        from datetime import timedelta
-
-        if not date_from:
-            date_from = date.today() - timedelta(days=30)
-        if not date_to:
-            date_to = date.today()
-
-        date_to_end = datetime.combine(date_to, datetime.max.time()).replace(
-            tzinfo=timezone.utc
-        )
-        date_from_start = datetime.combine(date_from, datetime.min.time()).replace(
-            tzinfo=timezone.utc
+        _, date_from_start, date_to_end = await self._report_window(
+            organization_id, date_from, date_to, default_days=30
         )
 
         base_q = (
@@ -5157,18 +5193,8 @@ class EquipmentCheckService:
         interval: str = "weekly",
     ) -> Dict[str, Any]:
         """Per-item pass/fail trend over time."""
-        from datetime import timedelta
-
-        if not date_from:
-            date_from = date.today() - timedelta(days=90)
-        if not date_to:
-            date_to = date.today()
-
-        date_to_end = datetime.combine(date_to, datetime.max.time()).replace(
-            tzinfo=timezone.utc
-        )
-        date_from_start = datetime.combine(date_from, datetime.min.time()).replace(
-            tzinfo=timezone.utc
+        org_tz, date_from_start, date_to_end = await self._report_window(
+            organization_id, date_from, date_to, default_days=90
         )
 
         # Get all check items for this template item, selecting the parent
@@ -5233,7 +5259,12 @@ class EquipmentCheckService:
             check = checks_map.get(str(item.check_id))
             if not check or not check.checked_at:
                 continue
-            period_key = check.checked_at.strftime(fmt)
+            checked_at = check.checked_at
+            if checked_at.tzinfo is None:
+                checked_at = checked_at.replace(tzinfo=timezone.utc)
+            # Bucket by the department's calendar, the same one the range
+            # bounds use, so an evening check counts toward its own day.
+            period_key = checked_at.astimezone(org_tz).strftime(fmt)
             bucket = self._trend_bucket_for_status(item.status)
             if bucket:
                 buckets[period_key][bucket] += 1

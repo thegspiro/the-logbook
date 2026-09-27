@@ -11,10 +11,11 @@ validation (ordering, no future, minimum duration, overlap). DB mocked.
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.models.admin_hours import AdminHoursEntryStatus
+from app.models.admin_hours import AdminHoursEntryMethod, AdminHoursEntryStatus
 from app.services.admin_hours_service import AdminHoursService
 
 
@@ -655,6 +656,188 @@ class TestEditPendingEntryParityGuards:
         assert "entry-1" in str(
             captured[-1].compile(compile_kwargs={"literal_binds": True})
         )
+
+
+class TestMemberOwnEntry:
+    """A member may edit or withdraw their own pending or rejected entry.
+    Editing a rejected entry is how a returned claim is resubmitted."""
+
+    @staticmethod
+    def _entry(status=AdminHoursEntryStatus.PENDING, **kw):
+        now = datetime.now(timezone.utc)
+        return SimpleNamespace(
+            id="entry-1",
+            organization_id="org-1",
+            user_id="u1",
+            category_id="cat-1",
+            clock_in_at=now - timedelta(hours=3),
+            clock_out_at=now - timedelta(hours=1),
+            duration_minutes=120,
+            description=None,
+            entry_method=kw.get("entry_method", AdminHoursEntryMethod.MANUAL),
+            status=status,
+            approved_by=kw.get("approved_by"),
+            approved_at=kw.get("approved_at"),
+            rejection_reason=kw.get("rejection_reason"),
+        )
+
+    @staticmethod
+    def _recording_db(entry, overlap=0):
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                return _one(entry.user_id if entry else None)  # owner lookup
+            if len(captured) == 2:
+                return MagicMock()  # User-row lock
+            if len(captured) == 3:
+                return _one(entry)  # locked entry fetch
+            return MagicMock(scalar=MagicMock(return_value=overlap))
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+        return db, captured
+
+    async def test_owner_edits_pending_entry(self):
+        entry = self._entry()
+        db, _ = self._recording_db(entry)
+        new_out = entry.clock_in_at + timedelta(hours=1)
+        out, resubmitted = await AdminHoursService(db).edit_own_entry(
+            "entry-1", "org-1", "u1", clock_out_at=new_out, description="Fixed"
+        )
+        assert out.duration_minutes == 60
+        assert out.description == "Fixed"
+        assert out.status == AdminHoursEntryStatus.PENDING
+        assert resubmitted is False
+
+    async def test_editing_rejected_entry_resubmits_it(self):
+        entry = self._entry(
+            AdminHoursEntryStatus.REJECTED,
+            approved_by="officer-1",
+            approved_at=datetime.now(timezone.utc),
+            rejection_reason="Wrong category",
+        )
+        db, _ = self._recording_db(entry)
+        out, resubmitted = await AdminHoursService(db).edit_own_entry(
+            "entry-1", "org-1", "u1", description="Corrected"
+        )
+        assert resubmitted is True
+        assert out.status == AdminHoursEntryStatus.PENDING
+        assert out.approved_by is None
+        assert out.approved_at is None
+        assert out.rejection_reason is None
+
+    async def test_lookups_are_scoped_to_the_caller(self):
+        entry = self._entry()
+        db, captured = self._recording_db(entry)
+        await AdminHoursService(db).edit_own_entry(
+            "entry-1", "org-1", "u1", description="x"
+        )
+        for stmt in (captured[0], captured[2]):
+            where = str(stmt.whereclause)
+            assert "user_id" in where
+            assert "organization_id" in where
+        assert "FOR UPDATE" in str(captured[1])
+        assert "users" in str(captured[1]).lower()
+        assert "FOR UPDATE" in str(captured[2])
+
+    async def test_someone_elses_entry_reads_as_not_found(self):
+        db, captured = self._recording_db(None)
+        with pytest.raises(ValueError, match="Entry not found"):
+            await AdminHoursService(db).edit_own_entry(
+                "entry-1", "org-1", "intruder", description="x"
+            )
+        # No lock is taken when the owner lookup finds nothing.
+        assert len(captured) == 1
+
+    @pytest.mark.parametrize(
+        "status",
+        [
+            AdminHoursEntryStatus.APPROVED,
+            AdminHoursEntryStatus.ACTIVE,
+            AdminHoursEntryStatus.WITHDRAWN,
+        ],
+    )
+    async def test_closed_statuses_cannot_be_edited(self, status):
+        entry = self._entry(status)
+        db, _ = self._recording_db(entry)
+        with pytest.raises(ValueError, match="awaiting review or rejected"):
+            await AdminHoursService(db).edit_own_entry(
+                "entry-1", "org-1", "u1", description="x"
+            )
+
+    async def test_event_attendance_entry_cannot_be_edited(self):
+        entry = self._entry(entry_method=AdminHoursEntryMethod.EVENT_ATTENDANCE)
+        db, _ = self._recording_db(entry)
+        with pytest.raises(ValueError, match="event attendance"):
+            await AdminHoursService(db).edit_own_entry(
+                "entry-1", "org-1", "u1", description="x"
+            )
+
+    async def test_member_edit_applies_overlap_guard(self):
+        entry = self._entry()
+        db, _ = self._recording_db(entry, overlap=1)
+        with pytest.raises(ValueError, match="overlaps"):
+            await AdminHoursService(db).edit_own_entry(
+                "entry-1",
+                "org-1",
+                "u1",
+                clock_out_at=entry.clock_in_at + timedelta(hours=1),
+            )
+
+    async def test_member_edit_applies_future_guard(self):
+        entry = self._entry()
+        db, _ = self._recording_db(entry)
+        with pytest.raises(ValueError, match="future"):
+            await AdminHoursService(db).edit_own_entry(
+                "entry-1",
+                "org-1",
+                "u1",
+                clock_out_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            )
+
+    @pytest.mark.parametrize(
+        "status", [AdminHoursEntryStatus.PENDING, AdminHoursEntryStatus.REJECTED]
+    )
+    async def test_withdraw_open_entry(self, status):
+        entry = self._entry(status)
+        db, _ = self._recording_db(entry)
+        out = await AdminHoursService(db).withdraw_own_entry("entry-1", "org-1", "u1")
+        assert out.status == AdminHoursEntryStatus.WITHDRAWN
+
+    async def test_event_attendance_entry_can_be_withdrawn(self):
+        entry = self._entry(entry_method=AdminHoursEntryMethod.EVENT_ATTENDANCE)
+        db, _ = self._recording_db(entry)
+        out = await AdminHoursService(db).withdraw_own_entry("entry-1", "org-1", "u1")
+        assert out.status == AdminHoursEntryStatus.WITHDRAWN
+
+    async def test_approved_entry_cannot_be_withdrawn(self):
+        entry = self._entry(AdminHoursEntryStatus.APPROVED)
+        db, _ = self._recording_db(entry)
+        with pytest.raises(ValueError, match="awaiting review or rejected"):
+            await AdminHoursService(db).withdraw_own_entry("entry-1", "org-1", "u1")
+        assert entry.status == AdminHoursEntryStatus.APPROVED
+
+    async def test_overlap_check_ignores_withdrawn_and_rejected(self):
+        captured = {}
+
+        async def execute(stmt, *_a, **_kw):
+            captured["stmt"] = stmt
+            return MagicMock(scalar=MagicMock(return_value=0))
+
+        db = MagicMock()
+        db.execute = execute
+        now = datetime.now(timezone.utc)
+        await AdminHoursService(db)._check_overlap(
+            "u1", "org-1", now - timedelta(hours=1), now
+        )
+        compiled = str(captured["stmt"].compile(compile_kwargs={"literal_binds": True}))
+        assert "NOT IN" in compiled
+        assert "'withdrawn'" in compiled
+        assert "'rejected'" in compiled
 
 
 class TestCreateManualEntryLocking:
@@ -1396,6 +1579,16 @@ class TestQuarterlyComplianceRequestedYear:
     rejected outright with a `ValueError` (-> `HTTPException(400, ...)` at
     the endpoint), before any per-requirement query runs, rather than
     answering with an incomplete list."""
+
+    @pytest.fixture(autouse=True)
+    def _utc_department(self, monkeypatch):
+        """The service reads the department's zone; answer UTC so the
+        ``date.today()`` years these tests are built from keep meaning what
+        they say, and the up-front rejection costs no extra query."""
+        monkeypatch.setattr(
+            "app.services.admin_hours_service.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("UTC")),
+        )
 
     async def test_quarterly_requirement_for_a_past_year_is_rejected(self):
         past_year = date.today().year - 1

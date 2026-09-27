@@ -23,14 +23,16 @@ How the rows come to exist:
   4. Officers can add, correct or remove stints directly, for history that
      predates this feature.
 
-"Today" is ``date.today()`` throughout, matching the tier service's existing
-years-of-service calculation so the two can never disagree on an anniversary.
+"Today" is the department's date throughout (``resolve_org_today``), the same
+one the tier service's years-of-service calculation uses, so the two can never
+disagree on an anniversary -- and neither turns one over at 8 PM Eastern
+because a UTC container already thinks it is tomorrow.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone, tzinfo
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from loguru import logger
@@ -39,6 +41,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import MemberServicePeriod, Organization, User, UserStatus
 from app.schemas.organization import RejoinServiceCredit
+from app.utils.org_timezone import (
+    resolve_org_today,
+    resolve_scheduling_timezone,
+    today_in,
+)
 
 # Statuses in which a member is away from the department, so time spent in
 # them is not service. Leave, suspension and inactivity are still membership
@@ -116,27 +123,36 @@ def _days(start: Optional[date], end: Optional[date], today: date) -> int:
     return max(0, ((end or today) - start).days)
 
 
-def implicit_separation_date(member: Any, today: date) -> date:
+def implicit_separation_date(member: Any, today: date, tz: tzinfo) -> date:
     """Best available last day of service for a separated member with no stints.
 
     ``status_changed_at`` is when they were dropped or retired -- unless they
     were archived since, which overwrites it with the archive date. That is the
     estimate the reactivation dialog pre-fills and lets the officer correct.
+    It is a UTC timestamp, read as its day on the department's calendar
+    (``tz``): an evening status change is already the next day in UTC.
     """
     changed = getattr(member, "status_changed_at", None)
     if changed is None:
         return today
-    changed_date = changed.date() if hasattr(changed, "date") else changed
+    changed_date = changed
+    if isinstance(changed, datetime):
+        aware = changed if changed.tzinfo else changed.replace(tzinfo=timezone.utc)
+        changed_date = aware.astimezone(tz).date()
     return min(changed_date, today)
 
 
 def summarize(
     member: Any,
     periods: Sequence[MemberServicePeriod],
-    today: Optional[date] = None,
+    today: date,
+    tz: tzinfo,
 ) -> ServiceSummary:
-    """Credited and prior service for ``member`` from their recorded stints."""
-    today = today or date.today()
+    """Credited and prior service for ``member`` from their recorded stints.
+
+    ``today`` and ``tz`` are the department's date and timezone; the caller
+    resolves them.
+    """
     hire_date = getattr(member, "hire_date", None)
     resolved: List[ResolvedPeriod] = []
     is_estimated = False
@@ -158,7 +174,7 @@ def summarize(
             )
     elif hire_date:
         separated = is_separated(getattr(member, "status", None))
-        end = implicit_separation_date(member, today) if separated else None
+        end = implicit_separation_date(member, today, tz) if separated else None
         is_estimated = separated
         resolved.append(
             ResolvedPeriod(
@@ -327,7 +343,8 @@ class MemberServiceHistoryService:
 
         Raises ValueError for a date the history cannot hold.
         """
-        today = today or date.today()
+        tz = await resolve_scheduling_timezone(self.db, member.organization_id)
+        today = today or today_in(tz)
         if rejoin_date > today:
             raise ValueError("The return date cannot be in the future.")
         credit = credit or await self.get_rejoin_default(member.organization_id)
@@ -340,7 +357,7 @@ class MemberServiceHistoryService:
             )
 
         if not periods and member.hire_date:
-            end = previous_service_end or implicit_separation_date(member, today)
+            end = previous_service_end or implicit_separation_date(member, today, tz)
             if end < member.hire_date:
                 raise ValueError(
                     "The last day of previous service cannot be before the "
@@ -409,7 +426,7 @@ class MemberServiceHistoryService:
         the recorded history, and service falls back to ``hire_date``.
         Does not commit.
         """
-        today = today or date.today()
+        today = today or await resolve_org_today(self.db, member.organization_id)
         existing = await self.list_periods(member.organization_id, member.id)
         by_id = {str(p.id): p for p in existing}
 

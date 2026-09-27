@@ -32,12 +32,33 @@ export const InventoryNfcTagStatus = {
 } as const;
 export type InventoryNfcTagStatus = (typeof InventoryNfcTagStatus)[keyof typeof InventoryNfcTagStatus];
 
-/** What a logged NFC tap did: identified an item, or moved it onto a shelf. */
+/**
+ * What a logged NFC tap did: identified an item, moved it onto a shelf, or
+ * found it during a shelf audit.
+ */
 export const InventoryNfcScanAction = {
   LOOKUP: 'lookup',
   PUT_AWAY: 'put_away',
+  AUDIT: 'audit',
 } as const;
 export type InventoryNfcScanAction = (typeof InventoryNfcScanAction)[keyof typeof InventoryNfcScanAction];
+
+/** How often a storage area should be audited by NFC tap. */
+export const InventoryAuditFrequency = {
+  WEEKLY: 'weekly',
+  MONTHLY: 'monthly',
+  QUARTERLY: 'quarterly',
+  YEARLY: 'yearly',
+} as const;
+export type InventoryAuditFrequency = (typeof InventoryAuditFrequency)[keyof typeof InventoryAuditFrequency];
+
+/** What a shelf audit found for one item. Missing items are only ever listed. */
+export const InventoryNfcAuditResult = {
+  FOUND: 'found',
+  MISSING: 'missing',
+  UNEXPECTED: 'unexpected',
+} as const;
+export type InventoryNfcAuditResult = (typeof InventoryNfcAuditResult)[keyof typeof InventoryNfcAuditResult];
 
 // ============================================
 // NFC ID Cards (member credentials)
@@ -130,6 +151,18 @@ export const SEPARATED_STATUSES: readonly UserStatus[] = [
   UserStatus.DROPPED_VOLUNTARY,
   UserStatus.DROPPED_INVOLUNTARY,
   UserStatus.RETIRED,
+  UserStatus.ARCHIVED,
+];
+
+/**
+ * Statuses the backend lets an officer anonymize a member from — mirrors
+ * `_DEPARTED_STATUSES` in `member_anonymization_service.py`, which refuses
+ * every other status, so offering the action for one would only fail. Unlike
+ * SEPARATED_STATUSES it excludes Retired.
+ */
+export const ANONYMIZABLE_STATUSES: readonly UserStatus[] = [
+  UserStatus.DROPPED_VOLUNTARY,
+  UserStatus.DROPPED_INVOLUNTARY,
   UserStatus.ARCHIVED,
 ];
 
@@ -838,6 +871,15 @@ export const MicrosoftAuthMethod = {
   OAUTH: 'oauth',
 } as const;
 export type MicrosoftAuthMethod = (typeof MicrosoftAuthMethod)[keyof typeof MicrosoftAuthMethod];
+
+/** Mirrors `EmailLinkDomainSource` in `app/schemas/organization.py`. */
+export const EmailLinkDomainSource = {
+  FRONTEND_URL: 'frontend_url',
+  ALLOWED_ORIGINS: 'allowed_origins',
+  UNRESOLVED_LOOPBACK: 'unresolved_loopback',
+  OVERRIDE: 'override',
+} as const;
+export type EmailLinkDomainSource = (typeof EmailLinkDomainSource)[keyof typeof EmailLinkDomainSource];
 
 // ============================================
 // Suggestion boxes

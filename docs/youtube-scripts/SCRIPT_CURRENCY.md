@@ -1,5 +1,45 @@
 # Script currency
 
+## Flagged by the 2026-09-25 guide 19 fold
+
+Guide 19, the August release lesson, was folded into the module guides
+([#2713](https://github.com/thegspiro/the-logbook/pull/2713)), and every claim
+was checked against the application as it moved. No script links to guide 19
+or 20, so nothing needed repointing. The corrections the fold made to the
+guides also had to be made to the scripts that repeated the same wrong facts:
+
+| Script | Beat                                     | Was                                                                                     | Now                                                                                                                                                                                                   | Class     |
+| ------ | ---------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| **03** | Attack protection, rate limit vs lockout | "five, then thirty minutes"                                                             | Five in a row, then **fifteen minutes by default**; both are settings (`MAX_LOGIN_ATTEMPTS`, `ACCOUNT_LOCKOUT_DURATION_MINUTES`). Thirty minutes belongs to the login rate limit                      | **Wrong** |
+| **04** | Creating an election, voting method      | "Choose your voting method … supermajority are also available"                          | The create form has one dropdown, **How is the Winner Determined?**, with six options that set counting and the win condition together                                                                | **Wrong** |
+| **06** | Dashboard walkthrough, messages          | Department Messages and Notifications side by side; a **Clear All** in the header       | **Needs you** holds a message waiting for **Acknowledge**; **My Updates** is one feed — pinned, then persistent, then newest, five rows and **Older Items**. There is no Clear All                    | **Wrong** |
+| **12** | Voting methods chapter and Short 12j     | "Four voting methods" on "the voting-method dropdown", Supermajority as a fourth method | Three ways of counting behind the six options of **How is the Winner Determined?**; **Supermajority Required (2/3)** is one mark per voter with a two-thirds bar and a Supermajority Percentage field | **Wrong** |
+| **12** | Paper ballots, two `[SCREEN]` cues       | "The Paper Batches panel"                                                               | **Paper-Ballot Batches** (the panel's title)                                                                                                                                                          | **Wrong** |
+
+**All five were wrong before the fold; it found them, it did not cause them.**
+Script 12's re-worded chapter reads a few seconds longer; re-time Chapter 3 when
+it is next recorded.
+
+## Flagged by the 2026-09-25 email redesign
+
+The default email templates moved to a new shell: the department's logo and
+name centred above a white card, a small coloured status line above the
+title, the key facts in a grey panel with each label above its value, and a
+centred button with the plain link under it. The 5px accent rule, the status
+pill and the details table with a coloured left edge are gone from the
+shipped defaults.
+
+Migration `f0d76814a9ab` moves every template still identical to the
+previous default onto the new design at upgrade. **An untouched template
+changes by itself this time**; an edited one keeps its markup until somebody
+presses Reset.
+
+| Script | Beat                                                 | Was                                                                                      | Now                                                                                                                                                                                   | Class     |
+| ------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| **07** | "Your emails look different now", preview `[SCREEN]` | "the 5px accent rule down the header, the status chip, the details table"                | The centred masthead, the status line, the fact panel, the centred button                                                                                                             | **Wrong** |
+| **07** | "Your emails look different now", upgrade claim      | "If you upgraded from the previous release, none of your existing templates changed."    | Templates nobody edited changed on upgrade; edited ones did not, and Reset moves them across. The banner's "Templates you have never edited already use it" is now true as read aloud | **Wrong** |
+| **07** | Production note on re-shooting previews              | Two states to caption: the pre-2026-08-10 band and the 2026-08-10 → 08-23 rounded header | A third, current state; shots of the accent-rule shell now show only an edited template                                                                                               | **Stale** |
+
 ## Flagged by the 2026-09-24 Event Information fix
 
 The event page's **Event Information** card now shows **Capacity** and **Event
@@ -36,6 +76,20 @@ covers:
 
 It must be filmed as a **member**, with attendee visibility switched on. The
 seeded open-house event supplies the rest.
+
+**Script 04, event creation → RSVP Settings** _(Incomplete, added
+2026-09-24)_: the organizer walkthrough never mentioned who can see the going
+list, so a chief finishing it had no idea the setting existed. A new beat after
+RSVP Settings covers the per-event **Who can see who's going** dropdown (**Use
+organization default**, **Everyone in the department**, **Only event
+managers**), that members see names only, and the department default under
+**Manage Events → Settings → Attendance**, which ships as **Only event
+managers**. It adds about 20 seconds. Film it as an officer; nothing needs
+saving.
+
+The script carries an **EDITOR** note folding those 20 seconds into Chapter 3's
+pending re-timing. Short **8AU**'s production notes now point its 0:34 officer
+beat at this one, so the two use the same labels.
 
 ## Flagged by the 2026-09-15 → 09-23 changes
 

@@ -505,6 +505,11 @@ export const EventForm: React.FC<EventFormProps> = ({
     return parts.join(' ');
   };
 
+  // Mirrors EventCreate.validate_dates on the backend, which is the only place
+  // it applies: EventUpdate and RecurringEventCreate accept an RSVP event with
+  // no deadline (a single fixed deadline has no meaning across a series).
+  const rsvpDeadlineRequired = formData.requires_rsvp && !editingEventId && !(isRecurring && onSubmitRecurring);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -512,6 +517,11 @@ export const EventForm: React.FC<EventFormProps> = ({
     // Validate dates
     if (new Date(formData.end_datetime) <= new Date(formData.start_datetime)) {
       setError('End date must be after start date');
+      return;
+    }
+
+    if (rsvpDeadlineRequired && !formData.rsvp_deadline) {
+      setError('Set an RSVP deadline, or turn off Require RSVP');
       return;
     }
 
@@ -1273,7 +1283,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <div className="space-y-4 border-l-2 border-red-500/30 pl-4">
               <div>
                 <label htmlFor="rsvp-deadline" className={labelClass}>
-                  RSVP Deadline
+                  RSVP Deadline {rsvpDeadlineRequired && <span className="text-red-700 dark:text-red-500">*</span>}
                 </label>
                 <DateTimeQuarterHour
                   id="rsvp-deadline"

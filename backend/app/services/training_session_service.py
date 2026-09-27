@@ -5,7 +5,7 @@ Business logic for training session management, approval workflows, and notifica
 """
 
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, List, Optional, Tuple
 from uuid import UUID
 
@@ -50,6 +50,7 @@ from app.services.event_service import EventService
 from app.services.location_service import LocationService
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
+from app.utils.org_timezone import local_and_utc_dates, resolve_scheduling_timezone
 
 
 class TrainingSessionService:
@@ -751,7 +752,8 @@ class TrainingSessionService:
             return
 
         program_service = TrainingProgramService(self.db)
-        event_date = event.start_datetime.date()
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        event_dates = local_and_utc_dates(event.start_datetime, tz)
 
         for user_id in removed:
             try:
@@ -766,7 +768,7 @@ class TrainingSessionService:
                 await self._uncomplete_training_record(
                     user_id=user_id,
                     training_session=training_session,
-                    event_date=event_date,
+                    event_dates=event_dates,
                 )
             except Exception:
                 logger.exception(
@@ -826,9 +828,13 @@ class TrainingSessionService:
         self,
         user_id: str,
         training_session: TrainingSession,
-        event_date,
+        event_dates: List[date],
     ) -> None:
-        """Take the completion back off a removed attendee's training record."""
+        """Take the completion back off a removed attendee's training record.
+
+        ``event_dates`` is the session's day on the department's calendar and,
+        for a record written before that, the UTC day it was filed under.
+        """
         record_result = await self.db.execute(
             select(TrainingRecord)
             .where(TrainingRecord.user_id == str(user_id))
@@ -838,8 +844,8 @@ class TrainingSessionService:
             .where(TrainingRecord.course_name == training_session.course_name)
             .where(
                 or_(
-                    TrainingRecord.scheduled_date == event_date,
-                    TrainingRecord.completion_date == event_date,
+                    TrainingRecord.scheduled_date.in_(event_dates),
+                    TrainingRecord.completion_date.in_(event_dates),
                 )
             )
         )
@@ -1316,6 +1322,16 @@ class TrainingSessionService:
         if not event:
             return pipeline_updates
 
+        # A record's date is the session's day on the department's calendar:
+        # the event's UTC date is already tomorrow for an evening session, which
+        # filed an 8 PM drill on the 31st under the next month's compliance.
+        # Records written before that carry the UTC date, so lookups accept both.
+        tz = await resolve_scheduling_timezone(
+            self.db, training_session.organization_id
+        )
+        event_dates = local_and_utc_dates(event.start_datetime, tz)
+        event_date = event_dates[0]
+
         # A session marked ineligible for certification still creates records
         # (members keep general credit) but never feeds pipeline/certificate
         # requirements — skip resolving them entirely.
@@ -1377,7 +1393,6 @@ class TrainingSessionService:
             # by scheduled_date with a NULL completion_date, so match on either
             # date and prefer the not-yet-completed one — otherwise finalizing
             # would leave that record orphaned and create a duplicate.
-            event_date = event.start_datetime.date()
             existing_record_result = await self.db.execute(
                 select(TrainingRecord)
                 .where(TrainingRecord.user_id == str(attendee.user_id))
@@ -1388,8 +1403,8 @@ class TrainingSessionService:
                 .where(TrainingRecord.course_name == training_session.course_name)
                 .where(
                     or_(
-                        TrainingRecord.scheduled_date == event_date,
-                        TrainingRecord.completion_date == event_date,
+                        TrainingRecord.scheduled_date.in_(event_dates),
+                        TrainingRecord.completion_date.in_(event_dates),
                     )
                 )
                 .order_by(TrainingRecord.completion_date.is_(None).desc())
@@ -1438,8 +1453,8 @@ class TrainingSessionService:
                     ),
                     training_type=training_session.training_type
                     or TrainingType.CONTINUING_EDUCATION,
-                    scheduled_date=event.start_datetime.date(),
-                    completion_date=event.start_datetime.date(),
+                    scheduled_date=event_date,
+                    completion_date=event_date,
                     hours_completed=hours_completed,
                     credit_hours=float(training_session.credit_hours or 0),
                     status="completed",

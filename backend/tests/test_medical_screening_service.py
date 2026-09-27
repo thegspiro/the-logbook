@@ -23,6 +23,17 @@ from app.models.medical_screening import (
 )
 from app.services.medical_screening_service import MedicalScreeningService
 
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.medical_screening_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+
+
 # ============================================
 # Fixtures
 # ============================================

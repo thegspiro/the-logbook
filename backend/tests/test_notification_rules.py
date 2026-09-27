@@ -98,9 +98,12 @@ class TestEnforcedTriggers:
         assert {t.value for t in ENFORCED_TRIGGERS} == {
             "event_reminder",
             "training_expiry",
+            "suggestion_submitted",
         }
 
-    @pytest.mark.parametrize("trigger", ["event_reminder", "training_expiry"])
+    @pytest.mark.parametrize(
+        "trigger", ["event_reminder", "training_expiry", "suggestion_submitted"]
+    )
     def test_a_wired_trigger_is_enforced_by_name_or_enum(self, trigger):
         assert is_enforced(trigger) is True
         assert is_enforced(NotificationTrigger(trigger)) is True

@@ -13,7 +13,7 @@ shipped Logbook icon (see the ``app-icon`` locations in
 already owns them instead of copying them into this one.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -49,12 +49,14 @@ async def _rate_limit_branding(request: Request) -> None:
         )
 
 
-def _png_response(request: Request, digest: str, png: bytes) -> Response:
+def _png_response(
+    request: Request, digest: str, png: bytes, cache_control: str = CACHE_CONTROL
+) -> Response:
     """A PNG body, or 304 when the caller already holds this rendering."""
     etag = f'"{digest}"'
     headers = {
         "ETag": etag,
-        "Cache-Control": CACHE_CONTROL,
+        "Cache-Control": cache_control,
         "X-Content-Type-Options": "nosniff",
     }
 
@@ -68,6 +70,35 @@ def _png_response(request: Request, digest: str, png: bytes) -> Response:
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
 
     return Response(content=png, media_type="image/png", headers=headers)
+
+
+# The email logo's URL carries the logo's digest, so its content never changes
+# under it: a new upload is a new URL. Mail proxies (Gmail's, Outlook's) can
+# keep it for as long as they like.
+EMAIL_LOGO_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+
+async def _rate_limit_email_logo(request: Request) -> None:
+    """Rate limit the email logo: 600/minute per IP (DoS guard).
+
+    A separate, larger budget from the app icons, because the traffic has a
+    different shape. Gmail and Outlook fetch images through a small pool of
+    proxy addresses, so a message sent to the whole department and opened
+    within a few minutes arrives as a burst from a handful of IPs. Held to the
+    icons' 120, that burst would turn the logo into a broken image for the
+    members who opened it last. Each response is cached for a year, so a
+    proxy asks once per logo version, not once per recipient.
+    """
+    client_ip = get_client_ip(request)
+    is_limited, _ = await public_rate_limit(
+        key=f"pub_branding_email:{client_ip}", max_requests=600, window_seconds=60
+    )
+    if is_limited:
+        raise CodedHTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again later.",
+            error_code=ErrorCode.SYS_RATE_LIMITED,
+        )
 
 
 def _not_configured() -> HTTPException:
@@ -148,3 +179,38 @@ async def get_app_splash(
 
     digest, png = rendered
     return _png_response(request, digest, png)
+
+
+@router.head(
+    "/email-logo",
+    response_class=Response,
+    include_in_schema=False,
+    dependencies=[Depends(_rate_limit_email_logo)],
+)
+@router.get(
+    "/email-logo",
+    response_class=Response,
+    responses={200: {"content": {"image/png": {}}}},
+    dependencies=[Depends(_rate_limit_email_logo)],
+)
+async def get_email_logo(
+    request: Request,
+    v: str = Query("", max_length=64),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """The department's logo for an email masthead.
+
+    ``v`` must be the current logo's digest, which is how the address in an
+    email is built (``branding_service.email_logo_src``). Any other value is a
+    404: a logo the department has since replaced, or one from an
+    organization this deployment does not serve. A mail client shows the
+    image's alt text — the department's name — in its place.
+    """
+    rendered = await branding_service.get_email_logo(db)
+    if rendered is None:
+        raise _not_configured()
+
+    digest, png = rendered
+    if v != digest:
+        raise _not_configured()
+    return _png_response(request, digest, png, EMAIL_LOGO_CACHE_CONTROL)

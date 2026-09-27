@@ -2759,13 +2759,16 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1331,
     anchor: "Screenshot of the weekly schedule, its cards tinted green",
-    alt: "The weekly schedule, its cards tinted green when fully staffed and amber when short",
+    alt: "The weekly schedule, each shift a chip tinted by its staffing, with the legend above the grid",
     route: "/scheduling",
     prepare: async (page) => {
-      // The staffing ratio only appears once a shift knows how many positions
-      // it has, so wait for a card to render one rather than a fixed pause.
+      // Each chip is tinted by its staffing status and reads "N open",
+      // "Full 4/4", "You + 2/4" or "N on"; wait for one rather than a fixed
+      // pause. The old wait wanted an "n/m" ratio, which only a full shift or
+      // one of your own still prints.
       await page
-        .getByText(/\d+\/\d+/)
+        .getByRole("grid")
+        .getByText(/\d+ (on|open)|\d+\/\d+/)
         .first()
         .waitFor({ timeout: 15_000 });
       await page.waitForTimeout(800);
@@ -3005,25 +3008,23 @@ export const SHOTS = [
       // The toggle only renders for a category whose item type supports
       // variants — uniform, PPE, tool or equipment — so the category has to
       // be chosen before it appears.
-      const category = page
-        .locator("select")
-        .filter({ hasText: /categor/i })
-        .first();
+      const dialog = page.getByRole("dialog", { name: "Add Item" });
+      const category = dialog.getByRole("combobox", { name: "Category" });
+      // Uniforms first: the item pictured is a polo shirt, and "Structural
+      // PPE" sorts ahead of it alphabetically.
       const options = await category.locator("option").evaluateAll((els) =>
-        els
-          .filter((e) => /uniform|ppe|gear|clothing/i.test(e.textContent || ""))
+        [/uniform/i, /ppe|gear|clothing/i]
+          .flatMap((re) => els.filter((e) => re.test(e.textContent || "")))
           .map((e) => e.getAttribute("value"))
           .filter(Boolean),
       );
       if (options[0]) await category.selectOption(options[0]);
       await page.waitForTimeout(500);
-      // The checkbox is sr-only inside a label that wraps only the toggle
-      // track; the caption beside it is a sibling span, so clicking the words
-      // does nothing at all.
-      await page
-        .locator("fieldset input[type='checkbox']")
-        .first()
-        .check({ force: true, timeout: 10_000 });
+      // The whole row is the switch (role="switch"), so its caption is its
+      // accessible name.
+      await dialog
+        .getByRole("switch", { name: "Generate Sizes & Styles" })
+        .click({ timeout: 10_000 });
       await page.waitForTimeout(700);
       for (const size of ["S", "M", "L", "XL"]) {
         await page
@@ -3045,9 +3046,8 @@ export const SHOTS = [
       // A name, so the form is not pictured with its one required field
       // blank. Scoped to the dialog — the page's own search box is the first
       // input on the document and swallowed the text.
-      await page
-        .locator("div.fixed.inset-0 form input:not([type])")
-        .first()
+      await dialog
+        .getByRole("textbox", { name: "Name *" })
         .fill("Uniform Polo Shirt", { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
@@ -3877,7 +3877,8 @@ export const SHOTS = [
     },
     // The phase card the gate sits in, so its siblings and their chips are in
     // the frame alongside it.
-    selector: "div.rounded-lg.border:has(h3:text-is('Basic Skills'))",
+    // The phase card is the shared `card` utility, not a hand-typed border.
+    selector: "div.card:has(h3:text-is('Basic Skills'))",
   },
   {
     id: "02-99-member-locked-requirement",
@@ -4015,12 +4016,40 @@ export const SHOTS = [
         { waitUntil: "domcontentloaded" },
       );
       await page.waitForTimeout(2500);
-      // The member whose written exam carries a recorded score, so the panel
+      // A member whose written exam carries a recorded score, so the panel
       // shows a used attempt rather than "Attempts: 0 / 3" beside an empty
       // field. Recording one here instead would spend an attempt on every
-      // capture run.
+      // capture run. Looked up rather than named: the demo member's exam is
+      // deliberately left unscored, because it is the gate 02-99 photographs
+      // locking the rest of that member's phase.
+      const scored = await page.evaluate(async (id) => {
+        const get = async (path) => {
+          const response = await fetch(`/api/v1${path}`, {
+            credentials: "include",
+          });
+          return response.ok ? response.json() : null;
+        };
+        const body = await get(`/training/programs/programs/${id}/enrollments`);
+        const list = Array.isArray(body) ? body : body?.enrollments || [];
+        for (const enrollment of list) {
+          const detail = await get(
+            `/training/programs/enrollments/${enrollment.id}`,
+          );
+          const rows = detail?.requirement_progress || [];
+          const exam = rows.find(
+            (row) => row.requirement?.name === "Firefighter I Written Exam",
+          );
+          if (exam?.status === "completed") return enrollment.user_name;
+        }
+        return null;
+      }, programId);
+      if (!scored) {
+        throw new Error(
+          "02-95: no enrollee has a scored written exam; re-run seed_demo_data.py",
+        );
+      }
       await page
-        .getByText(/Nadia Belhaj/)
+        .getByText(scored, { exact: true })
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(2500);
@@ -4508,8 +4537,10 @@ export const SHOTS = [
     alt: "An in-app confirmation dialog with its consequence sentence and named buttons",
     // A delete that names both the consequence and the two choices — the
     // pattern the section is about. Equipment-check templates are the clearest
-    // instance in the app.
-    route: "/inventory/admin/checklists/settings",
+    // instance in the app. The templates are listed on the checklists page
+    // itself; Settings now holds only the prompt and check-in window options.
+    // The dialog is opened and never confirmed, so nothing is deleted.
+    route: "/inventory/admin/checklists",
     prepare: async (page) => {
       await page
         .getByRole("button", { name: /^Delete/ })
@@ -4729,8 +4760,8 @@ export const SHOTS = [
   // the bootstrap step -- the reverse of every other shot here.
   {
     id: "20-01-onboarding-prepare",
-    doc: "20-september-2026-release-changes.md",
-    line: 1022,
+    doc: "08-admin-reports.md",
+    line: 120,
     anchor:
       "`/onboarding/prepare` showing both lists — what setup requires and what it",
     alt: "Setup Prerequisites — the two lists: what setup requires, and what it will ask for but can skip",
@@ -4745,8 +4776,8 @@ export const SHOTS = [
   },
   {
     id: "20-02-onboarding-progress-order",
-    doc: "20-september-2026-release-changes.md",
-    line: 1052,
+    doc: "08-admin-reports.md",
+    line: 145,
     anchor:
       "The onboarding progress indicator on a mid-flow step, showing the new",
     alt: "The setup progress strip on step 3 — Step 3 of 11: Modules, with steps 1 and 2 ticked and the optional steps marked",
@@ -4758,8 +4789,8 @@ export const SHOTS = [
   },
   {
     id: "20-03-onboarding-rank-ladder",
-    doc: "20-september-2026-release-changes.md",
-    line: 1074,
+    doc: "08-admin-reports.md",
+    line: 161,
     anchor:
       "Step 4 with the rank ladder editor open — a renamed rank, a reordered",
     alt: "Step 4's rank ladder — each rank with the shift seats it may fill, an Edit control per rank, and Add Rank",
@@ -4770,8 +4801,8 @@ export const SHOTS = [
   },
   {
     id: "20-08-onboarding-member-numbering",
-    doc: "20-september-2026-release-changes.md",
-    line: 1059,
+    doc: "08-admin-reports.md",
+    line: 155,
     anchor:
       "Step 1's member-numbering block with the switch on, a prefix filled in and a",
     alt: "Step 1's member-numbering block — the switch on, a prefix of FD- and numbering starting at 100",
@@ -4784,8 +4815,8 @@ export const SHOTS = [
   },
   {
     id: "20-09-onboarding-tier-rights",
-    doc: "20-september-2026-release-changes.md",
-    line: 1075,
+    doc: "08-admin-reports.md",
+    line: 166,
     anchor:
       "Step 4's membership tier ladder with one tier's rights open — the voting,",
     alt: "Step 4's tier ladder with Active Member open — can vote, can hold office, the attendance threshold, and the automatic-advancement switch",
@@ -4798,8 +4829,8 @@ export const SHOTS = [
   },
   {
     id: "20-10-onboarding-permission-rows",
-    doc: "20-september-2026-release-changes.md",
-    line: 1088,
+    doc: "08-admin-reports.md",
+    line: 173,
     anchor:
       "Step 4's permission rows for any position other than IT Manager, against a",
     alt: "Step 4's permission rows for Chief, with 13 unenabled modules hidden and a Show all modules control",
@@ -4812,8 +4843,8 @@ export const SHOTS = [
   // ── 20 September release: reachable from the seeded department ──────
   {
     id: "20-11-settings-email-smtp-preset",
-    doc: "20-september-2026-release-changes.md",
-    line: 1401,
+    doc: "08-admin-reports.md",
+    line: 2182,
     anchor: "what a picture adds is the effect",
     alt: "Settings → Email with SMTP (any provider) selected and the Fastmail preset applied — the credential line naming the provider, and the host, port and encryption it filled in",
     route: "/settings?tab=email",
@@ -4882,8 +4913,8 @@ export const SHOTS = [
   },
   {
     id: "20-12-stage-picker-election-vote",
-    doc: "20-september-2026-release-changes.md",
-    line: 1355,
+    doc: "15-prospective-members.md",
+    line: 75,
     anchor: "this type could not be saved from this dialog at all",
     alt: "The Add Pipeline Stage dialog with Election / Vote selected, its voting configuration revealed below the type grid, and Add Stage enabled with no validation error",
     route: "/prospective-members/settings",
@@ -4936,8 +4967,8 @@ export const SHOTS = [
   },
   {
     id: "20-15-suggestions-sidebar-submit",
-    doc: "20-september-2026-release-changes.md",
-    line: 1528,
+    doc: "00-getting-started.md",
+    line: 221,
     anchor: "capture as an ordinary member so the",
     alt: "An ordinary member's view: the Suggestions item in the sidebar just below Messages, and the Suggestions page open on its Submit tab with the Training ideas box chosen and its description showing — no Review tab",
     route: "/suggestions",
@@ -4978,8 +5009,8 @@ export const SHOTS = [
   },
   {
     id: "20-14-applicant-meeting-stage-hint",
-    doc: "20-september-2026-release-changes.md",
-    line: 1584,
+    doc: "15-prospective-members.md",
+    line: 188,
     anchor:
       "the applicant detail drawer for an applicant on a **meeting** stage whose",
     alt: "The applicant drawer for an applicant on the Attend a Business Meeting stage, whose Auto-Link Event Type is set: the hint above the action row says they must be checked in at the stage's event and that event's attendance must be finalized before they can advance",
@@ -5008,8 +5039,8 @@ export const SHOTS = [
   },
   {
     id: "20-13-applicant-drawer-not-elected",
-    doc: "20-september-2026-release-changes.md",
-    line: 1324,
+    doc: "15-prospective-members.md",
+    line: 528,
     anchor:
       "the applicant detail drawer for an applicant whose election package reads",
     alt: "An applicant's drawer after a losing vote — the Membership Vote stage, the red not elected package status, the banner and a link to the closed ballot, and an action row that offers Advance",
@@ -5058,8 +5089,8 @@ export const SHOTS = [
   },
   {
     id: "20-04-org-profile-navigation-layout",
-    doc: "20-september-2026-release-changes.md",
-    line: 940,
+    doc: "08-admin-reports.md",
+    line: 199,
     anchor:
       "Settings → Organization → Profile with the Navigation Layout control",
     alt: "The Navigation Layout control in Settings → General → Profile, noting that it applies to everyone in the department",
@@ -5085,8 +5116,8 @@ export const SHOTS = [
   },
   {
     id: "20-05-members-settings-ranks",
-    doc: "20-september-2026-release-changes.md",
-    line: 1110,
+    doc: "08-admin-reports.md",
+    line: 260,
     anchor:
       "The Members Administration → Settings screen with the section sidebar",
     // "across the top", not "in the sidebar": SettingsLayout renders top-level
@@ -5100,8 +5131,8 @@ export const SHOTS = [
   },
   {
     id: "20-06-scheduling-closeout-queue",
-    doc: "20-september-2026-release-changes.md",
-    line: 1158,
+    doc: "03-scheduling.md",
+    line: 1223,
     anchor:
       "`/scheduling/admin/closeout` with several shifts in the queue, oldest",
     alt: "The shift close-out queue — ended shifts that were never closed out, oldest first, beside the close-out settings",
@@ -5111,8 +5142,8 @@ export const SHOTS = [
   },
   {
     id: "20-07-applicant-place-on-stage",
-    doc: "20-september-2026-release-changes.md",
-    line: 1180,
+    doc: "15-prospective-members.md",
+    line: 332,
     anchor:
       "The applicant board with the place-on-a-stage action open on an applicant,",
     // The stage list itself cannot be pictured: it is a native <select>, and an
@@ -6837,7 +6868,7 @@ export const SHOTS = [
     line: 1600,
     anchor:
       "Screenshot of the email preview pane showing the new white-card-on-grey design",
-    alt: "The rendered preview: a white card on grey, its header band, details table and footer",
+    alt: "The rendered preview: a white card on grey, its centred masthead, fact panel and footer",
     route: "/communications/email-templates",
     // The Preview tab, not the editor: the two are alternate views of the same
     // panel and cannot both be on screen.
@@ -7441,17 +7472,19 @@ export const SHOTS = [
         "templates",
         (template) => template.name === "Engine Daily Check",
       )(page);
-      await clickByName("Preview")(page);
-      await page.waitForSelector("text=Safety Equipment", { timeout: 20_000 });
+      // On a wide canvas the preview is a rail beside the builder, chosen by
+      // its "Crew view" tab (the other tab lists what blocks publishing). The
+      // Tools menu's Preview entry, which opened it as a dialog, is rendered
+      // only on a narrow canvas, where there is no room for the rail.
+      await clickByName("Crew view")(page);
+      await page
+        .getByRole("heading", { name: "What the crew sees" })
+        .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
-    // The phone frame itself, not the dimmed page behind it.
-    //
-    // Third distinct dialog shape in this file: this one is the shared
-    // `modal-overlay` utility, which carries the fixed positioning itself, so
-    // it matches neither `fixed.inset-0` nor role="dialog". Anchored on the
-    // utility, which is the thing the design system actually guarantees.
-    selector: "div.modal-overlay > div",
+    // The rail card: the phone frame and its "What the crew sees" heading,
+    // not the builder beside it.
+    selector: 'div.card:has(h3:text-is("What the crew sees"))',
     viewport: { width: 1440, height: 1300 },
   },
   {
@@ -8224,9 +8257,12 @@ export const SHOTS = [
         // left on screen belongs to the line just added.
         const picker = page.getByPlaceholder("Search inventory…").first();
         await picker.fill(term);
-        // The picker debounces, then renders its results as buttons.
+        // The picker debounces, then renders its results as buttons. Scoped
+        // to the dialog: the items list behind it now has a button per row
+        // too, and the first page-wide match sat under the overlay.
         await page.waitForTimeout(1_200);
         await page
+          .getByRole("dialog", { name: "Receive Stock" })
           .getByRole("button", { name: new RegExp(term) })
           .first()
           .click({ timeout: 10_000 });
@@ -10414,14 +10450,14 @@ export const SHOTS = [
   {
     id: "07-14-suggestion-box-dialog",
     doc: "07-documents-forms.md",
-    line: 542,
+    line: 600,
     anchor: 'dialog filled in for a "training ideas" box',
-    alt: "The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up ticked, the note that managing boxes does not let you read them, and two reviewer positions ticked",
+    alt: "The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below",
     route: "/communications/suggestion-boxes",
     // The sentence the shot exists to carry. It sits between the switches and
     // the reviewer pickers, so a frame cut short above it also fails here.
     expect: "Managing boxes does not by itself let you read them",
-    viewport: { width: 1280, height: 1500 },
+    viewport: { width: 1280, height: 2000 },
     // The panel, not `[role="dialog"]`: Modal puts that role on the fixed
     // full-screen backdrop, so clipping to it photographs the whole dimmed page.
     selector: '[data-testid="modal-panel"]',
@@ -10447,6 +10483,10 @@ export const SHOTS = [
         .locator("label", { hasText: "Allow follow-up" })
         .locator('input[type="checkbox"]');
       if (!(await followUp.isChecked())) await followUp.check();
+      await dialog
+        .locator("label", { hasText: "Public idea board" })
+        .locator('input[type="checkbox"]')
+        .check();
       const positions = dialog.locator("fieldset", {
         has: page.locator("legend", { hasText: "Reviewer positions" }),
       });
@@ -10589,13 +10629,13 @@ export const SHOTS = [
     doc: "07-documents-forms.md",
     line: 633,
     anchor: "tab with one submission open: the disposition",
-    alt: "Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the internal note, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply",
+    alt: "Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the Response to the submitter and internal note fields, the Status history from Received to Under review, the Idea board section with its published copy and the Edit published copy and Take off the board buttons, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply",
     route: "/suggestions?tab=review",
     // The seeded reviewer is the Secretary position, which this account holds.
     // The administrator reviews no box, by design, and has no Review tab.
     auth: "secretary",
     expect: "Anonymous submitter",
-    viewport: { width: 1280, height: 1800 },
+    viewport: { width: 1280, height: 2400 },
     selector: '[role="tabpanel"]',
     prepare: async (page) => {
       await page
@@ -10609,6 +10649,7 @@ export const SHOTS = [
           hasText: "More hands-on SCBA time for probationary members",
         })
         .waitFor();
+      await page.getByRole("button", { name: "Edit published copy" }).waitFor();
       const disposition = await page
         .locator("#suggestion-disposition")
         .inputValue();
@@ -10624,7 +10665,7 @@ export const SHOTS = [
     doc: "07-documents-forms.md",
     line: 629,
     anchor: "What a forward recipient sees: Suggestions",
-    alt: "Suggestions → Review as a member who reviews no box: the one submission forwarded to them, marked Forwarded to you, open on the right with its disposition, internal note and thread, and under Forwarded to the note that only the box's reviewers can forward it, with no Forward button",
+    alt: "Suggestions → Review as a member who reviews no box: the one submission forwarded to them, marked Forwarded to you, open on the right with its disposition, internal note and thread, its Idea board section saying only the box's reviewers can publish it, and under Forwarded to the note that only the box's reviewers can forward it, with no Forward button",
     route: "/suggestions?tab=review",
     // Reviews no box, so everything on this tab arrives by forward -- which is
     // the state the guide describes. The secretary reviews every box and would
@@ -10653,6 +10694,135 @@ export const SHOTS = [
           "a Forward button is showing, so this account reviews the box; re-run seed_demo_data.py and check SUGGESTION_FORWARD_MEMBER_USERNAME",
         );
       }
+      // Publishing is for the box's own reviewers; a forward does not carry it.
+      if (
+        await page
+          .getByRole("button", {
+            name: /Publish to the board|Edit published copy/,
+          })
+          .count()
+      ) {
+        throw new Error("a forward recipient is being offered publishing");
+      }
+    },
+  },
+  {
+    id: "07-20-suggestion-status-history",
+    doc: "07-documents-forms.md",
+    line: 635,
+    anchor: "Status history** from Received through Accepted",
+    alt: "Suggestions → My submissions with the accepted night-time extrication drill open: its Status history running from Received through Accepted, with the reviewers' response to the submitter under the Accepted step",
+    route: "/suggestions?tab=mine",
+    auth: "member",
+    expect: "Scheduled for the second Tuesday next month",
+    viewport: { width: 1280, height: 1800 },
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Night-time vehicle extrication drill/ })
+        .first()
+        .click();
+      await page.locator('section[aria-label="Status history"]').waitFor();
+    },
+  },
+  {
+    id: "07-21-suggestion-idea-board",
+    doc: "07-documents-forms.md",
+    line: 688,
+    anchor: "Idea board** sorted by **Top**",
+    alt: "Suggestions → Idea board sorted by Top: the night-time extrication drill with three votes, already voted for, marked Accepted with the reviewers' response, above the SCBA sessions idea with one vote, marked Under review",
+    route: "/suggestions?tab=board",
+    auth: "member",
+    expect: "Night-time extrication drill",
+    viewport: { width: 1280, height: 1200 },
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      // Both states of the vote button are the point of the shot, so a seed
+      // that left them the same should fail here rather than be photographed.
+      await page
+        .getByRole("button", {
+          name: /^Remove your vote for Night-time extrication drill/,
+        })
+        .waitFor();
+      await page
+        .getByRole("button", {
+          name: /^Vote for Regular hands-on SCBA sessions for probies/,
+        })
+        .waitFor();
+    },
+  },
+  {
+    id: "07-22-suggestion-publish-dialog",
+    doc: "07-documents-forms.md",
+    line: 701,
+    anchor: "Edit published copy** dialog a reviewer opens",
+    alt: "The Edit published copy dialog opened from a submission's Idea board section: the note that every member can read it and that the submission, its screenshots and its sender are never shown, then the public title and summary",
+    route: "/suggestions?tab=review",
+    auth: "secretary",
+    expect: "Write it in your own words",
+    viewport: { width: 1280, height: 1200 },
+    selector: '[data-testid="modal-panel"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: /More hands-on SCBA time for probationary members/,
+        })
+        .first()
+        .click();
+      // Opened and photographed, never saved.
+      await page.getByRole("button", { name: "Edit published copy" }).click();
+      await page.locator("#publish-title").waitFor();
+    },
+  },
+  {
+    id: "07-23-suggestion-box-delete-dialog",
+    doc: "07-documents-forms.md",
+    line: 614,
+    anchor:
+      'Delete "Training ideas"?** dialog for a box that holds submissions',
+    alt: 'The Delete "Training ideas"? dialog: the warning giving how many submissions the box holds and that deleting removes them all, the Archive instead button, and the field for typing the box\'s name, with Delete permanently still disabled',
+    route: "/communications/suggestion-boxes",
+    expect: "Archive instead",
+    viewport: { width: 1280, height: 1200 },
+    selector: '[data-testid="modal-panel"]',
+    prepare: async (page) => {
+      // Opened and photographed, never confirmed: nothing is typed, so the
+      // delete button stays disabled throughout.
+      await page.getByRole("button", { name: "Delete Training ideas" }).click();
+      await page.locator("#delete-box-confirm").waitFor();
+      if (
+        await page
+          .getByRole("button", { name: "Delete permanently" })
+          .isEnabled()
+      ) {
+        throw new Error("Delete permanently is enabled before a name is typed");
+      }
+    },
+  },
+  {
+    id: "07-24-suggestion-notification-rule",
+    doc: "07-documents-forms.md",
+    line: 732,
+    anchor: "Create Notification Rule** with the trigger event set",
+    alt: "Notifications → Create Notification Rule with the trigger event set to Suggestion Submitted, and the note under it saying it tells the box's reviewers, and anyone the box notifies, that a submission arrived, and that replies and status updates still go out when it is switched off",
+    route: "/notifications?tab=rules",
+    expect: "Create Notification Rule",
+    viewport: { width: 1280, height: 1100 },
+    selector: '[aria-labelledby="create-rule-title"] div.max-w-lg',
+    prepare: async (page) => {
+      // Opened and photographed, never saved.
+      await page.getByRole("button", { name: "Add Rule" }).click();
+      const dialog = page.locator('[aria-labelledby="create-rule-title"]');
+      await dialog.waitFor();
+      await dialog.locator("#rule-name").fill("New suggestion notices");
+      await dialog
+        .locator("select")
+        .first()
+        .selectOption({ label: "Suggestion Submitted" });
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
     },
   },
   {
@@ -10940,8 +11110,9 @@ export const SHOTS = [
     line: 78,
     anchor:
       'Screenshot of the "Your Data" section showing the "Download my data" button',
-    alt: "The Your Data section of account security with its export button",
-    route: "/account?tab=security",
+    alt: "The Your Data section of your privacy settings with its export button",
+    // Privacy, not Security: the export moved with the other privacy choices.
+    route: "/account?tab=privacy",
     // The section sits at the foot of a long tab; clip to it rather than
     // shooting the whole page for one button.
     selector: 'div:has(> h2:text-is("Your Data"))',
@@ -11407,7 +11578,12 @@ export const SHOTS = [
       // match on that stage rather than on a name, since the seeder spreads
       // applicants across stages and who lands on the last one moves.
       await openApplicantAtStage("Onboarding")(page);
-      await clickByName(/convert/i)(page);
+      // Scoped to the drawer and exact: /convert/i also matches the board's
+      // "Converted" tab behind it, which is visible and comes first.
+      await page
+        .getByRole("dialog", { name: "Applicant details" })
+        .getByRole("button", { name: "Convert", exact: true })
+        .click({ timeout: 10_000 });
       // The modal opens on step 1 of 2 (Review Applicant); the membership
       // type, ID, rank and start date the placeholder names are on step 2.
       await clickByName(/^continue$/i)(page);
@@ -11623,7 +11799,7 @@ export const SHOTS = [
     doc: "09-skills-testing.md",
     line: 510,
     anchor: 'The "finish with unscored steps" dialog',
-    alt: "The warning raised on finishing — how many steps have no score, what an unscored critical step costs, and the choice between going back and reviewing anyway",
+    alt: "The warning raised on finishing — how many steps have no result, and the choice between going back to score and reviewing them",
     route: "/training/skills-testing",
     prepare: async (page) => {
       const testId = await page.evaluate(async () => {
@@ -11654,7 +11830,7 @@ export const SHOTS = [
         .click({ timeout: 20_000 });
       await page.waitForTimeout(1200);
       await page
-        .getByText(/Some steps have no score/)
+        .getByText(/Some steps have no result/)
         .first()
         .waitFor({ timeout: 20_000 });
     },
@@ -12378,7 +12554,7 @@ export const SHOTS = [
     // the marker, and the topic now lives in guide 03's "Who Can See the
     // Platoon Roster". Re-applied there on 2026-08-31, keeping the id.
     doc: "03-scheduling.md",
-    line: 635,
+    line: 698,
     anchor: "This removed access somebody already had",
     alt: "Platoon Management refusing a member who does not hold scheduling.manage",
     route: "/scheduling/admin/platoons",
@@ -12390,8 +12566,8 @@ export const SHOTS = [
     // platform, controls the data. Shot signed out because /privacy is reachable
     // from the sign-in page and that is where a member being onboarded meets it.
     id: "19-03-privacy-header",
-    doc: "19-august-2026-release-changes.md",
-    line: 493,
+    doc: "17-privacy-data-rights.md",
+    line: 215,
     anchor: "the rewritten `/privacy` page header showing the",
     alt: "The rewritten Privacy Policy above the fold, opening with who controls the system and the department's ownership of every account on it",
     route: "/privacy",
@@ -12404,8 +12580,8 @@ export const SHOTS = [
     // without naming a room, so nothing sensitive is on screen -- which the
     // marker asks for explicitly.
     id: "19-04-qr-directory-search",
-    doc: "19-august-2026-release-changes.md",
-    line: 80,
+    doc: "06-apparatus-facilities.md",
+    line: 219,
     anchor: "Check-In QR Codes directory search results with Download PNG",
     alt: "The Check-In QR Codes directory filtered to the stations, each card offering Copy URL, Download PNG and Regenerate above the Print All and Room signs controls",
     route: "/locations/qr-codes",
@@ -12427,8 +12603,8 @@ export const SHOTS = [
     // sign already printed and hung on a wall, and that consequence only exists
     // in this dialog.
     id: "19-05-qr-regenerate-warning",
-    doc: "19-august-2026-release-changes.md",
-    line: 82,
+    doc: "06-apparatus-facilities.md",
+    line: 273,
     anchor: "regenerate-code confirmation explicitly warning that the",
     alt: "The regenerate-code confirmation, warning that the code already printed stops working once a new one is issued",
     route: "/locations/qr-codes",
@@ -12449,8 +12625,8 @@ export const SHOTS = [
     // frame; the seeder now leaves orders in four distinct states so the
     // workflow breakdown is not a column of zeroes with one number in it.
     id: "19-06-store-admin-orders",
-    doc: "19-august-2026-release-changes.md",
-    line: 64,
+    doc: "18-storefront.md",
+    line: 520,
     anchor: "Store Admin with activity/status cards and a matching filtered",
     alt: "Store Admin's Orders tab narrowed to paid orders, the list showing only the two the status filter matches",
     route: "/inventory/admin/store",
@@ -12489,8 +12665,8 @@ export const SHOTS = [
     // says which is which rather than a caption claiming a screen that is not
     // in the frame.
     id: "19-08-store-admin-activity",
-    doc: "19-august-2026-release-changes.md",
-    line: 64,
+    doc: "18-storefront.md",
+    line: 516,
     anchor: "__paired-with-19-06__",
     alt: "Store Admin's Overview: the activity counts across the top and the order-workflow breakdown counting each fulfilment state the Orders list can be filtered by",
     route: "/inventory/admin/store",
@@ -12501,8 +12677,8 @@ export const SHOTS = [
     // order, and an admin looking at the same order gets the reconciliation
     // controls instead of the "tell us how you paid" editor the guide means.
     id: "19-07-member-payment-method",
-    doc: "19-august-2026-release-changes.md",
-    line: 66,
+    doc: "18-storefront.md",
+    line: 493,
     anchor: "member order payment-method editor plus the explanatory text",
     alt: "A member changing the payment method on their own order: a method picker over the department's payment handles and the \"I've sent payment\" report",
     route: "/store/orders",
@@ -12604,8 +12780,8 @@ export const SHOTS = [
     // draft so the two states sit side by side -- with nothing adopted both
     // cards show the platform default, which pictures the feature unused.
     id: "19-09-legal-documents",
-    doc: "19-august-2026-release-changes.md",
-    line: 545,
+    doc: "08-admin-reports.md",
+    line: 2536,
     anchor: "Governance → Legal Documents landing view, showing",
     alt: "Governance → Legal Documents: the Privacy Notice card published with its last-updated line, beside a Terms of Service card still carrying an unpublished draft",
     route: "/governance/legal",
@@ -12622,8 +12798,8 @@ export const SHOTS = [
     // existing event's type deliberately does not flip them, and a capture
     // taken that way would show the banner absent and teach the opposite.
     id: "19-10-event-recruitment-type",
-    doc: "19-august-2026-release-changes.md",
-    line: 703,
+    doc: "04-events-meetings.md",
+    line: 1767,
     anchor: "the event form with Recruitment selected, showing",
     alt: "A new event with Recruitment chosen: guest sign-in and create-a-prospect both switched on, under the banner explaining that guests reach the prospective-members pipeline",
     route: "/events/admin?tab=create",
@@ -12700,8 +12876,8 @@ export const SHOTS = [
     // it), so the reserved strip fell back to white. Fixed in styles/index.css;
     // this shot is the evidence and is re-captured against it.
     id: "19-11-dark-scrollbar-gutter",
-    doc: "19-august-2026-release-changes.md",
-    line: 222,
+    doc: "10-mobile-pwa.md",
+    line: 271,
     anchor: "a public page (`/f/{slug}` or an application-status link) in dark",
     alt: "A public form in dark mode at full window width, the themed gradient reaching the window edges",
     route: "/login",
@@ -12858,6 +13034,23 @@ export const SHOTS = [
       "events",
       (event) => event.title === "Station Open House — Setup Crew",
     ),
+    fullPage: true,
+  },
+  {
+    // The section lists forms whose integration type is `event_request` and
+    // nothing else: `/event-requests/forms` filters on that server-side, so
+    // the department's three ordinary forms -- near-miss, gear sizing,
+    // community request -- are absent from a screen an event administrator
+    // reaches without holding `forms.manage` at all. That absence is the
+    // marker's subject, and it is the one thing an image cannot show, so the
+    // caption names the three forms that are not here.
+    id: "19-24-outreach-form-section",
+    doc: "04-events-meetings.md",
+    line: 915,
+    anchor: "Event Settings outreach-form picker under an event-admin account",
+    alt: "Events Settings > Public Form: the generated outreach form listed as published and accepting submissions, with its public URL",
+    route: "/events/admin?tab=settings",
+    prepare: clickByName(/^Public Form/),
     fullPage: true,
   },
   {
@@ -13227,8 +13420,8 @@ export const SHOTS = [
   },
   {
     id: "19-16-legal-revision-editor",
-    doc: "19-august-2026-release-changes.md",
-    line: 563,
+    doc: "08-admin-reports.md",
+    line: 2552,
     anchor: "the revision editor with the body text area, the",
     alt: "The revision editor under a propose-only account: the document text, the filled-in change note, and the free-text Effective date printed to members as Last updated",
     route: "/governance/legal",
@@ -13353,8 +13546,8 @@ export const SHOTS = [
   },
   {
     id: "19-22-admin-hours-summary-year",
-    doc: "19-august-2026-release-changes.md",
-    line: 51,
+    doc: "08-admin-reports.md",
+    line: 2748,
     anchor: "Admin Hours Summary on Calendar Year with at least two",
     alt: "The Admin Hours Summary on This calendar year: counted, approved and needs-review totals over a year of logged time, ranked by the category it was logged against",
     route: "/admin-hours/manage",
@@ -13414,8 +13607,8 @@ export const SHOTS = [
     // "rescue specialist (legacy position)", which is the half of the marker
     // that matters: a value typed before the picker existed stays readable.
     id: "19-23-apparatus-crew-seats",
-    doc: "19-august-2026-release-changes.md",
-    line: 111,
+    doc: "06-apparatus-facilities.md",
+    line: 70,
     anchor: "apparatus form crew-position rank picker, including one legacy",
     alt: "The rescue's crew seats: three chosen from the department's configured positions and a fourth still holding a free-text value, marked (legacy position)",
     route: "/apparatus",
@@ -13427,23 +13620,6 @@ export const SHOTS = [
       "reads Level 2. Unselected options are in the DOM whatever is chosen.",
   },
   {
-    // The section lists forms whose integration type is `event_request` and
-    // nothing else: `/event-requests/forms` filters on that server-side, so
-    // the department's three ordinary forms -- near-miss, gear sizing,
-    // community request -- are absent from a screen an event administrator
-    // reaches without holding `forms.manage` at all. That absence is the
-    // marker's subject, and it is the one thing an image cannot show, so the
-    // caption names the three forms that are not here.
-    id: "19-24-outreach-form-section",
-    doc: "19-august-2026-release-changes.md",
-    line: 143,
-    anchor: "Event Settings outreach-form picker under an event-admin account",
-    alt: "Events Settings > Public Form: the generated outreach form listed as published and accepting submissions, with its public URL",
-    route: "/events/admin?tab=settings",
-    prepare: clickByName(/^Public Form/),
-    fullPage: true,
-  },
-  {
     // Step 2 of the create wizard, which is where all three links the marker
     // names sit together: the course above, and the category / requirement /
     // program pickers below it. The event-detail card corrects these links
@@ -13452,8 +13628,8 @@ export const SHOTS = [
     // Nothing is submitted -- the wizard creates on step 4 -- so this writes
     // nothing and needs no `mutatesSeedData` flag.
     id: "19-29-training-session-linkage",
-    doc: "19-august-2026-release-changes.md",
-    line: 237,
+    doc: "02-training.md",
+    line: 876,
     anchor: "training-session edit flow with requirement, course, and program",
     alt: "Step 2 of the training-session wizard: an existing course selected, and the category, requirement and program links under a plain-language line saying what attendance will advance",
     route: "/training/admin?page=records&tab=sessions",
@@ -13519,8 +13695,8 @@ export const SHOTS = [
     // the print page, which is why this is a fresh template rather than an
     // addition to the weighted sheet 09-22/09-23 already depend on.
     id: "19-30-skill-point-deduction",
-    doc: "19-august-2026-release-changes.md",
-    line: 295,
+    doc: "09-skills-testing.md",
+    line: 479,
     anchor: "skill result illustrating point deduction without automatic whole",
     alt: "A validated skill result's score breakdown: 47 of 50 points earned, a 10-point deduction on one failed step, netting 74% against the department's 70% pass mark -- PASS, with no critical failure",
     route: "/training/skills-testing",
@@ -13544,8 +13720,8 @@ export const SHOTS = [
     // unfinalized event on every seed, so the prompt is already in the inbox
     // -- this shot only has to read it.
     id: "19-31-notification-before-action",
-    doc: "19-august-2026-release-changes.md",
-    line: 311,
+    doc: "00-getting-started.md",
+    line: 334,
     anchor: "same notification before and after completing its related",
     alt: "The notification inbox with an unread 'Validate attendance' prompt for a just-ended event, beside an unrelated shift-assignment notification",
     route: "/notifications?tab=inbox",
@@ -13575,8 +13751,8 @@ export const SHOTS = [
     // guard actually requires -- nothing later in guide 19 reads event or
     // notification state, so no later shot can be broken by this one.
     id: "19-32-notification-after-action",
-    doc: "19-august-2026-release-changes.md",
-    line: 311,
+    doc: "00-getting-started.md",
+    line: 336,
     anchor: "__paired-with-19-31__",
     alt: "The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there",
     route: "/notifications?tab=inbox",
@@ -13618,8 +13794,8 @@ export const SHOTS = [
     // dashboard would be the same screen under a different caption. What is
     // not pictured anywhere is a feed carrying both kinds of item at once.
     id: "19-28-station-board-messages",
-    doc: "19-august-2026-release-changes.md",
-    line: 118,
+    doc: "08-admin-reports.md",
+    line: 1552,
     anchor: "populated station board with one pending message, one persistent",
     alt: "My Updates on the station board: unread notifications and announcements above a standing order badged Persistent, with the clear control only a manager sees",
     route: "/dashboard",
@@ -13682,8 +13858,8 @@ export const SHOTS = [
     // Shot as the member, because "one blue with the demo member on it" is a
     // statement about whose board this is.
     id: "19-34-schedule-board-desktop",
-    doc: "19-august-2026-release-changes.md",
-    line: 1150,
+    doc: "03-scheduling.md",
+    line: 3105,
     anchor: "the Schedule board, desktop",
     alt: "The month board with all four chip states: a red shift with open seats, a green full one, a blue one the member is already on, and a grey one that names neither positions nor a minimum",
     // `view=month` is not decoration: SchedulingPage defaults viewMode to
@@ -13711,8 +13887,8 @@ export const SHOTS = [
     // absent" is not a styling note: the day sheet registers as an overlay
     // surface, which hides the bar so its 56px cannot paint over the sheet.
     id: "19-35-schedule-board-phone",
-    doc: "19-august-2026-release-changes.md",
-    line: 1156,
+    doc: "10-mobile-pwa.md",
+    line: 919,
     anchor: "the Schedule board, phone",
     alt: "The same month on a phone: the bar grid with a day sheet open over it, and no bottom navigation while the sheet is up",
     route: "/scheduling?tab=schedule&view=month",
@@ -13723,8 +13899,8 @@ export const SHOTS = [
   },
   {
     id: "19-36-standing-shift-dialog",
-    doc: "19-august-2026-release-changes.md",
-    line: 1189,
+    doc: "03-scheduling.md",
+    line: 3133,
     anchor: "the standing shift dialog",
     alt: "The standing-shift dialog on a Tuesday night shift: a biweekly pattern with the horizon left at its default a year out, and the dialog's own action row in frame",
     route: "/scheduling?tab=schedule&view=month",
@@ -13736,8 +13912,8 @@ export const SHOTS = [
     // Officers only -- a member cannot issue, relabel or revoke a card, not
     // even their own -- so this is the administrator's session by default.
     id: "19-37-member-id-cards",
-    doc: "19-august-2026-release-changes.md",
-    line: 1272,
+    doc: "01-membership.md",
+    line: 1743,
     anchor: "member profile → ID Cards panel",
     alt: "The ID Cards panel on a demo member's profile: one active card and one revoked, each showing only the last four characters of its serial",
     route: "/members",
@@ -13748,8 +13924,8 @@ export const SHOTS = [
     // Tablet width, which is how a door station is actually used, and the
     // shared half of a pair with guide 10.
     id: "19-38-check-in-station-armed",
-    doc: "19-august-2026-release-changes.md",
-    line: 1315,
+    doc: "01-membership.md",
+    line: 1770,
     anchor: "the check-in station, armed",
     alt: "The check-in station armed against a drill night on a tablet, with one successful tap already in the session list",
     route: "/members/check-in-station",
@@ -13790,8 +13966,8 @@ export const SHOTS = [
     // controls are buttons and a switch rather than a native select, so the
     // swap is photographable in place.
     id: "19-39-admin-metrics-settings",
-    doc: "19-august-2026-release-changes.md",
-    line: 1397,
+    doc: "08-admin-reports.md",
+    line: 2666,
     anchor: "the metrics settings screen",
     alt: "Members metrics settings at department scope: three chooseable slots with one cleared for a swap, the applies-to-everyone switch, and slot four shown as fixed",
     route: "/members/admin?tab=settings",
@@ -13801,8 +13977,8 @@ export const SHOTS = [
   {
     id: "19-40-seal-panel",
     expect: "Tamper seal",
-    doc: "19-august-2026-release-changes.md",
-    line: 1478,
+    doc: "03-scheduling.md",
+    line: 3239,
     anchor: "the seal panel on a check",
     alt: "Two sealed bags in one frame: the Drug Bag's tag matches the last count and offers Seal intact — clear 1 check, while the Trauma Bag's differs and offers only Record seal with a hand count",
     route: "/inventory/checklists/my",
@@ -13825,8 +14001,8 @@ export const SHOTS = [
     // six categories, which satisfies "at least three" and makes "one category
     // with none" impossible.
     id: "19-41-my-admin-hours",
-    doc: "19-august-2026-release-changes.md",
-    line: 1552,
+    doc: "08-admin-reports.md",
+    line: 2726,
     anchor: "the rebuilt My Admin Hours page",
     alt: "My Admin Hours over all time: the category breakdown with share bars, the requirement-progress section, and the muted line naming the categories with nothing logged",
     route: "/admin-hours",
@@ -13853,8 +14029,8 @@ export const SHOTS = [
     // the allowlist and quotes what a healthy line reads; the picture shows
     // the two registrations, which is the part that is real.
     id: "19-33-label-printers",
-    doc: "19-august-2026-release-changes.md",
-    line: 1362,
+    doc: "05-inventory.md",
+    line: 1119,
     anchor: "Settings → Label Printers",
     alt: "Settings → Label Printers with two registrations: a ZPL watch-desk printer marked default and an ESC/POS printer in the supply room, each on a documentation address",
     route: "/settings?tab=labelPrinters",
@@ -13884,8 +14060,8 @@ export const SHOTS = [
   },
   {
     id: "19-42-message-detail",
-    doc: "19-august-2026-release-changes.md",
-    line: 2190,
+    doc: "07-documents-forms.md",
+    line: 466,
     anchor: "`/messages/:id`",
     alt: "A department message on its own page: the breadcrumb back to Messages, the title, sender and sent date, and a body several paragraphs long",
     route: "/messages",
@@ -13902,8 +14078,8 @@ export const SHOTS = [
   },
   {
     id: "19-43-photo-use-consent",
-    doc: "19-august-2026-release-changes.md",
-    line: 2208,
+    doc: "17-privacy-data-rights.md",
+    line: 198,
     anchor: "`/communications/photo-use-consent`",
     alt: "Photo Use Consent, captured as the administrator (who holds users.view_consents): one member agreed, one declined and twenty not answered, with the roster showing each member's standing",
     route: "/communications/photo-use-consent",
@@ -13920,6 +14096,11 @@ export const SHOTS = [
     // Must stay the last shot of guide 19 -- it leaves the draft holding the
     // template's four officer seats under ranked choice. `openBylawDraft` puts
     // it back for the shots that need it seeded, including the one above.
+    // `doc` stays on the guide-19 index although the image is embedded in
+    // 14-elections.md: 14-24-ballot-send-skipped and 19-26 both mutate the
+    // seeded data, and the invariant at the foot of this file allows one
+    // mutating shot per doc. Capture order, which is what the invariant
+    // protects, is unchanged.
     id: "19-26-ballot-template-settings-after",
     doc: "19-august-2026-release-changes.md",
     line: 33,
@@ -14238,8 +14419,8 @@ export const SHOTS = [
     // never pressed: the form, the platform and the demo address all stay in
     // the browser.
     id: "20-18-email-test-connection",
-    doc: "20-september-2026-release-changes.md",
-    line: 200,
+    doc: "08-admin-reports.md",
+    line: 2071,
     anchor:
       "Settings → Email with the Test Connection button and a successful test result",
     alt: "Settings → Email with Microsoft 365 selected: the App registration (OAuth) and App Password choice with App Password chosen, the notice that Microsoft disables it by default at the end of December 2026, and a Test Connection toast reading SMTP connection successful — a simulated result, since the demo has no Microsoft 365 tenant",
@@ -14286,8 +14467,8 @@ export const SHOTS = [
   },
   {
     id: "20-16-scheduling-admin-hub",
-    doc: "20-september-2026-release-changes.md",
-    line: 92,
+    doc: "03-scheduling.md",
+    line: 1219,
     anchor: "The `/scheduling/admin` hub",
     alt: "The Scheduling Administration hub: the headline metrics To close out, Short-staffed, Hours this month and Needs attention, the Needs attention queue, and the card grid grouped Before the shift, On the shift, After the shift, People & eligibility, Reporting and Department settings",
     route: "/scheduling/admin",
@@ -14296,8 +14477,8 @@ export const SHOTS = [
   },
   {
     id: "20-17-staffing-gaps",
-    doc: "20-september-2026-release-changes.md",
-    line: 299,
+    doc: "03-scheduling.md",
+    line: 1221,
     anchor: "The staffing-gaps view at `/scheduling/admin/planning`",
     alt: "Shift Planning on its Staffing gaps tab: a date range, the count of short shifts and open seats, and each short shift with its empty seats and an assign control, beside the Templates and Patterns tabs",
     route: "/scheduling/admin/planning",

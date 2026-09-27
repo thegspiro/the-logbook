@@ -6,17 +6,18 @@
 # Works on: Linux (Debian/Ubuntu, RHEL/CentOS/Fedora, Alpine, Arch), macOS, WSL
 # Architectures: x86_64, ARM64 (Apple Silicon, Raspberry Pi), ARMv7
 #
-# Usage:
-#   curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+# Usage (the public URL is required):
+#   curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh \
+#     | bash -s -- --public-url https://logbook.example.org
 #
-# Or with options:
+# Or with options (each also needs --public-url, or LOGBOOK_PUBLIC_URL set):
+#   ./scripts/universal-install.sh --public-url https://logbook.example.org
+#                                                       # Address used in emailed links
 #   ./scripts/universal-install.sh --profile minimal    # Low memory (1GB RAM)
 #   ./scripts/universal-install.sh --profile standard   # Default (4GB RAM)
 #   ./scripts/universal-install.sh --profile full       # All features (8GB+ RAM)
 #   ./scripts/universal-install.sh --arm                # Force ARM configuration
 #   ./scripts/universal-install.sh --no-docker          # Skip Docker installation
-#   ./scripts/universal-install.sh --public-url https://logbook.example.org
-#                                                       # Address used in emailed links
 #   ./scripts/universal-install.sh --help               # Show help
 # ============================================
 
@@ -42,7 +43,6 @@ INSTALL_DIR="${INSTALL_DIR:-$(pwd)}"
 # prefixed because a bare PUBLIC_URL is already used by other tooling (Create
 # React App among them) and would be picked up from an unrelated shell.
 PUBLIC_URL="${LOGBOOK_PUBLIC_URL:-}"
-DEFAULT_FRONTEND_URL="http://localhost:3000"
 
 # The production stack is ALWAYS the base file plus the production override.
 # COMPOSE_FILE_LIST is what gets pinned into .env (for the operator's later bare
@@ -96,9 +96,34 @@ validate_public_url() {
             ;;
     esac
     if frontend_url_is_loopback "$url"; then
-        log_warning "--public-url $url points at this machine; emailed links will not open elsewhere"
+        log_error "--public-url $url points at this machine. The backend refuses to start in"
+        log_error "production with it, because emailed links would not open anywhere else."
+        return 1
     fi
     return 0
+}
+
+# The stack runs ENVIRONMENT=production, where the backend refuses to start
+# while FRONTEND_URL points at this machine. Checked before anything is
+# installed, so a missing address fails here rather than after a full install
+# that can never boot. A preserved .env that already names a public address
+# needs nothing more.
+require_public_url() {
+    local current=""
+    if [[ -n "$PUBLIC_URL" ]]; then
+        return 0
+    fi
+    if [[ -f "$INSTALL_DIR/.env" ]]; then
+        current=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$INSTALL_DIR/.env" | tail -n 1)
+        if ! frontend_url_is_loopback "$current"; then
+            return 0
+        fi
+    fi
+    log_error "A public URL is required: the address members open the site at."
+    log_error "Every link in outgoing email is built from it, and the backend refuses"
+    log_error "to start in production without one. Re-run with"
+    log_error "  --public-url https://logbook.example.org   (or set LOGBOOK_PUBLIC_URL)"
+    return 1
 }
 
 # Replaces the line by filtering rather than with sed, whose replacement text
@@ -114,7 +139,8 @@ write_frontend_url() {
 
 # A preserved .env is the operator's, so an existing public FRONTEND_URL is
 # never rewritten. One that is absent or still points at this machine is
-# replaced when --public-url was given, and reported otherwise.
+# replaced with --public-url; require_public_url has already refused to run
+# when neither exists, so the error branch is a backstop.
 reconcile_frontend_url() {
     local env_file="$1" current
     current=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$env_file" | tail -n 1)
@@ -128,8 +154,9 @@ reconcile_frontend_url() {
         write_frontend_url "$env_file" "$PUBLIC_URL"
         log_info "Set FRONTEND_URL=$PUBLIC_URL in your .env"
     else
-        log_warning "Your .env has no public FRONTEND_URL, so links in outgoing email point at"
-        log_warning "this machine. Set it, or re-run with --public-url <address members use>."
+        log_error "Your .env has no public FRONTEND_URL, and the backend refuses to start in"
+        log_error "production without one. Re-run with --public-url <address members use>."
+        return 1
     fi
 }
 
@@ -555,7 +582,7 @@ REDIS_SSL=false
 ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 # Every link in outgoing email (password resets, ballots, reminders) is built
 # from this. Set it to the address members open the site at.
-FRONTEND_URL=${PUBLIC_URL:-$DEFAULT_FRONTEND_URL}
+FRONTEND_URL=${PUBLIC_URL}
 FRONTEND_PORT=3000
 BACKEND_PORT=3001
 
@@ -710,14 +737,6 @@ print_success_message() {
     echo -e "  Architecture:    ${GREEN}$ARCH${NC}"
     echo -e "  Config file:     ${GREEN}$INSTALL_DIR/.env${NC}"
     echo
-    local frontend_url
-    frontend_url=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$INSTALL_DIR/.env" | tail -n 1)
-    if frontend_url_is_loopback "$frontend_url"; then
-        echo -e "${YELLOW}Emailed links:${NC} FRONTEND_URL is '${frontend_url}', so password resets,"
-        echo -e "  ballots and reminders will link to this machine only. Set FRONTEND_URL in"
-        echo -e "  $INSTALL_DIR/.env to the address members use, then restart the backend."
-        echo
-    fi
     if [[ "$INSTALL_DOCKER" == "true" ]] && [[ "$OS_FAMILY" != "darwin" ]]; then
         echo -e "${YELLOW}Note: You may need to log out and back in for Docker group changes.${NC}"
         echo
@@ -741,25 +760,31 @@ OPTIONS:
     --arm               Force ARM configuration (auto-detected normally)
     --no-docker         Skip Docker installation
     --dir <path>        Installation directory (default: current directory)
-    --public-url <url>  Address members open the site at (for example
-                        https://logbook.example.org). Written to FRONTEND_URL,
-                        which every link in outgoing email is built from.
-                        Also read from the LOGBOOK_PUBLIC_URL environment
-                        variable.
+    --public-url <url>  Required. Address members open the site at (for
+                        example https://logbook.example.org). Written to
+                        FRONTEND_URL, which every link in outgoing email is
+                        built from; the backend refuses to start in production
+                        while it points at this machine. Also read from the
+                        LOGBOOK_PUBLIC_URL environment variable. May be omitted
+                        only when an existing .env already sets a public
+                        FRONTEND_URL.
     --help              Show this help message
 
 EXAMPLES:
     # Standard installation
-    $0
+    $0 --public-url https://logbook.example.org
 
     # Minimal profile for Raspberry Pi
-    $0 --profile minimal
+    $0 --public-url https://logbook.example.org --profile minimal
 
     # Full installation with all features
-    $0 --profile full
+    $0 --public-url https://logbook.example.org --profile full
 
     # Custom directory
-    $0 --dir /opt/the-logbook
+    $0 --public-url https://logbook.example.org --dir /opt/the-logbook
+
+    # A LAN-only install still needs an address other machines can reach
+    $0 --public-url http://192.168.1.50:3000
 
 SUPPORTED PLATFORMS:
     - Linux: Ubuntu, Debian, Fedora, CentOS, RHEL, Alpine, Arch
@@ -823,6 +848,7 @@ main() {
     if [[ -n "$PUBLIC_URL" ]]; then
         validate_public_url "$PUBLIC_URL" || exit 1
     fi
+    require_public_url || exit 1
 
     print_banner
 

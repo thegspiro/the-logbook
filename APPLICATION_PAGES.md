@@ -540,10 +540,18 @@ Compliance, Department Store, and Setup & Tools.
 | `/inventory/admin/nfc`            | NFC Tag Settings          | any of `settings.manage`, `organization.update_settings`                      |
 | `/inventory/tag/:code`            | NFC Tag Link (redirect)   | `inventory.view`                                                              |
 | `/inventory/put-away`             | Put Away by NFC           | `inventory.manage`                                                            |
+| `/inventory/shelf-audit`          | Shelf Audit by NFC        | `inventory.manage`                                                            |
+| `/inventory/admin/nfc/enroll`     | Tag Items in Bulk         | `inventory.manage`                                                            |
+| `/inventory/admin/not-seen`       | Items Not Seen            | `inventory.manage`                                                            |
+| `/inventory/kiosk`                | Self-Service Kiosk        | `inventory.kiosk`                                                             |
 
 > **NFC tags on items are opt-in** _(2026-09-24)_. `/inventory/admin/nfc` turns on `inventory.nfc_tracking_enabled` in the organization settings; until then every `/inventory/nfc*` and `/inventory/items/{id}/nfc-tags` endpoint answers 403. Once on, item detail shows an **NFC Tags** card to `inventory.manage` holders (link by writing a URL onto a blank tag, by reading the chip serial, or by typing the serial), and the distribute/return scanner gains **Tap NFC**. A written tag carries `/inventory/tag/<code>`: the code names the tag, not the item, so unlinking a tag stops its URL resolving, and any phone — an iPhone included — opens the item by tapping it. Only Chrome on Android can link tags or read them inside the app.
 >
 > **Phase 2** _(2026-09-24)_: storage areas carry tags too (linked from the storage area editor), and `/inventory/put-away` records where items are by tap — shelf first opens the shelf for every item tapped after it; item first moves that one item onto the next shelf tapped. The move goes through the barcode put-away's rule (`InventoryService.put_away_items`), so an item that is assigned, checked out, lost, stolen or retired is refused, and the item takes the room of the nearest storage area that has one. Every tap by an `inventory.manage` holder is logged in `inventory_nfc_scans` and shown on the item as **Last Seen (NFC)**; a member opening a written tag from their own phone is not logged. A shelf's written tag opens put-away with that shelf chosen for an inventory manager.
+>
+> **Phase 3** _(2026-09-24)_: `/inventory/shelf-audit` compares the items tapped on a shelf with the items recorded there and saves the result (`inventory_nfc_audits`). Missing items are only listed — an audit never marks anything lost — and unexpected ones move onto the shelf only when ticked and confirmed, through the same put-away rule. `/inventory/admin/nfc/enroll` links tags to untagged items one after another. `/inventory/admin/not-seen` lists active items with no staff tap or custody event (assignment, return, checkout, check-in, issuance) in 30–365 days, with a CSV; it works with NFC switched off. With the NFC ID Cards integration connected, the member ID scanner on the inventory screens also accepts a tapped card.
+>
+> **Phase 4** _(2026-09-25)_: storage areas can carry a shelf-audit schedule (due list on `/inventory/shelf-audit`, weekly overdue email). `/inventory/kiosk` is a self-service checkout kiosk, gated by its own `inventory.kiosk` grant (seeded to no position): members tap their ID card, then an item, to borrow or return it. Only categories with **Allow self-checkout** qualify, and a category's kiosk loan period sets the due date.
 
 > **Receiving a delivery and stocking the catalog are both one-pass jobs now** _(2026-08-10)_. Two modals open from the items list (`/inventory`, and the same screen at `/inventory/admin/items`):
 >
@@ -634,24 +642,25 @@ only from a row of cards on the member-facing `/scheduling` page — so an
 administrator opened the schedule to find the settings, and the Administration
 section had no scheduling entry at all. That row is gone.
 
-| URL                                        | Page                           | Permission          |
-| ------------------------------------------ | ------------------------------ | ------------------- |
-| `/scheduling/admin`                        | Scheduling Administration hub  | `scheduling.manage` |
-| `/scheduling/admin/planning`               | Shift Planning — staffing gaps | `scheduling.manage` |
-| `/scheduling/admin/planning/templates`     | Shift Templates Management     | `scheduling.manage` |
-| `/scheduling/admin/planning/patterns`      | Shift Pattern Management       | `scheduling.manage` |
-| `/scheduling/admin/closeout`               | Shift Close-Out — the queue    | `scheduling.manage` |
-| `/scheduling/admin/reports`                | Scheduling Reports             | `scheduling.manage` |
-| `/scheduling/admin/platoons`               | Platoon Management             | `scheduling.manage` |
-| `/scheduling/admin/positions`              | Position Qualification Roster  | `scheduling.manage` |
-| `/scheduling/admin/settings`               | `?tab=` → the section's route  | `scheduling.manage` |
-| `/scheduling/admin/settings/general`       | Scheduling Settings — General  | `scheduling.manage` |
-| `/scheduling/admin/settings/apparatus`     | Settings — Apparatus           | `scheduling.manage` |
-| `/scheduling/admin/settings/platoons`      | Settings — Platoons            | `scheduling.manage` |
-| `/scheduling/admin/settings/eligibility`   | Settings — Eligibility         | `scheduling.manage` |
-| `/scheduling/admin/settings/notifications` | Settings — Notifications       | `scheduling.manage` |
-| `/scheduling/admin/settings/shift-reports` | Settings — Shift Reports       | `scheduling.manage` |
-| `/scheduling/checkin`                      | Shift Check-In                 | Authenticated       |
+| URL                                            | Page                           | Permission          |
+| ---------------------------------------------- | ------------------------------ | ------------------- |
+| `/scheduling/admin`                            | Scheduling Administration hub  | `scheduling.manage` |
+| `/scheduling/admin/planning`                   | Shift Planning — staffing gaps | `scheduling.manage` |
+| `/scheduling/admin/planning/templates`         | Shift Templates Management     | `scheduling.manage` |
+| `/scheduling/admin/planning/patterns`          | Shift Pattern Management       | `scheduling.manage` |
+| `/scheduling/admin/closeout`                   | Shift Close-Out — the queue    | `scheduling.manage` |
+| `/scheduling/admin/reports`                    | Scheduling Reports             | `scheduling.manage` |
+| `/scheduling/admin/platoons`                   | Platoon Management             | `scheduling.manage` |
+| `/scheduling/admin/positions`                  | Position Qualification Roster  | `scheduling.manage` |
+| `/scheduling/admin/settings`                   | `?tab=` → the section's route  | `scheduling.manage` |
+| `/scheduling/admin/settings/general`           | Scheduling Settings — General  | `scheduling.manage` |
+| `/scheduling/admin/settings/apparatus`         | Settings — Apparatus           | `scheduling.manage` |
+| `/scheduling/admin/settings/platoons`          | Settings — Platoons            | `scheduling.manage` |
+| `/scheduling/admin/settings/eligibility`       | Settings — Eligibility         | `scheduling.manage` |
+| `/scheduling/admin/settings/notifications`     | Settings — Notifications       | `scheduling.manage` |
+| `/scheduling/admin/settings/shift-reports`     | Settings — Shift Reports       | `scheduling.manage` |
+| `/scheduling/admin/settings/outside-apparatus` | Settings — Outside Apparatus   | `scheduling.manage` |
+| `/scheduling/checkin`                          | Shift Check-In                 | Authenticated       |
 
 > **The old URLs are gone, with no redirect.** `/scheduling/templates`,
 > `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons`,
@@ -815,14 +824,15 @@ had before.
 Sections are defined in
 `modules/scheduling/components/schedulingSettingsSections.ts`:
 
-| Section         | Route                                      | Description                             | Saved by footer |
-| --------------- | ------------------------------------------ | --------------------------------------- | --------------- |
-| `general`       | `/scheduling/admin/settings/general`       | Shift defaults, overtime, and close-out | Yes             |
-| `apparatus`     | `/scheduling/admin/settings/apparatus`     | Apparatus and resource type defaults    | Yes             |
-| `platoons`      | `/scheduling/admin/settings/platoons`      | Platoon rosters and assignments         | No              |
-| `eligibility`   | `/scheduling/admin/settings/eligibility`   | Who may sign up for a shift             | No              |
-| `notifications` | `/scheduling/admin/settings/notifications` | Shift reminders and alerts              | No              |
-| `shift-reports` | `/scheduling/admin/settings/shift-reports` | End-of-shift reporting options          | No              |
+| Section             | Route                                          | Description                             | Saved by footer |
+| ------------------- | ---------------------------------------------- | --------------------------------------- | --------------- |
+| `general`           | `/scheduling/admin/settings/general`           | Shift defaults, overtime, and close-out | Yes             |
+| `apparatus`         | `/scheduling/admin/settings/apparatus`         | Apparatus and resource type defaults    | Yes             |
+| `platoons`          | `/scheduling/admin/settings/platoons`          | Platoon rosters and assignments         | No              |
+| `eligibility`       | `/scheduling/admin/settings/eligibility`       | Who may sign up for a shift             | No              |
+| `notifications`     | `/scheduling/admin/settings/notifications`     | Shift reminders and alerts              | No              |
+| `shift-reports`     | `/scheduling/admin/settings/shift-reports`     | End-of-shift reporting options          | No              |
+| `outside-apparatus` | `/scheduling/admin/settings/outside-apparatus` | Other departments members ride with     | No              |
 
 > **The Save/Reset footer appears only on the three sections it actually
 > writes** (`LOCALLY_SAVED_SECTIONS`). It used to be shown on all seven while

@@ -32,9 +32,12 @@ both that ``end_time`` survives the refresh with tzinfo intact and that
 """
 
 import uuid
+import warnings
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import inspect
+from sqlalchemy.exc import SAWarning
 
 from app.core.database import database_manager
 from app.models.training import Shift, ShiftAttendance
@@ -167,3 +170,52 @@ class TestLockingRefreshPreservesUtcTagging:
         finally:
             await one_session.rollback()
             await _teardown(org_id, shift_id, user_id)
+
+
+class TestPartialRefreshDoesNotLoadInsideTheHandler:
+    """The listener runs *inside* SQLAlchemy's refresh handler. A partial
+    refresh (``session.refresh(user, ["positions"])``, as onboarding does on a
+    freshly flushed account) leaves any expired timestamp unloaded, and
+    reading one through ``getattr`` there emitted a nested SELECT --
+    SQLAlchemy's "Loading context ... has changed within a load/refresh
+    handler" warning. The listener must read only what is already loaded, and
+    must still stamp the skipped column when it is loaded later."""
+
+    async def test_partial_refresh_emits_no_nested_load(self, one_session):
+        slug = f"ap-partial-refresh-{uuid.uuid4().hex[:12]}"
+        org = Organization(name="Partial Refresh VFD", slug=slug)
+        one_session.add(org)
+        await one_session.flush()
+        user = User(
+            organization_id=org.id,
+            username=f"ff-{slug}",
+            email=f"{slug}@example.test",
+            first_name="Jane",
+            last_name="Doe",
+            status=UserStatus.ACTIVE,
+        )
+        one_session.add(user)
+        await one_session.flush()
+        try:
+            # Whether a flush leaves a server default unloaded depends on the
+            # dialect (MariaDB returns it with the INSERT), so put the column
+            # in that state explicitly rather than relying on it.
+            one_session.expire(user, ["updated_at"])
+            assert "updated_at" in inspect(user).unloaded
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", SAWarning)
+                await one_session.refresh(user, ["positions"])
+
+            assert "updated_at" in inspect(user).unloaded, (
+                "the listener loaded an expired column from inside the "
+                "refresh handler"
+            )
+
+            await one_session.refresh(user, ["updated_at"])
+            assert user.updated_at.tzinfo is not None, (
+                "a timestamp skipped while unloaded was not stamped UTC when "
+                "it was loaded afterwards"
+            )
+        finally:
+            await one_session.rollback()

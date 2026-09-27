@@ -79,6 +79,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
   action_items: 'general',
   minutes: 'general',
   meetings: 'general',
+  suggestions: 'general',
 };
 
 function getCategoryDisplay(category: string | undefined) {

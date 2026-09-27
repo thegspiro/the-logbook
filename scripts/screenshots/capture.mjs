@@ -654,6 +654,21 @@ async function main() {
       await page
         .evaluate(() => localStorage.removeItem("navigationLayout"))
         .catch(() => {});
+      // Route mocks outlive their shot the same way, and since the layout
+      // moved to /auth/branding they are what actually leaked it: 08-62's
+      // branding mock stayed on the reused page and put every later admin
+      // shot in the top bar — 400 pages in one run, each 21px too wide.
+      // Dropping every route before the next shot installs its own makes a
+      // mock last exactly one shot, whatever manifest order does. Not caught:
+      // if the mocks cannot be dropped, the next shot could inherit one, so
+      // the shot must fail rather than photograph whatever leaked.
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      // The pointer outlives its shot too. A shot that clicks a tab leaves
+      // the mouse over it, and the next shot on the same page renders that
+      // spot in its hover state: 08-34 came back with the Officers tab lit
+      // because 08-37 had just clicked it. (0, 0) is where a fresh page
+      // starts, so every shot begins from the state the first one saw.
+      await page.mouse.move(0, 0);
       if (shot.beforeNavigate) {
         // Install route mocks before the first document request. This is used
         // sparingly for provider-controlled configuration states (for example,

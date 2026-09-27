@@ -56,7 +56,7 @@ class TestClassifyReferences:
 
     def test_covers_the_association_table_assigner(self, references):
         """
-        user_positions.assigned_by has no ondelete, so an admin who assigned a
+        user_positions.assigned_by is RESTRICT, so an admin who assigned a
         position to somebody else would otherwise be undeletable.
         """
         clearable, _ = references

@@ -168,25 +168,56 @@ IDs.
 > placeholder asked for all three. A run's counts appear once, in the toast.
 > The buttons are also named by what they map, not "Push Members".
 
+#### Readiness and preview
+
+The sync panel, and with it **Check readiness** and **Preview member sync**,
+appears only while a Salesforce integration is **connected**. The endpoints
+behind the two buttons (`GET /integrations/salesforce/readiness` and
+`POST /integrations/salesforce/preview/members`) return 404 "Salesforce
+integration is not connected" unless the integration is enabled and connected.
+
+Neither result can carry a credential — the readiness result is built from four
+keys and nothing else:
+
+| Key                        | Carries                                                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `connected`                | true/false                                                                                                               |
+| `objects`                  | per-sObject: reachable, the **names** of any missing custom fields, and an error message if the object could not be read |
+| `external_id_fields_ready` | true/false                                                                                                               |
+| `ready`                    | true/false                                                                                                               |
+
+There is no access token, refresh token, client secret, instance URL or request
+body in it. When the connection itself fails, an `error` message is added — one
+of the Salesforce client's own fixed messages, such as "Salesforce
+authentication failed — the access token may be expired or revoked" or
+"Salesforce returned HTTP {status}", or a generic message for any unexpected
+failure. None quotes a credential or a response body.
+
+The preview result is counts only — how many members would be created,
+updated or adopted (matched to an existing Contact), and how many skipped — and
+names no Salesforce record ids.
+
 ### Field Mappings
 
 The system maps internal fields to Salesforce fields automatically. View the current mapping via **View Field Mappings** on the integration detail page.
 
 ### Webhook Integration
 
-Salesforce can push contact updates back to The Logbook via a webhook at `POST /api/v1/webhooks/salesforce`. The webhook validates the request signature before processing.
+Salesforce can push contact updates back to The Logbook via a webhook at `POST /api/public/v1/webhooks/salesforce/{integration_id}`. The webhook validates the HMAC signature in the `X-Salesforce-Signature` header before processing, and rejects every request when the integration has no webhook secret configured. Each delivery is audit-logged with the object type, action, record counts and source IP — never the records' field values, the signature or the secret.
 
 ### Edge Cases
 
-| Scenario                                              | Behavior                                                                                                                                                                                                                                                                                           |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A Contact's **Title** (rank) is changed in Salesforce | Ignored on pull _(2026-08-12)_ — rank never syncs into The Logbook, because rank affects what a member can do here and Salesforce is not authoritative for it. The Logbook still **pushes** rank out to the Contact `Title`. If a member's rank looks wrong, fix it in The Logbook, not Salesforce |
-| Salesforce API rate limit hit                         | Retried up to three times, honoring `Retry-After` or using bounded exponential backoff                                                                                                                                                                                                             |
-| A later SOQL result page fails                        | The pull fails; partial results are never applied as a successful pull                                                                                                                                                                                                                             |
-| Field mapping mismatch                                | Warning logged; unmatched fields skipped                                                                                                                                                                                                                                                           |
-| Sandbox vs production mismatch                        | Warning shown; data won't sync to production from sandbox                                                                                                                                                                                                                                          |
-| OAuth token expired                                   | Auto-refreshed transparently                                                                                                                                                                                                                                                                       |
-| Conflict on bidirectional sync                        | There is no conflict-policy setting; the permitted direction determines which write applies last                                                                                                                                                                                                   |
+| Scenario                                                                                           | Behavior                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A Contact's **Title** (rank) is changed in Salesforce                                              | Ignored on pull _(2026-08-12)_ — rank never syncs into The Logbook, because rank affects what a member can do here and Salesforce is not authoritative for it. The Logbook still **pushes** rank out to the Contact `Title`. If a member's rank looks wrong, fix it in The Logbook, not Salesforce |
+| Salesforce API rate limit hit                                                                      | Retried up to three times, honoring `Retry-After` or using bounded exponential backoff                                                                                                                                                                                                             |
+| Transient Salesforce failure (HTTP 500/502/503/504 on a read, or a network error fetching a token) | Retried up to three times with bounded backoff. Writes are not retried on a 5xx, so an ambiguous failure cannot create a duplicate record                                                                                                                                                          |
+| Invalid Connected App credentials                                                                  | Not retried — the token request fails at once with "Failed to refresh Salesforce access token — verify your Connected App credentials"                                                                                                                                                             |
+| A later SOQL result page fails                                                                     | The pull fails; partial results are never applied as a successful pull                                                                                                                                                                                                                             |
+| Field mapping mismatch                                                                             | Warning logged; unmatched fields skipped                                                                                                                                                                                                                                                           |
+| Sandbox vs production mismatch                                                                     | Warning shown; data won't sync to production from sandbox                                                                                                                                                                                                                                          |
+| OAuth token expired                                                                                | Auto-refreshed transparently                                                                                                                                                                                                                                                                       |
+| Conflict on bidirectional sync                                                                     | There is no conflict-policy setting; the permitted direction determines which write applies last                                                                                                                                                                                                   |
 
 ---
 
@@ -745,12 +776,6 @@ The next week, Steve checks the integrations dashboard:
 ---
 
 **Previous:** [Prospective Members Pipeline](./15-prospective-members.md) | **Next:** [Privacy & Your Data](./17-privacy-data-rights.md)
-
-## August 12–14, 2026 update
-
-Salesforce retry, pagination, secret handling, and redacted webhook diagnostics
-are taught in [the release workflow lesson](./19-august-2026-release-changes.md#notifications-and-integrations),
-with a redacted readiness/preview screenshot marker and invalid-credential edge case.
 
 ## August 23, 2026 update — NFC ID Cards
 

@@ -6,7 +6,7 @@
  * hours manually.
  */
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   AlertTriangle,
   CalendarDays,
@@ -16,17 +16,20 @@ import {
   Clock,
   ListChecks,
   LogOut,
+  Pencil,
   Plus,
   Target,
   Timer,
+  Undo2,
 } from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
-import type { AdminHoursComplianceItem, AdminHoursEntryCreate } from '../types';
+import type { AdminHoursComplianceItem, AdminHoursEntry, AdminHoursEntryCreate } from '../types';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { addCalendarDays, formatDate, formatTime, getTodayLocalDate, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
 import { NfcTapButton } from '../../../components/nfc/NfcTapButton';
 import { formatDuration } from '../utils/formatDuration';
@@ -34,6 +37,7 @@ import { QUARTER_HOUR, formatHours, formatHoursExact, roundHoursToQuarter } from
 import { endOfReportingDayUTC, startOfReportingDayUTC } from '../utils/reportingRange';
 import { addHoursExact, syncEndToStartExact, resolveEndUtc, type DerivedEndTime } from '../utils/entryTimes';
 import QuickDurationButtons from '../components/QuickDurationButtons';
+import MyEntryEditForm from '../components/MyEntryEditForm';
 
 const PAGE_SIZE = 20;
 
@@ -63,6 +67,16 @@ const reportingDaysFor = (period: ReportingPeriod, timezone: string): { start: s
 
 const pluralEntries = (count: number): string => `${count} ${count === 1 ? 'entry' : 'entries'}`;
 
+// A member may still change an entry nobody has credited: one awaiting review,
+// or one an officer rejected, which is how hours are sent back for correction.
+// Approved hours are an officer's to change.
+const isOpenToMember = (entry: AdminHoursEntry): boolean => entry.status === 'pending' || entry.status === 'rejected';
+
+// Hours credited from event attendance follow the event's check-in record and
+// are rewritten when the event is resynced, so they are withdrawn, not edited.
+const isEditableByMember = (entry: AdminHoursEntry): boolean =>
+  isOpenToMember(entry) && entry.entryMethod !== 'event_attendance';
+
 const complianceStatusStyle = (status: string): { label: string; badge: string; bar: string } => {
   switch (status) {
     case 'compliant':
@@ -89,6 +103,7 @@ const complianceStatusStyle = (status: string): { label: string; badge: string; 
 const AdminHoursPage: React.FC = () => {
   const tz = useTimezone();
   const currentUserId = useAuthStore((s) => s.user?.id);
+  const { confirm } = useConfirm();
   const {
     categories,
     myEntries,
@@ -130,6 +145,11 @@ const AdminHoursPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [page, setPage] = useState(0);
+
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [withdrawingEntryId, setWithdrawingEntryId] = useState<string | null>(null);
+  const entriesSectionRef = useRef<HTMLElement>(null);
+  const entriesHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const [compliance, setCompliance] = useState<AdminHoursComplianceItem[]>([]);
 
@@ -288,6 +308,55 @@ const AdminHoursPage: React.FC = () => {
     }
   };
 
+  // Re-request exactly what the member is looking at: the list under its
+  // current filters and the totals for the same period.
+  const refreshEntriesAndSummary = () => {
+    void fetchMyEntries(entryQuery);
+    if (currentUserId) {
+      void fetchMySummary({ userId: currentUserId, ...dateBounds });
+    }
+  };
+
+  const handleEntrySaved = () => {
+    setEditingEntryId(null);
+    refreshEntriesAndSummary();
+  };
+
+  const handleWithdraw = async (entry: AdminHoursEntry) => {
+    if (withdrawingEntryId) return;
+    const ok = await confirm({
+      title: 'Withdraw these hours?',
+      message: `${entry.categoryName ?? 'This entry'} on ${formatDate(entry.clockInAt, tz)} (${formatDuration(
+        entry.durationMinutes
+      )}) will no longer count toward your hours or go to an approver. It stays in your history as withdrawn.`,
+      confirmLabel: 'Withdraw',
+      cancelLabel: 'Keep it',
+    });
+    if (!ok) return;
+    setWithdrawingEntryId(entry.id);
+    const { adminHoursEntryService } = await import('../services/api');
+    try {
+      await adminHoursEntryService.withdrawMine(entry.id);
+      toast.success('Entry withdrawn');
+      if (editingEntryId === entry.id) setEditingEntryId(null);
+      refreshEntriesAndSummary();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to withdraw entry'));
+    } finally {
+      setWithdrawingEntryId(null);
+    }
+  };
+
+  // The "Awaiting review" card points at the entries it counts: filter the
+  // list to them, bring it into view and move focus to it so keyboard and
+  // screen-reader users land where sighted users are scrolled to.
+  const showAwaitingReview = () => {
+    setStatusFilter('pending');
+    setPage(0);
+    entriesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    entriesHeadingRef.current?.focus({ preventScroll: true });
+  };
+
   const statusColor = (status: string) => {
     switch (status) {
       case 'approved':
@@ -298,6 +367,8 @@ const AdminHoursPage: React.FC = () => {
         return 'bg-red-500/20 text-red-700 dark:text-red-400';
       case 'active':
         return 'bg-blue-500/20 text-blue-700 dark:text-blue-400';
+      case 'withdrawn':
+        return 'bg-theme-surface-hover text-theme-text-secondary';
       default:
         return 'bg-theme-surface-hover text-theme-text-muted';
     }
@@ -548,7 +619,12 @@ const AdminHoursPage: React.FC = () => {
             {pluralEntries(mySummary?.approvedEntries ?? 0)} credited
           </p>
         </article>
-        <article className="card p-4">
+        <button
+          type="button"
+          onClick={showAwaitingReview}
+          aria-controls="my-hours"
+          className="card block w-full p-4 text-left transition hover:ring-2 hover:ring-amber-500/40 focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:outline-none"
+        >
           <div className="flex items-center justify-between">
             <p className="text-theme-text-secondary text-sm font-medium">Awaiting review</p>
             <ListChecks className="h-5 w-5 text-amber-600" aria-hidden="true" />
@@ -562,7 +638,10 @@ const AdminHoursPage: React.FC = () => {
               ? 'Nothing waiting on an approver'
               : `${pluralEntries(mySummary?.pendingEntries ?? 0)} with an approver`}
           </p>
-        </article>
+          <p className="mt-2 text-xs font-medium text-amber-800 underline dark:text-amber-300">
+            Show these entries below
+          </p>
+        </button>
         <article className="card p-4">
           <div className="flex items-center justify-between">
             <p className="text-theme-text-secondary text-sm font-medium">
@@ -776,6 +855,7 @@ const AdminHoursPage: React.FC = () => {
           <option value="approved">Approved</option>
           <option value="pending">Pending</option>
           <option value="rejected">Rejected</option>
+          <option value="withdrawn">Withdrawn</option>
           <option value="active">Active</option>
         </select>
         <select
@@ -802,9 +882,21 @@ const AdminHoursPage: React.FC = () => {
       </div>
 
       {/* Entries List */}
-      <div className="bg-theme-surface rounded-lg shadow-md">
+      <section
+        id="my-hours"
+        ref={entriesSectionRef}
+        aria-labelledby="my-hours-heading"
+        className="bg-theme-surface scroll-mt-4 rounded-lg shadow-md"
+      >
         <div className="border-theme-surface-border flex flex-wrap items-baseline justify-between gap-2 border-b px-4 py-3">
-          <h2 className="text-theme-text-primary font-semibold">My Hours</h2>
+          <h2
+            id="my-hours-heading"
+            ref={entriesHeadingRef}
+            tabIndex={-1}
+            className="text-theme-text-primary font-semibold focus:outline-none"
+          >
+            My Hours
+          </h2>
           <span className="text-theme-text-muted text-xs">{periodOption.label}</span>
         </div>
         {entriesLoading ? (
@@ -819,14 +911,15 @@ const AdminHoursPage: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="divide-theme-surface-border divide-y">
+            <div className="divide-theme-surface-border divide-y" role="list" aria-label="My hours entries">
               {myEntries.map((entry) => (
                 <div
                   key={entry.id}
-                  className={`flex items-center gap-3 px-4 py-3 ${entry.status === 'rejected' ? 'bg-red-500/5' : ''}`}
+                  role="listitem"
+                  className={`flex items-start gap-3 px-4 py-3 ${entry.status === 'rejected' ? 'bg-red-500/5' : ''}`}
                 >
                   <div
-                    className="h-3 w-3 shrink-0 rounded-full"
+                    className="mt-1.5 h-3 w-3 shrink-0 rounded-full"
                     style={{ backgroundColor: entry.categoryColor ?? '#6B7280' }}
                   />
                   <div className="min-w-0 flex-1">
@@ -842,7 +935,13 @@ const AdminHoursPage: React.FC = () => {
                     </div>
                     {entry.description && <p className="text-theme-text-muted truncate text-sm">{entry.description}</p>}
                     {entry.rejectionReason && (
-                      <p className="mt-0.5 text-sm text-red-700 dark:text-red-400">Rejected: {entry.rejectionReason}</p>
+                      <p className="mt-0.5 text-sm text-red-700 dark:text-red-400">
+                        Rejected: {entry.rejectionReason}
+                        {entry.status === 'rejected' &&
+                          (isEditableByMember(entry)
+                            ? ' — edit and resubmit it, or withdraw it.'
+                            : ' — withdraw it, or ask an officer to correct the event attendance.')}
+                      </p>
                     )}
                     {entry.approverName && entry.status !== 'active' && entry.status !== 'pending' && (
                       <p className="text-theme-text-muted mt-0.5 text-xs">
@@ -850,7 +949,43 @@ const AdminHoursPage: React.FC = () => {
                         {entry.approvedAt && ` on ${formatDate(entry.approvedAt, tz)}`}
                       </p>
                     )}
+                    {editingEntryId === entry.id && (
+                      <MyEntryEditForm
+                        entry={entry}
+                        categories={categories}
+                        timezone={tz}
+                        onSaved={handleEntrySaved}
+                        onCancel={() => setEditingEntryId(null)}
+                      />
+                    )}
                   </div>
+                  {isOpenToMember(entry) && editingEntryId !== entry.id && (
+                    <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
+                      {isEditableByMember(entry) && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingEntryId(entry.id)}
+                          aria-label={`Edit ${entry.categoryName ?? 'entry'} on ${formatDate(entry.clockInAt, tz)}`}
+                          className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary mobile-touch-target flex items-center gap-1 rounded-md px-2 py-1 text-sm"
+                        >
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
+                          {entry.status === 'rejected' ? 'Edit & resubmit' : 'Edit'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleWithdraw(entry);
+                        }}
+                        disabled={withdrawingEntryId === entry.id}
+                        aria-label={`Withdraw ${entry.categoryName ?? 'entry'} on ${formatDate(entry.clockInAt, tz)}`}
+                        className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary mobile-touch-target flex items-center gap-1 rounded-md px-2 py-1 text-sm disabled:opacity-50"
+                      >
+                        <Undo2 className="h-4 w-4" aria-hidden="true" />
+                        Withdraw
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -879,7 +1014,7 @@ const AdminHoursPage: React.FC = () => {
             )}
           </>
         )}
-      </div>
+      </section>
     </div>
   );
 };

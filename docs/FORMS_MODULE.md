@@ -406,4 +406,4 @@ administration, is organization-scoped, and returns public-outreach forms only.
 A general form viewer therefore cannot enumerate the administrative catalog,
 and a non-outreach or cross-organization form cannot be linked through this
 flow. The user workflow and screenshot state are in
-[training lesson 19](./training/19-august-2026-release-changes.md#events-reminders-check-in-and-outreach-forms).
+[Public Request Form](./training/04-events-meetings.md#public-request-form) section of the events training guide.

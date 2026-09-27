@@ -20,6 +20,17 @@ import pytest
 from app.models.inventory import ItemStatus, TrackingType
 from app.services.inventory_service import InventoryService
 
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.inventory_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+
+
 # ============================================
 # Fixtures / helpers
 # ============================================

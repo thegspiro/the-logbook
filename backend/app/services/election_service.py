@@ -49,6 +49,7 @@ from app.schemas.election import (
 )
 from app.services.email_service import BuiltMessage, EmailService
 from app.services.email_theme import TABLE_STYLE, TD_STYLE, TH_STYLE
+from app.utils.org_timezone import resolve_scheduling_timezone, to_local
 
 # " - Runoff Round 2" and friends, only at the very end of a title.
 _RUNOFF_SUFFIX = re.compile(r"\s*-\s*Runoff Round\s+\d+\s*$", re.IGNORECASE)
@@ -2128,11 +2129,16 @@ class ElectionService:
             election.anonymous_voting and election.status == ElectionStatus.CLOSED
         )
 
-        # 6. Voting timeline (votes per hour)
+        # 6. Voting timeline (votes per hour), in the department's hours: a
+        # reviewer reading "02:00" against the meeting's 10 PM close would
+        # otherwise see votes cast after it.
+        org_tz = await resolve_scheduling_timezone(self.db, organization_id)
         voting_timeline: Dict[str, int] = {}
         for v in active_votes:
             hour_key = (
-                v.voted_at.strftime("%Y-%m-%d %H:00") if v.voted_at else "unknown"
+                to_local(v.voted_at, org_tz).strftime("%Y-%m-%d %H:00")
+                if v.voted_at
+                else "unknown"
             )
             voting_timeline[hour_key] = voting_timeline.get(hour_key, 0) + 1
 

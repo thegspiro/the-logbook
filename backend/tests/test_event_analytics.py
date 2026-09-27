@@ -11,9 +11,20 @@ here by mocking the six query results in order. DB mocked; no MySQL.
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
+
+import pytest
 
 from app.models.event import EventType
 from app.services.event_service import EventService
+
+
+@pytest.fixture(autouse=True)
+def _new_york(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.event_service.resolve_scheduling_timezone",
+        AsyncMock(return_value=ZoneInfo("America/New_York")),
+    )
 
 
 def _scalar(value):
@@ -26,6 +37,10 @@ def _one(row):
 
 def _rows(rows):
     return MagicMock(all=MagicMock(return_value=rows))
+
+
+def _starts(values):
+    return MagicMock(scalars=MagicMock(return_value=iter(values)))
 
 
 def _db(side_effect):
@@ -41,10 +56,14 @@ def _full_db():
         SimpleNamespace(event_type=EventType.TRAINING, cnt=5),
         SimpleNamespace(event_type=EventType.SOCIAL, cnt=3),
     ]
-    month_rows = [
-        SimpleNamespace(yr=2026, mo=1, cnt=4),
-        SimpleNamespace(yr=2026, mo=2, cnt=6),
-    ]
+    # Stored UTC start times. The last January one is 10 PM on January 31 in
+    # New York -- February 1 in UTC -- and belongs to the department's January.
+    month_starts = [
+        datetime(2026, 1, 5, 23, 0),
+        datetime(2026, 1, 12, 23, 0),
+        datetime(2026, 1, 19, 23, 0),
+        datetime(2026, 2, 1, 3, 0),
+    ] + [datetime(2026, 2, day, 23, 0) for day in (2, 9, 16, 23, 24, 25)]
     top_rows = [
         SimpleNamespace(
             event_id="e1",
@@ -61,7 +80,7 @@ def _full_db():
             _one(agg_row),  # rsvp/checkin aggregates
             _scalar(900),  # avg seconds before start (15 min)
             _rows(type_rows),  # type distribution
-            _rows(month_rows),  # monthly counts
+            _starts(month_starts),  # event start times, for monthly counts
             _rows(top_rows),  # top events
         ]
     )
@@ -108,7 +127,7 @@ class TestAnalyticsSummary:
                 _one(agg_row),  # aggregates all zero
                 _scalar(None),  # no avg seconds
                 _rows([]),  # no types
-                _rows([]),  # no months
+                _starts([]),  # no months
                 _rows([]),  # no top events
             ]
         )

@@ -19,6 +19,7 @@ import type {
   TrainingType,
 } from '../types/training';
 import { Breadcrumbs } from '../components/ux';
+import { getErrorDetail } from '../utils/errorHandling';
 
 // ==================== Course Form Modal ====================
 
@@ -132,9 +133,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
       onSuccess(saved);
       onClose();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        `Failed to ${isEdit ? 'update' : 'create'} course`;
+      const msg = getErrorDetail(err) || `Failed to ${isEdit ? 'update' : 'create'} course`;
       setError(msg);
     } finally {
       setIsSubmitting(false);

@@ -128,13 +128,21 @@ timing change; the on-screen `docker compose version` output should show
 **[SCREEN: Type the command slowly, character by character for readability]**
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 ```
 
 > "This universal install script detects your operating system, your
 > architecture, checks for Docker, clones the repository, generates secure
 > passwords and encryption keys, and starts everything up. It works on Linux,
 > macOS, and Windows WSL2."
+
+> "The one thing it needs from you is `--public-url` — the address your
+> members will open the site at. Every link in an email, password resets and
+> ballots included, is built from it. Leave it off and the installer stops
+> before touching anything; give it `localhost` and it refuses, because a
+> production server won't start with that."
+
+**[CALLOUT: "--public-url is required — use the address members will actually open"]**
 
 ### WATCHING THE INSTALL (5:00 – 6:30)
 
@@ -174,7 +182,7 @@ fast-forward indicator]**
 **[SCREEN: Show the command with the profile flag]**
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --profile minimal
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile minimal
 ```
 
 > "The minimal profile reduces memory limits on all services — MySQL gets 128

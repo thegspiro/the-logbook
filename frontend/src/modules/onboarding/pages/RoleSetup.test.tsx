@@ -42,7 +42,7 @@ describe('buildPositionTemplates — the wizard follows the agency', () => {
     const ids = idsFor('fire_department');
     expect(ids).toContain('firefighter');
     expect(ids).toContain('emt');
-    expect(named('fire_department', 'fire_chief')).toBe('Fire Chief');
+    expect(named('fire_department', 'fire_chief')).toBe('Chief');
     expect(named('fire_department', 'engineer')).toBe('Engineer / Driver Operator');
   });
 

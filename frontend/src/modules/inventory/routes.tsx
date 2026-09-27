@@ -43,6 +43,10 @@ const InventorySetupPage = lazyWithRetry(() => import('./pages/InventorySetupPag
 const InventoryNfcSettingsPage = lazyWithRetry(() => import('./pages/InventoryNfcSettingsPage'));
 const InventoryNfcTagPage = lazyWithRetry(() => import('./pages/InventoryNfcTagPage'));
 const InventoryPutAwayPage = lazyWithRetry(() => import('./pages/InventoryPutAwayPage'));
+const InventoryShelfAuditPage = lazyWithRetry(() => import('./pages/InventoryShelfAuditPage'));
+const InventoryNfcEnrollPage = lazyWithRetry(() => import('./pages/InventoryNfcEnrollPage'));
+const InventoryNotSeenPage = lazyWithRetry(() => import('./pages/InventoryNotSeenPage'));
+const InventoryKioskPage = lazyWithRetry(() => import('./pages/InventoryKioskPage'));
 
 // Equipment checklists — the whole feature, authoring through performing.
 // Scheduling links in from a shift; it hosts none of this.
@@ -429,6 +433,49 @@ export const getInventoryRoutes = () => {
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryPutAwayPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/shelf-audit"
+        element={
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <InventoryShelfAuditPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/admin/nfc/enroll"
+        element={
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <InventoryNfcEnrollPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* Not NFC-gated: custody events alone make the report useful. */}
+      <Route
+        path="/inventory/admin/not-seen"
+        element={
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <InventoryNotSeenPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* The self-service kiosk: a grant of its own, not inventory.manage —
+          a department decides who may open one on a shared tablet. */}
+      <Route
+        path="/inventory/kiosk"
+        element={
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.kiosk">
+            <Suspense fallback={null}>
+              <InventoryKioskPage />
             </Suspense>
           </ProtectedRoute>
         }

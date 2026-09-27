@@ -39,7 +39,7 @@ import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormModal } from './PipelineEditModals';
 import { enumLabel } from '../utils/displayValue';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
 import { checklistClaimedIds, checklistDoneIds } from '../utils/checklistItems';
@@ -1309,9 +1309,7 @@ const PipelineDetailPage: React.FC = () => {
       toast.success('Pipeline duplicated successfully');
       void navigate(`/training/programs/${newProgram.id}`);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to duplicate pipeline';
+      const msg = getErrorDetail(err) || 'Failed to duplicate pipeline';
       toast.error(msg);
     } finally {
       setIsDuplicating(false);

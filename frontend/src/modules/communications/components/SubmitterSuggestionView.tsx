@@ -11,6 +11,7 @@ import type { SubmitterSuggestionDetail } from '../types/suggestions';
 import { formatSuggestionTime } from '../utils/suggestionTime';
 import SuggestionAttachments from './SuggestionAttachments';
 import SuggestionThread from './SuggestionThread';
+import SuggestionTimeline from './SuggestionTimeline';
 
 interface SubmitterSuggestionViewProps {
   detail: SubmitterSuggestionDetail;
@@ -41,7 +42,10 @@ const SubmitterSuggestionView: React.FC<SubmitterSuggestionViewProps> = ({ detai
       <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{detail.details}</p>
       <SuggestionAttachments attachments={detail.attachments} load={loadAttachment} />
       {detail.followUpEnabled ? (
-        <SuggestionThread messages={detail.messages} onReply={onReply} anonymousLabel="You" />
+        <>
+          <SuggestionTimeline entries={detail.timeline} />
+          <SuggestionThread messages={detail.messages} onReply={onReply} anonymousLabel="You" />
+        </>
       ) : (
         <p className="text-theme-text-muted text-sm">
           This box is one-way. Reviewers read every submission but do not reply or report a status.

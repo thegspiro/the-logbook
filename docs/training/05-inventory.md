@@ -98,6 +98,9 @@ Two things worth knowing:
   Category column disappears — the heading already says it — and a **Size**
   column takes its place, since size is what you are usually scanning for.
 
+**Export** follows what you are looking at: the file carries the current
+filters and grouping, not the whole catalog.
+
 ![The items list grouped by category, with collapsible group headings carrying whole-set counts and a Size column in place of the Category column](./images/05-03-items-grouped.png)
 
 ---
@@ -384,7 +387,12 @@ When creating a new uniform or PPE item that comes in multiple sizes and styles,
 4. Pick **Sizes** from the chips. Eleven are offered: XXS, XS, S, M, L, XL,
    XXL, 3XL, 4XL, One Size and Custom. At least one is required
 5. Optionally pick **Styles**. Ten are offered: Short Sleeve, Long Sleeve,
-   Men's, Women's, Unisex, V-Neck, Crew Neck, Polo, Button Down and Quarter Zip
+   Men's, Women's, Unisex, V-Neck, Crew Neck, Polo, Button Down and Quarter Zip.
+   Sleeve, fit, neckline and closure are independent attributes, so a garment
+   records every one it has — picking Men's, Long Sleeve and Polo describes
+   **one** men's long-sleeve polo. Only two options on the **same** attribute
+   multiply: Short Sleeve and Long Sleeve together make one item for each. Each
+   size and colour combination then becomes one item
 6. Optionally enter **Colors** as a comma-separated list (e.g. "Navy, White")
 7. Read the preview panel, which shows the total and how it was reached —
    "16 items will be created / 4 sizes × 2 styles × 2 colors". The submit
@@ -425,10 +433,9 @@ stock quantity per size and colour, open it on **Inventory Admin > Variant
 Groups**; that grid is pictured under
 [Stock Matrix on Variant Groups Page](#stock-matrix-on-variant-groups-page).
 
-> **Corrected 2026-08-12.** The retired screenshot placeholder here asked for
-> "a variant group **expanded**" in the inventory items list. The list does not
-> group or collapse variants — every variant is a top-level row, and the only
-> place a group is expandable is the Variant Groups admin page.
+**In the items list, a product's size variants fold into one row** that you
+expand to see each size — a coat in six sizes is one line until you open it.
+The Variant Groups admin page shows the same group as a grid instead.
 
 ### Edge Cases
 
@@ -809,6 +816,132 @@ The item page lists the item's recent NFC taps under **Last Seen (NFC)**: who
 tapped it, and where it was put away. Only quartermaster taps are recorded. A
 member opening a tag from their own phone leaves no record.
 
+### Auditing a shelf
+
+**Required Permission:** `inventory.manage`
+
+1. Go to **Inventory Admin > Shelf Audit** and tap **Start tapping tags**.
+2. Tap the shelf's tag (or choose it from **Or pick a shelf**).
+3. Tap every item on the shelf. Each appears in the list once, however many
+   times it is read. Remove one with its **×** if it was tapped by mistake.
+4. Tap **Finish audit**.
+
+The result has three lists:
+
+- **Missing**: recorded on this shelf, not tapped. **Nothing is marked lost.**
+  Look for them, then update each item yourself if it really is gone.
+- **Unexpected**: tapped here, recorded somewhere else. Tick the ones that
+  belong here and tap **Move selected onto** the shelf. An item assigned to a
+  member or checked out is not moved, and the page says why.
+- **Found**: recorded here and tapped.
+
+Items assigned to a member, checked out, lost, stolen or retired are not
+expected on a shelf, so they are never reported missing. **Recent audits**
+lists past audits; **View** opens one.
+
+> **Hint:** Audit one shelf or bin at a time. An audit covers exactly the
+> storage area you tapped, not the bins inside it.
+
+### Scheduling shelf audits
+
+**Required Permission:** `inventory.manage`
+
+1. Go to **Inventory > Storage Areas** and edit the shelf, bin or cabinet.
+2. Under **Shelf audit schedule**, choose **Weekly**, **Monthly**,
+   **Quarterly** or **Yearly**. It saves straight away.
+
+**Shelf Audit** then lists the area under **Audit schedule**, showing when it
+was last audited and when it is next due. **Audit now** starts an audit of it.
+Each area is due one week, month, quarter or year after its last saved audit,
+or straight away if it has never been audited.
+
+While any scheduled shelf is overdue, quartermasters get one reminder email a
+week listing them.
+
+### Tagging many items at once
+
+**Required Permission:** `inventory.manage`
+
+1. Go to **Inventory Admin > Tag Items in Bulk**. It lists items with no
+   working tag. Type in **Which items** and press **Find items** to narrow it.
+2. Choose **Write links** (a blank tag for each item) or **Read serials**.
+3. With **Write links**, tap **Write a tag for** the item shown and hold a blank
+   tag to the phone. With **Read serials**, tap **Start reading tags**, then
+   tap each item's tag in turn.
+4. The page moves to the next item after each link. **Skip this item** passes
+   one over.
+
+### Identifying a member by their ID card
+
+If your department issues NFC ID cards (Settings > Integrations > NFC ID
+Cards), the **Scan Member ID** window on the inventory screens also shows
+**Or tap their ID card**. Tap it and hold the member's card to the phone. A
+card marked lost, or one belonging to an inactive member, is refused with the
+reason.
+
+### Self-service kiosk
+
+**Required Permission:** `inventory.kiosk` to open it. Members need only their
+ID card.
+
+**For quartermasters:** edit each category of loaner gear in **Inventory >
+Categories**, turn on **Allow self-checkout at the kiosk**, and set a **Kiosk
+loan period (days)** if loans should be due back. Then open **Inventory Admin >
+Self-Service Kiosk** on a tablet and press **Start kiosk**.
+
+**For members:**
+
+1. Tap your ID card on the tablet.
+2. Tap the item's tag, then **Borrow it**, or, if you are bringing it back,
+   answer whether it is damaged.
+3. Tap **Done** when you are finished.
+
+The kiosk says why it will not lend something (for example, "Ask a
+quartermaster" for restricted gear). It forgets you after a minute without a
+tap.
+
+### Tapping without signal
+
+Put-away and shelf audits keep working without signal. Open the screen first,
+then keep tapping. Put-away taps are sent in order when signal returns, and a
+message says what moved. After that, tap the shelf again. For a shelf audit, press **Finish audit** as usual;
+without signal it is kept on the phone and saved later. Finish an audit before
+closing the screen, because an unfinished one is not kept.
+
+### Apparatus compartment tags
+
+**Required Permission:** `inventory.check_manage` to tag compartments;
+`inventory.check_submit` to tap during a check.
+
+**To tag a truck:** open the checklist in the builder, choose **NFC tags** on a
+compartment's **⋯** menu, and link a tag. Stick it on that compartment. For an
+item to be answered by a tap, give the item its own tag and link its checklist
+row to the inventory item.
+
+**During a check** (Chrome on Android):
+
+1. Press **Tap NFC tags**.
+2. Tap a compartment's tag to jump to it.
+3. Tap an item's tag. An unanswered pass/fail row is marked passed. A count,
+   reading or date is brought on screen to finish by hand. A tap never changes
+   an answer already given.
+
+Loading a vehicle preset or importing a checklist replaces its compartments and
+deletes their tags; re-link them afterwards.
+
+### Items not seen
+
+**Required Permission:** `inventory.manage`
+
+**Inventory Admin > Items Not Seen** lists items nobody has handled in 30, 90,
+180 (the default) or 365 days. "Handled" means an NFC tap by a quartermaster,
+an assignment or return, a checkout or check-in, or an issuance or its return.
+Editing the item's record does not count. Items never handled at all are
+listed first as **Never**. Filter by **Category**, and use **Download CSV** for
+the full list.
+
+This report works whether or not NFC tags are turned on.
+
 ---
 
 ## Label Printing
@@ -1013,7 +1146,8 @@ removes that step. The server sends the label to the printer in the printer's
 own language (ZPL), with the dimensions already fixed in printer dots.
 
 **Requires:** a label printer that accepts raw printing on port 9100, reachable
-from the server on the department network. Two printer languages are supported:
+from the server on the department network, at an address the server's operator
+has approved. Two printer languages are supported:
 
 - **ZPL** — Zebra's language, and the one to pick for a Zebra. It is worth
   knowing that **many non-Zebra printers speak it too**: TSC, Godex, Honeywell
@@ -1026,8 +1160,31 @@ from the server on the department network. Two printer languages are supported:
   Several models take **linerless label roll**, which turns one of those into a
   perfectly good asset-tag printer.
 
-Pick the language when registering the printer; everything after that works the
-same way.
+Pick the language when registering the printer. It decides more than the bytes
+sent: the renderer, the label sizes the form offers (a receipt printer is
+offered paper widths instead), and the status query all follow it — which is
+why a printer running a ZPL emulation is registered as ZPL.
+
+![Settings → Label Printers with two registrations: a ZPL watch-desk printer marked default and an ESC/POS printer in the supply room, each on a documentation address](./images/19-33-label-printers.png)
+
+> **The server opens the connection to the printer, not your browser.** A
+> printer you can reach from your laptop may be unreachable from the machine
+> running The Logbook, so when a printer answers from a desk and fails from the
+> app, test whether the **server** can reach it.
+>
+> **Direct printing also needs the operator to allow the address.** The server
+> opens a print socket only to an address inside
+> `LABEL_PRINTER_ALLOWED_NETWORKS`, a comma-separated list of IP addresses or
+> CIDR ranges in the server's environment. It is **empty by default, which
+> disables direct printing outright**. It is set by whoever runs the server, not
+> by a department administrator from this screen — deliberately, so that
+> registering a printer cannot be used to make the server connect to arbitrary
+> hosts. An address outside it is refused before any connection is attempted,
+> with _"… does not resolve to an operator-approved label-printer network."_
+> **Test connection**, **Check status**, test labels and every print are all
+> held to it; if each printer you register reports that message, the allowlist
+> is what needs changing, and that is a conversation with the server operator.
+> The port is held to the raw-print ports, 9100–9109 and 6101.
 
 **Setting one up** — _Organization Settings → Label Printers_, which needs the
 `settings.manage` permission:
@@ -1061,7 +1218,11 @@ most people should get with **Make default**.
 print. This matters more than it sounds: a network connection succeeds against
 a printer that is powered on but out of labels, and against whatever else has
 picked up that address — so "connected" alone is not good news. The status line
-reports the model, and any fault the printer names. A printer that accepts the
+reports the model, and any fault the printer names. Status is reported per
+printer, on the line under each one, so one printer failing to answer does not
+hide the others' answers. A healthy printer reads in green as model ·
+resolution · firmware — for example **"ZD421 · 203 dpi · V93.21.01Z"** — with
+any warnings appended after a dash. A printer that accepts the
 connection but answers nothing is called out as such rather than shown as fine.
 
 Faults are separated into **errors**, which mean the printer cannot print now,
@@ -2666,8 +2827,8 @@ four headline metrics, a **Needs attention** queue, then its existing tabs.
 Its built-in three metrics are **Items tracked**, **Issued to members** and
 **Out for repair**; the fourth slot is always the count the queue is about, so
 it cannot be configured away. Access is `inventory.manage` plus the Inventory
-module enabled. See the
-[shared frame section of the release lesson](./19-august-2026-release-changes.md#every-administration-page-opens-the-same-way).
+module enabled. Choosing the metrics, and who may see the queue, are covered in
+[Administration & Reports → Every Administration Page Opens the Same Way](./08-admin-reports.md#every-administration-page-opens-the-same-way-2026-08-23).
 
 ---
 
@@ -2856,6 +3017,8 @@ know what the department calls a thing had nowhere to start.
   through the same alias table the impact planner uses — so "Large" on their
   record selects the row you stored as "L". Any other size the department stocks
   is one tap away.
+- **The member's fit preference preselects the variant** too — Women's or Long
+  Sleeve, say — alongside their boot width.
 
 ![Request Equipment at the product step: category filters across the top and one row per product with its on-hand count and number of sizes, or None on hand — you can still ask](./images/05-86-gear-request-products.png)
 
@@ -3069,3 +3232,14 @@ Three related fixes:
 - **Every category appears in the pickers.** A department with a long category
   list could have categories past an internal cap silently missing from every
   picker and filter.
+
+## Medical Supplies: the headline counts and the audit trail
+
+The **Below reorder point** tile at the top of **Medical Supplies**
+(`/medical-supplies`) covers every active medical item that has a reorder point
+set, however large the catalog. An item
+with no reorder point is never counted as low: the reorder point is the
+department's own floor for that item.
+
+Creating or **editing** a medical category or item, and retiring an item, are
+each recorded in the audit log, with who made the change.

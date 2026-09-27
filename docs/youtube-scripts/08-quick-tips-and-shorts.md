@@ -666,7 +666,7 @@ column]**
 **[SCREEN: An import in progress; then an inbox full of "Set your password"
 emails]**
 
-> "Creating a member queues a password-setup email immediately. An import creates
+> "Creating a member queues a temporary-password email immediately. An import creates
 > them by the dozen. Load a roster for testing — or from a list with old addresses
 > — and that mail is out. You can't recall it."
 
@@ -1708,3 +1708,7 @@ department**.]**
   `nbelhaj` waitlisted.
 - **Record the settings beat without saving,** or put the setting back
   afterwards.
+- **The 0:34 officer beat is the short version of script 04's.** Script 04's
+  event walkthrough (Chapter 3, right after RSVP Settings) covers the per-event
+  dropdown and all three of its choices. Use the same labels here, and point
+  officers there in the description.

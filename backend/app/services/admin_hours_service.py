@@ -27,10 +27,21 @@ from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.hours import hours_from_minutes
 from app.utils.model_updates import apply_updates
+from app.utils.org_timezone import (
+    local_day_start_utc,
+    resolve_scheduling_timezone,
+    today_in,
+)
 
 # A single manual admin-hours entry cannot span more than a day — bounds the
 # absurd-duration self-credit vector on client-supplied times.
 MAX_MANUAL_ENTRY_MINUTES = 24 * 60
+
+# Statuses a member may still edit or withdraw on their own entry.
+MEMBER_EDITABLE_STATUSES = (
+    AdminHoursEntryStatus.PENDING,
+    AdminHoursEntryStatus.REJECTED,
+)
 
 
 def _ensure_utc(dt: datetime) -> datetime:
@@ -753,24 +764,8 @@ class AdminHoursService:
         Only pending entries can be edited. Duration is recalculated
         from the (possibly updated) clock-in and clock-out times.
         """
-        # Find the owning member before taking any lock. The User row is this
-        # invariant's shared parent (Pitfall #27) and must be locked *before*
-        # the entry row below, in the same order `create_manual_entry` uses —
-        # otherwise a create and an edit for the same member could lock the
-        # two rows in opposite orders and deadlock.
-        owner_result = await self.db.execute(
-            select(AdminHoursEntry.user_id).where(
-                AdminHoursEntry.id == entry_id,
-                AdminHoursEntry.organization_id == organization_id,
-            )
-        )
-        owner_id = owner_result.scalar_one_or_none()
-        if not owner_id:
+        if not await self._lock_owner_row(entry_id, organization_id):
             raise ValueError("Pending entry not found")
-
-        await self.db.execute(
-            select(User.id).where(User.id == owner_id).with_for_update()
-        )
 
         # Re-fetch (and lock) the entry itself, re-validating PENDING against
         # the committed row. Without `with_for_update()` here, a concurrent
@@ -791,6 +786,41 @@ class AdminHoursService:
         if not entry:
             raise ValueError("Pending entry not found")
 
+        await self._apply_entry_edits(
+            entry,
+            organization_id,
+            clock_in_at=clock_in_at,
+            clock_out_at=clock_out_at,
+            description=description,
+            category_id=category_id,
+        )
+
+        await self.db.flush()
+        await self.db.refresh(entry, ["created_at", "updated_at"])
+
+        logger.info(
+            "Admin {} edited pending entry {} (user {})",
+            admin_id,
+            entry_id,
+            entry.user_id,
+        )
+        return entry
+
+    async def _apply_entry_edits(
+        self,
+        entry: AdminHoursEntry,
+        organization_id: str,
+        clock_in_at: Optional[datetime] = None,
+        clock_out_at: Optional[datetime] = None,
+        description: Optional[str] = None,
+        category_id: Optional[str] = None,
+    ) -> None:
+        """Apply an edit to an entry already locked by the caller.
+
+        Shared by the officer and member edit paths so both enforce the guards
+        `create_manual_entry` applies. The caller must already hold the owner's
+        `User` row lock, which `_check_overlap(for_update=True)` relies on.
+        """
         if category_id is not None:
             category = await self.get_category(category_id, organization_id)
             if not category:
@@ -805,8 +835,9 @@ class AdminHoursService:
         if clock_out_at is not None:
             entry.clock_out_at = _require_utc(clock_out_at, "clock_out_at")
 
+        # None leaves the description alone; a blank string clears it.
         if description is not None:
-            entry.description = description
+            entry.description = description.strip() or None
 
         # Validate and recalculate duration — the same guards
         # create_manual_entry applies, since an edit can move these times
@@ -836,7 +867,7 @@ class AdminHoursService:
                 organization_id,
                 start,
                 end,
-                exclude_entry_id=entry_id,
+                exclude_entry_id=entry.id,
                 for_update=True,
             )
             if overlap:
@@ -845,15 +876,128 @@ class AdminHoursService:
                     "Please adjust the times."
                 )
 
+    async def _lock_owner_row(
+        self, entry_id: str, organization_id: str, user_id: Optional[str] = None
+    ) -> Optional[str]:
+        """Lock the owning member's `User` row ahead of the entry row.
+
+        The User row is the shared parent for the overlap invariant (Pitfall
+        #27) and must be locked before the entry, in the order
+        `create_manual_entry` uses, or a create and an edit for the same member
+        could take the two locks in opposite orders and deadlock. Passing
+        `user_id` restricts the lookup to that member's own entries.
+        """
+        query = select(AdminHoursEntry.user_id).where(
+            AdminHoursEntry.id == entry_id,
+            AdminHoursEntry.organization_id == organization_id,
+        )
+        if user_id is not None:
+            query = query.where(AdminHoursEntry.user_id == user_id)
+        owner_id = (await self.db.execute(query)).scalar_one_or_none()
+        if not owner_id:
+            return None
+        await self.db.execute(
+            select(User.id)
+            .where(User.id == owner_id, User.organization_id == organization_id)
+            .with_for_update()
+        )
+        return owner_id
+
+    async def _get_own_open_entry(
+        self, entry_id: str, organization_id: str, user_id: str
+    ) -> AdminHoursEntry:
+        """Lock and return a member's own entry that is still theirs to change.
+
+        Pending entries have not been decided, and a rejected entry is how an
+        officer sends a claim back for correction, so both stay open to the
+        member. Approved hours are credited and are an officer's to change.
+        """
+        if not await self._lock_owner_row(entry_id, organization_id, user_id):
+            raise ValueError("Entry not found")
+        result = await self.db.execute(
+            select(AdminHoursEntry)
+            .where(
+                AdminHoursEntry.id == entry_id,
+                AdminHoursEntry.organization_id == organization_id,
+                AdminHoursEntry.user_id == user_id,
+            )
+            .with_for_update()
+        )
+        entry = result.scalar_one_or_none()
+        if not entry:
+            raise ValueError("Entry not found")
+        if entry.status not in MEMBER_EDITABLE_STATUSES:
+            raise ValueError("Only entries awaiting review or rejected can be changed")
+        return entry
+
+    async def edit_own_entry(
+        self,
+        entry_id: str,
+        organization_id: str,
+        user_id: str,
+        clock_in_at: Optional[datetime] = None,
+        clock_out_at: Optional[datetime] = None,
+        description: Optional[str] = None,
+        category_id: Optional[str] = None,
+    ) -> Tuple[AdminHoursEntry, bool]:
+        """Let a member correct their own pending or rejected entry.
+
+        Editing a rejected entry resubmits it: it returns to pending and the
+        previous decision is cleared, because the officer's rejection applied
+        to hours that no longer exist. Returns the entry and whether it was
+        resubmitted.
+        """
+        entry = await self._get_own_open_entry(entry_id, organization_id, user_id)
+
+        # Event-attendance hours are derived from the event's check-in record,
+        # and a resync of that event rewrites them in place — a member's edit
+        # would be silently overwritten. The attendance record is what to fix.
+        if entry.entry_method == AdminHoursEntryMethod.EVENT_ATTENDANCE:
+            raise ValueError(
+                "Hours credited from event attendance follow the event record. "
+                "Ask an officer to correct the attendance instead."
+            )
+
+        await self._apply_entry_edits(
+            entry,
+            organization_id,
+            clock_in_at=clock_in_at,
+            clock_out_at=clock_out_at,
+            description=description,
+            category_id=category_id,
+        )
+
+        resubmitted = entry.status == AdminHoursEntryStatus.REJECTED
+        if resubmitted:
+            entry.status = AdminHoursEntryStatus.PENDING
+            entry.approved_by = None
+            entry.approved_at = None
+            entry.rejection_reason = None
+
         await self.db.flush()
         await self.db.refresh(entry, ["created_at", "updated_at"])
-
         logger.info(
-            "Admin {} edited pending entry {} (user {})",
-            admin_id,
+            "User {} edited own entry {}{}",
+            user_id,
             entry_id,
-            entry.user_id,
+            " (resubmitted)" if resubmitted else "",
         )
+        return entry, resubmitted
+
+    async def withdraw_own_entry(
+        self, entry_id: str, organization_id: str, user_id: str
+    ) -> AdminHoursEntry:
+        """Let a member retract their own pending or rejected entry.
+
+        The row is kept as `withdrawn` rather than deleted so the record of
+        what was claimed survives; withdrawn entries count toward nothing and
+        do not block the member re-logging the same time.
+        """
+        entry = await self._get_own_open_entry(entry_id, organization_id, user_id)
+        entry.status = AdminHoursEntryStatus.WITHDRAWN
+        await self.db.flush()
+        await self.db.refresh(entry, ["created_at", "updated_at"])
+        logger.info("User {} withdrew own entry {}", user_id, entry_id)
         return entry
 
     # =========================================================================
@@ -1181,6 +1325,14 @@ class AdminHoursService:
         result = await self.db.execute(query)
         rows = result.all()
 
+        # Clock times are stored UTC; the export is read as the department's
+        # wall clock, and an evening shift must not land on the next day.
+        org_tz = await resolve_scheduling_timezone(self.db, organization_id)
+
+        def local(value: datetime, fmt: str) -> str:
+            aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            return aware.astimezone(org_tz).strftime(fmt)
+
         output = io.StringIO()
         # SafeCsvWriter neutralizes spreadsheet formula injection in free-text
         # cells (member names, notes).
@@ -1217,18 +1369,14 @@ class AdminHoursService:
                 else ""
             )
             clock_in = (
-                entry.clock_in_at.strftime("%Y-%m-%d %H:%M")
-                if entry.clock_in_at
-                else ""
+                local(entry.clock_in_at, "%Y-%m-%d %H:%M") if entry.clock_in_at else ""
             )
             clock_out = (
-                entry.clock_out_at.strftime("%Y-%m-%d %H:%M")
+                local(entry.clock_out_at, "%Y-%m-%d %H:%M")
                 if entry.clock_out_at
                 else ""
             )
-            date_str = (
-                entry.clock_in_at.strftime("%Y-%m-%d") if entry.clock_in_at else ""
-            )
+            date_str = local(entry.clock_in_at, "%Y-%m-%d") if entry.clock_in_at else ""
             approver_name = (
                 f"{approver_first} {approver_last}"
                 if approver_first and approver_last
@@ -1320,7 +1468,10 @@ class AdminHoursService:
         exclude_entry_id: Optional[str] = None,
         for_update: bool = False,
     ) -> bool:
-        """Check if a time range overlaps with existing non-rejected entries.
+        """Check if a time range overlaps with an entry still being claimed.
+
+        Rejected and withdrawn entries claim no time, so a member can re-log
+        hours over one of them.
 
         `for_update` (Pitfall #27) makes this a locking read. The caller must
         already hold a `with_for_update()` lock on this user's own `User` row
@@ -1335,7 +1486,9 @@ class AdminHoursService:
         query = select(func.count(AdminHoursEntry.id)).where(
             AdminHoursEntry.user_id == user_id,
             AdminHoursEntry.organization_id == organization_id,
-            AdminHoursEntry.status != AdminHoursEntryStatus.REJECTED,
+            AdminHoursEntry.status.notin_(
+                [AdminHoursEntryStatus.REJECTED, AdminHoursEntryStatus.WITHDRAWN]
+            ),
             AdminHoursEntry.clock_out_at.isnot(None),
             # Overlap: existing.start < new.end AND existing.end > new.start
             AdminHoursEntry.clock_in_at < clock_out_at,
@@ -1936,7 +2089,10 @@ class AdminHoursService:
         # the caller gets an explicit error rather than a response that
         # looks complete (annual items present) but silently drops the
         # quarterly ones.
-        today = date.today()
+        # The department's calendar: its year and quarters start at its own
+        # midnight, and "this quarter" is the one it is in now.
+        org_tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = today_in(org_tz)
         if year != today.year and any(
             req.get("frequency", "annual") == "quarterly" for req in requirements
         ):
@@ -1948,8 +2104,8 @@ class AdminHoursService:
             )
 
         # Calculate date range for the year
-        year_start = datetime(year, 1, 1, tzinfo=timezone.utc)
-        year_end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        year_start = local_day_start_utc(date(year, 1, 1), org_tz)
+        year_end = local_day_start_utc(date(year + 1, 1, 1), org_tz)
 
         results = []
         for req in requirements:
@@ -1966,12 +2122,12 @@ class AdminHoursService:
             if frequency == "quarterly":
                 # Guaranteed `year == today.year` by the upfront check above.
                 q_start_month = ((today.month - 1) // 3) * 3 + 1
-                period_start = datetime(year, q_start_month, 1, tzinfo=timezone.utc)
+                period_start = local_day_start_utc(date(year, q_start_month, 1), org_tz)
                 if q_start_month + 3 > 12:
-                    period_end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+                    period_end = year_end
                 else:
-                    period_end = datetime(
-                        year, q_start_month + 3, 1, tzinfo=timezone.utc
+                    period_end = local_day_start_utc(
+                        date(year, q_start_month + 3, 1), org_tz
                     )
             else:
                 period_start = year_start

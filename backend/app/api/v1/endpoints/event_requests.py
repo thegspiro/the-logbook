@@ -89,6 +89,7 @@ from app.services.event_request_service import (
 )
 from app.services.forms_service import FormsService
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import format_in_org_timezone
 
 router = APIRouter(prefix="/event-requests", tags=["event-requests"])
 
@@ -1230,7 +1231,9 @@ async def schedule_request(
         old_status=old_status,
         new_status=EventRequestStatus.SCHEDULED.value,
         notes=data.notes
-        or f"Scheduled for {data.event_date.strftime('%B %d, %Y at %I:%M %p')}",
+        # The confirmed date is stored UTC; the activity log is read by people,
+        # in the department's time -- it said 11 PM for a 7 PM event.
+        or f"Scheduled for {format_in_org_timezone(data.event_date, org)}",
         details={
             "event_date": data.event_date.isoformat(),
             "location_id": data.location_id,

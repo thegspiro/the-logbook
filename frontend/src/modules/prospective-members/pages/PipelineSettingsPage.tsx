@@ -45,6 +45,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
 import type { Pipeline, PipelineListItem, InactivityConfig, InactivityTimeoutPreset } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, TIMEOUT_PRESET_LABELS } from '../types';
+import { StageType as StageTypeConst } from '../../../constants/enums';
 import { getEffectiveTimeoutDays } from '../utils';
 
 export const PipelineSettingsPage: React.FC = () => {
@@ -281,6 +282,14 @@ export const PipelineSettingsPage: React.FC = () => {
   const warningDays = effectiveTimeoutDays
     ? Math.round(effectiveTimeoutDays * (inactivityConfig.warning_threshold_percent / 100))
     : null;
+
+  // Applicants who reach an enabling Enable Status Page stage get a page even
+  // with the switch off, and "Show upcoming stages" still shapes it for them.
+  const hasEnablingStatusStage = (currentPipeline?.stages ?? []).some(
+    (stage) =>
+      stage.stage_type === StageTypeConst.STATUS_PAGE_TOGGLE &&
+      !('enable_public_status' in stage.config && stage.config.enable_public_status === false)
+  );
 
   const handleTogglePublicStatus = async () => {
     if (!currentPipeline) return;
@@ -956,7 +965,8 @@ export const PipelineSettingsPage: React.FC = () => {
                 </div>
                 <p className="text-theme-text-muted mb-4 text-xs">
                   When enabled, prospects receive a link to check their application status. Only stages marked as
-                  &quot;public visible&quot; in the stage settings will be shown.
+                  &quot;public visible&quot; in the stage settings will be shown. An Enable Status Page stage overrides
+                  this for each prospect who reaches it.
                 </p>
                 <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                   <input
@@ -973,7 +983,7 @@ export const PipelineSettingsPage: React.FC = () => {
                   <input
                     type="checkbox"
                     checked={currentPipeline.public_show_future_stages}
-                    disabled={!currentPipeline.public_status_enabled}
+                    disabled={!currentPipeline.public_status_enabled && !hasEnablingStatusStage}
                     onChange={() => {
                       void handleToggleShowFutureStages();
                     }}
