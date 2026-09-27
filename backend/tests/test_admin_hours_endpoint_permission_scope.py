@@ -158,3 +158,93 @@ class TestComplianceScope:
                 current_user=member,
             )
         assert mock_get_compliance.await_args.kwargs["user_id"] == "member-1"
+
+
+def _entry_row(status="pending"):
+    return SimpleNamespace(
+        id="entry-1",
+        organization_id="org-1",
+        user_id="member-1",
+        category_id="cat-1",
+        clock_in_at=None,
+        clock_out_at=None,
+        duration_minutes=60,
+        description=None,
+        entry_method=SimpleNamespace(value="manual"),
+        status=SimpleNamespace(value=status),
+        approved_by=None,
+        approved_at=None,
+        rejection_reason=None,
+        created_at=None,
+        updated_at=None,
+    )
+
+
+class TestOwnEntryScope:
+    """PATCH /entries/my/{id} and POST /entries/my/{id}/withdraw are open to
+    any member, so the owner the service scopes to must be the caller — never
+    a value the client supplies."""
+
+    async def test_edit_passes_the_callers_own_id(self):
+        member = _user("member-1")
+        member.username = "member1"
+        with (
+            patch.object(
+                admin_hours_endpoint.AdminHoursService,
+                "edit_own_entry",
+                new=AsyncMock(return_value=(_entry_row(), True)),
+            ) as mock_edit,
+            patch.object(
+                admin_hours_endpoint.AdminHoursService,
+                "get_category",
+                new=AsyncMock(return_value=None),
+            ),
+            patch.object(
+                admin_hours_endpoint, "log_audit_event", new=AsyncMock()
+            ) as mock_audit,
+        ):
+            out = await admin_hours_endpoint.edit_my_entry(
+                entry_id="entry-1",
+                data=admin_hours_endpoint.AdminHoursEntryEdit(description="x"),
+                db=AsyncMock(),
+                current_user=member,
+            )
+        assert mock_edit.await_args.kwargs["user_id"] == "member-1"
+        assert mock_edit.await_args.kwargs["organization_id"] == "org-1"
+        assert mock_audit.await_args.kwargs["event_data"]["resubmitted"] is True
+        assert out["status"] == "pending"
+
+    async def test_withdraw_passes_the_callers_own_id(self):
+        member = _user("member-1")
+        member.username = "member1"
+        with (
+            patch.object(
+                admin_hours_endpoint.AdminHoursService,
+                "withdraw_own_entry",
+                new=AsyncMock(return_value=_entry_row("withdrawn")),
+            ) as mock_withdraw,
+            patch.object(
+                admin_hours_endpoint.AdminHoursService,
+                "get_category",
+                new=AsyncMock(return_value=None),
+            ),
+            patch.object(admin_hours_endpoint, "log_audit_event", new=AsyncMock()),
+        ):
+            out = await admin_hours_endpoint.withdraw_my_entry(
+                entry_id="entry-1", db=AsyncMock(), current_user=member
+            )
+        assert mock_withdraw.await_args.kwargs["user_id"] == "member-1"
+        assert out["status"] == "withdrawn"
+
+    async def test_service_refusal_is_a_400(self):
+        member = _user("member-1")
+        with patch.object(
+            admin_hours_endpoint.AdminHoursService,
+            "withdraw_own_entry",
+            new=AsyncMock(side_effect=ValueError("Entry not found")),
+        ):
+            with pytest.raises(admin_hours_endpoint.HTTPException) as exc:
+                await admin_hours_endpoint.withdraw_my_entry(
+                    entry_id="entry-1", db=AsyncMock(), current_user=member
+                )
+        assert exc.value.status_code == 400

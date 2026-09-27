@@ -157,7 +157,7 @@ class AdminHoursActiveSession(UTCResponseBase):
 
 
 class AdminHoursEntryEdit(BaseModel):
-    """Schema for an admin editing a pending entry's times"""
+    """Edit to an entry's times — by an officer, or by the member who owns it"""
 
     clock_in_at: Optional[datetime] = None
     clock_out_at: Optional[datetime] = None

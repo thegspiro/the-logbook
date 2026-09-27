@@ -48,7 +48,7 @@ export interface AdminHoursEntry {
   durationMinutes: number | null;
   description: string | null;
   entryMethod: 'qr_scan' | 'manual' | 'event_attendance';
-  status: 'active' | 'pending' | 'approved' | 'rejected';
+  status: 'active' | 'pending' | 'approved' | 'rejected' | 'withdrawn';
   approvedBy: string | null;
   approvedAt: string | null;
   rejectionReason: string | null;

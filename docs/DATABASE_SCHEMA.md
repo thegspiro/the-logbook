@@ -719,7 +719,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `entry_method` | ENUM(`qr_scan`, `nfc_station`, `manual`, `event_attendance`) | no |  | `'manual'` |  |
 | `source_event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `source_rsvp_id` | VARCHAR(36) | yes | FK, IDX |  | → `event_rsvps.id` ON DELETE SET NULL |
-| `status` | ENUM(`active`, `pending`, `approved`, `rejected`) | no |  | `active` |  |
+| `status` | ENUM(`active`, `pending`, `approved`, `rejected`, `withdrawn`) | no |  | `active` |  |
 | `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `approved_at` | DATETIME | yes |  |  |  |
 | `rejection_reason` | TEXT | yes |  |  |  |

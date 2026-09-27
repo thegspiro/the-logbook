@@ -38,6 +38,7 @@ class AdminHoursEntryStatus(str, Enum):
     PENDING = "pending"  # Submitted, awaiting approval
     APPROVED = "approved"
     REJECTED = "rejected"
+    WITHDRAWN = "withdrawn"  # Retracted by the member; counts toward nothing
 
 
 class AdminHoursCategory(Base):

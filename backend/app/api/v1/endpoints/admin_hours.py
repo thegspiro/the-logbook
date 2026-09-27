@@ -643,6 +643,121 @@ async def edit_entry(
 
 
 # =============================================================================
+# Member: Edit / Withdraw Own Entry
+# =============================================================================
+
+
+def _own_entry_response(entry, category) -> dict:
+    return {
+        "id": entry.id,
+        "organization_id": entry.organization_id,
+        "user_id": entry.user_id,
+        "category_id": entry.category_id,
+        "clock_in_at": entry.clock_in_at,
+        "clock_out_at": entry.clock_out_at,
+        "duration_minutes": entry.duration_minutes,
+        "description": entry.description,
+        "entry_method": entry.entry_method.value,
+        "status": entry.status.value,
+        "approved_by": entry.approved_by,
+        "approved_at": entry.approved_at,
+        "rejection_reason": entry.rejection_reason,
+        "created_at": entry.created_at,
+        "updated_at": entry.updated_at,
+        "category_name": category.name if category else None,
+        "category_color": category.color if category else None,
+    }
+
+
+@router.patch(
+    "/entries/my/{entry_id}",
+    response_model=AdminHoursEntryResponse,
+)
+async def edit_my_entry(
+    entry_id: str,
+    data: AdminHoursEntryEdit,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Edit your own pending or rejected entry.
+
+    Editing a rejected entry resubmits it for review. Only the caller's own
+    entries are reachable; anyone else's reads as not found.
+    """
+    service = AdminHoursService(db)
+    try:
+        entry, resubmitted = await service.edit_own_entry(
+            entry_id=entry_id,
+            organization_id=str(current_user.organization_id),
+            user_id=str(current_user.id),
+            clock_in_at=data.clock_in_at,
+            clock_out_at=data.clock_out_at,
+            description=data.description,
+            category_id=data.category_id,
+        )
+        category = await service.get_category(
+            entry.category_id, str(current_user.organization_id)
+        )
+        await log_audit_event(
+            db=db,
+            event_type="admin_hours.entry_self_edited",
+            event_category="administration",
+            severity="info",
+            event_data={
+                "entry_id": entry_id,
+                "resubmitted": resubmitted,
+                "fields_changed": list(data.model_dump(exclude_unset=True).keys()),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return _own_entry_response(entry, category)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/entries/my/{entry_id}/withdraw",
+    response_model=AdminHoursEntryResponse,
+)
+async def withdraw_my_entry(
+    entry_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Withdraw your own pending or rejected entry.
+
+    The entry is kept as withdrawn and no longer counts toward any total.
+    """
+    service = AdminHoursService(db)
+    try:
+        entry = await service.withdraw_own_entry(
+            entry_id=entry_id,
+            organization_id=str(current_user.organization_id),
+            user_id=str(current_user.id),
+        )
+        category = await service.get_category(
+            entry.category_id, str(current_user.organization_id)
+        )
+        await log_audit_event(
+            db=db,
+            event_type="admin_hours.entry_withdrawn",
+            event_category="administration",
+            severity="info",
+            event_data={"entry_id": entry_id},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return _own_entry_response(entry, category)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+# =============================================================================
 # Approval
 # =============================================================================
 
