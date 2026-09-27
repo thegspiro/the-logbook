@@ -17,7 +17,7 @@ hide behind the other still working.
 """
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import func, select
@@ -27,6 +27,7 @@ from app.models.minute import ActionItem, MeetingMinutes, MinutesActionItemStatu
 from app.models.notification import NotificationLog
 from app.models.user import Organization, User
 from app.services.scheduled_tasks import run_action_item_reminders
+from app.utils.org_timezone import org_today
 
 pytestmark = pytest.mark.integration
 
@@ -73,8 +74,10 @@ class TestMinutesActionItemReminder:
         db_session.add(minutes)
         await db_session.flush()
 
+        # Due dates are counted on the department's calendar, which is a day
+        # behind UTC every evening in the Americas; `date.today()` is UTC.
         due_date = datetime.combine(
-            date.today() + timedelta(days=1),
+            org_today(org) + timedelta(days=1),
             datetime.min.time(),
             tzinfo=timezone.utc,
         )
@@ -117,7 +120,7 @@ class TestMeetingActionItemReminder:
         meeting = Meeting(
             organization_id=org.id,
             title="Monthly Business Meeting",
-            meeting_date=date.today(),
+            meeting_date=org_today(org),
         )
         db_session.add(meeting)
         await db_session.flush()
@@ -127,7 +130,7 @@ class TestMeetingActionItemReminder:
             organization_id=org.id,
             description="Inspect ladder truck",
             assigned_to=assignee.id,
-            due_date=date.today() + timedelta(days=1),
+            due_date=org_today(org) + timedelta(days=1),
             status=ActionItemStatus.OPEN.value,
         )
         db_session.add(item)

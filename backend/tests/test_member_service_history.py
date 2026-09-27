@@ -30,6 +30,7 @@ from app.services.member_service_history_service import (
     whole_years,
 )
 from app.services.membership_tier_service import MembershipTierService
+from app.utils.org_timezone import org_today
 
 TODAY = date(2026, 9, 24)
 
@@ -673,6 +674,9 @@ class TestStatusChangeWritesStints:
         )
 
         org = await _org(db_session)
+        # Stints open and close on the department's calendar date, which is a
+        # day behind UTC every evening in the Americas.
+        today = org_today(org)
         officer = await _user(db_session, org, hire_date=date(2000, 1, 1))
         member = await _user(db_session, org, hire_date=date(2012, 1, 1))
         caller = _caller(org, officer.id)
@@ -686,16 +690,14 @@ class TestStatusChangeWritesStints:
         )
         [closed] = await _stints(db_session, member)
         assert (closed.end_date, closed.separation_status) == (
-            date.today(),
+            today,
             "retired",
         )
 
         with pytest.raises(HTTPException) as exc:
             await change_member_status(
                 member.id,
-                MemberStatusChangeRequest(
-                    new_status="active", rejoin_date=date.today()
-                ),
+                MemberStatusChangeRequest(new_status="active", rejoin_date=today),
                 BackgroundTasks(),
                 db=db_session,
                 current_user=caller,
@@ -706,7 +708,7 @@ class TestStatusChangeWritesStints:
         assert member.status == UserStatus.RETIRED
 
         # Back-date the retirement so a rejoin today is after it.
-        closed.end_date = date.today() - timedelta(days=30)
+        closed.end_date = today - timedelta(days=30)
         await db_session.flush()
         await change_member_status(
             member.id,
@@ -720,7 +722,7 @@ class TestStatusChangeWritesStints:
 
         prior, current = await _stints(db_session, member)
         assert prior.counts_toward_service is False
-        assert (current.start_date, current.end_date) == (date.today(), None)
+        assert (current.start_date, current.end_date) == (today, None)
         await db_session.refresh(member)
         assert member.status == UserStatus.ACTIVE
 
