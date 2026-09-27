@@ -15,7 +15,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from loguru import logger
-from sqlalchemy import and_, case, func, or_, select, text
+from sqlalchemy import and_, case, delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -4338,6 +4338,11 @@ class SchedulingService:
             if validation_error:
                 return None, validation_error
 
+            if user_id:
+                await self._clear_inactive_assignment(
+                    shift_id, user_id, organization_id
+                )
+
             assignment = ShiftAssignment(
                 organization_id=organization_id,
                 shift_id=shift_id,
@@ -4396,6 +4401,36 @@ class SchedulingService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def _clear_inactive_assignment(
+        self, shift_id: UUID, user_id: Any, organization_id: UUID
+    ) -> None:
+        """Remove a member's declined or cancelled row so they can be re-seated.
+
+        ``uq_shift_assignment_shift_user`` admits one row per member per shift,
+        and a decline, a shift cancellation or approved time off leaves that
+        row behind as DECLINED/CANCELLED rather than deleting it. The candidate
+        check treats those rows as absent, so the insert that followed hit the
+        constraint and a member who had stepped away could never take the
+        shift back. The seat they are asking for is a new one: nothing from
+        the abandoned row (confirmation, notes, training slot) carries over.
+
+        Only call this after the candidate check has passed, so a refused
+        signup leaves the old row in place. A Core DELETE is used rather than
+        ``session.delete`` because the unit of work flushes inserts before
+        deletes, which would put the new row in before the old one left.
+        The caller already holds the shift row lock, so no concurrent signup
+        for this shift can interleave.
+        """
+        await self.db.execute(
+            delete(ShiftAssignment)
+            .where(ShiftAssignment.shift_id == str(shift_id))
+            .where(ShiftAssignment.user_id == str(user_id))
+            .where(ShiftAssignment.organization_id == str(organization_id))
+            .where(
+                ShiftAssignment.assignment_status.in_(self.INACTIVE_ASSIGNMENT_STATUSES)
+            )
+        )
 
     async def get_shift_assignments(
         self, shift_id: UUID, organization_id: UUID

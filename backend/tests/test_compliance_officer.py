@@ -21,6 +21,7 @@ from app.services.compliance_officer_service import (
     ISOReadinessService,
     RecordCompletenessService,
 )
+from app.utils.org_timezone import org_today
 
 # ============================================
 # ISO_CATEGORIES Structure Tests
@@ -192,7 +193,7 @@ class TestGetISOReadiness:
         service = ISOReadinessService(mock_db)
         result = await service.get_iso_readiness("org-1")
 
-        assert result["year"] == date.today().year
+        assert result["year"] == org_today(None).year
 
 
 # ============================================

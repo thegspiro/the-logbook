@@ -13,7 +13,7 @@ out, and falls back to `quantity` only for items with no lots at all.
 """
 
 import uuid
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 
@@ -29,18 +29,13 @@ from app.models.inventory import (
 )
 from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
+from app.utils.org_timezone import org_today
 
 pytestmark = pytest.mark.integration
 
 
 async def _org(db):
-    org = Organization(
-        name="Ledger FD",
-        slug=f"ledger-{uuid.uuid4().hex[:8]}",
-        # UTC, so "today" on the department's calendar is the date.today() the
-        # fixtures below are built from, at any hour the suite runs.
-        timezone="UTC",
-    )
+    org = Organization(name="Ledger FD", slug=f"ledger-{uuid.uuid4().hex[:8]}")
     db.add(org)
     await db.flush()
     return org
@@ -75,16 +70,17 @@ async def _item(db, org, quantity=0):
 
 
 async def _lot(db, org, item, quantity, expires_in_days=None):
+    # Expiry is judged on the department's calendar, not the runner's UTC
+    # date, which is a day ahead every US evening.
+    today = org_today(org)
     lot = InventoryLot(
         id=str(uuid.uuid4()),
         organization_id=org.id,
         inventory_item_id=item.id,
         quantity=quantity,
-        received_date=date.today(),
+        received_date=today,
         expiration_date=(
-            None
-            if expires_in_days is None
-            else date.today() + timedelta(days=expires_in_days)
+            None if expires_in_days is None else today + timedelta(days=expires_in_days)
         ),
     )
     db.add(lot)
