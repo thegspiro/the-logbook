@@ -284,7 +284,7 @@ describe('EventForm', () => {
       fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-01' } });
       await user.click(screen.getByLabelText(/require rsvp/i));
 
-      expect(screen.getByText('RSVP Deadline', { exact: false }).closest('label')).toHaveTextContent('*');
+      expect(screen.getByLabelText(/rsvp deadline\s*\*/i)).toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: /create event/i }));
 
@@ -308,7 +308,8 @@ describe('EventForm', () => {
       fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
       fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-01' } });
 
-      expect(screen.getByText('RSVP Deadline', { exact: false }).closest('label')).not.toHaveTextContent('*');
+      expect(screen.getByLabelText(/rsvp deadline/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/rsvp deadline\s*\*/i)).not.toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: /save changes/i }));
 
