@@ -35,6 +35,7 @@ import type {
   TrainingCourse,
   TrainingRequirementEnhanced,
 } from '../types/training';
+import { getErrorDetail } from '../utils/errorHandling';
 
 // ==================== Types ====================
 
@@ -1466,8 +1467,7 @@ const CreatePipelinePage: React.FC = () => {
       toast.success('Training pipeline created successfully!');
       void navigate(`/training/programs/${program.id}`);
     } catch (err: unknown) {
-      const errorMessage =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to create pipeline';
+      const errorMessage = getErrorDetail(err) || 'Failed to create pipeline';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {

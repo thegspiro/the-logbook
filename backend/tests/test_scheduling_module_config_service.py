@@ -9,10 +9,13 @@ out-of-range values.
 """
 
 import uuid
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import func, select
 
+from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.user import Organization, User
 from app.schemas.scheduling_module_config import (
     ShiftSettingsResponse,
@@ -164,6 +167,65 @@ class TestUpdate:
         settings, row = await service.get_settings(org.id)
         assert settings["default_duration_hours"] == 8
         assert row is not None
+
+
+@pytest.mark.integration
+class TestConcurrentFirstSave:
+    """Two first saves for one organization, both finding no row.
+
+    The settings screen issues two on its first load, and the second insert
+    used to hit the unique index on ``organization_id`` and answer 500. The
+    first lookup is made to return nothing — as the loser's does, reading from
+    a snapshot taken before the winner committed — so the insert that follows
+    genuinely collides with the winner's row.
+    """
+
+    async def test_the_loser_writes_over_the_winners_row(self, db_session):
+        org = await _make_org(db_session, "SMC Race FD")
+        service = SchedulingModuleConfigService(db_session)
+        await service.update_settings(org.id, _make_payload(defaultMinStaffing=2))
+
+        real_get_row = service._get_row
+        lookups: list[bool] = []
+
+        async def stale_first_lookup(organization_id, for_update=False):
+            lookups.append(for_update)
+            if len(lookups) == 1:
+                return None
+            return await real_get_row(organization_id, for_update=for_update)
+
+        with patch.object(service, "_get_row", side_effect=stale_first_lookup):
+            settings = await service.update_settings(
+                org.id, _make_payload(defaultMinStaffing=5)
+            )
+
+        assert settings["default_min_staffing"] == 5
+        rows = await db_session.scalar(
+            select(func.count())
+            .select_from(SchedulingModuleConfig)
+            .where(SchedulingModuleConfig.organization_id == org.id)
+        )
+        assert rows == 1
+
+    async def test_the_re_read_after_the_collision_locks(self, db_session):
+        # A plain SELECT would answer from the snapshot that found no row.
+        org = await _make_org(db_session, "SMC Race Lock FD")
+        service = SchedulingModuleConfigService(db_session)
+        await service.update_settings(org.id, _make_payload())
+
+        real_get_row = service._get_row
+        lookups: list[bool] = []
+
+        async def stale_first_lookup(organization_id, for_update=False):
+            lookups.append(for_update)
+            if len(lookups) == 1:
+                return None
+            return await real_get_row(organization_id, for_update=for_update)
+
+        with patch.object(service, "_get_row", side_effect=stale_first_lookup):
+            await service.update_settings(org.id, _make_payload())
+
+        assert lookups[:2] == [False, True]
 
 
 @pytest.mark.integration

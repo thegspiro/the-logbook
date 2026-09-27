@@ -172,6 +172,16 @@ describe('InventoryAdminHub', () => {
     expect(screen.queryByText('checked out')).not.toBeInTheDocument();
   });
 
+  it('asks for returns awaiting review by a status the API has', async () => {
+    // It asked for 'pending', which ReturnRequestStatus has never had: the API
+    // answered 500 (now 422) and the hub lost its returns figure on every visit.
+    renderWithRouter(<InventoryAdminHub />);
+
+    await waitFor(() => {
+      expect(mockGetReturnRequests).toHaveBeenCalledWith({ status: 'requested' });
+    });
+  });
+
   it('carries low stock as actionable record-level queue rows', async () => {
     renderWithRouter(<InventoryAdminHub />);
     expect(await screen.findAllByText('Low-stock item')).toHaveLength(2);

@@ -7174,7 +7174,7 @@ class InventoryService:
     async def get_return_requests(
         self,
         organization_id: UUID,
-        status_filter: Optional[str] = None,
+        status_filter: Optional[str | ReturnRequestStatus] = None,
         requester_id: Optional[UUID] = None,
     ) -> List[ReturnRequest]:
         """List return requests, optionally filtered by status or requester."""

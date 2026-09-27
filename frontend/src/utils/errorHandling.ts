@@ -71,6 +71,43 @@ function describeValidationError(entry: ValidationErrorEntry): string {
 }
 
 /**
+ * A response `detail` of any of its three shapes as display text, or
+ * `undefined` when it carries nothing to show. Shared by `toAppError` and
+ * `getErrorDetail` so the two cannot disagree about what a detail says.
+ */
+function describeDetail(detail: unknown): string | undefined {
+  if (Array.isArray(detail)) {
+    return (detail as ValidationErrorEntry[]).map(describeValidationError).join(' ') || undefined;
+  }
+  if (detail && typeof detail === 'object') {
+    // Some endpoints raise HTTPException with a structured object detail
+    // (e.g. a 409 { message, ... }). Surface its `message` rather than
+    // letting the object stringify to "[object Object]" in a toast.
+    const { message } = detail as { message?: unknown };
+    return typeof message === 'string' && message ? message : undefined;
+  }
+  return typeof detail === 'string' && detail ? detail : undefined;
+}
+
+/**
+ * The server's own explanation of a failed request, as display text, or
+ * `undefined` when it gave none — for call sites that show it and otherwise
+ * fall back to their own wording: `getErrorDetail(err) || 'Failed to save'`.
+ *
+ * Replaces reading `err.response.data.detail` directly under a cast to
+ * `string`. That cast is false for every 422, whose detail is an array of
+ * `{field, message}` objects; rendered as a React child, the array throws and
+ * the error boundary replaces the whole page, discarding the form the member
+ * was filling in.
+ */
+export function getErrorDetail(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('response' in error)) return undefined;
+  const { response } = error as { response?: unknown };
+  if (typeof response !== 'object' || response === null) return undefined;
+  return describeDetail((response as HttpErrorResponse['response']).data?.detail);
+}
+
+/**
  * Type guard to check if an error is an AppError
  */
 export function isAppError(error: unknown): error is AppError {
@@ -92,20 +129,12 @@ export function toAppError(error: unknown): AppError {
   ) {
     const response = (error as HttpErrorResponse).response;
     const { data } = response;
-    let message: string;
-    if (Array.isArray(data?.detail)) {
-      // 422 validation errors return detail as an array
-      message = data.detail.map(describeValidationError).join(' ') || 'Validation failed';
-    } else if (data?.detail && typeof data.detail === 'object') {
-      // Some endpoints raise HTTPException with a structured object detail
-      // (e.g. a 409 { message, ... }). Surface its `message` rather than
-      // letting the object stringify to "[object Object]" in a toast.
-      const objDetail = data.detail as { message?: unknown };
-      const detailMessage = typeof objDetail.message === 'string' ? objDetail.message : undefined;
-      message = detailMessage || data?.message || response.statusText || 'Request failed';
-    } else {
-      message = (data?.detail as string | undefined) || data?.message || response.statusText || 'Request failed';
-    }
+    const detailText = describeDetail(data?.detail);
+    // 422 validation errors return detail as an array, and an empty one still
+    // means validation failed rather than falling through to the status text.
+    const message = Array.isArray(data?.detail)
+      ? detailText || 'Validation failed'
+      : detailText || data?.message || response.statusText || 'Request failed';
     return {
       message,
       code: data?.code,

@@ -6,11 +6,10 @@
 
 import { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { AxiosError } from 'axios';
 import { eventService } from '../services/api';
 import type { RSVPStatus, Event } from '../types/event';
 import { RSVPStatus as RSVPStatusEnum } from '../constants/enums';
-import { getPhaseGateWarning } from '../utils/errorHandling';
+import { getErrorDetail, getPhaseGateWarning } from '../utils/errorHandling';
 
 import { useConfirm } from '../contexts/ConfirmContext';
 interface UseRSVPFormOptions {
@@ -167,7 +166,7 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
         resetForm();
         await onSuccess();
       } catch (err) {
-        setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to submit RSVP');
+        setSubmitError(getErrorDetail(err) || 'Failed to submit RSVP');
       } finally {
         setSubmitting(false);
       }

@@ -19,7 +19,7 @@ import type { UserWithRoles, Role } from '../types/role';
 import type { UserProfileUpdate } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import { validatePasswordStrength } from '../utils/passwordValidation';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { Modal } from '../components/Modal';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { useRanks } from '../hooks/useRanks';
@@ -168,7 +168,7 @@ export const MembersAdminPage: React.FC = () => {
       setEditingProfile(false);
       setProfileUser(null);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string }; status?: number } })?.response?.data?.detail;
+      const detail = getErrorDetail(err);
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 403) {
         setError('You do not have permission to update member information. Contact an administrator.');
@@ -195,7 +195,7 @@ export const MembersAdminPage: React.FC = () => {
       setEditingRoles(false);
       setSelectedUser(null);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string }; status?: number } })?.response?.data?.detail;
+      const detail = getErrorDetail(err);
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 403) {
         setError('You do not have permission to assign roles. Contact an administrator.');
@@ -250,7 +250,7 @@ export const MembersAdminPage: React.FC = () => {
       setEditingMembers(false);
       setSelectedRole(null);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string }; status?: number } })?.response?.data?.detail;
+      const detail = getErrorDetail(err);
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 403) {
         setError('You do not have permission to assign roles. Contact an administrator.');
@@ -326,7 +326,7 @@ export const MembersAdminPage: React.FC = () => {
       setResetMfaUser(null);
       await fetchData();
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const detail = getErrorDetail(err);
       setError(detail || 'Unable to reset MFA. Please try again.');
     } finally {
       setSavingMfaReset(false);
@@ -382,7 +382,7 @@ export const MembersAdminPage: React.FC = () => {
       setResetConfirmPassword('');
       setResetForceChange(true);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const detail = getErrorDetail(err);
       setError(detail || 'Unable to reset password. Please try again.');
     } finally {
       setSavingReset(false);

@@ -7,7 +7,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { AxiosError } from 'axios';
 import { eventService, meetingsService } from '../services/api';
 import { electionService } from '../services/electionService';
 import type { ElectionListItem } from '../types/election';
@@ -50,7 +49,7 @@ import { EventAttachmentsList } from '../components/event-detail/EventAttachment
 import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
 import { EventNotificationPanel } from '../components/event-detail/EventNotificationPanel';
 import { errorTracker } from '../services/errorTracking';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { EventRSVPSection } from '../components/event-detail/EventRSVPSection';
 import { EventAttendeesCard } from '../components/event-detail/EventAttendeesCard';
 import EventRSVPModal from '../components/event-detail/EventRSVPModal';
@@ -244,7 +243,7 @@ export const EventDetailPage: React.FC = () => {
       setEvent(data);
       void fetchSeriesEvents(data);
     } catch (err) {
-      setError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to load event');
+      setError(getErrorDetail(err) || 'Failed to load event');
     } finally {
       setLoading(false);
     }
@@ -417,7 +416,7 @@ export const EventDetailPage: React.FC = () => {
       await fetchStats();
       await fetchEligibleMembers();
     } catch (err) {
-      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to bulk add attendees');
+      toast.error(getErrorDetail(err) || 'Failed to bulk add attendees');
     } finally {
       setBulkAddLoading(false);
     }
@@ -447,7 +446,7 @@ export const EventDetailPage: React.FC = () => {
       toast.success('Event cancelled successfully');
       await fetchEvent();
     } catch (err) {
-      setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to cancel event');
+      setSubmitError(getErrorDetail(err) || 'Failed to cancel event');
     } finally {
       setSubmitting(false);
     }
@@ -478,7 +477,7 @@ export const EventDetailPage: React.FC = () => {
       toast.success(result.message);
       await fetchEvent();
     } catch (err) {
-      setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to cancel series');
+      setSubmitError(getErrorDetail(err) || 'Failed to cancel series');
     } finally {
       setSubmitting(false);
     }
@@ -493,7 +492,7 @@ export const EventDetailPage: React.FC = () => {
       await fetchStats();
       toast.success('Member checked in successfully');
     } catch (err) {
-      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to check in attendee');
+      toast.error(getErrorDetail(err) || 'Failed to check in attendee');
     }
   };
 
@@ -506,7 +505,7 @@ export const EventDetailPage: React.FC = () => {
       toast.success('Event duplicated successfully');
       void navigate(`/events/${newEvent.id}/edit`);
     } catch (err) {
-      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to duplicate event');
+      toast.error(getErrorDetail(err) || 'Failed to duplicate event');
     } finally {
       setSubmitting(false);
     }
@@ -531,7 +530,7 @@ export const EventDetailPage: React.FC = () => {
       }
       void navigate('/events');
     } catch (err) {
-      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to delete event');
+      toast.error(getErrorDetail(err) || 'Failed to delete event');
     } finally {
       setSubmitting(false);
       setShowDeleteConfirm(false);
@@ -574,7 +573,7 @@ export const EventDetailPage: React.FC = () => {
       await fetchRSVPs();
       await fetchStats();
     } catch (err) {
-      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to finalize attendance');
+      toast.error(getErrorDetail(err) || 'Failed to finalize attendance');
     } finally {
       setFinalizingAttendance(false);
     }
@@ -592,7 +591,7 @@ export const EventDetailPage: React.FC = () => {
       await fetchRSVPs();
       await fetchStats();
     } catch (err) {
-      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to reopen attendance');
+      toast.error(getErrorDetail(err) || 'Failed to reopen attendance');
     } finally {
       setReopeningAttendance(false);
     }
@@ -613,7 +612,7 @@ export const EventDetailPage: React.FC = () => {
         await fetchStats();
       }
     } catch (err) {
-      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to end event');
+      toast.error(getErrorDetail(err) || 'Failed to end event');
     } finally {
       setSubmitting(false);
     }
@@ -648,7 +647,7 @@ export const EventDetailPage: React.FC = () => {
         await fetchRSVPs();
       }
     } catch (err) {
-      setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to record times');
+      setSubmitError(getErrorDetail(err) || 'Failed to record times');
     } finally {
       setSubmitting(false);
     }
@@ -666,7 +665,7 @@ export const EventDetailPage: React.FC = () => {
       await fetchStats();
       toast.success('Attendee removed');
     } catch (err) {
-      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to remove attendee');
+      toast.error(getErrorDetail(err) || 'Failed to remove attendee');
     }
   };
 
@@ -863,9 +862,7 @@ export const EventDetailPage: React.FC = () => {
                           toast.success('Event published successfully');
                           await fetchEvent();
                         } catch (err) {
-                          toast.error(
-                            (err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to publish event'
-                          );
+                          toast.error(getErrorDetail(err) || 'Failed to publish event');
                         } finally {
                           setSubmitting(false);
                         }
@@ -1104,8 +1101,7 @@ export const EventDetailPage: React.FC = () => {
                                     toast.success('Meeting created from event');
                                     void navigate(`/minutes`);
                                   } catch (err) {
-                                    const axiosErr = err as AxiosError<{ detail?: string }>;
-                                    toast.error(axiosErr.response?.data?.detail || 'Failed to create meeting');
+                                    toast.error(getErrorDetail(err) || 'Failed to create meeting');
                                   }
                                 })();
                               }}
@@ -1915,9 +1911,7 @@ export const EventDetailPage: React.FC = () => {
                   setShowTemplateModal(false);
                   toast.success('Template saved successfully');
                 } catch (err) {
-                  toast.error(
-                    (err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to save template'
-                  );
+                  toast.error(getErrorDetail(err) || 'Failed to save template');
                 } finally {
                   setSubmitting(false);
                 }
