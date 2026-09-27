@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**280 tables · 4635 columns · 910 foreign keys**
+**283 tables · 4665 columns · 917 foreign keys**
 
 ---
 
@@ -204,6 +204,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
 | [`events`](#events) | `Event` | 53 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 8 | RSVP History model for tracking RSVP status changes. |
+
+### External_Shift_Hours
+
+<sub>`app/models/external_shift_hours.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`external_agencies`](#external_agencies) | `ExternalAgency` | 6 | A department members may staff apparatus for. |
+| [`external_apparatus`](#external_apparatus) | `ExternalApparatus` | 8 | One unit belonging to an :class:`ExternalAgency`. |
+| [`external_shift_hours`](#external_shift_hours) | `ExternalShiftHours` | 16 |  |
 
 ### Facilities
 
@@ -2767,6 +2777,86 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_rsvp_history_event_id` (`event_id`)
 - `ix_rsvp_history_rsvp_id` (`rsvp_id`)
 - `ix_rsvp_history_user_id` (`user_id`)
+
+## External_Shift_Hours
+
+### `external_agencies`
+
+**ExternalAgency** · `app/models/external_shift_hours.py`
+
+> A department members may staff apparatus for.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(255) | no |  |  |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_external_agencies_org_name` (`organization_id`, `name`)
+
+### `external_apparatus`
+
+**ExternalApparatus** · `app/models/external_shift_hours.py`
+
+> One unit belonging to an :class:`ExternalAgency`.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `agency_id` | VARCHAR(36) | no | FK |  | → `external_agencies.id` ON DELETE CASCADE |
+| `name` | VARCHAR(100) | no |  |  |  |
+| `apparatus_type` | VARCHAR(50) | yes |  |  |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_external_apparatus_org` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_external_apparatus_agency_name` (`agency_id`, `name`)
+
+### `external_shift_hours`
+
+**ExternalShiftHours** · `app/models/external_shift_hours.py`
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `shift_date` | DATE | no |  |  |  |
+| `duration_minutes` | INTEGER | no |  |  |  |
+| `external_apparatus_id` | VARCHAR(36) | yes | FK, IDX |  | → `external_apparatus.id` ON DELETE SET NULL |
+| `agency_name` | VARCHAR(255) | no |  |  |  |
+| `apparatus_name` | VARCHAR(100) | no |  |  |  |
+| `role` | VARCHAR(100) | yes |  |  |  |
+| `notes` | TEXT | yes |  |  |  |
+| `status` | VARCHAR(20) | no |  | `counted` |  |
+| `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `reviewed_at` | DATETIME | yes |  |  |  |
+| `rejection_reason` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_external_shift_hours_apparatus` (`external_apparatus_id`)
+- `ix_external_shift_hours_org_date` (`organization_id`, `shift_date`)
+- `ix_external_shift_hours_org_user_date` (`organization_id`, `user_id`, `shift_date`)
+
+**Constraints**
+
+- CHECK `ck_external_shift_hours_ck_external_shift_hours_duration`: `duration_minutes > 0 AND duration_minutes <= 2880`
+- CHECK `ck_external_shift_hours_ck_external_shift_hours_status`: `status IN ('counted', 'rejected')`
 
 ## Facilities
 
@@ -9774,7 +9864,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (335 references)
+### → `users` (337 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9876,6 +9966,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `expense_reports` | `approved_by` | SET NULL | yes |
 | `expense_reports` | `submitted_by` | RESTRICT | no |
 | `external_category_mappings` | `mapped_by` | SET NULL | yes |
+| `external_shift_hours` | `reviewed_by` | SET NULL | yes |
+| `external_shift_hours` | `user_id` | CASCADE | no |
 | `external_training_imports` | `user_id` | SET NULL | yes |
 | `external_training_providers` | `created_by` | SET NULL | yes |
 | `external_training_sync_logs` | `initiated_by` | SET NULL | yes |
@@ -10114,7 +10206,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (226 references)
+### → `organizations` (229 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10180,7 +10272,10 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `events` | `organization_id` | CASCADE | no |
 | `evoc_levels` | `organization_id` | CASCADE | yes |
 | `expense_reports` | `organization_id` | CASCADE | no |
+| `external_agencies` | `organization_id` | CASCADE | no |
+| `external_apparatus` | `organization_id` | CASCADE | no |
 | `external_category_mappings` | `organization_id` | CASCADE | no |
+| `external_shift_hours` | `organization_id` | CASCADE | no |
 | `external_training_imports` | `organization_id` | CASCADE | no |
 | `external_training_providers` | `organization_id` | CASCADE | no |
 | `external_training_sync_logs` | `organization_id` | CASCADE | no |
@@ -11027,6 +11122,18 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `expense_line_items` | `expense_report_id` | CASCADE | no |
+
+### → `external_agencies` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `external_apparatus` | `agency_id` | CASCADE | no |
+
+### → `external_apparatus` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `external_shift_hours` | `external_apparatus_id` | SET NULL | yes |
 
 ### → `external_training_sync_logs` (1 references)
 

@@ -432,6 +432,14 @@ export interface MemberHoursReportEntry {
   shifts_scheduled: number;
   scheduled_minutes: number;
   scheduled_hours: number;
+  /**
+   * Shifts the member logged on another jurisdiction's apparatus. Counted
+   * toward their credit, but kept out of `worked_*` so worked stays
+   * comparable with scheduled.
+   */
+  external_shifts?: number;
+  external_minutes?: number;
+  external_hours?: number;
 }
 
 export interface MemberHoursReport {

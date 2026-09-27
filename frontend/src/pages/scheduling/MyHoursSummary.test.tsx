@@ -14,6 +14,12 @@ vi.mock('../../modules/scheduling/services/api', () => ({
   },
 }));
 
+// The outside-shifts list has its own suite; here it only needs to be
+// present, and a stub keeps these tests off its service calls.
+vi.mock('./MyExternalShifts', () => ({
+  MyExternalShifts: () => <div data-testid="my-external-shifts" />,
+}));
+
 vi.mock('../../modules/scheduling/store/schedulingStore', () => ({
   useSchedulingStore: (selector?: (state: unknown) => unknown) => {
     const state = { callTrackingMode: mockCallTrackingMode, loadSettings: mockLoadSettings };
@@ -146,6 +152,25 @@ describe('MyHoursSummary', () => {
 
     expect(await screen.findByText(/5 more hours are logged on shifts/)).toBeInTheDocument();
     expect(screen.getByText('(+5 pending)')).toBeInTheDocument();
+  });
+
+  it('shows hours with other departments beside the credited ones, not inside them', async () => {
+    const months = history().months;
+    months[1] = month(2, { shifts: 1, hours: 12, calls: 3, external_shifts: 1, external_hours: 10 });
+    useDefaultHistory(
+      history({
+        months,
+        totals: { shifts: 3, hours: 36, calls: 9, pending_shifts: 0, pending_hours: 0, external_hours: 10 },
+      })
+    );
+
+    render(<MyHoursSummary />);
+
+    const yearCard = await screen.findByRole('group', { name: 'This year' });
+    expect(within(yearCard).getByText('36')).toBeInTheDocument();
+    expect(within(yearCard).getByText('+10 hrs with other departments')).toBeInTheDocument();
+    expect(screen.getAllByText('(+10 outside)')).toHaveLength(2);
+    expect(screen.getByTestId('my-external-shifts')).toBeInTheDocument();
   });
 
   describe('when the department does not track calls', () => {

@@ -61,6 +61,8 @@ async def test_hours_compliance_uses_raw_minutes_before_display_rounding():
                 _Result(scalar_rows=[user]),
                 _Result(rows=[]),
                 _Result(rows=[attendance]),
+                # external_shift_hours: none logged
+                _Result(rows=[]),
             ]
         )
     )

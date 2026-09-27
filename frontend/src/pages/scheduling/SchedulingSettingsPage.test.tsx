@@ -66,8 +66,16 @@ describe('SchedulingSettingsPage', () => {
 
     expect(screen.getByText('section:general')).toBeInTheDocument();
     const nav = settingsNav();
-    for (const label of ['General', 'Apparatus', 'Eligibility', 'Notifications', 'Shift Reports']) {
-      expect(within(nav).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument();
+    // Anchored: "Apparatus" is also the tail of "Outside Apparatus".
+    for (const label of [
+      'General',
+      'Apparatus',
+      'Eligibility',
+      'Notifications',
+      'Shift Reports',
+      'Outside Apparatus',
+    ]) {
+      expect(within(nav).getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
   });
 
