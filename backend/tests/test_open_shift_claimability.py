@@ -25,6 +25,20 @@ from app.models.training import AssignmentStatus
 from app.services import scheduling_service as scheduling_service_module
 from app.services.scheduling_service import SchedulingService
 
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    for module in (
+        "app.services.scheduling_service",
+        "app.api.v1.endpoints.scheduling",
+    ):
+        monkeypatch.setattr(
+            f"{module}.resolve_org_today", AsyncMock(return_value=date.today())
+        )
+
+
 ORG = "org-1"
 MEMBER = "member-1"
 

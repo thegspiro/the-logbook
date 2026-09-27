@@ -17,12 +17,23 @@ precisely because a check need not be attributable to one.
 DB mocked; no MySQL.
 """
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.services.equipment_check_service import EquipmentCheckService
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.equipment_check_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
 
 
 def _scalars_first(obj):

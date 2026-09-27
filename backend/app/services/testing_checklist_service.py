@@ -24,6 +24,7 @@ from app.models.testing_checklist import (
 )
 from app.models.user import Organization, Position, User, user_positions
 from app.schemas.testing_checklist import TestingCheckUpsert
+from app.utils.org_timezone import resolve_org_today
 
 # A run covers the pages the router declares — a few hundred. The cap is well
 # clear of that and exists so a scripted client cannot grow the table without
@@ -168,7 +169,8 @@ class TestingChecklistService:
         run = await self.current_run(organization_id)
         if run is not None:
             return run
-        label = f"Run of {datetime.now(timezone.utc).date().isoformat()}"
+        today = await resolve_org_today(self.db, organization_id)
+        label = f"Run of {today.isoformat()}"
         if build_id:
             label = f"{label} · build {build_id[:8]}"
         return await self.start_run(

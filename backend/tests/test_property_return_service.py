@@ -9,7 +9,7 @@ voluntary/involuntary letter variations, HTML escaping of member-supplied
 text, and document persistence. DB mocked; no MySQL.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,6 +17,16 @@ import pytest
 
 from app.models.document import SYSTEM_FOLDERS, DocumentFolder, FolderVisibility
 from app.services.property_return_service import PropertyReturnService
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.property_return_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
 
 
 def _one(obj):

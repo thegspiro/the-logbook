@@ -31,6 +31,7 @@ from app.models.inventory import (
 from app.models.user import Organization, User, UserStatus
 from app.schemas.organization import RejoinServiceCredit
 from app.services.member_service_history_service import MemberServiceHistoryService
+from app.utils.org_timezone import resolve_org_today
 
 
 async def check_and_auto_archive(
@@ -268,12 +269,14 @@ async def reactivate_member(
     # member's last status change says it did.
     history = MemberServiceHistoryService(db)
     service_credit = service_credit or await history.get_rejoin_default(organization_id)
+    today = await resolve_org_today(db, organization_id)
     await history.record_rejoin(
         member,
-        rejoin_date or date.today(),
+        rejoin_date or today,
         service_credit,
         reactivated_by,
         previous_service_end=previous_service_end,
+        today=today,
     )
 
     now = datetime.now(timezone.utc)

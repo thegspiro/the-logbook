@@ -5,15 +5,27 @@ never recomputed as time passes, so a record entered with a future due date
 stays is_overdue=False once the date passes — understating the overdue counts.
 This test pins the per-table UPDATEs (target tables, the is_overdue value, and
 the incomplete / past-due / not-yet-flagged predicates) and the total count,
-without a real database.
+without a real database. Each department is swept against its own date.
 """
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy.dialects import mysql
 
+from app.services import scheduled_tasks
 from app.services.scheduled_tasks import run_mark_overdue_maintenance
+
+
+@pytest.fixture(autouse=True)
+def _one_department(monkeypatch):
+    monkeypatch.setattr(
+        scheduled_tasks,
+        "_org_todays",
+        AsyncMock(return_value={"org-1": date(2026, 10, 6)}),
+    )
 
 
 async def test_marks_apparatus_and_facility_overdue():
@@ -44,6 +56,8 @@ async def test_marks_apparatus_and_facility_overdue():
     assert any("update facility_maintenance" in s for s in sqls)
     for s in sqls:
         assert "is_overdue" in s  # only past-due, not-yet-flagged rows
+        assert "'org-1'" in s
+        assert "'2026-10-06'" in s
 
 
 async def test_zero_when_nothing_overdue():

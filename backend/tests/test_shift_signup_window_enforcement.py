@@ -10,6 +10,7 @@ and the department's settings both change the outcome for real rows.
 import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import text
@@ -21,6 +22,17 @@ from app.services.scheduling_service import (
     SignupActor,
     _as_utc,
 )
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.scheduling_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 

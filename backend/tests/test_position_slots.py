@@ -10,7 +10,9 @@ screen did not, rendering an object as a React child. Pure logic; no DB.
 """
 
 import re
+from datetime import date
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -22,6 +24,16 @@ from app.utils.positions import (
     normalize_stored_positions,
     position_label,
 )
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.scheduling_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
 
 
 class TestFlatSeatLists:

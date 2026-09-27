@@ -25,6 +25,17 @@ from app.schemas.equipment_check import DeployedLotUpdateRequest
 from app.services.equipment_check_service import EquipmentCheckService
 from app.services.inventory_service import InventoryService
 
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.equipment_check_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+
+
 YESTERDAY = date.today() - timedelta(days=1)
 TOMORROW = date.today() + timedelta(days=1)
 NEXT_YEAR = date.today() + timedelta(days=365)
@@ -121,7 +132,7 @@ class TestComputeCheckStatus:
             }
         ]
         total, completed, failed, overall = service._compute_check_status(
-            items, {"ti-1": _template_item()}
+            items, {"ti-1": _template_item()}, today=date.today()
         )
         assert items[0]["status"] == "fail"
         assert items[0]["is_expired"] is True
@@ -136,7 +147,7 @@ class TestComputeCheckStatus:
             }
         ]
         _, _, failed, overall = service._compute_check_status(
-            items, {"ti-1": _template_item()}
+            items, {"ti-1": _template_item()}, today=date.today()
         )
         assert items[0]["status"] == "fail"
         assert items[0]["is_expired"] is True
@@ -153,7 +164,9 @@ class TestComputeCheckStatus:
             }
         ]
         _, _, failed, overall = service._compute_check_status(
-            items, {"ti-1": _template_item(expiration_date=NEXT_YEAR)}
+            items,
+            {"ti-1": _template_item(expiration_date=NEXT_YEAR)},
+            today=date.today(),
         )
         assert items[0]["status"] == "pass"
         assert items[0]["is_expired"] is False
@@ -163,7 +176,9 @@ class TestComputeCheckStatus:
     def test_item_expiring_today_is_not_yet_expired(self, service):
         items = [{"template_item_id": "ti-1", "status": "pass"}]
         service._compute_check_status(
-            items, {"ti-1": _template_item(expiration_date=date.today())}
+            items,
+            {"ti-1": _template_item(expiration_date=date.today())},
+            today=date.today(),
         )
         assert items[0]["is_expired"] is False
         assert items[0]["status"] == "pass"
@@ -173,7 +188,9 @@ class TestComputeCheckStatus:
             {"template_item_id": "ti-1", "status": "pass", "is_expired": True},
         ]
         _, _, failed, overall = service._compute_check_status(
-            items, {"ti-1": _template_item(expiration_date=NEXT_YEAR)}
+            items,
+            {"ti-1": _template_item(expiration_date=NEXT_YEAR)},
+            today=date.today(),
         )
         assert items[0]["status"] == "pass"
         assert (failed, overall) == (0, "pass")
@@ -188,18 +205,22 @@ class TestComputeCheckStatus:
             }
         ]
         _, _, failed, overall = service._compute_check_status(
-            items, {"ti-1": _template_item(has_expiration=False)}
+            items, {"ti-1": _template_item(has_expiration=False)}, today=date.today()
         )
         assert (failed, overall) == (1, "fail")
 
     def test_not_applicable_is_complete_without_failing(self, service):
         items = [{"template_item_id": "ti-1", "status": "not_applicable"}]
-        total, completed, failed, overall = service._compute_check_status(items)
+        total, completed, failed, overall = service._compute_check_status(
+            items, today=date.today()
+        )
         assert (total, completed, failed, overall) == (1, 1, 0, "pass")
 
     def test_out_of_service_is_complete_and_fails_check(self, service):
         items = [{"template_item_id": "ti-1", "status": "out_of_service"}]
-        total, completed, failed, overall = service._compute_check_status(items)
+        total, completed, failed, overall = service._compute_check_status(
+            items, today=date.today()
+        )
         assert (total, completed, failed, overall) == (1, 1, 1, "fail")
 
 

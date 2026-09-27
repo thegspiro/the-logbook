@@ -39,8 +39,10 @@ from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import (
+    local_date,
     resolve_org_today,
     resolve_scheduling_timezone,
+    today_in,
 )
 
 
@@ -883,6 +885,9 @@ class XAPIService:
         )
         statements = result.scalars().all()
         processed = 0
+        # A statement's timestamp is UTC; the completion date is the day it
+        # was on the department's calendar.
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
 
         for stmt in statements:
             # Create training record from completed xAPI statement
@@ -894,9 +899,9 @@ class XAPIService:
                 status="completed",
                 hours_completed=(stmt.duration_seconds or 0) / 3600,
                 completion_date=(
-                    stmt.statement_timestamp.date()
+                    local_date(stmt.statement_timestamp, tz)
                     if stmt.statement_timestamp
-                    else date.today()
+                    else today_in(tz)
                 ),
                 score=stmt.score_raw,
                 passed=stmt.success,

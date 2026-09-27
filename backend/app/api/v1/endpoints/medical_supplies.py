@@ -20,7 +20,6 @@ that runs everything through one quartermaster keeps working unchanged: they
 hold ``inventory.manage`` and these routes accept it.
 """
 
-from datetime import date as _date
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -49,6 +48,7 @@ from app.schemas.inventory import (
     ItemsListResponse,
 )
 from app.services.inventory_service import InventoryService
+from app.utils.org_timezone import resolve_org_today
 
 router = APIRouter()
 
@@ -687,12 +687,13 @@ async def list_expiring_medical_lots(
     **Requires permission: inventory.view_medical or inventory.view**
     """
     service = InventoryService(db)
+    today = await resolve_org_today(db, current_user.organization_id)
     rows = await service.get_expiring_lots(
         str(current_user.organization_id),
         days_ahead,
         item_types=MEDICAL_ITEM_TYPES,
+        today=today,
     )
-    today = _date.today()
     result: List[ExpiringLotResponse] = []
     for lot, item_name in rows:
         days_until = (lot.expiration_date - today).days if lot.expiration_date else None
@@ -735,11 +736,11 @@ async def medical_supply_summary(
         active_only=True,
         limit=1,
     )
+    today = await resolve_org_today(db, org_id)
     expiring = await service.get_expiring_lots(
-        org_id, expiring_within_days, item_types=MEDICAL_ITEM_TYPES
+        org_id, expiring_within_days, item_types=MEDICAL_ITEM_TYPES, today=today
     )
 
-    today = _date.today()
     already_expired = sum(
         1 for lot, _ in expiring if lot.expiration_date and lot.expiration_date < today
     )

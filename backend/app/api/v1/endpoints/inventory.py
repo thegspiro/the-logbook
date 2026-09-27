@@ -196,6 +196,7 @@ from app.services.label_service import LabelService
 from app.services.organization_service import OrganizationService
 from app.utils import label_renderer
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import resolve_org_today
 from app.utils.upload_limits import read_upload_limited
 from app.utils.websocket_origin import is_websocket_origin_allowed
 
@@ -5500,7 +5501,7 @@ async def get_nfpa_summary(
     from sqlalchemy import func as sa_func
 
     org_id = str(current_user.organization_id)
-    today = datetime.utcnow().date()
+    today = await resolve_org_today(db, org_id)
     from datetime import timedelta
 
     retirement_warning_date = today + timedelta(days=180)
@@ -5578,7 +5579,8 @@ async def get_nfpa_retirement_due(
     from datetime import timedelta
 
     org_id = str(current_user.organization_id)
-    cutoff = datetime.utcnow().date() + timedelta(days=days_ahead)
+    today = await resolve_org_today(db, org_id)
+    cutoff = today + timedelta(days=days_ahead)
 
     result = await db.execute(
         select(NFPAItemCompliance, InventoryItem)
@@ -5611,9 +5613,7 @@ async def get_nfpa_retirement_due(
                     else None
                 ),
                 "days_remaining": (
-                    (
-                        compliance.expected_retirement_date - datetime.utcnow().date()
-                    ).days
+                    (compliance.expected_retirement_date - today).days
                     if compliance.expected_retirement_date
                     else None
                 ),
@@ -7245,13 +7245,11 @@ async def list_expiring_lots(
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """List in-stock lots expiring within N days, with item name."""
-    from datetime import date as _date
-
     service = InventoryService(db)
+    today = await resolve_org_today(db, current_user.organization_id)
     rows = await service.get_expiring_lots(
-        str(current_user.organization_id), days_ahead
+        str(current_user.organization_id), days_ahead, today=today
     )
-    today = _date.today()
     result: list[ExpiringLotResponse] = []
     for lot, item_name in rows:
         days_until = (lot.expiration_date - today).days if lot.expiration_date else None

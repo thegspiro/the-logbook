@@ -37,6 +37,7 @@ from app.core.utils import ensure_found, safe_error_detail
 from app.models.user import MemberLeaveOfAbsence, User
 from app.services.member_leave_service import MemberLeaveService
 from app.services.scheduling_service import SchedulingService
+from app.utils.org_timezone import resolve_org_today
 
 router = APIRouter()
 
@@ -54,7 +55,7 @@ async def leave_widget_summary(
     current_user: User = Depends(require_permission("members.manage")),
 ):
     """Return oversight counts only, scoped to the officer's organization."""
-    today = date.today()
+    today = await resolve_org_today(db, current_user.organization_id)
     leaves = (
         (
             await db.execute(

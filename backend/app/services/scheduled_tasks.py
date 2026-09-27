@@ -98,7 +98,7 @@ Recommended crontab (add to host or container cron):
 
 import copy
 import html as _html
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
@@ -120,6 +120,19 @@ from app.utils.hours import hours_from_minutes
 from app.utils.org_timezone import org_today
 from app.utils.positions import position_label
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
+
+
+async def _org_todays(db: AsyncSession) -> Dict[str, date]:
+    """Today's date for every organization, each on its own calendar.
+
+    For a job that sweeps every department in one query: the container's
+    date is UTC, which is already tomorrow for a US department every
+    evening, so a single "today" would be wrong for somebody at any hour.
+    """
+    result = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
+    return {str(org.id): org_today(org) for org in result.scalars().all()}
 
 
 def _resolve_event_reminder_target(event: Any) -> str:
@@ -861,7 +874,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     Checks both meeting_action_items and minutes_action_items tables.
     Sends notifications at 3 days before, 1 day before, and on overdue.
     """
-    from datetime import date, timedelta
+    from datetime import timedelta
     from datetime import timezone as _tz_reminders
 
     from sqlalchemy.orm import selectinload
@@ -870,8 +883,11 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.models.minute import ActionItem as MinutesActionItem
     from app.models.minute import MinutesActionItemStatus
 
-    today = date.today()
-    three_days = today + timedelta(days=3)
+    todays = await _org_todays(db)
+    fallback_today = org_today(None)
+    # The SQL bound only narrows the scan; each item's day count uses its own
+    # department's date below. The latest calendar anywhere bounds them all.
+    three_days = max(todays.values(), default=fallback_today) + timedelta(days=3)
     total_reminders = 0
 
     # ── Meeting action items ──
@@ -886,6 +902,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     )
     for item in meeting_items.scalars().all():
         if item.assigned_to:
+            today = todays.get(str(item.organization_id), fallback_today)
             days_until = (item.due_date - today).days if item.due_date else None
             if days_until is not None and days_until in (3, 1, 0, -1):
                 # Log notification for the assignee
@@ -944,6 +961,10 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                 item.due_date.date()
                 if hasattr(item.due_date, "date")
                 else item.due_date
+            )
+            today = todays.get(
+                str(item.minutes.organization_id) if item.minutes else "",
+                fallback_today,
             )
             days_until = (due_d - today).days if due_d else None
             if days_until is not None and days_until in (3, 1, 0, -1):
@@ -5706,27 +5727,28 @@ async def run_mark_overdue_maintenance(db: AsyncSession) -> Dict[str, Any]:
     and in is_overdue-filtered lists. Runs daily, flipping only False -> True
     (completion and rescheduling already recompute the flag on their own paths).
     """
-    from datetime import date
-
     from sqlalchemy import update as sa_update
 
     from app.models.apparatus import ApparatusMaintenance
     from app.models.facilities import FacilityMaintenance
 
-    today = date.today()
     total = 0
-    for model in (ApparatusMaintenance, FacilityMaintenance):
-        result = await db.execute(
-            sa_update(model)
-            .where(
-                model.is_completed == False,  # noqa: E712
-                model.due_date.isnot(None),
-                model.due_date < today,
-                model.is_overdue == False,  # noqa: E712
+    # Per department: work due today is not overdue until that department's
+    # day is over, and this runs at one UTC hour for every timezone.
+    for org_id, today in (await _org_todays(db)).items():
+        for model in (ApparatusMaintenance, FacilityMaintenance):
+            result = await db.execute(
+                sa_update(model)
+                .where(
+                    model.organization_id == org_id,
+                    model.is_completed.is_(False),
+                    model.due_date.isnot(None),
+                    model.due_date < today,
+                    model.is_overdue.is_(False),
+                )
+                .values(is_overdue=True)
             )
-            .values(is_overdue=True)
-        )
-        total += result.rowcount or 0
+            total += result.rowcount or 0
     await db.commit()
     if total:
         logger.info("Marked {} maintenance record(s) overdue", total)

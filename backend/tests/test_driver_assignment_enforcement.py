@@ -13,6 +13,7 @@ MySQL.
 """
 
 import inspect
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -20,6 +21,16 @@ import pytest
 
 from app.core.error_codes import CodedValueError, ErrorCode
 from app.services.scheduling_service import SchedulingService
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.scheduling_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
 
 
 class TestDriverPositionDetection:
