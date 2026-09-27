@@ -911,3 +911,110 @@ class TestAdministration:
             assert LOCAL_TODAY in bound
             assert FROZEN_UTC.date() not in bound
             assert "org-1" in bound
+
+
+class TestDatesFromTimestamps:
+    """A stored UTC timestamp read as the department's day. 00:30 UTC on
+    October 7 is 8:30 PM on October 6 in New York."""
+
+    EVENING = datetime(2026, 10, 7, 0, 30)  # naive UTC, as MySQL returns it
+
+    def test_a_lookup_accepts_the_local_day_and_the_old_utc_day(self):
+        from zoneinfo import ZoneInfo
+
+        from app.utils.org_timezone import local_and_utc_dates
+
+        assert local_and_utc_dates(self.EVENING, ZoneInfo("America/New_York")) == [
+            date(2026, 10, 6),
+            date(2026, 10, 7),
+        ]
+        assert local_and_utc_dates(self.EVENING, ZoneInfo("UTC")) == [date(2026, 10, 7)]
+
+    async def test_a_check_in_record_is_dated_by_the_sessions_local_day(self):
+        """The UTC date filed an 8:30 PM drill under the next day -- and on
+        the 31st, the next month's compliance. The duplicate check still
+        finds a record written under the old UTC date."""
+        from app.models.event import EventType
+        from app.services.event_service import EventService
+
+        session = SimpleNamespace(
+            auto_create_records=True,
+            course_id=None,
+            category_id=None,
+            course_name="Pump ops",
+            course_code=None,
+            training_type="continuing_education",
+            credit_hours=2.0,
+            instructor=None,
+            issues_certification=False,
+            issuing_agency=None,
+        )
+        no_record = MagicMock()
+        no_record.scalars.return_value.first.return_value = None
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(session), _one(_org()), no_record])
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        event = SimpleNamespace(
+            id="e1",
+            event_type=EventType.TRAINING,
+            start_datetime=self.EVENING,
+            location=None,
+        )
+
+        await EventService(db)._auto_create_training_record(
+            event, SimpleNamespace(), "u1", "org-1"
+        )
+
+        record = db.add.call_args.args[0]
+        assert record.scheduled_date == date(2026, 10, 6)
+        bound = _bound(db.execute.await_args_list[2].args[0])
+        assert {date(2026, 10, 6), date(2026, 10, 7)} <= bound
+
+    def test_a_member_hired_the_next_day_was_not_expected_at_it(self):
+        from zoneinfo import ZoneInfo
+
+        from app.services.event_service import EventService
+
+        event = SimpleNamespace(start_datetime=self.EVENING)
+        member = SimpleNamespace(hire_date=date(2026, 10, 7), membership_type=None)
+
+        assert (
+            EventService._was_expected_at(
+                event, member, [], ZoneInfo("America/New_York")
+            )
+            is False
+        )
+
+    def test_an_evening_status_change_ends_service_that_day(self):
+        from zoneinfo import ZoneInfo
+
+        from app.services.member_service_history_service import (
+            implicit_separation_date,
+        )
+
+        member = SimpleNamespace(status_changed_at=self.EVENING)
+        assert implicit_separation_date(
+            member, date(2026, 12, 1), ZoneInfo("America/New_York")
+        ) == date(2026, 10, 6)
+
+    async def test_a_rig_down_at_9_pm_was_down_that_day(self):
+        from app.services.equipment_readiness_service import (
+            EquipmentReadinessService,
+        )
+
+        down = SimpleNamespace(
+            apparatus_id="e2", changed_at=datetime(2026, 10, 7, 1, 0)
+        )  # 9 PM Oct 6 in New York
+        rows = MagicMock()
+        rows.all.return_value = [(down, False)]
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[rows, _one(_org())])
+        unit = SimpleNamespace(key="e2", full_id="e2", status_available=True)
+
+        result = await EquipmentReadinessService(db)._unavailable_dates(
+            "org-1", {"e2": unit}, date(2026, 10, 5), date(2026, 10, 7)
+        )
+
+        assert date(2026, 10, 6) in result["e2"]
+        assert date(2026, 10, 5) not in result["e2"]

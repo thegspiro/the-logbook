@@ -47,6 +47,12 @@ from app.services.admin_hours_service import AdminHoursService
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
 from app.utils.event_attachments import validate_attachments_for_org
+from app.utils.org_timezone import (
+    local_and_utc_dates,
+    local_date,
+    resolve_scheduling_timezone,
+    to_local,
+)
 
 DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
 
@@ -557,11 +563,12 @@ class EventService:
             return []
 
         leaves = await self._active_leave_periods(organization_id, user_id)
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
 
         return [
             item
             for item in candidates
-            if self._was_expected_at(item["event"], user, leaves)
+            if self._was_expected_at(item["event"], user, leaves, tz)
         ]
 
     async def _active_leave_periods(
@@ -588,8 +595,12 @@ class EventService:
         event: Event,
         user: User,
         leaves: List[Tuple[date, Optional[date]]],
+        tz: ZoneInfo,
     ) -> bool:
         """Whether this member was actually required at this event.
+
+        The event's day is the department's: hire dates and leave periods are
+        calendar dates, and an evening drill's UTC date is already the next day.
 
         Errs toward *not* accusing: anything unknown (no hire date recorded, no
         membership type recorded) is treated as "cannot show they were required",
@@ -599,9 +610,7 @@ class EventService:
         start = event.start_datetime
         if start is None:
             return False
-        if start.tzinfo is None:
-            start = start.replace(tzinfo=dt_timezone.utc)
-        event_date = start.date()
+        event_date = local_date(start, tz)
 
         # Hired after it happened — they could not have been there.
         if user.hire_date and event_date < user.hire_date:
@@ -2536,6 +2545,14 @@ class EventService:
                 select(TrainingSession).where(TrainingSession.event_id == event.id)
             )
             training_session = session_result.scalar_one_or_none()
+        event_dates: List[date] = []
+        if training_session is not None and event.start_datetime is not None:
+            # The record was filed under the session's day on the department's
+            # calendar, or -- written before that -- under its UTC day.
+            event_dates = local_and_utc_dates(
+                event.start_datetime,
+                await resolve_scheduling_timezone(self.db, organization_id),
+            )
 
         updated_count = 0
         for rsvp in rsvps:
@@ -2551,15 +2568,18 @@ class EventService:
             updated_count += 1
 
             # Update linked training record if hours are still 0
-            if training_session:
+            if training_session and event_dates:
                 record_result = await self.db.execute(
-                    select(TrainingRecord).where(
+                    select(TrainingRecord)
+                    .where(
+                        TrainingRecord.organization_id == str(organization_id),
                         TrainingRecord.user_id == str(rsvp.user_id),
                         TrainingRecord.course_name == training_session.course_name,
-                        TrainingRecord.scheduled_date == event.start_datetime.date(),
+                        TrainingRecord.scheduled_date.in_(event_dates),
                     )
+                    .order_by(TrainingRecord.completion_date.is_(None).desc())
                 )
-                training_record = record_result.scalar_one_or_none()
+                training_record = record_result.scalars().first()
                 # Write the derived hours whenever this event is the thing the
                 # record came from. The old "only if null or zero" guard was
                 # there to avoid trampling a number someone else set, but it
@@ -3343,14 +3363,23 @@ class EventService:
             if not training_session.auto_create_records:
                 return
 
+            # Filed under the session's day on the department's calendar; a
+            # record written before that carries the UTC day, so the duplicate
+            # check accepts both.
+            event_dates = local_and_utc_dates(
+                event.start_datetime,
+                await resolve_scheduling_timezone(self.db, organization_id),
+            )
+
             # Check if training record already exists
             existing_record_result = await self.db.execute(
                 select(TrainingRecord)
+                .where(TrainingRecord.organization_id == str(organization_id))
                 .where(TrainingRecord.user_id == str(user_id))
                 .where(TrainingRecord.course_name == training_session.course_name)
-                .where(TrainingRecord.scheduled_date == event.start_datetime.date())
+                .where(TrainingRecord.scheduled_date.in_(event_dates))
             )
-            existing_record = existing_record_result.scalar_one_or_none()
+            existing_record = existing_record_result.scalars().first()
 
             if existing_record:
                 return  # Record already exists
@@ -3364,7 +3393,7 @@ class EventService:
                 course_name=training_session.course_name,
                 course_code=training_session.course_code,
                 training_type=training_session.training_type,
-                scheduled_date=event.start_datetime.date(),
+                scheduled_date=event_dates[0],
                 completion_date=None,
                 status=TrainingStatus.IN_PROGRESS,
                 hours_completed=0.0,
@@ -4196,7 +4225,6 @@ class EventService:
         distribution, monthly trend counts, average check-in lead time,
         and top events by attendance.
         """
-        from sqlalchemy import extract
 
         # Base filter: org, not cancelled, not draft
         base_filter = [
@@ -4293,24 +4321,23 @@ class EventService:
             for r in type_rows
         ]
 
-        # 5) Monthly event counts
-        month_q = (
-            select(
-                extract("year", Event.start_datetime).label("yr"),
-                extract("month", Event.start_datetime).label("mo"),
-                func.count(Event.id).label("cnt"),
-            )
-            .where(*base_filter)
-            .group_by("yr", "mo")
-            .order_by("yr", "mo")
-        )
-        month_rows = (await self.db.execute(month_q)).all()
+        # 5) Monthly event counts, by the department's month. Grouped here
+        # rather than with EXTRACT in SQL: that reads the UTC month, which files
+        # a 9 PM meeting on the 31st under the next month, and MySQL's
+        # CONVERT_TZ needs time-zone tables an installation may not have loaded.
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        starts = (
+            await self.db.execute(select(Event.start_datetime).where(*base_filter))
+        ).scalars()
+        month_counts: Dict[str, int] = {}
+        for start in starts:
+            if start is None:
+                continue
+            key = to_local(start, tz).strftime("%Y-%m")
+            month_counts[key] = month_counts.get(key, 0) + 1
         monthly_event_counts = [
-            {
-                "month": f"{int(r.yr)}-{int(r.mo):02d}",
-                "count": r.cnt,
-            }
-            for r in month_rows
+            {"month": month, "count": count}
+            for month, count in sorted(month_counts.items())
         ]
 
         # 6) Top events by attendance (top 10)

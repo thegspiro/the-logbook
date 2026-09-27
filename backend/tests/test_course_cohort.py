@@ -13,6 +13,7 @@ DB is mocked; no MySQL.
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -40,6 +41,18 @@ from app.schemas.course_cohort import (
     CourseCohortUpdate,
 )
 from app.services.course_cohort_service import CourseCohortService
+
+
+@pytest.fixture(autouse=True)
+def _utc_department(monkeypatch):
+    """The service reads the department's zone; answer UTC so the dates the
+    fixtures here are built from keep meaning what they say."""
+    for module in ("app.services.course_cohort_service",):
+        monkeypatch.setattr(
+            f"{module}.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("UTC")),
+        )
+
 
 ORG = uuid4()
 ACTOR = uuid4()

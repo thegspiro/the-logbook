@@ -22,7 +22,7 @@ from app.services.member_service_history_service import (
     whole_years,
 )
 from app.utils.membership import is_administrative
-from app.utils.org_timezone import org_today
+from app.utils.org_timezone import scheduling_timezone, today_in
 
 
 class MembershipTierService:
@@ -236,7 +236,8 @@ class MembershipTierService:
         stints_by_member = await history.periods_by_user(
             organization_id, [m.id for m in members]
         )
-        today = org_today(organization)
+        org_tz = scheduling_timezone(organization)
+        today = today_in(org_tz)
 
         advanced = []
         # Members whose current membership_type is not one of this
@@ -248,7 +249,7 @@ class MembershipTierService:
 
         for candidate in members:
             yos = summarize(
-                candidate, stints_by_member.get(str(candidate.id), []), today
+                candidate, stints_by_member.get(str(candidate.id), []), today, org_tz
             ).credited_years
             target_tier = self.resolve_tier(tiers, yos)
             if not target_tier:

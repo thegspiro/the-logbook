@@ -19,6 +19,7 @@ from contextlib import ExitStack
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -39,6 +40,18 @@ from app.services.equipment_readiness_service import (
     _Occasion,
     _worst,
 )
+
+
+@pytest.fixture(autouse=True)
+def _utc_department(monkeypatch):
+    """The service reads the department's zone; answer UTC so the dates the
+    fixtures here are built from keep meaning what they say."""
+    for module in ("app.services.equipment_readiness_service",):
+        monkeypatch.setattr(
+            f"{module}.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("UTC")),
+        )
+
 
 TODAY = date(2026, 8, 16)
 
