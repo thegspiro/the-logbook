@@ -13,6 +13,7 @@ the no-database unit job.
 
 import importlib.util
 import pathlib
+from types import SimpleNamespace
 
 import pytest
 import sqlalchemy as sa
@@ -91,19 +92,25 @@ def _rows(engine) -> dict:
 
 class TestTheFrozenDefaults:
     def test_the_next_revision_carries_on_from_this_ones_current(self):
-        # The bodies changed again in 15c5bc7700aa, which recognises exactly
-        # the body this revision wrote. If they ever disagree, a row this
-        # revision converted is stranded on it. Subjects, plain-text bodies
-        # and footers did not change, so this revision's copies of those are
-        # still what ships.
+        # 15c5bc7700aa resets every row of a shipped type to its own frozen
+        # defaults, so a row this revision wrote is always moved on — as long
+        # as the next revision's defaults differ from it, which is what makes
+        # the row count as needing a reset rather than already current.
         for template_type, frozen in MIGRATION.CURRENT.items():
-            shipped = _DEFAULTS[template_type]
-            assert (
-                frozen["html"] == SOLID_TAB.PREVIOUS_BODIES[template_type]
-            ), template_type
-            assert frozen["text"] == shipped["text"], template_type
-            assert frozen["subject"] == shipped["subject"], template_type
-            assert frozen["footer"] == shipped.get("footer"), template_type
+            row = SimpleNamespace(
+                template_type=template_type,
+                subject=frozen["subject"],
+                html_body=frozen["html"],
+                text_body=frozen["text"],
+                css_styles=None,
+                footer_key=frozen["footer"],
+                header_accent=None,
+                status_chip=None,
+                layout=None,
+            )
+            target = SOLID_TAB.target_for(row)
+            assert target, template_type
+            assert target["html_body"] == _DEFAULTS[template_type]["html"]
 
     def test_no_current_default_is_counted_as_an_earlier_one(self):
         # A current value in the history would be rewritten to itself, which

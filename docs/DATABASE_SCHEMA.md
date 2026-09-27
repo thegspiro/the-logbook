@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**284 tables · 4671 columns · 920 foreign keys**
+**285 tables · 4686 columns · 922 foreign keys**
 
 ---
 
@@ -171,6 +171,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`email_attachments`](#email_attachments) | `EmailAttachment` | 8 | Stored attachment that can be included with email templates. |
+| [`email_template_backups`](#email_template_backups) | `EmailTemplateBackup` | 15 | A template as it stood before a release reset it to the shipped default. |
 | [`email_templates`](#email_templates) | `EmailTemplate` | 22 | Configurable email template stored in the database. |
 | [`message_history`](#message_history) | `MessageHistory` | 12 | Log of every email sent by the application. |
 | [`scheduled_emails`](#scheduled_emails) | `ScheduledEmail` | 15 | An email scheduled to be sent at a future date/time. |
@@ -2354,6 +2355,35 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_email_attachments_template_id` (`template_id`)
+
+### `email_template_backups`
+
+**EmailTemplateBackup** · `app/models/email_template.py`
+
+> A template as it stood before a release reset it to the shipped default. Written by migration ``15c5bc7700aa``, which moved every stored template onto the solid-tab design, including ones a department had edited. What a department wrote is not thrown away: each reset row's previous content is copied here first, so it can be read back or restored by hand, and the migration's downgrade restores from it. ``template_id`` is SET NULL rather than CASCADE so a backup outlives the template it came from: deleting a template is exactly when somebody may want to see what it said. ``organization_id`` cascades, because a backup has no meaning once its department is gone.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `template_id` | VARCHAR(36) | yes | FK, IDX |  | → `email_templates.id` ON DELETE SET NULL |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `template_type` | VARCHAR(64) | no |  |  |  |
+| `name` | VARCHAR(255) | yes |  |  |  |
+| `subject` | VARCHAR(500) | yes |  |  |  |
+| `html_body` | TEXT | yes |  |  |  |
+| `text_body` | TEXT | yes |  |  |  |
+| `css_styles` | TEXT | yes |  |  |  |
+| `footer_key` | VARCHAR(32) | yes |  |  |  |
+| `header_accent` | VARCHAR(7) | yes |  |  |  |
+| `status_chip` | VARCHAR(40) | yes |  |  |  |
+| `layout` | VARCHAR(16) | yes |  |  |  |
+| `reason` | VARCHAR(64) | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_email_template_backups_organization_id` (`organization_id`)
+- `ix_email_template_backups_template_id` (`template_id`)
 
 ### `email_templates`
 
@@ -10228,7 +10258,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (230 references)
+### → `organizations` (231 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10279,6 +10309,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `dues_payments` | `organization_id` | CASCADE | no |
 | `dues_schedules` | `organization_id` | CASCADE | no |
 | `elections` | `organization_id` | CASCADE | no |
+| `email_template_backups` | `organization_id` | CASCADE | no |
 | `email_templates` | `organization_id` | CASCADE | no |
 | `equipment_check_bulk_delete_requests` | `organization_id` | CASCADE | no |
 | `equipment_check_bulk_requests` | `organization_id` | CASCADE | no |
@@ -10744,6 +10775,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `program_requirements` | `phase_id` | CASCADE | yes |
 | `training_sessions` | `phase_id` | SET NULL | yes |
 
+### → `email_templates` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `approval_chain_steps` | `email_template_id` | SET NULL | yes |
+| `email_attachments` | `template_id` | CASCADE | no |
+| `email_template_backups` | `template_id` | SET NULL | yes |
+| `membership_pipeline_steps` | `email_template_id` | SET NULL | yes |
+| `scheduled_emails` | `template_id` | SET NULL | yes |
+
 ### → `fiscal_years` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -10792,15 +10833,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `department_message_reads` | `message_id` | CASCADE | no |
 | `department_message_recipients` | `message_id` | CASCADE | no |
 | `notification_logs` | `department_message_id` | CASCADE | yes |
-
-### → `email_templates` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `approval_chain_steps` | `email_template_id` | SET NULL | yes |
-| `email_attachments` | `template_id` | CASCADE | no |
-| `membership_pipeline_steps` | `email_template_id` | SET NULL | yes |
-| `scheduled_emails` | `template_id` | SET NULL | yes |
 
 ### → `equipment_check_templates` (4 references)
 

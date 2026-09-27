@@ -426,12 +426,18 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "election_title", "description": "Title of the election"},
         {"name": "performer_name", "description": "Name of the person who rolled back"},
         {"name": "reason", "description": "Reason for the rollback"},
+        {"name": "previous_stage", "description": "Stage the election was in"},
+        {"name": "current_stage", "description": "Stage it was rolled back to"},
+        {"name": "action_time", "description": "When it was rolled back"},
     ],
     "election_deleted": [
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "election_title", "description": "Title of the deleted election"},
         {"name": "performer_name", "description": "Name of the person who deleted it"},
         {"name": "reason", "description": "Reason for deletion"},
+        {"name": "election_status", "description": "Stage it was in when deleted"},
+        {"name": "vote_count", "description": "Votes cast at the time of deletion"},
+        {"name": "action_time", "description": "When it was deleted"},
     ],
     "election_report": [
         {"name": "recipient_name", "description": "Recipient's display name"},
@@ -952,6 +958,9 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "election_title": "Captain Election 2026",
             "performer_name": "Secretary Robert Johnson",
             "reason": "Ballots were distributed to ineligible members",
+            "previous_stage": "Open",
+            "current_stage": "Draft",
+            "action_time": "March 30, 2026 at 02:15 PM",
         }
     ),
     "election_deleted": _sample(
@@ -960,6 +969,9 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "election_title": "Captain Election 2026",
             "performer_name": "Secretary Robert Johnson",
             "reason": "Election created in error — new election will be scheduled",
+            "election_status": "Open",
+            "vote_count": "14",
+            "action_time": "March 30, 2026 at 02:15 PM",
         }
     ),
     "election_report": _sample(
@@ -1596,13 +1608,22 @@ DEFAULT_ELECTION_ROLLBACK_HTML = build_shell(
     + facts(
         [
             [fact("Election", "{{election_title}}")],
-            [fact("Rolled back by", "{{performer_name}}")],
+            [
+                fact("Moved from", "{{previous_stage}}"),
+                fact("Moved to", "{{current_stage}}"),
+            ],
+            [
+                fact("Rolled back by", "{{performer_name}}"),
+                fact("When", "{{action_time}}"),
+            ],
             [fact("Reason", "{{reason}}")],
         ]
     )
-    + """        <p>Please review the election details and coordinate with your team as needed.</p>""",
+    + """        <p>This rollback has been logged in the election's audit trail. Please review the election details and coordinate with your team as needed.</p>
+        <p>If you have questions, please contact {{performer_name}}.</p>""",
     accent=ACCENT_INDIGO,
     chip="Rolled back",
+    tab_note="{{previous_stage}} → {{current_stage}}",
     after=callout(
         "warning",
         "Some votes no longer count",
@@ -1617,10 +1638,17 @@ Hello {{recipient_name}},
 An election has been rolled back to a previous stage:
 
 Election: {{election_title}}
+Moved from: {{previous_stage}}
+Moved to: {{current_stage}}
 Rolled back by: {{performer_name}}
+When: {{action_time}}
 Reason: {{reason}}
 
-Please review the election details and coordinate with your team as needed.
+Votes recorded after the stage this election returned to are no longer counted.
+
+This rollback has been logged in the election's audit trail. Please review the
+election details and coordinate with your team as needed. If you have
+questions, please contact {{performer_name}}.
 
 {{footer_text}}"""
 
@@ -1634,13 +1662,22 @@ DEFAULT_ELECTION_DELETED_HTML = build_shell(
     + facts(
         [
             [fact("Election", "{{election_title}}")],
-            [fact("Deleted by", "{{performer_name}}")],
+            [
+                fact("Stage when deleted", "{{election_status}}"),
+                fact("Votes at deletion", "{{vote_count}}"),
+            ],
+            [
+                fact("Deleted by", "{{performer_name}}"),
+                fact("When", "{{action_time}}"),
+            ],
             [fact("Reason", "{{reason}}")],
         ]
     )
-    + """        <p>If you have questions, please contact {{performer_name}}.</p>""",
+    + """        <p>This deletion has been logged in the audit trail with critical severity. Please review it and coordinate with your team immediately if it was not authorized.</p>
+        <p>If you have questions, please contact {{performer_name}}.</p>""",
     accent=ACCENT_INDIGO,
     chip="Deleted",
+    tab_note="Critical",
     after=callout(
         "critical",
         "This cannot be undone",
@@ -1655,10 +1692,17 @@ Hello {{recipient_name}},
 An election has been permanently deleted:
 
 Election: {{election_title}}
+Stage when deleted: {{election_status}}
+Votes at deletion: {{vote_count}}
 Deleted by: {{performer_name}}
+When: {{action_time}}
 Reason: {{reason}}
 
-All associated ballots and results have been removed.
+All associated ballots and results have been removed. This cannot be undone.
+
+This deletion has been logged in the audit trail with critical severity.
+Please review it and coordinate with your team immediately if it was not
+authorized. If you have questions, please contact {{performer_name}}.
 
 {{footer_text}}"""
 
@@ -2528,11 +2572,6 @@ class EmailTemplateService:
             or template.html_body != defn["html"]
             or (template.text_body or "") != (defn["text"] or "")
             or (template.footer_key or None) != defn.get("footer")
-            # A department that changed only the stylesheet has changed how
-            # its mail looks, and Reset would put that back — so leaving it
-            # out labelled the template Default and hid it from the Edited
-            # filter while Reset stood ready to undo their work.
-            or (template.css_styles or None) is not None
         )
 
     async def sent_counts(self, organization_id: str) -> Dict[str, int]:
@@ -2583,12 +2622,11 @@ class EmailTemplateService:
             subject=subject,
             html_body=html_body,
             text_body=text_body,
-            # NULL, not a copy of DEFAULT_CSS. render() falls back to the
-            # current default for a NULL, so a department that never touched
-            # the stylesheet tracks improvements to it; baking a snapshot in
-            # at creation time froze every existing organization on the
-            # stylesheet that shipped the day they signed up.
-            css_styles=css_styles or None,
+            # Always NULL: every email renders with the built-in stylesheet
+            # (see render()). The parameter stays so existing callers and API
+            # clients that still send one are not refused; what they send is
+            # not kept.
+            css_styles=None,
             # The colourway the body was built with. Stored rather than left
             # NULL so the accent swatches have something to show as selected,
             # and so an admin recolouring one notice does not have to
@@ -2645,7 +2683,9 @@ class EmailTemplateService:
             "subject",
             "html_body",
             "text_body",
-            "css_styles",
+            # css_styles is deliberately absent: a per-template stylesheet is
+            # no longer honoured, so accepting one would store a setting
+            # nothing reads (Pitfall #19).
             "description",
             "is_active",
             "allow_attachments",
@@ -2808,9 +2848,10 @@ class EmailTemplateService:
                 template.text_body, ctx, escape_html=False
             )
 
-        full_html = build_email_document(
-            subject, html_body, template.css_styles or DEFAULT_CSS
-        )
+        # Always the built-in stylesheet. A template's own css_styles is not
+        # consulted: every email is in the one house design, and the stored
+        # bodies are written against its classes.
+        full_html = build_email_document(subject, html_body, DEFAULT_CSS)
 
         return subject, full_html, text_body
 

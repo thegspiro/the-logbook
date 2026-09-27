@@ -321,6 +321,32 @@ class TestEveryDefaultRendersThroughTheShell:
         assert _DEFAULTS["member_dropped"]["accent"] == ACCENT_RED
 
 
+class TestEveryTemplateUsesTheBuiltInStylesheet:
+    def test_a_stored_stylesheet_is_not_rendered(self):
+        from app.models.email_template import EmailTemplate
+
+        defn = _DEFAULTS["event_reminder"]
+        template = EmailTemplate(
+            template_type=defn["type"],
+            subject=defn["subject"],
+            html_body=defn["html"],
+            text_body=defn["text"],
+            css_styles=".container { color: navy; }",
+        )
+        _subject, html, _text = EmailTemplateService(None).render(
+            template, {}, organization=_org()
+        )
+        assert "color: navy" not in html
+        assert DEFAULT_CSS in html
+        assert DARK_CSS in html
+
+    def test_create_template_does_not_keep_a_stylesheet(self):
+        import inspect
+
+        source = inspect.getsource(EmailTemplateService.create_template)
+        assert "css_styles=None," in source
+
+
 class TestOneOffEmails:
     def test_the_chip_is_escaped_into_the_tab(self):
         html = wrap_email_body(
@@ -344,20 +370,32 @@ class TestOneOffEmails:
 def _engine(rows):
     engine = sa.create_engine("sqlite://")
     with engine.begin() as conn:
+        conn.execute(sa.text("CREATE TABLE organizations (id TEXT PRIMARY KEY)"))
+        conn.execute(sa.text("INSERT INTO organizations VALUES ('org-1')"))
         conn.execute(
             sa.text(
                 "CREATE TABLE email_templates (id TEXT PRIMARY KEY, "
-                "template_type TEXT, html_body TEXT, css_styles TEXT, "
-                "header_accent TEXT)"
+                "organization_id TEXT, template_type TEXT, name TEXT, "
+                "subject TEXT, html_body TEXT, text_body TEXT, css_styles TEXT, "
+                "footer_key TEXT, header_accent TEXT, status_chip TEXT, "
+                "layout TEXT)"
             )
         )
         for row in rows:
+            values = {
+                "organization_id": "org-1",
+                "name": "A template",
+                **{column: None for column in MIGRATION.RESET_COLUMNS},
+                **row,
+            }
             conn.execute(
                 sa.text(
-                    "INSERT INTO email_templates VALUES (:id, :template_type, "
-                    ":html_body, :css_styles, :header_accent)"
+                    "INSERT INTO email_templates VALUES (:id, :organization_id, "
+                    ":template_type, :name, :subject, :html_body, :text_body, "
+                    ":css_styles, :footer_key, :header_accent, :status_chip, "
+                    ":layout)"
                 ),
-                {"html_body": None, "css_styles": None, "header_accent": None, **row},
+                values,
             )
     return engine
 
@@ -371,154 +409,141 @@ def _run(engine, fn):
             fn()
 
 
-def _rows(engine) -> dict:
+def _rows(engine, table="email_templates") -> dict:
     with engine.connect() as conn:
-        result = conn.execute(sa.text("SELECT * FROM email_templates"))
+        result = conn.execute(sa.text(f"SELECT * FROM {table}"))
         return {row.id: row._asdict() for row in result}
 
 
-class TestTheMigrationsFrozenBodies:
-    def test_every_shipped_default_is_the_migrations_current_body(self):
-        # If this fails, a default body changed without a migration to carry
-        # the rows already holding this one. Ship a new revision that knows
-        # CURRENT_BODIES as its previous bodies, and point this test at it.
-        assert set(MIGRATION.CURRENT_BODIES) == set(_DEFAULTS)
-        for template_type, body in MIGRATION.CURRENT_BODIES.items():
-            assert body == _DEFAULTS[template_type]["html"], template_type
-
-    def test_the_two_maps_cover_the_same_types(self):
-        assert set(MIGRATION.PREVIOUS_BODIES) == set(MIGRATION.CURRENT_BODIES)
-
-    def test_the_previous_bodies_are_the_previous_shell(self):
-        for template_type, body in MIGRATION.PREVIOUS_BODIES.items():
-            assert "{{status_line}}" in body, template_type
-            assert 'class="tab"' not in body, template_type
-
-    def test_the_frozen_welcome_accents_match_the_live_ones(self):
-        assert MIGRATION._CURRENT_WELCOME_ACCENT == _DEFAULTS["welcome"]["accent"]
-        assert MIGRATION._PREVIOUS_WELCOME_ACCENT == ACCENT_RED
+def _current(template_type: str) -> dict:
+    """A row holding exactly the new default for *template_type*."""
+    return {
+        name: MIGRATION.DEFAULTS[template_type][name]
+        for name in MIGRATION.RESET_COLUMNS
+        if name != "css_styles"
+    }
 
 
-class TestTheRewrite:
-    PREVIOUS = MIGRATION.PREVIOUS_BODIES
-    CURRENT = MIGRATION.CURRENT_BODIES
+class TestTheMigrationsFrozenDefaults:
+    def test_every_shipped_default_is_frozen_exactly(self):
+        # If this fails, a default changed without a migration to carry the
+        # rows already holding this one. Ship a new revision whose previous
+        # values are these, and point this test at it.
+        assert set(MIGRATION.DEFAULTS) == set(_DEFAULTS)
+        for template_type, frozen in MIGRATION.DEFAULTS.items():
+            shipped = _DEFAULTS[template_type]
+            assert frozen["subject"] == shipped["subject"], template_type
+            assert frozen["html_body"] == shipped["html"], template_type
+            assert frozen["text_body"] == shipped["text"], template_type
+            assert frozen["footer_key"] == shipped.get("footer"), template_type
+            assert frozen["header_accent"] == shipped["accent"], template_type
+            assert frozen["status_chip"] == shipped["chip"], template_type
+            assert frozen["layout"] == shipped["layout"], template_type
 
+    def test_the_backup_table_matches_the_model(self):
+        from app.models.email_template import EmailTemplateBackup
+
+        columns = set(EmailTemplateBackup.__table__.columns.keys())
+        assert set(MIGRATION.RESET_COLUMNS) <= columns
+        assert {"template_id", "organization_id", "reason"} <= columns
+        assert EmailTemplateBackup.__tablename__ == MIGRATION.BACKUP_TABLE
+
+
+class TestTheReset:
     def _scenario(self):
         return _engine(
             [
                 {
-                    "id": "untouched",
-                    "template_type": "event_reminder",
-                    "html_body": self.PREVIOUS["event_reminder"],
-                },
-                {
-                    "id": "welcome-stamped-red",
-                    "template_type": "welcome",
-                    "html_body": self.PREVIOUS["welcome"],
-                    "header_accent": ACCENT_RED,
-                },
-                {
-                    "id": "welcome-recoloured",
-                    "template_type": "welcome",
-                    "html_body": self.PREVIOUS["welcome"],
-                    "header_accent": ACCENT_BLUE,
-                },
-                {
-                    "id": "welcome-null-accent",
-                    "template_type": "welcome",
-                    "html_body": self.PREVIOUS["welcome"],
-                },
-                {
                     "id": "edited",
                     "template_type": "welcome",
-                    "html_body": self.PREVIOUS["welcome"].replace("Hello", "Hi"),
+                    "subject": "Welcome aboard, {{first_name}}",
+                    "html_body": '<div class="header"><h1>Hi</h1></div>',
+                    "text_body": "Hi",
                     "header_accent": ACCENT_RED,
+                    "status_chip": "Account ready",
+                    "layout": "notice",
                 },
                 {
                     "id": "own-stylesheet",
                     "template_type": "event_reminder",
-                    "html_body": self.PREVIOUS["event_reminder"],
+                    **_current("event_reminder"),
                     "css_styles": ".container { color: navy; }",
                 },
                 {
-                    "id": "crossed",
-                    "template_type": "password_reset",
-                    "html_body": self.PREVIOUS["welcome"],
+                    "id": "already-current",
+                    "template_type": "event_reminder",
+                    **_current("event_reminder"),
                 },
                 {
                     "id": "custom",
                     "template_type": "custom",
-                    "html_body": self.PREVIOUS["welcome"],
+                    "subject": "Mine",
+                    "html_body": "<p>Mine</p>",
                 },
-                {"id": "empty", "template_type": "welcome"},
+                {
+                    "id": "upper",
+                    "template_type": "PASSWORD_RESET",
+                    "subject": "Old",
+                    "html_body": "<p>Old</p>",
+                },
             ]
         )
 
-    def test_an_untouched_row_takes_the_new_body(self):
+    def test_every_row_of_a_shipped_type_is_reset(self):
         engine = self._scenario()
         _run(engine, MIGRATION.upgrade)
         rows = _rows(engine)
-        assert rows["untouched"]["html_body"] == self.CURRENT["event_reminder"]
-        assert rows["welcome-stamped-red"]["html_body"] == self.CURRENT["welcome"]
+        for row_id, template_type in (
+            ("edited", "welcome"),
+            ("own-stylesheet", "event_reminder"),
+            ("upper", "password_reset"),
+        ):
+            for name, value in _current(template_type).items():
+                assert rows[row_id][name] == value, (row_id, name)
+            assert rows[row_id]["css_styles"] is None, row_id
 
-    def test_welcome_moves_to_green_only_from_the_red_it_was_stamped_with(self):
+    def test_welcome_is_green_after_the_reset(self):
         engine = self._scenario()
         _run(engine, MIGRATION.upgrade)
-        rows = _rows(engine)
-        assert rows["welcome-stamped-red"]["header_accent"] == ACCENT_GREEN
-        # A colour an officer picked is theirs.
-        assert rows["welcome-recoloured"]["header_accent"] == ACCENT_BLUE
-        # NULL already renders the type's own colour, which is now green.
-        assert rows["welcome-null-accent"]["header_accent"] is None
+        assert _rows(engine)["edited"]["header_accent"] == ACCENT_GREEN
 
-    def test_what_it_cannot_vouch_for_is_left_alone(self):
+    def test_what_was_there_is_backed_up_first(self):
+        engine = self._scenario()
+        before = _rows(engine)
+        _run(engine, MIGRATION.upgrade)
+        backups = {
+            row["template_id"]: row
+            for row in _rows(engine, MIGRATION.BACKUP_TABLE).values()
+        }
+        assert set(backups) == {"edited", "own-stylesheet", "upper"}
+        for template_id, backup in backups.items():
+            assert backup["reason"] == MIGRATION.revision
+            assert backup["organization_id"] == "org-1"
+            for name in MIGRATION.RESET_COLUMNS:
+                assert backup[name] == before[template_id][name], (template_id, name)
+
+    def test_what_it_cannot_reset_or_need_not_is_left_alone(self):
         engine = self._scenario()
         before = _rows(engine)
         _run(engine, MIGRATION.upgrade)
         after = _rows(engine)
-        for row_id in ("edited", "own-stylesheet", "crossed", "custom", "empty"):
-            assert after[row_id] == before[row_id], row_id
+        assert after["custom"] == before["custom"]
+        assert after["already-current"] == before["already-current"]
 
     def test_running_it_twice_changes_nothing_more(self):
         engine = self._scenario()
         _run(engine, MIGRATION.upgrade)
-        once = _rows(engine)
+        once = (_rows(engine), _rows(engine, MIGRATION.BACKUP_TABLE))
         _run(engine, MIGRATION.upgrade)
-        assert _rows(engine) == once
+        assert (_rows(engine), _rows(engine, MIGRATION.BACKUP_TABLE)) == once
 
-    def test_downgrade_puts_back_exactly_what_it_changed(self):
+    def test_downgrade_restores_every_row_and_drops_the_backups(self):
         engine = self._scenario()
         before = _rows(engine)
         _run(engine, MIGRATION.upgrade)
         _run(engine, MIGRATION.downgrade)
         assert _rows(engine) == before
-
-    def test_a_row_edited_after_the_upgrade_survives_the_downgrade(self):
-        engine = _engine(
-            [
-                {
-                    "id": "later-edit",
-                    "template_type": "event_reminder",
-                    "html_body": self.CURRENT["event_reminder"].replace("Hello", "Hi"),
-                }
-            ]
-        )
-        before = _rows(engine)
-        _run(engine, MIGRATION.downgrade)
-        assert _rows(engine) == before
-
-    def test_an_upper_case_type_is_still_recognised(self):
-        engine = _engine(
-            [
-                {
-                    "id": "upper",
-                    "template_type": "EVENT_REMINDER",
-                    "html_body": self.PREVIOUS["event_reminder"],
-                }
-            ]
-        )
-        _run(engine, MIGRATION.upgrade)
-        assert _rows(engine)["upper"]["html_body"] == self.CURRENT["event_reminder"]
+        assert not sa.inspect(engine).has_table(MIGRATION.BACKUP_TABLE)
 
 
 if __name__ == "__main__":  # pragma: no cover

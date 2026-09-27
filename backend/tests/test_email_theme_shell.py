@@ -893,6 +893,20 @@ class TestSavingATemplateWritesWhatWasSent:
         assert template.default_cc == ["chief@example.test"]
         assert template.header_accent == _DEFS[0]["accent"]
 
+    async def test_a_stylesheet_is_not_saved(self, db_session, template):
+        # Every email uses the built-in stylesheet; a per-template one would
+        # be a stored setting nothing reads.
+        from app.services.email_template_service import EmailTemplateService
+
+        service = EmailTemplateService(db_session)
+        await service.update_template(
+            template_id=template.id,
+            organization_id=template.organization_id,
+            css_styles=".container { color: navy; }",
+        )
+        await db_session.refresh(template)
+        assert template.css_styles is None
+
     async def test_tenancy_columns_are_not_writable_through_an_update(
         self, db_session, template
     ):

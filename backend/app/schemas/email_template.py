@@ -42,6 +42,8 @@ class EmailTemplateResponse(UTCResponseBase):
     subject: str
     html_body: str
     text_body: Optional[str] = None
+    # Always null now: every email renders with the built-in stylesheet.
+    # Kept in the response so clients reading the field still find it.
     css_styles: Optional[str] = None
     footer_key: Optional[str] = None
     header_accent: Optional[str] = None
@@ -79,6 +81,8 @@ class EmailTemplateUpdate(BaseModel):
     subject: Optional[str] = Field(None, min_length=1, max_length=500)
     html_body: Optional[str] = Field(None, min_length=1)
     text_body: Optional[str] = None
+    # Accepted so older clients are not refused, but never stored or used:
+    # every email renders with the built-in stylesheet.
     css_styles: Optional[str] = None
     footer_key: Optional[str] = Field(
         None,
@@ -159,6 +163,8 @@ class EmailTemplatePreviewRequest(BaseModel):
     subject: Optional[str] = None
     html_body: Optional[str] = None
     text_body: Optional[str] = None
+    # Accepted so older clients are not refused, but never stored or used:
+    # every email renders with the built-in stylesheet.
     css_styles: Optional[str] = None
     footer_key: Optional[str] = Field(
         None,

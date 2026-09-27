@@ -159,6 +159,59 @@ class EmailTemplate(Base):
         return f"<EmailTemplate {self.template_type.value}: {self.name}>"
 
 
+class EmailTemplateBackup(Base):
+    """A template as it stood before a release reset it to the shipped default.
+
+    Written by migration ``15c5bc7700aa``, which moved every stored template
+    onto the solid-tab design, including ones a department had edited. What a
+    department wrote is not thrown away: each reset row's previous content is
+    copied here first, so it can be read back or restored by hand, and the
+    migration's downgrade restores from it.
+
+    ``template_id`` is SET NULL rather than CASCADE so a backup outlives the
+    template it came from: deleting a template is exactly when somebody may
+    want to see what it said. ``organization_id`` cascades, because a backup
+    has no meaning once its department is gone.
+    """
+
+    __tablename__ = "email_template_backups"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    template_id = Column(
+        String(36),
+        ForeignKey("email_templates.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    template_type = Column(String(64), nullable=False)
+    name = Column(String(255), nullable=True)
+
+    # The columns the reset overwrote, as they were.
+    subject = Column(String(500), nullable=True)
+    html_body = Column(Text, nullable=True)
+    text_body = Column(Text, nullable=True)
+    css_styles = Column(Text, nullable=True)
+    footer_key = Column(String(32), nullable=True)
+    header_accent = Column(String(7), nullable=True)
+    status_chip = Column(String(40), nullable=True)
+    layout = Column(String(16), nullable=True)
+
+    # Which change took the backup: the revision id that reset the row.
+    reason = Column(String(64), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __repr__(self):
+        return f"<EmailTemplateBackup {self.template_type} ({self.reason})>"
+
+
 class EmailAttachment(Base):
     """
     Stored attachment that can be included with email templates.

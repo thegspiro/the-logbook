@@ -334,11 +334,11 @@ class TestEmailTriggers:
 
 class TestTemplateEmail:
     @pytest.mark.asyncio
-    async def test_the_department_logo_is_not_escaped_into_visible_markup(self):
-        """``organization_logo_img`` is markup this module built, not text.
+    async def test_the_logo_placeholder_never_prints_markup(self):
+        """``organization_logo_img`` fills with nothing, never escaped markup.
 
-        Only a body that is a whole document still fills it: a fragment is
-        wrapped in the shell, whose masthead carries the logo instead.
+        Every body is wrapped in the shell, whose masthead carries the logo,
+        so the placeholder a body carries (even inside a whole page) is empty.
         """
         org = _org()
         event_request = _request_row()
@@ -374,8 +374,10 @@ class TestTemplateEmail:
             )
 
         body = email_service.send_email.await_args.kwargs["html_body"]
-        assert '<img src="https://cdn.example.org/logo.png">' in body
+        assert '<img src="https://cdn.example.org/logo.png">' not in body
         assert "&lt;img" not in body
+        assert "{{organization_logo_img}}" not in body
+        assert 'class="tab"' in body
 
     @pytest.mark.asyncio
     async def test_requester_supplied_values_are_still_escaped(self):
@@ -1226,8 +1228,8 @@ class TestReminderTemplateRendering:
         assert "September 12, 2026" in body
         assert text == "plain"
 
-    def test_requester_supplied_text_is_escaped_but_the_logo_is_not(self):
-        # A whole document is sent as written, so it still fills the logo.
+    def test_requester_supplied_text_is_escaped_inside_a_whole_page(self):
+        # A whole page is reduced to its message and wrapped like any other.
         template = SimpleNamespace(
             subject="Hi",
             body_html=(
@@ -1244,7 +1246,8 @@ class TestReminderTemplateRendering:
         ):
             _subject, body, _text = render_request_template(template, request, _org())
 
-        assert '<img src="https://cdn.example.org/l.png">' in body
+        assert '<img src="https://cdn.example.org/l.png">' not in body
+        assert "<script>x</script>" not in body
         assert "&lt;script&gt;" in body
 
 
@@ -1290,10 +1293,20 @@ class TestRequestTemplatesUseTheShell:
         _subject, body, _text = self._render("<p>x</p>", contact_name="<b>Dana</b>")
         assert "<h1>Directions for &lt;b&gt;Dana&lt;/b&gt;</h1>" in body
 
-    def test_a_whole_document_is_sent_as_written(self):
-        document = "<html><body><p>Hi {{contact_name}}</p></body></html>"
+    def test_a_whole_page_is_reduced_to_its_message_and_wrapped(self):
+        document = (
+            "<!DOCTYPE html><html><head><title>t</title>"
+            "<style>p { color: red; }</style></head>"
+            '<body style="margin:0"><p>Hi {{contact_name}}</p></body></html>'
+        )
         _subject, body, _text = self._render(document)
-        assert body == "<html><body><p>Hi Dana Reyes</p></body></html>"
+        assert 'class="tab"' in body
+        assert "<p>Hi Dana Reyes</p>" in body
+        # The page's own stylesheet and document are gone; only the house
+        # document and its two stylesheets remain.
+        assert "color: red" not in body
+        assert body.count("<html") == 1
+        assert body.count("<body") == 1
 
 
 class TestStaffingLifecycle:

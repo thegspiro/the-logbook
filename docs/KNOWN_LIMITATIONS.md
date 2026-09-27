@@ -456,33 +456,22 @@ sent keep whatever address they were sent with.
 
 ## Email Design — What the Solid-Tab Shell Does Not Reach (2026-09-27)
 
-Every default template, the storefront notices, and every email a service
-builds inline now renders into the solid-tab shell in
-`app/services/email_theme.py` (masthead, accent tab, tinted summary card, body
-card, stacked callouts, centred footer, dark rendering). Revision
-`15c5bc7700aa` moved each stored template that was still a verbatim copy of
-the previous default. Four things are deliberately left as they are:
+Every email the platform sends renders into the solid-tab shell in
+`app/services/email_theme.py` with the built-in stylesheet: every default
+template, the storefront notices, the event-request templates departments
+write, the election alerts, and every email a service builds inline.
+Revision `15c5bc7700aa` reset every stored template of a shipped type to the
+new default, keeping what it replaced in `email_template_backups` (see
+`docs/UPGRADING.md`). What remains:
 
-- **A template a department edited keeps its own markup.** It renders against
-  the new stylesheet, which still defines every class the previous shells
-  used, so it keeps working and picks up the new body card and footer. It gets
-  the tab and summary card only when an admin presses **Reset** on it. So does
-  a template with its own stylesheet, even if its body is untouched, because
-  that stylesheet was written against the old class names.
-- **An event-request template written as a whole HTML page is sent as
-  written.** Every other department-written request email (the body is a
-  fragment) is wrapped in the shell with the subject as its title and the
-  public footer, and its `{{organization_logo_img}}` fills with nothing
-  because the masthead carries the logo. A body containing `<html>` or
-  `<body>` is a complete design of its own, and nesting it in the shell
-  would not be valid markup.
-- **The election rollback and deletion alerts do not read their templates.**
-  `ElectionService._notify_leadership` builds its own body; the
-  `election_rollback` / `election_deleted` rows an admin can edit on the
-  Email Templates screen are stored but never sent (the Pitfall #19 shape).
-  The alert is now in the shell with its wording unchanged. Switching it to
-  the templates would change what leadership receives (the templates carry
-  less detail), so it is left for a decision.
+- **A custom template keeps whatever markup it has.** A template of type
+  `custom` has no default to reset to. It renders with the built-in
+  stylesheet, which still defines the previous shells' classes, so one built
+  from the editor's blocks keeps working; its header is whatever it was
+  written with.
+- **A backup is restored by hand.** `email_template_backups` holds each reset
+  template's previous content, but no screen reads it yet. Restoring one means
+  copying it back into the editor, or running SQL.
 - **Dark mode is Apple Mail and Outlook.com.** It is a
   `prefers-color-scheme` stylesheet, which Gmail strips along with every
   other `<style>`; Gmail's apps and classic Outlook repaint the light

@@ -19,8 +19,6 @@ export interface TemplateDraft {
   setHtmlBody: (value: string | ((prev: string) => string)) => void;
   textBody: string;
   setTextBody: (value: string) => void;
-  cssStyles: string;
-  setCssStyles: (value: string) => void;
   footerKey: string;
   setFooterKey: (value: string) => void;
   headerAccent: string;
@@ -47,7 +45,6 @@ const EMPTY_TEMPLATE = {
   subject: '',
   html_body: '',
   text_body: '',
-  css_styles: '',
   footer_key: '',
   header_accent: '',
   status_chip: '',
@@ -62,7 +59,6 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
   const [subject, setSubject] = useState(source.subject);
   const [htmlBody, setHtmlBody] = useState(source.html_body);
   const [textBody, setTextBody] = useState(source.text_body ?? '');
-  const [cssStyles, setCssStyles] = useState(source.css_styles ?? '');
   const [footerKey, setFooterKey] = useState(source.footer_key ?? '');
   const [headerAccent, setHeaderAccent] = useState(source.header_accent ?? '');
   const [statusChip, setStatusChip] = useState(source.status_chip ?? '');
@@ -74,7 +70,6 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
     setSubject(source.subject);
     setHtmlBody(source.html_body);
     setTextBody(source.text_body ?? '');
-    setCssStyles(source.css_styles ?? '');
     setFooterKey(source.footer_key ?? '');
     setHeaderAccent(source.header_accent ?? '');
     setStatusChip(source.status_chip ?? '');
@@ -99,7 +94,6 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
     source.subject,
     source.html_body,
     source.text_body ?? '',
-    source.css_styles ?? '',
     source.footer_key ?? '',
     source.header_accent ?? '',
     source.status_chip ?? '',
@@ -122,7 +116,6 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
     subject !== source.subject ||
     htmlBody !== source.html_body ||
     textBody !== (source.text_body ?? '') ||
-    cssStyles !== (source.css_styles ?? '') ||
     footerKey !== (source.footer_key ?? '') ||
     headerAccent !== (source.header_accent ?? '') ||
     statusChip !== (source.status_chip ?? '') ||
@@ -135,7 +128,6 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
     if (subject !== source.subject) data.subject = subject;
     if (htmlBody !== source.html_body) data.html_body = htmlBody;
     if (textBody !== (source.text_body ?? '')) data.text_body = textBody;
-    if (cssStyles !== (source.css_styles ?? '')) data.css_styles = cssStyles;
     // Sent as '' rather than omitted when cleared: an omitted key means
     // "leave this alone" to the backend's exclude_unset update, so the
     // template would keep its old footer behind a success toast.
@@ -155,19 +147,7 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
       data.default_bcc = parsed.length > 0 ? parsed : null;
     }
     return data;
-  }, [
-    source,
-    subject,
-    htmlBody,
-    textBody,
-    cssStyles,
-    footerKey,
-    headerAccent,
-    statusChip,
-    layout,
-    defaultCc,
-    defaultBcc,
-  ]);
+  }, [source, subject, htmlBody, textBody, footerKey, headerAccent, statusChip, layout, defaultCc, defaultBcc]);
 
   return useMemo(
     () => ({
@@ -177,8 +157,6 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
       setHtmlBody,
       textBody,
       setTextBody,
-      cssStyles,
-      setCssStyles,
       footerKey,
       setFooterKey,
       headerAccent,
@@ -202,7 +180,6 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
       subject,
       htmlBody,
       textBody,
-      cssStyles,
       footerKey,
       headerAccent,
       statusChip,
