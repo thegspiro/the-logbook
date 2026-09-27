@@ -10,6 +10,7 @@ domain, never to a row.
 Mocked service and session — no DB — so they run in the sandbox.
 """
 
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -25,6 +26,20 @@ from app.schemas.inventory import (
     InventoryLotBulkCreate,
     ItemRetireRequest,
 )
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    for module in (
+        "app.api.v1.endpoints.medical_supplies",
+        "app.services.inventory_service",
+    ):
+        monkeypatch.setattr(
+            f"{module}.resolve_org_today", AsyncMock(return_value=date.today())
+        )
+
 
 ORG = "org-1"
 MEDICAL_CAT = "11111111-1111-1111-1111-111111111111"

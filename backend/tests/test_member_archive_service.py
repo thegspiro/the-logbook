@@ -8,6 +8,7 @@ rules. The DB session and side-effect collaborators (audit log, email) are
 mocked, so the suite needs no MySQL.
 """
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -17,6 +18,19 @@ import pytest
 from app.models.user import UserStatus
 from app.schemas.organization import RejoinServiceCredit
 from app.services import member_archive_service as svc
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    for module in (
+        "app.services.member_service_history_service",
+        "app.services.member_archive_service",
+    ):
+        monkeypatch.setattr(
+            f"{module}.resolve_org_today", AsyncMock(return_value=date.today())
+        )
 
 
 def _result(scalar_one=None, scalar=None, scalars_all=None):

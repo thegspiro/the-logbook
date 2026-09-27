@@ -5,7 +5,7 @@ Business logic for meeting minutes including meetings,
 attendees, action items, and approval workflows.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -24,6 +24,13 @@ from app.models.meeting import (
 from app.models.user import User
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import (
+    local_date,
+    resolve_org_today,
+    resolve_scheduling_timezone,
+    to_local,
+    today_in,
+)
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
@@ -494,8 +501,10 @@ class MeetingsService:
         )
         total_meetings = total_result.scalar() or 0
 
-        # Meetings this month
-        first_of_month = date.today().replace(day=1)
+        # Meetings this month -- meeting_date is the department's own date.
+        first_of_month = (await resolve_org_today(self.db, organization_id)).replace(
+            day=1
+        )
         month_result = await self.db.execute(
             select(func.count(Meeting.id))
             .where(Meeting.organization_id == str(organization_id))
@@ -581,6 +590,15 @@ class MeetingsService:
         if existing.scalar_one_or_none():
             return None, "Meeting already exists for this event"
 
+        # An event's times are stored UTC; a meeting's date and times are the
+        # department's wall clock, as the meeting form enters them. Copied
+        # across unconverted, a 7 PM Eastern meeting read 11 PM, and one at
+        # 8 PM or later landed on the next day.
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+
+        def _wall_time(value: Optional[datetime]) -> Optional[time]:
+            return to_local(value, tz).time() if value else None
+
         try:
             meeting = Meeting(
                 id=generate_uuid(),
@@ -588,20 +606,12 @@ class MeetingsService:
                 title=event.title,
                 meeting_type=MeetingType.BUSINESS,
                 meeting_date=(
-                    event.start_datetime.date()
+                    local_date(event.start_datetime, tz)
                     if event.start_datetime
-                    else date.today()
+                    else today_in(tz)
                 ),
-                start_time=(
-                    event.actual_start_time.time()
-                    if event.actual_start_time
-                    else (event.start_datetime.time() if event.start_datetime else None)
-                ),
-                end_time=(
-                    event.actual_end_time.time()
-                    if event.actual_end_time
-                    else (event.end_datetime.time() if event.end_datetime else None)
-                ),
+                start_time=_wall_time(event.actual_start_time or event.start_datetime),
+                end_time=_wall_time(event.actual_end_time or event.end_datetime),
                 location=event.location,
                 location_id=event.location_id,
                 event_id=str(event_id),

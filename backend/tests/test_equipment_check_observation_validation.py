@@ -1,6 +1,7 @@
 """Focused validation tests for template-aware equipment check observations."""
 
 import math
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -85,7 +86,7 @@ class TestSubmissionObservationValidation:
         item = self.submission(quantity_found=quantity)
         with pytest.raises(ValueError, match="integers|non-negative"):
             EquipmentCheckService._validate_and_snapshot_submission(
-                [item], {"item-1": self.template_item("count")}
+                [item], {"item-1": self.template_item("count")}, today=date.today()
             )
 
     @pytest.mark.parametrize("reading", [math.inf, -math.inf, math.nan])
@@ -93,7 +94,7 @@ class TestSubmissionObservationValidation:
         item = self.submission(level_reading=reading)
         with pytest.raises(ValueError, match="must be finite"):
             EquipmentCheckService._validate_and_snapshot_submission(
-                [item], {"item-1": self.template_item("level")}
+                [item], {"item-1": self.template_item("level")}, today=date.today()
             )
 
     def test_rejects_level_below_configured_minimum(self):
@@ -103,12 +104,13 @@ class TestSubmissionObservationValidation:
             EquipmentCheckService._validate_and_snapshot_submission(
                 [item],
                 {"item-1": self.template_item("level", min_level=50.0)},
+                today=date.today(),
             )
 
     def test_irrelevant_observations_are_removed(self):
         item = self.submission(quantity_found=4, level_reading=75)
         EquipmentCheckService._validate_and_snapshot_submission(
-            [item], {"item-1": self.template_item("function")}
+            [item], {"item-1": self.template_item("function")}, today=date.today()
         )
         assert item["quantity_found"] is None
         assert item["level_reading"] is None
@@ -125,7 +127,7 @@ class TestSubmissionObservationValidation:
     ):
         item = self.submission(quantity_found=2, level_reading=75)
         EquipmentCheckService._validate_and_snapshot_submission(
-            [item], {"item-1": self.template_item(check_type)}
+            [item], {"item-1": self.template_item(check_type)}, today=date.today()
         )
         assert item[irrelevant_field] is None
         assert item[relevant_field] is not None
@@ -136,7 +138,7 @@ class TestSubmissionObservationValidation:
         )
         item = self.submission(quantity_found=3)
         EquipmentCheckService._validate_and_snapshot_submission(
-            [item], {"item-1": template_item}
+            [item], {"item-1": template_item}, today=date.today()
         )
         created = await service._create_check_items(
             "check-1", [item], {"item-1": template_item}, "org-1"
@@ -150,6 +152,7 @@ class TestSubmissionObservationValidation:
             EquipmentCheckService._validate_and_snapshot_submission(
                 [item],
                 {"item-1": self.template_item("count", required_quantity=2)},
+                today=date.today(),
             )
 
     def test_a_crew_may_fail_an_item_the_numbers_say_is_fine(self):
@@ -166,7 +169,9 @@ class TestSubmissionObservationValidation:
         item = self.submission(status="fail", level_reading=2000.0)
 
         EquipmentCheckService._validate_and_snapshot_submission(
-            [item], {"item-1": self.template_item("level", min_level=1500.0)}
+            [item],
+            {"item-1": self.template_item("level", min_level=1500.0)},
+            today=date.today(),
         )
 
         assert item["status"] == "fail"
@@ -185,6 +190,7 @@ class TestSubmissionObservationValidation:
                     expiration_date=date.today() + timedelta(days=365),
                 )
             },
+            today=date.today(),
         )
 
         assert item["status"] == "fail"
@@ -193,7 +199,9 @@ class TestSubmissionObservationValidation:
         item = self.submission(status="fail", quantity_found=4)
 
         EquipmentCheckService._validate_and_snapshot_submission(
-            [item], {"item-1": self.template_item("count", required_quantity=2)}
+            [item],
+            {"item-1": self.template_item("count", required_quantity=2)},
+            today=date.today(),
         )
 
         assert item["status"] == "fail"
@@ -214,4 +222,5 @@ class TestSubmissionObservationValidation:
                         expiration_date=date.today() - timedelta(days=1),
                     )
                 },
+                today=date.today(),
             )

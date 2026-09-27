@@ -39,6 +39,7 @@ from app.models.call_tracking import (
 )
 from app.models.training import Shift, ShiftCompletionReport
 from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
@@ -275,7 +276,9 @@ class CallTrackingService:
 
         shift_id = str(shift.id)
         apparatus_id = str(shift.apparatus_id) if shift.apparatus_id else None
-        call_date = shift.shift_date or date.today()
+        call_date = shift.shift_date or await resolve_org_today(
+            self.db, organization_id
+        )
 
         owned, shared = await self._partition_existing(shift_id, organization_id)
 

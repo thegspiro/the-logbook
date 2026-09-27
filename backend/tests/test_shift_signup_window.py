@@ -10,13 +10,25 @@ necessarily afterwards.
 Pure function under test; no DB.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.models.training import ShiftStatus
 from app.services.scheduling_service import SchedulingService, SignupActor
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.scheduling_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+
 
 pytestmark = pytest.mark.unit
 

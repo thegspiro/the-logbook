@@ -17,6 +17,17 @@ import pytest
 from app.models.inventory import InventoryLot
 from app.services.inventory_service import InventoryService
 
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.inventory_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+
+
 YESTERDAY = date.today() - timedelta(days=1)
 NEXT_YEAR = date.today() + timedelta(days=365)
 

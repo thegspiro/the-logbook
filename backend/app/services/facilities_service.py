@@ -80,6 +80,7 @@ from app.schemas.facilities import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_ordering import nulls_last_asc
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -667,10 +668,16 @@ class FacilitiesService:
 
         return items, total
 
-    async def get_dashboard_counts(self, organization_id: str) -> dict[str, int]:
-        """Return true organization-wide counts, independent of list pagination."""
+    async def get_dashboard_counts(
+        self, organization_id: str, today: Optional[date] = None
+    ) -> dict[str, int]:
+        """Return true organization-wide counts, independent of list pagination.
+
+        ``today`` is the department's date, resolved from the org if omitted.
+        """
         org_id = str(organization_id)
-        today = date.today()
+        if today is None:
+            today = await resolve_org_today(self.db, org_id)
         upcoming_cutoff = today + timedelta(days=30)
 
         total = await self.db.scalar(
@@ -720,9 +727,9 @@ class FacilitiesService:
         disagree once an organization had more than 100 records.
         """
         org_id = str(organization_id)
-        today = date.today()
+        today = await resolve_org_today(self.db, org_id)
         upcoming_cutoff = today + timedelta(days=30)
-        counts = await self.get_dashboard_counts(org_id)
+        counts = await self.get_dashboard_counts(org_id, today=today)
 
         overdue_result = await self.db.execute(
             select(FacilityMaintenance, Facility.name)
@@ -1501,8 +1508,8 @@ class FacilitiesService:
             maintenance.is_overdue = False
         elif (
             maintenance.due_date
-            and maintenance.due_date < date.today()
             and not maintenance.is_completed
+            and maintenance.due_date < await resolve_org_today(self.db, organization_id)
         ):
             maintenance.is_overdue = True
 
@@ -1523,6 +1530,7 @@ class FacilitiesService:
         maintenance = await self.get_maintenance_record(record_id, organization_id)
         if not maintenance:
             return None
+        today = await resolve_org_today(self.db, organization_id)
 
         update_data = maintenance_data.model_dump(exclude_unset=True)
 
@@ -1553,7 +1561,7 @@ class FacilitiesService:
         ):
             maintenance.completed_by = updated_by
             if not maintenance.completed_date:
-                maintenance.completed_date = date.today()
+                maintenance.completed_date = today
             maintenance.is_overdue = False
 
         apply_updates(maintenance, update_data)
@@ -1561,7 +1569,7 @@ class FacilitiesService:
         # Recheck overdue status
         if (
             maintenance.due_date
-            and maintenance.due_date < date.today()
+            and maintenance.due_date < today
             and not maintenance.is_completed
         ):
             maintenance.is_overdue = True

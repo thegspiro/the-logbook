@@ -11,7 +11,7 @@ Mocked sessions/getters — no DB — so it runs in the sandbox.
 """
 
 import inspect
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -43,6 +43,16 @@ from app.schemas.facilities import (
 )
 from app.services.facilities_service import FacilitiesService
 from app.utils.model_updates import apply_updates
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.facilities_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
 
 
 @pytest.fixture

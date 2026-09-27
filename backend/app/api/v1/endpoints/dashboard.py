@@ -58,7 +58,7 @@ from app.services.inventory_service import InventoryService
 from app.services.organization_service import OrganizationService
 from app.services.training_compliance import compute_org_compliance_pct
 from app.utils.hours import hours_from_minutes
-from app.utils.org_timezone import local_date, scheduling_timezone
+from app.utils.org_timezone import local_date, resolve_org_today, scheduling_timezone
 
 router = APIRouter()
 
@@ -129,7 +129,14 @@ async def get_asset_widgets(
     everybody's dashboard, linking into pages it had chosen to retire.
     """
     org_id = str(current_user.organization_id)
-    today = date.today()
+    # Looked up on first use: a caller who sees no asset block costs no query.
+    resolved_today: list[date] = []
+
+    async def department_today() -> date:
+        if not resolved_today:
+            resolved_today.append(await resolve_org_today(db, org_id))
+        return resolved_today[0]
+
     enabled = set(
         (
             await OrganizationService(db).get_enabled_modules(
@@ -146,6 +153,7 @@ async def get_asset_widgets(
         inventory = InventoryService(db)
         summary = await inventory.get_inventory_summary(org_id)
         low_stock = await inventory.get_low_stock_items(org_id)
+        today = await department_today()
         expiring = await db.scalar(
             select(func.count(InventoryLot.id))
             .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
@@ -253,6 +261,7 @@ async def get_asset_widgets(
         )
     ):
         fleet = await ApparatusService(db).get_fleet_summary(org_id)
+        today = await department_today()
         defects = await db.scalar(
             select(func.count(Apparatus.id)).where(
                 Apparatus.organization_id == org_id,
@@ -315,6 +324,7 @@ async def get_asset_widgets(
         user_has_permission(current_user, "facilities.manage")
         or user_has_permission(current_user, "settings.manage")
     ):
+        today = await department_today()
         maintenance = await db.scalar(
             select(func.count(FacilityMaintenance.id))
             .join(Facility, Facility.id == FacilityMaintenance.facility_id)
@@ -1053,7 +1063,7 @@ async def get_admin_summary(
                             ActionItemStatus.IN_PROGRESS.value,
                         ]
                     ),
-                    MeetingActionItem.due_date < date.today(),
+                    MeetingActionItem.due_date < await resolve_org_today(db, org_id),
                 )
             )
             overdue_meeting = result.scalar() or 0

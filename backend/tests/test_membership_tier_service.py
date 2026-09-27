@@ -26,15 +26,15 @@ TIERS = [
 
 class TestYearsOfService:
     def test_no_hire_date(self):
-        assert MembershipTierService.years_of_service(None) == 0
+        assert MembershipTierService.years_of_service(None, date.today()) == 0
 
     def test_exact_anniversary_counts(self):
         ten_years_ago = date.today().replace(year=date.today().year - 10)
-        assert MembershipTierService.years_of_service(ten_years_ago) == 10
+        assert MembershipTierService.years_of_service(ten_years_ago, date.today()) == 10
 
     def test_day_before_anniversary_does_not_count(self):
         almost = date.today().replace(year=date.today().year - 10) + timedelta(days=1)
-        assert MembershipTierService.years_of_service(almost) == 9
+        assert MembershipTierService.years_of_service(almost, date.today()) == 9
 
 
 class TestResolveTier:

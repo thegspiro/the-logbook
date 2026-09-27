@@ -45,11 +45,20 @@ class _ServerDate(date):
 @pytest.fixture(autouse=True)
 def _frozen_clock(monkeypatch):
     from app.services import (
+        apparatus_service,
         cert_alert_service,
+        driver_exception_service,
+        equipment_check_service,
+        equipment_readiness_service,
         evoc_level_service,
+        facilities_service,
         inventory_service,
+        medical_screening_service,
+        member_service_history_service,
+        membership_tier_service,
         qualification_service,
         reports_service,
+        scheduling_service,
         training_enhancement_service,
         training_program_service,
         training_service,
@@ -67,6 +76,15 @@ def _frozen_clock(monkeypatch):
     monkeypatch.setattr(reports_service, "date", _ServerDate)
     monkeypatch.setattr(qualification_service, "date", _ServerDate)
     monkeypatch.setattr(evoc_level_service, "date", _ServerDate)
+    monkeypatch.setattr(equipment_check_service, "date", _ServerDate)
+    monkeypatch.setattr(equipment_readiness_service, "date", _ServerDate)
+    monkeypatch.setattr(apparatus_service, "date", _ServerDate)
+    monkeypatch.setattr(facilities_service, "date", _ServerDate)
+    monkeypatch.setattr(driver_exception_service, "date", _ServerDate)
+    monkeypatch.setattr(scheduling_service, "date", _ServerDate)
+    monkeypatch.setattr(medical_screening_service, "date", _ServerDate)
+    monkeypatch.setattr(member_service_history_service, "date", _ServerDate)
+    monkeypatch.setattr(membership_tier_service, "date", _ServerDate)
 
 
 def _org(tz="America/New_York", **extra):
@@ -75,6 +93,17 @@ def _org(tz="America/New_York", **extra):
 
 def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
+
+
+def _bound(query):
+    """Every scalar a compiled statement binds, with IN lists flattened."""
+    values = set()
+    for value in query.compile().params.values():
+        if isinstance(value, (list, tuple)):
+            values.update(value)
+        else:
+            values.add(value)
+    return values
 
 
 def _scalars(items):
@@ -542,3 +571,343 @@ class TestOperationsDashboardAge:
 
         created = datetime(2026, 10, 6, 2, 30)  # naive, as func.min returns it
         assert _age_days(created, LOCAL_TODAY, ZoneInfo("America/New_York")) == 1
+
+
+class TestEquipmentChecks:
+    async def test_tonights_shift_is_still_on_my_checklists(self, monkeypatch):
+        """The UTC date (a day on) dropped tonight's shift from the list the
+        crew opens to start its check."""
+        from app.services import equipment_check_service as module
+
+        monkeypatch.setattr(
+            module, "resolve_apparatus_labels", AsyncMock(return_value={})
+        )
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await module.EquipmentCheckService(db).get_my_checklists("u1", "org-1")
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+    async def test_a_lot_expiring_today_is_not_yet_expired(self):
+        from app.models.apparatus import CheckItemDeployedLot, CheckTemplateItem
+        from app.services.equipment_check_service import EquipmentCheckService
+
+        item = CheckTemplateItem(
+            id="ti-1",
+            compartment_id="comp-1",
+            name="4x4 Gauze",
+            check_type="date_lot",
+            has_expiration=True,
+            expiration_date=LOCAL_TODAY,
+        )
+        item.deployed_lots = [
+            CheckItemDeployedLot(
+                id="lot-a",
+                organization_id="org-1",
+                template_item_id="ti-1",
+                lot_number="A",
+                expiration_date=LOCAL_TODAY,
+                quantity=1,
+            )
+        ]
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org())])
+        service = EquipmentCheckService(db)
+        service._get_item_with_template = AsyncMock(return_value=(item, "tpl-1"))
+
+        result = await service.get_item_deployed_lots("ti-1", "org-1")
+
+        assert result["lots"][0]["is_expired"] is False
+
+    def test_the_verdict_uses_the_date_it_is_given(self):
+        """The submit paths hand in the department's date; an item good
+        through that day passes."""
+        from app.models.apparatus import CheckTemplateItem
+        from app.services.equipment_check_service import EquipmentCheckService
+
+        item = CheckTemplateItem(
+            id="ti-1",
+            compartment_id="comp-1",
+            name="AED pads",
+            check_type="date_lot",
+            has_expiration=True,
+            expiration_date=LOCAL_TODAY,
+        )
+        items = [{"template_item_id": "ti-1", "status": "pass"}]
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            items, {"ti-1": item}, today=LOCAL_TODAY
+        )
+        assert (failed, overall) == (0, "pass")
+
+
+class TestInventoryDates:
+    async def test_maintenance_due_is_counted_from_the_departments_date(self):
+        from app.services.inventory_service import InventoryService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await InventoryService(db).get_maintenance_due(uuid.uuid4(), days_ahead=30)
+
+        query = db.execute.await_args_list[1].args[0]
+        bound = set(query.compile().params.values())
+        assert LOCAL_TODAY + timedelta(days=30) in bound
+        assert FROZEN_UTC.date() + timedelta(days=30) not in bound
+
+    async def test_a_lot_expiring_today_still_counts_as_stock(self):
+        from app.services.inventory_service import InventoryService
+
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await InventoryService(db)._in_date_lot_totals("org-1", ["item-1"])
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+
+class TestFleetReadiness:
+    async def test_the_duty_days_end_on_the_departments_date(self):
+        from app.services.equipment_readiness_service import (
+            EquipmentReadinessService,
+        )
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org())])
+        service = EquipmentReadinessService(db)
+        service._load_fleet = AsyncMock(return_value={"u1": SimpleNamespace()})
+        service._build_occasions = AsyncMock(return_value=([], []))
+        service._grid_rows = MagicMock(return_value=[])
+        service._log_entries = MagicMock(return_value=[])
+        service._log_summary = MagicMock(return_value={})
+
+        await service.get_check_log("org-1")
+
+        assert service._build_occasions.await_args.args[3] == LOCAL_TODAY
+
+
+class TestApparatusAndFacilities:
+    async def test_apparatus_maintenance_due_counts_from_the_departments_date(self):
+        from app.services.apparatus_service import ApparatusService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await ApparatusService(db).get_maintenance_due(
+            "org-1", days_ahead=30, include_overdue=False
+        )
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert {LOCAL_TODAY, LOCAL_TODAY + timedelta(days=30)} <= bound
+        assert FROZEN_UTC.date() not in bound
+
+    async def test_facility_work_due_today_is_not_overdue_tonight(self):
+        """The UTC date (a day on) flagged it overdue on the day it was due."""
+        from app.models.facilities import FacilityMaintenance
+        from app.schemas.facilities import FacilityMaintenanceUpdate
+        from app.services.facilities_service import FacilitiesService
+
+        record = FacilityMaintenance(
+            id="m-1",
+            organization_id="org-1",
+            due_date=LOCAL_TODAY,
+            is_completed=False,
+            is_overdue=False,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org())])
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        service = FacilitiesService(db)
+        service.get_maintenance_record = AsyncMock(return_value=record)
+
+        await service.update_maintenance_record(
+            "m-1", FacilityMaintenanceUpdate(), "org-1", "u1"
+        )
+
+        assert record.is_overdue is False
+
+
+class TestDriverExceptions:
+    async def test_the_review_queue_keeps_a_request_ending_today(self):
+        from app.services.driver_exception_service import DriverExceptionService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await DriverExceptionService(db).count_pending("org-1")
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+
+class TestScheduling:
+    async def test_leave_keeps_tonights_shift_in_the_cancellation(self):
+        """A member put on leave this evening is still due on tonight's shift;
+        the UTC date (a day on) left it assigned to someone who is away."""
+        from app.services.scheduling_service import SchedulingService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await SchedulingService(db).cancel_member_assignments_in_range(
+            "org-1", "u1", LOCAL_TODAY - timedelta(days=3)
+        )
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY in bound
+        assert FROZEN_UTC.date() not in bound
+
+    async def test_a_swap_offer_is_expired_against_the_departments_date(self):
+        from app.services.scheduling_service import SchedulingService
+
+        rows = MagicMock()
+        rows.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), rows])
+
+        await SchedulingService(db).expire_stale_swap_offers("org-1")
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert LOCAL_TODAY + timedelta(days=1) in bound
+        assert FROZEN_UTC.date() + timedelta(days=1) not in bound
+
+    async def test_tonights_shift_is_not_refused_as_past(self):
+        from app.services.scheduling_service import SchedulingService
+
+        inactive = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), inactive])
+        shift = SimpleNamespace(
+            id="s1", shift_date=LOCAL_TODAY, status="scheduled", is_finalized=False
+        )
+
+        error = await SchedulingService(db)._validate_assignment_candidate(
+            "org-1", shift, "u1", "firefighter", reject_past=True
+        )
+
+        # It gets as far as the member check rather than stopping at "past".
+        assert error == "Participating member is no longer active in this organization"
+
+
+class TestMembership:
+    async def test_an_anniversary_turns_over_on_the_departments_date(self):
+        """Hired October 7, 2016: tonight in New York they have nine years,
+        and the UTC date (already the anniversary) advanced them a tier."""
+        from app.services.membership_tier_service import MembershipTierService
+
+        org = _org(
+            settings={
+                "membership_tiers": {
+                    "tiers": [
+                        {"id": "probationary", "years_required": 0, "sort_order": 0},
+                        {"id": "life", "years_required": 10, "sort_order": 1},
+                    ]
+                }
+            }
+        )
+        member = SimpleNamespace(
+            id="u1",
+            membership_type="probationary",
+            hire_date=date(2016, 10, 7),
+            status_changed_at=None,
+            deleted_at=None,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_one(org), _scalars([member]), _scalars([])]
+        )
+
+        result = await MembershipTierService(db).advance_all("org-1", "admin")
+
+        assert result["advanced"] == 0
+        assert member.membership_type == "probationary"
+
+    async def test_a_screening_expiring_today_is_still_listed(self):
+        from app.services.medical_screening_service import MedicalScreeningService
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+
+        await MedicalScreeningService(db).get_expiring_soon("org-1", days=30)
+
+        bound = _bound(db.execute.await_args_list[1].args[0])
+        assert {LOCAL_TODAY, LOCAL_TODAY + timedelta(days=30)} <= bound
+        assert FROZEN_UTC.date() not in bound
+
+
+class TestAdministration:
+    async def test_a_meeting_bridged_from_an_event_keeps_its_wall_clock(self):
+        """7:30 PM Eastern is 23:30Z. Copied across unconverted, the meeting
+        read 11:30 PM; an event after 8 PM landed on the next day."""
+        from app.services.meetings_service import MeetingsService
+
+        event = SimpleNamespace(
+            title="Business meeting",
+            start_datetime=datetime(2026, 10, 7, 0, 30),  # naive UTC, 8:30 PM
+            end_datetime=datetime(2026, 10, 7, 2, 0),
+            actual_start_time=None,
+            actual_end_time=None,
+            location=None,
+            location_id=None,
+        )
+        no_meeting = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_one(event), no_meeting, _one(_org()), _scalars([])]
+        )
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+
+        meeting, error = await MeetingsService(db).create_from_event(
+            uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        )
+
+        assert error is None
+        assert meeting.meeting_date == date(2026, 10, 6)
+        assert meeting.start_time.strftime("%H:%M") == "20:30"
+        assert meeting.end_time.strftime("%H:%M") == "22:00"
+
+    def test_a_dashboard_month_starts_at_the_departments_midnight(self):
+        from zoneinfo import ZoneInfo
+
+        from app.services.dashboard_widget_service import period_bounds
+
+        start, end = period_bounds("month", LOCAL_TODAY, ZoneInfo("America/New_York"))
+
+        assert start == datetime(2026, 10, 1, 4, 0, tzinfo=timezone.utc)
+        assert end == datetime(2026, 10, 7, 4, 0, tzinfo=timezone.utc)
+
+    async def test_overdue_maintenance_is_marked_per_department(self):
+        """The nightly sweep runs at one UTC hour for every timezone; work due
+        today in New York is not overdue until New York's day is over."""
+        from app.services import scheduled_tasks
+
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalars([_org()]),
+                MagicMock(rowcount=0),
+                MagicMock(rowcount=0),
+            ]
+        )
+        db.commit = AsyncMock()
+
+        await scheduled_tasks.run_mark_overdue_maintenance(db)
+
+        for call in db.execute.await_args_list[1:]:
+            bound = _bound(call.args[0])
+            assert LOCAL_TODAY in bound
+            assert FROZEN_UTC.date() not in bound
+            assert "org-1" in bound

@@ -8,7 +8,7 @@ report is automatically generated, saved to documents, and optionally emailed.
 
 import copy
 from collections import Counter
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -35,6 +35,7 @@ from app.services.member_service_history_service import (
     is_separated,
 )
 from app.utils.membership import LEGACY_MEMBERSHIP_TYPES, is_administrative
+from app.utils.org_timezone import resolve_org_today
 
 router = APIRouter()
 
@@ -389,10 +390,9 @@ async def change_member_status(
     history = MemberServiceHistoryService(db)
     previous = UserStatus(previous_status)
     service_credit = None
+    today = await resolve_org_today(db, current_user.organization_id)
     if not is_separated(previous) and is_separated(new_status):
-        await history.record_separation(
-            member, new_status, date.today(), str(current_user.id)
-        )
+        await history.record_separation(member, new_status, today, str(current_user.id))
     elif is_separated(previous) and not is_separated(new_status):
         service_credit = request.service_credit or await history.get_rejoin_default(
             str(current_user.organization_id)
@@ -400,10 +400,11 @@ async def change_member_status(
         try:
             await history.record_rejoin(
                 member,
-                request.rejoin_date or date.today(),
+                request.rejoin_date or today,
                 service_credit,
                 str(current_user.id),
                 previous_service_end=request.previous_service_end,
+                today=today,
             )
         except ValueError as e:
             raise HTTPException(
