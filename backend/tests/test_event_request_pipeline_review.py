@@ -335,14 +335,21 @@ class TestEmailTriggers:
 class TestTemplateEmail:
     @pytest.mark.asyncio
     async def test_the_department_logo_is_not_escaped_into_visible_markup(self):
-        """``organization_logo_img`` is markup this module built, not text."""
+        """``organization_logo_img`` is markup this module built, not text.
+
+        Only a body that is a whole document still fills it: a fragment is
+        wrapped in the shell, whose masthead carries the logo instead.
+        """
         org = _org()
         event_request = _request_row()
         template = SimpleNamespace(
             id="tpl-1",
             name="Directions to the station",
             subject="Directions for {{contact_name}}",
-            body_html="{{organization_logo_img}}<p>Hi {{contact_name}}</p>",
+            body_html=(
+                "<html><body>{{organization_logo_img}}"
+                "<p>Hi {{contact_name}}</p></body></html>"
+            ),
             body_text="Hi",
         )
         db = _seq_db([_result(event_request), _result(template), _result(org)])
@@ -1220,9 +1227,13 @@ class TestReminderTemplateRendering:
         assert text == "plain"
 
     def test_requester_supplied_text_is_escaped_but_the_logo_is_not(self):
+        # A whole document is sent as written, so it still fills the logo.
         template = SimpleNamespace(
             subject="Hi",
-            body_html="{{organization_logo_img}}<p>{{contact_name}}</p>",
+            body_html=(
+                "<html><body>{{organization_logo_img}}"
+                "<p>{{contact_name}}</p></body></html>"
+            ),
             body_text=None,
         )
         request = _request_row(contact_name="<script>x</script>")
@@ -1235,6 +1246,54 @@ class TestReminderTemplateRendering:
 
         assert '<img src="https://cdn.example.org/l.png">' in body
         assert "&lt;script&gt;" in body
+
+
+class TestRequestTemplatesUseTheShell:
+    """A department's message is wrapped in the same design as every notice."""
+
+    @staticmethod
+    def _render(body_html, contact_name="Dana Reyes"):
+        template = SimpleNamespace(
+            subject="Directions for {{contact_name}}",
+            body_html=body_html,
+            body_text="plain",
+        )
+        with patch(
+            "app.services.email_service.build_email_logo_img",
+            MagicMock(return_value='<img src="https://cdn.example.org/l.png">'),
+        ):
+            return render_request_template(
+                template, _request_row(contact_name=contact_name), _org()
+            )
+
+    def test_a_fragment_is_wrapped_with_the_subject_as_its_title(self):
+        subject, body, text = self._render("<p>Hi {{contact_name}}</p>")
+        assert subject == "Directions for Dana Reyes"
+        assert body.lstrip().startswith("<!DOCTYPE html>")
+        assert 'class="tab"' in body
+        assert ">Request update</td>" in body
+        assert "<h1>Directions for Dana Reyes</h1>" in body
+        assert "<p>Hi Dana Reyes</p>" in body
+        assert "{{" not in body.split("<body", 1)[1]
+        assert text == "plain"
+
+    def test_the_logo_is_not_printed_twice(self):
+        # Bodies written before the shell put the logo at the top themselves;
+        # the masthead carries it now.
+        _subject, body, _text = self._render(
+            "{{organization_logo_img}}<p>Hi {{contact_name}}</p>"
+        )
+        assert '<img src="https://cdn.example.org/l.png">' not in body
+        assert "{{organization_logo_img}}" not in body
+
+    def test_the_title_is_escaped(self):
+        _subject, body, _text = self._render("<p>x</p>", contact_name="<b>Dana</b>")
+        assert "<h1>Directions for &lt;b&gt;Dana&lt;/b&gt;</h1>" in body
+
+    def test_a_whole_document_is_sent_as_written(self):
+        document = "<html><body><p>Hi {{contact_name}}</p></body></html>"
+        _subject, body, _text = self._render(document)
+        assert body == "<html><body><p>Hi Dana Reyes</p></body></html>"
 
 
 class TestStaffingLifecycle:

@@ -308,6 +308,7 @@ def wrap_email_body(
     header_color: str = "",
     chip: str = "",
     subtitle: str = "",
+    footer_key: Optional[str] = None,
 ) -> str:
     """Wrap raw HTML content in the standard email template chrome.
 
@@ -330,6 +331,9 @@ def wrap_email_body(
             an unmapped tint.
         chip: The category the tab names. Empty leaves a plain accent band.
         subtitle: Optional line under the title.
+        footer_key: Which of the department's footers to close with, as a
+            template would name it (``"public"`` for mail to someone outside
+            the department). ``None`` takes the department's default.
     """
     # The department's default footer, so a one-off email from a scheduled
     # task closes the same way its templated mail does. *footer_text*
@@ -338,7 +342,9 @@ def wrap_email_body(
     if footer_text:
         footer_block = f'<div class="footer"><p>{_html.escape(footer_text)}</p></div>'
     else:
-        context = EmailTemplateService.build_context({}, organization)
+        context = EmailTemplateService.build_context(
+            {}, organization, footer_key=footer_key
+        )
         footer_block = str(context.get("footer_html", ""))
 
     accent = header_color or ACCENT_RED

@@ -469,12 +469,13 @@ the previous default. Four things are deliberately left as they are:
   the tab and summary card only when an admin presses **Reset** on it. So does
   a template with its own stylesheet, even if its body is untouched, because
   that stylesheet was written against the old class names.
-- **Event-request emails are not wrapped.** Their bodies
-  (`EventRequestEmailTemplate`) are written entirely by each department, with
-  no shipped default, and many carry their own `{{organization_logo_img}}`
-  and sign-off. Putting the shell around them would duplicate both. Deciding
-  whether to wrap them, and how to migrate bodies that already carry a logo,
-  is an owner decision.
+- **An event-request template written as a whole HTML page is sent as
+  written.** Every other department-written request email (the body is a
+  fragment) is wrapped in the shell with the subject as its title and the
+  public footer, and its `{{organization_logo_img}}` fills with nothing
+  because the masthead carries the logo. A body containing `<html>` or
+  `<body>` is a complete design of its own, and nesting it in the shell
+  would not be valid markup.
 - **The election rollback and deletion alerts do not read their templates.**
   `ElectionService._notify_leadership` builds its own body; the
   `election_rollback` / `election_deleted` rows an admin can edit on the
