@@ -24,7 +24,11 @@ from app.models.grant import (
     PledgeStatus,
 )
 from app.utils.model_updates import apply_updates
-from app.utils.org_timezone import resolve_org_today
+from app.utils.org_timezone import (
+    local_date,
+    resolve_org_today,
+    resolve_scheduling_timezone,
+)
 from app.utils.sql_ordering import nulls_last_asc
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -490,8 +494,11 @@ class FundraisingService:
         row = result.one()
         donor.total_donated = row[0]
         donor.donation_count = row[1]
-        donor.first_donation_date = row[2].date() if row[2] else None
-        donor.last_donation_date = row[3].date() if row[3] else None
+        # Donation times are UTC; the donor's first and last dates are the
+        # department's calendar days, as the donation screens show them.
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        donor.first_donation_date = local_date(row[2], tz) if row[2] else None
+        donor.last_donation_date = local_date(row[3], tz) if row[3] else None
 
     # ------------------------------------------------------------------
     # Pledges
