@@ -21,6 +21,7 @@ from app.services.compliance_officer_service import (
     ISOReadinessService,
     RecordCompletenessService,
 )
+from app.utils.org_timezone import org_today
 
 # ============================================
 # ISO_CATEGORIES Structure Tests
@@ -192,7 +193,7 @@ class TestGetISOReadiness:
         service = ISOReadinessService(mock_db)
         result = await service.get_iso_readiness("org-1")
 
-        assert result["year"] == date.today().year
+        assert result["year"] == org_today(None).year
 
 
 # ============================================
@@ -759,7 +760,9 @@ class TestRecordCompletenessEvaluate:
         service = RecordCompletenessService(mock_db)
         result = await service.evaluate_record_completeness("org-1")
 
-        today = date.today()
+        # The period ends on the department's today, and the mocked org has
+        # no timezone, so it resolves to the scheduling default.
+        today = org_today(None)
         assert result["period_start"] == date(today.year, 1, 1).isoformat()
         assert result["period_end"] == today.isoformat()
 

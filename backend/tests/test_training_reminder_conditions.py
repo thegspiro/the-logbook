@@ -13,7 +13,7 @@ a hardcoded ``[30, 14, 7]``. A department that set a 90-day warning got one at
 DB mocked; no MySQL.
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -22,6 +22,7 @@ import pytest
 from app.models.training import EnrollmentStatus
 from app.schemas.training_program import ReminderConditions
 from app.services.struggling_member_service import StrugglingMemberService
+from app.utils.org_timezone import org_today
 from app.utils.reminder_conditions import (
     normalize_reminder_conditions,
     should_send_warning,
@@ -133,7 +134,9 @@ def _enrollment(days_left, progress, program):
         program_id="prog-1",
         program=program,
         progress_percentage=progress,
-        target_completion_date=date.today() + timedelta(days=days_left),
+        # Days left are counted on the department's calendar; these mocks
+        # carry no timezone, so the service falls back to the default.
+        target_completion_date=org_today(None) + timedelta(days=days_left),
         deadline_warning_sent=False,
         deadline_warning_sent_at=None,
     )
