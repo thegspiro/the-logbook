@@ -60,6 +60,7 @@ from app.schemas.apparatus import (
     ApparatusUpdate,
 )
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
@@ -824,7 +825,9 @@ class ApparatusService:
 
         apparatus.disposal_method = archive_data.disposal_method
         apparatus.disposal_reason = archive_data.disposal_reason
-        apparatus.disposal_date = archive_data.disposal_date or date.today()
+        apparatus.disposal_date = archive_data.disposal_date or await resolve_org_today(
+            self.db, organization_id
+        )
         apparatus.disposal_notes = archive_data.disposal_notes
 
         if archive_data.sold_date:
@@ -1213,8 +1216,8 @@ class ApparatusService:
             maintenance.is_overdue = False
         elif (
             maintenance.due_date
-            and maintenance.due_date < date.today()
             and not maintenance.is_completed
+            and maintenance.due_date < await resolve_org_today(self.db, organization_id)
         ):
             maintenance.is_overdue = True
 
@@ -1296,6 +1299,7 @@ class ApparatusService:
         maintenance = await self.get_maintenance_record(record_id, organization_id)
         if not maintenance:
             return None
+        today = await resolve_org_today(self.db, organization_id)
 
         # XC-1: maintenance_type is eager-loaded into the maintenance response,
         # so a foreign maintenance_type_id would leak another org's type.
@@ -1343,7 +1347,7 @@ class ApparatusService:
         ):
             maintenance.completed_by = updated_by
             if not maintenance.completed_date:
-                maintenance.completed_date = date.today()
+                maintenance.completed_date = today
             maintenance.is_overdue = False
 
         for field, value in update_data.items():
@@ -1352,7 +1356,7 @@ class ApparatusService:
         # Recheck overdue status
         if (
             maintenance.due_date
-            and maintenance.due_date < date.today()
+            and maintenance.due_date < today
             and not maintenance.is_completed
         ):
             maintenance.is_overdue = True
@@ -1382,9 +1386,15 @@ class ApparatusService:
         organization_id: str,
         days_ahead: int = 30,
         include_overdue: bool = True,
+        today: Optional[date] = None,
     ) -> List[Dict[str, Any]]:
-        """Get maintenance due within specified days"""
-        due_date_threshold = date.today() + timedelta(days=days_ahead)
+        """Get maintenance due within specified days.
+
+        ``today`` is the department's date, resolved from the org if omitted.
+        """
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
+        due_date_threshold = today + timedelta(days=days_ahead)
 
         conditions = [
             ApparatusMaintenance.organization_id == organization_id,
@@ -1400,7 +1410,7 @@ class ApparatusService:
             )
         else:
             conditions.append(ApparatusMaintenance.due_date <= due_date_threshold)
-            conditions.append(ApparatusMaintenance.due_date >= date.today())
+            conditions.append(ApparatusMaintenance.due_date >= today)
 
         query = (
             select(ApparatusMaintenance)
@@ -1945,17 +1955,20 @@ class ApparatusService:
         archived = archived_result.scalar()
 
         # Maintenance due soon (30 days)
-        maintenance_due = await self.get_maintenance_due(organization_id, days_ahead=30)
+        today = await resolve_org_today(self.db, organization_id)
+        maintenance_due = await self.get_maintenance_due(
+            organization_id, days_ahead=30, today=today
+        )
         maintenance_overdue = [m for m in maintenance_due if m["is_overdue"]]
 
         # Expiring items (30 days)
-        expiration_date = date.today() + timedelta(days=30)
+        expiration_date = today + timedelta(days=30)
 
         reg_expiring_query = select(func.count(Apparatus.id)).where(
             Apparatus.organization_id == organization_id,
             Apparatus.is_archived.is_(False),
             Apparatus.registration_expiration <= expiration_date,
-            Apparatus.registration_expiration >= date.today(),
+            Apparatus.registration_expiration >= today,
         )
         reg_result = await self.db.execute(reg_expiring_query)
         reg_expiring = reg_result.scalar()
@@ -1964,7 +1977,7 @@ class ApparatusService:
             Apparatus.organization_id == organization_id,
             Apparatus.is_archived.is_(False),
             Apparatus.inspection_expiration <= expiration_date,
-            Apparatus.inspection_expiration >= date.today(),
+            Apparatus.inspection_expiration >= today,
         )
         insp_result = await self.db.execute(insp_expiring_query)
         insp_expiring = insp_result.scalar()
@@ -1973,7 +1986,7 @@ class ApparatusService:
             Apparatus.organization_id == organization_id,
             Apparatus.is_archived.is_(False),
             Apparatus.insurance_expiration <= expiration_date,
-            Apparatus.insurance_expiration >= date.today(),
+            Apparatus.insurance_expiration >= today,
         )
         ins_result = await self.db.execute(ins_expiring_query)
         ins_expiring = ins_result.scalar()
@@ -2600,7 +2613,7 @@ class ApparatusService:
         open_issues = notes_result.scalars().all()
 
         # Get recent maintenance (last 12 months)
-        cutoff = date.today() - timedelta(days=365)
+        cutoff = await resolve_org_today(self.db, organization_id) - timedelta(days=365)
         maint_query = (
             select(ApparatusMaintenance)
             .where(

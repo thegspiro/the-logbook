@@ -18,6 +18,7 @@ Covers:
 import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
@@ -39,6 +40,17 @@ from app.models.training import (
 from app.models.user import User
 from app.schemas.scheduling import ShiftUpdate
 from app.services.scheduling_service import SchedulingService
+
+
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.scheduling_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+
 
 # ── Helpers ──────────────────────────────────────────────────────────
 

@@ -21,6 +21,16 @@ from sqlalchemy.exc import IntegrityError
 from app.services.equipment_check_service import EquipmentCheckService
 
 
+@pytest.fixture(autouse=True)
+def _department_today(monkeypatch):
+    """The service asks the org for its date; answer with the same
+    ``date.today()`` the fixtures here are built from."""
+    monkeypatch.setattr(
+        "app.services.equipment_check_service.resolve_org_today",
+        AsyncMock(return_value=date.today()),
+    )
+
+
 @pytest.fixture
 def mock_db():
     db = AsyncMock()
@@ -1589,7 +1599,9 @@ class TestSnapshottedTargetQuantity:
         item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 1}
         EquipmentCheckService._snapshot_from_template(item, template)
 
-        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            [item], today=date.today()
+        )
 
         assert item["status"] == "fail"
         assert failed == 1
@@ -1606,7 +1618,9 @@ class TestSnapshottedTargetQuantity:
         item = {"template_item_id": "ti-1", "status": "fail", "quantity_found": 1}
         EquipmentCheckService._snapshot_from_template(item, template)
 
-        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            [item], today=date.today()
+        )
 
         assert item["status"] == "fail"
         assert failed == 1
@@ -1620,7 +1634,9 @@ class TestSnapshottedTargetQuantity:
         item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 1}
         EquipmentCheckService._snapshot_from_template(item, template)
 
-        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            [item], today=date.today()
+        )
 
         assert item["status"] == "fail"
         assert failed == 1
@@ -1631,7 +1647,9 @@ class TestSnapshottedTargetQuantity:
         item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 4}
         EquipmentCheckService._snapshot_from_template(item, template)
 
-        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            [item], today=date.today()
+        )
 
         assert item["status"] == "pass"
         assert failed == 0

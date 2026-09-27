@@ -37,6 +37,7 @@ from app.models.apparatus import (
 from app.models.user import User
 from app.services.separation_of_duties import assert_different_person
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import resolve_org_today
 
 # The grant that lets someone approve. Named once so the enforcement message,
 # the endpoint gate, and the approver lookup cannot drift apart.
@@ -70,7 +71,7 @@ class DriverExceptionService:
         matches whatever unit is asked about. Only ``approved`` counts —
         pending, denied, and revoked all leave the block in place.
         """
-        target_date = on_date or date.today()
+        target_date = on_date or await resolve_org_today(self.db, organization_id)
 
         conditions = [
             DriverException.organization_id == str(organization_id),
@@ -184,7 +185,8 @@ class DriverExceptionService:
         # out — a chief's approval sitting dormant until long after the
         # circumstances they weighed have gone. The grant has to begin within
         # the same horizon it may span.
-        if (valid_from - date.today()).days > MAX_VALIDITY_DAYS:
+        today = await resolve_org_today(self.db, organization_id)
+        if (valid_from - today).days > MAX_VALIDITY_DAYS:
             raise ValueError(
                 f"An exception must start within {MAX_VALIDITY_DAYS} days. "
                 "Request it closer to the date so it is reviewed against the "
@@ -257,7 +259,9 @@ class DriverExceptionService:
             record="exception request",
         )
 
-        if approve and exception.valid_until < date.today():
+        if approve and exception.valid_until < await resolve_org_today(
+            self.db, organization_id
+        ):
             raise ValueError(
                 "This request has already lapsed; its end date is in the past."
             )
@@ -379,7 +383,10 @@ class DriverExceptionService:
         if user_id:
             conditions.append(DriverException.user_id == str(user_id))
         if not include_expired:
-            conditions.append(DriverException.valid_until >= date.today())
+            conditions.append(
+                DriverException.valid_until
+                >= await resolve_org_today(self.db, organization_id)
+            )
 
         result = await self.db.execute(
             select(DriverException)
@@ -400,7 +407,8 @@ class DriverExceptionService:
             select(DriverException.id).where(
                 DriverException.organization_id == str(organization_id),
                 DriverException.status == DriverExceptionStatus.PENDING,
-                DriverException.valid_until >= date.today(),
+                DriverException.valid_until
+                >= await resolve_org_today(self.db, organization_id),
             )
         )
         return len(list(result.scalars().all()))

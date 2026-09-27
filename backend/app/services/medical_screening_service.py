@@ -31,6 +31,7 @@ from app.schemas.medical_screening import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import resolve_org_today
 
 
 class MedicalScreeningService:
@@ -331,7 +332,7 @@ class MedicalScreeningService:
             prospect_id=prospect_id,
         )
 
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         items: List[ComplianceItem] = []
         compliant_count = 0
         expiring_soon_count = 0
@@ -453,7 +454,7 @@ class MedicalScreeningService:
         days: int = 30,
     ) -> List[ExpiringScreening]:
         """Find screening records expiring within the given number of days."""
-        today = date.today()
+        today = await resolve_org_today(self.db, organization_id)
         cutoff = today + timedelta(days=days)
 
         query = (

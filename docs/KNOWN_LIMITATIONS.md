@@ -485,9 +485,9 @@ against the plain one will find the masked version noticeably smaller. Fitting
 it larger means some launchers cut the corners off the crest, which is worse and
 is not visible to whoever chooses the setting.
 
-## "Today" Is Still the Server's Date in 92 Places (2026-09-25)
+## "Today" Is the Department's Date — What Still Reads UTC (2026-09-26)
 
-🚩 **Open — the remainder needs reading, not a sweep.** `date.today()` returns
+**Resolved for "today"; one related class remains open.** `date.today()` returns
 the server's date, and a container runs in UTC, so for a US department it is
 already tomorrow every evening (from 7–8 PM Eastern, 4–5 PM Pacific). Anything
 that counts days, decides expired-versus-not, or picks "this month" from it is
@@ -540,13 +540,44 @@ UTC morning are off for the western half of the country every time they run.
   invalid) timezone, and age an evening row on the department's calendar
   (`tests/test_org_local_today.py`).
 
-**Remaining call sites** (92, counted by `grep -rn "date.today()"
-backend/app` excluding comments): `equipment_check_service.py` 11,
-`apparatus_service.py` 11, `scheduling_service.py` 7, `inventory_service.py`
-7, `facilities_service.py` 5, `driver_exception_service.py` 5, and 1–4 each
-in about 35 more files. Many are harmless (a stored `created_on` default, a
-filename) — each needs reading rather than a mechanical replace, which is why
-this is recorded here rather than swept.
+- Everything else that read "today" off the server, moved one area at a time
+  (`tests/test_org_local_today.py`): equipment checks (the auto-fail on an
+  expired item, observation validation, lots aboard, swaps, the apparatus
+  inventory and my-checklists list), stock lots and NFPA screens, medical
+  supplies, the fleet readiness board; apparatus and facility maintenance
+  (overdue flags, due lists, dashboards, the nightly overdue sweep, run per
+  department), the fleet summary's expiring registrations, driver
+  qualification exceptions; scheduling (open shifts, week and month calendars,
+  the "past shift" signup fallback, auto-generation, swap-offer expiry,
+  cancelling shifts for a leave, the shift/hours compliance report, the iCal
+  feed); membership tiers and service history, rejoin and separation dates,
+  the leave widget, medical screening; grants, meetings (including a meeting
+  bridged from an event, whose date and times are now the department's wall
+  clock rather than the event's UTC timestamp), documents, forms,
+  notification and fundraising summaries, dashboard widget periods, the admin
+  hours year and quarters, action-item reminders (per department), and a few
+  labels and file names.
+
+**Guarded.** `tests/test_server_date_ratchet.py` walks `backend/app` and fails
+on any new `date.today()` / `datetime.now(timezone.utc).date()` /
+`datetime.utcnow().date()`. Three calls remain on purpose, each listed there
+with its reason: the end bound sent to an external training provider (a later
+bound only includes more), and two schema validators that refuse a future
+date — they cannot see the organization, and for a US department the server's
+date is never behind its own, so they never refuse a genuine date.
+
+🚩 **Still open: a stored UTC timestamp cut to a date with `.date()`.** The
+same bug in a different shape — `event.start_datetime.date()` is the UTC day,
+already tomorrow for an evening event. The places above that turned one into a
+calendar day use `local_date`, but the pattern is common across the backend
+and not every instance is wrong (some columns hold a UTC-midnight "date"), so
+each needs reading. Known examples: the readiness board's out-of-service days
+from apparatus status history (`equipment_readiness_service._unavailable_dates`),
+`member_service_history_service.implicit_separation_date`, and date-typed
+filters compared against `DateTime` columns (fundraising's year-to-date
+donations). Order and request numbers (`ORD-YYYY-`, `PR-YYYY-`) also take
+their year from UTC, which only differs on the evening of December 31 and
+changes nothing but the prefix.
 
 ## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
 

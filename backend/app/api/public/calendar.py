@@ -9,7 +9,7 @@ per-user token embedded in the URL instead of a login.
 Only the member's own shift times/notes are exposed — no other members' data.
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
@@ -21,6 +21,7 @@ from app.core.security_middleware import get_client_ip, public_rate_limit
 from app.models.user import Organization
 from app.services.integration_services.ical_service import generate_ical_feed
 from app.services.scheduling_service import SchedulingService
+from app.utils.org_timezone import org_today
 
 router = APIRouter(prefix="/public/v1/calendar", tags=["public-calendar"])
 
@@ -79,8 +80,7 @@ async def get_personal_calendar_feed(
     org_name = org.name if org and org.name else "The Logbook"
     tz_name = org.timezone if org and org.timezone else "UTC"
 
-    # Wall-clock "today" is fine here; the window is deliberately wide.
-    today = date.today()
+    today = org_today(org)
     shifts = await service.get_shifts_for_user_feed(
         user,
         today - timedelta(days=FEED_PAST_DAYS),

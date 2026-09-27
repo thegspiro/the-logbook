@@ -133,6 +133,7 @@ from app.services.scheduling_widget_service import (
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftService
 from app.utils.hours import hours_from_minutes
+from app.utils.org_timezone import resolve_org_today
 from app.utils.outreach_roles import normalize_staffing_roles
 from app.utils.positions import normalize_stored_positions
 
@@ -660,7 +661,11 @@ async def get_open_shifts(
     """
     service = SchedulingService(db)
     try:
-        start = date.fromisoformat(start_date) if start_date else date.today()
+        start = (
+            date.fromisoformat(start_date)
+            if start_date
+            else await resolve_org_today(db, current_user.organization_id)
+        )
         end = date.fromisoformat(end_date) if end_date else start + timedelta(days=30)
     except ValueError:
         raise HTTPException(
@@ -1525,11 +1530,11 @@ async def get_week_calendar(
     """Get shifts for a specific week"""
     service = SchedulingService(db)
     try:
-        start = (
-            date.fromisoformat(week_start)
-            if week_start
-            else (date.today() - timedelta(days=date.today().weekday()))
-        )
+        if week_start:
+            start = date.fromisoformat(week_start)
+        else:
+            today = await resolve_org_today(db, current_user.organization_id)
+            start = today - timedelta(days=today.weekday())
     except ValueError:
         raise HTTPException(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
@@ -1550,7 +1555,7 @@ async def get_month_calendar(
 ):
     """Get shifts for a specific month"""
     service = SchedulingService(db)
-    today = date.today()
+    today = await resolve_org_today(db, current_user.organization_id)
     y = year or today.year
     m = month or today.month
     shifts = await service.get_month_shifts(current_user.organization_id, y, m)
@@ -2938,13 +2943,14 @@ async def get_shift_compliance_report(
                 status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
             )
 
+    if ref_date is None:
+        ref_date = await resolve_org_today(db, current_user.organization_id)
     compliance = await service.get_shift_compliance(
         current_user.organization_id, reference_date=ref_date
     )
-    actual_ref = ref_date or date.today()
     return {
         "requirements": compliance,
-        "reference_date": actual_ref.isoformat(),
+        "reference_date": ref_date.isoformat(),
         "total_requirements": len(compliance),
     }
 

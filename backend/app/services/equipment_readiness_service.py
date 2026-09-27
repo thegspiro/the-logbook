@@ -62,6 +62,7 @@ from app.models.training import (
     ShiftTemplateEquipmentCheck,
 )
 from app.models.user import User
+from app.utils.org_timezone import resolve_org_today
 
 # Item outcomes that mean the crew found something wrong. "not_checked" is an
 # unanswered question rather than a finding, and "not_applicable" means the
@@ -179,7 +180,7 @@ class EquipmentReadinessService:
         matrix of one member's checks would read as fleet coverage.
         """
         dates = max(1, min(dates, MAX_LOG_DATES))
-        today = today or date.today()
+        today = today or await resolve_org_today(self.db, organization_id)
 
         fleet = await self._load_fleet(organization_id)
         if apparatus_id:
@@ -214,7 +215,7 @@ class EquipmentReadinessService:
     ) -> Dict[str, Any]:
         """One readiness row per apparatus for the fleet board."""
         strip_dates = max(1, min(strip_dates, MAX_LOG_DATES))
-        today = today or date.today()
+        today = today or await resolve_org_today(self.db, organization_id)
 
         fleet = await self._load_fleet(organization_id)
         if not fleet:

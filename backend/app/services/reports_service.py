@@ -664,7 +664,10 @@ class ReportsService:
     ) -> Dict[str, Any]:
         """Generate an annual training report with hours, completions, shift reports, and member breakdown."""
         # Default to current year if no dates provided
-        year = _safe_int((filters or {}).get("year"), datetime.now(timezone.utc).year)
+        year = _safe_int(
+            (filters or {}).get("year"),
+            (await resolve_org_today(self.db, organization_id)).year,
+        )
         if not start_date:
             start_date = date(year, 1, 1)
         if not end_date:
@@ -1573,10 +1576,9 @@ class ReportsService:
         from app.models.minute import MeetingMinutes, MinutesActionItemStatus
 
         org_id = str(organization_id)
-        period_start = (
-            start_date or (datetime.now(timezone.utc) - timedelta(days=365)).date()
-        )
-        period_end = end_date or datetime.now(timezone.utc).date()
+        today = await resolve_org_today(self.db, org_id)
+        period_start = start_date or today - timedelta(days=365)
+        period_end = end_date or today
 
         # ── Members ──
         total_result = await self.db.execute(
