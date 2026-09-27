@@ -77,6 +77,7 @@ import {
 } from '../../utils/shiftReportOfflineQueue';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+import { EmptyState } from '../../components/ux/EmptyState';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -1401,24 +1402,42 @@ export const ShiftReportsTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* A member without training.manage has exactly one view, and a
+          segmented control with one segment is a button that does nothing —
+          it read as a control with no information behind it. Say what the
+          view is instead. */}
+      {!canManage && (
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-500/10">
+            <FileText className="h-5 w-5 text-violet-700 dark:text-violet-300" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 className="text-theme-text-primary text-lg font-semibold">Shift reports about you</h2>
+            <p className="text-theme-text-muted text-sm">
+              Feedback your officers write after shifts you worked. Open a report to read it and acknowledge it.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* View Toggle */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="segmented-group hscroll flex flex-1 items-center gap-1 sm:flex-none">
-          <button
-            onClick={() => setViewMode('my-reports')}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
-              viewMode === 'my-reports'
-                ? 'bg-violet-600 text-white'
-                : 'text-theme-text-secondary hover:text-theme-text-primary'
-            }`}
-            title="Reports other people wrote about your shifts"
-          >
-            {/* "My Reports" and "Filed by Me" are reports *about* you and reports
+      {canManage && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="segmented-group hscroll flex flex-1 items-center gap-1 sm:flex-none">
+            <button
+              onClick={() => setViewMode('my-reports')}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+                viewMode === 'my-reports'
+                  ? 'bg-violet-600 text-white'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary'
+              }`}
+              title="Reports other people wrote about your shifts"
+            >
+              {/* "My Reports" and "Filed by Me" are reports *about* you and reports
                 you *wrote* — a distinction neither label carried, and both
                 readings fit both labels. */}
-            About me
-          </button>
-          {canManage && (
+              About me
+            </button>
             <button
               onClick={() => setViewMode('filed-by-me')}
               className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
@@ -1430,32 +1449,30 @@ export const ShiftReportsTab: React.FC = () => {
             >
               Written by me
             </button>
-          )}
-          {canManage && config?.report_review_required && (
-            <button
-              onClick={() => setViewMode('pending-review')}
-              className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
-                viewMode === 'pending-review'
-                  ? 'bg-violet-600 text-white'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
-            >
-              <ClipboardCheck className="h-3.5 w-3.5" /> Review Queue
-            </button>
-          )}
-          {canManage && config?.report_review_required && (
-            <button
-              onClick={() => setViewMode('flagged')}
-              className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
-                viewMode === 'flagged'
-                  ? 'bg-violet-600 text-white'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
-            >
-              <AlertCircle className="h-3.5 w-3.5" /> Flagged
-            </button>
-          )}
-          {canManage && (
+            {config?.report_review_required && (
+              <button
+                onClick={() => setViewMode('pending-review')}
+                className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+                  viewMode === 'pending-review'
+                    ? 'bg-violet-600 text-white'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+              >
+                <ClipboardCheck className="h-3.5 w-3.5" /> Review Queue
+              </button>
+            )}
+            {config?.report_review_required && (
+              <button
+                onClick={() => setViewMode('flagged')}
+                className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+                  viewMode === 'flagged'
+                    ? 'bg-violet-600 text-white'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+              >
+                <AlertCircle className="h-3.5 w-3.5" /> Flagged
+              </button>
+            )}
             <button
               onClick={() => setViewMode('drafts')}
               className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
@@ -1471,8 +1488,6 @@ export const ShiftReportsTab: React.FC = () => {
                 </span>
               )}
             </button>
-          )}
-          {canManage && (
             <button
               onClick={() => setViewMode('create')}
               className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
@@ -1483,9 +1498,9 @@ export const ShiftReportsTab: React.FC = () => {
             >
               <Plus className="h-4 w-4" /> New
             </button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Analytics dashboards */}
       {viewMode === 'my-reports' && renderTraineeDashboard()}
@@ -2127,32 +2142,69 @@ export const ShiftReportsTab: React.FC = () => {
             <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
               <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
             </div>
-          ) : reports.length === 0 ? (
-            <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
-              <FileText className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-              <h3 className="text-theme-text-primary mb-1 text-lg font-medium">
-                {viewMode === 'my-reports'
-                  ? 'No reports for you yet'
-                  : viewMode === 'pending-review'
-                    ? 'No reports pending review'
-                    : viewMode === 'flagged'
-                      ? 'No flagged reports'
-                      : viewMode === 'drafts'
-                        ? 'No draft reports'
-                        : 'No reports filed yet'}
-              </h3>
-              <p className="text-theme-text-muted text-sm">
-                {viewMode === 'my-reports'
-                  ? 'Shift completion reports from your officers will appear here.'
-                  : viewMode === 'pending-review'
-                    ? 'All reports have been reviewed.'
-                    : viewMode === 'flagged'
-                      ? 'No reports have been flagged for follow-up.'
-                      : viewMode === 'drafts'
-                        ? 'Draft reports are auto-created when shifts are finalized. Complete them to track trainee progress.'
-                        : 'Submit a shift report to track trainee progress.'}
-              </p>
+          ) : reports.length === 0 && viewMode === 'my-reports' ? (
+            <div className="border-theme-surface-border rounded-xl border border-dashed px-4 py-10 sm:px-8">
+              <div className="mx-auto max-w-md text-center">
+                <FileText className="text-theme-text-muted mx-auto mb-3 h-10 w-10" aria-hidden="true" />
+                {/* Under the member heading above an h3; for an officer this is
+                    the tab's own body, directly under the page h1. */}
+                {React.createElement(
+                  canManage ? 'h2' : 'h3',
+                  { className: 'text-theme-text-primary mb-1 text-lg font-semibold' },
+                  'No shift reports yet'
+                )}
+                <p className="text-theme-text-muted text-sm">
+                  When an officer files a report for a shift you worked, it will show up here.
+                  {config?.report_review_required &&
+                    ' A training officer reviews each report before it is shared with you.'}
+                </p>
+              </div>
+              <ul className="text-theme-text-secondary mx-auto mt-6 grid max-w-2xl gap-3 text-left text-sm sm:grid-cols-3">
+                <li className="bg-theme-surface-secondary flex items-start gap-2 rounded-lg p-3">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-violet-700 dark:text-violet-300" aria-hidden="true" />
+                  <span>The shift itself — date, hours and calls run</span>
+                </li>
+                <li className="bg-theme-surface-secondary flex items-start gap-2 rounded-lg p-3">
+                  <TrendingUp
+                    className="mt-0.5 h-4 w-4 shrink-0 text-violet-700 dark:text-violet-300"
+                    aria-hidden="true"
+                  />
+                  <span>Your officer&apos;s feedback — skills observed, strengths, what to work on</span>
+                </li>
+                <li className="bg-theme-surface-secondary flex items-start gap-2 rounded-lg p-3">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-violet-700 dark:text-violet-300" aria-hidden="true" />
+                  <span>A place to acknowledge it once you&apos;ve read it</span>
+                </li>
+              </ul>
             </div>
+          ) : reports.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              className="border-theme-surface-border rounded-xl border border-dashed"
+              title={
+                viewMode === 'pending-review'
+                  ? 'No reports pending review'
+                  : viewMode === 'flagged'
+                    ? 'No flagged reports'
+                    : viewMode === 'drafts'
+                      ? 'No draft reports'
+                      : 'No reports filed yet'
+              }
+              description={
+                viewMode === 'pending-review'
+                  ? 'All reports have been reviewed.'
+                  : viewMode === 'flagged'
+                    ? 'No reports have been flagged for follow-up.'
+                    : viewMode === 'drafts'
+                      ? 'Draft reports are auto-created when shifts are finalized. Complete them to track trainee progress.'
+                      : 'Submit a shift report to track trainee progress.'
+              }
+              actions={
+                viewMode === 'filed-by-me'
+                  ? [{ label: 'Write a report', icon: Plus, onClick: () => setViewMode('create') }]
+                  : undefined
+              }
+            />
           ) : (
             <>
               {/* Review summary dashboard */}
