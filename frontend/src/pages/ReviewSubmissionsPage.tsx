@@ -27,7 +27,7 @@ import { trainingSubmissionService, trainingService, trainingProgramService } fr
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTimeOfDay } from '../utils/dateFormatting';
 import { formatHours } from '../utils/hoursFormatting';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { SubmissionStatus, TRAINING_TYPE_LABELS } from '../constants/enums';
 import { EmptyState } from '../components/ux';
 import type {
@@ -1060,8 +1060,7 @@ const ReviewSubmissionsPage: React.FC = () => {
       toast.success(`Submission ${actionLabel}`);
       void loadData();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to review submission';
+      const msg = getErrorDetail(err) || 'Failed to review submission';
       toast.error(msg);
     }
   };

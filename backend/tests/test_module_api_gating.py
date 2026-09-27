@@ -187,6 +187,46 @@ async def test_the_module_lookup_happens_once_per_request():
     assert mocked.await_count == 1
 
 
+def test_a_websocket_on_a_gated_router_reaches_its_handler():
+    """A gated router's socket must not fail its handshake in the gate.
+
+    FastAPI cannot supply a ``Request`` to a WebSocket route, so a gate whose
+    dependency asked for one raised ``TypeError`` on every handshake — a 500
+    before the handler ran — which is how the inventory live-update socket
+    never connected at all. The gate stands aside for a socket, as
+    ``verify_csrf_token`` does, and the handler checks the module itself once
+    it has authenticated (see ``inventory_websocket``).
+    """
+    from fastapi import APIRouter, WebSocket
+    from starlette.testclient import TestClient
+
+    router = APIRouter()
+
+    @router.websocket("/ws")
+    async def socket(websocket: WebSocket):
+        await websocket.accept()
+        await websocket.send_text("reached")
+        await websocket.close()
+
+    api = FastAPI()
+    api.include_router(
+        router, dependencies=[Depends(require_module("inventory", "Inventory"))]
+    )
+    api.dependency_overrides[get_db] = lambda: SimpleNamespace()
+    with patch(
+        "app.api.dependencies.get_optional_current_user",
+        new=AsyncMock(return_value=SimpleNamespace(id="u1", organization_id=ORG)),
+    ) as user_lookup, patch(
+        "app.services.organization_service.OrganizationService.get_enabled_modules",
+        new=AsyncMock(return_value=SimpleNamespace(enabled_modules=[])),
+    ) as modules_lookup:
+        with TestClient(api) as client, client.websocket_connect("/ws") as sock:
+            assert sock.receive_text() == "reached"
+
+    user_lookup.assert_not_awaited()
+    modules_lookup.assert_not_awaited()
+
+
 # ── The map itself ──────────────────────────────────────────────────────────
 #
 # Which API roots the module switch actually governs. Pinned rather than

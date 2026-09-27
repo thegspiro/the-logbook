@@ -6,6 +6,7 @@ import type { PositionOption } from '../modules/scheduling/types/shiftSettings';
 import { ensureShiftSettingsLoaded } from '../modules/scheduling/services/shiftSettingsApi';
 import { rankEligibleSeatOptions } from '../modules/scheduling/utils/positionLabels';
 import { invalidateRanksCache } from './useRanks';
+import { getErrorDetail } from '../utils/errorHandling';
 
 export interface RankForm {
   rank_code: string;
@@ -150,7 +151,7 @@ export function useRankEditor(options: UseRankEditorOptions = {}) {
       toast.success('Rank added');
       await fetchRanks();
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const detail = getErrorDetail(err);
       toast.error(detail || 'Failed to add rank');
     } finally {
       setRankSaving(false);
@@ -170,7 +171,7 @@ export function useRankEditor(options: UseRankEditorOptions = {}) {
       toast.success('Rank updated');
       await fetchRanks();
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const detail = getErrorDetail(err);
       toast.error(detail || 'Failed to update rank');
     } finally {
       setRankSaving(false);
@@ -188,7 +189,7 @@ export function useRankEditor(options: UseRankEditorOptions = {}) {
         // The backend refuses to delete a rank members still hold, and names
         // how many. A bare "Failed to remove rank" leaves the officer with no
         // idea that reassigning those members is the way through.
-        const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+        const detail = getErrorDetail(err);
         toast.error(detail || 'Failed to remove rank');
       } finally {
         setDeletingRankId(null);

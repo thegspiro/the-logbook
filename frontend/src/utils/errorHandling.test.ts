@@ -1,5 +1,12 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { isAppError, toAppError, getErrorMessage, isNetworkError, isNonRetryableHttpError } from './errorHandling';
+import {
+  isAppError,
+  toAppError,
+  getErrorDetail,
+  getErrorMessage,
+  isNetworkError,
+  isNonRetryableHttpError,
+} from './errorHandling';
 import type { AppError } from './errorHandling';
 
 describe('errorHandling', () => {
@@ -389,6 +396,64 @@ describe('errorHandling', () => {
       expect(getErrorMessage(axiosError)).toBe('Request failed');
     });
   });
+  // ---- getErrorDetail ----
+
+  describe('getErrorDetail', () => {
+    it('returns a string detail as it is', () => {
+      expect(getErrorDetail({ response: { data: { detail: 'Title is already taken' } } })).toBe(
+        'Title is already taken'
+      );
+    });
+
+    it('renders a 422 detail array as text rather than handing back the objects', () => {
+      // The shape that crashed the event form when rendered as a React child.
+      const error = {
+        response: {
+          status: 422,
+          data: {
+            detail: [{ field: 'request', message: 'rsvp_deadline is required when requires_rsvp is True' }],
+            code: 'LB-VAL-001',
+          },
+        },
+      };
+      expect(getErrorDetail(error)).toBe('rsvp_deadline is required when requires_rsvp is True.');
+    });
+
+    it('names the field of a validation entry, in either spelling', () => {
+      const error = {
+        response: {
+          data: {
+            detail: [
+              { field: 'title', message: 'Field required' },
+              { loc: ['body', 'end_datetime'], msg: 'Invalid date' },
+            ],
+          },
+        },
+      };
+      expect(getErrorDetail(error)).toBe('title: Field required. end_datetime: Invalid date.');
+    });
+
+    it("surfaces a structured detail's message", () => {
+      expect(getErrorDetail({ response: { data: { detail: { message: 'Seat already taken', seat: 3 } } } })).toBe(
+        'Seat already taken'
+      );
+    });
+
+    it('returns undefined when the server gave no detail, so the caller keeps its own wording', () => {
+      expect(getErrorDetail({ response: { data: {}, statusText: 'Bad Request' } })).toBeUndefined();
+      expect(getErrorDetail({ response: { data: { detail: '' } } })).toBeUndefined();
+      expect(getErrorDetail({ response: { data: { detail: [] } } })).toBeUndefined();
+      expect(getErrorDetail({ response: { data: { detail: { reason: 'no message key' } } } })).toBeUndefined();
+    });
+
+    it('returns undefined for anything that is not an HTTP error', () => {
+      expect(getErrorDetail(new Error('Boom'))).toBeUndefined();
+      expect(getErrorDetail('string error')).toBeUndefined();
+      expect(getErrorDetail(null)).toBeUndefined();
+      expect(getErrorDetail({ response: null })).toBeUndefined();
+    });
+  });
+
   // ---- isNetworkError ----
 
   describe('isNetworkError', () => {

@@ -13,6 +13,7 @@ import type { EventCreate, EventTemplate, RecurringEventCreate } from '../types/
 import { EventForm } from '../components/EventForm';
 import type { ConflictEvent } from '../components/EventForm';
 import toast from 'react-hot-toast';
+import { getErrorDetail } from '../utils/errorHandling';
 
 /**
  * Convert an EventTemplate into a partial EventCreate suitable for pre-populating the form.
@@ -106,8 +107,7 @@ export const EventCreatePage: React.FC = () => {
       const event = await eventService.createEvent(data);
       void navigate(`/events/${event.id}`);
     } catch (err: unknown) {
-      const apiError = err as { response?: { data?: { detail?: string } } };
-      setError(apiError.response?.data?.detail || 'Failed to create event. Please try again.');
+      setError(getErrorDetail(err) || 'Failed to create event. Please try again.');
       setIsSubmitting(false);
       throw err; // Re-throw so EventForm knows submission failed
     }
@@ -122,8 +122,7 @@ export const EventCreatePage: React.FC = () => {
       toast.success(`Created ${count} recurring event${count !== 1 ? 's' : ''}`);
       void navigate('/events');
     } catch (err: unknown) {
-      const apiError = err as { response?: { data?: { detail?: string } } };
-      setError(apiError.response?.data?.detail || 'Failed to create recurring events. Please try again.');
+      setError(getErrorDetail(err) || 'Failed to create recurring events. Please try again.');
       setIsSubmitting(false);
       throw err;
     }

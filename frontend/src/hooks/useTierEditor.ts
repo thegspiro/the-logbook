@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { memberStatusService } from '../services/api';
 import { RejoinServiceCredit } from '../constants/enums';
 import type { MembershipTier, MembershipTierBenefits, MembershipTierConfig } from '../types/user';
+import { getErrorDetail } from '../utils/errorHandling';
 
 /** A tier as the editor holds it while being edited. */
 export type TierDraft = MembershipTier;
@@ -253,7 +254,7 @@ export function useTierEditor() {
       // The backend names the tier and how many members hold it when it
       // refuses a removal. A generic message would leave an officer with no
       // idea which rung is the problem.
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const detail = getErrorDetail(err);
       toast.error(detail || 'Failed to save membership tiers');
     } finally {
       setSaving(false);

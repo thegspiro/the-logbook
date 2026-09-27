@@ -334,7 +334,7 @@ export const InventoryAdminHub: React.FC = () => {
       ? [
           ['summary', inventoryService.getSummary()],
           ['low stock', inventoryService.getLowStockItems()],
-          ['returns', inventoryService.getReturnRequests({ status: 'pending' })],
+          ['returns', inventoryService.getReturnRequests({ status: 'requested' })],
           ['gear requests', inventoryService.getEquipmentRequests({ status: 'pending' })],
           ['setup', inventoryService.getSetupStatus()],
           ['temporary loans', inventoryService.getOverdueCheckouts()],

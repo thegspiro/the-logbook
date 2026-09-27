@@ -273,6 +273,50 @@ describe('EventForm', () => {
       });
     });
 
+    it('asks for a deadline before creating an event that requires RSVPs', async () => {
+      // The API refuses to create one without it (EventCreate.validate_dates),
+      // so catching it here keeps the member on a form that says what to fix.
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const user = userEvent.setup();
+      await user.type(screen.getByLabelText(/title/i), 'RSVP drill');
+      fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
+      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-01' } });
+      await user.click(screen.getByLabelText(/require rsvp/i));
+
+      expect(screen.getByText('RSVP Deadline', { exact: false }).closest('label')).toHaveTextContent('*');
+
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Set an RSVP deadline');
+      expect(mockOnSubmit).not.toHaveBeenCalled();
+    });
+
+    it('does not demand a deadline when editing, where the API does not either', async () => {
+      mockOnSubmit.mockResolvedValue(undefined);
+      renderWithRouter(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          editingEventId="evt-1"
+          submitLabel="Save Changes"
+          initialData={{ title: 'RSVP drill', requires_rsvp: true }}
+        />
+      );
+
+      const user = userEvent.setup();
+      fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
+      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-01' } });
+
+      expect(screen.getByText('RSVP Deadline', { exact: false }).closest('label')).not.toHaveTextContent('*');
+
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => {
+        expect(mockOnSubmit).toHaveBeenCalledWith(expect.objectContaining({ requires_rsvp: true }));
+      });
+    });
+
     it('keeps capacity and guests when Require RSVP is turned back off', async () => {
       // The submit path used to wipe max_attendees and allow_guests whenever
       // requires_rsvp was false, which silently uncapped a voluntary event and

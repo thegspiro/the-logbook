@@ -40,6 +40,7 @@ import type { Location, LocationCreate } from '../services/api';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useAuthStore } from '../stores/authStore';
 import { copyToClipboard } from '../utils/clipboard';
+import { getErrorDetail } from '../utils/errorHandling';
 
 // Group locations: top-level = stations (has address, no room_number), children = rooms (have room_number or building)
 function groupLocations(locations: Location[]): { stations: Location[]; rooms: Map<string, Location[]> } {
@@ -276,7 +277,7 @@ function LocationSetupWizard({
       }
       setStep('done');
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const detail = getErrorDetail(err);
       toast.error(detail || 'Failed to save rooms');
     } finally {
       setIsSaving(false);
@@ -1075,7 +1076,7 @@ export default function LocationsPage() {
       setShowStationModal(false);
       void loadLocations();
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const detail = getErrorDetail(err);
       toast.error(detail || 'Failed to save station');
     } finally {
       setIsSavingStation(false);
@@ -1152,7 +1153,7 @@ export default function LocationsPage() {
       setShowRoomModal(false);
       void loadLocations();
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const detail = getErrorDetail(err);
       toast.error(detail || 'Failed to save room');
     } finally {
       setIsSavingRoom(false);

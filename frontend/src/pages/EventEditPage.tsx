@@ -8,13 +8,13 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { Breadcrumbs } from '../components/ux';
 import { Calendar, ArrowLeft, Info } from 'lucide-react';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { eventService } from '../services/api';
 import type { EventCreate, Event } from '../types/event';
 import { EventForm } from '../components/EventForm';
 import type { ConflictEvent, InitialRecurrence } from '../components/EventForm';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { getErrorDetail } from '../utils/errorHandling';
 
 export const EventEditPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -60,8 +60,7 @@ export const EventEditPage: React.FC = () => {
       const data = await eventService.getEvent(eventId);
       setEvent(data);
     } catch (err) {
-      const apiError = err as AxiosError<{ detail?: string }>;
-      setError(apiError.response?.data?.detail || 'Failed to load event');
+      setError(getErrorDetail(err) || 'Failed to load event');
     } finally {
       setLoading(false);
     }
@@ -83,8 +82,7 @@ export const EventEditPage: React.FC = () => {
       }
       void navigate(`/events/${eventId}`);
     } catch (err: unknown) {
-      const apiError = err as { response?: { data?: { detail?: string } } };
-      setError(apiError.response?.data?.detail || 'Failed to update event. Please try again.');
+      setError(getErrorDetail(err) || 'Failed to update event. Please try again.');
       setIsSubmitting(false);
       throw err;
     }

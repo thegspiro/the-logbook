@@ -134,6 +134,37 @@ describe('EventCreatePage', () => {
     });
   });
 
+  describe('Validation errors from the server', () => {
+    it('shows a 422 detail array as a message instead of crashing the page', async () => {
+      // A 422 detail is an array of {field, message}; rendered directly as a
+      // React child it threw, and the error boundary replaced the whole page.
+      const error = Object.assign(new Error('Request failed with status code 422'), {
+        response: {
+          status: 422,
+          data: {
+            detail: [{ field: 'request', message: 'end_datetime must be after start_datetime' }],
+            code: 'LB-VAL-001',
+          },
+        },
+      });
+      vi.mocked(eventService.createEvent).mockRejectedValue(error);
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventCreatePage />);
+
+      await user.type(screen.getByLabelText(/title/i), 'Monthly Drill');
+      fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
+      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-02' } });
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      await waitFor(() => {
+        expect(screen.getAllByText(/end_datetime must be after start_datetime/).length).toBeGreaterThanOrEqual(1);
+      });
+      // The form survived: what the member typed is still there.
+      expect(screen.getByLabelText(/title/i)).toHaveValue('Monthly Drill');
+    });
+  });
+
   describe('Cancel Action', () => {
     it('should navigate back to events on cancel', async () => {
       const user = userEvent.setup();
