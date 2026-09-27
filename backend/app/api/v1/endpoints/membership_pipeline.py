@@ -97,6 +97,7 @@ from app.schemas.membership_pipeline import (
     TransferProspectRequest,
     TransferProspectResponse,
 )
+from app.services.email_service import welcome_email_can_send
 from app.services.membership_pipeline_service import MembershipPipelineService
 
 # Applied router-wide, not per route: every endpoint that takes a
@@ -1575,6 +1576,13 @@ async def regress_prospect(
     return prospect
 
 
+TRANSFER_WELCOME_EMAIL_UNAVAILABLE_DETAIL = (
+    "Email is not set up for this department, so a temporary password cannot "
+    "be sent to the new member. Set an initial password for them, or convert "
+    "them now and set one later with Reset Password."
+)
+
+
 @router.post(
     "/prospects/{prospect_id}/transfer", response_model=TransferProspectResponse
 )
@@ -1610,6 +1618,30 @@ async def transfer_prospect(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Prospect has already been transferred",
+        )
+
+    # The new member needs a password someone knows. Either the coordinator
+    # sets one here, held to the same rules as POST /users, or the welcome
+    # email carries a generated one -- and that email must be able to go out.
+    # Neither (send_welcome_email false, no password) stays allowed: it is the
+    # "set it later with Reset Password" choice, as in bulk import.
+    if data.password:
+        from app.core.breached_password import check_password_not_breached
+        from app.core.security import validate_password_strength
+
+        is_valid, error_msg = validate_password_strength(data.password)
+        if is_valid:
+            is_valid, error_msg = await check_password_not_breached(data.password)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg
+            )
+    elif data.send_welcome_email and not await welcome_email_can_send(
+        db, str(current_user.organization_id)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=TRANSFER_WELCOME_EMAIL_UNAVAILABLE_DETAIL,
         )
 
     # A rank grants its default permissions (_collect_user_permissions unions
@@ -1655,6 +1687,7 @@ async def transfer_prospect(
         station=data.station,
         role_ids=[str(rid) for rid in data.role_ids] if data.role_ids else None,
         send_welcome_email=data.send_welcome_email,
+        initial_password=data.password,
         department_email=data.department_email,
         middle_name=data.middle_name,
         hire_date=data.hire_date,

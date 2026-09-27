@@ -65,6 +65,7 @@ from app.services.admin_continuity_service import (
     assert_not_last_administrator,
     assert_positions_retain_administrator,
 )
+from app.services.email_service import welcome_email_can_send
 from app.services.operational_rank_service import (
     OperationalRankService,
     rank_not_configured_message,
@@ -163,6 +164,12 @@ async def list_users(
     )
 
     return users
+
+
+WELCOME_EMAIL_UNAVAILABLE_DETAIL = (
+    "Email is not set up for this department, so a temporary password cannot "
+    "be sent to the new member. Set an initial password for them instead."
+)
 
 
 @router.post(
@@ -264,6 +271,20 @@ async def create_member(
         initial_password = user_data.password
         password_hash = hash_password(initial_password)
     else:
+        # With no password given, the welcome email is the only place the
+        # generated one is ever written down: it is never returned by the API.
+        # If that email cannot be sent the account is created with a password
+        # nobody knows, and the admin is told it succeeded. Refuse instead,
+        # before anything is written. A create that asks for no welcome email
+        # (bulk import with the toggle off) is still allowed — the admin has
+        # chosen to set passwords afterwards with a reset.
+        if user_data.send_welcome_email and not await welcome_email_can_send(
+            db, str(current_user.organization_id)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=WELCOME_EMAIL_UNAVAILABLE_DETAIL,
+            )
         initial_password = generate_temporary_password()
         password_hash = hash_password(initial_password)
 
@@ -490,6 +511,33 @@ async def create_member(
     # welcome email, never in API responses (prevents caching/logging leaks).
     response = UserWithRolesResponse.model_validate(new_user)
     return response
+
+
+@router.get("/welcome-email-available")
+async def check_welcome_email_available(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "users.create", "members.manage", "prospective_members.manage"
+        )
+    ),
+):
+    """
+    Whether a new member's temporary password can be emailed to them.
+
+    Add Member, Import Members and the prospect Convert dialog read this to
+    require an initial password, or to withdraw the welcome email, before the
+    create is refused. Gated on each permission that can create an account, so
+    a pipeline coordinator converting a prospect can read it too.
+
+    **Authentication required**
+
+    **Permissions required:** users.create, members.manage or
+    prospective_members.manage
+    """
+    return {
+        "available": await welcome_email_can_send(db, str(current_user.organization_id))
+    }
 
 
 @router.get("/contact-info-enabled")

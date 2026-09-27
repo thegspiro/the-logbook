@@ -410,6 +410,22 @@ class BuiltMessage(NamedTuple):
 BatchMessage = Union[Tuple[List[str], str], BuiltMessage]
 
 
+async def welcome_email_can_send(db: Any, organization_id: str) -> bool:
+    """Whether a welcome email for this organization would actually be sent.
+
+    For callers that must refuse an action whose only output is an email — a
+    new account whose only password is in the welcome email. Answers with
+    :attr:`EmailService.can_send`, the check the send path itself applies, so
+    the refusal cannot disagree with what happens when the email is attempted.
+    """
+    from sqlalchemy import select
+
+    organization = (
+        await db.execute(select(Organization).where(Organization.id == organization_id))
+    ).scalar_one_or_none()
+    return EmailService(organization).can_send
+
+
 class EmailService:
     """Service for sending emails"""
 
@@ -635,6 +651,26 @@ class EmailService:
     @property
     def _use_cloudflare(self) -> bool:
         return self._cloudflare_config is not None
+
+    @property
+    def can_send(self) -> bool:
+        """Whether this service will attempt delivery rather than skip it.
+
+        The one definition of "email is on" for sending: the deployment-wide
+        switch, a Cloudflare account, or the organization's own email settings.
+        ``send_email`` and ``send_batch`` both gate on it, and callers that
+        must refuse an action whose only output is an email (a welcome email
+        carrying the member's only password) ask the same question here rather
+        than re-deriving it.
+        """
+        return bool(
+            settings.EMAIL_ENABLED
+            or self._use_cloudflare
+            or (
+                self.organization
+                and stored_email_section(self.organization.settings).get("enabled")
+            )
+        )
 
     def _get_ehlo_hostname(self) -> str:
         """Return the hostname used for SMTP EHLO/HELO.
@@ -1245,15 +1281,7 @@ class EmailService:
         """
         if not messages:
             return []
-        email_enabled = (
-            settings.EMAIL_ENABLED
-            or self._use_cloudflare
-            or (
-                self.organization
-                and stored_email_section(self.organization.settings).get("enabled")
-            )
-        )
-        if not email_enabled:
+        if not self.can_send:
             logger.info("Email disabled. Would batch-send {} messages.", len(messages))
             return [False] * len(messages)
         if self._use_cloudflare:
@@ -1317,15 +1345,7 @@ class EmailService:
         Returns:
             Tuple of (success_count, failure_count)
         """
-        email_enabled = (
-            settings.EMAIL_ENABLED
-            or self._use_cloudflare
-            or (
-                self.organization
-                and stored_email_section(self.organization.settings).get("enabled")
-            )
-        )
-        if not email_enabled:
+        if not self.can_send:
             logger.info(
                 "Email disabled. Would send to {} recipients: {}",
                 len(to_emails),

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Upload, Download, FileText, CheckCircle, AlertTriangle, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -653,6 +653,21 @@ const ImportMembers: React.FC = () => {
    * mail no one can recall in front of every one of them.
    */
   const [sendWelcomeEmails, setSendWelcomeEmails] = useState(false);
+  // false: email cannot be sent, and the server refuses a create that asks
+  // for a welcome email, so the option is withdrawn rather than failing every
+  // row. null until known; the server still refuses if it has to.
+  const [welcomeEmailAvailable, setWelcomeEmailAvailable] = useState<boolean | null>(null);
+  useEffect(() => {
+    userService
+      .getWelcomeEmailAvailability()
+      .then(({ available }) => {
+        setWelcomeEmailAvailable(available);
+        if (!available) setSendWelcomeEmails(false);
+      })
+      .catch(() => {
+        // Non-critical: see above.
+      });
+  }, []);
   /** Read inside the import loop, so a ref rather than state — a re-render would not reach it. */
   const cancelRequested = useRef(false);
 
@@ -1135,7 +1150,7 @@ const ImportMembers: React.FC = () => {
                   type="checkbox"
                   checked={sendWelcomeEmails}
                   onChange={(e) => setSendWelcomeEmails(e.target.checked)}
-                  disabled={importing}
+                  disabled={importing || welcomeEmailAvailable === false}
                   className="border-theme-input-border mt-1 h-4 w-4 rounded"
                 />
                 <span className="text-sm">
@@ -1144,6 +1159,8 @@ const ImportMembers: React.FC = () => {
                     Each member is emailed a temporary password the moment their record is created, and the email cannot
                     be recalled. They must change it at first sign-in. Left off, the roster imports quietly and you set
                     passwords later with Reset Password in Member Management.
+                    {welcomeEmailAvailable === false &&
+                      " Unavailable: email isn't set up for this department, so import quietly and set passwords afterwards."}
                   </span>
                 </span>
               </label>

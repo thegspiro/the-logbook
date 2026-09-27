@@ -2526,8 +2526,21 @@ class MembershipPipelineService:
         # so an event-driven caller's own commit would have persisted a final
         # stage marked complete with nobody converted, plus an email already
         # sent saying so. Ordering it first leaves nothing to undo.
+        transfer: Optional[Dict[str, Any]] = None
         if will_auto_transfer:
-            transfer = await self._do_transfer(prospect, completed_by)
+            from app.services.email_service import welcome_email_can_send
+
+            # The generated password reaches the new member only by the welcome
+            # email, so send one whenever email can go out; it is deferred until
+            # after the commit below (see _deliver_auto_transfer_welcome).
+            transfer = await self._do_transfer(
+                prospect,
+                completed_by,
+                send_welcome_email=await welcome_email_can_send(
+                    self.db, organization_id
+                ),
+                defer_welcome_email=True,
+            )
             if isinstance(transfer, dict) and not transfer.get("success"):
                 # The detailed message names the matched member and their
                 # email. /transfer redacts it deliberately and so must this:
@@ -2623,6 +2636,9 @@ class MembershipPipelineService:
 
         await self.db.commit()
 
+        if isinstance(transfer, dict) and transfer.get("success"):
+            await self._deliver_auto_transfer_welcome(prospect, transfer, completed_by)
+
         # An automated-email stage has nothing left for anyone to do once its
         # email has gone out, and an Enable Status Page stage none once it has
         # acted, so each completes itself rather than sitting "in progress"
@@ -2637,6 +2653,75 @@ class MembershipPipelineService:
                 prospect_id, organization_id, finished_step_id, trigger
             )
         return await self.get_prospect(prospect_id, organization_id)
+
+    async def _deliver_auto_transfer_welcome(
+        self,
+        prospect: ProspectiveMember,
+        transfer: Dict[str, Any],
+        approved_by: Optional[str],
+    ) -> None:
+        """Send an auto-transfer's welcome email, or say plainly that none went.
+
+        Runs after the approval has committed, so the member it announces
+        exists. Without the email the new member holds a password nobody
+        knows, and the approval gave no sign of it: record that on the
+        applicant's activity log and, when a person approved, tell them in-app.
+        An automated conversion has no approver to tell, so the activity log
+        is where it shows. Failures here are logged, never raised: the
+        approval they follow is already durable.
+        """
+        try:
+            send = transfer.get("_send_welcome_email")
+            if send is not None and await send():
+                return
+
+            reason = (
+                "No welcome email was sent because email is not set up for this "
+                "department"
+                if send is None
+                else "The welcome email could not be sent"
+            ) + (
+                ", so the new member has no password they know. Set one with "
+                "Reset Password in Member Management before they can sign in."
+            )
+            user_id = str(transfer["user_id"])
+            await self._log_activity(
+                prospect_id=prospect.id,
+                action="welcome_email_not_sent",
+                details={"user_id": user_id, "reason": reason},
+                performed_by=approved_by,
+            )
+            await self.db.commit()
+
+            if approved_by:
+                from app.models.notification import (
+                    NotificationCategory,
+                    NotificationChannel,
+                )
+                from app.services.notifications_service import NotificationsService
+
+                name = f"{prospect.first_name} {prospect.last_name}".strip()
+                await NotificationsService(self.db).log_notification(
+                    organization_id=prospect.organization_id,
+                    log_data={
+                        "recipient_id": approved_by,
+                        "channel": NotificationChannel.IN_APP,
+                        "category": NotificationCategory.MEMBERS,
+                        "subject": f"Set a password for {name}",
+                        "message": reason,
+                        "action_url": f"/members/{user_id}",
+                        "delivered": True,
+                        "sent_at": datetime.now(timezone.utc),
+                    },
+                )
+        except Exception:
+            logger.exception(
+                "Could not deliver or report the welcome email for auto-transferred "
+                f"prospect {prospect.id}"
+            )
+            # Leave the session usable: complete_step reads the prospect back
+            # after this returns.
+            await self.db.rollback()
 
     # What a stage that finishes itself on arrival records, per trigger.
     _ON_ARRIVAL_COMPLETIONS: Dict[str, Tuple[str, Dict[str, Any]]] = {
@@ -3514,6 +3599,7 @@ class MembershipPipelineService:
         hire_date=None,
         emergency_contacts: Optional[List[Dict[str, Any]]] = None,
         membership_type: Optional[str] = None,
+        initial_password: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Transfer a prospect to a full User record"""
         # Serialize on the prospect row: without the lock, two concurrent
@@ -3547,6 +3633,7 @@ class MembershipPipelineService:
             hire_date=hire_date,
             emergency_contacts=emergency_contacts,
             membership_type=membership_type,
+            initial_password=initial_password,
         )
 
     async def _do_transfer(
@@ -3564,8 +3651,21 @@ class MembershipPipelineService:
         hire_date=None,
         emergency_contacts: Optional[List[Dict[str, Any]]] = None,
         membership_type: Optional[str] = None,
+        initial_password: Optional[str] = None,
+        defer_welcome_email: bool = False,
     ) -> Dict[str, Any]:
-        """Internal method to perform the actual transfer"""
+        """Internal method to perform the actual transfer.
+
+        ``initial_password`` is one the coordinator chose (already checked by
+        the endpoint); without it a temporary one is generated, which only the
+        welcome email ever carries.
+
+        ``defer_welcome_email`` is for a caller that commits after this
+        returns: instead of sending, the result carries
+        ``"_send_welcome_email"``, a coroutine function to await once the
+        transfer is durable. Sending first could email credentials for an
+        account whose transaction then rolls back.
+        """
 
         # The manual "Convert" action is the documented, ordinary way to
         # complete a pipeline's final stage (see skip_current_step's own
@@ -3695,7 +3795,7 @@ class MembershipPipelineService:
         # kept in memory for the optional welcome email.
         from app.core.security import generate_temporary_password, hash_password
 
-        temp_password = generate_temporary_password()
+        temp_password = initial_password or generate_temporary_password()
         password_hash = hash_password(temp_password)
 
         # Use explicit override, or auto-generate from org settings; keep
@@ -3854,9 +3954,8 @@ class MembershipPipelineService:
         # Send welcome email with temporary credentials if requested.
         # Use the primary (department) email so the new member receives
         # credentials at the address they'll actually log in with.
-        welcome_email_sent = False
-        if send_welcome_email:
-            welcome_email_sent = await self._send_transfer_welcome_email(
+        async def send_welcome() -> bool:
+            return await self._send_transfer_welcome_email(
                 prospect=prospect,
                 username=username,
                 temp_password=temp_password,
@@ -3864,7 +3963,11 @@ class MembershipPipelineService:
                 recipient_email=primary_email,
             )
 
-        return {
+        welcome_email_sent = False
+        if send_welcome_email and not defer_welcome_email:
+            welcome_email_sent = await send_welcome()
+
+        result: Dict[str, Any] = {
             "success": True,
             "prospect_id": prospect.id,
             "user_id": user_id,
@@ -3876,6 +3979,9 @@ class MembershipPipelineService:
             "auto_enrollment": enrollment_result,
             "welcome_email_sent": welcome_email_sent,
         }
+        if send_welcome_email and defer_welcome_email:
+            result["_send_welcome_email"] = send_welcome
+        return result
 
     async def _auto_enroll_probationary(
         self,

@@ -13,12 +13,16 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockCreateMember = vi.fn();
+const mockGetWelcomeEmailAvailability = vi.fn();
 const mockPreviewNextMembershipId = vi.fn();
 const mockGetRoles = vi.fn();
 const mockGetLocations = vi.fn();
 
 vi.mock('../services/api', () => ({
-  userService: { createMember: (...args: unknown[]) => mockCreateMember(...args) as unknown },
+  userService: {
+    createMember: (...args: unknown[]) => mockCreateMember(...args) as unknown,
+    getWelcomeEmailAvailability: (...args: unknown[]) => mockGetWelcomeEmailAvailability(...args) as unknown,
+  },
   organizationService: {
     previewNextMembershipId: (...args: unknown[]) => mockPreviewNextMembershipId(...args) as unknown,
   },
@@ -85,6 +89,8 @@ describe('AddMember', () => {
     mockGetRoles.mockResolvedValue([]);
     mockGetLocations.mockResolvedValue([]);
     mockCreateMember.mockResolvedValue({ id: 'u1' });
+    mockGetWelcomeEmailAvailability.mockReset();
+    mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
   });
 
   it('offers a rank to an operational member', async () => {
@@ -141,6 +147,59 @@ describe('AddMember', () => {
     expect(payload.member_class).toBe('operational');
     expect(payload.member_status).toBe('regular');
     expect(payload.rank).toBe('captain');
+  });
+
+  describe('when email cannot deliver a temporary password', () => {
+    const passwordToggle = () => screen.getByRole('checkbox', { name: /set initial password/i });
+
+    beforeEach(() => {
+      mockGetWelcomeEmailAvailability.mockReset();
+      mockGetWelcomeEmailAvailability.mockResolvedValue({ available: false });
+    });
+
+    it('requires an initial password and says why', async () => {
+      renderWithRouter(<AddMember />);
+
+      await waitFor(() => expect(passwordToggle()).toBeChecked());
+      expect(passwordToggle()).toBeDisabled();
+      expect(screen.getByText(/email isn't set up for this department/i)).toBeInTheDocument();
+    });
+
+    it('does not submit without the password', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(passwordToggle()).toBeChecked());
+
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      expect(mockCreateMember).not.toHaveBeenCalled();
+    });
+
+    it('sends the password and asks for no welcome email', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(passwordToggle()).toBeChecked());
+
+      await fillRequired(user);
+      await user.type(screen.getByPlaceholderText('Minimum 12 characters'), 'Hydrant$Blue947');
+      await user.type(screen.getByPlaceholderText(/re-enter|confirm/i), 'Hydrant$Blue947');
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload.password).toBe('Hydrant$Blue947');
+      expect(payload.send_welcome_email).toBe(false);
+    });
+  });
+
+  it('leaves the initial password optional when email can deliver one', async () => {
+    renderWithRouter(<AddMember />);
+    await waitFor(() => expect(mockGetWelcomeEmailAvailability).toHaveBeenCalled());
+
+    const toggle = screen.getByRole('checkbox', { name: /set initial password/i });
+    expect(toggle).not.toBeChecked();
+    expect(toggle).toBeEnabled();
   });
 
   describe('the optional second emergency contact', () => {

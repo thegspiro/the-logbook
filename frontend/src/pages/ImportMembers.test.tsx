@@ -7,11 +7,13 @@ import ImportMembers from './ImportMembers';
 const mockCreateMember = vi.fn();
 const mockGetRoles = vi.fn();
 const mockGetUsers = vi.fn();
+const mockGetWelcomeEmailAvailability = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: {
     createMember: (...args: unknown[]) => mockCreateMember(...args) as unknown,
     getUsers: (...args: unknown[]) => mockGetUsers(...args) as unknown,
+    getWelcomeEmailAvailability: (...args: unknown[]) => mockGetWelcomeEmailAvailability(...args) as unknown,
   },
   roleService: {
     getRoles: (...args: unknown[]) => mockGetRoles(...args) as unknown,
@@ -83,6 +85,32 @@ describe('ImportMembers', () => {
     mockGetRoles.mockResolvedValue([{ id: 'member-role', slug: 'member', name: 'Member' }]);
     mockGetUsers.mockResolvedValue([]);
     mockCreateMember.mockResolvedValue({ id: 'u1' });
+    mockGetWelcomeEmailAvailability.mockReset();
+    mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+  });
+
+  describe('welcome emails', () => {
+    const welcomeToggle = () => screen.getByRole('checkbox', { name: /send welcome emails now/i });
+
+    it('can be turned on when email can deliver them', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv('firstName,lastName,email\nJohn,Doe,john@example.com');
+
+      await waitFor(() => expect(welcomeToggle()).toBeEnabled());
+    });
+
+    it('are withdrawn, with the reason, when email cannot deliver them', async () => {
+      // POST /users refuses a create that asks for a welcome email it cannot
+      // send, so leaving the option on would fail every row.
+      mockGetWelcomeEmailAvailability.mockReset();
+      mockGetWelcomeEmailAvailability.mockResolvedValue({ available: false });
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv('firstName,lastName,email\nJohn,Doe,john@example.com');
+
+      await waitFor(() => expect(welcomeToggle()).toBeDisabled());
+      expect(welcomeToggle()).not.toBeChecked();
+      expect(screen.getByText(/email isn't set up for this department/i)).toBeInTheDocument();
+    });
   });
 
   it('renders the page header and instructions', () => {

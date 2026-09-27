@@ -654,7 +654,10 @@ class TestSkipNeverTransfers:
             svc, "_advance_current_step", new_callable=AsyncMock, return_value=None
         ) as mock_advance, patch.object(
             svc, "_do_transfer", new_callable=AsyncMock
-        ) as mock_transfer:
+        ) as mock_transfer, patch(
+            "app.services.email_service.welcome_email_can_send",
+            new=AsyncMock(return_value=True),
+        ):
             await svc.complete_step(
                 prospect_id="p1",
                 organization_id="org1",
@@ -663,6 +666,10 @@ class TestSkipNeverTransfers:
                 action_result={"completed_items": ["Vote held"]},
             )
         mock_transfer.assert_awaited_once()
+        # The generated password reaches the member only by email, so an
+        # auto-transfer asks for one, deferred until after the commit.
+        assert mock_transfer.await_args.kwargs["send_welcome_email"] is True
+        assert mock_transfer.await_args.kwargs["defer_welcome_email"] is True
         mock_advance.assert_not_awaited()
 
 

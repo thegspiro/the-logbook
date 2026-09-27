@@ -64,6 +64,18 @@ describe('userService', () => {
     });
   });
 
+  // ── getWelcomeEmailAvailability ──────────────────────────────────────
+  describe('getWelcomeEmailAvailability', () => {
+    it('should GET /users/welcome-email-available and return the answer', async () => {
+      mockGet.mockResolvedValue({ data: { available: false } });
+
+      const result = await userService.getWelcomeEmailAvailability();
+
+      expect(mockGet).toHaveBeenCalledWith('/users/welcome-email-available');
+      expect(result).toEqual({ available: false });
+    });
+  });
+
   // ── getUsersWithRoles ────────────────────────────────────────────────
   describe('getUsersWithRoles', () => {
     it('should GET /users/with-roles and return users with roles', async () => {

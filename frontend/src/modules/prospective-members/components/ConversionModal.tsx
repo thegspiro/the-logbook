@@ -28,12 +28,55 @@ import toast from 'react-hot-toast';
 import type { Applicant, TargetMembershipType, EmergencyContact } from '../types';
 import { StepProgressStatus } from '../types';
 import { applicantService } from '../services/api';
+import { userService } from '../../../services/api';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import TargetRolePicker from './TargetRolePicker';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ADMINISTRATIVE_RANK_HINT } from '../../../utils/membership';
+
+type PasswordDelivery = 'email' | 'set' | 'later';
+
+/**
+ * What the coordinator needs to do next about the new member's password.
+ *
+ * The conversion always succeeds as a conversion, so a success screen alone
+ * hid the one case that still needs action: a welcome email that was asked
+ * for and did not go out leaves a password nobody knows.
+ */
+const PasswordOutcome: React.FC<{ delivery: PasswordDelivery; welcomeEmailSent: boolean; name: string }> = ({
+  delivery,
+  welcomeEmailSent,
+  name,
+}) => {
+  if (delivery === 'email' && welcomeEmailSent) {
+    return (
+      <p className="text-theme-text-muted mb-4 text-center text-sm">
+        A welcome email with a temporary password was sent to {name}.
+      </p>
+    );
+  }
+  if (delivery === 'set') {
+    return (
+      <p className="text-theme-text-muted mb-4 text-center text-sm">
+        Give {name} the password you set. They must change it at first sign-in.
+      </p>
+    );
+  }
+  return (
+    <div
+      role="alert"
+      className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400"
+    >
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <p>
+        {delivery === 'email' ? 'The welcome email could not be sent, so ' : ''}
+        {name} has no password they know yet. Set one with Reset Password in Member Management before they can sign in.
+      </p>
+    </div>
+  );
+};
 
 interface ConversionModalProps {
   isOpen: boolean;
@@ -60,7 +103,16 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
   const [targetRoleId, setTargetRoleId] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [hireDate, setHireDate] = useState('');
-  const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
+  // How the new member learns their password. 'email' sends a generated one;
+  // 'set' takes one the coordinator chooses; 'later' converts now and leaves
+  // it to Reset Password — the same three states POST /transfer accepts.
+  const [passwordDelivery, setPasswordDelivery] = useState<PasswordDelivery>('email');
+  const [initialPassword, setInitialPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  // false: email cannot send, so the server refuses 'email'. null: not known
+  // yet, or the check failed — the server still refuses if it has to.
+  const [welcomeEmailAvailable, setWelcomeEmailAvailable] = useState<boolean | null>(null);
   const [notes, setNotes] = useState('');
   const [emergencyContact, setEmergencyContact] = useState<EmergencyContact>({
     name: '',
@@ -72,7 +124,9 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
   const [conversionResult, setConversionResult] = useState<{
     user_id: string;
     message: string;
-    membership_number?: string;
+    membership_number?: string | undefined;
+    delivery: PasswordDelivery;
+    welcome_email_sent: boolean;
   } | null>(null);
 
   // Reset state when applicant changes or modal opens
@@ -85,13 +139,35 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
       setTargetRoleId(applicant.target_role_id || '');
       setMiddleName('');
       setHireDate(getTodayLocalDate(tz));
-      setSendWelcomeEmail(true);
+      setPasswordDelivery('email');
+      setInitialPassword('');
+      setConfirmPassword('');
+      setPasswordError(null);
       setNotes('');
       setEmergencyContact({ name: '', relationship: '', phone: '' });
       setIsConverting(false);
       setConversionResult(null);
     }
   }, [applicant, isOpen, tz]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    setWelcomeEmailAvailable(null);
+    userService
+      .getWelcomeEmailAvailability()
+      .then(({ available }) => {
+        if (cancelled) return;
+        setWelcomeEmailAvailable(available);
+        if (!available) setPasswordDelivery((current) => (current === 'email' ? 'set' : current));
+      })
+      .catch(() => {
+        // Non-critical: the conversion itself is refused if it has to be.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   if (!isOpen || !applicant) return null;
 
@@ -104,6 +180,17 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
   const isAdministrative = membershipType === 'administrative';
 
   const handleConvert = async () => {
+    if (passwordDelivery === 'set') {
+      if (initialPassword.length < 12) {
+        setPasswordError('The password must be at least 12 characters.');
+        return;
+      }
+      if (initialPassword !== confirmPassword) {
+        setPasswordError('The passwords do not match.');
+        return;
+      }
+    }
+    setPasswordError(null);
     setIsConverting(true);
     try {
       const emergencyContacts: EmergencyContact[] = [];
@@ -114,7 +201,8 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
       const result = await applicantService.convertToMember(applicant.id, {
         target_membership_type: membershipType,
         target_role_id: targetRoleId || undefined,
-        send_welcome_email: sendWelcomeEmail,
+        send_welcome_email: passwordDelivery === 'email',
+        password: passwordDelivery === 'set' ? initialPassword : undefined,
         notes: notes || undefined,
         middle_name: middleName || undefined,
         hire_date: hireDate || undefined,
@@ -122,7 +210,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
         station: station || undefined,
         emergency_contacts: emergencyContacts.length > 0 ? emergencyContacts : undefined,
       });
-      setConversionResult(result);
+      setConversionResult({ ...result, delivery: passwordDelivery });
       // Both halves: a conversion empties the applicant out of the open list
       // and moves two header counts (active down, converted up). Refreshing
       // the list alone left the stat cards claiming the applicant was still
@@ -160,7 +248,9 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
                   Convert to Member
                 </h2>
                 <p className="text-theme-text-muted text-sm">
-                  Step {conversionResult ? '3' : step} of 2 — {step === 1 ? 'Review Applicant' : 'Set Up Account'}
+                  {conversionResult
+                    ? 'Done'
+                    : `Step ${step} of 2 — ${step === 1 ? 'Review Applicant' : 'Set Up Account'}`}
                 </p>
               </div>
             </div>
@@ -187,6 +277,11 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
                   <p className="text-theme-text-muted text-sm">Membership #: {conversionResult.membership_number}</p>
                 )}
               </div>
+              <PasswordOutcome
+                delivery={conversionResult.delivery}
+                welcomeEmailSent={conversionResult.welcome_email_sent}
+                name={`${applicant.first_name} ${applicant.last_name}`}
+              />
               <div className="flex justify-end">
                 <button
                   onClick={onClose}
@@ -446,16 +541,106 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
                   </div>
                 </div>
 
-                {/* Welcome Email */}
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={sendWelcomeEmail}
-                    onChange={(e) => setSendWelcomeEmail(e.target.checked)}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Send welcome email with login credentials
-                </label>
+                {/* How the member gets their password */}
+                <fieldset className="space-y-2">
+                  <legend className="text-theme-text-secondary mb-1 text-sm font-medium">
+                    How will they get their password?
+                  </legend>
+                  <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="password-delivery"
+                      value="email"
+                      checked={passwordDelivery === 'email'}
+                      onChange={() => setPasswordDelivery('email')}
+                      disabled={welcomeEmailAvailable === false}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Email them a temporary password
+                      {welcomeEmailAvailable === false && (
+                        <span className="text-theme-text-muted block text-xs">
+                          Unavailable: email isn&apos;t set up for this department.
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                  <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="password-delivery"
+                      value="set"
+                      checked={passwordDelivery === 'set'}
+                      onChange={() => setPasswordDelivery('set')}
+                      className="mt-0.5"
+                    />
+                    <span>Set an initial password now</span>
+                  </label>
+                  {passwordDelivery === 'set' && (
+                    <div className="grid grid-cols-1 gap-2 pl-6 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="conversion-password" className="text-theme-text-muted mb-1 block text-xs">
+                          Password
+                        </label>
+                        <input
+                          id="conversion-password"
+                          type="password"
+                          value={initialPassword}
+                          onChange={(e) => {
+                            setInitialPassword(e.target.value);
+                            setPasswordError(null);
+                          }}
+                          placeholder="Minimum 12 characters"
+                          autoComplete="new-password"
+                          className="form-input"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="conversion-password-confirm"
+                          className="text-theme-text-muted mb-1 block text-xs"
+                        >
+                          Confirm password
+                        </label>
+                        <input
+                          id="conversion-password-confirm"
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(e) => {
+                            setConfirmPassword(e.target.value);
+                            setPasswordError(null);
+                          }}
+                          autoComplete="new-password"
+                          className="form-input"
+                        />
+                      </div>
+                      <p className="text-theme-text-muted text-xs sm:col-span-2">
+                        Give it to them yourself; they must change it at first sign-in.
+                      </p>
+                      {passwordError && (
+                        <p role="alert" className="text-sm text-red-700 sm:col-span-2 dark:text-red-400">
+                          {passwordError}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="password-delivery"
+                      value="later"
+                      checked={passwordDelivery === 'later'}
+                      onChange={() => setPasswordDelivery('later')}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Set it later
+                      <span className="text-theme-text-muted block text-xs">
+                        They can&apos;t sign in until you set one with Reset Password in Member Management.
+                      </span>
+                    </span>
+                  </label>
+                </fieldset>
 
                 {/* Notes */}
                 <div>

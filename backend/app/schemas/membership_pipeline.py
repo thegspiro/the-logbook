@@ -675,6 +675,15 @@ class TransferProspectRequest(BaseModel):
     send_welcome_email: bool = Field(
         default=False, description="Send welcome email with credentials"
     )
+    password: Optional[str] = Field(
+        None,
+        min_length=12,
+        max_length=128,
+        description=(
+            "Optional initial password. If omitted a temporary password is "
+            "generated, which only the welcome email ever carries."
+        ),
+    )
     # Two-step wizard fields
     middle_name: Optional[str] = Field(
         None, max_length=100, description="Middle name for the new member"
@@ -701,6 +710,7 @@ class TransferProspectResponse(BaseModel):
     personal_email: Optional[str] = None
     department_email_generated: bool = False
     message: str
+    welcome_email_sent: bool = False
 
 
 # --- Activity Log Schema ---

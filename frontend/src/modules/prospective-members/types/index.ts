@@ -658,6 +658,8 @@ export interface ConvertApplicantRequest {
   target_membership_type: TargetMembershipType;
   target_role_id?: string | undefined;
   send_welcome_email: boolean;
+  /** An initial password the coordinator chose; omitted for a generated one. */
+  password?: string | undefined;
   notes?: string | undefined;
   // Two-step wizard fields
   middle_name?: string | undefined;
@@ -680,6 +682,9 @@ export interface ConvertApplicantResponse {
   user_id: string;
   membership_type: TargetMembershipType;
   message: string;
+  membership_number?: string | undefined;
+  /** Whether the welcome email carrying the member's password went out. */
+  welcome_email_sent: boolean;
 }
 
 // Public application status
