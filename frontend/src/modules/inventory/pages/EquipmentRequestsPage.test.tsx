@@ -107,7 +107,9 @@ describe('EquipmentRequestsPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Radio XTS 5000')).toBeInTheDocument();
     });
-    expect(screen.getByText('pending')).toBeInTheDocument();
+    // The badge carries the same label the member sees, not the raw value.
+    expect(screen.getByText('Awaiting review', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.queryByText('pending')).not.toBeInTheDocument();
     expect(screen.getByText('Temporary need')).toBeInTheDocument();
     expect(screen.getByText(/John Doe/)).toBeInTheDocument();
     expect(screen.getByText(/Need for shift/)).toBeInTheDocument();
@@ -225,7 +227,7 @@ describe('EquipmentRequestsPage', () => {
     await user.click(screen.getByText('Review'));
     const notesField = await screen.findByPlaceholderText('Optional notes for the requester...');
     await user.type(notesField, 'Not available');
-    await user.click(screen.getByText('Deny'));
+    await user.click(screen.getByText('Decline'));
     await waitFor(() => {
       expect(mockReviewEquipmentRequest).toHaveBeenCalledWith('req-1', {
         status: 'denied',

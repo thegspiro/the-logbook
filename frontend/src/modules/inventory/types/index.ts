@@ -414,9 +414,10 @@ export const REQUEST_STATUS_BADGES: Record<string, string> = {
 };
 
 /**
- * What a member reads for their own equipment request's status. The stored
- * values are workflow terms; "denied" in particular reads as a verdict on the
- * member, where the request form tells them the quartermaster may decline.
+ * How an equipment request's status reads, on both the member's list and the
+ * quartermaster's. The stored values are workflow terms; "denied" in
+ * particular reads as a verdict on the member, where the request form tells
+ * them the quartermaster may decline. One map so both sides use one word.
  */
 export const EQUIPMENT_REQUEST_STATUS_LABELS: Record<string, string> = {
   pending: 'Awaiting review',

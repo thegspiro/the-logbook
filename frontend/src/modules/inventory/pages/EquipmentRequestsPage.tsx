@@ -21,7 +21,7 @@ import {
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { inventoryService } from '../../../services/api';
 import type { EquipmentRequestItem, FulfillmentOption, FulfillmentOptionsResponse } from '../types';
-import { REQUEST_STATUS_BADGES, sizeLabel } from '../types';
+import { EQUIPMENT_REQUEST_STATUS_LABELS, REQUEST_STATUS_BADGES, sizeLabel } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
@@ -381,10 +381,10 @@ const EquipmentRequestsPage: React.FC = () => {
             }}
             className="form-input w-48"
           >
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="fulfilled">Fulfilled</option>
-            <option value="denied">Denied</option>
+            <option value="pending">{EQUIPMENT_REQUEST_STATUS_LABELS.pending}</option>
+            <option value="approved">{EQUIPMENT_REQUEST_STATUS_LABELS.approved}</option>
+            <option value="fulfilled">{EQUIPMENT_REQUEST_STATUS_LABELS.fulfilled}</option>
+            <option value="denied">{EQUIPMENT_REQUEST_STATUS_LABELS.denied}</option>
             <option value="">All</option>
           </select>
         </div>
@@ -411,7 +411,7 @@ const EquipmentRequestsPage: React.FC = () => {
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${REQUEST_STATUS_BADGES[req.status] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}
                       >
-                        {req.status}
+                        {EQUIPMENT_REQUEST_STATUS_LABELS[req.status] ?? req.status}
                       </span>
                       <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-xs">
                         {req.requested_duration === 'ongoing' ? 'Ongoing need' : 'Temporary need'}
@@ -505,10 +505,10 @@ const EquipmentRequestsPage: React.FC = () => {
                 statusFilter === 'pending'
                   ? 'Show Approved'
                   : statusFilter === 'approved'
-                    ? 'Show Denied'
+                    ? 'Show Declined'
                     : statusFilter === 'denied'
                       ? 'Show All'
-                      : 'Show Pending',
+                      : 'Show Awaiting review',
               icon: <Filter className="h-5 w-5" />,
               onClick: () => {
                 setPage(0);
@@ -624,7 +624,7 @@ const EquipmentRequestsPage: React.FC = () => {
                   className="btn-primary btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <XCircle className="h-4 w-4" />
-                  Deny
+                  Decline
                 </button>
                 <button
                   onClick={() => {
