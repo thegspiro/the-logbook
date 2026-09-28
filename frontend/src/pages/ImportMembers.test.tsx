@@ -12,7 +12,8 @@ const mockGetWelcomeEmailAvailability = vi.fn();
 vi.mock('../services/api', () => ({
   userService: {
     createMember: (...args: unknown[]) => mockCreateMember(...args) as unknown,
-    getUsers: (...args: unknown[]) => mockGetUsers(...args) as unknown,
+    // The pre-check reads the with-roles list (W09); the mock keeps its name.
+    getUsersWithRoles: (...args: unknown[]) => mockGetUsers(...args) as unknown,
     getWelcomeEmailAvailability: (...args: unknown[]) => mockGetWelcomeEmailAvailability(...args) as unknown,
   },
   roleService: {
@@ -597,7 +598,7 @@ describe('ImportMembers', () => {
       expect(mockCreateMember).toHaveBeenCalledTimes(2);
     });
     expect(await screen.findByText('Import Complete!')).toBeInTheDocument();
-    expect(screen.getByText('Successfully imported 2 members')).toBeInTheDocument();
+    expect(screen.getByText('Imported 2 members')).toBeInTheDocument();
   });
 
   // Creating a member emails a temporary password immediately, and an import
@@ -826,7 +827,9 @@ describe('ImportMembers', () => {
       renderWithRouter(<ImportMembers />);
       await uploadCsv('firstName,lastName,email\nJohn,Doe,taken@example.com\nJane,Roe,not-an-email');
       await clickImport();
-      await screen.findByText('Import Complete!');
+      // Every row failed, so the result must not read as a success (W09).
+      await screen.findByText('Nothing Was Imported');
+      expect(screen.queryByText('Import Complete!')).not.toBeInTheDocument();
 
       const report = await captureDownload(async () => {
         await userEvent.setup().click(screen.getByText('Download Error Report'));
@@ -834,7 +837,6 @@ describe('ImportMembers', () => {
 
       expect(report).toContain('Email already exists');
       expect(report).toContain('is not an email address');
-      expect(screen.getByText('Import Complete!')).toBeInTheDocument();
     });
   });
 });

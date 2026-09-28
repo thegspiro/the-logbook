@@ -32,7 +32,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | #   | Activity                                                                  | Acts as                | Starts at                                    | Status |
 | --- | ------------------------------------------------------------------------- | ---------------------- | -------------------------------------------- | ------ |
 | W08 | Add a member, with and without a password, and their first sign-in        | admin → new member     | `/members/add`                               | ✅     |
-| W09 | Import members from a spreadsheet                                         | admin                  | `/members/import`                            | ⬜     |
+| W09 | Import members from a spreadsheet                                         | admin                  | `/members/import`                            | ✅     |
 | W10 | Find a member and read their profile, as a member (contact visibility)    | member, admin          | `/members`, `/members/:userId`               | ⬜     |
 | W11 | Edit a member as an officer: details, clearing a field, status, history   | admin                  | `/members/admin/edit/:userId`                | ⬜     |
 | W12 | Member settings: ranks, membership tiers, ID numbering, EVOC, visibility  | admin                  | `/members/admin/settings/*`                  | ⬜     |
@@ -168,6 +168,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W09 — Import members from a spreadsheet — 2026-09-28
+
+Driven as: `admin` at 1280×900 and 390×844, with `member2` refused. Held:
+the pre-check named four of seven bad rows before anything was written, each
+with the column and a fix; the error report returns them with the reason
+and neutralises a leading `=`; imported rows were stored exactly (US dates
+converted, quoted commas kept, rank, position and contacts saved); a
+re-upload flags every row as already on the roster; the error report
+re-uploads with its reason column ignored; a non-CSV is refused. Fixed:
+W09-1 (MED — a duplicate email passed the pre-check whenever the department
+hides work email, because `GET /users` returned every email null), W09-2
+(LOW — "Import Complete! Successfully imported 0 members" over an all-failed
+run), W09-3 (NIT). Nothing flagged. Gate: typecheck, lint and the full frontend suite
+clean (no Python changed). Next: W10.
 
 ### W08 — Add a member and their first sign-in — 2026-09-28
 

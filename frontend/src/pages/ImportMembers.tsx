@@ -780,7 +780,13 @@ const ImportMembers: React.FC = () => {
       // through a write, into a reason naming the member it collides with.
       let existing: ExistingMembers | null = null;
       try {
-        existing = indexExistingMembers(await userService.getUsers());
+        // The with-roles list, not the directory: `GET /users` applies the
+        // department's contact-visibility ceiling even for managers, so with
+        // work email hidden every email came back null and a duplicate email
+        // was only found by the server, per row, after the preview had counted
+        // it as importable (workflow review W09). This page already requires
+        // members.manage, which the with-roles list accepts.
+        existing = indexExistingMembers(await userService.getUsersWithRoles());
       } catch (_error) {
         toast(
           'Could not load the current roster, so rows that duplicate an existing member will only be caught during the import.',
@@ -977,7 +983,7 @@ const ImportMembers: React.FC = () => {
             </div>
             <button
               onClick={() => void navigate('/members')}
-              className="text-theme-text-secondary hover:text-theme-text-primary shrink-0 self-start text-sm transition-colors sm:self-auto"
+              className="text-theme-text-secondary hover:text-theme-text-primary touch-target-phone shrink-0 self-start text-sm transition-colors sm:self-auto"
             >
               ← Back to Members
             </button>
@@ -1039,7 +1045,7 @@ const ImportMembers: React.FC = () => {
                     setFile(null);
                     resetFileState();
                   }}
-                  className="mt-3 text-sm text-red-700 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                  className="touch-target-phone mt-3 text-sm text-red-700 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                 >
                   Remove file
                 </button>
@@ -1214,7 +1220,9 @@ const ImportMembers: React.FC = () => {
                 ) : (
                   <>
                     <CheckCircle className="h-5 w-5" />
-                    <span>Import {preflight.valid.length} Members</span>
+                    <span>
+                      Import {preflight.valid.length} {preflight.valid.length === 1 ? 'Member' : 'Members'}
+                    </span>
                   </>
                 )}
               </button>
@@ -1226,9 +1234,21 @@ const ImportMembers: React.FC = () => {
         {importResult && (
           <div className="card p-8">
             <div className="mb-6 text-center">
-              <CheckCircle className="text-theme-alert-success-icon mx-auto mb-4 h-16 w-16" />
-              <h2 className="text-theme-text-primary mb-2 text-2xl font-bold">Import Complete!</h2>
-              <p className="text-theme-text-secondary">Successfully imported {importResult.success} members</p>
+              {/* "Import Complete! Successfully imported 0 members" read as a
+                  success over a run where every row failed (workflow review W09). */}
+              {importResult.success > 0 ? (
+                <CheckCircle className="text-theme-alert-success-icon mx-auto mb-4 h-16 w-16" />
+              ) : (
+                <AlertTriangle className="text-theme-alert-danger-icon mx-auto mb-4 h-16 w-16" />
+              )}
+              <h2 className="text-theme-text-primary mb-2 text-2xl font-bold">
+                {importResult.success > 0 ? 'Import Complete!' : 'Nothing Was Imported'}
+              </h2>
+              <p className="text-theme-text-secondary">
+                {importResult.success > 0
+                  ? `Imported ${importResult.success} ${importResult.success === 1 ? 'member' : 'members'}`
+                  : 'Every row was refused. The reasons are listed below.'}
+              </p>
             </div>
 
             <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
