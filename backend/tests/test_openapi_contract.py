@@ -8,7 +8,12 @@ schemathesis run. They pin the corrections that suite found on 2026-08-01.
 
 import pytest
 
-pytestmark = [pytest.mark.unit]
+# The module fixture imports the whole app and builds the OpenAPI schema for
+# 1,200+ routes — about 23s on a developer machine, and it is charged to the
+# first test's 30s pytest-timeout budget. A slower CI runner tipped it over
+# (12 setup timeouts, nothing asserted). The budget is raised for the
+# fixture's cost, not to tolerate a hang: every assertion is unchanged.
+pytestmark = [pytest.mark.unit, pytest.mark.timeout(120)]
 
 
 @pytest.fixture(scope="module")
