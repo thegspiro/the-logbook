@@ -39,8 +39,12 @@ export const EventRecurrenceInfo: React.FC<EventRecurrenceInfoProps> = ({
   return (
     <>
       <div className="mt-2 flex items-center gap-3 text-sm">
+        {/* A cancelled occurrence is not in the list it is counted against,
+            and read "Occurrence of 6" with no number. */}
         <span className="text-theme-text-muted">
-          Occurrence {seriesPosition} of {seriesTotal}
+          {seriesPosition !== null
+            ? `Occurrence ${seriesPosition} of ${seriesTotal ?? seriesEvents.length}`
+            : `Series of ${seriesTotal ?? seriesEvents.length}`}
         </span>
         <div className="flex items-center gap-1">
           {prevOccurrence ? (

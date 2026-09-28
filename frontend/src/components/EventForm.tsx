@@ -650,7 +650,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <button
               type="button"
               onClick={() => insertMarkdown('bold')}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded p-1.5 transition-colors"
               title="Bold (**text**)"
               aria-label="Insert bold text"
             >
@@ -659,7 +659,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <button
               type="button"
               onClick={() => insertMarkdown('italic')}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded p-1.5 transition-colors"
               title="Italic (*text*)"
               aria-label="Insert italic text"
             >
@@ -668,7 +668,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <button
               type="button"
               onClick={() => insertMarkdown('list')}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded p-1.5 transition-colors"
               title="Bullet list (- item)"
               aria-label="Insert bullet list"
             >
@@ -677,7 +677,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <button
               type="button"
               onClick={() => insertMarkdown('link')}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded p-1.5 transition-colors"
               title="Link ([text](url))"
               aria-label="Insert link"
             >
@@ -821,6 +821,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             </label>
             <DateTimeQuarterHour
               id="start-datetime"
+              timeLabel="Start time"
               required
               value={formData.start_datetime}
               onChange={(val) => handleStartDateChange(val)}
@@ -833,6 +834,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             </label>
             <DateTimeQuarterHour
               id="end-datetime"
+              timeLabel="End time"
               required
               value={formData.end_datetime}
               onChange={(val) => update({ end_datetime: val })}
@@ -873,7 +875,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 key={h}
                 type="button"
                 onClick={() => setDuration(h)}
-                className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring rounded-lg border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
+                className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring touch-target-phone rounded-lg border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
               >
                 {h} {h === 1 ? 'hour' : 'hours'}
               </button>
@@ -940,6 +942,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                         <input
                           type="date"
                           id="recurrence-end-date"
+                          aria-label="Series end date"
                           value={recurrenceEndDate}
                           onChange={(e) => setRecurrenceEndDate(e.target.value)}
                           className={inputClass}
@@ -1040,6 +1043,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                   <div className="mb-2 flex items-center gap-2">
                     <input
                       type="date"
+                      aria-label="Date to skip"
                       value={newExceptionDate}
                       onChange={(e) => setNewExceptionDate(e.target.value)}
                       className={inputClass}
@@ -1053,7 +1057,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                         }
                       }}
                       disabled={!newExceptionDate}
-                      className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium whitespace-nowrap text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="touch-target-phone rounded-lg bg-red-700 px-4 py-2 text-sm font-medium whitespace-nowrap text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Add
                     </button>
@@ -1069,6 +1073,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                           <button
                             type="button"
                             onClick={() => setRecurrenceExceptions((prev) => prev.filter((d) => d !== date))}
+                            aria-label={`Remove ${date}`}
                             className="text-xs font-medium text-red-500 hover:text-red-700"
                           >
                             Remove
@@ -1561,7 +1566,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                               reminder_schedule: (formData.reminder_schedule || [24]).filter((h) => h !== hours),
                             })
                           }
-                          className="ml-0.5 hover:text-red-900 dark:hover:text-red-100"
+                          className="touch-target-phone ml-0.5 inline-flex items-center justify-center hover:text-red-900 dark:hover:text-red-100"
                           aria-label={`Remove ${hours}-hour reminder`}
                         >
                           &times;
@@ -1573,6 +1578,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
               <select
                 id="add-reminder"
+                aria-label="Add a reminder"
                 value=""
                 onChange={(e) => {
                   const val = parseInt(e.target.value);

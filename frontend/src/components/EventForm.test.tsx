@@ -102,6 +102,25 @@ describe('EventForm', () => {
     });
   });
 
+  describe('Accessible names (workflow review W18)', () => {
+    // The start and end pickers both announced "Time hour", and the series
+    // end date, the date to skip and the reminder picker had no name at all.
+    it('names every schedule control a screen reader reaches', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} showRecurrence />);
+
+      expect(screen.getByLabelText('Start time hour')).toBeInTheDocument();
+      expect(screen.getByLabelText('End time hour')).toBeInTheDocument();
+      expect(screen.getByLabelText('Add a reminder')).toBeInTheDocument();
+
+      await user.click(screen.getByLabelText('Make this a recurring event'));
+      expect(screen.getByLabelText('Series end date')).toBeInTheDocument();
+      await user.type(screen.getByLabelText('Date to skip'), '2026-10-12');
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+      expect(screen.getByRole('button', { name: 'Remove 2026-10-12' })).toBeInTheDocument();
+    });
+  });
+
   describe('Event Details Section', () => {
     it('should render title input', () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);

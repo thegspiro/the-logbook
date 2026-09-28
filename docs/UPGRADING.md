@@ -262,6 +262,25 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Recurring events keep their local time, and series edits stop moving dates (2026-09-28)
+
+A new recurring series is now laid out in the department's own time: a
+weekly 7pm drill stays at 7pm after the clocks change, and custom weekdays,
+"the 2nd Monday" patterns and dates to skip land on the department's
+calendar day rather than the UTC one (which is the next day for an evening
+event). The rolling 12-month extension follows the same rule.
+
+**Edit → This and all future events** no longer copies the edited
+occurrence's date onto every later one. A change to the time moves each
+occurrence by the same amount; leaving the time alone leaves every date
+where it was.
+
+**Nothing already stored is changed.** Series created before this upgrade
+that span a daylight-saving change, and any series edited with "This and all
+future events", may have occurrences at the wrong time or on one date. Check
+the department's recurring events after upgrading and fix or recreate any
+that look wrong; see `docs/KNOWN_LIMITATIONS.md`.
+
 ### An applicant cannot be converted while a required stage is unfinished (2026-09-28)
 
 **Convert to Member** used to succeed from any stage. It is now refused while

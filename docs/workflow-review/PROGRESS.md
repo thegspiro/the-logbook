@@ -46,7 +46,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 
 | #   | Activity                                                                  | Acts as               | Starts at                                       | Status |
 | --- | ------------------------------------------------------------------------- | --------------------- | ----------------------------------------------- | ------ |
-| W18 | Create, edit and cancel an event, including a recurring one               | secretary             | `/events`, `/events/:id/edit`                   | ⬜     |
+| W18 | Create, edit and cancel an event, including a recurring one               | secretary             | `/events`, `/events/:id/edit`                   | ✅     |
 | W19 | RSVP, change it, and see it on the event                                  | member, member2       | `/events/:id`                                   | ⬜     |
 | W20 | Check-in: QR self check-in, live monitoring, an officer's manual check-in | member, secretary     | `/events/:id/qr-code`, `/events/:id/monitoring` | ⬜     |
 | W21 | Event templates, the events admin hub, and event analytics                | secretary             | `/events/admin`, `/events/templates`            | ⬜     |
@@ -173,6 +173,22 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W18 — Create, edit and cancel an event, including a recurring one — 2026-09-28
+
+Driven as: `secretary` at 1280×900 and 390×844, with `member` refused on both
+pages and three APIs. Held: required fields and the 10-character cancel
+reason are enforced; editing one occurrence changes only it; cancelling one
+occurrence and the whole series both read back after reload. Fixed: W18-1
+(HIGH — series were stepped in UTC, so a 7pm drill became 6pm when daylight
+saving ended, and evening custom weekdays, Nth-weekday patterns and skip
+dates matched the UTC day), W18-2 (HIGH — "This and all future events"
+stamped the anchor's date onto every later occurrence, so a description
+edit collapsed the series onto one day), W18-4 (LOW — unnamed and
+identically named schedule controls), W18-5 (LOW — "Occurrence of 6" on a
+cancelled occurrence), W18-6 (NIT — tap targets). Flagged: W18-3 (MED —
+series already stored wrong are not repaired; a data migration). Gate: see
+`W18-events-and-recurring.md`. Next: W19.
 
 ### W17 — An applicant checks their status by link — 2026-09-28
 
