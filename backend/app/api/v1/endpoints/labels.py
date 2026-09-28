@@ -187,8 +187,8 @@ async def generate_labels(
 ):
     """Generate a barcode-label PDF for records in *module*.
 
-    A prospect label carries the applicant's public status-check token, so
-    the caller's own application is filtered out of the id list here too.
+    The caller's own application is filtered out of the id list here too,
+    as it is from every prospect listing.
 
     **Authentication required** · requires the module's view permission.
     """

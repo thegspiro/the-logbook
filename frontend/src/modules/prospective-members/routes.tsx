@@ -29,10 +29,13 @@ export const getProspectiveMembersRoutes = () => {
         path="/prospective-members/print-labels"
         element={
           <Suspense fallback={null}>
+            {/* View or manage, as the label API accepts: a coordinator holds
+                manage alone, and the pipeline's own Print Labels button sent
+                them to an Access Denied page. */}
             <ProtectedRoute
               requiredModule="prospective_members"
               moduleLabel="Prospective Members"
-              requiredPermission="prospective_members.view"
+              requiredAnyPermission={['prospective_members.view', 'prospective_members.manage']}
             >
               <ProspectLabelPrintPage />
             </ProtectedRoute>

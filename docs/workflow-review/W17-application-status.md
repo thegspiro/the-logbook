@@ -75,7 +75,7 @@ Not driven: the Cal.com and Documenso stage actions (no integration configured).
 **Tests:** `ApplicationStatusPage.test.tsx` covers three cases: a `404` still reads not found; a `503` reads unavailable and retries; a network error reads unavailable. The last two failed before the fix.
 **Re-driven:** with a `503` the page read "Status Unavailable". **Try again**, once the API answered, loaded Remy's status.
 
-### W17-3 — MED — Staff can read every applicant's status token from the label preview — FLAGGED
+### W17-3 — MED — Staff can read every applicant's status token from the label preview — ✅ FIXED (owner decision)
 
 **Did:** as `membership_coordinator`, `POST /labels/preview` with module `prospective_members` and the department's applicant ids.
 **Saw:** each item's `barcode_value` was the applicant's status token. Remy's matched the token that opens his status page.
@@ -91,13 +91,33 @@ Not driven: the Cal.com and Documenso stage actions (no integration configured).
 - **This is deliberate.** The comment calls the token "a stable, scannable badge id". The `/labels/generate` docstring notes the label carries it, and so filters out the caller's own application.
 - **Nothing reads the barcode back** (read from code). The only lookups by `status_token` are the two public status endpoints.
 
-**Why flagged, and why the rotation stops here:**
+**Decided by the owner:** "Print the short id on labels."
 
-- Whether a printed applicant label may carry the applicant's credential is an authorization decision, which is this rotation's stop condition.
-- **The likely fix** is to print `_short_id(id)` as other modules do.
-- **Labels already printed** would still carry live tokens. Revoking them means rotating every applicant's token, which breaks links already emailed.
+**Fix:**
 
-Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+- `_build_prospect_specs` now prints `_short_id(id)`, as other modules do, and never the token.
+- The `/labels/generate` docstring no longer says a label carries it.
+
+**Not done:** labels printed before this change still carry live tokens. Revoking them means rotating every applicant's token, which breaks links already emailed. That was left alone; see `docs/KNOWN_LIMITATIONS.md`.
+**Test:** `test_label_builders.py::TestProspectBuilder::test_maps_name_and_short_id_never_the_status_token`. It failed against the old builder. The test it replaces asserted the token was the barcode.
+**Re-driven:** the coordinator's preview reads "15B749F4AC3A" for Remy, where it read his token before. The PDF downloads.
+
+### W17-4 — LOW — A membership coordinator is refused the applicant label page their own pipeline links to — ✅ FIXED
+
+**Did:** re-driving W17-3 as `membership_coordinator`, opened `/prospective-members/print-labels`. This is where the pipeline's **Print Labels** button goes.
+**Saw:** "Access Denied — You do not have the required permissions to access this page."
+
+- The route required `prospective_members.view`, and the coordinator holds `prospective_members.manage` alone.
+- The label API accepts either, and had just served them the preview.
+
+**Where:** `frontend/src/modules/prospective-members/routes.tsx`.
+**Fix:**
+
+- The route takes `requiredAnyPermission` view **or** manage, as the Apparatus and Facilities label pages already do.
+- `APPLICATION_PAGES.md` updated to match.
+
+**Test:** `routes.test.tsx` (new). It failed against the old route.
+**Re-driven:** the coordinator's page lists "Remy Drawer 15B749F4AC3A", "Quinn Prospect C64137D80503" and "Pat Applicant FA4292184E38". **PDF** downloads `labels-2026-09-28.pdf`.
 
 Seen and left:
 
@@ -110,7 +130,7 @@ Seen and left:
 | Section                 | Result                                                                                               |
 | ----------------------- | ---------------------------------------------------------------------------------------------------- |
 | 1. The job gets done    | ✅ status read and withdrawal end to end; the coordinator and the Chief see the result               |
-| 2. The right people     | ❌ W17-3: staff can read applicants' tokens; unknown and malformed tokens are refused                |
+| 2. The right people     | ✅ after W17-3 and W17-4; unknown and malformed tokens are refused                                   |
 | 3. Wrong input, failure | ✅ after W17-2; double confirm made one withdrawal                                                   |
 | 4. Browser signals      | ✅ only the provoked `404`, `422` and `503`; the doubled `GET` is StrictMode                         |
 | 5. Coming back to it    | ✅ status and withdrawal hold after reload                                                           |
@@ -128,3 +148,13 @@ Seen and left:
 | black --check            | n/a                                                                                                                                           |
 | frontend tests (touched) | ✅ `ApplicationStatusPage.test.tsx` and `ApparatusInventoryPage.test.tsx`, 34 tests. The 4 new or tightened cases failed against the old code |
 | backend tests (touched)  | n/a                                                                                                                                           |
+
+W17-3 and W17-4 fixes:
+
+| Check                            | Result                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| npm run typecheck / lint         | ✅ clean                                                                             |
+| flake8 / black / isort (changed) | ✅ clean                                                                             |
+| backend tests                    | ✅ 303 label tests; the new builder case failed before the fix                       |
+| frontend tests                   | ✅ `routes.test.tsx`, which failed before the fix                                    |
+| route registries (pitfall 30a)   | ✅ `check_route_permissions.py --strict` clean after the `APPLICATION_PAGES.md` edit |

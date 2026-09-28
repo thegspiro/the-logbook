@@ -190,9 +190,11 @@ applicant's status token, which opens and withdraws the application; the
 printed barcode carries it too). Gate: typecheck and lint clean; the two
 touched suites pass (no Python changed).
 
-**The rotation stopped here.** W17-3 is a decision about who may hold an
-applicant's credential, which is an authorization decision and the
-rotation's stop condition. Next, once decided: W18.
+**W17-3 resolved** at the owner's direction ("print the short id on
+labels"), and W17-4 (LOW — the coordinator was refused the label page their
+pipeline links to; the route now takes view or manage, as the API does)
+fixed while re-driving it. Labels printed earlier still carry tokens; see
+`docs/KNOWN_LIMITATIONS.md`. The rotation restarted; next: W18.
 
 ### W16 — Prospective member to converted member — 2026-09-28
 
