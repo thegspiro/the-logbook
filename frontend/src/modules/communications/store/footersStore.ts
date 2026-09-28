@@ -9,7 +9,7 @@
 import { create } from 'zustand';
 import { emailTemplatesService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import type { EmailFooter, TemplateVariable } from '../types';
+import type { EmailFooter, EmailFooterContactDetails, TemplateVariable } from '../types';
 
 interface FootersState {
   footers: EmailFooter[];
@@ -18,6 +18,8 @@ interface FootersState {
   variables: TemplateVariable[];
   /** Templates currently closing with each footer, keyed by footer key. */
   usage: Record<string, number>;
+  /** The organization values the contact switches would print. */
+  contactDetails: EmailFooterContactDetails;
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
@@ -28,11 +30,19 @@ interface FootersState {
   clearError: () => void;
 }
 
+const EMPTY_CONTACT_DETAILS: EmailFooterContactDetails = {
+  phone: '',
+  email: '',
+  website: '',
+  mailing_address: '',
+};
+
 export const useFootersStore = create<FootersState>((set) => ({
   footers: [],
   defaultKey: '',
   variables: [],
   usage: {},
+  contactDetails: EMPTY_CONTACT_DETAILS,
   isLoading: false,
   isSaving: false,
   error: null,
@@ -47,6 +57,7 @@ export const useFootersStore = create<FootersState>((set) => ({
         defaultKey: library.default_key,
         variables: library.variables,
         usage: library.usage,
+        contactDetails: library.contact_details,
         isLoading: false,
         hasLoaded: true,
       });
@@ -70,6 +81,7 @@ export const useFootersStore = create<FootersState>((set) => ({
         defaultKey: library.default_key,
         variables: library.variables,
         usage: library.usage,
+        contactDetails: library.contact_details,
         isSaving: false,
       });
     } catch (err: unknown) {

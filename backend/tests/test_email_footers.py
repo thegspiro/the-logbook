@@ -163,6 +163,159 @@ class TestRenderingAFooter:
         assert email_footers.render_text(footer, {}) == ""
 
 
+_CONTACT = {
+    "organization_phone": "(555) 111-2222",
+    "organization_email": "info@example.org",
+    "organization_website": "https://example.org",
+}
+
+
+class TestChoosingWhichContactDetailsToShow:
+    """Phone, email and website are switched one by one.
+
+    Before the split one ``show_contact`` switched all three, so a
+    department that wanted its email and website but not a phone nobody
+    staffs had no way to say so.
+    """
+
+    def _footer(self, **flags):
+        return {"key": "x", "name": "X", "lines": [], **flags}
+
+    def test_email_and_website_without_the_phone(self):
+        footer = self._footer(show_phone=False, show_email=True, show_website=True)
+        html = email_footers.render_html(footer, _CONTACT)
+        text = email_footers.render_text(footer, _CONTACT)
+        assert "555" not in html
+        assert "info@example.org | https://example.org" in html
+        assert "555" not in text
+        assert "info@example.org | https://example.org" in text
+
+    def test_each_part_on_its_own(self):
+        for flag, value in (
+            ("show_phone", "(555) 111-2222"),
+            ("show_email", "info@example.org"),
+            ("show_website", "https://example.org"),
+        ):
+            flags = {f: f == flag for f in email_footers.CONTACT_FIELDS}
+            text = email_footers.render_text(self._footer(**flags), _CONTACT)
+            assert text == f"---\n{value}", flag
+
+    def test_a_footer_saved_before_the_split_renders_as_it_did(self):
+        """A stored footer carrying only ``show_contact`` must not change."""
+        on = email_footers.render_text(self._footer(show_contact=True), _CONTACT)
+        assert on.endswith("(555) 111-2222 | info@example.org | https://example.org")
+        off = email_footers.render_text(self._footer(show_contact=False), _CONTACT)
+        assert off == ""
+
+    def test_a_part_the_footer_does_not_mention_follows_the_legacy_switch(self):
+        footer = self._footer(show_contact=False, show_email=True)
+        assert email_footers.render_text(footer, _CONTACT) == "---\ninfo@example.org"
+
+    def test_a_non_boolean_flag_is_not_trusted(self):
+        """A hand-edited blob must not switch a part with a stray string."""
+        footer = self._footer(show_contact=False, show_phone="yes")
+        assert email_footers.contact_flags(footer)["show_phone"] is False
+
+    def test_a_blank_organization_value_is_skipped(self):
+        footer = self._footer(show_phone=True, show_email=True, show_website=True)
+        context = {**_CONTACT, "organization_phone": "  "}
+        assert email_footers.render_text(footer, context) == (
+            "---\ninfo@example.org | https://example.org"
+        )
+
+    def test_the_library_reports_every_flag_for_an_old_footer(self):
+        """The editor needs an explicit value to put in each checkbox."""
+        library = email_footers.read_library(
+            _with_library(
+                {
+                    "default_key": "old",
+                    "footers": [
+                        {
+                            "key": "old",
+                            "name": "Old",
+                            "lines": [],
+                            "show_contact": False,
+                        }
+                    ],
+                }
+            )
+        )
+        footer = library["footers"][0]
+        assert footer["show_phone"] is False
+        assert footer["show_email"] is False
+        assert footer["show_website"] is False
+        assert footer["show_contact"] is False
+
+    def test_reading_does_not_mutate_the_stored_settings(self):
+        stored = {"key": "old", "name": "Old", "lines": [], "show_contact": True}
+        org = _with_library({"default_key": "old", "footers": [stored]})
+        email_footers.read_library(org)
+        assert "show_phone" not in stored
+
+    def test_the_seeded_footers_show_every_part(self):
+        for footer in email_footers.DEFAULT_FOOTERS:
+            assert all(email_footers.contact_flags(footer).values()), footer["key"]
+
+
+class TestSavingContactFlags:
+    def test_a_client_sending_only_the_legacy_switch_sets_every_part(self):
+        from app.schemas.email_template import EmailFooter
+
+        footer = EmailFooter(key="x", name="X", show_contact=False)
+        assert (footer.show_phone, footer.show_email, footer.show_website) == (
+            False,
+            False,
+            False,
+        )
+
+    def test_the_legacy_switch_reports_whether_any_part_is_shown(self):
+        from app.schemas.email_template import EmailFooter
+
+        footer = EmailFooter(
+            key="x",
+            name="X",
+            show_contact=False,
+            show_phone=False,
+            show_email=True,
+            show_website=False,
+        )
+        assert footer.show_contact is True
+        assert footer.show_phone is False
+
+    def test_turning_every_part_off_turns_the_legacy_switch_off(self):
+        from app.schemas.email_template import EmailFooter
+
+        footer = EmailFooter(
+            key="x", name="X", show_phone=False, show_email=False, show_website=False
+        )
+        assert footer.show_contact is False
+
+
+class TestTheEditorSeesWhatWillPrint:
+    """The screen shows the actual values beside each switch."""
+
+    def test_the_contact_details_come_from_the_organization(self):
+        from app.api.v1.endpoints.email_templates import _footer_contact_details
+
+        details = _footer_contact_details(_org(website=None))
+        assert details.phone == "(555) 111-2222"
+        assert details.email == "info@example.org"
+        assert details.website == ""
+        assert details.mailing_address.startswith("100 Main Street\n")
+        assert "Falls Church, VA" in details.mailing_address
+
+    def test_no_organization_reports_nothing_set(self):
+        from app.api.v1.endpoints.email_templates import _footer_contact_details
+
+        details = _footer_contact_details(None)
+        assert details.model_dump() == {
+            "phone": "",
+            "email": "",
+            "website": "",
+            "mailing_address": "",
+        }
+
+
 class TestTemplatesCloseWithTheirOwnFooter:
     @staticmethod
     def _template(defn):

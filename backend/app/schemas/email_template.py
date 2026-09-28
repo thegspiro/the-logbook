@@ -263,7 +263,21 @@ class EmailFooter(BaseModel):
         ),
     )
     show_contact: bool = Field(
-        True, description="Append the phone / email / website line"
+        True,
+        description=(
+            "Legacy single switch for the whole contact line. Any per-part "
+            "flag left unset inherits it; on the way out it reports whether "
+            "any part is shown"
+        ),
+    )
+    show_phone: Optional[bool] = Field(
+        None, description="Show the department phone in the contact line"
+    )
+    show_email: Optional[bool] = Field(
+        None, description="Show the department email in the contact line"
+    )
+    show_website: Optional[bool] = Field(
+        None, description="Show the department website in the contact line"
     )
     show_mailing_address: bool = Field(
         False,
@@ -280,6 +294,34 @@ class EmailFooter(BaseModel):
             if len(line) > 300:
                 raise ValueError("A footer line may not exceed 300 characters")
         return [line for line in value if line.strip()]
+
+    @model_validator(mode="after")
+    def _settle_contact_flags(self) -> "EmailFooter":
+        # A client written before the contact line was split sends only
+        # show_contact; it meant all three parts, so that is what an unset
+        # part inherits. Storing every flag explicitly means the renderer
+        # never has to guess for a library saved from here on.
+        for flag in ("show_phone", "show_email", "show_website"):
+            if getattr(self, flag) is None:
+                setattr(self, flag, self.show_contact)
+        self.show_contact = bool(
+            self.show_phone or self.show_email or self.show_website
+        )
+        return self
+
+
+class EmailFooterContactDetails(BaseModel):
+    """The organization values a footer's switches would print.
+
+    Shown beside each switch so an admin choosing "phone" can see which
+    phone, and can tell that a part the organization left blank will not
+    appear however the switch is set.
+    """
+
+    phone: str = ""
+    email: str = ""
+    website: str = ""
+    mailing_address: str = ""
 
 
 class EmailFooterLibrary(BaseModel):
@@ -312,6 +354,9 @@ class EmailFooterLibraryResponse(BaseModel):
     usage: Dict[str, int] = Field(
         default_factory=dict,
         description="How many templates currently use each footer key",
+    )
+    contact_details: EmailFooterContactDetails = Field(
+        default_factory=EmailFooterContactDetails
     )
 
 

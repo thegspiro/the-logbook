@@ -29,6 +29,7 @@ from app.models.email_template import (
 from app.models.user import User
 from app.schemas.email_template import (
     EmailAttachmentResponse,
+    EmailFooterContactDetails,
     EmailFooterLibrary,
     EmailFooterLibraryResponse,
     EmailTemplateBackupResponse,
@@ -92,6 +93,22 @@ async def _footer_library_response(
             if variable["name"] in email_footers.FOOTER_VARIABLE_NAMES
         ],
         usage=usage,
+        contact_details=_footer_contact_details(organization),
+    )
+
+
+def _footer_contact_details(organization) -> EmailFooterContactDetails:
+    """What the footer switches would print, from the same context a send uses.
+
+    Built through ``build_context`` rather than read off the columns so the
+    screen shows the mailing address formatted exactly as the email will.
+    """
+    ctx = EmailTemplateService.build_context({}, organization)
+    return EmailFooterContactDetails(
+        phone=str(ctx.get("organization_phone") or ""),
+        email=str(ctx.get("organization_email") or ""),
+        website=str(ctx.get("organization_website") or ""),
+        mailing_address=str(ctx.get("organization_mailing_address") or ""),
     )
 
 

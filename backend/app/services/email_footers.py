@@ -87,6 +87,9 @@ DEFAULT_FOOTERS: List[Dict[str, Any]] = [
             "This is an automated message from {{organization_name}}.",
         ],
         "show_contact": True,
+        "show_phone": True,
+        "show_email": True,
+        "show_website": True,
         "show_mailing_address": False,
     },
     {
@@ -101,6 +104,9 @@ DEFAULT_FOOTERS: List[Dict[str, Any]] = [
             "Replies to this message reach the department office.",
         ],
         "show_contact": True,
+        "show_phone": True,
+        "show_email": True,
+        "show_website": True,
         "show_mailing_address": True,
     },
     {
@@ -115,11 +121,25 @@ DEFAULT_FOOTERS: List[Dict[str, Any]] = [
             "Please retain this notice for your records.",
         ],
         "show_contact": True,
+        "show_phone": True,
+        "show_email": True,
+        "show_website": True,
         "show_mailing_address": True,
     },
 ]
 
 DEFAULT_FOOTER_KEY = "internal"
+
+# The contact line's parts, as {footer flag: template variable}, in the order
+# they print. Each has its own switch because a department may well want its
+# email and website on a notice but not a phone nobody staffs. Libraries
+# saved before the split carry only ``show_contact``, which switched all
+# three together, so a missing flag inherits it — see ``contact_flags``.
+CONTACT_FIELDS: Dict[str, str] = {
+    "show_phone": "organization_phone",
+    "show_email": "organization_email",
+    "show_website": "organization_website",
+}
 
 
 def default_library() -> Dict[str, Any]:
@@ -144,7 +164,7 @@ def read_library(organization: Optional[Any]) -> Dict[str, Any]:
     if not isinstance(stored, dict):
         return default_library()
 
-    footers = [f for f in stored.get("footers", []) if _is_valid(f)]
+    footers = [with_contact_flags(f) for f in stored.get("footers", []) if _is_valid(f)]
     if not footers:
         return default_library()
 
@@ -164,6 +184,32 @@ def _is_valid(footer: Any) -> bool:
         and isinstance(footer.get("lines"), list)
         and all(isinstance(line, str) for line in footer["lines"])
     )
+
+
+def contact_flags(footer: Dict[str, Any]) -> Dict[str, bool]:
+    """Whether each part of the contact line is shown, for any stored footer.
+
+    A flag that is absent — or not a boolean, as a hand-edited blob might
+    hold — falls back to ``show_contact``, which is what switched the whole
+    line before the parts could be chosen one by one. So a library saved
+    before the split renders exactly as it did.
+    """
+    legacy = footer.get("show_contact", True)
+    legacy = legacy if isinstance(legacy, bool) else True
+    return {
+        flag: value if isinstance(value := footer.get(flag), bool) else legacy
+        for flag in CONTACT_FIELDS
+    }
+
+
+def with_contact_flags(footer: Dict[str, Any]) -> Dict[str, Any]:
+    """A copy of ``footer`` carrying every contact flag explicitly.
+
+    ``show_contact`` is kept, as "any part is shown", for anything still
+    reading the single switch.
+    """
+    flags = contact_flags(footer)
+    return {**footer, **flags, "show_contact": any(flags.values())}
 
 
 def resolve(
@@ -204,18 +250,11 @@ def render_html(footer: Dict[str, Any], context: Dict[str, Any]) -> str:
                 + "</p>"
             )
 
-    if footer.get("show_contact", True):
-        contact = " | ".join(
-            _html.escape(str(context.get(name, "") or "").strip())
-            for name in (
-                "organization_phone",
-                "organization_email",
-                "organization_website",
-            )
-            if str(context.get(name, "") or "").strip()
-        )
-        if contact:
-            parts.append(f'<p class="muted">{contact}</p>')
+    contact = " | ".join(
+        _html.escape(value) for value in _contact_values(footer, context)
+    )
+    if contact:
+        parts.append(f'<p class="muted">{contact}</p>')
 
     if not parts:
         return ""
@@ -235,22 +274,24 @@ def render_text(footer: Dict[str, Any], context: Dict[str, Any]) -> str:
         if address:
             lines.extend(address.splitlines())
 
-    if footer.get("show_contact", True):
-        contact = " | ".join(
-            str(context.get(name, "") or "").strip()
-            for name in (
-                "organization_phone",
-                "organization_email",
-                "organization_website",
-            )
-            if str(context.get(name, "") or "").strip()
-        )
-        if contact:
-            lines.append(contact)
+    contact = " | ".join(_contact_values(footer, context))
+    if contact:
+        lines.append(contact)
 
     if not lines:
         return ""
     return "---\n" + "\n".join(lines)
+
+
+def _contact_values(footer: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
+    """The contact values this footer shows, skipping any the org left blank."""
+    flags = contact_flags(footer)
+    values = (
+        str(context.get(variable, "") or "").strip()
+        for flag, variable in CONTACT_FIELDS.items()
+        if flags[flag]
+    )
+    return [value for value in values if value]
 
 
 def _substitute(text: str, context: Dict[str, Any], escape: bool) -> str:

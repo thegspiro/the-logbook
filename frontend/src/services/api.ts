@@ -225,6 +225,7 @@ export type {
   EmailTemplatePreview,
   TemplatePreviewOverrides,
   EmailFooter,
+  EmailFooterContactDetails,
   EmailFooterLibrary,
   NotificationRuleRecord,
   NotificationLogRecord,

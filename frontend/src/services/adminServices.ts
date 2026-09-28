@@ -525,8 +525,20 @@ export interface EmailFooter {
   name: string;
   description?: string;
   lines: string[];
+  /** Whether any part of the contact line is shown. Kept for older clients. */
   show_contact: boolean;
+  show_phone: boolean;
+  show_email: boolean;
+  show_website: boolean;
   show_mailing_address: boolean;
+}
+
+/** The organization's own values that a footer's switches would print. */
+export interface EmailFooterContactDetails {
+  phone: string;
+  email: string;
+  website: string;
+  mailing_address: string;
 }
 
 export interface EmailFooterLibrary {
@@ -536,6 +548,7 @@ export interface EmailFooterLibrary {
   variables: TemplateVariable[];
   /** Templates currently closing with each footer, keyed by footer key. */
   usage: Record<string, number>;
+  contact_details: EmailFooterContactDetails;
 }
 
 export const reportsService = {
