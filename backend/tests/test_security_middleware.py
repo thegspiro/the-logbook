@@ -2761,6 +2761,9 @@ class TestIPLoggingMiddlewareRequestIdValidation:
         assert len(response_request_id) == 16
 
 
+# Its fixture builds the app's OpenAPI schema (~23s cold), charged to the first
+# test's 30s pytest-timeout budget; see tests/test_openapi_contract.py.
+@pytest.mark.timeout(120)
 class TestExportEndpointsCoverage:
     """SecurityMonitoringMiddleware.EXPORT_ENDPOINTS (data-exfiltration
     monitoring) is a hand-maintained exact-match set of route paths, not

@@ -276,9 +276,18 @@ class AuthService:
         if rehashed:
             user.password_hash = rehashed
 
-        # Reset failed login attempts on successful login
-        user.failed_login_attempts = 0
-        user.locked_until = None
+        # Reset failed login attempts on successful login — but only when the
+        # password alone completes authentication. For an MFA account the
+        # counter also carries failed second-factor codes (`mfa_login` adds to
+        # it), and a correct password is not full authentication: resetting
+        # here let anyone holding the password guess four codes, sign in
+        # again, and guess four more, so the lockout never tripped. `mfa_login`
+        # clears the counter once the second factor succeeds. Same invariant as
+        # `clear_auth_failures` for the suspicious-IP throttle (workflow review
+        # W04).
+        if not user.mfa_enabled:
+            user.failed_login_attempts = 0
+            user.locked_until = None
         user.last_login_at = datetime.now(timezone.utc)
         await self.db.flush()
 

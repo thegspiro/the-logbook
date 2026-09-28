@@ -1233,7 +1233,9 @@ async def get_setup_checklist(
                 key="scheduling",
                 title="Create Shift Templates",
                 description="Define reusable shift templates (Day Shift, Night Shift, etc.) for faster schedule building.",
-                path="/scheduling",
+                # The templates screen itself; "/scheduling" is the week
+                # calendar, which has no way to create one (workflow review W06).
+                path="/scheduling/admin/planning/templates",
                 category="scheduling",
                 is_complete=shift_template_count > 0,
                 count=shift_template_count,
@@ -1340,7 +1342,9 @@ async def get_setup_checklist(
                     if not email_configured
                     else "Email is configured. Send a test message to confirm it delivers."
                 ),
-                path="/settings",
+                # The Email section; bare "/settings" opens the Profile section
+                # (workflow review W06).
+                path="/settings?tab=email",
                 category="notifications",
                 is_complete=email_configured and delivered_email_count > 0,
                 count=delivered_email_count,

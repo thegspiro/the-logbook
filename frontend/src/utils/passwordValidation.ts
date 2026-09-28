@@ -184,11 +184,9 @@ export function validatePassword(
   }
 
   // Check special characters
-  // eslint-disable-next-line no-useless-escape
-  if (requirements.requireSpecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)) {
+  if (requirements.requireSpecial && !/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?~`]/.test(password)) {
     errors.push('Password must contain at least one special character');
-    // eslint-disable-next-line no-useless-escape
-  } else if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)) {
+  } else if (/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?~`]/.test(password)) {
     strengthScore += 1;
   }
 
@@ -302,6 +300,12 @@ export function getStrengthText(strength: PasswordValidationResult['strength']):
 /**
  * Validate password strength and return individual checks
  * Useful for displaying password requirements checklist in the UI
+ *
+ * `noSequence` and `noRepeat` are rules the backend enforces
+ * (`validate_password_strength`). Without them a password could tick every
+ * listed rule, be refused after submitting, and — on the reset page — spend
+ * one of the three attempts the reset endpoints allow per five minutes
+ * (workflow review W03). They read as met only once something is typed.
  */
 export function validatePasswordStrength(password: string) {
   const checks = {
@@ -309,8 +313,9 @@ export function validatePasswordStrength(password: string) {
     uppercase: /[A-Z]/.test(password),
     lowercase: /[a-z]/.test(password),
     number: /\d/.test(password),
-    // eslint-disable-next-line no-useless-escape
-    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password),
+    special: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?~`]/.test(password),
+    noSequence: password.length > 0 && !hasSequentialCharacters(password),
+    noRepeat: password.length > 0 && !hasRepeatedCharacters(password),
   };
 
   const isValid = Object.values(checks).every(Boolean);
@@ -320,3 +325,22 @@ export function validatePasswordStrength(password: string) {
     isValid,
   };
 }
+
+export type PasswordCheckKey = keyof ReturnType<typeof validatePasswordStrength>['checks'];
+
+/**
+ * The rules `validatePasswordStrength` checks, labelled for a checklist.
+ *
+ * One list for every screen that shows one. The reset and change-password
+ * screens each typed their own, and both said "At least 8 characters" while
+ * the check (and the server) required 12.
+ */
+export const PASSWORD_CHECKLIST: ReadonlyArray<{ key: PasswordCheckKey; label: string }> = [
+  { key: 'length', label: `At least ${DEFAULT_REQUIREMENTS.minLength} characters` },
+  { key: 'uppercase', label: 'One uppercase letter' },
+  { key: 'lowercase', label: 'One lowercase letter' },
+  { key: 'number', label: 'One number' },
+  { key: 'special', label: 'One special character' },
+  { key: 'noSequence', label: 'No runs like 123 or abc' },
+  { key: 'noRepeat', label: 'No character three times in a row' },
+];

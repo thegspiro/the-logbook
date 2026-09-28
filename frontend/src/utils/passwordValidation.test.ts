@@ -458,15 +458,19 @@ describe('validatePasswordStrength', () => {
     expect(result.isValid).toBe(false);
   });
 
-  it('does not check for sequential characters or common passwords', () => {
-    // validatePasswordStrength is a simpler check — only character class checks
-    const result = validatePasswordStrength('Abc12345!@#$');
-    expect(result.checks.length).toBe(true);
-    expect(result.checks.uppercase).toBe(true);
-    expect(result.checks.lowercase).toBe(true);
-    expect(result.checks.number).toBe(true);
-    expect(result.checks.special).toBe(true);
-    expect(result.isValid).toBe(true);
+  it('checks the run rules the server enforces, but not the common-password list', () => {
+    // This used to assert the opposite for runs, which is how the checklist
+    // passed passwords the server then refused (workflow review W01-2, W03-4).
+    const withRun = validatePasswordStrength('Abc12345!@#$');
+    expect(withRun.checks.noSequence).toBe(false);
+    expect(withRun.isValid).toBe(false);
+
+    // The common-password list stays with validatePassword.
+    const common = validatePasswordStrength('Firefighter1!Xq');
+    expect(common.isValid).toBe(true);
+    expect(validatePassword('firefighter').errors).toContain(
+      'Password is too common. Please choose a stronger password'
+    );
   });
 });
 

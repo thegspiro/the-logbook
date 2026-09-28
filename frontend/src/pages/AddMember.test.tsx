@@ -56,10 +56,9 @@ const membershipSelect = () => screen.getByRole('combobox', { name: /membership 
 /**
  * Fill every field `validateForm` insists on, so submit actually reaches the API.
  *
- * By placeholder rather than by label: this form's labels are not associated
- * with their controls, so an accessible-name query finds nothing. Only the two
- * fields this change owns were given ids — retrofitting the other fourteen is
- * a separate job.
+ * By placeholder: written when this form's labels were not associated with
+ * their controls. They are now (workflow review W08, asserted below), and the
+ * placeholders still identify each field.
  */
 const fillRequired = async (user: ReturnType<typeof userEvent.setup>) => {
   const type = async (placeholder: string, value: string) => {
@@ -268,6 +267,66 @@ describe('AddMember', () => {
       await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
       const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
       expect(payload.emergency_contacts).toHaveLength(1);
+    });
+  });
+
+  describe('workflow review W08', () => {
+    it('names every field by its label', async () => {
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      for (const label of [
+        /^first name/i,
+        /^last name/i,
+        /^membership number/i,
+        /^street address/i,
+        /^zip code/i,
+        /^primary phone/i,
+        /^email/i,
+      ]) {
+        expect(screen.getAllByLabelText(label).length).toBeGreaterThan(0);
+      }
+    });
+
+    it('offers no Status or Preferred Contact control, since neither is saved', async () => {
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      expect(screen.queryByRole('option', { name: 'On Leave' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Preferred Contact Method')).not.toBeInTheDocument();
+    });
+
+    it('refuses a password the server would, at the field, and lists the rules', async () => {
+      const user = userEvent.setup();
+      mockGetWelcomeEmailAvailability.mockResolvedValue({ available: false });
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(screen.getByRole('checkbox', { name: /set initial password/i })).toBeChecked());
+
+      await fillRequired(user);
+      await user.type(screen.getByLabelText(/^password\s*\*?$/i), 'Abcdefgh1234!');
+      await user.type(screen.getByLabelText(/^confirm password/i), 'Abcdefgh1234!');
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      expect(await screen.findByText('Password does not meet every rule listed below')).toBeInTheDocument();
+      expect(screen.getByRole('list', { name: 'Password rules' })).toHaveTextContent('No runs like 123 or abc');
+      expect(mockCreateMember).not.toHaveBeenCalled();
+    });
+
+    it('takes the next free username when the email-derived one is taken', async () => {
+      const user = userEvent.setup();
+      mockCreateMember.mockReset();
+      mockCreateMember
+        .mockRejectedValueOnce({ response: { status: 400, data: { detail: 'Username already exists' } } })
+        .mockResolvedValueOnce({ id: 'u2' });
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalledTimes(2));
+      expect((mockCreateMember.mock.calls[0]?.[0] as { username: string }).username).toBe('dreyes');
+      expect((mockCreateMember.mock.calls[1]?.[0] as { username: string }).username).toBe('dreyes_2');
     });
   });
 });
