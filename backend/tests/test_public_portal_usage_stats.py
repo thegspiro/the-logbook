@@ -298,6 +298,26 @@ class TestTheOtherKeyMetrics:
         assert stats.average_response_time_ms == pytest.approx(200.0)
 
 
+def _pin_rate_limit_hour(monkeypatch) -> int:
+    """Freeze the rate limiter's hour bucket for the rest of the test.
+
+    Both tests below spend a key's hourly allowance by seeding the bucket for
+    "now", then call `authenticate_api_key`, which recomputes the bucket from
+    the clock. A run that crossed the hour between the two read an empty new
+    bucket, was not refused, and failed with "DID NOT RAISE" — which is what
+    took CI red at 09:00 on 2026-09-28, on a commit that changed no Python.
+    """
+    frozen = 1_790_000_000 - (1_790_000_000 % 3600)
+
+    async def _frozen_hour() -> int:
+        return frozen
+
+    monkeypatch.setattr(
+        "app.core.public_portal_security.get_current_hour_timestamp", _frozen_hour
+    )
+    return frozen
+
+
 class TestTheRefusalIsRecorded:
     """Without this, `rate_limit_hits_24h` is a tile that cannot leave zero.
 
@@ -309,7 +329,7 @@ class TestTheRefusalIsRecorded:
     """
 
     async def test_a_rate_limited_request_writes_a_429_row(
-        self, db_session: AsyncSession, setup_org_and_admin
+        self, db_session: AsyncSession, setup_org_and_admin, monkeypatch
     ):
         org_id, _ = setup_org_and_admin
         config_id = await _make_config(db_session, org_id)
@@ -334,9 +354,7 @@ class TestTheRefusalIsRecorded:
         request.headers.get.return_value = None
 
         # Spend the key's single hourly request, so the next one is refused.
-        from app.core.public_portal_security import get_current_hour_timestamp
-
-        bucket = await get_current_hour_timestamp()
+        bucket = _pin_rate_limit_hour(monkeypatch)
         key_id = str(api_key.id)
         rate_limit_cache[key_id][bucket] = 1
         try:
@@ -351,7 +369,7 @@ class TestTheRefusalIsRecorded:
         assert stats.rate_limit_hits_24h == 1
 
     async def test_the_row_survives_the_rollback_the_raise_causes(
-        self, db_session: AsyncSession, setup_org_and_admin
+        self, db_session: AsyncSession, setup_org_and_admin, monkeypatch
     ):
         """PUB-8's mechanism, from the other end.
 
@@ -383,9 +401,7 @@ class TestTheRefusalIsRecorded:
         request.method = "GET"
         request.headers.get.return_value = None
 
-        from app.core.public_portal_security import get_current_hour_timestamp
-
-        bucket = await get_current_hour_timestamp()
+        bucket = _pin_rate_limit_hour(monkeypatch)
         key_id = str(api_key.id)
         rate_limit_cache[key_id][bucket] = 1
         try:
