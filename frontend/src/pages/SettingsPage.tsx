@@ -46,7 +46,7 @@ import {
   Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../utils/errorHandling';
 import { HelpLink } from '../components/HelpLink';
 import { organizationService } from '../services/api';
 import type { ModuleSettingsData, OrganizationProfile } from '../services/api';
@@ -528,8 +528,7 @@ export const SettingsPage: React.FC = () => {
    * field would appear to swallow input at random. The local value is already
    * what they asked for; only the branding mirror needs the server's copy.
    */
-  const persistProfile = useCallback(async (next: OrganizationProfile) => {
-    const updated = await organizationService.updateProfile(next);
+  const publishBranding = useCallback((updated: OrganizationProfile) => {
     localStorage.setItem('departmentName', updated.name);
     if (updated.logo) {
       localStorage.setItem('logoData', updated.logo);
@@ -542,6 +541,13 @@ export const SettingsPage: React.FC = () => {
       })
     );
   }, []);
+
+  const persistProfile = useCallback(
+    async (next: OrganizationProfile) => {
+      publishBranding(await organizationService.updateProfile(next));
+    },
+    [publishBranding]
+  );
 
   /**
    * The department's navigation layout.
@@ -635,9 +641,44 @@ export const SettingsPage: React.FC = () => {
     }
     const reader = new FileReader();
     reader.onload = () => {
-      updateProfileField('logo', reader.result as string, { immediate: true });
+      void saveLogo(reader.result as string);
     };
     reader.readAsDataURL(file);
+  };
+
+  /**
+   * Sends only the logo, and shows it only once the server has accepted it.
+   *
+   * Unlike a typed field, a rejected logo is not the member's only copy of
+   * anything — the file is still on their device — and keeping it would be
+   * worse than useless: every later save sends the whole profile, so an image
+   * the server refuses would fail each of them in turn. A validation refusal
+   * is therefore reported and dropped here rather than left for the autosave
+   * to retry forever; a network failure still goes to the pill's retry.
+   *
+   * The accepted value is the server's re-encoded copy, written back into the
+   * profile so later whole-profile saves send what is stored and are not
+   * mistaken for a new upload.
+   */
+  const saveLogo = async (dataUrl: string) => {
+    await save(
+      async () => {
+        try {
+          const updated = await organizationService.updateProfile({ logo: dataUrl });
+          const current = profileRef.current;
+          if (current) {
+            const next = { ...current, logo: updated.logo };
+            profileRef.current = next;
+            setProfile(next);
+          }
+          publishBranding(updated);
+        } catch (err: unknown) {
+          if (toAppError(err).status !== 400) throw err;
+          toast.error(getErrorMessage(err, 'That image could not be used as the logo.'));
+        }
+      },
+      { errorMessage: 'Could not save the logo' }
+    );
   };
 
   // ── Module handlers ──

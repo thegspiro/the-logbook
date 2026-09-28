@@ -60,6 +60,7 @@ from app.utils.email_providers import (
     connection_identity,
     normalize_stored_platform,
 )
+from app.utils.image_validator import validate_logo_image
 
 router = APIRouter()
 
@@ -1532,6 +1533,27 @@ async def update_organization_profile(
     update_data = updates.model_dump(
         exclude_unset=True, exclude={"mailing_address", "physical_address"}
     )
+
+    # A new logo goes through the same validation onboarding applies: PNG or
+    # JPEG only, bounded size and dimensions, re-encoded to strip anything
+    # riding along in the file. Emails, app icons and the login page all
+    # render from this column, so an unusable value here is a broken image
+    # in every one of them — and an external address could not be served
+    # through the email logo route at all.
+    #
+    # Only when it changed: the Settings screen sends the whole profile on
+    # every save, so validating an unchanged logo would lock a department
+    # whose stored logo predates this check out of saving its own name.
+    new_logo = update_data.get("logo")
+    if new_logo and new_logo != org.logo:
+        if new_logo.lower().startswith(("http://", "https://")):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Upload the logo as a PNG or JPEG file rather than a link.",
+            )
+        # Pillow decodes and re-encodes up to 5 MB here; off the event loop.
+        update_data["logo"] = await asyncio.to_thread(validate_logo_image, new_logo)
+
     for field, value in update_data.items():
         setattr(org, field, value)
 
