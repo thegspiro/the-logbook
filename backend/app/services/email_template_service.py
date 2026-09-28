@@ -6,7 +6,8 @@ Manages CRUD operations for email templates and renders them with context variab
 
 import re
 import uuid
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, time, timedelta, timezone
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from loguru import logger
 from sqlalchemy import and_, func, select
@@ -51,6 +52,7 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     colourway_context,
     colourway_for,
     countdown_tile,
+    date_tile,
     fact,
     facts,
     summary_facts,
@@ -308,6 +310,8 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "event_type", "description": "Type of event (e.g. Business Meeting)"},
         {"name": "event_start", "description": "Event start date and time"},
         {"name": "event_end", "description": "Event end time"},
+        {"name": "event_month", "description": "Month of the start, e.g. Oct"},
+        {"name": "event_day", "description": "Day of the month of the start, e.g. 14"},
         {"name": "location_name", "description": "Event location name"},
         {"name": "location_details", "description": "Additional location details"},
         {"name": "event_url", "description": "Link to view the event"},
@@ -708,6 +712,8 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "event_type": "Business Meeting",
             "event_start": "March 15, 2026 at 07:00 PM",
             "event_end": "09:00 PM",
+            "event_month": "Mar",
+            "event_day": "15",
             "location_name": "Main Station \u2014 Meeting Room A",
             "location_details": "123 Main St, Anytown, USA",
             "event_url": "https://example.com/events/123",
@@ -1194,6 +1200,259 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
 SAMPLE_CONTEXT.update(
     {key: _sample(value) for key, value in _storefront_templates.SAMPLE_CONTEXT.items()}
 )
+
+# The sample links' placeholder host. Only the host is replaced: each path is
+# the one the real sender builds (``/events/{id}``, ``/training/approve/…``),
+# so a test link lands on the right screen of this deployment.
+_SAMPLE_LINK_HOST = re.compile(r"^https://example\.(?:com|org)(?=/|$)")
+
+
+# Who a test email is addressed to, per template type: {variable: form}.
+#
+# A test goes to the admin who sent it, so the fields naming *the recipient*
+# carry that admin's name — the greeting reads "Hello Jordan", as the real
+# notice would for them. Only those fields: in several notices a name belongs
+# to someone else (the member a notice is *about*, the submitter, the
+# customer on an admin copy), and renaming those would describe a notice that
+# cannot exist. Each entry follows the variable the default template greets,
+# and the form (first / last / full / username) follows what the real sender
+# passes: shift reminders and election alerts greet by first name.
+# test_email_live_sample_context asserts every greeting variable is listed.
+TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
+    "welcome": {
+        "first_name": "first",
+        "last_name": "last",
+        "full_name": "full",
+        "username": "username",
+    },
+    "password_reset": {"first_name": "first"},
+    "event_cancellation": {"recipient_name": "full"},
+    "event_reminder": {"recipient_name": "full"},
+    "series_end_reminder": {"recipient_name": "full"},
+    "ballot_notification": {"recipient_name": "full"},
+    "election_report": {"recipient_name": "full"},
+    "ballot_eligibility_summary": {"recipient_name": "full"},
+    "member_dropped": {"member_name": "full"},
+    "inventory_change": {"first_name": "first"},
+    "cert_expiration": {"recipient_name": "full"},
+    "post_event_validation": {"recipient_name": "full"},
+    "post_shift_validation": {"recipient_name": "full"},
+    "property_return_reminder": {"member_name": "full"},
+    "inactivity_warning": {"coordinator_name": "full"},
+    "election_rollback": {"recipient_name": "first"},
+    "election_deleted": {"recipient_name": "first"},
+    "event_request_status": {"contact_name": "full"},
+    "duplicate_application": {"applicant_name": "full"},
+    "application_withdrawn": {"applicant_name": "full"},
+    "suggestion_submitted": {"recipient_name": "full"},
+    "shift_assignment": {"recipient_name": "full"},
+    "shift_reminder": {"recipient_name": "first"},
+    "storefront_order_confirmation": {"first_name": "first", "customer_name": "full"},
+}
+
+_DATE_TIME = "%B %d, %Y at %I:%M %p"
+_DATE = "%B %d, %Y"
+
+
+def _strf(pattern: str) -> Callable[[datetime], str]:
+    return lambda moment: moment.strftime(pattern)
+
+
+def _day_of_month(moment: datetime) -> str:
+    # As send_event_reminder formats event_day: no leading zero.
+    return str(moment.day)
+
+
+# The dates a test email shows, per template type:
+# {variable: (days from today, local time of day or None for "now", format)}.
+#
+# The samples were fixed strings — "March 15, 2026 at 07:00 PM" — so a test
+# sent in September reminded the admin of an event six months gone. These put
+# each date where the real notice would (an event ahead, a completed action
+# behind), on the department's own calendar and in the format the real sender
+# uses. Times of day are wall-clock in the department's timezone.
+TEST_SAMPLE_DATES: Dict[
+    str, Dict[str, Tuple[int, Optional[time], Callable[[datetime], str]]]
+] = {
+    "event_reminder": {
+        "event_start": (1, time(19, 0), _strf(_DATE_TIME)),
+        "event_end": (1, time(21, 0), _strf("%I:%M %p")),
+        "event_month": (1, time(19, 0), _strf("%b")),
+        "event_day": (1, time(19, 0), _day_of_month),
+    },
+    "series_end_reminder": {"series_end_date": (14, None, _strf(_DATE))},
+    "event_cancellation": {"event_date": (3, None, _strf(_DATE))},
+    "training_approval": {
+        "event_date": (-2, time(9, 0), _strf(_DATE_TIME)),
+        "approval_deadline": (5, None, _strf(_DATE)),
+    },
+    "ballot_notification": {
+        "voting_opens": (1, time(8, 0), _strf(_DATE_TIME)),
+        "voting_closes": (4, time(17, 0), _strf(_DATE_TIME)),
+        "meeting_date": (4, time(19, 0), _strf(_DATE_TIME)),
+    },
+    "member_dropped": {
+        "effective_date": (0, None, _strf(_DATE)),
+        "return_deadline": (14, None, _strf(_DATE)),
+    },
+    "inventory_change": {"change_date": (0, None, _strf(_DATE))},
+    "cert_expiration": {"expiration_date": (30, None, _strf(_DATE))},
+    "post_event_validation": {"event_date": (-1, None, _strf(_DATE))},
+    "post_shift_validation": {"shift_date": (-1, None, _strf(_DATE))},
+    "property_return_reminder": {"return_deadline": (7, None, _strf(_DATE))},
+    "election_rollback": {"action_time": (0, None, _strf(_DATE_TIME))},
+    "election_deleted": {"action_time": (0, None, _strf(_DATE_TIME))},
+    "election_report": {
+        "start_date": (-4, time(8, 0), _strf(_DATE_TIME)),
+        "end_date": (0, time(17, 0), _strf(_DATE_TIME)),
+    },
+    "event_request_status": {"event_date": (21, time(18, 0), _strf(_DATE_TIME))},
+    "it_password_notification": {"request_time": (0, None, _strf(_DATE_TIME))},
+    "duplicate_application": {"original_date": (-30, None, _strf(_DATE))},
+    "application_withdrawn": {"withdrawal_date": (0, None, _strf(_DATE))},
+    "shift_assignment": {
+        "shift_date": (3, None, _strf(_DATE)),
+        "shift_start": (3, time(6, 0), _strf("%H:%M")),
+    },
+    "shift_decline": {"shift_date": (3, None, _strf(_DATE))},
+    "shift_reminder": {
+        "shift_date": (1, None, _strf("%b %d, %Y")),
+        "shift_start": (1, time(6, 0), _strf("%H:%M")),
+    },
+}
+
+
+# Dates that sit inside a prose value rather than a variable of their own:
+# {template type: {variable: days from today}}. The sample's one date in that
+# value is replaced, in the sample's own format (``_DATE``).
+TEST_SAMPLE_PROSE_DATES: Dict[str, Dict[str, int]] = {
+    "storefront_window_open": {"window_extra_html": 14},
+    "storefront_window_closing": {"window_extra_html": 2},
+    "storefront_window_closed": {"window_extra_html": 30},
+    "storefront_vendor_order_placed": {"window_extra_html": 30},
+}
+
+_PROSE_DATE = re.compile(
+    r"(?:January|February|March|April|May|June|July|August|September|October"
+    r"|November|December) \d{2}, \d{4}"
+)
+
+
+def _recipient_forms(recipient: Any) -> Dict[str, str]:
+    first = str(getattr(recipient, "first_name", None) or "").strip()
+    last = str(getattr(recipient, "last_name", None) or "").strip()
+    return {
+        "first": first,
+        "last": last,
+        # Built here rather than from User.full_name, which renders a missing
+        # half as the word "None".
+        "full": " ".join(part for part in (first, last) if part),
+        "username": str(getattr(recipient, "username", None) or "").strip(),
+    }
+
+
+def _sample_dates(
+    template_type: str,
+    organization: Optional[Any],
+    now: Optional[datetime] = None,
+) -> Dict[str, str]:
+    """The template's sample dates, placed relative to today in the org's zone."""
+    from app.utils.org_timezone import scheduling_timezone
+
+    zone = scheduling_timezone(organization)
+    local_now = (now or datetime.now(timezone.utc)).astimezone(zone)
+    dates: Dict[str, str] = {}
+    for key, (days, clock, render) in TEST_SAMPLE_DATES.get(template_type, {}).items():
+        if clock is None:
+            moment = local_now + timedelta(days=days)
+        else:
+            day = local_now.date() + timedelta(days=days)
+            moment = datetime.combine(day, clock, tzinfo=zone)
+        dates[key] = render(moment)
+    return dates
+
+
+def _prose_dates(
+    template_type: str,
+    sample: Dict[str, str],
+    organization: Optional[Any],
+    now: Optional[datetime] = None,
+) -> Dict[str, str]:
+    """``TEST_SAMPLE_PROSE_DATES``: the sample value with its date moved."""
+    from app.utils.org_timezone import scheduling_timezone
+
+    today = (
+        (now or datetime.now(timezone.utc))
+        .astimezone(scheduling_timezone(organization))
+        .date()
+    )
+    moved: Dict[str, str] = {}
+    for key, days in TEST_SAMPLE_PROSE_DATES.get(template_type, {}).items():
+        text = sample.get(key)
+        if isinstance(text, str):
+            date_text = (today + timedelta(days=days)).strftime(_DATE)
+            moved[key] = _PROSE_DATE.sub(date_text, text, count=1)
+    return moved
+
+
+def live_sample_context(
+    template_type: str,
+    organization: Optional[Any] = None,
+    recipient: Optional[Any] = None,
+    now: Optional[datetime] = None,
+) -> Dict[str, str]:
+    """Sample values for a preview or test send, with everything real made real.
+
+    ``SAMPLE_CONTEXT`` stands in for the parts of a notice no test has — an
+    event, a token, the other people a notice mentions. Several parts of it
+    stood in for things that do exist, and a test email is only useful if it
+    shows those as a member would receive them:
+
+    * **Links** pointed at example.com. They now use ``FRONTEND_URL``, the base
+      every real sender builds its links from, keeping the sample path.
+    * **The department's own details** were Sample Fire Department's, and
+      because ``build_context`` only ever fills a key the caller left out,
+      they also won over the organization's real phone, address and website.
+      With an organization they are dropped, so ``build_context`` supplies the
+      live values — including a blank where the department has none, which is
+      what its members would see.
+    * **The recipient** is the admin the test goes to (``recipient``), in the
+      fields ``TEST_RECIPIENT_FIELDS`` names; a name that is blank on their
+      account keeps the sample one rather than greeting nobody.
+    * **Dates** are placed relative to today on the department's calendar
+      (``TEST_SAMPLE_DATES``, and ``TEST_SAMPLE_PROSE_DATES`` for one written
+      into prose), not fixed to a day that has long passed. A sample date
+      quoted inside another value is replaced there too.
+    """
+    base = (app_settings.FRONTEND_URL or "").strip().rstrip("/")
+    sample = SAMPLE_CONTEXT.get(template_type, {})
+    context: Dict[str, str] = {}
+    for key, value in sample.items():
+        if organization is not None and key.startswith("organization_"):
+            continue
+        if base and isinstance(value, str):
+            value = _SAMPLE_LINK_HOST.sub(base, value)
+        context[key] = value
+
+    if recipient is not None:
+        forms = _recipient_forms(recipient)
+        for key, form in TEST_RECIPIENT_FIELDS.get(template_type, {}).items():
+            if key in context and forms[form]:
+                context[key] = forms[form]
+
+    context.update(_prose_dates(template_type, sample, organization, now))
+
+    for key, value in _sample_dates(template_type, organization, now).items():
+        old = sample.get(key)
+        context[key] = value
+        # A long sample date also appears inside prose ("Scheduled Date: …").
+        # Short ones ("Mar", "06:00") are too likely to match something else.
+        if isinstance(old, str) and len(old) > 8:
+            for other, text in context.items():
+                if other != key and isinstance(text, str) and old in text:
+                    context[other] = text.replace(old, value)
+    return context
+
 
 # Default welcome email HTML body
 DEFAULT_WELCOME_HTML = build_shell(
@@ -2141,6 +2400,10 @@ DEFAULT_EVENT_REMINDER_HTML = build_shell(
     accent=ACCENT_BLUE,
     chip="Reminder",
     subtitle="{{event_start}}",
+    # The calendar page a member recognises before reading a word. The
+    # month and day arrive as their own variables: event_start is one
+    # pre-formatted string, and splitting it would depend on its format.
+    lead=date_tile("{{event_month}}", "{{event_day}}"),
 )
 
 DEFAULT_EVENT_REMINDER_TEXT = """Event Reminder

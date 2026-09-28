@@ -5,6 +5,11 @@
  * it uses, so the wording is edited once here instead of in every template —
  * and mail to members, mail to the public, and notices that go on a member's
  * record can each close differently.
+ *
+ * The contact switches show the department's actual phone, email, website and
+ * mailing address beside them, and `DepartmentContactCard` above the list
+ * edits those values in place — without them an admin ticking "phone" could
+ * not tell which number would print, or that a blank one would print nothing.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -13,12 +18,21 @@ import toast from 'react-hot-toast';
 import { SkeletonPage } from '../../../components/ux';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useFootersStore } from '../store/footersStore';
-import type { EmailFooter } from '../types';
+import DepartmentContactCard from './DepartmentContactCard';
+import type { EmailFooter, EmailFooterContactDetails } from '../types';
 
 /** Mirrors the backend's key pattern, so a bad key is caught before the save. */
 const KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 const MAX_FOOTERS = 12;
 const MAX_LINES = 6;
+
+type ContactFlag = 'show_phone' | 'show_email' | 'show_website';
+
+const CONTACT_PARTS: { flag: ContactFlag; label: string; detail: keyof EmailFooterContactDetails }[] = [
+  { flag: 'show_phone', label: 'Phone', detail: 'phone' },
+  { flag: 'show_email', label: 'Email', detail: 'email' },
+  { flag: 'show_website', label: 'Website', detail: 'website' },
+];
 
 function blankFooter(existingKeys: string[]): EmailFooter {
   let key = 'footer';
@@ -33,12 +47,42 @@ function blankFooter(existingKeys: string[]): EmailFooter {
     description: '',
     lines: ['Sent by {{organization_name}}.'],
     show_contact: true,
+    show_phone: true,
+    show_email: true,
+    show_website: true,
     show_mailing_address: false,
   };
 }
 
+interface ContactToggleProps {
+  label: string;
+  value: string;
+  checked: boolean;
+  onToggle: (checked: boolean) => void;
+}
+
+const ContactToggle: React.FC<ContactToggleProps> = ({ label, value, checked, onToggle }) => (
+  <label className="flex items-start gap-2 text-sm">
+    <input
+      type="checkbox"
+      className="form-checkbox mt-0.5"
+      checked={checked}
+      onChange={(e) => onToggle(e.target.checked)}
+    />
+    <span className="min-w-0">
+      <span className="text-theme-text-primary font-medium">{label}</span>
+      {value ? (
+        <span className="text-theme-text-secondary block break-words whitespace-pre-line">{value}</span>
+      ) : (
+        <span className="text-theme-text-muted block italic">Not set, so it will not appear</span>
+      )}
+    </span>
+  </label>
+);
+
 interface FooterCardProps {
   footer: EmailFooter;
+  contactDetails: EmailFooterContactDetails;
   isDefault: boolean;
   usageCount: number;
   keyError: string | null;
@@ -50,6 +94,7 @@ interface FooterCardProps {
 
 const FooterCard: React.FC<FooterCardProps> = ({
   footer,
+  contactDetails,
   isDefault,
   usageCount,
   keyError,
@@ -62,6 +107,12 @@ const FooterCard: React.FC<FooterCardProps> = ({
     const lines = [...footer.lines];
     lines[index] = value;
     onChange({ ...footer, lines });
+  };
+
+  const setContactPart = (flag: ContactFlag, checked: boolean) => {
+    const next = { ...footer, [flag]: checked };
+    // show_contact is the pre-split single switch; keep it meaning "any part".
+    onChange({ ...next, show_contact: next.show_phone || next.show_email || next.show_website });
   };
 
   return (
@@ -183,26 +234,29 @@ const FooterCard: React.FC<FooterCardProps> = ({
         )}
       </div>
 
-      <div className="flex flex-wrap gap-4">
-        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="form-checkbox"
-            checked={footer.show_contact}
-            onChange={(e) => onChange({ ...footer, show_contact: e.target.checked })}
-          />
-          Phone, email and website
-        </label>
-        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="form-checkbox"
+      <fieldset className="space-y-2">
+        <legend className="form-label">Contact details</legend>
+        <p className="text-theme-text-muted text-xs">
+          Tick the details this footer shows. The values are the department contact details above.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {CONTACT_PARTS.map((part) => (
+            <ContactToggle
+              key={part.flag}
+              label={part.label}
+              value={contactDetails[part.detail]}
+              checked={footer[part.flag]}
+              onToggle={(checked) => setContactPart(part.flag, checked)}
+            />
+          ))}
+          <ContactToggle
+            label="Mailing address"
+            value={contactDetails.mailing_address}
             checked={footer.show_mailing_address}
-            onChange={(e) => onChange({ ...footer, show_mailing_address: e.target.checked })}
+            onToggle={(checked) => onChange({ ...footer, show_mailing_address: checked })}
           />
-          Mailing address
-        </label>
-      </div>
+        </div>
+      </fieldset>
     </div>
   );
 };
@@ -213,12 +267,14 @@ const FootersPanel: React.FC = () => {
     defaultKey,
     variables,
     usage,
+    contactDetails,
     isLoading,
     isSaving,
     error,
     hasLoaded,
     fetchFooters,
     saveFooters,
+    refreshContactDetails,
     clearError,
   } = useFootersStore();
   const { confirm } = useConfirm();
@@ -347,11 +403,14 @@ const FootersPanel: React.FC = () => {
         </div>
       )}
 
+      <DepartmentContactCard onSaved={refreshContactDetails} />
+
       <div className="space-y-4">
         {draft.map((footer, index) => (
           <FooterCard
             key={index}
             footer={footer}
+            contactDetails={contactDetails}
             isDefault={footer.key === draftDefault}
             usageCount={usage[footer.key] ?? 0}
             keyError={keyErrors[index] ?? null}

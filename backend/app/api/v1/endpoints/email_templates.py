@@ -29,6 +29,7 @@ from app.models.email_template import (
 from app.models.user import User
 from app.schemas.email_template import (
     EmailAttachmentResponse,
+    EmailFooterContactDetails,
     EmailFooterLibrary,
     EmailFooterLibraryResponse,
     EmailTemplateBackupResponse,
@@ -43,8 +44,8 @@ from app.schemas.email_template import (
 from app.services import email_footers
 from app.services.email_template_service import (
     GLOBAL_VARIABLES,
-    SAMPLE_CONTEXT,
     EmailTemplateService,
+    live_sample_context,
 )
 from app.services.officer_service import OfficerService
 from app.utils.mime_validation import detect_mime_type
@@ -92,6 +93,22 @@ async def _footer_library_response(
             if variable["name"] in email_footers.FOOTER_VARIABLE_NAMES
         ],
         usage=usage,
+        contact_details=_footer_contact_details(organization),
+    )
+
+
+def _footer_contact_details(organization) -> EmailFooterContactDetails:
+    """What the footer switches would print, from the same context a send uses.
+
+    Built through ``build_context`` rather than read off the columns so the
+    screen shows the mailing address formatted exactly as the email will.
+    """
+    ctx = EmailTemplateService.build_context({}, organization)
+    return EmailFooterContactDetails(
+        phone=str(ctx.get("organization_phone") or ""),
+        email=str(ctx.get("organization_email") or ""),
+        website=str(ctx.get("organization_website") or ""),
+        mailing_address=str(ctx.get("organization_mailing_address") or ""),
     )
 
 
@@ -443,13 +460,18 @@ async def preview_email_template(
         if hasattr(template.template_type, "value")
         else str(template.template_type)
     )
-    context = {**SAMPLE_CONTEXT.get(template_type_key, {}), **preview_data.context}
-
     # --- Inject live organization data ---
     org_result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
     organization = org_result.scalar_one_or_none()
+
+    # The same live sample a test send uses, so the preview and the test email
+    # in the admin's inbox agree.
+    context = {
+        **live_sample_context(template_type_key, organization, recipient=current_user),
+        **preview_data.context,
+    }
     if organization:
         context["organization_name"] = organization.name or context.get(
             "organization_name", ""

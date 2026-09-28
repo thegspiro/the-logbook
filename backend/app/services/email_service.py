@@ -2078,6 +2078,11 @@ class EmailService:
             "event_type": event_type,
             "event_start": self._format_local_dt(event_start),
             "event_end": self._format_local_dt(event_end, "%I:%M %p"),
+            # The date tile's two halves, in the department's timezone like
+            # event_start, so the tile and the line beside it name the same
+            # day. The day drops its leading zero ("4", not "04").
+            "event_month": self._format_local_dt(event_start, "%b"),
+            "event_day": self._format_local_dt(event_start, "%d").lstrip("0"),
             "location_name": location_name or "",
             "location_details": location_details or "",
             "event_url": event_url or "",

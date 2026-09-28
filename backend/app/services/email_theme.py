@@ -690,10 +690,11 @@ def countdown_tile(value: str, unit: str) -> str:
 def date_tile(month: str, day: str) -> str:
     """The calendar-page tile: an accent strip with the month over the day.
 
-    Takes the month and the day separately, because a sender passes each
-    date to a template as one pre-formatted string and there is nothing to
-    split reliably across locales. No shipped template uses it yet: it is here
-    for the first template whose sender supplies the two parts.
+    Takes the month and the day separately, because a sender passes each date
+    to a template as one pre-formatted string and there is nothing to split
+    reliably across locales. The event reminder uses it, fed the
+    ``event_month`` / ``event_day`` variables ``send_event_reminder`` computes
+    in the department's timezone.
     """
     return (
         '<table class="tile-date" role="presentation" cellpadding="0" '

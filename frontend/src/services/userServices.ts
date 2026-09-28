@@ -418,6 +418,23 @@ export interface OrganizationProfile {
   };
 }
 
+/**
+ * A partial profile update touching only the contact details. `null` clears a
+ * field; an omitted key leaves it alone (the endpoint dumps `exclude_unset`).
+ */
+export interface OrganizationContactUpdate {
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  mailing_address?: {
+    line1?: string | null;
+    line2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+  };
+}
+
 export interface EnabledModulesResponse {
   enabled_modules: string[];
   module_settings: ModuleSettingsData;
@@ -623,6 +640,11 @@ export const organizationService = {
   },
 
   async updateProfile(updates: Partial<OrganizationProfile>): Promise<OrganizationProfile> {
+    const response = await api.patch<OrganizationProfile>('/organization/profile', updates);
+    return response.data;
+  },
+
+  async updateContactDetails(updates: OrganizationContactUpdate): Promise<OrganizationProfile> {
     const response = await api.patch<OrganizationProfile>('/organization/profile', updates);
     return response.data;
   },

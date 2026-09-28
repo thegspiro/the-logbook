@@ -138,6 +138,7 @@ async def send_test_email(
 
     subject = "Test Email from The Logbook"
     template_type = None
+    attachment_paths: list[str] = []
     html_body = _build_test_html(organization)
     text_body = "This is a test email from The Logbook. If you received this, your email configuration is working correctly."
 
@@ -146,8 +147,8 @@ async def send_test_email(
         from sqlalchemy.orm import selectinload
 
         from app.services.email_template_service import (
-            SAMPLE_CONTEXT,
             EmailTemplateService,
+            live_sample_context,
         )
 
         tmpl_result = await db.execute(
@@ -171,9 +172,10 @@ async def send_test_email(
             if hasattr(template.template_type, "value")
             else str(template.template_type)
         )
-        context = {**SAMPLE_CONTEXT.get(ttype_key, {})}
-        if organization:
-            context["organization_name"] = organization.name or ""
+        # Live links, the department's real details, today's dates, and the
+        # admin receiving the test as its recipient; only what no test can
+        # have (an event, a token, other people) stays sample data.
+        context = live_sample_context(ttype_key, organization, recipient=current_user)
         await OfficerService(db).overlay_preview_context(
             current_user.organization_id, context
         )
@@ -182,6 +184,10 @@ async def send_test_email(
         )
         subject = f"[TEST] {subject}"
         template_type = ttype_key
+        # The same files the real send attaches (EmailService.send_welcome_email
+        # uses this rule), so a test shows whether they arrive and fit.
+        if template.allow_attachments and template.attachments:
+            attachment_paths = [a.storage_path for a in template.attachments]
 
     # Send the email (also logs to message_history automatically)
     email_svc = EmailService(organization=organization)
@@ -190,6 +196,7 @@ async def send_test_email(
         subject=subject,
         html_body=html_body,
         text_body=text_body,
+        attachment_paths=attachment_paths or None,
         db=db,
         template_type=template_type,
         sent_by=current_user.id,
