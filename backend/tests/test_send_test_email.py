@@ -23,10 +23,10 @@ def _result(value):
     return result
 
 
-def _template(allow_attachments, attachments):
+def _template(allow_attachments, attachments, template_type=EmailTemplateType.WELCOME):
     return SimpleNamespace(
         id="tpl-1",
-        template_type=EmailTemplateType.WELCOME,
+        template_type=template_type,
         allow_attachments=allow_attachments,
         attachments=attachments,
     )
@@ -66,6 +66,16 @@ async def _send(template):
             "app.services.email_template_service.EmailTemplateService.render",
             return_value=("Welcome", "<p>Welcome</p>", "Welcome"),
         ) as render,
+        patch(
+            "app.services.email_test_records.real_record_context",
+            new=AsyncMock(
+                side_effect=lambda _db, ttype, _org: (
+                    {"event_title": "Pump Ops Drill"}
+                    if ttype == "event_reminder"
+                    else {}
+                )
+            ),
+        ),
     ):
         await send_test_email(
             SendTestEmailRequest(template_id="tpl-1"), db=db, current_user=user
@@ -107,3 +117,12 @@ async def test_the_welcome_test_is_addressed_to_the_admin_sending_it():
     _, context = await _send(_template(True, []))
     assert context["first_name"] == "Jordan"
     assert context["username"] == "jreyes"
+
+
+async def test_an_event_reminder_test_uses_the_departments_next_event():
+    _, context = await _send(
+        _template(False, [], template_type=EmailTemplateType.EVENT_REMINDER)
+    )
+    assert context["event_title"] == "Pump Ops Drill"
+    # Still addressed to the admin; the record fills only the event.
+    assert context["recipient_name"] == "Jordan Reyes"

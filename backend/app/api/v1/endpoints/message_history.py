@@ -150,6 +150,7 @@ async def send_test_email(
             EmailTemplateService,
             live_sample_context,
         )
+        from app.services.email_test_records import real_record_context
 
         tmpl_result = await db.execute(
             select(EmailTemplate)
@@ -176,6 +177,8 @@ async def send_test_email(
         # admin receiving the test as its recipient; only what no test can
         # have (an event, a token, other people) stays sample data.
         context = live_sample_context(ttype_key, organization, recipient=current_user)
+        # The department's own next event or shift, when it has one.
+        context.update(await real_record_context(db, ttype_key, organization))
         await OfficerService(db).overlay_preview_context(
             current_user.organization_id, context
         )
