@@ -23,7 +23,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W02 | Sign in, sign out, session timeout, a wrong password, lockout messaging    | member            | `/login`                              | ✅     |
 | W03 | Forgot password and reset by link                                          | anonymous         | `/forgot-password`, `/reset-password` | ✅     |
 | W04 | My account: profile, password change, MFA enrolment, notification settings | member            | `/account`                            | ✅     |
-| W05 | Positions and permissions: create a position, grant, assign, revoke        | admin → member    | `/settings/roles`                     | ⬜     |
+| W05 | Positions and permissions: create a position, grant, assign, revoke        | admin → member    | `/settings/roles`                     | ✅     |
 | W06 | Organization settings, module switches, department setup checklist         | admin             | `/settings`, `/setup`                 | ⬜     |
 | W07 | Dashboard for each role: what shows, what links work, what fails behind it | every role        | `/dashboard`                          | ⬜     |
 
@@ -155,6 +155,11 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   on `/integrations/connected` (four times) and `/scheduling/settings` for
   modules that are off.
 - **W08** — several Add Member fields have no programmatic label.
+- **W08** — "View by Role → Manage Members" saves each member with its own
+  request under `Promise.all`; if one is refused the others still land, but
+  the page shows only the error and does not reload, so the list is stale
+  (read from code in W05, not driven). The base "Member" position also has a
+  remove "×" like any other.
 - **W79** — tap targets under 44px on the onboarding Modules, Ranks &
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
   screen's "Forgot your password?", Privacy and Terms links (W02-5), and
@@ -163,6 +168,22 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W05 — Positions and permissions — 2026-09-28
+
+Driven as: `admin` → `member`, plus `membership_coordinator` and `chief`, at
+1280×900 and 390×844. Held: a position created with `reports.view` and
+assigned to `member` opened Reports in the member's live session; unchecking
+the permission, and deleting the position, took it away again; `member` is
+refused on both pages and the API; the grant ceiling refused the coordinator
+Chief and `chief` both emptying IT Manager and adding `*` to Member; double
+submit made one position; every change audited with the actor. Fixed: W05-1
+(MED — a refused save showed its error behind the dialog, in schema
+language), W05-2 (MED — Manage Roles told a coordinator they could not
+assign positions, behind the dialog, instead of the server's reason), W05-3,
+W05-4, W05-6 (LOW), W05-7 (NIT). Flagged: W05-5 (LOW — duplicate position
+names), mirrored to KNOWN_LIMITATIONS. Gate: typecheck, lint and the full frontend suite clean
+(no Python changed). Next: W06.
 
 ### W04 — My account — 2026-09-28
 

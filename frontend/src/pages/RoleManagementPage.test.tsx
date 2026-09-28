@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { roleService } from '../services/api';
@@ -116,5 +116,53 @@ describe('RoleManagementPage', () => {
 
     expect(screen.getByLabelText('Role Name')).toBeDisabled();
     expect(screen.getByText(/only the description and permissions/i)).toBeInTheDocument();
+  });
+
+  // W05: the save error was rendered on the page behind the dialog, so a
+  // refused save looked like a button that did nothing.
+  describe('errors while the dialog is open', () => {
+    it('refuses an empty name inside the dialog without calling the server', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<RoleManagementPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Create Custom Role' }));
+      await user.click(screen.getByRole('button', { name: 'Create Role' }));
+
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByRole('alert')).toHaveTextContent('Give the role a name.');
+      expect(roleService.createRole).not.toHaveBeenCalled();
+    });
+
+    it('shows a refused save inside the dialog, once', async () => {
+      const user = userEvent.setup();
+      vi.mocked(roleService.createRole).mockRejectedValueOnce(
+        new Error('You cannot grant a role permissions beyond your own (offending permission: *).')
+      );
+      renderWithRouter(<RoleManagementPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Create Custom Role' }));
+      await user.type(screen.getByLabelText('Role Name'), 'Report Reader');
+      await user.click(screen.getByRole('button', { name: 'Create Role' }));
+
+      const dialog = screen.getByRole('dialog');
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(/beyond your own/);
+      expect(screen.getAllByText(/beyond your own/)).toHaveLength(1);
+    });
+  });
+
+  it('does not describe priority as authority', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<RoleManagementPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Create Custom Role' }));
+
+    expect(screen.getByText(/It grants no permissions/)).toBeInTheDocument();
+    expect(screen.queryByText(/more authority/)).not.toBeInTheDocument();
+  });
+
+  it('shows each permission by its full name, not its last segment', async () => {
+    renderWithRouter(<RoleManagementPage />);
+
+    expect(await screen.findByText('events.view')).toBeInTheDocument();
   });
 });
