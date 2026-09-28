@@ -173,7 +173,9 @@ describe('ApplicationStatusPage withdraw application', () => {
 
     await user.click(await screen.findByRole('button', { name: /Withdraw Application/i }));
     expect(screen.getByText('Withdraw your application?')).toBeInTheDocument();
-    await user.type(screen.getByLabelText(/Reason/i), 'Moving away');
+    // Exact: PromptDialog appends "(optional)" itself; the label once said it
+    // too, and the applicant read "Reason (optional) (optional)".
+    await user.type(screen.getByLabelText('Reason (optional)'), 'Moving away');
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Withdraw Application/i }));
 
     await waitFor(() => expect(mockWithdrawApplication).toHaveBeenCalledWith('tok123', 'Moving away'));
@@ -207,5 +209,46 @@ describe('ApplicationStatusPage withdraw application', () => {
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('This application is no longer open'));
     expect(screen.getByText('In Progress')).toBeInTheDocument();
+  });
+});
+
+describe('ApplicationStatusPage when the status cannot be read', () => {
+  beforeEach(() => {
+    mockGetApplicationStatus.mockReset();
+  });
+
+  const httpError = (status: number) => Object.assign(new Error('Request failed'), { response: { status, data: {} } });
+
+  it('says the application was not found when the server does not know the link', async () => {
+    mockGetApplicationStatus.mockRejectedValue(httpError(404));
+
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Application Not Found' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  // An outage read "Application not found", telling an applicant whose
+  // application is open that it no longer exists (workflow review W17-2).
+  it('says the status is unavailable, not missing, when the server fails, and retries', async () => {
+    const user = userEvent.setup();
+    mockGetApplicationStatus.mockRejectedValueOnce(httpError(503)).mockResolvedValueOnce(baseStatus);
+
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Status Unavailable' })).toBeInTheDocument();
+    expect(screen.queryByText(/not found/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('Interview')).toBeInTheDocument();
+    expect(mockGetApplicationStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('treats a dropped connection as unavailable', async () => {
+    mockGetApplicationStatus.mockRejectedValue(new Error('Network Error'));
+
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Status Unavailable' })).toBeInTheDocument();
   });
 });

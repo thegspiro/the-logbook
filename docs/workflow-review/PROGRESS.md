@@ -40,7 +40,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W14 | Check-in station, badge scan, member labels and ID cards                  | admin                  | `/members/check-in-station`, `/members/scan` | ✅     |
 | W15 | A member leaves: departure clearance, property return, archive, reinstate | admin                  | `/members/admin`                             | ✅     |
 | W16 | Prospective member from application to converted member                   | membership_coordinator | `/prospective-members`                       | ✅     |
-| W17 | An applicant checks their status by link                                  | anonymous              | `/application-status/:token`                 | ⬜     |
+| W17 | An applicant checks their status by link                                  | anonymous              | `/application-status/:token`                 | ✅     |
 
 ## Tier 3 — Events
 
@@ -173,6 +173,26 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W17 — An applicant checks their status by link — 2026-09-28
+
+Driven as: anonymous at 1280×900 and 390×844 (token read from the review
+database for setup, since email is off and staff never see it), with
+`membership_coordinator` and `chief` reading the result. Held: the page
+shows status, progress and a dated timeline; unknown and malformed links
+are refused plainly; withdrawal works end to end, once, and reaches the
+coordinator's Withdrawn tab and drawer with the reason; the Chief's
+sign-offs drop the withdrawn applicant. Fixed: W17-1 (NIT — "Reason
+(optional) (optional)", and the same on Apparatus Inventory's note), W17-2
+(LOW — an outage read "Application not found"). Flagged: W17-3 (MED — the
+label preview hands anyone with `prospective_members.view` every
+applicant's status token, which opens and withdraws the application; the
+printed barcode carries it too). Gate: typecheck and lint clean; the two
+touched suites pass (no Python changed).
+
+**The rotation stopped here.** W17-3 is a decision about who may hold an
+applicant's credential, which is an authorization decision and the
+rotation's stop condition. Next, once decided: W18.
 
 ### W16 — Prospective member to converted member — 2026-09-28
 
