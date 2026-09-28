@@ -44,8 +44,8 @@ from app.schemas.email_template import (
 from app.services import email_footers
 from app.services.email_template_service import (
     GLOBAL_VARIABLES,
-    SAMPLE_CONTEXT,
     EmailTemplateService,
+    live_sample_context,
 )
 from app.services.officer_service import OfficerService
 from app.utils.mime_validation import detect_mime_type
@@ -460,13 +460,18 @@ async def preview_email_template(
         if hasattr(template.template_type, "value")
         else str(template.template_type)
     )
-    context = {**SAMPLE_CONTEXT.get(template_type_key, {}), **preview_data.context}
-
     # --- Inject live organization data ---
     org_result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
     organization = org_result.scalar_one_or_none()
+
+    # The same live sample a test send uses, so the preview and the test email
+    # in the admin's inbox agree.
+    context = {
+        **live_sample_context(template_type_key, organization),
+        **preview_data.context,
+    }
     if organization:
         context["organization_name"] = organization.name or context.get(
             "organization_name", ""

@@ -146,8 +146,8 @@ async def send_test_email(
         from sqlalchemy.orm import selectinload
 
         from app.services.email_template_service import (
-            SAMPLE_CONTEXT,
             EmailTemplateService,
+            live_sample_context,
         )
 
         tmpl_result = await db.execute(
@@ -171,9 +171,9 @@ async def send_test_email(
             if hasattr(template.template_type, "value")
             else str(template.template_type)
         )
-        context = {**SAMPLE_CONTEXT.get(ttype_key, {})}
-        if organization:
-            context["organization_name"] = organization.name or ""
+        # Live links and the department's real details; only what no test
+        # can have (a recipient, an event, a token) stays sample data.
+        context = live_sample_context(ttype_key, organization)
         await OfficerService(db).overlay_preview_context(
             current_user.organization_id, context
         )

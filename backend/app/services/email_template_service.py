@@ -1200,6 +1200,42 @@ SAMPLE_CONTEXT.update(
     {key: _sample(value) for key, value in _storefront_templates.SAMPLE_CONTEXT.items()}
 )
 
+# The sample links' placeholder host. Only the host is replaced: each path is
+# the one the real sender builds (``/events/{id}``, ``/training/approve/…``),
+# so a test link lands on the right screen of this deployment.
+_SAMPLE_LINK_HOST = re.compile(r"^https://example\.(?:com|org)(?=/|$)")
+
+
+def live_sample_context(
+    template_type: str, organization: Optional[Any] = None
+) -> Dict[str, str]:
+    """Sample values for a preview or test send, with everything real made real.
+
+    ``SAMPLE_CONTEXT`` stands in for the parts of a notice no test has — a
+    recipient, an event, a token. Two parts of it stood in for things that do
+    exist, and a test email is only useful if it shows those as a member would
+    receive them:
+
+    * **Links** pointed at example.com. They now use ``FRONTEND_URL``, the base
+      every real sender builds its links from, keeping the sample path.
+    * **The department's own details** were Sample Fire Department's, and
+      because ``build_context`` only ever fills a key the caller left out,
+      they also won over the organization's real phone, address and website.
+      With an organization they are dropped, so ``build_context`` supplies the
+      live values — including a blank where the department has none, which is
+      what its members would see.
+    """
+    base = (app_settings.FRONTEND_URL or "").strip().rstrip("/")
+    context: Dict[str, str] = {}
+    for key, value in SAMPLE_CONTEXT.get(template_type, {}).items():
+        if organization is not None and key.startswith("organization_"):
+            continue
+        if base and isinstance(value, str):
+            value = _SAMPLE_LINK_HOST.sub(base, value)
+        context[key] = value
+    return context
+
+
 # Default welcome email HTML body
 DEFAULT_WELCOME_HTML = build_shell(
     "Your account is ready",
