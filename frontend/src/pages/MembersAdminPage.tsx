@@ -18,7 +18,8 @@ import type { Location } from '../services/api';
 import type { UserWithRoles, Role } from '../types/role';
 import type { UserProfileUpdate } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
-import { validatePasswordStrength } from '../utils/passwordValidation';
+import toast from 'react-hot-toast';
+import { PASSWORD_CHECKLIST, validatePasswordStrength } from '../utils/passwordValidation';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { Modal } from '../components/Modal';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
@@ -226,29 +227,41 @@ export const MembersAdminPage: React.FC = () => {
       // Users to remove the role from
       const usersToRemove = currentUserIds.filter((id) => !selectedUserIds.includes(id));
 
-      // Update each user's roles
-      const updatePromises = [];
-
+      const changes: { user: UserWithRoles; roleIds: string[] }[] = [];
       for (const userId of usersToAdd) {
         const user = users.find((u) => u.id === userId);
-        if (user) {
-          const newRoleIds = [...user.roles.map((r) => r.id), selectedRole.id];
-          updatePromises.push(userService.assignUserRoles(userId, newRoleIds));
-        }
+        if (user) changes.push({ user, roleIds: [...user.roles.map((r) => r.id), selectedRole.id] });
       }
-
       for (const userId of usersToRemove) {
         const user = users.find((u) => u.id === userId);
-        if (user) {
-          const newRoleIds = user.roles.map((r) => r.id).filter((id) => id !== selectedRole.id);
-          updatePromises.push(userService.assignUserRoles(userId, newRoleIds));
+        if (user) changes.push({ user, roleIds: user.roles.map((r) => r.id).filter((id) => id !== selectedRole.id) });
+      }
+
+      // One member at a time, not `Promise.all`. In parallel, a refusal
+      // rejected the whole save while the other requests still landed, and the
+      // page neither reloaded nor said which ones had. Sequential requests also
+      // keep the server's last-administrator check from judging several
+      // removals against the same, not-yet-updated count.
+      const failures: { name: string; reason: string }[] = [];
+      for (const { user, roleIds } of changes) {
+        try {
+          await userService.assignUserRoles(user.id, roleIds);
+        } catch (err: unknown) {
+          failures.push({
+            name: user.full_name || user.username,
+            reason: getErrorDetail(err) || 'the change was refused',
+          });
         }
       }
 
-      await Promise.all(updatePromises);
-
-      // Refresh the user list
       await fetchData();
+
+      if (failures.length > 0) {
+        const saved = changes.length - failures.length;
+        const listed = failures.map((f) => `${f.name}: ${f.reason}`).join(' ');
+        setError(`${saved} of ${changes.length} change${changes.length === 1 ? '' : 's'} saved. Not saved — ${listed}`);
+        return;
+      }
 
       setEditingMembers(false);
       setSelectedRole(null);
@@ -277,10 +290,11 @@ export const MembersAdminPage: React.FC = () => {
   };
 
   const handleQuickRemoveRole = async (user: UserWithRoles, roleId: string) => {
+    const roleName = user.roles.find((r) => r.id === roleId)?.name ?? 'this role';
     if (
       !(await confirm({
         title: 'Remove role',
-        message: `Remove this role from ${user.full_name || user.username}?`,
+        message: `Remove ${roleName} from ${user.full_name || user.username}?`,
         confirmLabel: 'Remove',
         cancelLabel: 'Keep it',
       }))
@@ -293,8 +307,11 @@ export const MembersAdminPage: React.FC = () => {
       const newRoleIds = user.roles.map((r) => r.id).filter((id) => id !== roleId);
       await userService.assignUserRoles(user.id, newRoleIds);
       await fetchData();
-    } catch (_err) {
-      setError('Unable to remove the role. Please check your connection and try again.');
+    } catch (err: unknown) {
+      // The server refuses on purpose — the last administrator, the grant
+      // ceiling — and its reason is the useful part; "check your connection"
+      // sent the officer looking for a network fault.
+      setError(getErrorDetail(err) || 'Unable to remove the role. Please check your connection and try again.');
     }
   };
 
@@ -318,8 +335,10 @@ export const MembersAdminPage: React.FC = () => {
       const newRoleIds = user.roles.map((r) => r.id).filter((id) => id !== role.id);
       await userService.assignUserRoles(userId, newRoleIds);
       await fetchData();
-    } catch (_err) {
-      setError('Unable to remove the user from this role. Please check your connection and try again.');
+    } catch (err: unknown) {
+      setError(
+        getErrorDetail(err) || 'Unable to remove the user from this role. Please check your connection and try again.'
+      );
     }
   };
 
@@ -365,6 +384,8 @@ export const MembersAdminPage: React.FC = () => {
     }
   };
 
+  const resetPasswordChecks = validatePasswordStrength(resetNewPassword).checks;
+
   const handleResetPassword = async () => {
     if (!resetPasswordUser) return;
 
@@ -375,7 +396,7 @@ export const MembersAdminPage: React.FC = () => {
 
     const validation = validatePasswordStrength(resetNewPassword);
     if (!validation.isValid) {
-      setError('Password does not meet strength requirements');
+      setError('Password does not meet every rule listed below');
       return;
     }
 
@@ -383,6 +404,9 @@ export const MembersAdminPage: React.FC = () => {
       setSavingReset(true);
       setError(null);
       await userService.adminResetPassword(resetPasswordUser.id, resetNewPassword, resetForceChange);
+      // The dialog closing was the only sign it worked, which reads the same
+      // as a dismissed dialog.
+      toast.success(`Password reset for ${resetPasswordUser.full_name || resetPasswordUser.username}`);
       setResetPasswordUser(null);
       setResetNewPassword('');
       setResetConfirmPassword('');
@@ -913,8 +937,14 @@ export const MembersAdminPage: React.FC = () => {
         >
           <div className="space-y-4">
             <div>
-              <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">New Password</label>
+              <label
+                htmlFor="reset-new-password"
+                className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+              >
+                New Password
+              </label>
               <input
+                id="reset-new-password"
                 type="password"
                 value={resetNewPassword}
                 onChange={(e) => setResetNewPassword(e.target.value)}
@@ -923,11 +953,29 @@ export const MembersAdminPage: React.FC = () => {
                 disabled={savingReset}
                 autoComplete="new-password"
               />
+              {resetNewPassword && (
+                <ul className="mt-2 space-y-1 text-xs" aria-label="Password rules">
+                  {PASSWORD_CHECKLIST.map(({ key, label }) => {
+                    const met = resetPasswordChecks[key];
+                    return (
+                      <li key={key} className={met ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}>
+                        {met ? '✓' : '○'} {label}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
 
             <div>
-              <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Confirm Password</label>
+              <label
+                htmlFor="reset-confirm-password"
+                className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+              >
+                Confirm Password
+              </label>
               <input
+                id="reset-confirm-password"
                 type="password"
                 value={resetConfirmPassword}
                 onChange={(e) => setResetConfirmPassword(e.target.value)}
@@ -952,7 +1000,11 @@ export const MembersAdminPage: React.FC = () => {
               <span className="text-theme-text-secondary text-sm">Require user to change password on next login</span>
             </label>
 
-            {error && <div className="text-sm text-red-700 dark:text-red-400">{error}</div>}
+            {error && (
+              <div role="alert" className="text-sm text-red-700 dark:text-red-400">
+                {error}
+              </div>
+            )}
           </div>
         </Modal>
 

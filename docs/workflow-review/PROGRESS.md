@@ -34,7 +34,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W08 | Add a member, with and without a password, and their first sign-in        | admin → new member     | `/members/add`                               | ✅     |
 | W09 | Import members from a spreadsheet                                         | admin                  | `/members/import`                            | ✅     |
 | W10 | Find a member and read their profile, as a member (contact visibility)    | member, admin          | `/members`, `/members/:userId`               | ✅     |
-| W11 | Edit a member as an officer: details, clearing a field, status, history   | admin                  | `/members/admin/edit/:userId`                | ⬜     |
+| W11 | Edit a member as an officer: details, clearing a field, status, history   | admin                  | `/members/admin/edit/:userId`                | ✅     |
 | W12 | Member settings: ranks, membership tiers, ID numbering, EVOC, visibility  | admin                  | `/members/admin/settings/*`                  | ⬜     |
 | W13 | Waivers                                                                   | admin                  | `/members/admin/waivers`                     | ⬜     |
 | W14 | Check-in station, badge scan, member labels and ID cards                  | admin                  | `/members/check-in-station`, `/members/scan` | ⬜     |
@@ -159,11 +159,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   (first sign-in, admin reset), the shell and shared hooks fire ~17 requests
   the server refuses with 403, including `POST /errors/log`, so errors from
   that state cannot be reported (W08-6).
-- **W11** — "View by Role → Manage Members" saves each member with its own
-  request under `Promise.all`; if one is refused the others still land, but
-  the page shows only the error and does not reload, so the list is stale
-  (read from code in W05, not driven). The base "Member" position also has a
-  remove "×" like any other.
 - **W79** — tap targets under 44px on the onboarding Modules, Ranks &
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
   screen's "Forgot your password?", Privacy and Terms links (W02-5), and
@@ -172,6 +167,24 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W11 — Edit a member as an officer — 2026-09-28
+
+Driven as: `admin` at 1280×900 and 390×844, with `member2` refused on page
+and API. Held: clearing middle name, phone and personal email persists
+across a reload; a status change to Leave with a reason, and a membership
+type change, both land and are filed under the right history filter;
+Manage Members adds and removes; every change is audited. Fixed: W11-1 (MED
+— an emergency contact without an email was a 422 and the contact was
+lost), W11-2 (LOW — 21 unlabelled fields plus both member dialogs), W11-3
+(LOW — Reset Password named no rule and was silent on success), W11-4 (LOW
+— Manage Members' `Promise.all` hid a partial save; the W05 lead), W11-5
+(LOW — the "×" confirmation did not name the position and a refusal read as
+a connection fault), W11-6 (LOW — the history showed no time), W11-7 (NIT).
+Flagged: W11-8 (MED — the last-administrator check takes no lock), W11-9
+(LOW — the base Member position can be removed like any other). Casey put
+back to active and probationary afterwards. Gate: typecheck, lint and the
+full frontend suite clean (no Python changed). Next: W12.
 
 ### W10 — Find a member and read their profile — 2026-09-28
 

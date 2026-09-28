@@ -294,7 +294,23 @@ export const MemberAdminEditPage: React.FC = () => {
       const contactsChanged =
         JSON.stringify(form.emergency_contacts) !== JSON.stringify(initialForm.emergency_contacts);
       if (contactsChanged) {
-        profileUpdate.emergency_contacts = form.emergency_contacts;
+        // `EmergencyContact` requires a name and relationship and types the
+        // email as `EmailStr | None`, so an untouched Email box (`''`) was a
+        // 422 that discarded the whole save. Blank emails are omitted, and
+        // the two required fields are checked here, before anything is sent.
+        const contacts = form.emergency_contacts.map((c) => ({
+          name: c.name.trim(),
+          relationship: c.relationship.trim(),
+          phone: c.phone.trim(),
+          email: c.email?.trim() || undefined,
+          is_primary: c.is_primary,
+        }));
+        const incomplete = contacts.findIndex((c) => !c.name || !c.relationship);
+        if (incomplete >= 0) {
+          setError(`Emergency contact ${incomplete + 1} needs a name and a relationship.`);
+          return;
+        }
+        profileUpdate.emergency_contacts = contacts;
         hasProfileChanges = true;
       }
 
@@ -402,7 +418,7 @@ export const MemberAdminEditPage: React.FC = () => {
         <div className="mb-6">
           <Link
             to="/members/admin"
-            className="text-theme-text-muted hover:text-theme-text-primary mb-4 inline-flex items-center text-sm"
+            className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone mb-4 inline-flex items-center text-sm"
           >
             <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -443,8 +459,14 @@ export const MemberAdminEditPage: React.FC = () => {
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Personal Information</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">First Name</label>
+                <label
+                  htmlFor="member-first-name"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
+                  First Name
+                </label>
                 <input
+                  id="member-first-name"
                   type="text"
                   value={form.first_name}
                   onChange={(e) => handleFieldChange('first_name', e.target.value)}
@@ -453,8 +475,14 @@ export const MemberAdminEditPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Middle Name</label>
+                <label
+                  htmlFor="member-middle-name"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
+                  Middle Name
+                </label>
                 <input
+                  id="member-middle-name"
                   type="text"
                   value={form.middle_name}
                   onChange={(e) => handleFieldChange('middle_name', e.target.value)}
@@ -463,8 +491,14 @@ export const MemberAdminEditPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Last Name</label>
+                <label
+                  htmlFor="member-last-name"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
+                  Last Name
+                </label>
                 <input
+                  id="member-last-name"
                   type="text"
                   value={form.last_name}
                   onChange={(e) => handleFieldChange('last_name', e.target.value)}
@@ -476,8 +510,14 @@ export const MemberAdminEditPage: React.FC = () => {
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Date of Birth</label>
+                <label
+                  htmlFor="member-date-of-birth"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
+                  Date of Birth
+                </label>
                 <input
+                  id="member-date-of-birth"
                   type="date"
                   value={form.date_of_birth}
                   onChange={(e) => handleFieldChange('date_of_birth', e.target.value)}
@@ -489,8 +529,14 @@ export const MemberAdminEditPage: React.FC = () => {
                 </p>
               </div>
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Personal Email</label>
+                <label
+                  htmlFor="member-personal-email"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
+                  Personal Email
+                </label>
                 <input
+                  id="member-personal-email"
                   type="email"
                   value={form.personal_email}
                   onChange={(e) => handleFieldChange('personal_email', e.target.value)}
@@ -506,10 +552,14 @@ export const MemberAdminEditPage: React.FC = () => {
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Department Information</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">
+                <label
+                  htmlFor="member-membership-number"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
                   Membership Number
                 </label>
                 <input
+                  id="member-membership-number"
                   type="text"
                   value={form.membership_number}
                   onChange={(e) => handleFieldChange('membership_number', e.target.value)}
@@ -540,8 +590,14 @@ export const MemberAdminEditPage: React.FC = () => {
                 )}
               </div>
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Station</label>
+                <label
+                  htmlFor="member-station"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
+                  Station
+                </label>
                 <select
+                  id="member-station"
                   value={form.station}
                   onChange={(e) => handleFieldChange('station', e.target.value)}
                   className="form-input bg-theme-surface-secondary px-3 text-sm"
@@ -556,8 +612,14 @@ export const MemberAdminEditPage: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Platoon</label>
+                <label
+                  htmlFor="member-platoon"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
+                  Platoon
+                </label>
                 <input
+                  id="member-platoon"
                   type="text"
                   value={form.platoon}
                   onChange={(e) => handleFieldChange('platoon', e.target.value)}
@@ -572,8 +634,14 @@ export const MemberAdminEditPage: React.FC = () => {
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Hire Date</label>
+                <label
+                  htmlFor="member-hire-date"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
+                  Hire Date
+                </label>
                 <input
+                  id="member-hire-date"
                   type="date"
                   value={form.hire_date}
                   onChange={(e) => handleFieldChange('hire_date', e.target.value)}
@@ -639,10 +707,14 @@ export const MemberAdminEditPage: React.FC = () => {
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Contact Information</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">
+                <label
+                  htmlFor="member-email"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
                   Email (Organization)
                 </label>
                 <input
+                  id="member-email"
                   type="email"
                   value={form.email}
                   readOnly
@@ -652,8 +724,14 @@ export const MemberAdminEditPage: React.FC = () => {
                 <p className="text-theme-text-muted mt-1 text-xs">Managed via organization contact settings.</p>
               </div>
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Phone</label>
+                <label
+                  htmlFor="member-phone"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
+                  Phone
+                </label>
                 <input
+                  id="member-phone"
                   type="tel"
                   value={form.phone}
                   onChange={(e) => handleFieldChange('phone', e.target.value)}
@@ -662,8 +740,14 @@ export const MemberAdminEditPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Mobile</label>
+                <label
+                  htmlFor="member-mobile"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
+                  Mobile
+                </label>
                 <input
+                  id="member-mobile"
                   type="tel"
                   value={form.mobile}
                   onChange={(e) => handleFieldChange('mobile', e.target.value)}
@@ -679,8 +763,14 @@ export const MemberAdminEditPage: React.FC = () => {
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Address</h2>
             <div className="space-y-4">
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Street Address</label>
+                <label
+                  htmlFor="member-address-street"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
+                  Street Address
+                </label>
                 <input
+                  id="member-address-street"
                   type="text"
                   value={form.address_street}
                   onChange={(e) => handleFieldChange('address_street', e.target.value)}
@@ -690,8 +780,14 @@ export const MemberAdminEditPage: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
                 <div>
-                  <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">City</label>
+                  <label
+                    htmlFor="member-address-city"
+                    className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                  >
+                    City
+                  </label>
                   <input
+                    id="member-address-city"
                     type="text"
                     value={form.address_city}
                     onChange={(e) => handleFieldChange('address_city', e.target.value)}
@@ -700,8 +796,14 @@ export const MemberAdminEditPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">State</label>
+                  <label
+                    htmlFor="member-address-state"
+                    className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                  >
+                    State
+                  </label>
                   <input
+                    id="member-address-state"
                     type="text"
                     value={form.address_state}
                     onChange={(e) => handleFieldChange('address_state', e.target.value)}
@@ -710,8 +812,14 @@ export const MemberAdminEditPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">ZIP Code</label>
+                  <label
+                    htmlFor="member-address-zip"
+                    className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                  >
+                    ZIP Code
+                  </label>
                   <input
+                    id="member-address-zip"
                     type="text"
                     value={form.address_zip}
                     onChange={(e) => handleFieldChange('address_zip', e.target.value)}
@@ -720,8 +828,14 @@ export const MemberAdminEditPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Country</label>
+                  <label
+                    htmlFor="member-address-country"
+                    className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                  >
+                    Country
+                  </label>
                   <input
+                    id="member-address-country"
                     type="text"
                     value={form.address_country}
                     onChange={(e) => handleFieldChange('address_country', e.target.value)}
@@ -761,7 +875,7 @@ export const MemberAdminEditPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleRemoveEmergencyContact(index)}
-                      className="text-xs font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                      className="touch-target-phone text-xs font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                       disabled={saving}
                     >
                       Remove
@@ -769,8 +883,14 @@ export const MemberAdminEditPage: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Name</label>
+                      <label
+                        htmlFor={`contact-${index}-name`}
+                        className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                      >
+                        Name
+                      </label>
                       <input
+                        id={`contact-${index}-name`}
                         type="text"
                         value={contact.name}
                         onChange={(e) => handleEmergencyContactChange(index, 'name', e.target.value)}
@@ -779,10 +899,14 @@ export const MemberAdminEditPage: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">
+                      <label
+                        htmlFor={`contact-${index}-relationship`}
+                        className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                      >
                         Relationship
                       </label>
                       <input
+                        id={`contact-${index}-relationship`}
                         type="text"
                         value={contact.relationship}
                         onChange={(e) => handleEmergencyContactChange(index, 'relationship', e.target.value)}
@@ -791,8 +915,14 @@ export const MemberAdminEditPage: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Phone</label>
+                      <label
+                        htmlFor={`contact-${index}-phone`}
+                        className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                      >
+                        Phone
+                      </label>
                       <input
+                        id={`contact-${index}-phone`}
                         type="tel"
                         value={contact.phone}
                         onChange={(e) => handleEmergencyContactChange(index, 'phone', e.target.value)}
@@ -801,8 +931,14 @@ export const MemberAdminEditPage: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Email</label>
+                      <label
+                        htmlFor={`contact-${index}-email`}
+                        className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                      >
+                        Email
+                      </label>
                       <input
+                        id={`contact-${index}-email`}
                         type="email"
                         value={contact.email || ''}
                         onChange={(e) => handleEmergencyContactChange(index, 'email', e.target.value)}
@@ -834,7 +970,7 @@ export const MemberAdminEditPage: React.FC = () => {
               <div>
                 <Link
                   to={`/members/admin/history/${userId}`}
-                  className="text-sm text-blue-700 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  className="touch-target-phone inline-flex items-center text-sm text-blue-700 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   View History
                 </Link>

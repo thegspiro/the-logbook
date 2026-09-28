@@ -567,6 +567,24 @@ describe('MemberProfilePage membership and privacy', () => {
     );
   });
 
+  it('names both fields of the status dialog and sends the reason typed', async () => {
+    const user = userEvent.setup();
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByTitle('Change member status'));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'New Status' }), UserStatus.LEAVE);
+    await user.type(screen.getByRole('textbox', { name: 'Reason (optional)' }), 'Deployed overseas');
+    await user.click(screen.getByRole('button', { name: 'Update Status' }));
+
+    await waitFor(() =>
+      expect(changeStatus).toHaveBeenCalledWith(TARGET_ID, {
+        new_status: UserStatus.LEAVE,
+        reason: 'Deployed overseas',
+      })
+    );
+  });
+
   it('does not claim "no address on file" when only the personal email was shared', async () => {
     getUserWithRoles.mockResolvedValue({ ...redactedColleague, personal_email: 'jane@example.org' });
     renderWithRouter(<MemberProfilePage />);

@@ -15,7 +15,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { userService } from '../services/api';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDateTime } from '../utils/dateFormatting';
 import { toDisplayString } from '../utils/displayValue';
 import { useTimezone } from '../hooks/useTimezone';
 import type { MemberAuditLogEntry } from '../types/user';
@@ -210,7 +210,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
         <div className="mb-6">
           <button
             onClick={() => void navigate(`/members/admin/edit/${userId}`)}
-            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center gap-1 text-sm"
+            className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone mb-4 flex items-center gap-1 text-sm"
           >
             &larr; Back to Edit Member
           </button>
@@ -301,7 +301,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
                         <div className="min-w-0 flex-1">
                           <p className="text-theme-text-primary text-sm font-medium">{entry.description}</p>
                           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                            <span className="text-theme-text-muted text-sm">{formatDate(entry.timestamp, tz)}</span>
+                            <span className="text-theme-text-muted text-sm">{formatDateTime(entry.timestamp, tz)}</span>
                             {entry.changed_by_username && (
                               <span className="text-theme-text-secondary text-sm">by {entry.changed_by_username}</span>
                             )}
@@ -323,7 +323,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
                         {hasEventData && (
                           <button
                             onClick={() => toggleEntryExpanded(entry.id)}
-                            className="text-theme-text-muted hover:text-theme-text-primary shrink-0 text-sm"
+                            className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone shrink-0 text-sm"
                             aria-expanded={isExpanded}
                             aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
                           >
