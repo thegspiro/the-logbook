@@ -479,11 +479,18 @@ Revision `15c5bc7700aa` reset every stored template of a shipped type to the
 new default, keeping what it replaced in `email_template_backups` (see
 `docs/UPGRADING.md`). What remains:
 
-- **A custom template keeps whatever markup it has.** A template of type
-  `custom` has no default to reset to. It renders with the built-in
-  stylesheet, which still defines the previous shells' classes, so one built
-  from the editor's blocks keeps working; its header is whatever it was
-  written with.
+- **A `custom` template row would keep whatever markup it has — but nothing
+  creates one.** The type exists in `EmailTemplateType`, yet no endpoint,
+  screen or service stores a template of it: the only stored templates are
+  the shipped defaults `ensure_default_templates` seeds, and every one of
+  those was moved to the new design. (Senders tag some one-off mail as
+  `custom` in message history; that mail is built with `wrap_email_body` and
+  is already in the new design.) A row inserted by hand would render with the
+  built-in stylesheet, which still defines the previous shells' classes, and
+  keep its own header. A "convert to the new design" action was considered
+  on 2026-09-28 and not built, because there is nothing for it to convert;
+  if a way to create custom templates is ever added, it should start them
+  from `build_shell` so none are created in the old design.
 - **Restoring a backup brings back the wording, not the layout.** The
   editor's "Previous version" panel loads a backup's subject, plain text,
   title and message into the new design as an unsaved draft. What the
