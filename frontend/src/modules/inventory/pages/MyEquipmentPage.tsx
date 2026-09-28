@@ -32,7 +32,7 @@ import type {
   EquipmentRequestItem,
   ReturnRequestItem,
 } from '../types';
-import { getConditionColor, REQUEST_STATUS_BADGES, sizeLabel } from '../types';
+import { EQUIPMENT_REQUEST_STATUS_LABELS, getConditionColor, REQUEST_STATUS_BADGES, sizeLabel } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -364,7 +364,7 @@ const MyEquipmentPage: React.FC = () => {
                       <span
                         className={`shrink-0 self-start rounded-full px-2 py-0.5 text-xs font-medium sm:self-auto ${REQUEST_STATUS_BADGES[r.status] ?? 'text-theme-text-muted'}`}
                       >
-                        {r.status}
+                        {EQUIPMENT_REQUEST_STATUS_LABELS[r.status] ?? r.status}
                       </span>
                     </div>
                   ))}

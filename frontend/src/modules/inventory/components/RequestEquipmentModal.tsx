@@ -289,7 +289,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
         requested_size: activeVariant?.size || undefined,
         reason: reason.trim() || undefined,
       });
-      toast.success('Equipment request submitted');
+      toast.success('Request sent to the quartermaster for review');
       onSubmitted();
       onClose();
     } catch (err: unknown) {
@@ -325,7 +325,8 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
         <option value="ongoing">Ongoing — I need it as regular assigned gear</option>
       </select>
       <p className="text-theme-text-muted mt-1 text-xs">
-        The quartermaster decides the final issue method based on availability and department policy.
+        This is a guide for the quartermaster. They decide how it is issued — loaned, assigned to you, or issued from
+        stock — based on what is available and department policy.
       </p>
     </div>
   );
@@ -341,7 +342,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         className="form-input"
-        placeholder="Why do you need this item?"
+        placeholder="Why do you need it? (e.g. worn out, doesn't fit, new member) — this helps the quartermaster decide"
       />
     </div>
   );
@@ -393,8 +394,8 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
               )}
             </div>
             <p className="text-theme-text-muted mt-1 text-xs">
-              Search matches the category as well as the item name, so you do not need the department&rsquo;s exact
-              wording. Leave it blank to browse everything.
+              You don&rsquo;t need the department&rsquo;s exact name for it — search also checks categories. Leave it
+              blank to browse everything.
             </p>
           </div>
 
@@ -454,7 +455,8 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
               className="form-input"
             />
             <p className="text-theme-text-muted text-xs">
-              The quartermaster sees these too — it is how the department finds out what it is missing.
+              The quartermaster reviews these like any other request and decides whether to get it. It is also how the
+              department learns what it is missing.
             </p>
             {freeText.trim() !== '' && (
               <div className="space-y-4 pt-2">

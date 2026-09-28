@@ -413,6 +413,18 @@ export const REQUEST_STATUS_BADGES: Record<string, string> = {
   completed: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30',
 };
 
+/**
+ * What a member reads for their own equipment request's status. The stored
+ * values are workflow terms; "denied" in particular reads as a verdict on the
+ * member, where the request form tells them the quartermaster may decline.
+ */
+export const EQUIPMENT_REQUEST_STATUS_LABELS: Record<string, string> = {
+  pending: 'Awaiting review',
+  approved: 'Approved',
+  denied: 'Declined',
+  fulfilled: 'Issued',
+};
+
 /** Get the display style for an item status */
 export function getStatusStyle(status: string): string {
   const found = STATUS_OPTIONS.find((s) => s.value === status);

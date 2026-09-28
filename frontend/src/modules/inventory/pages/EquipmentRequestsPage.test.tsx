@@ -177,6 +177,24 @@ describe('EquipmentRequestsPage', () => {
     });
   });
 
+  it('tells the reviewer when the requested size is not one the department stocks', async () => {
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [makeRequest({ item_id: null, requested_size: 'xs' })],
+      total: 1,
+      skip: 0,
+      limit: 25,
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentRequestsPage />);
+    await screen.findByText('Radio XTS 5000');
+
+    await user.click(screen.getByText('Review'));
+
+    expect(
+      await screen.findByText(/not a size the department stocks for this item\. Approving means ordering it/)
+    ).toBeInTheDocument();
+  });
+
   it('approves a request', async () => {
     const user = userEvent.setup();
     mockReviewEquipmentRequest.mockResolvedValue({});

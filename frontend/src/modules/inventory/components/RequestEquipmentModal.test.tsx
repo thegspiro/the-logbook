@@ -249,6 +249,8 @@ describe('RequestEquipmentModal', () => {
       reason: undefined,
     });
     expect(onSubmitted).toHaveBeenCalled();
+    // Says where the request went, not just that it was saved.
+    expect(mockToastSuccess).toHaveBeenCalledWith('Request sent to the quartermaster for review');
   });
 
   it('lets a free-text request state an ongoing need', async () => {

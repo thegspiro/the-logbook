@@ -562,7 +562,9 @@ const EquipmentRequestsPage: React.FC = () => {
                         the department does not stock has no catalog row behind
                         it — this line is the only place the need shows up. */}
                     <strong>Size requested:</strong> {sizeLabel(reviewModal.request.requested_size)}
-                    {reviewModal.request.item_id ? '' : ' — nothing in the catalog matches this size'}
+                    {reviewModal.request.item_id
+                      ? ''
+                      : ' — not a size the department stocks for this item. Approving means ordering it or offering a different size.'}
                   </p>
                 )}
                 <p>

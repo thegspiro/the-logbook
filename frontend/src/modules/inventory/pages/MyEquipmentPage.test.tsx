@@ -254,5 +254,8 @@ describe('MyEquipmentPage', () => {
 
     // Stored lowercase, shown the way the rest of the app writes it.
     expect(await screen.findByText(/Size 3XL/)).toBeInTheDocument();
+    // The workflow value is not shown raw to the member.
+    expect(screen.getByText('Awaiting review')).toBeInTheDocument();
+    expect(screen.queryByText('pending')).not.toBeInTheDocument();
   });
 });
