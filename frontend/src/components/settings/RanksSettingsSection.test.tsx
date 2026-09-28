@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import RanksSettingsSection from './RanksSettingsSection';
+import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import type { OperationalRankResponse } from '../../services/api';
 import type { PositionOption } from '../../modules/scheduling/types/shiftSettings';
 
@@ -54,7 +56,9 @@ const renderSection = (
       onDeleteRank={vi.fn()}
       onMoveRank={vi.fn()}
       onToggleEligiblePosition={vi.fn()}
-    />
+    />,
+    // The app shell mounts one; the delete asks through it.
+    { wrapper: ConfirmProvider }
   );
 
 const WARNING = /no default permissions/i;
@@ -171,5 +175,100 @@ describe('RanksSettingsSection — the eligible-seat picker', () => {
     renderSection([rank({ eligible_positions: ['ems'] })], SEATS, 'rank-1');
 
     expect(screen.queryByRole('button', { name: 'Paramedic' })).not.toBeInTheDocument();
+  });
+});
+
+describe('RanksSettingsSection — the add form and the seat picker, by name (workflow review W12)', () => {
+  it('labels the add form', () => {
+    render(
+      <RanksSettingsSection
+        canReorder
+        ranks={[]}
+        ranksLoading={false}
+        editingRank={null}
+        addingRank
+        rankForm={{ rank_code: '', display_name: '' }}
+        rankSaving={false}
+        deletingRankId={null}
+        editingPositionsRankId={null}
+        rankValidationIssues={[]}
+        seatOptions={SEATS}
+        onSetEditingRank={vi.fn()}
+        onSetAddingRank={vi.fn()}
+        onSetRankForm={vi.fn()}
+        onSetEditingPositionsRankId={vi.fn()}
+        onAddRank={vi.fn()}
+        onUpdateRank={vi.fn()}
+        onDeleteRank={vi.fn()}
+        onMoveRank={vi.fn()}
+        onToggleEligiblePosition={vi.fn()}
+      />,
+      { wrapper: ConfirmProvider }
+    );
+
+    expect(screen.getByRole('textbox', { name: 'Display Name' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Code (internal identifier)' })).toBeInTheDocument();
+  });
+
+  // The chosen seats were marked by colour alone.
+  it('says which seats a rank is eligible for', () => {
+    renderSection([rank({ eligible_positions: ['ems'] })], SEATS, 'rank-1');
+
+    expect(screen.getByRole('button', { name: 'EMT' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Officer' })).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
+describe('RanksSettingsSection — deleting a rank (workflow review W12)', () => {
+  const renderWithConfirm = (onDeleteRank: (id: string) => void) =>
+    render(
+      <ConfirmProvider>
+        <RanksSettingsSection
+          canReorder
+          ranks={[rank({ id: 'rank-9', display_name: 'Senior FF' })]}
+          ranksLoading={false}
+          editingRank={null}
+          addingRank={false}
+          rankForm={{ rank_code: '', display_name: '' }}
+          rankSaving={false}
+          deletingRankId={null}
+          editingPositionsRankId={null}
+          rankValidationIssues={[]}
+          seatOptions={SEATS}
+          onSetEditingRank={vi.fn()}
+          onSetAddingRank={vi.fn()}
+          onSetRankForm={vi.fn()}
+          onSetEditingPositionsRankId={vi.fn()}
+          onAddRank={vi.fn()}
+          onUpdateRank={vi.fn()}
+          onDeleteRank={onDeleteRank}
+          onMoveRank={vi.fn()}
+          onToggleEligiblePosition={vi.fn()}
+        />
+      </ConfirmProvider>
+    );
+
+  // The trash icon deleted the row on one tap, permanently.
+  it('asks first, and keeps the rank when the officer backs out', async () => {
+    const user = userEvent.setup();
+    const onDeleteRank = vi.fn();
+    renderWithConfirm(onDeleteRank);
+
+    await user.click(screen.getByRole('button', { name: 'Delete Senior FF' }));
+    expect(await screen.findByText(/Delete the Senior FF rank\?/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Keep it' }));
+
+    expect(onDeleteRank).not.toHaveBeenCalled();
+  });
+
+  it('deletes once confirmed', async () => {
+    const user = userEvent.setup();
+    const onDeleteRank = vi.fn();
+    renderWithConfirm(onDeleteRank);
+
+    await user.click(screen.getByRole('button', { name: 'Delete Senior FF' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    expect(onDeleteRank).toHaveBeenCalledWith('rank-9');
   });
 });

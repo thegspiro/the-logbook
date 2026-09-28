@@ -35,7 +35,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W09 | Import members from a spreadsheet                                         | admin                  | `/members/import`                            | ✅     |
 | W10 | Find a member and read their profile, as a member (contact visibility)    | member, admin          | `/members`, `/members/:userId`               | ✅     |
 | W11 | Edit a member as an officer: details, clearing a field, status, history   | admin                  | `/members/admin/edit/:userId`                | ✅     |
-| W12 | Member settings: ranks, membership tiers, ID numbering, EVOC, visibility  | admin                  | `/members/admin/settings/*`                  | ⬜     |
+| W12 | Member settings: ranks, membership tiers, ID numbering, EVOC, visibility  | admin                  | `/members/admin/settings/*`                  | ✅     |
 | W13 | Waivers                                                                   | admin                  | `/members/admin/waivers`                     | ⬜     |
 | W14 | Check-in station, badge scan, member labels and ID cards                  | admin                  | `/members/check-in-station`, `/members/scan` | ⬜     |
 | W15 | A member leaves: departure clearance, property return, archive, reinstate | admin                  | `/members/admin`                             | ⬜     |
@@ -167,6 +167,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W12 — Member settings — 2026-09-28
+
+Driven as: `admin` at 1280×900 and 390×844, with `member` reading the
+directory and `membership_coordinator` and `member2` refused. Held: every
+section saves and survives a reload; contact visibility reaches the
+directory; ranks refuse a duplicate and a rank ten members hold; tiers
+refuse a colliding id, a held tier's removal and a ladder that would demote;
+EVOC refuses a duplicate level and asks before deleting; the coordinator is
+sent to the one section its grant opens. Fixed: W12-1 (LOW — the IDs screen
+showed "RV-150" where the server issues "RV-0150"), W12-2 (LOW — one tap
+deleted a rank permanently), W12-3 (LOW — rank form unlabelled, seat
+eligibility by colour alone), W12-4 (NIT). Nothing flagged. Settings put
+back as found. Gate: typecheck, lint and the full frontend suite clean (no
+Python changed). Next: W13.
 
 ### W11 — Edit a member as an officer — 2026-09-28
 

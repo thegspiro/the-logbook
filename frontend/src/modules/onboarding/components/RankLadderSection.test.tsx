@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import userEvent from '@testing-library/user-event';
 
 const getRankLadder = vi.fn();
@@ -85,7 +86,7 @@ describe('RankLadderSection', () => {
   beforeEach(installDefaults);
 
   it('loads the department ladder on mount', async () => {
-    render(<RankLadderSection />);
+    render(<RankLadderSection />, { wrapper: ConfirmProvider });
 
     expect(await screen.findByText('Captain')).toBeInTheDocument();
     expect(screen.getByText('Firefighter')).toBeInTheDocument();
@@ -96,7 +97,7 @@ describe('RankLadderSection', () => {
     // against. Setup is the worst place to change one: there is no "before"
     // to notice the rank quietly conferring nothing against.
     const user = userEvent.setup();
-    render(<RankLadderSection />);
+    render(<RankLadderSection />, { wrapper: ConfirmProvider });
     await screen.findByText('Captain');
 
     await user.click(screen.getByRole('button', { name: /add rank/i }));
@@ -107,7 +108,7 @@ describe('RankLadderSection', () => {
 
   it('derives a code from the display name when a department adds its own rank', async () => {
     const user = userEvent.setup();
-    render(<RankLadderSection />);
+    render(<RankLadderSection />, { wrapper: ConfirmProvider });
     await screen.findByText('Captain');
 
     await user.click(screen.getByRole('button', { name: /add rank/i }));
@@ -125,7 +126,7 @@ describe('RankLadderSection', () => {
 
   it('renames a rank without touching its code', async () => {
     const user = userEvent.setup();
-    render(<RankLadderSection />);
+    render(<RankLadderSection />, { wrapper: ConfirmProvider });
     await screen.findByText('Captain');
 
     await user.click(screen.getByRole('button', { name: 'Edit Captain' }));
@@ -143,7 +144,7 @@ describe('RankLadderSection', () => {
     // grants, so the built-in ranks confer on their own — and an administrator
     // told otherwise could restrict a position believing the rank was inert,
     // while anyone holding it kept the chief-level defaults.
-    render(<RankLadderSection />);
+    render(<RankLadderSection />, { wrapper: ConfirmProvider });
     await screen.findByText('Captain');
 
     expect(screen.getByText(/the built-in ranks carry some too/i)).toBeInTheDocument();
@@ -151,14 +152,14 @@ describe('RankLadderSection', () => {
   });
 
   it('still says a rank the department adds itself grants nothing', async () => {
-    render(<RankLadderSection />);
+    render(<RankLadderSection />, { wrapper: ConfirmProvider });
     await screen.findByText('Captain');
 
     expect(screen.getByText(/a rank you add yourself carries none/i)).toBeInTheDocument();
   });
 
   it('does not offer a rank for the System Owner before there is one signed in', async () => {
-    render(<RankLadderSection />);
+    render(<RankLadderSection />, { wrapper: ConfirmProvider });
     await screen.findByText('Captain');
 
     expect(screen.queryByLabelText('Your rank')).not.toBeInTheDocument();
@@ -175,7 +176,7 @@ describe('RankLadderSection with the System Owner signed in', () => {
   });
 
   it("offers the ladder as the System Owner's own rank", async () => {
-    render(<RankLadderSection />);
+    render(<RankLadderSection />, { wrapper: ConfirmProvider });
     await screen.findByRole('button', { name: 'Edit Captain' });
 
     const picker = await screen.findByLabelText('Your rank');
@@ -188,7 +189,7 @@ describe('RankLadderSection with the System Owner signed in', () => {
     // the department's own ladder and enforces the permission-grant ceiling,
     // and setup has no business skipping either.
     const user = userEvent.setup();
-    render(<RankLadderSection />);
+    render(<RankLadderSection />, { wrapper: ConfirmProvider });
     await screen.findByRole('button', { name: 'Edit Captain' });
 
     await user.selectOptions(await screen.findByLabelText('Your rank'), 'captain');
@@ -199,7 +200,7 @@ describe('RankLadderSection with the System Owner signed in', () => {
   it('puts the previous choice back when the write is refused', async () => {
     updateUserProfile.mockRejectedValueOnce(new Error('nope'));
     const user = userEvent.setup();
-    render(<RankLadderSection />);
+    render(<RankLadderSection />, { wrapper: ConfirmProvider });
     await screen.findByRole('button', { name: 'Edit Captain' });
 
     const picker = await screen.findByLabelText('Your rank');
@@ -218,7 +219,7 @@ describe('an unsaved rank form', () => {
     // when there is something to lose.
     const user = userEvent.setup();
     const onPendingChange = vi.fn();
-    render(<RankLadderSection onPendingChange={onPendingChange} />);
+    render(<RankLadderSection onPendingChange={onPendingChange} />, { wrapper: ConfirmProvider });
     await screen.findByText('Captain');
 
     await user.click(screen.getByRole('button', { name: 'Edit Captain' }));
@@ -233,7 +234,7 @@ describe('an unsaved rank form', () => {
     // blocks Continue for no reason.
     const user = userEvent.setup();
     const onPendingChange = vi.fn();
-    render(<RankLadderSection onPendingChange={onPendingChange} />);
+    render(<RankLadderSection onPendingChange={onPendingChange} />, { wrapper: ConfirmProvider });
     await screen.findByText('Captain');
 
     await user.click(screen.getByRole('button', { name: 'Edit Captain' }));
@@ -246,7 +247,7 @@ describe('an unsaved rank form', () => {
     // pending" and lets Continue discard it.
     const user = userEvent.setup();
     const onPendingChange = vi.fn();
-    render(<RankLadderSection onPendingChange={onPendingChange} />);
+    render(<RankLadderSection onPendingChange={onPendingChange} />, { wrapper: ConfirmProvider });
     await screen.findByText('Captain');
 
     await user.click(screen.getByRole('button', { name: 'Edit Captain' }));
@@ -261,7 +262,7 @@ describe('an unsaved rank form', () => {
     // none.
     const user = userEvent.setup();
     const onPendingChange = vi.fn();
-    render(<RankLadderSection onPendingChange={onPendingChange} />);
+    render(<RankLadderSection onPendingChange={onPendingChange} />, { wrapper: ConfirmProvider });
     await screen.findByText('Captain');
 
     await user.click(screen.getByRole('button', { name: /add rank/i }));
