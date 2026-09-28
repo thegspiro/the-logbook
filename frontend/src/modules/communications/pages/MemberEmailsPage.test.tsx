@@ -1,14 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import MemberEmailsPage from './MemberEmailsPage';
 import type { MemberEmailPolicy } from '../../../services/api';
 
 const mockGetPolicy = vi.fn();
+const mockUpdatePolicy = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   emailTemplatesService: {
     getMemberEmailPolicy: (...args: unknown[]) => mockGetPolicy(...args) as unknown,
+    updateMemberEmailPolicy: (...args: unknown[]) => mockUpdatePolicy(...args) as unknown,
   },
 }));
 
@@ -23,6 +26,7 @@ const policy: MemberEmailPolicy = {
       includes: ['Ballots and voting links'],
       rationale: 'Every eligible voter must receive their ballot.',
       legacy_preference: null,
+      department_required: false,
     },
     {
       key: 'shift_notices',
@@ -33,6 +37,7 @@ const policy: MemberEmailPolicy = {
       includes: ['Shift reminders'],
       rationale: 'The schedule and the bell carry the same information.',
       legacy_preference: null,
+      department_required: false,
     },
     {
       key: 'inventory_duties',
@@ -43,6 +48,7 @@ const policy: MemberEmailPolicy = {
       includes: ['Low stock'],
       rationale: 'Inventory shows the same alerts.',
       legacy_preference: null,
+      department_required: false,
     },
   ],
   texts: [
@@ -54,12 +60,14 @@ const policy: MemberEmailPolicy = {
     },
   ],
   text_conditions: ['The member has agreed to receive texts.'],
+  can_edit: false,
 };
 
 describe('MemberEmailsPage', () => {
   beforeEach(() => {
     mockGetPolicy.mockReset();
     mockGetPolicy.mockResolvedValue(policy);
+    mockUpdatePolicy.mockReset();
   });
 
   it('separates the emails members cannot turn off from the ones they can', async () => {
@@ -96,5 +104,45 @@ describe('MemberEmailsPage', () => {
     renderWithRouter(<MemberEmailsPage />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('boom');
+  });
+
+  it('offers no department switch to someone who cannot change settings', async () => {
+    renderWithRouter(<MemberEmailsPage />);
+
+    await screen.findByRole('region', { name: 'Members can turn off' });
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  it('lets an administrator make an optional email required', async () => {
+    const editable: MemberEmailPolicy = { ...policy, can_edit: true };
+    mockGetPolicy.mockResolvedValue(editable);
+    mockUpdatePolicy.mockResolvedValue({
+      ...editable,
+      emails: editable.emails.map((e) => (e.key === 'shift_notices' ? { ...e, department_required: true } : e)),
+    });
+    renderWithRouter(<MemberEmailsPage />);
+
+    const toggle = await screen.findByRole('switch', { name: 'Require Shift notices for every member' });
+    // A required-by-code email has nothing for the department to decide.
+    expect(screen.queryByRole('switch', { name: /Election ballots/ })).not.toBeInTheDocument();
+    await userEvent.click(toggle);
+
+    expect(mockUpdatePolicy).toHaveBeenCalledWith(['shift_notices']);
+    expect(await screen.findByText('Required by your department')).toBeInTheDocument();
+  });
+
+  it('removes only the email switched back to optional', async () => {
+    const editable: MemberEmailPolicy = {
+      ...policy,
+      can_edit: true,
+      emails: policy.emails.map((e) => (e.required ? e : { ...e, department_required: true })),
+    };
+    mockGetPolicy.mockResolvedValue(editable);
+    mockUpdatePolicy.mockResolvedValue(editable);
+    renderWithRouter(<MemberEmailsPage />);
+
+    await userEvent.click(await screen.findByRole('switch', { name: 'Require Shift notices for every member' }));
+
+    expect(mockUpdatePolicy).toHaveBeenCalledWith(['inventory_duties']);
   });
 });

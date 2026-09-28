@@ -29,7 +29,11 @@ from app.models.inventory import (
     InventoryNotificationQueue,
 )
 from app.models.user import Organization, User
-from app.services.email_policy import EmailKind, member_receives_email
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+)
 from app.services.email_service import EmailService
 from app.services.email_template_service import EmailTemplateService
 from app.utils.org_timezone import format_in_org_timezone
@@ -182,7 +186,9 @@ class InventoryNotificationService:
                 # no address: the queued rows are consumed, so the digest does
                 # not wait for them to change their mind.
                 wants_email = bool(user and user.email) and member_receives_email(
-                    user.notification_preferences, EmailKind.INVENTORY_UPDATES
+                    user.notification_preferences,
+                    EmailKind.INVENTORY_UPDATES,
+                    department_required_kinds(org),
                 )
                 if not wants_email:
                     if not user or not user.email:

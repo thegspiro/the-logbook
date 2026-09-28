@@ -1900,15 +1900,20 @@ async def _email(
     users: Sequence[User],
     notice: Dict[str, str],
 ) -> None:
-    from app.services.email_policy import EmailKind, member_receives_email
+    from app.services.email_policy import (
+        EmailKind,
+        department_required_kinds,
+        member_receives_email,
+    )
     from app.services.email_service import EmailService, wrap_email_body
 
     email_service = EmailService(organization=org)
+    department_required = department_required_kinds(org)
     for user in users:
         if not user.email:
             continue
         if not member_receives_email(
-            user.notification_preferences, EmailKind.SUGGESTION_BOX
+            user.notification_preferences, EmailKind.SUGGESTION_BOX, department_required
         ):
             continue
         try:

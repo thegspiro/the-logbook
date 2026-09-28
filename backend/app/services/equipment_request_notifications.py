@@ -29,7 +29,11 @@ from app.models.notification import (
     NotificationTrigger,
 )
 from app.models.user import Organization, User
-from app.services.email_policy import EmailKind, member_receives_email
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+)
 from app.services.email_theme import fact, facts
 from app.services.inventory_service import _size_label
 from app.services.notification_rules import NotificationRuleResolver
@@ -257,7 +261,9 @@ async def _email(
     if not member.email:
         return
     if not member_receives_email(
-        member.notification_preferences, EmailKind.INVENTORY_UPDATES
+        member.notification_preferences,
+        EmailKind.INVENTORY_UPDATES,
+        department_required_kinds(org),
     ):
         return
     try:

@@ -478,6 +478,8 @@ class MemberEmailKindResponse(BaseModel):
     rationale: str
     # The older per-topic setting still honoured for this kind, if any.
     legacy_preference: Optional[str] = None
+    # An optional kind this department's leadership has made required.
+    department_required: bool = False
 
 
 class MemberTextAlertResponse(BaseModel):
@@ -495,3 +497,11 @@ class MemberEmailPolicyResponse(BaseModel):
     emails: List[MemberEmailKindResponse]
     texts: List[MemberTextAlertResponse]
     text_conditions: List[str]
+    # Whether the caller may change which optional kinds are required.
+    can_edit: bool = False
+
+
+class MemberEmailPolicyUpdate(BaseModel):
+    """The optional kinds this department makes required, replacing the list."""
+
+    required_kinds: List[str] = Field(default_factory=list, max_length=50)

@@ -4,31 +4,47 @@
  * Lists every kind of email the application sends to members and officers,
  * whether a member can turn it off, and which alerts may also be texted.
  *
- * Read-only by design: the classification is code (backend
- * services/email_policy and SmsAlert), so this page reports exactly what the
- * senders enforce instead of offering a switch a sender might not read
- * (CLAUDE.md pitfall #19).
+ * The classification is code (backend services/email_policy and SmsAlert),
+ * so this page reports exactly what the senders enforce. The one thing a
+ * department changes here is which optional emails it makes required for its
+ * own members; every sender reads that list, so the switch is never
+ * decorative (CLAUDE.md pitfall #19). Members then see those emails as
+ * always sent rather than as a choice.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, Lock, Mail, MessageSquare, ToggleRight } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Breadcrumbs, SkeletonPage } from '../../../components/ux';
+import { SettingsToggle } from '../../../components/settings/SettingsToggle';
 import { emailTemplatesService } from '../../../services/api';
 import type { MemberEmailKind, MemberEmailPolicy } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 
-const EmailKindCard: React.FC<{ kind: MemberEmailKind }> = ({ kind }) => (
+interface EmailKindCardProps {
+  kind: MemberEmailKind;
+  /** Present only for an optional kind the caller may make required. */
+  onRequiredChange?: ((required: boolean) => void) | undefined;
+  saving?: boolean;
+}
+
+const EmailKindCard: React.FC<EmailKindCardProps> = ({ kind, onRequiredChange, saving }) => (
   <li className="card-secondary p-4">
     <div className="flex flex-wrap items-center gap-2">
       <h3 className="text-theme-text-primary text-base font-semibold">{kind.label}</h3>
       {kind.audience === 'officers' && (
         <span className="badge bg-theme-surface-secondary text-theme-text-secondary">Officers</span>
       )}
-      {!kind.required && (
-        <span className="badge bg-theme-surface-secondary text-theme-text-secondary">
-          {kind.default_on ? 'On unless turned off' : 'Off unless turned on'}
-        </span>
-      )}
+      {!kind.required &&
+        (kind.department_required ? (
+          <span className="badge bg-theme-surface-secondary text-theme-text-secondary">
+            Required by your department
+          </span>
+        ) : (
+          <span className="badge bg-theme-surface-secondary text-theme-text-secondary">
+            {kind.default_on ? 'On unless turned off' : 'Off unless turned on'}
+          </span>
+        ))}
     </div>
     <ul className="text-theme-text-secondary mt-2 list-disc space-y-0.5 pl-5 text-sm">
       {kind.includes.map((item) => (
@@ -36,12 +52,24 @@ const EmailKindCard: React.FC<{ kind: MemberEmailKind }> = ({ kind }) => (
       ))}
     </ul>
     <p className="text-theme-text-muted mt-2 text-xs">{kind.rationale}</p>
+    {onRequiredChange && (
+      <div className="border-theme-surface-border mt-3 flex items-center justify-between gap-3 border-t pt-3">
+        <p className="text-theme-text-secondary text-sm">Required for our department</p>
+        <SettingsToggle
+          checked={kind.department_required}
+          onChange={onRequiredChange}
+          disabled={saving === true}
+          label={`Require ${kind.label} for every member`}
+        />
+      </div>
+    )}
   </li>
 );
 
 const MemberEmailsPage: React.FC = () => {
   const [policy, setPolicy] = useState<MemberEmailPolicy | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -55,6 +83,21 @@ const MemberEmailsPage: React.FC = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const setDepartmentRequired = async (key: string, required: boolean) => {
+    if (!policy) return;
+    const current = policy.emails.filter((k) => k.department_required).map((k) => k.key);
+    const next = required ? [...current, key] : current.filter((k) => k !== key);
+    setSaving(true);
+    try {
+      setPolicy(await emailTemplatesService.updateMemberEmailPolicy(next));
+      toast.success(required ? 'Now required for every member' : 'Members can turn it off again');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Unable to save that change.'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!policy && !error) {
     return <SkeletonPage />;
@@ -113,10 +156,20 @@ const MemberEmailsPage: React.FC = () => {
             </h2>
             <p className="text-theme-text-muted mb-3 text-sm">
               A member who turns off Email Notifications in their settings stops all of these at once.
+              {policy.can_edit
+                ? ' Make one required and members will see it as always sent instead of as a choice.'
+                : ''}
             </p>
             <ul className="grid gap-3 md:grid-cols-2">
               {optional.map((kind) => (
-                <EmailKindCard key={kind.key} kind={kind} />
+                <EmailKindCard
+                  key={kind.key}
+                  kind={kind}
+                  saving={saving}
+                  onRequiredChange={
+                    policy.can_edit ? (required) => void setDepartmentRequired(kind.key, required) : undefined
+                  }
+                />
               ))}
             </ul>
           </section>

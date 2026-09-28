@@ -71,7 +71,11 @@ from app.models.storefront import (
     StoreSettings,
 )
 from app.models.user import Organization, User, UserStatus
-from app.services.email_policy import EmailKind, member_receives_email
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+)
 from app.services.email_service import EmailService, wrap_email_body
 from app.services.email_template_service import EmailTemplateService
 from app.services.email_theme import (
@@ -557,6 +561,9 @@ class StorefrontNotificationService:
         kind = _EMAIL_KIND_BY_TEMPLATE.get(template_type)
         if kind is None or organization is None:
             return addresses
+        department_required = department_required_kinds(organization)
+        if kind in department_required:
+            return addresses
         try:
             result = await self.db.execute(
                 select(User.email, User.notification_preferences).where(
@@ -577,7 +584,7 @@ class StorefrontNotificationService:
         opted_out = {
             (email or "").lower()
             for email, prefs in rows
-            if not member_receives_email(prefs, kind)
+            if not member_receives_email(prefs, kind, department_required)
         }
         return [a for a in addresses if a.lower() not in opted_out]
 

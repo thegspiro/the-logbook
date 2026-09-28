@@ -34,7 +34,12 @@ from app.core.constants import (
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import Organization, User, UserStatus
-from app.services.email_policy import EmailKind, member_receives_email
+from app.services.email_policy import (
+    DepartmentRequired,
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+)
 from app.services.email_service import EmailService, wrap_email_body
 from app.services.email_theme import ACCENT_AMBER, ACCENT_RED
 from app.services.notifications_service import NotificationsService
@@ -140,7 +145,9 @@ class CertAlertService:
         officers = await self._get_officers_with_roles(organization_id, role_slugs)
         return [u.email for u in officers if u.email]
 
-    def _member_has_email_enabled(self, member: User) -> bool:
+    def _member_has_email_enabled(
+        self, member: User, department_required: DepartmentRequired
+    ) -> bool:
         """Whether a member receives certification reminder emails.
 
         Decided by the email policy (``EmailKind.TRAINING_REMINDERS``), which
@@ -151,6 +158,7 @@ class CertAlertService:
         return member_receives_email(
             getattr(member, "notification_preferences", None),
             EmailKind.TRAINING_REMINDERS,
+            department_required,
         )
 
     async def _log_in_app_notification(
@@ -321,7 +329,12 @@ class CertAlertService:
                             )
 
                     # Send email only if member has email enabled
-                    if self._member_has_email_enabled(member) and member.email:
+                    if (
+                        self._member_has_email_enabled(
+                            member, department_required_kinds(org)
+                        )
+                        and member.email
+                    ):
                         cc_emails = []
                         if cc_officers:
                             cc_emails.extend(
@@ -474,7 +487,9 @@ class CertAlertService:
                 # follows the member's own choice; it used to be added even
                 # when they had turned these emails off. The officers' CC is
                 # the escalation and is unaffected.
-                if self._member_has_email_enabled(member):
+                if self._member_has_email_enabled(
+                    member, department_required_kinds(org)
+                ):
                     if member.email:
                         to_emails.append(member.email)
                     if include_personal_email and getattr(

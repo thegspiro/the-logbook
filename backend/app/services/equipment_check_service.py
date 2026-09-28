@@ -4816,6 +4816,7 @@ class EquipmentCheckService:
 
                     from app.services.email_policy import (
                         EmailKind,
+                        department_required_kinds,
                         member_receives_email,
                     )
                     from app.services.email_service import EmailService, wrap_email_body
@@ -4832,7 +4833,11 @@ class EquipmentCheckService:
                         email
                         for email, prefs in recip_result.all()
                         if email
-                        and member_receives_email(prefs, EmailKind.INVENTORY_DUTIES)
+                        and member_receives_email(
+                            prefs,
+                            EmailKind.INVENTORY_DUTIES,
+                            department_required_kinds(org),
+                        )
                     ]
                     cc_emails = cfg.get("cc_emails", [])
                     if to_emails:
