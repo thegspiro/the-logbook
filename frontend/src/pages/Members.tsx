@@ -154,6 +154,13 @@ const Members: React.FC = () => {
     }
   };
 
+  // Email is only matched where it is shown. With the department's work-email
+  // visibility off every email here is null, so promising an email search
+  // offered one that could never match (workflow review W10).
+  const searchPlaceholder = members.some((m) => m.email)
+    ? 'Search by name, membership number, or email...'
+    : 'Search by name or membership number...';
+
   const filteredMembers = useMemo(() => {
     let result = members.filter((member) => {
       const fullName = `${member.first_name || ''} ${member.last_name || ''}`.toLowerCase();
@@ -370,8 +377,8 @@ const Members: React.FC = () => {
                 autoCorrect="off"
                 spellCheck={false}
                 type="text"
-                aria-label="Search by name, membership number, or email..."
-                placeholder="Search by name, membership number, or email..."
+                aria-label={searchPlaceholder}
+                placeholder={searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="form-input placeholder-theme-text-muted pr-4 pl-10"
@@ -486,7 +493,7 @@ const Members: React.FC = () => {
                       <div className="ml-3 min-w-0">
                         <Link
                           to={`/members/${member.id}`}
-                          className="text-theme-text-primary hover:text-theme-text-primary block truncate font-medium hover:underline"
+                          className="text-theme-text-primary hover:text-theme-text-primary block truncate font-medium hover:underline max-md:py-2.5"
                         >
                           {member.first_name} {member.last_name}
                         </Link>

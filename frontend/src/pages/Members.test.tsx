@@ -252,6 +252,16 @@ describe('Members roster — regular member (no members.manage)', () => {
     expect(await within(table()).findByText('Brian Anderson')).toBeInTheDocument();
   });
 
+  // W10: with the department's work-email visibility off, every email in the
+  // roster is null, so the box must not promise an email search.
+  it('offers email search only when emails are shown', async () => {
+    mockGetUsers.mockResolvedValue(ROSTER.map((m) => ({ ...m, email: null })));
+    renderWithRouter(<Members />);
+
+    expect(await screen.findByLabelText('Search by name or membership number...')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/or email/i)).not.toBeInTheDocument();
+  });
+
   it('leaves the roster blank when it is empty and nothing is filtered', async () => {
     mockGetUsers.mockResolvedValue([]);
     renderWithRouter(<Members />);

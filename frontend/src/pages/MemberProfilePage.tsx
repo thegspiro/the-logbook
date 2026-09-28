@@ -269,12 +269,18 @@ export const MemberProfilePage: React.FC = () => {
   // every member (it opens the catalog and their own kit), so it cannot be the
   // gate here — inventory.manage is.
   const canViewTargetInventory = isSelf || checkPermission('inventory.manage');
+  // Leaves of absence: the endpoint serves a member's own, or anyone's to
+  // members.manage, and refused the rest with a 403 on every colleague's
+  // profile a member opened (workflow review W10).
+  const canViewTargetLeaves = isSelf || checkPermission('members.manage');
 
   useEffect(() => {
     if (userId) {
       void fetchUserData(userId);
       void fetchModuleStatus();
-      void fetchLeaves(userId);
+      if (canViewTargetLeaves) {
+        void fetchLeaves(userId);
+      }
       if (canViewTargetAdminHours) {
         void fetchAdminHours(userId);
       }
@@ -288,6 +294,7 @@ export const MemberProfilePage: React.FC = () => {
     trainingEnabled,
     canViewTargetTraining,
     canViewTargetAdminHours,
+    canViewTargetLeaves,
     fetchUserData,
     fetchModuleStatus,
     fetchLeaves,
@@ -724,7 +731,7 @@ export const MemberProfilePage: React.FC = () => {
         <div className="mb-6">
           <button
             onClick={() => void navigate('/members')}
-            className="text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1 text-sm"
+            className="text-theme-text-muted hover:text-theme-text-secondary touch-target-phone mb-4 flex items-center gap-1 text-sm"
           >
             &larr; Back to Members
           </button>
@@ -814,7 +821,7 @@ export const MemberProfilePage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Link
                   to={`/members/${userId}/id-card`}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/40 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+                  className="touch-target-phone inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/40 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
                 >
                   <CreditCard className="h-4 w-4" />
                   ID Card

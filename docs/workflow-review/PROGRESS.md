@@ -33,7 +33,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | --- | ------------------------------------------------------------------------- | ---------------------- | -------------------------------------------- | ------ |
 | W08 | Add a member, with and without a password, and their first sign-in        | admin → new member     | `/members/add`                               | ✅     |
 | W09 | Import members from a spreadsheet                                         | admin                  | `/members/import`                            | ✅     |
-| W10 | Find a member and read their profile, as a member (contact visibility)    | member, admin          | `/members`, `/members/:userId`               | ⬜     |
+| W10 | Find a member and read their profile, as a member (contact visibility)    | member, admin          | `/members`, `/members/:userId`               | ✅     |
 | W11 | Edit a member as an officer: details, clearing a field, status, history   | admin                  | `/members/admin/edit/:userId`                | ⬜     |
 | W12 | Member settings: ranks, membership tiers, ID numbering, EVOC, visibility  | admin                  | `/members/admin/settings/*`                  | ⬜     |
 | W13 | Waivers                                                                   | admin                  | `/members/admin/waivers`                     | ⬜     |
@@ -151,6 +151,10 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
+- **Kiosk and check-in activities** — the member ID card's QR code is
+  unsigned JSON (`{type, id, membership_number, org}`) and the id is in every
+  profile URL; check whether any scanner treats a scanned code as proof of
+  identity rather than a lookup (W10).
 - **Any run touching the app shell** — while a password change is required
   (first sign-in, admin reset), the shell and shared hooks fire ~17 requests
   the server refuses with 403, including `POST /errors/log`, so errors from
@@ -168,6 +172,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W10 — Find a member and read their profile — 2026-09-28
+
+Driven as: `member`, `member2` and `admin`, at 1280×900 and 390×844. Held:
+search by name and member number, and a hidden email cannot be confirmed by
+searching for it; a colleague's profile shows only what a member may see;
+turning the department's contact ceiling on shows email and phone; a member
+setting their work email to "Only you and leadership" hides it from other
+members in the page and the API while `admin` still sees it, and the choice
+survives a reload. Fixed: W10-1 (LOW — every colleague's profile fired two
+403s for leaves of absence), W10-2 (LOW — the search box promised an email
+search that could not match while emails are hidden), W10-3 (NIT). Nothing
+flagged; one lead for the kiosk activities (unsigned ID-card QR). Settings
+restored afterwards. Gate: typecheck, lint and the full frontend suite
+clean (no Python changed). Next: W11.
 
 ### W09 — Import members from a spreadsheet — 2026-09-28
 

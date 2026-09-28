@@ -56,6 +56,7 @@ const reactivateMember = vi.fn();
 const anonymizeMember = vi.fn();
 const getServiceHistory = vi.fn();
 const changeStatus = vi.fn();
+const getMemberLeaves = vi.fn(() => Promise.resolve([]));
 let nfcIdCardsConnected = false;
 
 vi.mock('../hooks/useConnectedIntegrations', () => ({
@@ -96,7 +97,7 @@ vi.mock('../services/api', () => ({
     getUserInventory: (...args: unknown[]) => getUserInventory(...args) as unknown,
   },
   memberStatusService: {
-    getMemberLeaves: () => Promise.resolve([]),
+    getMemberLeaves: (...args: unknown[]) => getMemberLeaves(...args) as unknown,
     reactivateMember: (...args: unknown[]) => reactivateMember(...args) as unknown,
     anonymizeMember: (...args: unknown[]) => anonymizeMember(...args) as unknown,
     getServiceHistory: (...args: unknown[]) => getServiceHistory(...args) as unknown,
@@ -242,6 +243,48 @@ const RETURNED_HISTORY = {
   is_estimated: false,
   default_rejoin_credit: 'continue',
 };
+
+// W10: the leaves endpoint serves a member's own, or anyone's to
+// members.manage, and answered every other profile view with a 403.
+describe('MemberProfilePage leaves of absence', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeUserId = TARGET_ID;
+    grantedPermissions = [];
+    getUserWithRoles.mockReset();
+    getUserWithRoles.mockResolvedValue(targetUser);
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    getMemberLeaves.mockReset();
+    getMemberLeaves.mockResolvedValue([]);
+  });
+
+  it('does not ask for a colleague’s leaves without members.manage', async () => {
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByRole('heading', { name: 'jdoe' });
+    await waitFor(() => expect(getEnabledModules).toHaveBeenCalled());
+
+    expect(getMemberLeaves).not.toHaveBeenCalled();
+  });
+
+  it('asks for a colleague’s leaves with members.manage', async () => {
+    grantedPermissions = ['members.manage'];
+
+    renderWithRouter(<MemberProfilePage />);
+
+    await waitFor(() => expect(getMemberLeaves).toHaveBeenCalledWith(TARGET_ID));
+  });
+
+  it('asks for the member’s own leaves', async () => {
+    routeUserId = VIEWER_ID;
+
+    renderWithRouter(<MemberProfilePage />);
+
+    await waitFor(() => expect(getMemberLeaves).toHaveBeenCalledWith(VIEWER_ID));
+  });
+});
 
 describe('MemberProfilePage membership and privacy', () => {
   beforeEach(() => {
