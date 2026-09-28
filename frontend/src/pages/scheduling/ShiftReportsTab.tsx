@@ -87,7 +87,7 @@ export const ShiftReportsTab: React.FC = () => {
   const canManage = checkPermission('training.manage');
   const isOnline = useOnlineStatus();
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const linkedShiftId = searchParams.get('shift') || undefined;
   const linkedReportId = searchParams.get('report') || undefined;
@@ -107,6 +107,15 @@ export const ShiftReportsTab: React.FC = () => {
   };
 
   const [viewMode, setViewMode] = useState<ViewMode>(initialView);
+
+  // Mirror the selected view into ?view= so a refresh, a shared link or the
+  // back button returns to the same list rather than the default one.
+  useEffect(() => {
+    if (searchParams.get('view') === viewMode) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('view', viewMode);
+    setSearchParams(next, { replace: true });
+  }, [viewMode, searchParams, setSearchParams]);
   const [reports, setReports] = useState<ShiftCompletionReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(linkedReportId ?? null);
@@ -796,6 +805,9 @@ export const ShiftReportsTab: React.FC = () => {
     return levels.map((n) => `${n} = ${ratingScaleLabels[String(n)]}`).join(' · ');
   }, [ratingScaleType, ratingScaleLabels]);
 
+  // "2026-07" → "Jul". The charts labelled their columns "07", "08".
+  const monthLabel = (month: string) => formatDateCustom(`${month}-15T12:00:00`, { month: 'short' }, tz);
+
   const renderTraineeDashboard = () => {
     if (!traineeStats || traineeStats.total_reports === 0) return null;
     const maxHours = Math.max(...traineeStats.monthly.map((m) => m.hours), 1);
@@ -844,7 +856,7 @@ export const ShiftReportsTab: React.FC = () => {
                     className="w-full rounded-t bg-violet-500/20"
                     style={{ height: `${Math.max((m.hours / maxHours) * 100, 4)}%` }}
                   />
-                  <span className="text-theme-text-muted text-[9px]">{m.month.split('-')[1] ?? ''}</span>
+                  <span className="text-theme-text-muted text-xs">{monthLabel(m.month)}</span>
                 </div>
               ))}
             </div>
@@ -856,7 +868,7 @@ export const ShiftReportsTab: React.FC = () => {
 
   const renderOfficerDashboard = () => {
     if (!officerAnalytics || officerAnalytics.total_reports === 0) return null;
-    const maxHours = Math.max(...officerAnalytics.monthly.map((m) => m.hours), 1);
+    const maxReports = Math.max(...officerAnalytics.monthly.map((m) => m.reports), 1);
     const draftCount = officerAnalytics?.status_counts?.['draft'] ?? 0;
     const pendingCount = officerAnalytics?.status_counts?.['pending_review'] ?? 0;
     // Literal class names: Tailwind only emits classes it can find verbatim
@@ -962,18 +974,22 @@ export const ShiftReportsTab: React.FC = () => {
         {/* Monthly trend */}
         {officerAnalytics.monthly.length > 1 && (
           <div>
-            <p className="text-theme-text-secondary mb-2 text-xs font-medium">Monthly Trend</p>
+            {/* The bars were sized by hours while the figure on each read the
+                report count, so a tall bar could carry a small number. One
+                measure, and the title says which. */}
+            <p className="text-theme-text-secondary mb-2 text-xs font-medium">Reports written per month</p>
             <div className="flex h-24 items-end gap-1.5">
               {officerAnalytics.monthly.map((m) => (
                 // See the trainee chart above: an auto-height column gives the
                 // percentage-height bar nothing to resolve against.
                 <div key={m.month} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-                  <span className="text-theme-text-muted text-[9px] font-medium">{m.reports}</span>
+                  <span className="text-theme-text-secondary text-xs font-medium">{m.reports}</span>
                   <div
                     className="w-full rounded-t bg-violet-500/20"
-                    style={{ height: `${Math.max((m.hours / maxHours) * 100, 4)}%` }}
+                    title={`${monthLabel(m.month)}: ${m.reports} ${m.reports === 1 ? 'report' : 'reports'}`}
+                    style={{ height: `${Math.max((m.reports / maxReports) * 100, 4)}%` }}
                   />
-                  <span className="text-theme-text-muted text-[9px]">{m.month.split('-')[1] ?? ''}</span>
+                  <span className="text-theme-text-muted text-xs">{monthLabel(m.month)}</span>
                 </div>
               ))}
             </div>
@@ -1004,13 +1020,69 @@ export const ShiftReportsTab: React.FC = () => {
       label: 'Approved',
     };
 
+    const badges = (
+      <>
+        {/* Aging indicator for pending/flagged */}
+        {(report.review_status === 'pending_review' || report.review_status === 'flagged') &&
+          (() => {
+            const days = Math.floor((Date.now() - new Date(report.created_at).getTime()) / 86400000);
+            if (days < 1) return null;
+            return (
+              <span
+                className={`text-xs font-medium ${
+                  days >= 7
+                    ? 'text-red-600 dark:text-red-400'
+                    : days >= 3
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-theme-text-muted'
+                }`}
+              >
+                {/* A bare "3d" beside the status badge did not say what had
+                    been three days. */}
+                Waiting {days} {days === 1 ? 'day' : 'days'}
+              </span>
+            );
+          })()}
+        {/* Review status badge, approved included. Suppressing it there made
+                the most important state the *absence* of a badge: a finished
+                report looked the same as one whose status had not loaded, and
+                the reader had to know that blank meant approved. The style was
+                already defined and never reachable. */}
+        <span
+          className={`px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text} rounded-full border border-current/20`}
+        >
+          {statusStyle.label}
+        </span>
+        {isMyReport && !report.trainee_acknowledged && report.review_status === SubmissionStatus.APPROVED && (
+          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+            Needs Acknowledgment
+          </span>
+        )}
+        {/* The author's side of the acknowledgment: without it an approved
+                report the member has not acknowledged looked finished. */}
+        {viewMode === 'filed-by-me' &&
+          !isMyReport &&
+          !report.trainee_acknowledged &&
+          report.review_status === SubmissionStatus.APPROVED && (
+            <span className="text-theme-text-secondary border-theme-surface-border rounded-full border px-2 py-0.5 text-xs font-medium">
+              Not acknowledged yet
+            </span>
+          )}
+        {report.trainee_acknowledged && (
+          <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+            Acknowledged
+          </span>
+        )}
+      </>
+    );
+
     return (
       <div key={report.id} className="card overflow-hidden">
         <button
           onClick={() => setExpandedId(isExpanded ? null : report.id)}
-          className="hover:bg-theme-surface-hover flex w-full items-center justify-between p-4 text-left transition-colors sm:p-5"
+          className="hover:bg-theme-surface-hover grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 p-4 text-left transition-colors sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:p-5"
         >
-          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+          <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-3 sm:gap-4">
             {(isReviewMode || viewMode === 'flagged') && (
               <input
                 type="checkbox"
@@ -1023,12 +1095,13 @@ export const ShiftReportsTab: React.FC = () => {
                 className="form-checkbox shrink-0"
               />
             )}
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:h-12 sm:w-12">
-              <FileText className="h-5 w-5 text-violet-500 sm:h-6 sm:w-6" />
+            <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:flex">
+              <FileText className="h-6 w-6 text-violet-500" aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <p className="text-theme-text-primary truncate text-sm font-semibold sm:text-base">
-                {report.trainee_name ? `${report.trainee_name} — ` : ''}
+                {/* In "About me" the member is always the viewer. */}
+                {report.trainee_name && viewMode !== 'my-reports' ? `${report.trainee_name} — ` : ''}
                 {dateStr}
               </p>
               {/* Person and date alone told two reports from one day apart by
@@ -1044,12 +1117,12 @@ export const ShiftReportsTab: React.FC = () => {
                 </p>
               )}
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                <span className="text-theme-text-muted flex items-center gap-1 text-xs">
+                <span className="text-theme-text-muted flex items-center gap-1 text-xs whitespace-nowrap">
                   {/* One decimal, like the summary table above. Raw, the same
                       record read 11.87h here and 11.9 up there. */}
                   <Clock className="h-3 w-3" /> {formatHours(Number(report.hours_on_shift))}h
                 </span>
-                <span className="text-theme-text-muted flex items-center gap-1 text-xs">
+                <span className="text-theme-text-muted flex items-center gap-1 text-xs whitespace-nowrap">
                   <Phone className="h-3 w-3" /> {report.calls_responded} call{report.calls_responded === 1 ? '' : 's'}
                 </span>
                 {report.performance_rating && renderRating(report.performance_rating)}
@@ -1067,58 +1140,13 @@ export const ShiftReportsTab: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {/* Aging indicator for pending/flagged */}
-            {(report.review_status === 'pending_review' || report.review_status === 'flagged') &&
-              (() => {
-                const days = Math.floor((Date.now() - new Date(report.created_at).getTime()) / 86400000);
-                if (days < 1) return null;
-                return (
-                  <span
-                    className={`text-xs font-medium ${
-                      days >= 7
-                        ? 'text-red-600 dark:text-red-400'
-                        : days >= 3
-                          ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-theme-text-muted'
-                    }`}
-                  >
-                    {/* A bare "3d" beside the status badge did not say what had
-                        been three days. */}
-                    Waiting {days} {days === 1 ? 'day' : 'days'}
-                  </span>
-                );
-              })()}
-            {/* Review status badge, approved included. Suppressing it there made
-                the most important state the *absence* of a badge: a finished
-                report looked the same as one whose status had not loaded, and
-                the reader had to know that blank meant approved. The style was
-                already defined and never reachable. */}
-            <span
-              className={`px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text} rounded-full border border-current/20`}
-            >
-              {statusStyle.label}
-            </span>
-            {isMyReport && !report.trainee_acknowledged && report.review_status === SubmissionStatus.APPROVED && (
-              <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
-                Needs Acknowledgment
-              </span>
-            )}
-            {/* The author's side of the acknowledgment: without it an approved
-                report the member has not acknowledged looked finished. */}
-            {viewMode === 'filed-by-me' &&
-              !isMyReport &&
-              !report.trainee_acknowledged &&
-              report.review_status === SubmissionStatus.APPROVED && (
-                <span className="text-theme-text-secondary border-theme-surface-border rounded-full border px-2 py-0.5 text-xs font-medium">
-                  Not acknowledged yet
-                </span>
-              )}
-            {report.trainee_acknowledged && (
-              <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
-                Acknowledged
-              </span>
-            )}
+          {/* Beside the title from sm up; on its own row under it on a phone,
+              where three pills in the same row crushed the member's name to
+              "Al…". A grid rather than two copies, so each badge exists once. */}
+          <div className="col-start-1 row-start-2 flex flex-wrap items-center gap-2 sm:col-start-2 sm:row-start-1 sm:flex-nowrap">
+            {badges}
+          </div>
+          <div className="col-start-2 row-start-1 flex items-center sm:col-start-3">
             {isExpanded ? (
               <ChevronUp className="text-theme-text-muted h-4 w-4" />
             ) : (
@@ -1227,14 +1255,19 @@ export const ShiftReportsTab: React.FC = () => {
             )}
             {canManage && report.review_status === 'flagged' && !isReviewMode && (
               <div className="space-y-3 pt-2">
-                <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
-                  <p className="mb-1 flex items-center gap-1 text-xs font-semibold tracking-wider text-red-700 uppercase dark:text-red-400">
-                    <AlertCircle className="h-3 w-3" /> Flagged for Review
-                  </p>
-                  <p className="text-theme-text-secondary text-sm">
-                    This report has been flagged and requires attention. You can re-review it to approve or add notes.
-                  </p>
-                </div>
+                {/* The reviewer's own comment above already says why it was
+                    flagged, in red; a second red box saying only that it was
+                    flagged repeated it. Kept for a flag with no comment. */}
+                {!report.reviewer_notes && (
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+                    <p className="mb-1 flex items-center gap-1 text-xs font-semibold tracking-wider text-red-700 uppercase dark:text-red-400">
+                      <AlertCircle className="h-3 w-3" /> Flagged for Review
+                    </p>
+                    <p className="text-theme-text-secondary text-sm">
+                      This report has been flagged and requires attention. You can re-review it to approve or add notes.
+                    </p>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={(e) => {
@@ -1449,11 +1482,11 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* View Toggle */}
       {canManage && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="segmented-group hscroll flex flex-1 items-center gap-1 sm:flex-none">
+        <div className="flex items-center gap-2">
+          <div className="segmented-group hscroll flex min-w-0 flex-1 items-center gap-1 sm:flex-none">
             <button
               onClick={() => setViewMode('my-reports')}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+              className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 viewMode === 'my-reports'
                   ? 'bg-violet-600 text-white'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -1467,7 +1500,7 @@ export const ShiftReportsTab: React.FC = () => {
             </button>
             <button
               onClick={() => setViewMode('filed-by-me')}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+              className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 viewMode === 'filed-by-me'
                   ? 'bg-violet-600 text-white'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -1479,7 +1512,7 @@ export const ShiftReportsTab: React.FC = () => {
             {config?.report_review_required && (
               <button
                 onClick={() => setViewMode('pending-review')}
-                className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+                className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                   viewMode === 'pending-review'
                     ? 'bg-violet-600 text-white'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -1491,7 +1524,7 @@ export const ShiftReportsTab: React.FC = () => {
             {config?.report_review_required && (
               <button
                 onClick={() => setViewMode('flagged')}
-                className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+                className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                   viewMode === 'flagged'
                     ? 'bg-violet-600 text-white'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -1502,7 +1535,7 @@ export const ShiftReportsTab: React.FC = () => {
             )}
             <button
               onClick={() => setViewMode('drafts')}
-              className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+              className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 viewMode === 'drafts'
                   ? 'bg-violet-600 text-white'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -1515,17 +1548,17 @@ export const ShiftReportsTab: React.FC = () => {
                 </span>
               )}
             </button>
+          </div>
+          {/* An action, not a list: as the last segment it read as a sixth
+              filter, and on a phone it scrolled off the end of the strip. */}
+          {viewMode !== 'create' && (
             <button
               onClick={() => setViewMode('create')}
-              className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
-                viewMode === 'create'
-                  ? 'bg-violet-600 text-white'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
+              className="btn-primary inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap"
             >
-              <Plus className="h-4 w-4" /> New
+              <Plus className="h-4 w-4" aria-hidden="true" /> New report
             </button>
-          </div>
+          )}
         </div>
       )}
 

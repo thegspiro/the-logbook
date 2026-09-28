@@ -232,4 +232,39 @@ describe('ShiftReportsTab — Written by me', () => {
 
     expect(await screen.findByText('No draft reports')).toBeInTheDocument();
   });
+  it('shows the reviewer comment on a flagged report once, not twice', async () => {
+    mockGetByOfficer.mockResolvedValue([
+      report({
+        review_status: 'flagged',
+        reviewer_notes: 'Rating does not match narrative.',
+        reviewer_name: 'Chief Moss',
+      }),
+    ]);
+    renderWithRouter(<ShiftReportsTab />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Sam Lee/ }));
+
+    expect(screen.getByText('Rating does not match narrative.')).toBeInTheDocument();
+    expect(screen.queryByText(/Flagged for Review/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Re-Review Report/ })).toBeInTheDocument();
+  });
+
+  it('charts reports per month under month names, sized by the figure it shows', async () => {
+    mockGetByOfficer.mockResolvedValue([report({})]);
+    mockGetOfficerAnalytics.mockResolvedValue({
+      ...analytics({}),
+      monthly: [
+        { month: '2026-07', reports: 4, hours: 10 },
+        { month: '2026-08', reports: 1, hours: 40 },
+      ],
+    });
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByText('Reports written per month')).toBeInTheDocument();
+    expect(screen.getByText('Jul')).toBeInTheDocument();
+    expect(screen.getByText('Aug')).toBeInTheDocument();
+    // August has more hours but fewer reports: its bar is the shorter one.
+    expect(screen.getByTitle('Jul: 4 reports').style.height).toBe('100%');
+    expect(screen.getByTitle('Aug: 1 report').style.height).toBe('25%');
+  });
 });

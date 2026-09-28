@@ -321,12 +321,18 @@ const SchedulingPage: React.FC = () => {
   }, [loadInitialData]);
 
   // Keep the calendar location shareable and preserve it across browser history.
+  // Only while the calendar is the tab on screen: `view` is also how the Shift
+  // Reports tab is deep-linked (`?tab=shift-reports&view=create`, the training
+  // module's hand-off), and rewriting it to `week` on mount replaced that before
+  // the lazily loaded tab could read it, so every such link landed on the
+  // default list instead.
   useEffect(() => {
+    if (activeTab !== 'schedule') return;
     const next = new URLSearchParams(searchParams);
     next.set('view', viewMode);
     next.set('date', formatDateISO(currentDate));
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [currentDate, searchParams, setSearchParams, viewMode]);
+  }, [activeTab, currentDate, searchParams, setSearchParams, viewMode]);
 
   // Fetch summary on mount via the store
   useEffect(() => {
