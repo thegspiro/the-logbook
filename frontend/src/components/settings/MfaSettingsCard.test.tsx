@@ -22,9 +22,14 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
-// QRCodeSVG renders an SVG that jsdom doesn't need; stub it to keep tests light.
+// QRCodeSVG's drawing is not what these tests check; the stub keeps only the
+// role and title, which give the code its accessible name.
 vi.mock('qrcode.react', () => ({
-  QRCodeSVG: () => null,
+  QRCodeSVG: ({ role, title }: { role?: string; title?: string }) => (
+    <svg role={role}>
+      <title>{title}</title>
+    </svg>
+  ),
 }));
 
 import { MfaSettingsCard } from './MfaSettingsCard';
@@ -60,6 +65,41 @@ describe('MfaSettingsCard', () => {
     expect(await screen.findByText('code-1111')).toBeInTheDocument();
     expect(screen.getByText('code-2222')).toBeInTheDocument();
     expect(mockVerifySetup).toHaveBeenCalledWith('123456');
+  });
+
+  it('names the QR code for screen readers (workflow review W04)', async () => {
+    const user = userEvent.setup();
+    mockSetup.mockResolvedValue({ secret: 'ABC123', qr_code_url: 'otpauth://x' });
+
+    render(<MfaSettingsCard />);
+    await user.click(await screen.findByRole('button', { name: /enable two-factor/i }));
+
+    expect(await screen.findByRole('img', { name: /qr code .*authenticator app/i })).toBeInTheDocument();
+  });
+
+  it('keeps the recovery codes on screen until they are dismissed, then tells the parent', async () => {
+    // W04-2: onChange fired as soon as MFA was enabled; the account page
+    // answers it by reloading the user, which remounted this card and threw
+    // away the codes — shown this once — before anyone could read them.
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    mockSetup.mockResolvedValue({ secret: 'ABC123', qr_code_url: 'otpauth://x' });
+    mockVerifySetup.mockResolvedValue({ recovery_codes: ['code-1111', 'code-2222'] });
+    mockGetStatus
+      .mockResolvedValueOnce({ mfa_enabled: false, recovery_codes_remaining: 0 })
+      .mockResolvedValue({ mfa_enabled: true, recovery_codes_remaining: 10 });
+
+    render(<MfaSettingsCard onChange={onChange} />);
+    await user.click(await screen.findByRole('button', { name: /enable two-factor/i }));
+    await user.type(await screen.findByLabelText(/authenticator code/i), '123456');
+    await user.click(screen.getByRole('button', { name: /verify & enable/i }));
+
+    expect(await screen.findByText('code-1111')).toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: /^done$/i }));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
   });
 
   it('warns when recovery codes are running low', async () => {

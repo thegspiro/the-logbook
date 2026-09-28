@@ -342,7 +342,7 @@ export const LoginPage: React.FC = () => {
                 inputMode={useRecoveryCode ? 'text' : 'numeric'}
                 value={mfaCode}
                 onChange={(e) => setMfaCode(e.target.value)}
-                placeholder={useRecoveryCode ? 'xxxxx-xxxxx' : '123456'}
+                placeholder={useRecoveryCode ? 'xxxxx-xxxxx-xxxxx-xxxxx' : '123456'}
                 className="form-input"
               />
             </div>
@@ -413,6 +413,18 @@ export const LoginPage: React.FC = () => {
           }}
           aria-label="Sign in form"
         >
+          {(location.state as { reason?: string })?.reason === 'password_changed' && (
+            <div
+              className="rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-500/30 dark:bg-green-500/10"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                Your password was changed, and you have been signed out everywhere. Sign in with your new password.
+              </p>
+            </div>
+          )}
+
           {(location.state as { reason?: string })?.reason === 'timeout' && (
             <div
               className="rounded-md border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10"

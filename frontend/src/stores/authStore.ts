@@ -225,6 +225,14 @@ interface AuthState {
   cancelMfa: () => void;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
+  /**
+   * Everything `logout` does in this browser, without asking the server to
+   * end the session. For when the server has already ended it — a password
+   * change revokes every session — so the sign-out request would only 401,
+   * and the refresh interceptor would answer that with a hard redirect that
+   * drops whatever the caller wanted to say on the sign-in screen.
+   */
+  endSessionLocally: () => Promise<void>;
   loadUser: () => Promise<void>;
   clearError: () => void;
   clearLogoutPurgeNotice: () => void;
@@ -439,43 +447,48 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // Logout errors are non-critical; cookies are cleared by the backend
     } finally {
-      // SEC: Clear session flag, temporary in-memory token, and any
-      // legacy token remnants from localStorage
-      clearTempAccessToken();
-      // SEC: Purge the in-memory API cache UNCONDITIONALLY here (not only inside
-      // authService.logout, which is skipped when the logout POST throws — the
-      // common case on a shared terminal with an already-expired session). The
-      // cache key carries no user identity, so a stale entry would otherwise be
-      // served to the next user who logs in on the same tab without a reload.
-      clearCache();
-      clearInFlight();
-      invalidateRanksCache();
-      clearQueuedReports();
-      // SEC: the scheduling store holds department-wide values (call types,
-      // signup window, feature toggles, roster, templates, apparatus) behind
-      // once-per-session loaded flags. Like the caches above it is keyed by
-      // nothing user-specific, so on a shared terminal the next member —
-      // possibly from another department — read the previous one's until the
-      // tab was reloaded. `claimDeviceForMember` covers the sign-in side.
-      useSchedulingStore.getState().resetSettings();
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      // SEC (FE-6/FE-7): shift-report drafts (localStorage) and the offline
-      // queues (IndexedDB, including photo blobs) are scoped to the browser
-      // profile, not the member — on a shared station computer they would
-      // otherwise be readable by whoever signs in next. Awaited so the purge
-      // completes before the session is torn down, and non-throwing by
-      // construction so it can never strand a member signed in.
-      const purge = await purgeLocalMemberData();
-      if (purge.unsyncedDiscarded > 0) {
-        set({ lastLogoutPurge: purge });
-      }
-      set({
-        user: null,
-        isAuthenticated: false,
-        error: null,
-      });
+      await get().endSessionLocally();
     }
+  },
+
+  endSessionLocally: async () => {
+    localStorage.removeItem('has_session');
+    // SEC: Clear session flag, temporary in-memory token, and any
+    // legacy token remnants from localStorage
+    clearTempAccessToken();
+    // SEC: Purge the in-memory API cache UNCONDITIONALLY here (not only inside
+    // authService.logout, which is skipped when the logout POST throws — the
+    // common case on a shared terminal with an already-expired session). The
+    // cache key carries no user identity, so a stale entry would otherwise be
+    // served to the next user who logs in on the same tab without a reload.
+    clearCache();
+    clearInFlight();
+    invalidateRanksCache();
+    clearQueuedReports();
+    // SEC: the scheduling store holds department-wide values (call types,
+    // signup window, feature toggles, roster, templates, apparatus) behind
+    // once-per-session loaded flags. Like the caches above it is keyed by
+    // nothing user-specific, so on a shared terminal the next member —
+    // possibly from another department — read the previous one's until the
+    // tab was reloaded. `claimDeviceForMember` covers the sign-in side.
+    useSchedulingStore.getState().resetSettings();
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    // SEC (FE-6/FE-7): shift-report drafts (localStorage) and the offline
+    // queues (IndexedDB, including photo blobs) are scoped to the browser
+    // profile, not the member — on a shared station computer they would
+    // otherwise be readable by whoever signs in next. Awaited so the purge
+    // completes before the session is torn down, and non-throwing by
+    // construction so it can never strand a member signed in.
+    const purge = await purgeLocalMemberData();
+    if (purge.unsyncedDiscarded > 0) {
+      set({ lastLogoutPurge: purge });
+    }
+    set({
+      user: null,
+      isAuthenticated: false,
+      error: null,
+    });
   },
 
   loadUser: async () => {

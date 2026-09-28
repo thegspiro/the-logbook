@@ -45,6 +45,7 @@ const defaultProfile = {
 };
 
 // Mock auth store
+const mockEndSessionLocally = vi.fn().mockResolvedValue(undefined);
 vi.mock('../stores/authStore', () => ({
   useAuthStore: () => ({
     user: {
@@ -65,6 +66,7 @@ vi.mock('../stores/authStore', () => ({
       must_change_password: false,
     },
     loadUser: vi.fn(),
+    endSessionLocally: () => mockEndSessionLocally() as unknown,
     checkPermission: () => false,
   }),
 }));
@@ -128,6 +130,38 @@ describe('UserSettingsPage', () => {
       show_email: true,
       show_phone: true,
       show_mobile: true,
+    });
+  });
+
+  describe('Password Tab', () => {
+    const openPasswordTab = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderWithRouter(<UserSettingsPage />);
+      await user.click(screen.getByRole('button', { name: /^password$/i }));
+    };
+
+    it('shows the rules before anything is typed', async () => {
+      // W04: they appeared only once typing started.
+      const user = userEvent.setup();
+      await openPasswordTab(user);
+
+      expect(screen.getByText('At least 12 characters')).toBeInTheDocument();
+      expect(screen.getByText('No runs like 123 or abc')).toBeInTheDocument();
+    });
+
+    it('signs out and says why after a successful change', async () => {
+      // W04-1: the change ends every session, so reloading the user hit a 401
+      // and the member reached sign-in with no word that it had worked.
+      const user = userEvent.setup();
+      await openPasswordTab(user);
+
+      await user.type(screen.getByLabelText(/^current password/i), 'Old$Hydrant947');
+      await user.type(screen.getByLabelText(/^new password/i), 'Tanker$Green583');
+      await user.type(screen.getByLabelText(/^confirm new password/i), 'Tanker$Green583');
+      await user.click(screen.getByRole('button', { name: /^change password$/i }));
+
+      await waitFor(() => expect(window.location.pathname).toBe('/login'));
+      expect(mockEndSessionLocally).toHaveBeenCalled();
+      expect((window.history.state as { usr?: { reason?: string } } | null)?.usr?.reason).toBe('password_changed');
     });
   });
 
@@ -236,6 +270,19 @@ describe('UserSettingsPage', () => {
   });
 
   describe('Notifications Tab', () => {
+    // Each label pointed at an id its switch did not carry, so a screen reader
+    // announced three unnamed switches (workflow review W04).
+    it('names every preference switch by its label', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      await user.click(screen.getByText('Notifications'));
+
+      for (const name of ['Email Notifications', 'Event Reminders', 'Training Reminders']) {
+        expect(await screen.findByRole('switch', { name })).toBeInTheDocument();
+      }
+    });
+
     it('turning off urgent texts withdraws the SMS consent and the preference together', async () => {
       const user = userEvent.setup();
       renderWithRouter(<UserSettingsPage />);
@@ -491,28 +538,48 @@ describe('UserSettingsPage', () => {
       await user.click(screen.getByRole('button', { name: /add emergency contact/i }));
 
       // Fill in the form
-      const nameInput = screen.getByLabelText(/^Name/);
-      const phoneInput = screen.getByLabelText(/^Phone/);
-
-      await user.type(nameInput, 'Jane Doe');
-      await user.type(phoneInput, '555-5678');
+      await user.type(screen.getByLabelText(/^Name/), ' Jane Doe ');
+      await user.type(screen.getByLabelText(/^Relationship/), 'Spouse');
+      await user.type(screen.getByLabelText(/^Phone/), '555-5678');
 
       // Save
       await user.click(screen.getByRole('button', { name: /save emergency contacts/i }));
 
+      // Trimmed, and the blank email left out: the server's EmailStr refuses ''.
       await waitFor(() => {
         expect(userService.updateUserProfile).toHaveBeenCalledWith('user-123', {
           emergency_contacts: [
             {
               name: 'Jane Doe',
-              relationship: '',
+              relationship: 'Spouse',
               phone: '555-5678',
-              email: '',
               is_primary: true,
             },
           ],
         });
       });
+      const sent = vi.mocked(userService.updateUserProfile).mock.calls[0]?.[1];
+      expect(sent?.emergency_contacts?.[0]).not.toHaveProperty('email', '');
+    });
+
+    // The server requires a relationship; the form marked it optional, so a
+    // contact with a name and phone came back as a 422 in schema paths
+    // (workflow review W04).
+    it('asks for a relationship before saving, instead of sending a contact the server refuses', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      await user.click(screen.getByText('Emergency Contacts'));
+      await user.click(await screen.findByRole('button', { name: /add emergency contact/i }));
+
+      await user.type(screen.getByLabelText(/^Name/), 'Jane Doe');
+      await user.type(screen.getByLabelText(/^Phone/), '555-5678');
+      await user.click(screen.getByRole('button', { name: /save emergency contacts/i }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Each emergency contact needs a name, relationship and phone number.'
+      );
+      expect(userService.updateUserProfile).not.toHaveBeenCalled();
     });
 
     it('should show description text on the emergency tab', async () => {

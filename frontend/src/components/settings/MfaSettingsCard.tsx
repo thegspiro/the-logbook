@@ -6,7 +6,7 @@
  * requires a current authenticator code.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { ShieldCheck, ShieldOff, Loader2, Copy } from 'lucide-react';
@@ -31,6 +31,7 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
   const [qrUrl, setQrUrl] = useState('');
   const [code, setCode] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const notifyOnDone = useRef(false);
   const [disableCode, setDisableCode] = useState('');
   const [showDisable, setShowDisable] = useState(false);
   const [regenCode, setRegenCode] = useState('');
@@ -77,7 +78,12 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
       setStep('recovery');
       toast.success('Two-factor authentication enabled');
       await loadStatus();
-      onChange?.();
+      // Tell the parent only once the codes have been dismissed. The parent's
+      // handler reloads the signed-in user, which remounts this page — and the
+      // codes live only in this component's state, shown this once. Calling it
+      // here unmounted them before anyone could read them (workflow review
+      // W04-2).
+      notifyOnDone.current = true;
     } catch (err) {
       toast.error(getErrorMessage(err, 'Invalid code — please try again'));
     } finally {
@@ -157,7 +163,16 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
           >
             <Copy className="h-4 w-4" /> Copy codes
           </button>
-          <button onClick={() => setStep('idle')} className="btn-primary text-sm font-medium">
+          <button
+            onClick={() => {
+              setStep('idle');
+              if (notifyOnDone.current) {
+                notifyOnDone.current = false;
+                onChange?.();
+              }
+            }}
+            className="btn-primary text-sm font-medium"
+          >
             Done
           </button>
         </div>
@@ -174,7 +189,14 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
           code to confirm.
         </p>
         <div className="mx-auto flex w-fit justify-center rounded-lg bg-white p-4">
-          {qrUrl && <QRCodeSVG value={qrUrl} size={176} />}
+          {qrUrl && (
+            <QRCodeSVG
+              value={qrUrl}
+              size={176}
+              role="img"
+              title="QR code to add The Logbook to your authenticator app"
+            />
+          )}
         </div>
         <p className="text-theme-text-muted text-center text-xs break-all">
           Can't scan? Enter this key manually: <span className="font-mono">{secret}</span>

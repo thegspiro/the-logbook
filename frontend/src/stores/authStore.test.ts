@@ -339,6 +339,25 @@ describe('authStore', () => {
 
   // ---- logout ----
 
+  describe('endSessionLocally', () => {
+    it('signs out in this browser without asking the server', async () => {
+      // A password change has already ended the session server-side; a logout
+      // request would 401 and the refresh interceptor would hard-redirect,
+      // dropping the "password changed" notice (workflow review W04-1).
+      localStorage.setItem('has_session', '1');
+      useAuthStore.setState({ user: fakeUser, isAuthenticated: true });
+
+      await act(async () => {
+        await getState().endSessionLocally();
+      });
+
+      expect(mockLogout).not.toHaveBeenCalled();
+      expect(localStorage.getItem('has_session')).toBeNull();
+      expect(getState().user).toBeNull();
+      expect(getState().isAuthenticated).toBe(false);
+    });
+  });
+
   describe('logout', () => {
     it('calls authService.logout, clears localStorage flags, and resets state', async () => {
       localStorage.setItem('has_session', '1');

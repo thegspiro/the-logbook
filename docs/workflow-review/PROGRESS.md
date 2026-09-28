@@ -22,7 +22,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W01 | Fresh-install onboarding, every step, including going Back and resuming    | anonymous → admin | `/`, `/onboarding/*`                  | ✅     |
 | W02 | Sign in, sign out, session timeout, a wrong password, lockout messaging    | member            | `/login`                              | ✅     |
 | W03 | Forgot password and reset by link                                          | anonymous         | `/forgot-password`, `/reset-password` | ✅     |
-| W04 | My account: profile, password change, MFA enrolment, notification settings | member            | `/account`                            | ⬜     |
+| W04 | My account: profile, password change, MFA enrolment, notification settings | member            | `/account`                            | ✅     |
 | W05 | Positions and permissions: create a position, grant, assign, revoke        | admin → member    | `/settings/roles`                     | ⬜     |
 | W06 | Organization settings, module switches, department setup checklist         | admin             | `/settings`, `/setup`                 | ⬜     |
 | W07 | Dashboard for each role: what shows, what links work, what fails behind it | every role        | `/dashboard`                          | ⬜     |
@@ -151,15 +151,9 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **W02 / W04** — after a password change the member is returned to the
-  sign-in screen with no message saying why.
-- **W04** — the password rules are shown only after typing starts.
 - **W07** — right after onboarding, the administrator's dashboard fires 403s
   on `/integrations/connected` (four times) and `/scheduling/settings` for
   modules that are off.
-- **W04** — the change-password checklist now uses the shared list (W03-4);
-  drive it to confirm, and check the lead below about the redirect after a
-  change.
 - **W08** — several Add Member fields have no programmatic label.
 - **W79** — tap targets under 44px on the onboarding Modules, Ranks &
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
@@ -169,6 +163,23 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W04 — My account — 2026-09-28
+
+Driven as: `member`, with `member2` as the other member, at 1280×900 and
+390×844. Held: password change refuses a wrong current password, reuse and a
+change inside the minimum age; MFA enrolment, sign-in by code and by recovery
+code, the replay guard, regeneration and turning MFA off with a code;
+notification preferences survive a reload; another member sees emergency
+contacts redacted and gets `403` editing them; no overflow on eight tabs.
+Fixed: W04-2 (HIGH — recovery codes were never shown), W04-3 (HIGH — a
+correct password cleared the MFA failure count, so the lockout never
+tripped), W04-1 (MED — no message after a password change signed the member
+out), W04-4 (MED — a contact with the fields marked required got a 422 in
+schema paths), W04-5, W04-6, W04-8 (LOW), W04-9 (NIT). Flagged: W04-7 (LOW —
+phone and mobile are free text), mirrored to KNOWN_LIMITATIONS. MFA left off
+for `member` so the harness can sign in. Gate: typecheck, lint, flake8, black and the full frontend suite clean;
+the auth/MFA backend tests pass. Next: W05.
 
 ### W03 — Forgot password and reset by link — 2026-09-28
 

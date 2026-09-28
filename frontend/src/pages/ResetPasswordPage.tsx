@@ -321,36 +321,33 @@ export const ResetPasswordPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Password strength indicator */}
-              {password && (
-                <div className="mt-3 space-y-2">
-                  <p className="text-theme-text-secondary text-xs font-medium">Password must contain:</p>
-                  <ul className="space-y-1 text-xs">
-                    {PASSWORD_CHECKLIST.map(({ key, label }) => ({ label, valid: passwordValidation.checks[key] })).map(
-                      (check) => (
-                        <li key={check.label} className="flex items-center space-x-2">
-                          {check.valid ? (
-                            <CheckCircle
-                              className="h-4 w-4 shrink-0 text-green-700 dark:text-green-400"
-                              aria-hidden="true"
-                            />
-                          ) : (
-                            <div
-                              className="border-theme-input-border h-4 w-4 shrink-0 rounded-full border-2"
-                              aria-hidden="true"
-                            />
-                          )}
-                          <span
-                            className={check.valid ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}
-                          >
-                            {check.label}
-                          </span>
-                        </li>
-                      )
-                    )}
-                  </ul>
-                </div>
-              )}
+              {/* The rules, shown before typing starts: they are what someone needs to
+                  choose a password (workflow review W04). */}
+              <div className="mt-3 space-y-2">
+                <p className="text-theme-text-secondary text-xs font-medium">Password must contain:</p>
+                <ul className="space-y-1 text-xs">
+                  {PASSWORD_CHECKLIST.map(({ key, label }) => ({ label, valid: passwordValidation.checks[key] })).map(
+                    (check) => (
+                      <li key={check.label} className="flex items-center space-x-2">
+                        {check.valid ? (
+                          <CheckCircle
+                            className="h-4 w-4 shrink-0 text-green-700 dark:text-green-400"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <div
+                            className="border-theme-input-border h-4 w-4 shrink-0 rounded-full border-2"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span className={check.valid ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}>
+                          {check.label}
+                        </span>
+                      </li>
+                    )
+                  )}
+                </ul>
+              </div>
             </div>
 
             <div>

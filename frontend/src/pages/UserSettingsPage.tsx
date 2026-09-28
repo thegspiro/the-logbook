@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useLocation, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import {
   User,
   Lock,
@@ -70,7 +70,7 @@ const TAB_IDS: TabType[] = [
 const SECTIONS: SettingsSection<TabType>[] = [
   { key: 'account', label: 'Account', icon: User, description: 'Your name, contact details, and photo' },
   { key: 'password', label: 'Password', icon: Lock, description: 'Change the password you sign in with' },
-  { key: 'security', label: 'Security', icon: ShieldCheck, description: 'Two-factor authentication and sessions' },
+  { key: 'security', label: 'Security', icon: ShieldCheck, description: 'Two-factor authentication' },
   {
     key: 'privacy',
     label: 'Privacy',
@@ -84,7 +84,8 @@ const SECTIONS: SettingsSection<TabType>[] = [
 ];
 
 export const UserSettingsPage: React.FC = () => {
-  const { user, loadUser } = useAuthStore();
+  const { user, endSessionLocally } = useAuthStore();
+  const navigate = useNavigate();
   const { rankOptions } = useRanks();
   const { theme, setTheme } = useTheme();
   const location = useLocation();
@@ -290,10 +291,14 @@ export const UserSettingsPage: React.FC = () => {
       setNewPassword('');
       setConfirmPassword('');
 
-      // Reload user to clear must_change_password flag
-      await loadUser();
-
-      toast.success('Password changed successfully!');
+      // A password change ends every session, this one included
+      // (AuthService.change_password). Reloading the user here met a 401 and
+      // the refresh interceptor sent the member to sign-in with no word of
+      // whether the change had worked — the success toast never showed
+      // (workflow review W04-1). Sign out here without asking the server — it
+      // has already ended the session — and say so on arrival.
+      await endSessionLocally();
+      void navigate('/login', { replace: true, state: { reason: 'password_changed' } });
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to change password. Please check your current password and try again.'));
     } finally {
@@ -528,17 +533,26 @@ export const UserSettingsPage: React.FC = () => {
 
   const handleSaveEmergencyContacts = async () => {
     if (!user?.id) return;
-    // Validate at least name and phone for each contact
-    const valid = contactsForm.every((c) => c.name.trim() && c.phone.trim());
+    // The server requires a name, relationship and phone on every contact
+    // (schemas/user.py EmergencyContact), and refuses an empty-string email:
+    // a contact filled in with only the fields this form used to mark
+    // required came back as a 422 in schema paths (workflow review W04).
+    const valid = contactsForm.every((c) => c.name.trim() && c.relationship.trim() && c.phone.trim());
     if (!valid) {
-      setContactsError('Each emergency contact must have a name and phone number.');
+      setContactsError('Each emergency contact needs a name, relationship and phone number.');
       return;
     }
     try {
       setSavingContacts(true);
       setContactsError(null);
       const updated = await userService.updateUserProfile(user.id, {
-        emergency_contacts: contactsForm,
+        emergency_contacts: contactsForm.map((c) => ({
+          ...c,
+          name: c.name.trim(),
+          relationship: c.relationship.trim(),
+          phone: c.phone.trim(),
+          email: c.email?.trim() || undefined,
+        })),
       });
       setProfile(updated);
       setContactsForm(
@@ -941,37 +955,36 @@ export const UserSettingsPage: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Password strength indicator */}
-                  {newPassword && (
-                    <div className="mt-3 space-y-2">
-                      <p className="text-theme-text-secondary text-xs font-medium">Password must contain:</p>
-                      <ul className="space-y-1 text-xs">
-                        {PASSWORD_CHECKLIST.map(({ key, label }) => ({
-                          label,
-                          valid: passwordValidation.checks[key],
-                        })).map((check) => (
-                          <li key={check.label} className="flex items-center space-x-2">
-                            {check.valid ? (
-                              <CheckCircle
-                                className="h-4 w-4 shrink-0 text-green-500 dark:text-green-400"
-                                aria-hidden="true"
-                              />
-                            ) : (
-                              <div
-                                className="border-theme-surface-border h-4 w-4 shrink-0 rounded-full border-2"
-                                aria-hidden="true"
-                              />
-                            )}
-                            <span
-                              className={check.valid ? 'text-green-600 dark:text-green-300' : 'text-theme-text-muted'}
-                            >
-                              {check.label}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  {/* The rules, shown before typing starts: they are what someone needs
+                      to choose a password (workflow review W04). */}
+                  <div className="mt-3 space-y-2">
+                    <p className="text-theme-text-secondary text-xs font-medium">Password must contain:</p>
+                    <ul className="space-y-1 text-xs">
+                      {PASSWORD_CHECKLIST.map(({ key, label }) => ({
+                        label,
+                        valid: passwordValidation.checks[key],
+                      })).map((check) => (
+                        <li key={check.label} className="flex items-center space-x-2">
+                          {check.valid ? (
+                            <CheckCircle
+                              className="h-4 w-4 shrink-0 text-green-500 dark:text-green-400"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <div
+                              className="border-theme-surface-border h-4 w-4 shrink-0 rounded-full border-2"
+                              aria-hidden="true"
+                            />
+                          )}
+                          <span
+                            className={check.valid ? 'text-green-600 dark:text-green-300' : 'text-theme-text-muted'}
+                          >
+                            {check.label}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
 
                 {/* Confirm Password */}
@@ -1204,7 +1217,7 @@ export const UserSettingsPage: React.FC = () => {
                               </label>
                               <button
                                 onClick={() => handleRemoveContact(i)}
-                                className="rounded-sm p-1 text-red-500 transition-colors hover:text-red-800 dark:hover:text-red-400"
+                                className="touch-target-phone inline-flex items-center justify-center rounded-sm p-1 text-red-500 transition-colors hover:text-red-800 dark:hover:text-red-400"
                                 aria-label={`Remove contact ${i + 1}`}
                               >
                                 <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -1234,7 +1247,7 @@ export const UserSettingsPage: React.FC = () => {
                                 htmlFor={`contact-relationship-${i}`}
                                 className="text-theme-text-secondary mb-1 block text-sm font-medium"
                               >
-                                Relationship
+                                Relationship <span className="text-red-500">*</span>
                               </label>
                               <input
                                 id={`contact-relationship-${i}`}
@@ -1288,14 +1301,17 @@ export const UserSettingsPage: React.FC = () => {
 
                       <button
                         onClick={handleAddContact}
-                        className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm font-medium transition-colors"
+                        className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover touch-target-phone flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm font-medium transition-colors"
                       >
                         <Plus className="h-4 w-4" aria-hidden="true" />
                         Add Another Contact
                       </button>
 
                       {contactsError && (
-                        <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-500/30 dark:bg-red-500/10">
+                        <div
+                          role="alert"
+                          className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-500/30 dark:bg-red-500/10"
+                        >
                           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
                           <p className="text-sm text-red-600 dark:text-red-400">{contactsError}</p>
                         </div>
@@ -1431,6 +1447,7 @@ export const UserSettingsPage: React.FC = () => {
                   </div>
                   <button
                     type="button"
+                    id="emailNotifications"
                     onClick={() => setEmailNotifications(!emailNotifications)}
                     className={`${
                       emailNotifications ? 'bg-red-800' : 'bg-theme-surface-border'
@@ -1492,6 +1509,7 @@ export const UserSettingsPage: React.FC = () => {
                   </div>
                   <button
                     type="button"
+                    id="eventReminders"
                     onClick={() => setEventReminders(!eventReminders)}
                     className={`${
                       eventReminders ? 'bg-red-800' : 'bg-theme-surface-border'
@@ -1515,6 +1533,7 @@ export const UserSettingsPage: React.FC = () => {
                   </div>
                   <button
                     type="button"
+                    id="trainingReminders"
                     onClick={() => setTrainingReminders(!trainingReminders)}
                     className={`${
                       trainingReminders ? 'bg-red-800' : 'bg-theme-surface-border'
