@@ -137,8 +137,13 @@ describe('RequestEquipmentModal', () => {
 
     await user.click(await screen.findByRole('button', { name: /Long Sleeve/ }));
 
-    const own = screen.getByRole('button', { name: '4XL, none on hand' });
+    // "Not stocked", not "none on hand": the department has never carried
+    // this size, which is a different fact from having run out of it.
+    const own = screen.getByRole('button', { name: '4XL, not stocked' });
     expect(own).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText("The department doesn't stock this item in 4XL.")).toBeInTheDocument();
+    expect(screen.getByText(/quartermaster will review it and decide whether to order it/)).toBeInTheDocument();
+    expect(screen.getByText(/isn't one of the sizes the department carries/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Submit Request/ }));
 
     // No item_id: nothing in the catalog is that size, which is exactly the
@@ -167,6 +172,37 @@ describe('RequestEquipmentModal', () => {
     expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({ item_id: 'item-xxl', requested_size: 'xxl' })
     );
+  });
+
+  it("says a stocked size at zero can still be asked for, at the quartermaster's discretion", async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(await screen.findByRole('button', { name: /Long Sleeve/ }));
+    await user.click(screen.getByRole('button', { name: 'XXL, none on hand' }));
+
+    expect(screen.getByText('None in XXL on hand right now.')).toBeInTheDocument();
+    expect(
+      screen.getByText(/quartermaster will decide whether to reorder, offer a substitute, or decline/)
+    ).toBeInTheDocument();
+  });
+
+  it('says how many are on hand when the quantity asked for is more', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(await screen.findByRole('button', { name: /Long Sleeve/ }));
+    await user.click(screen.getByRole('button', { name: 'L, 3 on hand' }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    const quantity = screen.getByLabelText('Quantity');
+    await user.clear(quantity);
+    await user.type(quantity, '5');
+
+    expect(screen.getByText('Only 3 on hand in L.')).toBeInTheDocument();
+    expect(
+      screen.getByText(/You can still ask for 5\. The quartermaster will decide how many to issue/)
+    ).toBeInTheDocument();
   });
 
   it('refuses to submit a sized product with no size chosen', async () => {

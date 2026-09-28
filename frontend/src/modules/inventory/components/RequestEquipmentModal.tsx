@@ -16,7 +16,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Loader2, ChevronLeft, PackageSearch, Ruler, PencilLine } from 'lucide-react';
+import { Search, Loader2, ChevronLeft, PackageSearch, Ruler, PencilLine, Info } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { RequestableCategory, RequestableProduct, RequestableVariant } from '../types';
 import { styleAttributesLabel } from '../types';
@@ -53,6 +53,62 @@ const availabilityNote = (product: RequestableProduct): string => {
     return `${product.total_available} on hand`;
   }
   return 'None on hand — you can still ask';
+};
+
+/**
+ * "Not stocked" and "none on hand" are different facts and read differently to
+ * a member. A size with no catalog row is one the department does not carry
+ * for this item at all; a catalog size at zero is one it carries and has run
+ * out of. Calling both "none on hand" told a member their size was merely
+ * back-ordered when nobody had ever bought it.
+ */
+const isUnstocked = (variant: RequestableVariant): boolean => variant.item_id == null;
+
+const stockPhrase = (variant: RequestableVariant): string => {
+  if (isUnstocked(variant)) return 'not stocked';
+  return variant.available > 0 ? `${variant.available} on hand` : 'none on hand';
+};
+
+interface AvailabilityNotice {
+  title: string;
+  body: string;
+}
+
+/**
+ * What the member should know before submitting against what is on the shelf.
+ *
+ * Every branch says the same two things, because both were missing: the
+ * request is still accepted, and the quartermaster — not the form — decides
+ * whether and how it is filled. Promising "the quartermaster will order or
+ * substitute" committed the department to something it may decline.
+ */
+const availabilityNotice = (
+  variant: RequestableVariant | undefined,
+  hasSizes: boolean,
+  quantity: number,
+  isPool: boolean
+): AvailabilityNotice | null => {
+  if (!variant) return null;
+  const size = variant.size_label ?? variant.size;
+  if (isUnstocked(variant)) {
+    return {
+      title: `The department doesn't stock this item in ${size ?? 'that size'}.`,
+      body: 'You can still submit the request. The quartermaster will review it and decide whether to order it, offer a different size, or decline.',
+    };
+  }
+  if (variant.available <= 0) {
+    return {
+      title: hasSizes ? `None in ${variantLabel(variant)} on hand right now.` : 'None on hand right now.',
+      body: 'You can still submit the request. The quartermaster will decide whether to reorder, offer a substitute, or decline.',
+    };
+  }
+  if (isPool && Number.isInteger(quantity) && quantity > variant.available) {
+    return {
+      title: `Only ${variant.available} on hand${hasSizes ? ` in ${variantLabel(variant)}` : ''}.`,
+      body: `You can still ask for ${quantity}. The quartermaster will decide how many to issue and whether to order the rest.`,
+    };
+  }
+  return null;
 };
 
 const MAX_QUANTITY = 99;
@@ -203,6 +259,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
   const isPool = selected?.tracking_type === 'pool';
   const parsedQuantity = Number(quantity);
   const quantityValid = Number.isInteger(parsedQuantity) && parsedQuantity >= 1 && parsedQuantity <= MAX_QUANTITY;
+  const notice = selected ? availabilityNotice(activeVariant, selected.has_sizes, parsedQuantity, isPool) : null;
 
   const handleSubmit = async () => {
     const itemName = selected ? selected.name : freeText.trim();
@@ -436,7 +493,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
               <div className="flex flex-wrap gap-2" role="group" aria-labelledby="request-size-label">
                 {sizeOptions.map((variant) => {
                   const key = variantKey(variant);
-                  const stock = variant.available > 0 ? `${variant.available} on hand` : 'none on hand';
+                  const stock = stockPhrase(variant);
                   return (
                     <button
                       key={key}
@@ -451,17 +508,25 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
                     >
                       {variantLabel(variant)}
                       <span className={selectedVariant === key ? 'ml-1.5 opacity-80' : 'ml-1.5 opacity-70'}>
-                        {variant.available > 0 ? `· ${variant.available}` : '· none on hand'}
+                        {variant.available > 0 ? `· ${variant.available}` : `· ${stock}`}
                       </span>
                     </button>
                   );
                 })}
               </div>
               {selected.member_size && (
-                <p className="text-theme-text-muted mt-2 inline-flex items-center gap-1 text-xs">
-                  <Ruler className="h-3.5 w-3.5" />
-                  Your size on file: <span className="text-theme-text-primary font-medium">{selected.member_size}</span>
-                  {!selected.suggested_size && ' — the department does not stock it, so it is offered above as a need.'}
+                // The size on file is the member's own preference, recorded on
+                // their profile — it is not a statement about the shelf, so it
+                // is kept apart from the availability notice below.
+                <p className="text-theme-text-muted mt-2 flex items-start gap-1 text-xs">
+                  <Ruler className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    Your size on file:{' '}
+                    <span className="text-theme-text-primary font-medium">{selected.member_size}</span>
+                    {selected.suggested_size
+                      ? ' (from your profile).'
+                      : " (from your profile). It isn't one of the sizes the department carries for this item, so it's listed above as a size you can still ask for."}
+                  </span>
                 </p>
               )}
             </div>
@@ -483,11 +548,16 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
                 onChange={(e) => setQuantity(e.target.value)}
                 className="form-input w-28"
               />
-              {activeVariant && activeVariant.available < parsedQuantity && (
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  More than is on hand. The request still goes through — the quartermaster will order or substitute.
-                </p>
-              )}
+            </div>
+          )}
+
+          {notice && (
+            <div className="alert-info flex items-start gap-2" role="status">
+              <Info className="text-theme-alert-info-icon mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div>
+                <p className="text-theme-text-primary text-sm font-medium">{notice.title}</p>
+                <p className="text-theme-text-secondary mt-0.5 text-xs">{notice.body}</p>
+              </div>
             </div>
           )}
 
