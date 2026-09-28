@@ -50,6 +50,7 @@ from app.schemas.election import (
 )
 from app.services.email_policy import (
     EmailKind,
+    department_required_kinds,
     member_receives_email,
     recipients_for,
 )
@@ -3215,7 +3216,11 @@ class ElectionService:
             members = members_result.scalars().all()
             member_emails = [
                 m.email
-                for m in recipients_for(members, EmailKind.ELECTION_NOTICES)
+                for m in recipients_for(
+                    members,
+                    EmailKind.ELECTION_NOTICES,
+                    department_required_kinds(organization),
+                )
                 if m.email
             ]
             if not member_emails:
@@ -3296,7 +3301,9 @@ class ElectionService:
             if not organization or not nominee or not nominee.email:
                 return
             if not member_receives_email(
-                nominee.notification_preferences, EmailKind.ELECTION_NOTICES
+                nominee.notification_preferences,
+                EmailKind.ELECTION_NOTICES,
+                department_required_kinds(organization),
             ):
                 return
 
@@ -5384,16 +5391,13 @@ class ElectionService:
         )
         all_users = users_result.scalars().all()
 
-        leadership_users = recipients_for(
-            [
-                user
-                for user in all_users
-                if any(role.slug in leadership_roles for role in user.roles)
-            ],
-            EmailKind.ELECTION_ADMIN,
-        )
+        leadership = [
+            user
+            for user in all_users
+            if any(role.slug in leadership_roles for role in user.roles)
+        ]
 
-        if not leadership_users:
+        if not leadership:
             return 0
 
         performer_result = await self.db.execute(
@@ -5408,6 +5412,15 @@ class ElectionService:
         organization = org_result.scalar_one_or_none()
 
         if not organization:
+            return 0
+
+        leadership_users = recipients_for(
+            leadership,
+            EmailKind.ELECTION_ADMIN,
+            department_required_kinds(organization),
+        )
+
+        if not leadership_users:
             return 0
 
         email_service = EmailService(organization)
@@ -6617,7 +6630,9 @@ class ElectionService:
                 and (
                     requested
                     or member_receives_email(
-                        creator.notification_preferences, EmailKind.ELECTION_ADMIN
+                        creator.notification_preferences,
+                        EmailKind.ELECTION_ADMIN,
+                        department_required_kinds(organization),
                     )
                 )
             ):

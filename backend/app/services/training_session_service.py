@@ -1017,7 +1017,11 @@ class TrainingSessionService:
         Send email notifications to training officers about pending approval.
         """
         from app.models.user import user_roles
-        from app.services.email_policy import EmailKind, recipients_for
+        from app.services.email_policy import (
+            EmailKind,
+            department_required_kinds,
+            recipients_for,
+        )
         from app.services.email_service import EmailService
 
         try:
@@ -1045,11 +1049,21 @@ class TrainingSessionService:
             if not training_officers:
                 return
 
+            # Load organization for org-specific email settings
+            from app.models.user import Organization
+
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+            org = org_result.scalar_one_or_none()
+
             # Get officer emails
             to_emails = [
                 officer.email
                 for officer in recipients_for(
-                    training_officers, EmailKind.TRAINING_DUTIES
+                    training_officers,
+                    EmailKind.TRAINING_DUTIES,
+                    department_required_kinds(org),
                 )
                 if officer.email
             ]
@@ -1068,14 +1082,6 @@ class TrainingSessionService:
 
             # Build approval URL
             approval_url = f"{settings.FRONTEND_URL}/training/approve/{approval_token}"
-
-            # Load organization for org-specific email settings
-            from app.models.user import Organization
-
-            org_result = await self.db.execute(
-                select(Organization).where(Organization.id == str(organization_id))
-            )
-            org = org_result.scalar_one_or_none()
 
             # Send email
             email_service = EmailService(organization=org)

@@ -215,6 +215,29 @@ export interface NotificationPreferences {
   sms_notifications: boolean;
   event_reminders: boolean;
   training_reminders: boolean;
+  /**
+   * Per-email choices keyed by the backend's EmailKind, e.g.
+   * `{ shift_notices: false }`. The backend merges these into what is
+   * stored, so sending one kind leaves the member's other choices alone.
+   */
+  email_kinds?: Record<string, boolean> | undefined;
+}
+
+/** One optional email a member may turn off, as `/users/me/email-choices` lists it. */
+export interface MemberEmailChoice {
+  key: string;
+  label: string;
+  audience: 'members' | 'officers';
+  includes: string[];
+  enabled: boolean;
+}
+
+export interface MemberEmailChoices {
+  email_notifications: boolean;
+  /** Optional emails the member decides on. Excludes any the department made required. */
+  choices: MemberEmailChoice[];
+  /** Labels of the emails this member receives whatever they choose. */
+  always_sent: string[];
 }
 
 export interface ContactInfoUpdate {

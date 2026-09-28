@@ -113,7 +113,12 @@ from app.models.event import (
 from app.models.inventory import MEDICAL_ITEM_TYPES
 from app.models.user import Organization, User
 from app.services.call_tracking_service import CallTrackingService
-from app.services.email_policy import EmailKind, member_receives_email
+from app.services.email_policy import (
+    DepartmentRequired,
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+)
 from app.services.email_service import _redact_email
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.email_providers import stored_email_section
@@ -464,7 +469,9 @@ DOMAIN_MEDICAL = "medical"
 
 
 async def _stock_alert_audiences(
-    db_session: AsyncSession, organization_id: str
+    db_session: AsyncSession,
+    organization_id: str,
+    department_required: DepartmentRequired,
 ) -> Dict[frozenset, List[str]]:
     """Group recipient emails by the stock domains each may actually see.
 
@@ -509,7 +516,9 @@ async def _stock_alert_audiences(
         if not domains:
             continue
         if not member_receives_email(
-            user.notification_preferences, EmailKind.INVENTORY_DUTIES
+            user.notification_preferences,
+            EmailKind.INVENTORY_DUTIES,
+            department_required,
         ):
             continue
 
@@ -521,6 +530,7 @@ async def _stock_alert_audiences(
 async def _stock_alert_recipients(
     db_session: AsyncSession,
     organization_id: str,
+    department_required: DepartmentRequired,
     permissions: tuple[str, ...] = GEAR_STOCK_PERMISSIONS,
 ) -> list[User]:
     """The members this department put in charge of the stock being alerted on.
@@ -563,7 +573,9 @@ async def _stock_alert_recipients(
         for role in user.roles or []:
             granted.update(role.permissions or [])
         if permission_matches_any(permissions, granted) and member_receives_email(
-            user.notification_preferences, EmailKind.INVENTORY_DUTIES
+            user.notification_preferences,
+            EmailKind.INVENTORY_DUTIES,
+            department_required,
         ):
             recipients.append(user)
     return recipients
@@ -1268,7 +1280,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                         # Email notification — only if user hasn't opted out
                         if user.email and member_receives_email(
-                            prefs, EmailKind.EVENT_REMINDERS
+                            prefs,
+                            EmailKind.EVENT_REMINDERS,
+                            department_required_kinds(org),
                         ):
                             try:
                                 sent = await email_service.send_event_reminder(
@@ -1452,7 +1466,9 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
 
                 # Email notification (if user has email prefs enabled)
                 if creator.email and member_receives_email(
-                    creator.notification_preferences, EmailKind.EVENT_DUTIES
+                    creator.notification_preferences,
+                    EmailKind.EVENT_DUTIES,
+                    department_required_kinds(org),
                 ):
                     try:
                         from app.services.email_service import wrap_email_body
@@ -1817,7 +1833,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
                 # Email notification
                 if officer.email and member_receives_email(
-                    officer.notification_preferences, EmailKind.SCHEDULING_DUTIES
+                    officer.notification_preferences,
+                    EmailKind.SCHEDULING_DUTIES,
+                    department_required_kinds(org),
                 ):
                     try:
                         from app.services.email_service import wrap_email_body
@@ -2306,6 +2324,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             if not member_receives_email(
                                 getattr(member, "notification_preferences", None),
                                 EmailKind.SHIFT_NOTICES,
+                                department_required_kinds(org),
                             ):
                                 continue
                             try:
@@ -2916,7 +2935,9 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
 
                     # Email
                     if user.email and member_receives_email(
-                        user.notification_preferences, EmailKind.SHIFT_NOTICES
+                        user.notification_preferences,
+                        EmailKind.SHIFT_NOTICES,
+                        department_required_kinds(org),
                     ):
                         try:
                             from app.services.email_service import wrap_email_body
@@ -3241,7 +3262,9 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                     )
 
                 if trainee.email and member_receives_email(
-                    trainee.notification_preferences, EmailKind.SHIFT_NOTICES
+                    trainee.notification_preferences,
+                    EmailKind.SHIFT_NOTICES,
+                    department_required_kinds(org),
                 ):
                     try:
                         e_first = _html.escape(trainee.first_name or "")
@@ -4273,7 +4296,9 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
         for row in low_stock:
             by_domain[_row_domain(row[0])].append(row)
 
-        audiences = await _stock_alert_audiences(db_session, str(org.id))
+        audiences = await _stock_alert_audiences(
+            db_session, str(org.id), department_required_kinds(org)
+        )
 
         alerts_sent = 0
         email_svc = EmailService(organization=org)
@@ -4382,7 +4407,10 @@ async def run_inventory_audit_digest(db: AsyncSession) -> Dict[str, Any]:
             return 0
 
         recipients = await _stock_alert_recipients(
-            db_session, org_id, permissions=GEAR_STOCK_PERMISSIONS
+            db_session,
+            org_id,
+            department_required_kinds(org),
+            permissions=GEAR_STOCK_PERMISSIONS,
         )
         emails = [u.email for u in recipients if u.email]
         if not emails:
@@ -4604,7 +4632,10 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
         # NFPA 1851 retirement is structural firefighting PPE, which is
         # the gear officer's ledger and not the EMS supply officer's.
         admins = await _stock_alert_recipients(
-            db_session, str(org.id), GEAR_STOCK_PERMISSIONS
+            db_session,
+            str(org.id),
+            department_required_kinds(org),
+            permissions=GEAR_STOCK_PERMISSIONS,
         )
         admin_emails = [a.email for a in admins if a.email]
 
@@ -4770,7 +4801,9 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </table>
                 """
 
-        audiences = await _stock_alert_audiences(db_session, str(org.id))
+        audiences = await _stock_alert_audiences(
+            db_session, str(org.id), department_required_kinds(org)
+        )
         if not audiences:
             return 0
 
@@ -5106,7 +5139,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 # Email notification
                 if creator.email and member_receives_email(
-                    prefs, EmailKind.EVENT_REMINDERS
+                    prefs, EmailKind.EVENT_REMINDERS, department_required_kinds(org)
                 ):
                     try:
                         context = {

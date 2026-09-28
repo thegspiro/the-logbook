@@ -45,7 +45,7 @@ from app.models.audit import AuditLog
 from app.models.document import Document
 from app.models.inventory import ItemAssignment, ItemIssuance
 from app.models.training import TrainingRecord as TrainingRecordModel
-from app.models.user import Role, User, UserStatus, user_roles
+from app.models.user import Organization, Role, User, UserStatus, user_roles
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.schemas.user import (
     AdminPasswordReset,
@@ -53,6 +53,8 @@ from app.schemas.user import (
     ContactInfoUpdate,
     DeletionImpactResponse,
     MemberAuditLogEntry,
+    MemberEmailChoice,
+    MemberEmailChoicesResponse,
     ProfileVisibility,
     UserListResponse,
     UserProfileResponse,
@@ -65,7 +67,14 @@ from app.services.admin_continuity_service import (
     assert_not_last_administrator,
     assert_positions_retain_administrator,
 )
-from app.services.email_policy import clean_email_kind_choices
+from app.services.email_policy import (
+    EMAIL_POLICIES,
+    EmailAudience,
+    clean_email_kind_choices,
+    department_required_kinds,
+    is_required,
+    member_choice,
+)
 from app.services.email_service import welcome_email_can_send
 from app.services.operational_rank_service import (
     OperationalRankService,
@@ -2781,6 +2790,58 @@ async def get_my_consents(
 # route must be declared *below* these two: FastAPI matches in declaration
 # order and parses ``user_id: UUID`` only after choosing the route, so a
 # by-id route declared above would capture ``me`` and answer 422.
+def _holds_officer_permissions(user: User) -> bool:
+    """Whether *user* holds any management grant, which is what makes them a
+    possible recipient of the officer duty emails. Deliberately broad: showing
+    an officer a toggle for an email their role never produces costs a line
+    on a settings screen, while hiding one they do receive leaves them no
+    way to turn it off."""
+    permissions = _collect_user_permissions(user)
+    return any(
+        permission == "*" or permission.endswith((".manage", ".*"))
+        for permission in permissions
+    )
+
+
+@router.get("/me/email-choices", response_model=MemberEmailChoicesResponse)
+async def get_my_email_choices(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The optional emails the calling member can turn off, with their current
+    setting for each. Officer duty emails are listed only to members who
+    hold a management permission. An optional email the department has made
+    required is listed under always_sent instead: the member receives it
+    whatever they chose, so offering the switch would mislead them.
+    """
+    organization = await db.get(Organization, str(current_user.organization_id))
+    department_required = department_required_kinds(organization)
+    prefs = current_user.notification_preferences or {}
+    show_officer = _holds_officer_permissions(current_user)
+    return MemberEmailChoicesResponse(
+        email_notifications=prefs.get("email_notifications", True) is not False,
+        choices=[
+            MemberEmailChoice(
+                key=kind.value,
+                label=policy.label,
+                audience=policy.audience.value,
+                includes=list(policy.includes),
+                enabled=member_choice(prefs, kind),
+            )
+            for kind, policy in EMAIL_POLICIES.items()
+            if not is_required(kind, department_required)
+            and (show_officer or policy.audience is not EmailAudience.OFFICERS)
+        ],
+        always_sent=[
+            policy.label
+            for kind, policy in EMAIL_POLICIES.items()
+            if is_required(kind, department_required)
+            and (show_officer or policy.audience is not EmailAudience.OFFICERS)
+        ],
+    )
+
+
 @router.get("/me/profile-visibility", response_model=ProfileVisibility)
 async def get_my_profile_visibility(
     current_user: User = Depends(get_current_user),

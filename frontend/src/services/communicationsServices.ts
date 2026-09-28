@@ -313,6 +313,8 @@ export interface MemberEmailKind {
   includes: string[];
   rationale: string;
   legacy_preference: string | null;
+  /** An optional email this department's leadership has made required. */
+  department_required: boolean;
 }
 
 /** One alert the backend permits to escalate to a text message. */
@@ -327,17 +329,30 @@ export interface MemberEmailPolicy {
   emails: MemberEmailKind[];
   texts: MemberTextAlert[];
   text_conditions: string[];
+  /** Whether the caller may change which optional emails are required. */
+  can_edit: boolean;
 }
+
+const normalizeMemberEmailPolicy = (data: MemberEmailPolicy): MemberEmailPolicy => ({
+  emails: asArray(data.emails),
+  texts: asArray(data.texts),
+  text_conditions: asArray(data.text_conditions),
+  can_edit: Boolean(data.can_edit),
+});
 
 export const emailTemplatesService = {
   /** Every member email and text, and whether members can opt out. Read-only. */
   async getMemberEmailPolicy(): Promise<MemberEmailPolicy> {
     const response = await api.get<MemberEmailPolicy>('/email-templates/member-email-policy');
-    return {
-      emails: asArray(response.data.emails),
-      texts: asArray(response.data.texts),
-      text_conditions: asArray(response.data.text_conditions),
-    };
+    return normalizeMemberEmailPolicy(response.data);
+  },
+
+  /** Replace the list of optional emails this department makes required. */
+  async updateMemberEmailPolicy(requiredKinds: string[]): Promise<MemberEmailPolicy> {
+    const response = await api.put<MemberEmailPolicy>('/email-templates/member-email-policy', {
+      required_kinds: requiredKinds,
+    });
+    return normalizeMemberEmailPolicy(response.data);
   },
 
   async getTemplates(): Promise<EmailTemplate[]> {

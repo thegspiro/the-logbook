@@ -407,6 +407,27 @@ class UserWithRolesResponse(UserResponse):
     model_config = _response_config
 
 
+class MemberEmailChoice(BaseModel):
+    """One optional kind of email and the calling member's setting for it."""
+
+    key: str
+    label: str
+    audience: str
+    includes: List[str]
+    # The member's own choice for this kind, ignoring the Email notifications
+    # switch, so switching that back on restores each choice as it was.
+    enabled: bool
+
+
+class MemberEmailChoicesResponse(BaseModel):
+    """The optional emails the calling member can turn off, and the always-sent
+    ones, by label only, so the settings screen can say what cannot be."""
+
+    email_notifications: bool
+    choices: List[MemberEmailChoice]
+    always_sent: List[str]
+
+
 class NotificationPreferences(BaseModel):
     """Notification preferences schema.
 

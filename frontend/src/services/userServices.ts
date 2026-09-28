@@ -206,6 +206,15 @@ export const userService = {
   },
 
   /**
+   * The optional emails the signed-in member can turn off, and the ones they
+   * always receive — including any the department has made required.
+   */
+  async getMyEmailChoices(): Promise<import('../types/user').MemberEmailChoices> {
+    const response = await api.get<import('../types/user').MemberEmailChoices>('/users/me/email-choices');
+    return response.data;
+  },
+
+  /**
    * Update notification preferences for a user.
    *
    * Partial by design: the backend merges, so a key you omit is left as it

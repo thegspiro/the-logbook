@@ -27,6 +27,12 @@ How an optional kind is decided, in order:
    ``training_reminders``), so a member who turned one off stays off.
 4. ``default_on``.
 
+A department's leadership can make any optional kind required for its own
+members, on the Member Emails & Texts page. That wins over every step above,
+and members see the kind as always sent rather than as a choice. Only that
+direction is allowed: nothing a department sets can make a system-required
+kind optional.
+
 Not governed here: mail to people who are not members (applicants, event
 requesters, outside approvers), addresses an administrator types in (report
 recipients, CC lists, test sends), and the in-app bell entry, which is how a
@@ -36,7 +42,17 @@ removes.
 
 import enum
 from dataclasses import dataclass
-from typing import Any, Iterable, List, Mapping, Optional, Sequence, TypeVar
+from typing import (
+    AbstractSet,
+    Any,
+    FrozenSet,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    TypeVar,
+)
 
 
 class EmailKind(str, enum.Enum):
@@ -310,24 +326,82 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
 PREFERENCE_KEY = "email_kinds"
 MASTER_SWITCH = "email_notifications"
 
+# Where a department's own additions to the required list live, inside
+# Organization.settings: {"email_policy": {"required_kinds": ["shift_notices"]}}.
+ORG_SETTINGS_KEY = "email_policy"
+ORG_REQUIRED_KEY = "required_kinds"
+
 OPTIONAL_KINDS = frozenset(k for k, p in EMAIL_POLICIES.items() if not p.required)
+
+DepartmentRequired = AbstractSet[EmailKind]
+
+
+def department_required_kinds(organization: Any) -> FrozenSet[EmailKind]:
+    """The optional kinds this department has made required for its members.
+
+    Leadership can only move a kind from optional to required, never the
+    reverse, so anything here that is not an optional kind is ignored — as is
+    a malformed value, which must not start or stop anyone's email.
+    Takes an Organization (or anything with ``settings``), or None.
+    """
+    settings = getattr(organization, "settings", None)
+    if not isinstance(settings, Mapping):
+        return frozenset()
+    section = settings.get(ORG_SETTINGS_KEY)
+    if not isinstance(section, Mapping):
+        return frozenset()
+    stored = section.get(ORG_REQUIRED_KEY)
+    if not isinstance(stored, (list, tuple)):
+        return frozenset()
+    optional = {kind.value: kind for kind in OPTIONAL_KINDS}
+    return frozenset(
+        optional[v] for v in stored if isinstance(v, str) and v in optional
+    )
+
+
+def is_required(kind: EmailKind, department_required: DepartmentRequired) -> bool:
+    """Required by the system, or by this department."""
+    return EMAIL_POLICIES[kind].required or kind in department_required
 
 
 def member_receives_email(
-    preferences: Optional[Mapping[str, Any]], kind: EmailKind
+    preferences: Optional[Mapping[str, Any]],
+    kind: EmailKind,
+    department_required: DepartmentRequired,
 ) -> bool:
     """Whether a member with *preferences* is emailed a notice of *kind*.
+
+    *department_required* is :func:`department_required_kinds` for the
+    member's organization. It is a required argument on purpose: a sender that
+    left it out would quietly let members opt out of an email their
+    department made mandatory.
 
     The order of decisions is in the module docstring. A malformed preference
     is treated as no choice: a bad value in a JSON blob must not silently stop
     someone's email.
     """
-    policy = EMAIL_POLICIES[kind]
-    if policy.required:
+    if is_required(kind, department_required):
         return True
     prefs = preferences if isinstance(preferences, Mapping) else {}
     if prefs.get(MASTER_SWITCH) is False:
         return False
+    return member_choice(prefs, kind)
+
+
+def member_choice(preferences: Optional[Mapping[str, Any]], kind: EmailKind) -> bool:
+    """The member's own setting for an optional *kind*, ignoring the master
+    switch and any department requirement — steps 2 to 4 of the order in the
+    module docstring.
+
+    This is what a per-kind toggle shows. It is kept separate so turning
+    Email notifications off and on again restores every toggle as it was,
+    and so a kind the department stops requiring returns to the member's own
+    earlier choice.
+    """
+    policy = EMAIL_POLICIES[kind]
+    if policy.required:
+        return True
+    prefs = preferences if isinstance(preferences, Mapping) else {}
     choices = prefs.get(PREFERENCE_KEY)
     if isinstance(choices, Mapping):
         choice = choices.get(kind.value)
@@ -341,7 +415,9 @@ def member_receives_email(
 _U = TypeVar("_U")
 
 
-def recipients_for(users: Iterable[_U], kind: EmailKind) -> List[_U]:
+def recipients_for(
+    users: Iterable[_U], kind: EmailKind, department_required: DepartmentRequired
+) -> List[_U]:
     """The members of *users* who receive *kind*, in their original order.
 
     Takes anything with a ``notification_preferences`` attribute — ORM users
@@ -350,7 +426,9 @@ def recipients_for(users: Iterable[_U], kind: EmailKind) -> List[_U]:
     return [
         user
         for user in users
-        if member_receives_email(getattr(user, "notification_preferences", None), kind)
+        if member_receives_email(
+            getattr(user, "notification_preferences", None), kind, department_required
+        )
     ]
 
 

@@ -52,7 +52,11 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
 )
 from app.models.user import Organization, Role, User, UserStatus, generate_uuid
-from app.services.email_policy import EmailKind, recipients_for
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    recipients_for,
+)
 from app.utils.membership import ADMINISTRATIVE_RANK_MESSAGE, is_administrative
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
@@ -6869,6 +6873,7 @@ class MembershipPipelineService:
             recipients = recipients_for(
                 await self._withdrawal_notice_recipients(str(prospect.organization_id)),
                 EmailKind.MEMBERSHIP_ADMIN,
+                department_required_kinds(org),
             )
             if not recipients:
                 logger.warning(

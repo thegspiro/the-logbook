@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link } from 'react-router';
 import { renderWithRouter } from '../test/utils';
 import { UserSettingsPage } from './UserSettingsPage';
 import * as apiModule from '../services/api';
+import type { MemberEmailChoices } from '../types/user';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
@@ -15,6 +16,7 @@ vi.mock('../services/api', () => ({
     getUserWithRoles: vi.fn(),
     updateUserProfile: vi.fn(),
     getNotificationPreferences: vi.fn(),
+    getMyEmailChoices: vi.fn(),
     updateNotificationPreferences: vi.fn().mockResolvedValue(undefined),
     getMyConsents: vi.fn(),
     setMyConsent: vi.fn().mockResolvedValue(undefined),
@@ -42,6 +44,27 @@ const defaultProfile = {
   address_country: 'USA',
   emergency_contacts: [],
   roles: [],
+};
+
+const emailChoices: MemberEmailChoices = {
+  email_notifications: true,
+  choices: [
+    {
+      key: 'event_reminders',
+      label: 'Event reminders',
+      audience: 'members',
+      includes: ['Reminders before events you are attending'],
+      enabled: true,
+    },
+    {
+      key: 'shift_notices',
+      label: 'Shift notices',
+      audience: 'members',
+      includes: ['Shift reminders'],
+      enabled: false,
+    },
+  ],
+  always_sent: ['Election ballots', 'Department messages'],
 };
 
 // Mock auth store
@@ -111,6 +134,8 @@ describe('UserSettingsPage', () => {
       event_reminders: true,
       training_reminders: true,
     });
+    vi.mocked(userService.getMyEmailChoices).mockReset();
+    vi.mocked(userService.getMyEmailChoices).mockResolvedValue(emailChoices);
     vi.mocked(userService.getMyConsents).mockResolvedValue([
       { consent_type: 'sms_notifications', granted: true, updated_at: null },
     ]);
@@ -278,9 +303,68 @@ describe('UserSettingsPage', () => {
 
       await user.click(screen.getByText('Notifications'));
 
-      for (const name of ['Email Notifications', 'Event Reminders', 'Training Reminders']) {
+      for (const name of ['Email Notifications', 'Event reminders', 'Shift notices']) {
         expect(await screen.findByRole('switch', { name })).toBeInTheDocument();
       }
+    });
+
+    it('lists each optional email with its current setting and the ones always sent', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      await user.click(screen.getByText('Notifications'));
+
+      expect(await screen.findByRole('switch', { name: 'Event reminders' })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('switch', { name: 'Shift notices' })).toHaveAttribute('aria-checked', 'false');
+      const always = screen.getByRole('region', { name: 'Always emailed to you' });
+      expect(within(always).getByText('Election ballots')).toBeInTheDocument();
+      // Listed, but never as something the member can switch.
+      expect(screen.queryByRole('switch', { name: 'Election ballots' })).not.toBeInTheDocument();
+    });
+
+    it('saves every per-email choice with the preferences', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      await user.click(screen.getByText('Notifications'));
+      await user.click(await screen.findByRole('switch', { name: 'Shift notices' }));
+      await user.click(screen.getByRole('button', { name: 'Save Preferences' }));
+
+      await waitFor(() =>
+        expect(userService.updateNotificationPreferences).toHaveBeenCalledWith('user-123', {
+          email_notifications: true,
+          sms_notifications: true,
+          email_kinds: { event_reminders: true, shift_notices: true },
+        })
+      );
+    });
+
+    it('greys out the per-email choices while all optional email is off', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      await user.click(screen.getByText('Notifications'));
+      await user.click(await screen.findByRole('switch', { name: 'Email Notifications' }));
+
+      const reminders = screen.getByRole('switch', { name: 'Event reminders' });
+      expect(reminders).toBeDisabled();
+      expect(reminders).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('shows an email the department made required as always sent, not as a choice', async () => {
+      vi.mocked(userService.getMyEmailChoices).mockResolvedValue({
+        ...emailChoices,
+        choices: emailChoices.choices.filter((c) => c.key !== 'shift_notices'),
+        always_sent: [...emailChoices.always_sent, 'Shift notices'],
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      await user.click(screen.getByText('Notifications'));
+
+      const always = await screen.findByRole('region', { name: 'Always emailed to you' });
+      expect(within(always).getByText('Shift notices')).toBeInTheDocument();
+      expect(screen.queryByRole('switch', { name: 'Shift notices' })).not.toBeInTheDocument();
     });
 
     it('turning off urgent texts withdraws the SMS consent and the preference together', async () => {

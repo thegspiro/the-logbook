@@ -57,7 +57,11 @@ from app.models.user import (
     user_positions,
 )
 from app.services.call_tracking_service import CallTrackingService
-from app.services.email_policy import EmailKind, member_receives_email
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+)
 from app.services.external_shift_hours_service import ExternalShiftHoursService
 from app.services.member_leave_service import MemberLeaveService
 from app.services.notifications_service import NotificationsService
@@ -547,10 +551,14 @@ class SchedulingService:
                             User.email.isnot(None),
                         )
                     )
+                    department_required = department_required_kinds(org)
                     to_emails = [
                         email
                         for email, prefs in recipient_result.all()
-                        if email and member_receives_email(prefs, email_kind)
+                        if email
+                        and member_receives_email(
+                            prefs, email_kind, department_required
+                        )
                     ]
                     if to_emails:
                         email_svc = EmailService(organization=org)
@@ -6126,10 +6134,6 @@ class SchedulingService:
         ).scalar_one_or_none()
         if not user or not user.email:
             return
-        if not member_receives_email(
-            user.notification_preferences, EmailKind.SHIFT_NOTICES
-        ):
-            return
 
         org = (
             await self.db.execute(
@@ -6137,6 +6141,12 @@ class SchedulingService:
             )
         ).scalar_one_or_none()
         if not org:
+            return
+        if not member_receives_email(
+            user.notification_preferences,
+            EmailKind.SHIFT_NOTICES,
+            department_required_kinds(org),
+        ):
             return
 
         url = f"{settings.FRONTEND_URL}/scheduling?tab=requests"
@@ -8852,7 +8862,9 @@ class SchedulingService:
 
             # Email notification
             if officer.email and member_receives_email(
-                officer.notification_preferences, EmailKind.SCHEDULING_DUTIES
+                officer.notification_preferences,
+                EmailKind.SCHEDULING_DUTIES,
+                department_required_kinds(org),
             ):
                 try:
                     from app.services.email_service import wrap_email_body
