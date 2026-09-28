@@ -151,6 +151,15 @@ describe('MembersSettingsPage', () => {
     expect(screen.queryByText('Contact Information Visibility')).not.toBeInTheDocument();
   });
 
+  // Add Member previews the server's ID ("FD-0007"); this screen printed the
+  // bare number ("FD-7"), so the two disagreed about what would be issued.
+  it('shows the next membership ID in the format the server issues', async () => {
+    renderWithRouter(<MembersSettingsPage section="ids" />);
+
+    expect(await screen.findByText('Next: FD-0007')).toBeInTheDocument();
+    expect(screen.getByText(/produces FD-0001/)).toBeInTheDocument();
+  });
+
   it('says the settings did not load rather than showing defaults as the answer', async () => {
     mockGetSettings.mockRejectedValue(new Error('nope'));
 

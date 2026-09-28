@@ -14,6 +14,7 @@ import {
 import type { OperationalRankResponse, RankValidationIssue } from '../../services/api';
 import type { PositionOption } from '../../modules/scheduling/types/shiftSettings';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
+import { useConfirm } from '../../contexts/ConfirmContext';
 
 interface RankForm {
   rank_code: string;
@@ -115,6 +116,21 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
   canReorder,
   onToggleEligiblePosition,
 }) => {
+  const { confirm } = useConfirm();
+
+  // The delete is permanent (the row is removed, not deactivated), and it sat
+  // on a trash icon that fired on a single tap. The server refuses a rank any
+  // member holds, so what this guards is an unheld rung and its seat list.
+  const confirmDelete = async (rank: OperationalRankResponse) => {
+    const ok = await confirm({
+      title: 'Delete rank',
+      message: `Delete the ${rank.display_name} rank? Its place in the ladder and its eligible positions go with it, and this cannot be undone.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep it',
+    });
+    if (ok) onDeleteRank(rank.id);
+  };
+
   return (
     <div className="space-y-4">
       {/* Title and description come from the page's SettingsPanelHead, which
@@ -144,8 +160,11 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
           <p className="text-theme-text-primary mb-3 text-sm font-medium">{editingRank ? 'Edit Rank' : 'New Rank'}</p>
           <div className={`grid grid-cols-1 gap-3 ${allowCodeEdit ? 'sm:grid-cols-2' : ''}`}>
             <div>
-              <label className="text-theme-text-muted mb-1 block text-xs font-medium">Display Name</label>
+              <label htmlFor="rank-display-name" className="text-theme-text-muted mb-1 block text-xs font-medium">
+                Display Name
+              </label>
               <input
+                id="rank-display-name"
                 type="text"
                 value={rankForm.display_name}
                 onChange={(e) => {
@@ -170,10 +189,11 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
             </div>
             {allowCodeEdit && (
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                <label htmlFor="rank-code" className="text-theme-text-muted mb-1 block text-xs font-medium">
                   Code (internal identifier)
                 </label>
                 <input
+                  id="rank-code"
                   type="text"
                   value={rankForm.rank_code}
                   onChange={(e) =>
@@ -240,14 +260,14 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                   is not on offer either. */}
               {canReorder && (
                 <>
-                  <div className="flex shrink-0 flex-col">
+                  <div className="flex shrink-0 flex-row md:flex-col">
                     <button
                       type="button"
                       onClick={() => {
                         void onMoveRank(idx, 'up');
                       }}
                       disabled={idx === 0}
-                      className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
                       aria-label="Move up"
                     >
                       <ChevronUp className="h-3.5 w-3.5" />
@@ -258,7 +278,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                         void onMoveRank(idx, 'down');
                       }}
                       disabled={idx === ranks.length - 1}
-                      className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
                       aria-label="Move down"
                     >
                       <ChevronDown className="h-3.5 w-3.5" />
@@ -302,7 +322,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                         <button
                           type="button"
                           onClick={() => onSetEditingPositionsRankId(rank.id)}
-                          className="text-theme-text-muted hover:text-theme-accent-blue hover:bg-theme-accent-blue-muted rounded px-1.5 py-0.5 text-[10px] transition-colors"
+                          className="text-theme-text-muted hover:text-theme-accent-blue hover:bg-theme-accent-blue-muted touch-target-phone rounded px-1.5 py-0.5 text-[10px] transition-colors"
                         >
                           Edit
                         </button>
@@ -311,7 +331,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                       <button
                         type="button"
                         onClick={() => onSetEditingPositionsRankId(rank.id)}
-                        className="text-theme-text-muted hover:text-theme-accent-blue text-[11px] transition-colors"
+                        className="text-theme-text-muted hover:text-theme-accent-blue touch-target-phone text-[11px] transition-colors"
                       >
                         + Configure eligible positions
                       </button>
@@ -328,7 +348,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                       <button
                         type="button"
                         onClick={() => onSetEditingPositionsRankId(null)}
-                        className="text-theme-text-muted hover:text-theme-text-primary text-[10px]"
+                        className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone text-[10px]"
                       >
                         Done
                       </button>
@@ -340,10 +360,11 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                           <button
                             key={seat.value}
                             type="button"
+                            aria-pressed={isEligible}
                             onClick={() => {
                               void onToggleEligiblePosition(rank, seat.value);
                             }}
-                            className={`rounded-md px-2 py-1 text-[11px] font-medium transition-all ${
+                            className={`touch-target-phone rounded-md px-2 py-1 text-[11px] font-medium transition-all ${
                               isEligible
                                 ? 'bg-theme-accent-blue text-white shadow-sm dark:text-slate-950'
                                 : 'bg-theme-surface border-theme-surface-border text-theme-text-muted hover:text-theme-accent-blue border'
@@ -365,7 +386,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                     onSetAddingRank(false);
                     onSetRankForm({ rank_code: rank.rank_code, display_name: rank.display_name });
                   }}
-                  className="text-theme-text-muted hover:text-theme-accent-blue hover:bg-theme-accent-blue-muted rounded-sm p-1.5"
+                  className="text-theme-text-muted hover:text-theme-accent-blue hover:bg-theme-accent-blue-muted touch-target-phone rounded-sm p-1.5"
                   aria-label={`Edit ${rank.display_name}`}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -373,10 +394,10 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    void onDeleteRank(rank.id);
+                    void confirmDelete(rank);
                   }}
                   disabled={deletingRankId === rank.id}
-                  className="text-theme-text-muted rounded-sm p-1.5 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
+                  className="text-theme-text-muted touch-target-phone rounded-sm p-1.5 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
                   aria-label={`Delete ${rank.display_name}`}
                 >
                   {deletingRankId === rank.id ? (

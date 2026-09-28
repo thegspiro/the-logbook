@@ -394,7 +394,12 @@ export const ProspectiveMembersPage: React.FC = () => {
   }, [currentPipeline, currentApplicant]);
 
   const handleCreateApplicant = async () => {
-    if (!currentPipeline) return;
+    // Said rather than swallowed: this returned silently, so "Add to Pipeline"
+    // did nothing at all on an install with no pipeline (workflow review W16).
+    if (!currentPipeline) {
+      toast.error('Set up a pipeline before adding applicants.');
+      return;
+    }
     if (!newApplicant.first_name.trim() || !newApplicant.last_name.trim() || !newApplicant.email.trim()) {
       toast.error('First name, last name, and email are required');
       return;
@@ -488,6 +493,8 @@ export const ProspectiveMembersPage: React.FC = () => {
           </button>
           <button
             onClick={() => setShowAddModal(true)}
+            disabled={!currentPipeline}
+            title={currentPipeline ? undefined : 'Set up a pipeline first'}
             className="btn-primary flex items-center gap-2 px-3 text-sm sm:px-4"
           >
             <UserPlus className="h-4 w-4" />
@@ -1690,12 +1697,21 @@ export const ProspectiveMembersPage: React.FC = () => {
       {showAddModal && (
         <DialogPortal>
           <div className="modal-overlay z-50 flex items-center justify-center p-4">
-            <div ref={dialogRef3} className="modal-panel modal-panel-scroll w-full max-w-md">
+            <div
+              ref={dialogRef3}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="add-applicant-title"
+              className="modal-panel modal-panel-scroll w-full max-w-md"
+            >
               <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-                <h2 className="text-theme-text-primary text-lg font-bold">Add Applicant</h2>
+                <h2 id="add-applicant-title" className="text-theme-text-primary text-lg font-bold">
+                  Add Applicant
+                </h2>
                 <button
                   onClick={() => setShowAddModal(false)}
-                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  aria-label="Close"
+                  className="text-theme-text-muted hover:text-theme-text-primary btn-icon transition-colors"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -1703,8 +1719,11 @@ export const ProspectiveMembersPage: React.FC = () => {
               <div className="space-y-4 p-6">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="text-theme-text-muted mb-1 block text-sm">First Name *</label>
+                    <label htmlFor="new-applicant-first-name" className="text-theme-text-muted mb-1 block text-sm">
+                      First Name *
+                    </label>
                     <input
+                      id="new-applicant-first-name"
                       type="text"
                       value={newApplicant.first_name}
                       onChange={(e) => setNewApplicant({ ...newApplicant, first_name: e.target.value })}
@@ -1712,8 +1731,11 @@ export const ProspectiveMembersPage: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-theme-text-muted mb-1 block text-sm">Last Name *</label>
+                    <label htmlFor="new-applicant-last-name" className="text-theme-text-muted mb-1 block text-sm">
+                      Last Name *
+                    </label>
                     <input
+                      id="new-applicant-last-name"
                       type="text"
                       value={newApplicant.last_name}
                       onChange={(e) => setNewApplicant({ ...newApplicant, last_name: e.target.value })}
@@ -1722,8 +1744,11 @@ export const ProspectiveMembersPage: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="text-theme-text-muted mb-1 block text-sm">Email *</label>
+                  <label htmlFor="new-applicant-email" className="text-theme-text-muted mb-1 block text-sm">
+                    Email *
+                  </label>
                   <input
+                    id="new-applicant-email"
                     type="email"
                     value={newApplicant.email}
                     onChange={(e) => setNewApplicant({ ...newApplicant, email: e.target.value })}
@@ -1731,8 +1756,11 @@ export const ProspectiveMembersPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-theme-text-muted mb-1 block text-sm">Phone</label>
+                  <label htmlFor="new-applicant-phone" className="text-theme-text-muted mb-1 block text-sm">
+                    Phone
+                  </label>
                   <input
+                    id="new-applicant-phone"
                     type="tel"
                     value={newApplicant.phone}
                     onChange={(e) => setNewApplicant({ ...newApplicant, phone: e.target.value })}
@@ -1740,8 +1768,11 @@ export const ProspectiveMembersPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-theme-text-muted mb-1 block text-sm">Membership Type</label>
+                  <label htmlFor="new-applicant-membership-type" className="text-theme-text-muted mb-1 block text-sm">
+                    Membership Type
+                  </label>
                   <select
+                    id="new-applicant-membership-type"
                     value={newApplicant.target_membership_type}
                     onChange={(e) =>
                       setNewApplicant({

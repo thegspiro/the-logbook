@@ -36,6 +36,7 @@ vi.mock('../../../../services/api', () => ({
 
 vi.mock('../../../../hooks/useRanks', () => ({ invalidateRanksCache: vi.fn() }));
 
+import { ConfirmProvider } from '../../../../contexts/ConfirmContext';
 import RanksSection from './RanksSection';
 
 describe('RanksSection', () => {
@@ -47,7 +48,7 @@ describe('RanksSection', () => {
   it('says the ladder could not be loaded rather than showing an empty one', async () => {
     getRankLadder.mockRejectedValue(new Error('network'));
 
-    render(<RanksSection />);
+    render(<RanksSection />, { wrapper: ConfirmProvider });
 
     expect(await screen.findByRole('alert')).toHaveTextContent('The rank ladder could not be loaded.');
     // The distinction the whole fix turns on: not shown, not missing.
@@ -74,7 +75,7 @@ describe('RanksSection', () => {
         : Promise.reject(new Error('network'))
     );
 
-    render(<RanksSection />);
+    render(<RanksSection />, { wrapper: ConfirmProvider });
     expect(await screen.findByRole('alert')).toBeInTheDocument();
 
     reachable = true;
@@ -96,7 +97,7 @@ describe('RanksSection', () => {
       },
     ]);
 
-    render(<RanksSection />);
+    render(<RanksSection />, { wrapper: ConfirmProvider });
 
     expect(await screen.findByText('Captain')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -118,7 +119,7 @@ describe('RanksSection', () => {
     ]);
     validateRanks.mockRejectedValue(new Error('network'));
 
-    render(<RanksSection />);
+    render(<RanksSection />, { wrapper: ConfirmProvider });
 
     expect(await screen.findByText('Captain')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();

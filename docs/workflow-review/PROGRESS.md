@@ -35,11 +35,11 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W09 | Import members from a spreadsheet                                         | admin                  | `/members/import`                            | ✅     |
 | W10 | Find a member and read their profile, as a member (contact visibility)    | member, admin          | `/members`, `/members/:userId`               | ✅     |
 | W11 | Edit a member as an officer: details, clearing a field, status, history   | admin                  | `/members/admin/edit/:userId`                | ✅     |
-| W12 | Member settings: ranks, membership tiers, ID numbering, EVOC, visibility  | admin                  | `/members/admin/settings/*`                  | ⬜     |
-| W13 | Waivers                                                                   | admin                  | `/members/admin/waivers`                     | ⬜     |
-| W14 | Check-in station, badge scan, member labels and ID cards                  | admin                  | `/members/check-in-station`, `/members/scan` | ⬜     |
-| W15 | A member leaves: departure clearance, property return, archive, reinstate | admin                  | `/members/admin`                             | ⬜     |
-| W16 | Prospective member from application to converted member                   | membership_coordinator | `/prospective-members`                       | ⬜     |
+| W12 | Member settings: ranks, membership tiers, ID numbering, EVOC, visibility  | admin                  | `/members/admin/settings/*`                  | ✅     |
+| W13 | Waivers                                                                   | admin                  | `/members/admin/waivers`                     | ✅     |
+| W14 | Check-in station, badge scan, member labels and ID cards                  | admin                  | `/members/check-in-station`, `/members/scan` | ✅     |
+| W15 | A member leaves: departure clearance, property return, archive, reinstate | admin                  | `/members/admin`                             | ✅     |
+| W16 | Prospective member from application to converted member                   | membership_coordinator | `/prospective-members`                       | ✅     |
 | W17 | An applicant checks their status by link                                  | anonymous              | `/application-status/:token`                 | ⬜     |
 
 ## Tier 3 — Events
@@ -151,10 +151,16 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **Kiosk and check-in activities** — the member ID card's QR code is
-  unsigned JSON (`{type, id, membership_number, org}`) and the id is in every
-  profile URL; check whether any scanner treats a scanned code as proof of
-  identity rather than a lookup (W10).
+- **Inventory activities** — the Inventory Administration "Needs attention"
+  tile (backend summary: PPE replacement and below-par only) disagrees with
+  the list under it, which also carries clearances, requests and returns;
+  "Issued to members" counts pool issuances only, so permanently assigned
+  items read "0, held by 0 members" (W15).
+- **Facilities, reports and inventory activities** — four `DialogPanel`
+  dialogs have no `role` on the panel or a wrapper: the facilities lookup
+  editor, the report viewer, and InventoryScanModal's confirm and
+  custody-transfer dialogs (W14-2). The inventory pair sits inside another
+  modal; check its tests' dialog queries when changing it.
 - **Any run touching the app shell** — while a password change is required
   (first sign-in, admin reset), the shell and shared hooks fire ~17 requests
   the server refuses with 403, including `POST /errors/log`, so errors from
@@ -167,6 +173,86 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W16 — Prospective member to converted member — 2026-09-28
+
+Driven as: `membership_coordinator` at 1280×900 and 390×844, with `chief` as
+a required signer and `member2` refused on page and API. Held: a pipeline
+and stages are created from labelled forms and presets; a Required stage
+cannot be skipped; Advance records the stage history; the conversion wizard
+is honest about email being off. Fixed: W16-2 (LOW — with no pipeline, Add
+Applicant opened a form that silently did nothing), W16-3 (LOW — the Add
+Applicant dialog had no role, labels or named close), W16-4 (NIT). Flagged:
+W16-1 (HIGH — a Required Multi-Signer Approval stage is not enforced: the
+coordinator converted an applicant no officer had signed; the transfer
+endpoint never checks required stages, and no screen lets a signer record
+an approval). Gate: typecheck, lint and the full frontend suite clean (no
+Python changed).
+
+**The rotation stopped here.** W16-1 needs a decision about who may admit a
+member and when, which is an authorization and product decision, and the
+overnight routine's stop condition. Next, once decided: W17.
+
+### W15 — A member leaves — 2026-09-28
+
+Driven as: `admin` at 1280×900 and 390×844, with `member` reading the
+directory and `member2` refused on five APIs. Setup: one item created and
+assigned through the API (no inventory existed). Held: the drop warns, opens
+a clearance with a deadline and serves the property return report;
+completing the clearance auto-archives; Reactivate restores the number and
+records a second stint. Fixed: W15-1 (MED — Inventory Administration asked
+for `in_progress` clearances only, so a new `initiated` one never appeared,
+and rows named the member by raw id). Flagged: W15-2 (MED — no screen can
+resolve or complete a clearance, and an ordinary return leaves it open, so
+the member is never archived), W15-3 (LOW — a member dropped today cannot be
+reinstated until tomorrow), W15-4 (LOW — archived members are listed in
+every member's directory). Ian Two reinstated afterwards. Gate: typecheck,
+lint and the full frontend suite clean (no Python changed). Next: W16.
+
+### W14 — Check-in station, badge scan, labels and ID cards — 2026-09-28
+
+Driven as: `admin` at 1280×900 and 390×844, with `member2` refused on page
+and API. Held: NFC ID Cards activates; an officer issues a card and a
+duplicate serial in another format is refused; the station clocks in, guards
+a double tap, refuses unknown and suspended cards with reasons, and clocks
+out; badges print for selected members. The ID-card QR lead is closed: only
+officer-operated lookups read it, and the station and kiosk identify by NFC
+card. Fixed: W14-1 (MED — a badge printed for a member without a membership
+number carried a short id no scanner in the app resolved), W14-2 (LOW — the
+integration Activate/Connect dialog had no dialog role or name), W14-3 (NIT).
+Nothing flagged. Test card removed and NFC ID Cards deactivated afterwards.
+Gate: typecheck, lint and the full frontend suite clean (no Python changed).
+Next: W15.
+
+### W13 — Waivers — 2026-09-28
+
+Driven as: `admin` at 1280×900 and 390×844, with `member` reading their
+own profile and `member2` refused on page and API. Held: validation before
+anything is sent; training-plus-leave, training-only and permanent waivers
+stored as chosen; the member sees their own leave; deactivating asks first
+and takes the linked training waiver with it; the history lists every one.
+Fixed: W13-1 (MED — "Meeting Attendance" and "Shift Requirements" were
+separate choices, but a leave excuses both, so either box excused every
+shift), W13-2 (LOW — five unlabelled fields, filters by colour alone),
+W13-3 (LOW — a refused deactivation hid the server's reason), W13-4 (NIT).
+Flagged: W13-5 (LOW — whether meetings and shifts should be separable needs
+a column). All review waivers deactivated afterwards. Gate: typecheck, lint
+and the full frontend suite clean (no Python changed). Next: W14.
+
+### W12 — Member settings — 2026-09-28
+
+Driven as: `admin` at 1280×900 and 390×844, with `member` reading the
+directory and `membership_coordinator` and `member2` refused. Held: every
+section saves and survives a reload; contact visibility reaches the
+directory; ranks refuse a duplicate and a rank ten members hold; tiers
+refuse a colliding id, a held tier's removal and a ladder that would demote;
+EVOC refuses a duplicate level and asks before deleting; the coordinator is
+sent to the one section its grant opens. Fixed: W12-1 (LOW — the IDs screen
+showed "RV-150" where the server issues "RV-0150"), W12-2 (LOW — one tap
+deleted a rank permanently), W12-3 (LOW — rank form unlabelled, seat
+eligibility by colour alone), W12-4 (NIT). Nothing flagged. Settings put
+back as found. Gate: typecheck, lint and the full frontend suite clean (no
+Python changed). Next: W13.
 
 ### W11 — Edit a member as an officer — 2026-09-28
 

@@ -455,6 +455,7 @@ export const inventoryService = {
     clearances: Array<{
       id: string;
       user_id: string;
+      member_name?: string | null;
       status: string;
       items_outstanding: number;
       initiated_at: string;
@@ -467,6 +468,7 @@ export const inventoryService = {
       clearances: Array<{
         id: string;
         user_id: string;
+        member_name?: string | null;
         status: string;
         items_outstanding: number;
         initiated_at: string;

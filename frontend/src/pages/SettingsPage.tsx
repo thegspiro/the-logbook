@@ -1015,7 +1015,14 @@ export const SettingsPage: React.FC = () => {
                     Remove logo
                   </button>
                 )}
-                <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  aria-label="Department logo file"
+                  className="hidden"
+                  onChange={handleLogoUpload}
+                />
               </div>
             </div>
 

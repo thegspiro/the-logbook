@@ -521,7 +521,9 @@ describe('IntegrationsPage', () => {
       await screen.findByText('NFC ID Cards');
       await user.click(within(screen.getByTestId('integration-card-nfc-id-cards')).getByText('Activate'));
 
-      expect(screen.getByText('Activate NFC ID Cards')).toBeInTheDocument();
+      // Announced as a dialog, named by its heading: it had neither, so a
+      // screen reader read the page behind as live (workflow review W14).
+      expect(screen.getByRole('dialog', { name: 'Activate NFC ID Cards' })).toBeInTheDocument();
       expect(screen.getByTestId('connect-submit')).toHaveTextContent('Activate');
 
       await user.click(screen.getByTestId('connect-submit'));

@@ -403,7 +403,7 @@ const EvocLevelsSettingsSection: React.FC = () => {
                     onClick={() => {
                       void handleToggleActive(level);
                     }}
-                    className="text-theme-text-muted hover:text-theme-accent-blue hover:bg-theme-accent-blue-muted rounded-sm px-2 py-1.5 text-xs"
+                    className="text-theme-text-muted hover:text-theme-accent-blue hover:bg-theme-accent-blue-muted touch-target-phone rounded-sm px-2 py-1.5 text-xs"
                   >
                     {level.isActive ? 'Deactivate' : 'Activate'}
                   </button>
@@ -414,7 +414,7 @@ const EvocLevelsSettingsSection: React.FC = () => {
                       setAdding(false);
                       setForm(toForm(level));
                     }}
-                    className="text-theme-text-muted hover:text-theme-accent-blue hover:bg-theme-accent-blue-muted rounded-sm p-1.5"
+                    className="text-theme-text-muted hover:text-theme-accent-blue hover:bg-theme-accent-blue-muted touch-target-phone rounded-sm p-1.5"
                     aria-label={`Edit ${level.name}`}
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -425,7 +425,7 @@ const EvocLevelsSettingsSection: React.FC = () => {
                       void handleDelete(level);
                     }}
                     disabled={deletingId === level.id}
-                    className="text-theme-text-muted rounded-sm p-1.5 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
+                    className="text-theme-text-muted touch-target-phone rounded-sm p-1.5 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
                     aria-label={`Delete ${level.name}`}
                   >
                     {deletingId === level.id ? (

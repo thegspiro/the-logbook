@@ -360,7 +360,7 @@ export const PipelineSettingsPage: React.FC = () => {
       <div className="mb-6 flex items-center gap-4">
         <button
           onClick={() => void navigate('/prospective-members')}
-          className="text-theme-text-muted hover:text-theme-text-primary p-2 transition-colors"
+          className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone p-2 transition-colors"
           aria-label="Back to prospective members"
         >
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
@@ -385,7 +385,7 @@ export const PipelineSettingsPage: React.FC = () => {
                   onClick={() => {
                     void handleOpenTemplateGallery();
                   }}
-                  className="text-theme-text-muted hover:text-theme-text-primary p-1.5 transition-colors"
+                  className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone p-1.5 transition-colors"
                   aria-label="Browse templates"
                   title="Browse templates"
                 >
@@ -397,7 +397,7 @@ export const PipelineSettingsPage: React.FC = () => {
                     setPipelineDescription('');
                     setShowCreateModal(true);
                   }}
-                  className="text-theme-text-muted hover:text-theme-text-primary p-1.5 transition-colors"
+                  className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone p-1.5 transition-colors"
                   aria-label="Create pipeline"
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />

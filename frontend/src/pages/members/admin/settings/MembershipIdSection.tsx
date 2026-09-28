@@ -26,6 +26,15 @@ const DEFAULTS: MembershipIdSettings = {
   next_number: 1,
 };
 
+/**
+ * The ID the server will issue: prefix, then the number zero-padded to four
+ * digits. Mirrors `OrganizationService.generate_next_membership_id` and the
+ * `/organization/membership-id/preview` endpoint Add Member reads; this screen
+ * printed the bare number ("RV-150") while Add Member showed "RV-0150".
+ */
+const formatMembershipId = (prefix: string, nextNumber: number): string =>
+  `${prefix}${String(nextNumber).padStart(4, '0')}`;
+
 interface Props {
   /** The page's autosave — see the note in `ContactVisibilitySection`. */
   save: (saver: () => Promise<unknown>) => void;
@@ -106,7 +115,7 @@ const MembershipIdSection: React.FC<Props> = ({ save, saveDebounced }) => {
       <SettingsPanelHead
         title="Membership ID Number"
         description="Each member can be assigned a unique ID displayed on their profile."
-        meta={settings.enabled ? `Next: ${settings.prefix}${settings.next_number}` : undefined}
+        meta={settings.enabled ? `Next: ${formatMembershipId(settings.prefix, settings.next_number)}` : undefined}
       />
       <div className="space-y-3" aria-busy={loading}>
         <div className="border-theme-surface-border flex items-center justify-between border-b py-3">
@@ -142,7 +151,7 @@ const MembershipIdSection: React.FC<Props> = ({ save, saveDebounced }) => {
                 ID Prefix
               </label>
               <p className="text-theme-text-muted mb-2 text-xs">
-                Optional prefix (e.g. &quot;FD-&quot; produces FD-001)
+                Optional prefix (e.g. &quot;FD-&quot; produces FD-0001)
               </p>
               <input
                 id="membership-id-prefix"
