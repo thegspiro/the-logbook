@@ -476,6 +476,40 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
     mockModulesLoading.mockReturnValue(false);
   });
 
+  // A clearance opens as `initiated`; the hub asked for `in_progress` only,
+  // so a member dropped with property outstanding never reached this list, and
+  // a row that did named the member by raw id (workflow review W15).
+  it('lists an open departure clearance by the member it belongs to', async () => {
+    mockGetDepartureClearances.mockResolvedValue({
+      clearances: [
+        {
+          id: 'c1',
+          user_id: 'fa936425-862b-443e-853e-2f2637d7e878',
+          member_name: 'Ian Two',
+          status: 'initiated',
+          items_outstanding: 1,
+          initiated_at: '2026-09-28T14:30:53Z',
+          return_deadline: '2026-10-12T14:30:53Z',
+        },
+        {
+          id: 'c2',
+          user_id: 'u-done',
+          member_name: 'Done Member',
+          status: 'completed',
+          items_outstanding: 0,
+          initiated_at: '2026-09-01T00:00:00Z',
+        },
+      ],
+      total: 2,
+    });
+    renderWithRouter(<InventoryAdminHub />);
+
+    expect(await screen.findByText(/Ian Two · 1 outstanding/)).toBeInTheDocument();
+    expect(screen.queryByText(/Done Member/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/fa936425-862b/)).not.toBeInTheDocument();
+    expect(mockGetDepartureClearances).toHaveBeenCalledWith();
+  });
+
   it('opens each supply line on the catalogue filtered to it', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await screen.findByText('PPE & Turnout Gear');

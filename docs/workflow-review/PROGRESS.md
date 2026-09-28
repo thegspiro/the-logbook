@@ -38,7 +38,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W12 | Member settings: ranks, membership tiers, ID numbering, EVOC, visibility  | admin                  | `/members/admin/settings/*`                  | ✅     |
 | W13 | Waivers                                                                   | admin                  | `/members/admin/waivers`                     | ✅     |
 | W14 | Check-in station, badge scan, member labels and ID cards                  | admin                  | `/members/check-in-station`, `/members/scan` | ✅     |
-| W15 | A member leaves: departure clearance, property return, archive, reinstate | admin                  | `/members/admin`                             | ⬜     |
+| W15 | A member leaves: departure clearance, property return, archive, reinstate | admin                  | `/members/admin`                             | ✅     |
 | W16 | Prospective member from application to converted member                   | membership_coordinator | `/prospective-members`                       | ⬜     |
 | W17 | An applicant checks their status by link                                  | anonymous              | `/application-status/:token`                 | ⬜     |
 
@@ -151,6 +151,11 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
+- **Inventory activities** — the Inventory Administration "Needs attention"
+  tile (backend summary: PPE replacement and below-par only) disagrees with
+  the list under it, which also carries clearances, requests and returns;
+  "Issued to members" counts pool issuances only, so permanently assigned
+  items read "0, held by 0 members" (W15).
 - **Facilities, reports and inventory activities** — four `DialogPanel`
   dialogs have no `role` on the panel or a wrapper: the facilities lookup
   editor, the report viewer, and InventoryScanModal's confirm and
@@ -168,6 +173,22 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W15 — A member leaves — 2026-09-28
+
+Driven as: `admin` at 1280×900 and 390×844, with `member` reading the
+directory and `member2` refused on five APIs. Setup: one item created and
+assigned through the API (no inventory existed). Held: the drop warns, opens
+a clearance with a deadline and serves the property return report;
+completing the clearance auto-archives; Reactivate restores the number and
+records a second stint. Fixed: W15-1 (MED — Inventory Administration asked
+for `in_progress` clearances only, so a new `initiated` one never appeared,
+and rows named the member by raw id). Flagged: W15-2 (MED — no screen can
+resolve or complete a clearance, and an ordinary return leaves it open, so
+the member is never archived), W15-3 (LOW — a member dropped today cannot be
+reinstated until tomorrow), W15-4 (LOW — archived members are listed in
+every member's directory). Ian Two reinstated afterwards. Gate: typecheck,
+lint and the full frontend suite clean (no Python changed). Next: W16.
 
 ### W14 — Check-in station, badge scan, labels and ID cards — 2026-09-28
 
