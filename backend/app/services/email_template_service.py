@@ -542,6 +542,38 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Link to the submission in the Review tab",
         },
     ],
+    "equipment_request_update": [
+        {"name": "member_name", "description": "Requesting member's name"},
+        {"name": "item_name", "description": "The item the member asked for"},
+        {
+            "name": "status_label",
+            "description": "What happened, in lower case: approved, declined or issued",
+        },
+        {
+            "name": "status_message",
+            "description": "One sentence saying what happened and what comes next",
+        },
+        {
+            "name": "details_html",
+            "description": (
+                "Panel listing the size, quantity and how it was issued, "
+                "showing only the ones that apply"
+            ),
+        },
+        {
+            "name": "details_text",
+            "description": "Plain-text version of the details panel",
+        },
+        {
+            "name": "notes_html",
+            "description": "The quartermaster's note as a paragraph, empty if none",
+        },
+        {
+            "name": "review_notes",
+            "description": "The quartermaster's note as plain text, empty if none",
+        },
+        {"name": "requests_url", "description": "Link to My Equipment"},
+    ],
     "ballot_eligibility_summary": [
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "election_title", "description": "Title of the election"},
@@ -1101,6 +1133,33 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "suggestion_url": "https://example.org/suggestions?tab=review&id=sample",
         }
     ),
+    "equipment_request_update": _sample(
+        {
+            "member_name": "John Doe",
+            "item_name": "Short Sleeve",
+            "status_label": "declined",
+            "status_message": (
+                "The quartermaster declined your request for Short Sleeve."
+            ),
+            "details_html": (
+                '<table class="facts" role="presentation" cellpadding="0" '
+                'cellspacing="0"><tr><td class="fact" colspan="2">'
+                '<p class="fact-label">Size</p>'
+                '<p class="fact-value">XS</p></td></tr></table>'
+            ),
+            "details_text": "Size: XS",
+            "notes_html": (
+                '<p style="white-space:pre-line;"><strong>From the '
+                "quartermaster:</strong> We don't carry XS; one is on order "
+                "for next month.</p>"
+            ),
+            "review_notes": (
+                "From the quartermaster: We don't carry XS; one is on order "
+                "for next month."
+            ),
+            "requests_url": "https://example.org/inventory/my-equipment",
+        }
+    ),
     "ballot_eligibility_summary": _sample(
         {
             "recipient_name": "Secretary Robert Johnson",
@@ -1245,6 +1304,7 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "duplicate_application": {"applicant_name": "full"},
     "application_withdrawn": {"applicant_name": "full"},
     "suggestion_submitted": {"recipient_name": "full"},
+    "equipment_request_update": {"member_name": "full"},
     "shift_assignment": {"recipient_name": "full"},
     "shift_reminder": {"recipient_name": "first"},
     "storefront_order_confirmation": {"first_name": "first", "customer_name": "full"},
@@ -2155,6 +2215,38 @@ Review it: {{suggestion_url}}
 {{footer_text}}"""
 
 DEFAULT_SUGGESTION_SUBMITTED_SUBJECT = "New submission in the {{box_name}} box"
+
+# Sent to a member when the quartermaster approves, declines or issues their
+# equipment request. The facts panel and the quartermaster's note are built by
+# the sender, so a request with no size or no note leaves nothing behind
+# rather than a label followed by empty space.
+DEFAULT_EQUIPMENT_REQUEST_UPDATE_HTML = build_shell(
+    "Equipment Request Update",
+    """        <p>Hello {{member_name}},</p>
+        <p>{{status_message}}</p>
+        {{details_html}}
+        {{notes_html}}
+""" + action("{{requests_url}}", "View My Requests"),
+    accent=ACCENT_BLUE,
+    chip="Equipment request",
+)
+
+DEFAULT_EQUIPMENT_REQUEST_UPDATE_TEXT = """Equipment Request Update
+
+Hello {{member_name}},
+
+{{status_message}}
+
+{{details_text}}
+{{review_notes}}
+
+View your requests: {{requests_url}}
+
+{{footer_text}}"""
+
+DEFAULT_EQUIPMENT_REQUEST_UPDATE_SUBJECT = (
+    "Your equipment request was {{status_label}}: {{item_name}}"
+)
 
 # Default ballot notification email
 DEFAULT_BALLOT_NOTIFICATION_HTML = build_shell(
@@ -3461,6 +3553,7 @@ class EmailTemplateService:
         "footer_html",
         "details_html",
         "message_html",
+        "notes_html",
         "apparatus_html",
         "roster_html",
         "checklist_html",
@@ -3777,6 +3870,18 @@ class EmailTemplateService:
             "description": (
                 "Sent to each reviewer of a suggestion box when a member "
                 "submits to it. Carries a link only, never the submission."
+            ),
+        },
+        {
+            "type": EmailTemplateType.EQUIPMENT_REQUEST_UPDATE,
+            "name": "Equipment Request Update",
+            "subject": DEFAULT_EQUIPMENT_REQUEST_UPDATE_SUBJECT,
+            "html": DEFAULT_EQUIPMENT_REQUEST_UPDATE_HTML,
+            "text": DEFAULT_EQUIPMENT_REQUEST_UPDATE_TEXT,
+            "description": (
+                "Sent to a member when the quartermaster approves, declines "
+                "or issues their equipment request, with the quartermaster's "
+                "note if one was left."
             ),
         },
         {

@@ -2199,6 +2199,44 @@ class EmailService:
 
         return success_count > 0
 
+    async def send_equipment_request_update_email(
+        self,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell one member their equipment request was approved, declined or
+        issued. *context* carries the ``equipment_request_update`` template
+        variables, built by ``equipment_request_notifications``.
+        """
+        from app.services.email_template_service import (
+            DEFAULT_EQUIPMENT_REQUEST_UPDATE_HTML,
+            DEFAULT_EQUIPMENT_REQUEST_UPDATE_SUBJECT,
+            DEFAULT_EQUIPMENT_REQUEST_UPDATE_TEXT,
+        )
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.EQUIPMENT_REQUEST_UPDATE,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_EQUIPMENT_REQUEST_UPDATE_SUBJECT,
+            default_html=DEFAULT_EQUIPMENT_REQUEST_UPDATE_HTML,
+            default_text=DEFAULT_EQUIPMENT_REQUEST_UPDATE_TEXT,
+        )
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.EQUIPMENT_REQUEST_UPDATE.value,
+        )
+
+        return success_count > 0
+
     async def send_duplicate_application_email(
         self,
         to_email: str,

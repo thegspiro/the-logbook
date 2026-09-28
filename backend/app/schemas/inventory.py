@@ -1753,6 +1753,12 @@ class EquipmentRequestReview(BaseModel):
 
     status: ReviewStatusLiteral = Field(..., description="approved or denied")
     review_notes: Optional[FreeText] = None
+    # "Approve & fulfill now" approves and issues seconds apart; it passes
+    # False so the member hears once, when the item is issued, rather than
+    # twice. Every other caller keeps the default.
+    notify_member: bool = Field(
+        True, description="Tell the requester about this decision"
+    )
 
 
 class EquipmentRequestFulfill(BaseModel):

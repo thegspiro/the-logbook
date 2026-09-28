@@ -99,6 +99,7 @@ class TestEnforcedTriggers:
             "event_reminder",
             "training_expiry",
             "suggestion_submitted",
+            "equipment_request_update",
         }
 
     @pytest.mark.parametrize(

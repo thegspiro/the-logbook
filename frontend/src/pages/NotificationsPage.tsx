@@ -23,6 +23,7 @@ import {
   Wrench,
   CheckCheck,
   Lightbulb,
+  PackageCheck,
 } from 'lucide-react';
 import { Breadcrumbs, SkeletonPage } from '../components/ux';
 import { useAuthStore } from '../stores/authStore';
@@ -72,6 +73,11 @@ const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; la
     color: 'text-amber-700 dark:text-amber-400',
     label: 'Suggestion Submitted',
   },
+  equipment_request_update: {
+    icon: <PackageCheck className="h-5 w-5" />,
+    color: 'text-amber-700 dark:text-amber-400',
+    label: 'Equipment Request Update',
+  },
 };
 
 // Dropdown options for the create modal.
@@ -96,6 +102,12 @@ const TRIGGER_OPTIONS = [
     effect:
       'Tells a suggestion box’s reviewers, and anyone the box notifies, that a submission arrived. Disabling it stops those notices; replies and status updates still go out.',
   },
+  {
+    label: 'Equipment Request Update',
+    value: 'equipment_request_update',
+    effect:
+      'Tells a member when the quartermaster approves, declines or issues their equipment request, with any note left for them. Disabling it stops the notice; the request’s status still shows on My Equipment.',
+  },
 ];
 
 // Category mapping from trigger to category
@@ -107,6 +119,7 @@ const TRIGGER_CATEGORY_MAP: Record<string, string> = {
   maintenance_due: 'maintenance',
   form_submitted: 'general',
   suggestion_submitted: 'general',
+  equipment_request_update: 'general',
 };
 
 function getTriggerDisplay(trigger: string) {
