@@ -34,6 +34,8 @@ import type {
   BulkActionResult,
   ConvertApplicantRequest,
   ConvertApplicantResponse,
+  PendingSignOff,
+  SignOffResult,
   ApplicantDocument,
   WithdrawApplicantRequest,
   ReactivateApplicantRequest,
@@ -1250,6 +1252,28 @@ export const eventLinkService = {
 
   async unlinkEvent(applicantId: string, linkId: string): Promise<void> {
     await api.delete(`/prospective-members/prospects/${applicantId}/events/${linkId}`);
+  },
+};
+
+/**
+ * Multi-Signer Approval sign-offs, for the officers a stage names.
+ *
+ * Neither call needs prospective_members access: the server lists and
+ * accepts only the stages asking for a role the caller holds.
+ */
+export const signOffService = {
+  async listMine(): Promise<PendingSignOff[]> {
+    const response = await api.get<PendingSignOff[]>('/prospective-members/my-sign-offs');
+    return response.data;
+  },
+
+  async sign(applicantId: string, stepId: string, role: string, notes?: string): Promise<SignOffResult> {
+    const response = await api.post<SignOffResult>(`/prospective-members/prospects/${applicantId}/approve-step`, {
+      step_id: stepId,
+      role,
+      notes,
+    });
+    return response.data;
   },
 };
 

@@ -315,6 +315,88 @@ def meeting_stage_names_an_event(config: Dict[str, Any]) -> bool:
     return bool(config.get("linked_event_type") or config.get("linked_event_id"))
 
 
+def _incomplete_required_steps(
+    prospect: ProspectiveMember, completing_step_id: Optional[str] = None
+) -> List[str]:
+    """Names of the prospect's required stages not yet completed, in order.
+
+    Conversion is where the department admits the applicant, so every stage
+    it marked Required has to be finished first. Nothing checked this: a
+    Multi-Signer Approval stage requiring the Chief and the President could
+    be converted past by the coordinator alone, with neither signature on
+    file (workflow review W16-1).
+
+    A skipped stage does not count. Skip already refuses a required stage;
+    one skipped while it was optional and made required afterwards has to
+    be completed like any other. ``completing_step_id`` is the stage the
+    conversion itself finishes, which is graded separately: the automatic
+    path converts before it records the final stage's completion, and a
+    manual Convert is how a coordinator finishes the stage the applicant is
+    on (see ``_do_transfer``).
+
+    ``required`` is nullable; a NULL reads as not required, which is how
+    ``skip_current_step`` reads it too.
+    """
+    steps = prospect.pipeline.steps if prospect.pipeline else []
+    completed = {
+        str(p.step_id)
+        for p in (prospect.step_progress or [])
+        if p.status == StepProgressStatus.COMPLETED
+    }
+    return [
+        step.name
+        for step in sorted(steps, key=lambda s: s.sort_order)
+        if step.required
+        and str(step.id) not in completed
+        and str(step.id) != str(completing_step_id)
+    ]
+
+
+def _required_steps_refusal(names: List[str]) -> str:
+    listed = ", ".join(f"'{n}'" for n in names)
+    noun = "stage is" if len(names) == 1 else "stages are"
+    return (
+        f"This applicant cannot be converted yet: the required {noun} not "
+        f"complete: {listed}."
+    )
+
+
+def _approval_roles_held(positions: Iterable[Any]) -> set[str]:
+    """Every approval-role name the holder of these positions answers to.
+
+    Casefolded. A position is known by its slug and its name; stage presets
+    store office keys ("chief") while the matching default position is
+    slugged differently ("fire_chief"), so the office catalog is resolved
+    too and a Fire Chief is recognized as holding the "chief" role. Shared by
+    the sign-off itself and the list of sign-offs waiting on a member, so the
+    two cannot disagree about who may sign.
+    """
+    positions = list(positions)
+    roles = {
+        value.casefold()
+        for position in positions
+        for value in (position.slug, position.name)
+        if value
+    }
+    slugs = {position.slug.casefold() for position in positions if position.slug}
+    for office in OFFICE_CATALOG:
+        office_slugs = {
+            str(slug).casefold() for slug in office.get("position_slugs", [])
+        }
+        if slugs & office_slugs:
+            roles.add(str(office["key"]).casefold())
+            roles.add(str(office["label"]).casefold())
+    return roles
+
+
+def _approval_role_label(role: str) -> str:
+    """The office's display label for a stage's stored approver key."""
+    for office in OFFICE_CATALOG:
+        if str(office["key"]).casefold() == role.casefold():
+            return str(office["label"])
+    return role.replace("_", " ").title()
+
+
 def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
     """Raise unless the prospect's status permits pipeline movement.
 
@@ -2237,26 +2319,7 @@ class MembershipPipelineService:
         if signer is None:
             raise ValueError("The approval signer is not an active organization member")
 
-        signer_roles = {
-            value.casefold()
-            for position in signer.positions
-            for value in (position.slug, position.name)
-            if value
-        }
-        # Stage presets store office keys ("chief"), while the matching
-        # default position is slugged differently ("fire_chief"). Resolve
-        # through the office catalog so a Fire Chief is recognized as
-        # holding the "chief" approval role.
-        signer_slugs = {
-            position.slug.casefold() for position in signer.positions if position.slug
-        }
-        for office in OFFICE_CATALOG:
-            office_slugs = {
-                str(slug).casefold() for slug in office.get("position_slugs", [])
-            }
-            if signer_slugs & office_slugs:
-                signer_roles.add(str(office["key"]).casefold())
-                signer_roles.add(str(office["label"]).casefold())
+        signer_roles = _approval_roles_held(signer.positions)
 
         authorized: List[Dict[str, str]] = []
         for approval in approvals:
@@ -2348,6 +2411,108 @@ class MembershipPipelineService:
         )
         await self.db.commit()
         return await self.get_prospect(prospect_id, organization_id)
+
+    async def list_pending_sign_offs(
+        self, organization_id: str, user_id: str
+    ) -> List[Dict[str, Any]]:
+        """Multi-Signer Approval stages waiting on this member's signature.
+
+        Active applicants whose current stage is a multi-approval stage that
+        asks for a role this member holds and has not yet been signed for
+        that role. The signers a stage names (the Chief, the President) rarely
+        hold prospective_members access, so this is how they find what is
+        waiting on them; ``record_step_approval`` is how they sign.
+
+        Deliberately minimal — name, pipeline, stage and roles — for the same
+        reason /approve-step returns no prospect record: holding an approval
+        role is not a grant to read the applicant's file.
+        """
+        result = await self.db.execute(
+            select(User)
+            .where(
+                User.id == user_id,
+                User.organization_id == organization_id,
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+            )
+            .options(selectinload(User.positions))
+        )
+        member = result.scalar_one_or_none()
+        if member is None:
+            return []
+        held = _approval_roles_held(member.positions)
+        if not held:
+            return []
+
+        rows = await self.db.execute(
+            select(ProspectiveMember, MembershipPipelineStep)
+            .join(
+                MembershipPipelineStep,
+                MembershipPipelineStep.id == ProspectiveMember.current_step_id,
+            )
+            .where(
+                ProspectiveMember.organization_id == organization_id,
+                ProspectiveMember.status == ProspectStatus.ACTIVE,
+                MembershipPipelineStep.step_type == PipelineStepType.MULTI_APPROVAL,
+            )
+            .options(
+                selectinload(ProspectiveMember.step_progress),
+                selectinload(ProspectiveMember.pipeline),
+            )
+            .order_by(ProspectiveMember.created_at)
+        )
+
+        waiting: List[Dict[str, Any]] = []
+        for prospect, step in rows.all():
+            required = [
+                str(r) for r in (step.config or {}).get("required_approvers") or []
+            ]
+            progress = next(
+                (p for p in prospect.step_progress if str(p.step_id) == str(step.id)),
+                None,
+            )
+            stored = (
+                progress.action_result
+                if progress and isinstance(progress.action_result, dict)
+                else {}
+            )
+            signed = {
+                str(a.get("role", "")).casefold()
+                for a in stored.get("approvals") or []
+                if isinstance(a, dict)
+            }
+            to_sign = [
+                r
+                for r in required
+                if r.casefold() in held and r.casefold() not in signed
+            ]
+            if not to_sign:
+                continue
+            waiting.append(
+                {
+                    "prospect_id": str(prospect.id),
+                    "first_name": prospect.first_name,
+                    "last_name": prospect.last_name,
+                    "pipeline_name": (
+                        prospect.pipeline.name if prospect.pipeline else None
+                    ),
+                    "step_id": str(step.id),
+                    "step_name": step.name,
+                    "step_description": step.description,
+                    "roles_to_sign": [
+                        {"role": r, "label": _approval_role_label(r)} for r in to_sign
+                    ],
+                    "required_roles": [
+                        {
+                            "role": r,
+                            "label": _approval_role_label(r),
+                            "signed": r.casefold() in signed,
+                        }
+                        for r in required
+                    ],
+                }
+            )
+        return waiting
 
     async def record_step_approval(
         self,
@@ -2533,6 +2698,14 @@ class MembershipPipelineService:
         # sent saying so. Ordering it first leaves nothing to undo.
         transfer: Optional[Dict[str, Any]] = None
         if will_auto_transfer:
+            # The final stage passed its own gate above; the others must be
+            # complete too (see _incomplete_required_steps).
+            incomplete = _incomplete_required_steps(
+                prospect, completing_step_id=step_id
+            )
+            if incomplete:
+                raise ValueError(_required_steps_refusal(incomplete))
+
             from app.services.email_service import welcome_email_can_send
 
             # The generated password reaches the new member only by the welcome
@@ -2541,6 +2714,7 @@ class MembershipPipelineService:
             transfer = await self._do_transfer(
                 prospect,
                 completed_by,
+                completing_step_id=step_id,
                 send_welcome_email=await welcome_email_can_send(
                     self.db, organization_id
                 ),
@@ -3658,6 +3832,7 @@ class MembershipPipelineService:
         membership_type: Optional[str] = None,
         initial_password: Optional[str] = None,
         defer_welcome_email: bool = False,
+        completing_step_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer.
 
@@ -3692,6 +3867,38 @@ class MembershipPipelineService:
                 "success": False,
                 "message": f"This applicant {election_block}",
             }
+
+        # Every required stage has to be finished before the department admits
+        # the applicant (see _incomplete_required_steps). The automatic path
+        # names the stage whose completion triggered it, which has already
+        # passed its gate. The manual Convert *is* how a coordinator finishes
+        # the stage the applicant is on, so that stage is graded here with the
+        # same gate Advance uses — a Multi-Signer Approval stage refuses until
+        # every required role has signed — and the rest must be complete.
+        if completing_step_id is None and prospect.current_step_id:
+            current = next(
+                (
+                    s
+                    for s in (prospect.pipeline.steps if prospect.pipeline else [])
+                    if str(s.id) == str(prospect.current_step_id)
+                ),
+                None,
+            )
+            if current is not None and current.required:
+                try:
+                    await self._validate_step_completion(prospect, current, None)
+                except ValueError as exc:
+                    return {
+                        "success": False,
+                        "message": (
+                            "This applicant cannot be converted yet: "
+                            f"'{current.name}' is not complete. {exc}"
+                        ),
+                    }
+            completing_step_id = str(prospect.current_step_id)
+        incomplete = _incomplete_required_steps(prospect, completing_step_id)
+        if incomplete:
+            return {"success": False, "message": _required_steps_refusal(incomplete)}
 
         # A rank that matches nothing the department has configured resolves to
         # no eligible seats and no default permissions, so the new member is

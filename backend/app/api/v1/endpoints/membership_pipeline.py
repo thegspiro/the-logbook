@@ -71,6 +71,7 @@ from app.schemas.membership_pipeline import (
     KanbanBoardResponse,
     KanbanColumnResponse,
     PaginatedProspectListResponse,
+    PendingSignOffResponse,
     PipelineCreate,
     PipelineListResponse,
     PipelineResponse,
@@ -1191,6 +1192,26 @@ async def complete_step(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
     return prospect
+
+
+@router.get("/my-sign-offs", response_model=list[PendingSignOffResponse])
+async def list_my_sign_offs(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Multi-Signer Approval stages waiting on the caller's own signature.
+
+    Not permission-gated, like /approve-step: the roles a stage asks for
+    (chief, president, ...) are rarely held by prospective_members.manage
+    holders, and the list only ever contains stages asking for a role the
+    caller holds. Each entry carries the applicant's name and stage, not
+    their record.
+    """
+    service = MembershipPipelineService(db)
+    return await service.list_pending_sign_offs(
+        str(current_user.organization_id), str(current_user.id)
+    )
 
 
 @router.post(

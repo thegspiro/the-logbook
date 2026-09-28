@@ -274,6 +274,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'prospective_members',
       },
       {
+        path: '/prospective-members/sign-offs',
+        label: 'Sign-offs',
+        module: 'prospective_members',
+        note: 'Officers a Multi-Signer Approval stage names approve applicants here',
+      },
+      {
         path: '/prospective-members/print-labels',
         label: 'Print prospect labels',
         permission: 'prospective_members.view',

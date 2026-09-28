@@ -37,7 +37,7 @@
 
 ## Findings
 
-### W16-1 — HIGH — A required multi-signer stage is not enforced: a coordinator converted an applicant no officer had signed — FLAGGED
+### W16-1 — HIGH — A required multi-signer stage is not enforced: a coordinator converted an applicant no officer had signed — ✅ FIXED (owner decision)
 
 **Did:** with Pat at **Officer Sign-Off**, a Required Multi-Signer Approval stage configured as "Require Chief and President to both approve", clicked **Convert** as `membership_coordinator` and finished the wizard.
 **Saw:**
@@ -59,6 +59,38 @@
 - Should signers get a sign-off control, and where?
 
 That is an authorization and product decision, which is this rotation's stop condition. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+
+**Decided by the owner:** "Block conversion until required stages complete, and add signer sign-off."
+
+**Fix:**
+
+- **Conversion waits for every Required stage** (`membership_pipeline_service.py`, `_do_transfer` and `complete_step`):
+  - A Required stage must be COMPLETED; a skipped one does not count. Optional stages never hold conversion.
+  - A manual **Convert** grades the applicant's current stage as if completing it, so an unsigned Multi-Signer Approval stage is refused with "Approval still needed from: …". A Required stage still ahead of the applicant is refused by name.
+  - The automatic transfer after a final stage refuses the same way, so an applicant placed straight onto the final stage cannot skip the ones before it.
+  - The Election Vote gate's own message still comes first.
+- **Signers can find and sign their sign-offs:**
+  - `GET /prospective-members/my-sign-offs` lists applicants at a Multi-Signer Approval stage that still need a role the caller holds. It returns the name and stage only: holding an approval role is not a grant to read the applicant's file.
+  - A **Sign-offs** page (`/prospective-members/sign-offs`) shows who has signed and offers "Sign as {role}", with an optional note, through the existing `approve-step`.
+  - The dashboard's Needs-you list carries "{Name} is waiting on your sign-off".
+  - The office catalog's slugs now count as the role, so a member holding the `fire_chief` position signs as `chief`.
+- **The coordinator's drawer shows who has signed.** Its Approval Status read the required signers off the last history entry, where they are never stored, so it said "No approval data recorded yet" after both had signed. It now reads the stage's configuration and that stage's own progress row (`ApplicantDetailDrawer.tsx`).
+
+**Re-driven:**
+
+- As `membership_coordinator`, **Convert** on an unsigned applicant: refused, naming the Chief and the President.
+- As `chief`: the dashboard row → Sign-offs → **Sign as Chief** → "still needs other signatures".
+- As the president: signed → "Officer Sign-Off is complete".
+- As `member2`: "Nothing is waiting on you".
+- As `membership_coordinator`: **Convert** succeeded.
+- A second applicant signed by the Chief only: the coordinator's drawer reads "Chief — Approved, President — Pending".
+- Sign-offs at 390px: no sideways scroll.
+
+**Tests:**
+
+- `backend/tests/test_prospect_conversion_gate.py` (integration, 8 cases): 6 failed against the old service.
+- `SignOffsPage.test.tsx`, the two new `Dashboard.test.tsx` cases, and the new `ApplicantDetailDrawer.test.tsx` case, which failed against the old drawer.
+- `test_election_vote_stage_gate.py` marks its trailing Onboarding stage optional, so that test stays on the election gate.
 
 ### W16-2 — LOW — With no pipeline, Add Applicant took the whole form and then did nothing — ✅ FIXED
 
@@ -108,7 +140,7 @@ Seen and left:
 | Section                 | Result                                                                                        |
 | ----------------------- | --------------------------------------------------------------------------------------------- |
 | 1. The job gets done    | ✅ pipeline → stages → applicant → advance → convert; W16-2 fixed                             |
-| 2. The right people     | ❌ W16-1: a required officer sign-off is not enforced; `member2` correctly refused            |
+| 2. The right people     | ✅ after W16-1: conversion waits for required sign-offs; `member2` correctly refused          |
 | 3. Wrong input, failure | ✅ Required stage cannot be skipped; W16-2                                                    |
 | 4. Browser signals      | ✅ none                                                                                       |
 | 5. Coming back to it    | ✅ stage history and conversion read back                                                     |
@@ -118,6 +150,8 @@ Seen and left:
 
 ## Completion gate
 
+Initial run (W16-2 to W16-4):
+
 | Check                    | Result                                                                            |
 | ------------------------ | --------------------------------------------------------------------------------- |
 | npm run typecheck        | ✅ clean                                                                          |
@@ -126,3 +160,15 @@ Seen and left:
 | black --check            | n/a                                                                               |
 | frontend tests (touched) | ✅ full suite: 607 files, 8,258 tests. Both new cases failed against the old page |
 | backend tests (touched)  | n/a                                                                               |
+
+W16-1 fix:
+
+| Check                            | Result                                                                                      |
+| -------------------------------- | ------------------------------------------------------------------------------------------- |
+| npm run typecheck                | ✅ clean                                                                                    |
+| npm run lint                     | ✅ clean                                                                                    |
+| flake8 / black / isort (changed) | ✅ clean                                                                                    |
+| frontend tests                   | ✅ full suite: 609 files, 8,265 tests                                                       |
+| backend tests                    | ✅ 2,260 pipeline, prospect, membership, election, endpoint, route and permission tests     |
+| new DB tests are `integration`   | ✅ none collected by the unit job's marker filter                                           |
+| route registries (pitfall 30a)   | ✅ `check_route_permissions.py --strict` clean; testing registry and mobile inventory added |
