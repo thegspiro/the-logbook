@@ -211,6 +211,7 @@ describe('MyEquipmentPage', () => {
       expect(mockGetEquipmentRequests).toHaveBeenCalledWith({ mine_only: true });
       expect(mockGetReturnRequests).toHaveBeenCalledWith({ mine_only: true });
     });
+    expect(await screen.findByText(/You haven.t requested any equipment or returns yet/)).toBeInTheDocument();
   });
 
   // The request form itself moved to RequestEquipmentModal, which owns the
@@ -254,5 +255,37 @@ describe('MyEquipmentPage', () => {
 
     // Stored lowercase, shown the way the rest of the app writes it.
     expect(await screen.findByText(/Size 3XL/)).toBeInTheDocument();
+    // The workflow value is not shown raw to the member.
+    expect(screen.getByText('Awaiting review')).toBeInTheDocument();
+    expect(screen.queryByText('pending')).not.toBeInTheDocument();
+  });
+
+  it("shows the quartermaster's note on a decided request", async () => {
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [
+        {
+          id: 'req-2',
+          requester_id: 'me',
+          item_name: 'Short Sleeve',
+          quantity: 1,
+          request_type: 'issuance',
+          requested_duration: 'ongoing',
+          requested_size: 'xs',
+          priority: 'normal',
+          status: 'denied',
+          review_notes: 'We do not carry XS; ordered one for next month.',
+          created_at: '2026-03-01T00:00:00Z',
+          updated_at: '2026-03-02T00:00:00Z',
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<MyEquipmentPage />);
+    await screen.findByRole('heading', { name: 'My Issued Gear' });
+
+    await user.click(screen.getByRole('button', { name: /My Requests/ }));
+
+    expect(await screen.findByText('Declined')).toBeInTheDocument();
+    expect(screen.getByText('Quartermaster: We do not carry XS; ordered one for next month.')).toBeInTheDocument();
   });
 });

@@ -32,7 +32,7 @@ import type {
   EquipmentRequestItem,
   ReturnRequestItem,
 } from '../types';
-import { getConditionColor, REQUEST_STATUS_BADGES, sizeLabel } from '../types';
+import { EQUIPMENT_REQUEST_STATUS_LABELS, getConditionColor, REQUEST_STATUS_BADGES, sizeLabel } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -340,7 +340,7 @@ const MyEquipmentPage: React.FC = () => {
           <div className="card-secondary space-y-4 p-4">
             <h2 className="text-theme-text-primary text-lg font-semibold">My Requests</h2>
             {equipRequests.length === 0 && returnRequests.length === 0 && (
-              <p className="text-theme-text-muted text-sm">No requests found.</p>
+              <p className="text-theme-text-muted text-sm">You haven&rsquo;t requested any equipment or returns yet.</p>
             )}
             {equipRequests.length > 0 && (
               <div>
@@ -360,11 +360,18 @@ const MyEquipmentPage: React.FC = () => {
                           {r.requested_duration === 'ongoing' ? 'Ongoing need' : 'Temporary need'} &middot;{' '}
                           {formatDate(r.created_at, tz)}
                         </span>
+                        {/* The review dialog tells the quartermaster this note is
+                            shown to the member; this is the only place it is. A
+                            decline without its reason reads as a refusal with no
+                            way to act on it. */}
+                        {r.review_notes && (
+                          <p className="text-theme-text-secondary mt-1 text-xs">Quartermaster: {r.review_notes}</p>
+                        )}
                       </div>
                       <span
                         className={`shrink-0 self-start rounded-full px-2 py-0.5 text-xs font-medium sm:self-auto ${REQUEST_STATUS_BADGES[r.status] ?? 'text-theme-text-muted'}`}
                       >
-                        {r.status}
+                        {EQUIPMENT_REQUEST_STATUS_LABELS[r.status] ?? r.status}
                       </span>
                     </div>
                   ))}
