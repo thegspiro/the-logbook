@@ -21,7 +21,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | --- | -------------------------------------------------------------------------- | ----------------- | ------------------------------------- | ------ |
 | W01 | Fresh-install onboarding, every step, including going Back and resuming    | anonymous → admin | `/`, `/onboarding/*`                  | ✅     |
 | W02 | Sign in, sign out, session timeout, a wrong password, lockout messaging    | member            | `/login`                              | ✅     |
-| W03 | Forgot password and reset by link                                          | anonymous         | `/forgot-password`, `/reset-password` | ⬜     |
+| W03 | Forgot password and reset by link                                          | anonymous         | `/forgot-password`, `/reset-password` | ✅     |
 | W04 | My account: profile, password change, MFA enrolment, notification settings | member            | `/account`                            | ⬜     |
 | W05 | Positions and permissions: create a position, grant, assign, revoke        | admin → member    | `/settings/roles`                     | ⬜     |
 | W06 | Organization settings, module switches, department setup checklist         | admin             | `/settings`, `/setup`                 | ⬜     |
@@ -157,17 +157,35 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **W07** — right after onboarding, the administrator's dashboard fires 403s
   on `/integrations/connected` (four times) and `/scheduling/settings` for
   modules that are off.
-- **W03** — `POST /auth/forgot-password` can answer "reset your password
-  through your SSO provider", but the screen shows "Check Your Email" whatever
-  the answer says (seen under W01-11).
+- **W04** — the change-password checklist now uses the shared list (W03-4);
+  drive it to confirm, and check the lead below about the redirect after a
+  change.
 - **W08** — several Add Member fields have no programmatic label.
 - **W79** — tap targets under 44px on the onboarding Modules, Ranks &
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
-  screen's "Forgot your password?", Privacy and Terms links (W02-5).
+  screen's "Forgot your password?", Privacy and Terms links (W02-5), and
+  "Back to Login" on the forgot-password page (36px, W03).
 - **W75** — password sign-in, failure, lockout and sign-out never reach the
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W03 — Forgot password and reset by link — 2026-09-28
+
+Driven as: a signed-out visitor and `member2`, at 1280×900 and 390×844, with
+a minted token standing in for the email (tokens are stored hashed and email
+is off here). Held: the same answer for every address, requests audited, the
+token in the URL fragment and single-use, a used or bad link refused, and a
+reset that signs in with the new password, refuses the old, and (from code)
+ends sessions and clears a lock. Fixed: W03-2 (MED — "Check Your Email"
+covered the server saying no link was sent under outside sign-in); W03-3
+(MED — a rate-limited link was called invalid); W03-4 (MED — both
+checklists said 8 characters and missed two server rules; one shared list
+now); W03-1, W03-5 (LOW); W03-8 (NIT — suppressions removed). Flagged:
+W03-6 (MED — with email off the page promises an email) and W03-7 (MED —
+request, open and submit share 3 requests per 5 minutes), both mirrored to
+KNOWN_LIMITATIONS. Gate: typecheck, lint, flake8, black and the full
+frontend suite clean. Next: W04.
 
 ### W02 — Sign in, sign out, session timeout, lockout — 2026-09-27
 

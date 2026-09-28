@@ -12,6 +12,7 @@ import type {
   PasswordChangeData,
   PasswordResetConfirm,
   PasswordResetRequest,
+  PasswordResetRequestResponse,
   RegisterData,
   TokenResponse,
 } from '../types/auth';
@@ -126,10 +127,10 @@ export const authService = {
   /**
    * Request password reset (sends email with reset link)
    */
-  async requestPasswordReset(data: PasswordResetRequest, captchaToken?: string): Promise<{ message: string }> {
+  async requestPasswordReset(data: PasswordResetRequest, captchaToken?: string): Promise<PasswordResetRequestResponse> {
     // Header rather than body: the backend verifies the challenge in a
     // dependency, before the request body is parsed.
-    const response = await api.post<{ message: string }>(
+    const response = await api.post<PasswordResetRequestResponse>(
       '/auth/forgot-password',
       data,
       captchaToken ? { headers: { [CAPTCHA_HEADER]: captchaToken } } : {}

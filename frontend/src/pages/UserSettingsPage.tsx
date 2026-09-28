@@ -33,7 +33,7 @@ import { MfaSettingsCard } from '../components/settings/MfaSettingsCard';
 import { AppVersionSection } from '../components/settings/AppVersionSection';
 import { useAuthStore } from '../stores/authStore';
 import { useTheme } from '../contexts/ThemeContext';
-import { validatePasswordStrength } from '../utils/passwordValidation';
+import { PASSWORD_CHECKLIST, validatePasswordStrength } from '../utils/passwordValidation';
 import type { PasswordChangeData } from '../types/auth';
 import type {
   UserProfileUpdate,
@@ -946,14 +946,11 @@ export const UserSettingsPage: React.FC = () => {
                     <div className="mt-3 space-y-2">
                       <p className="text-theme-text-secondary text-xs font-medium">Password must contain:</p>
                       <ul className="space-y-1 text-xs">
-                        {[
-                          { label: 'At least 8 characters', valid: passwordValidation.checks.length },
-                          { label: 'One uppercase letter', valid: passwordValidation.checks.uppercase },
-                          { label: 'One lowercase letter', valid: passwordValidation.checks.lowercase },
-                          { label: 'One number', valid: passwordValidation.checks.number },
-                          { label: 'One special character', valid: passwordValidation.checks.special },
-                        ].map((check, idx) => (
-                          <li key={idx} className="flex items-center space-x-2">
+                        {PASSWORD_CHECKLIST.map(({ key, label }) => ({
+                          label,
+                          valid: passwordValidation.checks[key],
+                        })).map((check) => (
+                          <li key={check.label} className="flex items-center space-x-2">
                             {check.valid ? (
                               <CheckCircle
                                 className="h-4 w-4 shrink-0 text-green-500 dark:text-green-400"

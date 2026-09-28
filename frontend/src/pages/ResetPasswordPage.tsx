@@ -8,8 +8,23 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
 import { ArrowLeft, CheckCircle, Lock, Eye, EyeOff } from 'lucide-react';
 import { authService } from '../services/api';
-import { validatePasswordStrength } from '../utils/passwordValidation';
-import { getErrorMessage } from '../utils/errorHandling';
+import { PASSWORD_CHECKLIST, validatePasswordStrength } from '../utils/passwordValidation';
+import { getErrorMessage, toAppError } from '../utils/errorHandling';
+
+/**
+ * Whole minutes to wait when `err` is a 429, else null.
+ *
+ * Requesting a reset, opening the link and submitting share one budget of
+ * three requests per five minutes. A reload or a password the server refused
+ * used it up, and the page then said "Invalid Reset Link" about a link that
+ * was fine — so a member discarded it (workflow review W03).
+ */
+function rateLimitWaitMinutes(err: unknown): number | null {
+  const appError = toAppError(err);
+  if (appError.status !== 429) return null;
+  const seconds = typeof appError.details?.retryAfter === 'number' ? appError.details.retryAfter : 300;
+  return Math.max(1, Math.ceil(seconds / 60));
+}
 
 export const ResetPasswordPage: React.FC = () => {
   const navigate = useNavigate();
@@ -31,10 +46,16 @@ export const ResetPasswordPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [tokenValid, setTokenValid] = useState(false);
+  const [rateLimitedMinutes, setRateLimitedMinutes] = useState<number | null>(null);
 
-  // Validate token on mount
+  // Validate token on mount, and again when a different link opens in the
+  // same tab — which is why the previous link's verdict is cleared first.
   useEffect(() => {
     const validateToken = async () => {
+      setError(null);
+      setTokenValid(false);
+      setRateLimitedMinutes(null);
+      setIsValidating(true);
       if (!token) {
         setError('Invalid or missing reset token');
         setIsValidating(false);
@@ -49,7 +70,12 @@ export const ResetPasswordPage: React.FC = () => {
           setError('This password reset link is invalid or has expired');
         }
       } catch (err: unknown) {
-        setError(getErrorMessage(err, 'This password reset link is invalid or has expired'));
+        const wait = rateLimitWaitMinutes(err);
+        if (wait !== null) {
+          setRateLimitedMinutes(wait);
+        } else {
+          setError(getErrorMessage(err, 'This password reset link is invalid or has expired'));
+        }
       } finally {
         setIsValidating(false);
       }
@@ -94,7 +120,12 @@ export const ResetPasswordPage: React.FC = () => {
         void navigate('/login');
       }, 3000);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to reset password. Please try again or request a new reset link.'));
+      const wait = rateLimitWaitMinutes(err);
+      setError(
+        wait !== null
+          ? `Too many attempts. Wait ${wait} minute${wait === 1 ? '' : 's'} and try again — the link still works until it expires.`
+          : getErrorMessage(err, 'Failed to reset password. Please try again or request a new reset link.')
+      );
     } finally {
       setIsLoading(false);
     }
@@ -110,6 +141,31 @@ export const ResetPasswordPage: React.FC = () => {
         <div className="text-center">
           <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-t-4 border-b-4 border-red-500"></div>
           <p className="text-theme-text-primary text-lg">Validating reset link...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (rateLimitedMinutes !== null) {
+    return (
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br px-4 py-12 sm:px-6 lg:px-8"
+      >
+        <div className="w-full max-w-md">
+          <div className="card p-8 text-center">
+            <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">Please Wait a Few Minutes</h2>
+            <p className="text-theme-text-secondary mb-6">
+              {`There have been too many password-reset attempts from this connection. Wait ${rateLimitedMinutes} minute${rateLimitedMinutes === 1 ? '' : 's'}, then reload this page — if this link has not been used, it still works until it expires.`}
+            </p>
+            <Link
+              to="/login"
+              className="focus:ring-theme-focus-ring inline-flex items-center rounded-sm px-3 py-2 font-medium text-red-700 transition-colors hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-red-400 dark:hover:text-red-300"
+            >
+              Back to Login
+            </Link>
+          </div>
         </div>
       </main>
     );
@@ -270,30 +326,28 @@ export const ResetPasswordPage: React.FC = () => {
                 <div className="mt-3 space-y-2">
                   <p className="text-theme-text-secondary text-xs font-medium">Password must contain:</p>
                   <ul className="space-y-1 text-xs">
-                    {[
-                      { label: 'At least 8 characters', valid: passwordValidation.checks.length },
-                      { label: 'One uppercase letter', valid: passwordValidation.checks.uppercase },
-                      { label: 'One lowercase letter', valid: passwordValidation.checks.lowercase },
-                      { label: 'One number', valid: passwordValidation.checks.number },
-                      { label: 'One special character', valid: passwordValidation.checks.special },
-                    ].map((check, idx) => (
-                      <li key={idx} className="flex items-center space-x-2">
-                        {check.valid ? (
-                          <CheckCircle
-                            className="h-4 w-4 shrink-0 text-green-700 dark:text-green-400"
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <div
-                            className="border-theme-input-border h-4 w-4 shrink-0 rounded-full border-2"
-                            aria-hidden="true"
-                          />
-                        )}
-                        <span className={check.valid ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}>
-                          {check.label}
-                        </span>
-                      </li>
-                    ))}
+                    {PASSWORD_CHECKLIST.map(({ key, label }) => ({ label, valid: passwordValidation.checks[key] })).map(
+                      (check) => (
+                        <li key={check.label} className="flex items-center space-x-2">
+                          {check.valid ? (
+                            <CheckCircle
+                              className="h-4 w-4 shrink-0 text-green-700 dark:text-green-400"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <div
+                              className="border-theme-input-border h-4 w-4 shrink-0 rounded-full border-2"
+                              aria-hidden="true"
+                            />
+                          )}
+                          <span
+                            className={check.valid ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}
+                          >
+                            {check.label}
+                          </span>
+                        </li>
+                      )
+                    )}
                   </ul>
                 </div>
               )}

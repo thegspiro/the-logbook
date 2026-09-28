@@ -61,6 +61,15 @@ export interface PasswordResetRequest {
   email: string;
 }
 
+/** What `POST /auth/forgot-password` answers — the same for every address. */
+export interface PasswordResetRequestResponse {
+  message: string;
+  /** How long an emailed link lasts; absent from older backends. */
+  expires_in_minutes?: number | undefined;
+  /** Set when the department signs in through an outside provider, and no link is sent. */
+  auth_provider?: string | undefined;
+}
+
 export interface PasswordResetConfirm {
   token: string;
   new_password: string;
