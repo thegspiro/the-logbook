@@ -51,6 +51,7 @@ from app.services.email_template_service import (
     EmailTemplateService,
     live_sample_context,
 )
+from app.services.email_test_records import real_record_context
 from app.services.notification_channels import SMS_ALERT_DETAILS, SMS_CONDITIONS
 from app.services.officer_service import OfficerService
 from app.utils.mime_validation import detect_mime_type
@@ -519,6 +520,8 @@ async def preview_email_template(
     # in the admin's inbox agree.
     context = {
         **live_sample_context(template_type_key, organization, recipient=current_user),
+        # The department's own next event or shift, when it has one.
+        **await real_record_context(db, template_type_key, organization),
         **preview_data.context,
     }
     if organization:

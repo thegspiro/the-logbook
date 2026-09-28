@@ -382,6 +382,14 @@ class EmailLinkDomainResponse(BaseModel):
     override_url: Optional[str] = None
     source: EmailLinkDomainSource
     is_loopback: bool
+    is_private_network: bool = Field(
+        False,
+        description=(
+            "The address only resolves inside a local network (a private IP, "
+            ".local and similar, or a bare hostname), so emailed links fail "
+            "for anyone reading away from the station"
+        ),
+    )
     is_https: bool
     email_enabled: bool
     allowed_hosts: List[str] = Field(default_factory=list)
