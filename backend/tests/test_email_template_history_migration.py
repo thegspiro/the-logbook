@@ -110,7 +110,7 @@ class TestTheFrozenDefaults:
             )
             target = SOLID_TAB.target_for(row)
             assert target, template_type
-            assert target["html_body"] == _DEFAULTS[template_type]["html"]
+            assert target["html_body"] == SOLID_TAB.DEFAULTS[template_type]["html_body"]
 
     def test_no_current_default_is_counted_as_an_earlier_one(self):
         # A current value in the history would be rewritten to itself, which

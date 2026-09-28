@@ -51,6 +51,7 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     colourway_context,
     colourway_for,
     countdown_tile,
+    date_tile,
     fact,
     facts,
     summary_facts,
@@ -308,6 +309,8 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "event_type", "description": "Type of event (e.g. Business Meeting)"},
         {"name": "event_start", "description": "Event start date and time"},
         {"name": "event_end", "description": "Event end time"},
+        {"name": "event_month", "description": "Month of the start, e.g. Oct"},
+        {"name": "event_day", "description": "Day of the month of the start, e.g. 14"},
         {"name": "location_name", "description": "Event location name"},
         {"name": "location_details", "description": "Additional location details"},
         {"name": "event_url", "description": "Link to view the event"},
@@ -708,6 +711,8 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "event_type": "Business Meeting",
             "event_start": "March 15, 2026 at 07:00 PM",
             "event_end": "09:00 PM",
+            "event_month": "Mar",
+            "event_day": "15",
             "location_name": "Main Station \u2014 Meeting Room A",
             "location_details": "123 Main St, Anytown, USA",
             "event_url": "https://example.com/events/123",
@@ -2141,6 +2146,10 @@ DEFAULT_EVENT_REMINDER_HTML = build_shell(
     accent=ACCENT_BLUE,
     chip="Reminder",
     subtitle="{{event_start}}",
+    # The calendar page a member recognises before reading a word. The
+    # month and day arrive as their own variables: event_start is one
+    # pre-formatted string, and splitting it would depend on its format.
+    lead=date_tile("{{event_month}}", "{{event_day}}"),
 )
 
 DEFAULT_EVENT_REMINDER_TEXT = """Event Reminder
