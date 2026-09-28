@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
+import { postLoginRedirect } from '../utils/postLoginRedirect';
 import { authService } from '../services/api';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -215,24 +216,16 @@ export const LoginPage: React.FC = () => {
       if (useAuthStore.getState().mfaRequired) {
         return;
       }
-      // Redirect to the page the user was trying to access (saved by
-      // ProtectedRoute), or default to /dashboard.
-      // SEC: Validate redirect target is a relative path starting with '/'
-      // to prevent open redirect attacks via crafted location state.
-      const rawFrom = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
-      const from =
-        typeof rawFrom === 'string' && rawFrom.startsWith('/') && !rawFrom.startsWith('//') ? rawFrom : '/dashboard';
-      void navigate(from, { replace: true });
+      // Back to the page ProtectedRoute stopped them at (see postLoginRedirect
+      // for the open-redirect guard).
+      void navigate(postLoginRedirect(location.state), { replace: true });
     } catch (_err) {
       // Error is handled by the store and displayed via error state
     }
   };
 
   const redirectAfterAuth = () => {
-    const rawFrom = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
-    const from =
-      typeof rawFrom === 'string' && rawFrom.startsWith('/') && !rawFrom.startsWith('//') ? rawFrom : '/dashboard';
-    void navigate(from, { replace: true });
+    void navigate(postLoginRedirect(location.state), { replace: true });
   };
 
   const handleMfaSubmit = async (e: React.FormEvent) => {

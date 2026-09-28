@@ -61,6 +61,41 @@ describe('errorHandling', () => {
   // ---- toAppError ----
 
   describe('toAppError', () => {
+    it('carries a 429 Retry-After header into details', () => {
+      // W02-2: the header never reached details, so the sign-in lockout
+      // countdown ignored the server's wait.
+      const result = toAppError({
+        response: {
+          data: { detail: 'Too many requests. Please try again later.' },
+          status: 429,
+          headers: { 'retry-after': '60' },
+        },
+      });
+
+      expect(result.details?.retryAfter).toBe(60);
+    });
+
+    it('keeps body details alongside Retry-After', () => {
+      const result = toAppError({
+        response: {
+          data: { detail: 'Slow down', details: { scope: 'login' } },
+          status: 429,
+          headers: { 'retry-after': '30' },
+        },
+      });
+
+      expect(result.details).toEqual({ scope: 'login', retryAfter: 30 });
+    });
+
+    it('ignores Retry-After on anything but a 429, and ignores a malformed one', () => {
+      expect(
+        toAppError({ response: { data: { detail: 'Down' }, status: 503, headers: { 'retry-after': '5' } } }).details
+      ).toBeUndefined();
+      expect(
+        toAppError({ response: { data: { detail: 'Slow' }, status: 429, headers: { 'retry-after': 'soon' } } }).details
+      ).toBeUndefined();
+    });
+
     it('handles Axios-like errors with response.data.detail', () => {
       const axiosError = {
         response: {
