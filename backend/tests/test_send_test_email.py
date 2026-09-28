@@ -46,7 +46,12 @@ async def _send(template):
     email_service.last_message_history_id = "hist-1"
 
     user = SimpleNamespace(
-        organization_id="org-1", id="user-1", email="chief@station12.org"
+        organization_id="org-1",
+        id="user-1",
+        email="chief@station12.org",
+        first_name="Jordan",
+        last_name="Reyes",
+        username="jreyes",
     )
     with (
         patch(
@@ -60,16 +65,16 @@ async def _send(template):
         patch(
             "app.services.email_template_service.EmailTemplateService.render",
             return_value=("Welcome", "<p>Welcome</p>", "Welcome"),
-        ),
+        ) as render,
     ):
         await send_test_email(
             SendTestEmailRequest(template_id="tpl-1"), db=db, current_user=user
         )
-    return email_service.send_email.await_args.kwargs
+    return email_service.send_email.await_args.kwargs, render.call_args.args[1]
 
 
 async def test_the_templates_attachments_ride_along():
-    kwargs = await _send(
+    kwargs, _ = await _send(
         _template(
             True,
             [
@@ -87,12 +92,18 @@ async def test_the_templates_attachments_ride_along():
 
 async def test_files_on_a_template_with_attachments_switched_off_are_not_sent():
     """The real send ignores them in that case, so the test does too."""
-    kwargs = await _send(
+    kwargs, _ = await _send(
         _template(False, [SimpleNamespace(storage_path="/data/attachments/a.pdf")])
     )
     assert kwargs["attachment_paths"] is None
 
 
 async def test_a_template_without_attachments_sends_none():
-    kwargs = await _send(_template(True, []))
+    kwargs, _ = await _send(_template(True, []))
     assert kwargs["attachment_paths"] is None
+
+
+async def test_the_welcome_test_is_addressed_to_the_admin_sending_it():
+    _, context = await _send(_template(True, []))
+    assert context["first_name"] == "Jordan"
+    assert context["username"] == "jreyes"

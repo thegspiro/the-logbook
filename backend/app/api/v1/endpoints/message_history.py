@@ -172,9 +172,10 @@ async def send_test_email(
             if hasattr(template.template_type, "value")
             else str(template.template_type)
         )
-        # Live links and the department's real details; only what no test
-        # can have (a recipient, an event, a token) stays sample data.
-        context = live_sample_context(ttype_key, organization)
+        # Live links, the department's real details, today's dates, and the
+        # admin receiving the test as its recipient; only what no test can
+        # have (an event, a token, other people) stays sample data.
+        context = live_sample_context(ttype_key, organization, recipient=current_user)
         await OfficerService(db).overlay_preview_context(
             current_user.organization_id, context
         )

@@ -469,7 +469,7 @@ async def preview_email_template(
     # The same live sample a test send uses, so the preview and the test email
     # in the admin's inbox agree.
     context = {
-        **live_sample_context(template_type_key, organization),
+        **live_sample_context(template_type_key, organization, recipient=current_user),
         **preview_data.context,
     }
     if organization:
