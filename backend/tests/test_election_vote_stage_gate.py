@@ -92,7 +92,12 @@ async def _election_stage_pipeline(svc, org_id, *, auto_transfer: bool):
         },
     )
     if not auto_transfer:
-        await svc.add_step(pipeline.id, org_id, {"name": "Onboarding"})
+        # Not required: a manual conversion is refused while any required
+        # stage is unfinished (test_prospect_conversion_gate.py), and these
+        # tests grade the vote alone.
+        await svc.add_step(
+            pipeline.id, org_id, {"name": "Onboarding", "required": False}
+        )
     return pipeline, vote
 
 

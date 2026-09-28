@@ -193,6 +193,14 @@ Python changed).
 member and when, which is an authorization and product decision, and the
 overnight routine's stop condition. Next, once decided: W17.
 
+**W16-1 resolved** at the owner's direction ("block conversion until required
+stages complete, and add signer sign-off"): conversion is refused while any
+Required stage is incomplete; signers get a Sign-offs page and a dashboard
+row; the applicant drawer's Approval Status now reads the stage's configured
+signers. Re-driven end to end as `membership_coordinator`, `chief` and the
+president; `member2` sees nothing to sign. See `W16-prospective-member.md`.
+The rotation remains stopped; next, when restarted: W17.
+
 ### W15 — A member leaves — 2026-09-28
 
 Driven as: `admin` at 1280×900 and 390×844, with `member` reading the

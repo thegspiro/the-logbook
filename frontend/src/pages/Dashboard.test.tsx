@@ -140,6 +140,11 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+const { mockListMySignOffs } = vi.hoisted(() => ({ mockListMySignOffs: vi.fn() }));
+vi.mock('../modules/prospective-members/services/api', () => ({
+  signOffService: { listMine: mockListMySignOffs },
+}));
+
 vi.mock('../modules/admin-hours/services/api', () => ({
   adminHoursEntryService: {
     getSummary: mockGetAdminHoursSummary,
@@ -2158,6 +2163,42 @@ describe('Dashboard', () => {
       is_acknowledged: false,
       acknowledged_at: null,
       ...overrides,
+    });
+
+    // The officers a Multi-Signer Approval stage names rarely open the
+    // applicant pages; this row is how they learn a conversion is waiting on
+    // their signature (workflow review W16-1).
+    it("says when an applicant is waiting on the member's sign-off", async () => {
+      mockGetEnabledModules.mockResolvedValue({ configured: true, enabled_modules: ['prospective_members'] });
+      mockListMySignOffs.mockResolvedValue([
+        {
+          prospect_id: 'p1',
+          first_name: 'Pat',
+          last_name: 'Applicant',
+          pipeline_name: 'Volunteer Applicants',
+          step_id: 's2',
+          step_name: 'Officer Sign-Off',
+          step_description: null,
+          roles_to_sign: [{ role: 'chief', label: 'Chief' }],
+          required_roles: [],
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      const panel = await screen.findByRole('region', { name: 'Needs you' });
+      expect(within(panel).getByText('Pat Applicant is waiting on your sign-off')).toBeInTheDocument();
+      expect(within(panel).getByRole('button', { name: 'Review' })).toBeInTheDocument();
+    });
+
+    it('does not ask for sign-offs when the department does not run prospective members', async () => {
+      mockListMySignOffs.mockReset();
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => {
+        expect(mockGetInbox).toHaveBeenCalledWith({ include_read: false, limit: 10 });
+      });
+      expect(mockListMySignOffs).not.toHaveBeenCalled();
     });
 
     it('stays hidden when nothing needs the member', async () => {
