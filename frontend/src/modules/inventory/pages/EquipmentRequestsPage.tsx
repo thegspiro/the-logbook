@@ -41,6 +41,32 @@ import { Breadcrumbs } from '../../../components/ux';
 const notableStatus = (status?: string | null): string | null =>
   !status || status === 'available' ? null : status.replace(/_/g, ' ');
 
+/** How the requested catalog item is tracked, in words rather than the enum. */
+const trackingLabel = (trackingType?: string | null): string => {
+  if (trackingType === 'individual') return 'Tracked individually';
+  if (trackingType === 'pool') return 'Issued from bulk stock';
+  return trackingType ? trackingType.replace(/_/g, ' ') : 'Determined when fulfilled';
+};
+
+/**
+ * The empty list, named with the same words as the filter that produced it
+ * rather than the stored status value.
+ */
+const emptyListMessage = (statusFilter: string): string => {
+  switch (statusFilter) {
+    case 'pending':
+      return 'Nothing awaiting review.';
+    case 'approved':
+      return 'No approved requests waiting to be issued.';
+    case 'fulfilled':
+      return 'No issued requests.';
+    case 'denied':
+      return 'No declined requests.';
+    default:
+      return 'No equipment requests yet.';
+  }
+};
+
 /**
  * The facts a quartermaster is actually choosing between, without the name.
  *
@@ -211,7 +237,7 @@ const EquipmentRequestsPage: React.FC = () => {
         status: decision,
         review_notes: reviewNotes || undefined,
       });
-      toast.success(`Request ${decision}`);
+      toast.success(decision === 'approved' ? 'Request approved' : 'Request declined');
       setReviewModal({ open: false, request: null });
       setReviewNotes('');
       void loadRequests();
@@ -320,7 +346,9 @@ const EquipmentRequestsPage: React.FC = () => {
         override_allowance: fulfillOverride,
         substitution_override_reason: substitutionOverride ? substitutionReason.trim() : undefined,
       });
-      toast.success('Request fulfilled');
+      toast.success(
+        fulfillModal.request.requester_name ? `Issued to ${fulfillModal.request.requester_name}` : 'Request issued'
+      );
       setFulfillModal({ open: false, request: null });
       void loadRequests();
     } catch (err: unknown) {
@@ -398,7 +426,7 @@ const EquipmentRequestsPage: React.FC = () => {
           <div className="card-secondary p-8 text-center">
             <ClipboardList className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
             <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Requests</h3>
-            <p className="text-theme-text-muted text-sm">No {statusFilter || 'equipment'} requests found.</p>
+            <p className="text-theme-text-muted text-sm">{emptyListMessage(statusFilter)}</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -549,7 +577,7 @@ const EquipmentRequestsPage: React.FC = () => {
                   <strong>Requester:</strong> {reviewModal.request.requester_name ?? 'Unknown'}
                 </p>
                 <p>
-                  <strong>Member intent:</strong>{' '}
+                  <strong>Member asked for:</strong>{' '}
                   {reviewModal.request.requested_duration === 'ongoing' ? 'Ongoing need' : 'Temporary need'} —{' '}
                   {reviewModal.request.reason || 'No reason provided'}
                 </p>
@@ -568,13 +596,17 @@ const EquipmentRequestsPage: React.FC = () => {
                   </p>
                 )}
                 <p>
-                  <strong>Tracking:</strong>{' '}
-                  {reviewModal.request.requested_item?.tracking_type ?? 'Determined when fulfilled'}
+                  <strong>Tracking:</strong> {trackingLabel(reviewModal.request.requested_item?.tracking_type)}
                 </p>
                 <p>
                   <strong>Availability:</strong>{' '}
                   {reviewModal.request.requested_item
-                    ? `${reviewModal.request.requested_item.available_quantity} available (${reviewModal.request.requested_item.status})`
+                    ? [
+                        `${reviewModal.request.requested_item.available_quantity} on hand`,
+                        notableStatus(reviewModal.request.requested_item.status),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
                     : 'No specific catalog item selected'}
                 </p>
                 <p>
@@ -611,7 +643,7 @@ const EquipmentRequestsPage: React.FC = () => {
                   value={reviewNotes}
                   onChange={(e) => setReviewNotes(e.target.value)}
                   className="form-input"
-                  placeholder="Optional notes for the requester..."
+                  placeholder="Shown to the member on their request, e.g. why it was declined or when to expect it"
                 />
               </div>
 
@@ -640,7 +672,7 @@ const EquipmentRequestsPage: React.FC = () => {
                   onClick={() => void handleApproveAndFulfill()}
                   disabled={submitting || optionsLoading || !fulfillOptions?.can_fulfill_now}
                   className="btn-success btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
-                  title="Available only when catalog stock is immediately available"
+                  title="Nothing matching is on hand to issue right now — approve it and fulfil later"
                 >
                   <PackageCheck className="h-4 w-4" />
                   Approve &amp; fulfill now
@@ -661,7 +693,10 @@ const EquipmentRequestsPage: React.FC = () => {
             <div className="space-y-4">
               <div className="text-theme-text-secondary text-sm">
                 <p>Requester: {fulfillModal.request.requester_name ?? 'Unknown'}</p>
-                <p>Requested duration: {fulfillModal.request.requested_duration}</p>
+                <p>
+                  Member asked for:{' '}
+                  {fulfillModal.request.requested_duration === 'ongoing' ? 'Ongoing need' : 'Temporary need'}
+                </p>
               </div>
 
               <div>

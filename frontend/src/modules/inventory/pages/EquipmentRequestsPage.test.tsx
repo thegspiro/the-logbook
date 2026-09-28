@@ -134,6 +134,39 @@ describe('EquipmentRequestsPage', () => {
     await waitFor(() => {
       expect(screen.getByText('No Requests')).toBeInTheDocument();
     });
+    // Named with the filter's own words, not the stored status value.
+    expect(screen.getByText('Nothing awaiting review.')).toBeInTheDocument();
+  });
+
+  it('describes the requested item in words in the review dialog', async () => {
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [
+        makeRequest({
+          item_id: 'item-1',
+          requested_item: {
+            tracking_type: 'pool',
+            status: 'available',
+            available_quantity: 3,
+            size: null,
+            min_rank_order: null,
+            restricted_to_positions: [],
+          },
+        }),
+      ],
+      total: 1,
+      skip: 0,
+      limit: 25,
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentRequestsPage />);
+    await screen.findByText('Radio XTS 5000');
+
+    await user.click(screen.getByText('Review'));
+
+    expect(await screen.findByText('Member asked for:')).toBeInTheDocument();
+    expect(screen.getByText('Issued from bulk stock')).toBeInTheDocument();
+    // The unremarkable "available" status is not repeated after the count.
+    expect(screen.getByText('3 on hand')).toBeInTheDocument();
   });
 
   it('filters requests by status', async () => {
@@ -225,7 +258,7 @@ describe('EquipmentRequestsPage', () => {
       expect(screen.getByText('Radio XTS 5000')).toBeInTheDocument();
     });
     await user.click(screen.getByText('Review'));
-    const notesField = await screen.findByPlaceholderText('Optional notes for the requester...');
+    const notesField = await screen.findByPlaceholderText(/Shown to the member on their request/);
     await user.type(notesField, 'Not available');
     await user.click(screen.getByText('Decline'));
     await waitFor(() => {
@@ -234,7 +267,7 @@ describe('EquipmentRequestsPage', () => {
         review_notes: 'Not available',
       });
     });
-    expect(mockToastSuccess).toHaveBeenCalledWith('Request denied');
+    expect(mockToastSuccess).toHaveBeenCalledWith('Request declined');
   });
 
   it('handles review error', async () => {
@@ -301,7 +334,7 @@ describe('EquipmentRequestsPage', () => {
         override_allowance: false,
       });
     });
-    expect(mockToastSuccess).toHaveBeenCalledWith('Request fulfilled');
+    expect(mockToastSuccess).toHaveBeenCalledWith('Issued to John Doe');
   });
 
   const poloRequest = (overrides: Record<string, unknown> = {}) =>
