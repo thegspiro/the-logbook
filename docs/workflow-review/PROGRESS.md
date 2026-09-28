@@ -31,7 +31,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 
 | #   | Activity                                                                  | Acts as                | Starts at                                    | Status |
 | --- | ------------------------------------------------------------------------- | ---------------------- | -------------------------------------------- | ------ |
-| W08 | Add a member, with and without a password, and their first sign-in        | admin → new member     | `/members/add`                               | ⬜     |
+| W08 | Add a member, with and without a password, and their first sign-in        | admin → new member     | `/members/add`                               | ✅     |
 | W09 | Import members from a spreadsheet                                         | admin                  | `/members/import`                            | ⬜     |
 | W10 | Find a member and read their profile, as a member (contact visibility)    | member, admin          | `/members`, `/members/:userId`               | ⬜     |
 | W11 | Edit a member as an officer: details, clearing a field, status, history   | admin                  | `/members/admin/edit/:userId`                | ⬜     |
@@ -151,8 +151,11 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **W08** — several Add Member fields have no programmatic label.
-- **W08** — "View by Role → Manage Members" saves each member with its own
+- **Any run touching the app shell** — while a password change is required
+  (first sign-in, admin reset), the shell and shared hooks fire ~17 requests
+  the server refuses with 403, including `POST /errors/log`, so errors from
+  that state cannot be reported (W08-6).
+- **W11** — "View by Role → Manage Members" saves each member with its own
   request under `Promise.all`; if one is refused the others still land, but
   the page shows only the error and does not reload, so the list is stale
   (read from code in W05, not driven). The base "Member" position also has a
@@ -165,6 +168,24 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W08 — Add a member and their first sign-in — 2026-09-28
+
+Driven as: `admin`, the new member and `member2`, at 1280×900 and 390×844.
+Held: an empty submit names 13 required fields; everything the form sends is
+stored; with email off the password is required and the form says why; the
+first sign-in holds the member on a forced change, signs them out after it
+and lets the new password in; both new members show in another member's
+directory; a member is refused page and API; creates are audited. Fixed:
+W08-2 (MED — a second member whose email shared a local part could not be
+added: "Username already exists" for a field the form does not show), W08-3,
+W08-4 (LOW — 28 unlabelled fields; the password checked only for length),
+W08-5 (NIT). Flagged: W08-1 (MED — Status and Preferred Contact were offered
+and never saved; removed, and the owner question mirrored to
+KNOWN_LIMITATIONS). Open: W08-6 (LOW — refused requests while a password
+change is required; added as a lead). Not driven: adding without a
+password, which needs email. Gate: typecheck, lint and the full frontend suite
+clean (no Python changed). Next: W09.
 
 ### W07 — Dashboard for each role — 2026-09-28
 

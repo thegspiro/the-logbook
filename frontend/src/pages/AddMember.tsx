@@ -5,12 +5,17 @@ import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
 import { userService, organizationService, roleService, locationsService } from '../services/api';
 import type { Location } from '../services/api';
-import { getErrorMessage } from '@/utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { getTodayLocalDate } from '../utils/dateFormatting';
 import { useRanks } from '../hooks/useRanks';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { PASSWORD_CHECKLIST, validatePasswordStrength } from '../utils/passwordValidation';
 import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember, memberClassAndStatusFor } from '../utils/membership';
+
+/** The create endpoint's refusal for a username already in the department. */
+const USERNAME_TAKEN = 'Username already exists';
+const MAX_USERNAME_ATTEMPTS = 20;
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
@@ -63,6 +68,7 @@ const AddMember: React.FC = () => {
   const [initialPassword, setInitialPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const passwordChecks = validatePasswordStrength(initialPassword).checks;
 
   // Dropdown data
   const [availablePositions, setAvailablePositions] = useState<{ id: string; name: string }[]>([]);
@@ -182,10 +188,13 @@ const AddMember: React.FC = () => {
 
     // Password (if custom password is set)
     if (useCustomPassword) {
+      // The server's own rules (W03-4's shared list), so a password it will
+      // refuse is caught here, at the field, rather than in a toast after the
+      // whole form has been sent (workflow review W08).
       if (!initialPassword) {
         newErrors.password = 'Password is required when setting a custom password';
-      } else if (initialPassword.length < 12) {
-        newErrors.password = 'Password must be at least 12 characters';
+      } else if (!validatePasswordStrength(initialPassword).isValid) {
+        newErrors.password = 'Password does not meet every rule listed below';
       }
       if (initialPassword !== confirmPassword) {
         newErrors.confirmPassword = 'Passwords do not match';
@@ -276,7 +285,20 @@ const AddMember: React.FC = () => {
         ...(formData.role ? { role_ids: [formData.role] } : {}),
       };
 
-      await userService.createMember(memberPayload);
+      // The form has no username field; it is derived from the email. Two
+      // addresses sharing a local part (casey@a.org, casey@b.org) derived the
+      // same one, and the second member could not be added at all — the
+      // refusal named a field the officer never saw (workflow review W08).
+      // Try the next free suffix instead.
+      for (let attempt = 1; ; attempt++) {
+        const candidate = attempt === 1 ? username : `${username}_${attempt}`;
+        try {
+          await userService.createMember({ ...memberPayload, username: candidate });
+          break;
+        } catch (err: unknown) {
+          if (attempt >= MAX_USERNAME_ATTEMPTS || getErrorDetail(err) !== USERNAME_TAKEN) throw err;
+        }
+      }
 
       toast.success('Member added successfully!');
       void navigate('/members');
@@ -327,7 +349,7 @@ const AddMember: React.FC = () => {
             </div>
             <button
               onClick={() => void handleCancel()}
-              className="text-theme-text-secondary hover:text-theme-text-primary shrink-0 self-start text-sm transition-colors sm:self-auto"
+              className="text-theme-text-secondary hover:text-theme-text-primary touch-target-phone shrink-0 self-start text-sm transition-colors sm:self-auto"
             >
               ← Back to Members
             </button>
@@ -351,11 +373,12 @@ const AddMember: React.FC = () => {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                <label htmlFor="add-firstName" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   First Name <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
+                  id="add-firstName"
                   value={formData.firstName}
                   onChange={(e) => handleInputChange('firstName', e.target.value)}
                   className={`form-input ${errors.firstName ? 'border-red-500' : 'border-theme-input-border'}`}
@@ -365,9 +388,12 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Middle Name</label>
+                <label htmlFor="add-middleName" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Middle Name
+                </label>
                 <input
                   type="text"
+                  id="add-middleName"
                   value={formData.middleName}
                   onChange={(e) => handleInputChange('middleName', e.target.value)}
                   className="form-input placeholder-theme-text-muted"
@@ -376,11 +402,12 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                <label htmlFor="add-lastName" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   Last Name <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
+                  id="add-lastName"
                   value={formData.lastName}
                   onChange={(e) => handleInputChange('lastName', e.target.value)}
                   className={`form-input ${errors.lastName ? 'border-red-500' : 'border-theme-input-border'}`}
@@ -392,11 +419,15 @@ const AddMember: React.FC = () => {
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                <label
+                  htmlFor="add-membershipNumber"
+                  className="text-theme-text-primary mb-2 block text-sm font-medium"
+                >
                   Membership Number <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
+                  id="add-membershipNumber"
                   value={formData.membershipNumber}
                   onChange={(e) => handleInputChange('membershipNumber', e.target.value)}
                   className={`form-input ${errors.membershipNumber ? 'border-red-500' : 'border-theme-input-border'}`}
@@ -408,9 +439,12 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Date of Birth</label>
+                <label htmlFor="add-dateOfBirth" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Date of Birth
+                </label>
                 <input
                   type="date"
+                  id="add-dateOfBirth"
                   value={formData.dateOfBirth}
                   onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
                   className="form-input"
@@ -451,11 +485,12 @@ const AddMember: React.FC = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                <label htmlFor="add-street" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   Street Address <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
+                  id="add-street"
                   value={formData.street}
                   onChange={(e) => handleInputChange('street', e.target.value)}
                   className={`form-input ${errors.street ? 'border-red-500' : 'border-theme-input-border'}`}
@@ -466,11 +501,12 @@ const AddMember: React.FC = () => {
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
                 <div>
-                  <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  <label htmlFor="add-city" className="text-theme-text-primary mb-2 block text-sm font-medium">
                     City <span className="text-red-700 dark:text-red-400">*</span>
                   </label>
                   <input
                     type="text"
+                    id="add-city"
                     value={formData.city}
                     onChange={(e) => handleInputChange('city', e.target.value)}
                     className={`form-input ${errors.city ? 'border-red-500' : 'border-theme-input-border'}`}
@@ -480,11 +516,12 @@ const AddMember: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  <label htmlFor="add-state" className="text-theme-text-primary mb-2 block text-sm font-medium">
                     State <span className="text-red-700 dark:text-red-400">*</span>
                   </label>
                   <input
                     type="text"
+                    id="add-state"
                     value={formData.state}
                     onChange={(e) => handleInputChange('state', e.target.value)}
                     className={`form-input ${errors.state ? 'border-red-500' : 'border-theme-input-border'}`}
@@ -495,11 +532,12 @@ const AddMember: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  <label htmlFor="add-zipCode" className="text-theme-text-primary mb-2 block text-sm font-medium">
                     ZIP Code <span className="text-red-700 dark:text-red-400">*</span>
                   </label>
                   <input
                     type="text"
+                    id="add-zipCode"
                     value={formData.zipCode}
                     onChange={(e) => handleInputChange('zipCode', e.target.value)}
                     className={`form-input ${errors.zipCode ? 'border-red-500' : 'border-theme-input-border'}`}
@@ -520,11 +558,12 @@ const AddMember: React.FC = () => {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                <label htmlFor="add-primaryPhone" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   Primary Phone <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="tel"
+                  id="add-primaryPhone"
                   value={formData.primaryPhone}
                   onChange={(e) => handleInputChange('primaryPhone', e.target.value)}
                   className={`form-input ${errors.primaryPhone ? 'border-red-500' : 'border-theme-input-border'}`}
@@ -536,9 +575,12 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Secondary Phone</label>
+                <label htmlFor="add-secondaryPhone" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Secondary Phone
+                </label>
                 <input
                   type="tel"
+                  id="add-secondaryPhone"
                   value={formData.secondaryPhone}
                   onChange={(e) => handleInputChange('secondaryPhone', e.target.value)}
                   className="form-input placeholder-theme-text-muted"
@@ -547,32 +589,18 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                <label htmlFor="add-email" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   Email <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="email"
+                  id="add-email"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   className={`form-input ${errors.email ? 'border-red-500' : 'border-theme-input-border'}`}
                   placeholder="john.doe@example.com"
                 />
                 {errors.email && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.email}</p>}
-              </div>
-
-              <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Preferred Contact Method
-                </label>
-                <select
-                  value={formData.preferredContact}
-                  onChange={(e) => handleInputChange('preferredContact', e.target.value)}
-                  className="form-input"
-                >
-                  <option value="phone">Phone</option>
-                  <option value="email">Email</option>
-                  <option value="text">Text</option>
-                </select>
               </div>
             </div>
           </div>
@@ -618,11 +646,12 @@ const AddMember: React.FC = () => {
               {useCustomPassword && (
                 <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                    <label htmlFor="add-password" className="text-theme-text-primary mb-2 block text-sm font-medium">
                       Password <span className="text-red-700 dark:text-red-400">*</span>
                     </label>
                     <div className="relative">
                       <input
+                        id="add-password"
                         type={showPassword ? 'text' : 'password'}
                         value={initialPassword}
                         onChange={(e) => {
@@ -642,6 +671,7 @@ const AddMember: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
                         className="text-theme-text-muted hover:text-theme-text-primary absolute inset-y-0 right-0 flex items-center pr-3"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -653,10 +683,14 @@ const AddMember: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                    <label
+                      htmlFor="add-confirm-password"
+                      className="text-theme-text-primary mb-2 block text-sm font-medium"
+                    >
                       Confirm Password <span className="text-red-700 dark:text-red-400">*</span>
                     </label>
                     <input
+                      id="add-confirm-password"
                       type={showPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => {
@@ -680,13 +714,30 @@ const AddMember: React.FC = () => {
                 </div>
               )}
 
+              {useCustomPassword && (
+                <ul className="space-y-1 text-xs" aria-label="Password rules">
+                  {PASSWORD_CHECKLIST.map(({ key, label }) => {
+                    const met = passwordChecks[key];
+                    return (
+                      <li key={key} className={met ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}>
+                        {met ? '✓' : '○'} {label}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
               <p className="text-theme-text-muted text-xs">
                 The member will be required to change their password on first login regardless of how it is set.
               </p>
             </div>
           </div>
 
-          {/* Department Information */}
+          {/* Department Information. There is no Status or Preferred Contact
+              control: both were offered here, and neither was sent — the create
+              endpoint has no field for either, so "On Leave" produced an active
+              member (workflow review W08; the owner question is in
+              KNOWN_LIMITATIONS). */}
           <div className="card p-6">
             <div className="mb-4 flex items-center space-x-2">
               <Calendar className="h-5 w-5 text-orange-700 dark:text-orange-400" />
@@ -695,27 +746,16 @@ const AddMember: React.FC = () => {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Join Date</label>
+                <label htmlFor="add-joinDate" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Join Date
+                </label>
                 <input
                   type="date"
+                  id="add-joinDate"
                   value={formData.joinDate}
                   onChange={(e) => handleInputChange('joinDate', e.target.value)}
                   className="form-input"
                 />
-              </div>
-
-              <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => handleInputChange('status', e.target.value)}
-                  className="form-input"
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="leave">On Leave</option>
-                  <option value="retired">Retired</option>
-                </select>
               </div>
 
               <div>
@@ -757,8 +797,11 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Position</label>
+                <label htmlFor="add-role" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Position
+                </label>
                 <select
+                  id="add-role"
                   value={formData.role}
                   onChange={(e) => handleInputChange('role', e.target.value)}
                   className="form-input"
@@ -773,8 +816,11 @@ const AddMember: React.FC = () => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Station</label>
+                <label htmlFor="add-station" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Station
+                </label>
                 <select
+                  id="add-station"
                   value={formData.station}
                   onChange={(e) => handleInputChange('station', e.target.value)}
                   className="form-input"
@@ -789,9 +835,12 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Platoon</label>
+                <label htmlFor="add-platoon" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Platoon
+                </label>
                 <input
                   type="text"
+                  id="add-platoon"
                   value={formData.platoon}
                   onChange={(e) => handleInputChange('platoon', e.target.value)}
                   placeholder="e.g. A, B, C"
@@ -812,11 +861,12 @@ const AddMember: React.FC = () => {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                <label htmlFor="add-emergencyName1" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   Name <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
+                  id="add-emergencyName1"
                   value={formData.emergencyName1}
                   onChange={(e) => handleInputChange('emergencyName1', e.target.value)}
                   className={`form-input ${errors.emergencyName1 ? 'border-red-500' : 'border-theme-input-border'}`}
@@ -828,11 +878,15 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                <label
+                  htmlFor="add-emergencyRelationship1"
+                  className="text-theme-text-primary mb-2 block text-sm font-medium"
+                >
                   Relationship <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
+                  id="add-emergencyRelationship1"
                   value={formData.emergencyRelationship1}
                   onChange={(e) => handleInputChange('emergencyRelationship1', e.target.value)}
                   className={`form-input ${errors.emergencyRelationship1 ? 'border-red-500' : 'border-theme-input-border'}`}
@@ -844,11 +898,12 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                <label htmlFor="add-emergencyPhone1" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   Phone <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="tel"
+                  id="add-emergencyPhone1"
                   value={formData.emergencyPhone1}
                   onChange={(e) => handleInputChange('emergencyPhone1', e.target.value)}
                   className={`form-input ${errors.emergencyPhone1 ? 'border-red-500' : 'border-theme-input-border'}`}
@@ -860,9 +915,12 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Email</label>
+                <label htmlFor="add-emergencyEmail1" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Email
+                </label>
                 <input
                   type="email"
+                  id="add-emergencyEmail1"
                   value={formData.emergencyEmail1}
                   onChange={(e) => handleInputChange('emergencyEmail1', e.target.value)}
                   className="form-input placeholder-theme-text-muted"
@@ -882,9 +940,12 @@ const AddMember: React.FC = () => {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Name</label>
+                <label htmlFor="add-emergencyName2" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Name
+                </label>
                 <input
                   type="text"
+                  id="add-emergencyName2"
                   value={formData.emergencyName2}
                   onChange={(e) => handleInputChange('emergencyName2', e.target.value)}
                   className={`form-input placeholder-theme-text-muted ${errors.emergencyName2 ? 'border-red-500' : ''}`}
@@ -896,9 +957,15 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Relationship</label>
+                <label
+                  htmlFor="add-emergencyRelationship2"
+                  className="text-theme-text-primary mb-2 block text-sm font-medium"
+                >
+                  Relationship
+                </label>
                 <input
                   type="text"
+                  id="add-emergencyRelationship2"
                   value={formData.emergencyRelationship2}
                   onChange={(e) => handleInputChange('emergencyRelationship2', e.target.value)}
                   className={`form-input placeholder-theme-text-muted ${errors.emergencyRelationship2 ? 'border-red-500' : ''}`}
@@ -910,9 +977,12 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Phone</label>
+                <label htmlFor="add-emergencyPhone2" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Phone
+                </label>
                 <input
                   type="tel"
+                  id="add-emergencyPhone2"
                   value={formData.emergencyPhone2}
                   onChange={(e) => handleInputChange('emergencyPhone2', e.target.value)}
                   className={`form-input placeholder-theme-text-muted ${errors.emergencyPhone2 ? 'border-red-500' : ''}`}
@@ -924,9 +994,12 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Email</label>
+                <label htmlFor="add-emergencyEmail2" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Email
+                </label>
                 <input
                   type="email"
+                  id="add-emergencyEmail2"
                   value={formData.emergencyEmail2}
                   onChange={(e) => handleInputChange('emergencyEmail2', e.target.value)}
                   className="form-input placeholder-theme-text-muted"
