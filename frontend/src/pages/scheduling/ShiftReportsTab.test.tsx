@@ -3,6 +3,7 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { ShiftReportsTab } from './ShiftReportsTab';
+import type { OfficerShiftAnalytics, ShiftCompletionReport } from '../../types/training';
 
 const mockGetMyReports = vi.fn();
 const mockGetFiledReports = vi.fn();
@@ -12,6 +13,8 @@ const mockGetFlagged = vi.fn();
 const mockGetConfig = vi.fn();
 const mockGetUsers = vi.fn();
 const mockGetRecentShifts = vi.fn();
+const mockGetByOfficer = vi.fn();
+const mockGetOfficerAnalytics = vi.fn();
 let canManage = true;
 
 vi.mock('../../services/api', () => ({
@@ -21,7 +24,8 @@ vi.mock('../../services/api', () => ({
     getDraftReports: (...a: unknown[]) => mockGetDraftReports(...a) as unknown,
     getPendingReviewReports: (...a: unknown[]) => mockGetPendingReview(...a) as unknown,
     getFlaggedReports: (...a: unknown[]) => mockGetFlagged(...a) as unknown,
-    getOfficerAnalytics: () => Promise.resolve(null),
+    getReportsByOfficer: (...a: unknown[]) => mockGetByOfficer(...a) as unknown,
+    getOfficerAnalytics: (...a: unknown[]) => mockGetOfficerAnalytics(...a) as unknown,
     getMyStats: () => Promise.resolve(null),
   },
   trainingModuleConfigService: {
@@ -79,6 +83,10 @@ beforeEach(() => {
   mockGetConfig.mockResolvedValue({});
   mockGetUsers.mockResolvedValue([]);
   mockGetRecentShifts.mockResolvedValue({ shifts: [], total: 0 });
+  mockGetByOfficer.mockReset();
+  mockGetByOfficer.mockResolvedValue([]);
+  mockGetOfficerAnalytics.mockReset();
+  mockGetOfficerAnalytics.mockResolvedValue(null);
 });
 
 describe('ShiftReportsTab — the view named in the URL', () => {
@@ -153,5 +161,75 @@ describe('ShiftReportsTab — an officer who has filed nothing', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Write a report' }));
 
     expect(await screen.findByText('New Shift Completion Report')).toBeInTheDocument();
+  });
+});
+
+describe('ShiftReportsTab — Written by me', () => {
+  const report = (over: Partial<ShiftCompletionReport>): ShiftCompletionReport => ({
+    id: 'r-1',
+    organization_id: 'org-1',
+    shift_date: '2026-09-20',
+    trainee_id: 'user-2',
+    officer_id: 'user-1',
+    trainee_name: 'Sam Lee',
+    officer_name: 'Dana Ruiz',
+    hours_on_shift: 12,
+    calls_responded: 3,
+    review_status: 'approved',
+    trainee_acknowledged: false,
+    created_at: '2026-09-20T20:00:00Z',
+    updated_at: '2026-09-20T20:00:00Z',
+    ...over,
+  });
+
+  const analytics = (statusCounts: Record<string, number>): OfficerShiftAnalytics => ({
+    total_reports: 2,
+    total_hours: 24,
+    total_calls: 6,
+    avg_rating: null,
+    status_counts: statusCounts,
+    trainees: [],
+    monthly: [],
+  });
+
+  it('lists the reports under a heading, without naming the viewer as author on each', async () => {
+    mockGetByOfficer.mockResolvedValue([report({ id: 'r-1' }), report({ id: 'r-2', trainee_name: 'Alex Kim' })]);
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByRole('heading', { name: /Reports you've written \(2\)/ })).toBeInTheDocument();
+    expect(screen.queryByText('Dana Ruiz')).not.toBeInTheDocument();
+  });
+
+  it('says when an approved report has not been acknowledged by the member', async () => {
+    mockGetByOfficer.mockResolvedValue([
+      report({ id: 'r-1' }),
+      report({ id: 'r-2', trainee_name: 'Alex Kim', trainee_acknowledged: true }),
+    ]);
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findAllByText('Not acknowledged yet')).toHaveLength(1);
+    expect(screen.getByText('Acknowledged')).toBeInTheDocument();
+  });
+
+  it('labels how long a pending report has waited instead of a bare day count', async () => {
+    mockGetByOfficer.mockResolvedValue([
+      report({ review_status: 'pending_review', created_at: new Date(Date.now() - 3 * 86400000).toISOString() }),
+    ]);
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByText('Waiting 3 days')).toBeInTheDocument();
+  });
+
+  it('makes the drafts tile a button that opens the drafts view', async () => {
+    mockGetByOfficer.mockResolvedValue([report({})]);
+    mockGetOfficerAnalytics.mockResolvedValue(analytics({ draft: 2 }));
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByRole('heading', { name: 'Your reporting summary' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Awaiting review/ })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /2 Drafts to finish/ }));
+
+    expect(await screen.findByText('No draft reports')).toBeInTheDocument();
   });
 });
