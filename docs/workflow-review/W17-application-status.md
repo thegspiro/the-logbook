@@ -114,7 +114,7 @@ Not driven: the Cal.com and Documenso stage actions (no integration configured).
 **Fix:**
 
 - The route takes `requiredAnyPermission` view **or** manage, as the Apparatus and Facilities label pages already do.
-- `APPLICATION_PAGES.md` updated to match.
+- `APPLICATION_PAGES.md` and `testingRegistry.ts` updated to match.
 
 **Test:** `routes.test.tsx` (new). It failed against the old route.
 **Re-driven:** the coordinator's page lists "Remy Drawer 15B749F4AC3A", "Quinn Prospect C64137D80503" and "Pat Applicant FA4292184E38". **PDF** downloads `labels-2026-09-28.pdf`.
