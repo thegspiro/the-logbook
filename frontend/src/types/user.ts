@@ -122,6 +122,8 @@ export interface EmailLinkDomain {
   override_url?: string | null;
   source: EmailLinkDomainSource;
   is_loopback: boolean;
+  /** Only resolves inside a local network: links fail for anyone away from the station. */
+  is_private_network: boolean;
   is_https: boolean;
   email_enabled: boolean;
   /** Hosts an override may use: the ones this server accepts traffic on. */

@@ -30,6 +30,7 @@ const domain = (overrides: Partial<EmailLinkDomain> = {}): EmailLinkDomain => ({
   override_url: null,
   source: 'frontend_url',
   is_loopback: false,
+  is_private_network: false,
   is_https: true,
   email_enabled: true,
   allowed_hosts: ['logbook.yourdept.org', 'intranet.yourdept.org'],
@@ -103,6 +104,21 @@ describe('EmailLinkDomainCard', () => {
     );
     render(<EmailLinkDomainCard />);
     expect(await screen.findByRole('alert')).toHaveTextContent(/once email sending is turned on/);
+  });
+
+  it('warns that a station-only address fails for members away from the station', async () => {
+    mockGetEmailLinkDomain.mockResolvedValue(
+      domain({ effective_url: 'https://tower.local', is_private_network: true, is_https: true })
+    );
+    viewFrom('https://tower.local');
+    render(<EmailLinkDomainCard />);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/only works inside your station.s network/);
+  });
+
+  it('says nothing about the station network for a public address', async () => {
+    render(<EmailLinkDomainCard />);
+    await screen.findByTestId('email-link-domain-url');
+    expect(screen.queryByText(/inside your station.s network/)).not.toBeInTheDocument();
   });
 
   it('warns about a plain http address', async () => {

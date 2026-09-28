@@ -1370,11 +1370,13 @@ TEST_SAMPLE_DATES: Dict[
     "it_password_notification": {"request_time": (0, None, _strf(_DATE_TIME))},
     "duplicate_application": {"original_date": (-30, None, _strf(_DATE))},
     "application_withdrawn": {"withdrawal_date": (0, None, _strf(_DATE))},
+    # The assignment and decline notices print the ISO date
+    # (SchedulingService: shift.shift_date.isoformat()), so the test does too.
     "shift_assignment": {
-        "shift_date": (3, None, _strf(_DATE)),
+        "shift_date": (3, None, _strf("%Y-%m-%d")),
         "shift_start": (3, time(6, 0), _strf("%H:%M")),
     },
-    "shift_decline": {"shift_date": (3, None, _strf(_DATE))},
+    "shift_decline": {"shift_date": (3, None, _strf("%Y-%m-%d"))},
     "shift_reminder": {
         "shift_date": (1, None, _strf("%b %d, %Y")),
         "shift_start": (1, time(6, 0), _strf("%H:%M")),
