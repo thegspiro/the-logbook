@@ -25,7 +25,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W04 | My account: profile, password change, MFA enrolment, notification settings | member            | `/account`                            | ✅     |
 | W05 | Positions and permissions: create a position, grant, assign, revoke        | admin → member    | `/settings/roles`                     | ✅     |
 | W06 | Organization settings, module switches, department setup checklist         | admin             | `/settings`, `/setup`                 | ✅     |
-| W07 | Dashboard for each role: what shows, what links work, what fails behind it | every role        | `/dashboard`                          | ⬜     |
+| W07 | Dashboard for each role: what shows, what links work, what fails behind it | every role        | `/dashboard`                          | ✅     |
 
 ## Tier 2 — Members
 
@@ -151,9 +151,6 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **W07** — right after onboarding, the administrator's dashboard fires 403s
-  on `/integrations/connected` (four times) and `/scheduling/settings` for
-  modules that are off.
 - **W08** — several Add Member fields have no programmatic label.
 - **W08** — "View by Role → Manage Members" saves each member with its own
   request under `Promise.all`; if one is refused the others still land, but
@@ -168,6 +165,18 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W07 — Dashboard for each role — 2026-09-28
+
+Driven as: all ten seeded roles at 1280×900, `admin` and `member` at
+390×844. Held: every dashboard loaded with no failed request, console error
+or broken text; all 42 links across the ten dashboards opened a page the
+role can use; the money, grant and outreach cards follow their permission
+and module gates. Fixed: W07-1 (LOW — with Integrations or Scheduling off,
+every page fired 403s for `/integrations/connected` from both navigation
+bars and `/scheduling/settings` from the dashboard; confirms and closes the
+W07 lead). Nothing flagged. Gate: typecheck, lint and the full frontend suite
+clean (no Python changed). Next: W08.
 
 ### W06 — Organization settings, modules, department setup — 2026-09-28
 

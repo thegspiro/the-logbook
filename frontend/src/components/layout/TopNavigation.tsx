@@ -81,8 +81,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const [expandedMobileMenus, setExpandedMobileMenus] = useState<string[]>([]);
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { isModuleOn } = useEnabledModules();
-  const { isConnected } = useConnectedIntegrations();
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
 
   // The mobile bottom bar's "More" button asks us to open the menu; a second

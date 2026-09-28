@@ -43,4 +43,23 @@ describe('useConnectedIntegrations', () => {
     expect(result.current.connected.size).toBe(0);
     expect(result.current.isConnected('zoom')).toBe(false);
   });
+
+  // W07: with the Integrations module off the endpoint answers 403, and both
+  // navigation bars asked for it on every page load.
+  it('makes no request while disabled, then fetches once enabled', async () => {
+    mockGetConnectedStatus.mockResolvedValue([{ integration_type: 'zoom', status: 'connected', enabled: true }]);
+
+    const { result, rerender } = renderHook(({ enabled }) => useConnectedIntegrations({ enabled }), {
+      initialProps: { enabled: false },
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(mockGetConnectedStatus).not.toHaveBeenCalled();
+    expect(result.current.isConnected('zoom')).toBe(false);
+
+    rerender({ enabled: true });
+
+    await waitFor(() => expect(result.current.isConnected('zoom')).toBe(true));
+    expect(mockGetConnectedStatus).toHaveBeenCalledTimes(1);
+  });
 });

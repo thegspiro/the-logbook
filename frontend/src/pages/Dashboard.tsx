@@ -230,7 +230,8 @@ const TIMELINE_ACCENT: Record<TimelineKind, string> = {
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
-  const signupWindow = useSignupWindow();
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const signupWindow = useSignupWindow({ enabled: !modulesLoading && isModuleOn('scheduling') });
   const [searchParams, setSearchParams] = useSearchParams();
   const { user: currentUser, checkPermission } = useAuthStore();
   const [departmentName, setDepartmentName] = useState('Fire Department');
@@ -268,7 +269,6 @@ const Dashboard: React.FC = () => {
   const canManageMessages = canViewLegacyAdmin || checkPermission('notifications.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
   const canViewScheduling = checkPermission('scheduling.manage');
-  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(canViewLegacyAdmin);
   const [adminError, setAdminError] = useState(false);

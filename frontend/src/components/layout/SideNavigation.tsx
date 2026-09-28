@@ -115,8 +115,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
-  const { isModuleOn } = useEnabledModules();
-  const { isConnected } = useConnectedIntegrations();
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
 
   // The mobile bottom bar's "More" button asks us to open the drawer.

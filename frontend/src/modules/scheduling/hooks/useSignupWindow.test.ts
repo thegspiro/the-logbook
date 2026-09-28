@@ -75,4 +75,13 @@ describe('useSignupWindow', () => {
 
     expect(result.current.openEndedCushionHours).toBe(12);
   });
+
+  // W07: the dashboard shows scheduling only when the module is on; with it
+  // off, loading the settings answered 403 on every dashboard visit.
+  it('does not load the settings while disabled', () => {
+    const { result } = renderHook(() => useSignupWindow({ enabled: false }));
+
+    expect(mockGetFeatureSettings).not.toHaveBeenCalled();
+    expect(result.current).toEqual(UNRESOLVED_SIGNUP_WINDOW);
+  });
 });

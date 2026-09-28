@@ -21,12 +21,30 @@ interface UseConnectedIntegrationsResult {
   isConnected: (integrationType: string) => boolean;
 }
 
-export const useConnectedIntegrations = (): UseConnectedIntegrationsResult => {
+interface UseConnectedIntegrationsOptions {
+  /**
+   * False skips the request and reports nothing connected. The navigation
+   * passes the Integrations module switch here: with the module off the
+   * endpoint answers 403, and every page load fired it from both navigation
+   * bars (workflow review W07).
+   */
+  enabled?: boolean;
+}
+
+export const useConnectedIntegrations = ({
+  enabled = true,
+}: UseConnectedIntegrationsOptions = {}): UseConnectedIntegrationsResult => {
   const [connected, setConnected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!enabled) {
+      setConnected(new Set());
+      setLoading(false);
+      return undefined;
+    }
     let cancelled = false;
+    setLoading(true);
     integrationsService
       .getConnectedIntegrationStatus()
       .then((items) => {
@@ -42,7 +60,7 @@ export const useConnectedIntegrations = (): UseConnectedIntegrationsResult => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   const isConnected = useCallback((integrationType: string) => connected.has(integrationType), [connected]);
 
