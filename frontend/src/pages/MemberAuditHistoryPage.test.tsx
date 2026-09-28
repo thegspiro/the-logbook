@@ -1,9 +1,10 @@
 /**
  * Tests for the member audit history page.
  *
- * Two things this pins:
+ * What this pins:
  *  - the Event Type dropdown offers only filters the endpoint can serve
  *  - the expanded entry does not print raw ids for people the row already names
+ *  - each entry carries its time as well as its date
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -71,6 +72,15 @@ describe('MemberAuditHistoryPage', () => {
     expect(screen.getByText('Fields Updated')).toBeInTheDocument();
     expect(screen.queryByText(/a8c2c854-7bb9-458c-bba4-dd99d88e5167/)).not.toBeInTheDocument();
     expect(screen.queryByText(/256605cb-e6e5-4183-aae9-23bb9eecd7ea/)).not.toBeInTheDocument();
+  });
+
+  // Every entry on a busy day read "9/28/2026", so an officer could not tell
+  // which of two changes came last.
+  it('shows the time of each entry, not only the date', async () => {
+    renderWithRouter(<MemberAuditHistoryPage />);
+
+    await screen.findByText('Member profile updated: rank');
+    expect(screen.getByText(/\d{1,2}:\d{2}/)).toBeInTheDocument();
   });
 
   it('offers no details toggle when nothing is left to show', async () => {

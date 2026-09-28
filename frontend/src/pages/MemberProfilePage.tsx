@@ -1381,8 +1381,14 @@ export const MemberProfilePage: React.FC = () => {
               <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Change Member Status</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">New Status</label>
+                  <label
+                    htmlFor="status-new-status"
+                    className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                  >
+                    New Status
+                  </label>
                   <select
+                    id="status-new-status"
                     value={newStatus}
                     onChange={(e) => setNewStatus(e.target.value)}
                     className="form-input px-3 text-sm focus:ring-blue-500"
@@ -1399,8 +1405,11 @@ export const MemberProfilePage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Reason (optional)</label>
+                  <label htmlFor="status-reason" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                    Reason (optional)
+                  </label>
                   <textarea
+                    id="status-reason"
                     value={statusReason}
                     onChange={(e) => setStatusReason(e.target.value)}
                     rows={3}

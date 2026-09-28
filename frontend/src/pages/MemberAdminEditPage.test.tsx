@@ -210,3 +210,63 @@ describe('MemberAdminEditPage — clearing a date', () => {
     expect(await screen.findByText(/date_of_birth: Invalid date format\./)).toBeInTheDocument();
   });
 });
+
+describe('MemberAdminEditPage — emergency contacts', () => {
+  beforeEach(() => {
+    mockGetUserWithRoles.mockReset();
+    mockUpdateUserProfile.mockReset();
+    mockGetLocations.mockReset();
+    mockGetLocations.mockResolvedValue([]);
+    mockUpdateUserProfile.mockResolvedValue({});
+    mockGetUserWithRoles.mockResolvedValue(
+      member({
+        emergency_contacts: [
+          { name: 'Pat Reyes', relationship: 'Spouse', phone: '555-0100', email: 'pat@example.org', is_primary: true },
+        ],
+      })
+    );
+  });
+
+  it('adds a contact with no email instead of sending an empty string', async () => {
+    // `EmergencyContact.email` is `EmailStr | None`, so '' was a 422 and the
+    // new contact was lost.
+    const user = userEvent.setup();
+    await renderPage();
+
+    await user.click(screen.getByRole('button', { name: /add contact/i }));
+    await user.type(screen.getAllByRole('textbox', { name: /^name$/i })[1] ?? document.body, ' Sam Reyes ');
+    await user.type(screen.getAllByRole('textbox', { name: /relationship/i })[1] ?? document.body, 'Brother');
+    await user.type(screen.getAllByRole('textbox', { name: /^phone$/i })[2] ?? document.body, '555-0101');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
+    const payload = JSON.parse(JSON.stringify(mockUpdateUserProfile.mock.calls[0]?.[1])) as {
+      emergency_contacts: Record<string, unknown>[];
+    };
+    expect(payload.emergency_contacts).toEqual([
+      { name: 'Pat Reyes', relationship: 'Spouse', phone: '555-0100', email: 'pat@example.org', is_primary: true },
+      { name: 'Sam Reyes', relationship: 'Brother', phone: '555-0101', is_primary: false },
+    ]);
+  });
+
+  it('names the incomplete contact and sends nothing', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    await user.click(screen.getByRole('button', { name: /add contact/i }));
+    await user.type(screen.getAllByRole('textbox', { name: /^name$/i })[1] ?? document.body, 'Sam Reyes');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(await screen.findByText('Emergency contact 2 needs a name and a relationship.')).toBeInTheDocument();
+    expect(mockUpdateUserProfile).not.toHaveBeenCalled();
+  });
+
+  it('labels every field on the page', async () => {
+    await renderPage();
+    expect(screen.getByRole('textbox', { name: /first name/i })).toHaveValue('Dana');
+    expect(screen.getByRole('textbox', { name: /membership number/i })).toHaveValue('FF-001');
+    expect(screen.getByRole('combobox', { name: /station/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /street address/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /^relationship$/i })).toHaveValue('Spouse');
+  });
+});

@@ -8,6 +8,7 @@ vi.mock('../services/api', () => ({
   userService: {
     getUsersWithRoles: vi.fn(),
     assignUserRoles: vi.fn(),
+    adminResetPassword: vi.fn(),
   },
   roleService: {
     getRoles: vi.fn(),
@@ -22,6 +23,11 @@ vi.mock('../stores/authStore', () => ({
     checkPermission: () => true,
     user: { id: 'coordinator-1' },
   }),
+}));
+
+const mockToastSuccess = vi.fn();
+vi.mock('react-hot-toast', () => ({
+  default: { success: (...args: unknown[]) => mockToastSuccess(...args) as unknown, error: vi.fn() },
 }));
 
 vi.mock('../hooks/useRanks', () => ({
@@ -101,5 +107,137 @@ describe('MembersAdminPage — Manage Roles refusals (workflow review W05)', () 
     );
     expect(screen.getAllByText(/beyond your own/)).toHaveLength(1);
     expect(userService.assignUserRoles).toHaveBeenCalledWith('user-1', ['role-member', 'role-chief']);
+  });
+});
+
+describe('MembersAdminPage — Reset Password (workflow review W11)', () => {
+  beforeEach(() => {
+    vi.mocked(userService.getUsersWithRoles).mockReset();
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member] as never);
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([memberRole] as never);
+    vi.mocked(locationsService.getLocations).mockReset();
+    vi.mocked(locationsService.getLocations).mockResolvedValue([] as never);
+    vi.mocked(userService.adminResetPassword).mockReset();
+    vi.mocked(userService.adminResetPassword).mockResolvedValue({ message: 'ok' });
+    mockToastSuccess.mockReset();
+  });
+
+  // The refusal said only "does not meet strength requirements", with no word
+  // on which rule, and the two fields had no accessible name.
+  it('lists the rules a refused password breaks, and sends nothing', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MembersAdminPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Reset Password' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('New Password'), 'Abcdefgh1234!');
+    await user.type(within(dialog).getByLabelText('Confirm Password'), 'Abcdefgh1234!');
+    await user.click(within(dialog).getByRole('button', { name: 'Reset Password' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Password does not meet every rule listed below'
+    );
+    expect(within(dialog).getByRole('list', { name: 'Password rules' })).toHaveTextContent(/○ No runs like 123 or abc/);
+    expect(userService.adminResetPassword).not.toHaveBeenCalled();
+  });
+
+  // Success closed the dialog and said nothing, which reads the same as a
+  // dismissed dialog.
+  it('confirms a reset that went through', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MembersAdminPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Reset Password' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('New Password'), 'Tanker$Maple947');
+    await user.type(within(dialog).getByLabelText('Confirm Password'), 'Tanker$Maple947');
+    await user.click(within(dialog).getByRole('button', { name: 'Reset Password' }));
+
+    await vi.waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Password reset for Jordan Avery'));
+    expect(userService.adminResetPassword).toHaveBeenCalledWith('user-1', 'Tanker$Maple947', true);
+  });
+});
+
+describe('MembersAdminPage — Manage Members for a position (workflow review W11)', () => {
+  const member2 = { ...member, id: 'user-2', username: 'review_member2', full_name: 'Imogen One', roles: [] };
+  const member3 = { ...member, id: 'user-3', username: 'review_member3', full_name: 'Ian Two', roles: [] };
+
+  beforeEach(() => {
+    vi.mocked(userService.getUsersWithRoles).mockReset();
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member, member2, member3] as never);
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([memberRole, chiefRole] as never);
+    vi.mocked(locationsService.getLocations).mockReset();
+    vi.mocked(locationsService.getLocations).mockResolvedValue([] as never);
+    vi.mocked(userService.assignUserRoles).mockReset();
+  });
+
+  // Under `Promise.all`, one refusal rejected the save while the other
+  // request still landed; the page showed only the refusal, did not reload,
+  // and did not say that anything had been saved.
+  it('saves one member at a time, reloads, and names the one that was refused', async () => {
+    const user = userEvent.setup();
+    let inFlight = 0;
+    let maxInFlight = 0;
+    vi.mocked(userService.assignUserRoles).mockImplementation(async (userId: string) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      if (userId === 'user-3') {
+        throw Object.assign(new Error('refused'), {
+          response: { status: 400, data: { detail: 'Member is archived.' } },
+        });
+      }
+      return {} as never;
+    });
+    renderWithRouter(<MembersAdminPage />);
+
+    await user.click(await screen.findByRole('button', { name: /view by role/i }));
+    const chiefCard = (await screen.findAllByRole('button', { name: 'Manage Members' }))[1] ?? document.body;
+    await user.click(chiefCard);
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('checkbox', { name: /Imogen One/ }));
+    await user.click(within(dialog).getByRole('checkbox', { name: /Ian Two/ }));
+    const loadsBefore = vi.mocked(userService.getUsersWithRoles).mock.calls.length;
+    await user.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '1 of 2 changes saved. Not saved — Ian Two: Member is archived.'
+    );
+    expect(maxInFlight).toBe(1);
+    expect(userService.assignUserRoles).toHaveBeenCalledWith('user-2', ['role-chief']);
+    expect(vi.mocked(userService.getUsersWithRoles).mock.calls.length).toBeGreaterThan(loadsBefore);
+  });
+});
+
+describe('MembersAdminPage — quick-removing a position (workflow review W11)', () => {
+  beforeEach(() => {
+    vi.mocked(userService.getUsersWithRoles).mockReset();
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member] as never);
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([memberRole] as never);
+    vi.mocked(locationsService.getLocations).mockReset();
+    vi.mocked(locationsService.getLocations).mockResolvedValue([] as never);
+    vi.mocked(userService.assignUserRoles).mockReset();
+  });
+
+  // The confirmation read "Remove this role from Jordan Avery?", and a refusal
+  // — such as the last administrator's — was reported as a connection fault.
+  it("names the position, and shows the server's reason for a refusal", async () => {
+    const user = userEvent.setup();
+    vi.mocked(userService.assignUserRoles).mockRejectedValueOnce({
+      response: { status: 400, data: { detail: 'Cannot remove the only remaining administrator.' } },
+    });
+    renderWithRouter(<MembersAdminPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove Member role from Jordan Avery' }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('Remove Member from Jordan Avery?');
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
+
+    expect(await screen.findByText('Cannot remove the only remaining administrator.')).toBeInTheDocument();
+    expect(screen.queryByText(/check your connection/)).not.toBeInTheDocument();
   });
 });
