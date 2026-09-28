@@ -59,6 +59,7 @@ import ScheduledEmailList from '../components/ScheduledEmailList';
 import MessageHistoryList from '../components/MessageHistoryList';
 import OfficersPanel from '../components/OfficersPanel';
 import FootersPanel from '../components/FootersPanel';
+import { EmailLinkReachabilityNotice } from '../components/EmailLinkReachabilityNotice';
 import { useTemplateDraft } from '../hooks/useTemplateDraft';
 import type { EmailAttachment } from '../types';
 import toast from 'react-hot-toast';
@@ -407,6 +408,7 @@ const EmailTemplatesPage: React.FC = () => {
       width={activeTab === 'templates' ? 'wide' : 'standard'}
     >
       <>
+        <EmailLinkReachabilityNotice />
         {/* Save bar for the Templates section.
 
               Sticky, and it carries Save: with the editor and the preview side

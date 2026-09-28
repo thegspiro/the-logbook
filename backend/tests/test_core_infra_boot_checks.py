@@ -309,6 +309,20 @@ class TestNonProductionEmailWithLocalhostLinksIsReported:
             ENVIRONMENT="development",
             EMAIL_ENABLED=True,
             FRONTEND_URL="http://localhost:3000",
-            ALLOWED_ORIGINS="http://192.168.1.10:7880",
+            ALLOWED_ORIGINS="https://logbook.yourdept.org",
         )
         assert self._frontend_warnings(settings) == []
+
+    def test_a_station_only_origin_replaces_localhost_but_is_itself_reported(self):
+        """A LAN origin still beats localhost, and is then flagged as LAN-only."""
+        settings = Settings(
+            ENVIRONMENT="development",
+            EMAIL_ENABLED=True,
+            FRONTEND_URL="http://localhost:3000",
+            ALLOWED_ORIGINS="http://192.168.1.10:7880",
+        )
+        assert settings.FRONTEND_URL == "http://192.168.1.10:7880"
+        warnings = self._frontend_warnings(settings)
+        assert len(warnings) == 1
+        assert "only resolves inside a local network" in warnings[0]
+        assert warnings[0].startswith("WARNING:")

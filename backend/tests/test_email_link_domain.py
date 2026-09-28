@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.api.v1.endpoints import organizations
-from app.core.config import Settings
+from app.core.config import Settings, _is_private_network_url
 from app.schemas.organization import EmailLinkDomainResponse, EmailLinkDomainSource
 
 pytestmark = pytest.mark.unit
@@ -79,6 +79,85 @@ class TestDescribeFrontendUrl:
             },
         ):
             EmailLinkDomainResponse(**Settings(**kwargs).describe_frontend_url())
+
+
+class TestStationOnlyAddresses:
+    """An address that works at the station and nowhere else.
+
+    Loopback fails for everyone and was already caught. A private address
+    works for everyone setting the system up, so nothing looks wrong until a
+    member opens an email at home and neither the links nor the logo load.
+    """
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://192.168.1.20:3000",
+            "http://10.0.0.5",
+            "https://172.16.4.2",
+            "http://169.254.10.1",
+            "http://tower.local",
+            "http://logbook.lan",
+            "https://logbook.station12.internal",
+            "http://logbook.home.arpa",
+            "http://tower",
+            "http://[fd00::1]",
+        ],
+    )
+    def test_is_recognised(self, url):
+        assert _is_private_network_url(url) is True
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://logbook.yourdept.org",
+            "http://8.8.8.8",
+            "https://local.example.org",  # "local" as a label, not the suffix
+            # Loopback is reported separately, as its own case.
+            "http://localhost:3000",
+            "http://127.0.0.1",
+            "",
+        ],
+    )
+    def test_a_public_or_loopback_address_is_not(self, url):
+        assert _is_private_network_url(url) is False
+
+    def test_is_reported_to_the_settings_screen(self):
+        described = Settings(
+            FRONTEND_URL="http://tower.local:3000",
+            ALLOWED_ORIGINS="http://tower.local:3000",
+        ).describe_frontend_url()
+        assert described["is_private_network"] is True
+        assert described["is_loopback"] is False
+        assert EmailLinkDomainResponse(**described).is_private_network is True
+
+    def test_a_public_address_is_not_flagged(self):
+        described = Settings(
+            FRONTEND_URL="https://logbook.yourdept.org"
+        ).describe_frontend_url()
+        assert described["is_private_network"] is False
+
+    def test_startup_warns_when_mail_is_on(self):
+        warnings = Settings(
+            FRONTEND_URL="http://192.168.1.20:3000",
+            ALLOWED_ORIGINS="http://192.168.1.20:3000",
+            EMAIL_ENABLED=True,
+        ).validate_security_config()
+        station_only = [
+            w for w in warnings if "only resolves inside a local network" in w
+        ]
+        assert len(station_only) == 1
+        # Advisory: a station-only deployment is a legitimate choice, and
+        # anything CRITICAL stops the server from starting.
+        assert station_only[0].startswith("WARNING")
+
+    def test_startup_is_quiet_when_mail_is_off(self):
+        warnings = Settings(
+            FRONTEND_URL="http://192.168.1.20:3000",
+            ALLOWED_ORIGINS="http://192.168.1.20:3000",
+            EMAIL_ENABLED=False,
+        ).validate_security_config()
+        assert not [w for w in warnings if "local network" in w]
 
 
 class TestLinkDomainEndpoint:

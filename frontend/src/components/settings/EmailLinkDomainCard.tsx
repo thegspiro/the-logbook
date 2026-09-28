@@ -297,6 +297,17 @@ const EmailLinkDomainCard: React.FC = () => {
                 </div>
               )}
 
+              {domain.is_private_network && (
+                <div role="alert" className="alert-warning flex items-start gap-2 text-sm">
+                  <AlertTriangle className="text-theme-alert-warning-icon mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <p className="text-theme-alert-warning-text">
+                    This address only works inside your station&apos;s network. Links and the logo in emails will not
+                    open for a member reading on a phone or at home. If members reach this site from outside the
+                    station, set the address they use there.
+                  </p>
+                </div>
+              )}
+
               {!domain.is_loopback && !domain.is_https && (
                 <div className="alert-warning flex items-start gap-2 text-sm">
                   <AlertTriangle className="text-theme-alert-warning-icon mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
