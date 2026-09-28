@@ -218,6 +218,7 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `/prospective-members`                        | Prospective Members Pipeline | `prospective_members.manage`                         |
 | `/prospective-members/settings`               | Pipeline Settings            | `prospective_members.manage`                         |
 | `/prospective-members/:applicantId/interview` | Applicant Interview          | `prospective_members.manage`                         |
+| `/prospective-members/sign-offs`              | Sign-offs                    | Authenticated                                        |
 | `/application-status/:token`                  | Public Application Status    | None (token-based; see the public-routes note above) |
 
 > **Board view fetch size** _(2026-08-08)_: the kanban view requests `KANBAN_PAGE_SIZE` (**200**, the list endpoint's ceiling), not `DEFAULT_PAGE_SIZE` (25) — it groups applicants into stage columns client-side, so a page of 25 produced a board silently assembled from a fraction of the pipeline. Switching between board and table **refetches** rather than inheriting the other view's page. Past 200 the board renders a truncation notice naming the real total. Column headers count only the cards that loaded, so a stage on a truncated board can read low — the table view is the accurate one at that size.
@@ -1469,6 +1470,8 @@ reviewable in one place.
 | ------------------------------- | ---------------------------- | ---------------------------- |
 | `/prospective-members`          | Prospective Members Pipeline | `prospective_members.manage` |
 | `/prospective-members/settings` | Pipeline Settings            | `prospective_members.manage` |
+
+> **Sign-offs (`/prospective-members/sign-offs`)** _(added 2026-09-28)_. Where the officers a Multi-Signer Approval stage names (the Chief, the President) approve an applicant. Authenticated with the module on, and no permission beyond it: those officers rarely hold `prospective_members` access, and `GET /prospective-members/my-sign-offs` lists only stages asking for a role the caller holds — by applicant name and stage, not their record. Conversion refuses until every required stage is complete.
 
 > The **Pipeline Settings** page includes a **Report Stage Groups Editor** for configuring how pipeline stages are grouped in the pipeline overview report (e.g., combining Application + Interview into "Early Stages").
 

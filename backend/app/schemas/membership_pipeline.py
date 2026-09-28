@@ -489,6 +489,35 @@ class StepApprovalRequest(BaseModel):
     notes: Optional[str] = None
 
 
+class SignOffRole(BaseModel):
+    """An approver role a Multi-Signer Approval stage asks for."""
+
+    role: str
+    label: str
+
+
+class RequiredSignOffRole(SignOffRole):
+    signed: bool
+
+
+class PendingSignOffResponse(BaseModel):
+    """A stage waiting on the caller's signature — deliberately minimal.
+
+    Same reasoning as StepApprovalResponse: the caller is authorized by the
+    role they hold, so the applicant's name and stage are all it carries.
+    """
+
+    prospect_id: UUID
+    first_name: str
+    last_name: str
+    pipeline_name: Optional[str] = None
+    step_id: UUID
+    step_name: str
+    step_description: Optional[str] = None
+    roles_to_sign: List[SignOffRole]
+    required_roles: List[RequiredSignOffRole]
+
+
 class StepApprovalResponse(BaseModel):
     """Result of a signer's sign-off — deliberately not the full prospect.
 

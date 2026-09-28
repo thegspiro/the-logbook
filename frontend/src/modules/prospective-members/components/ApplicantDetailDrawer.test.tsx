@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import { ApplicantDetailDrawer } from './ApplicantDetailDrawer';
@@ -149,6 +149,40 @@ describe('ApplicantDetailDrawer skip action', () => {
     const skip = screen.getByRole('button', { name: /skip/i });
     expect(skip).toBeDisabled();
     expect(skip).toHaveAttribute('title', expect.stringContaining('Required'));
+  });
+});
+
+describe('ApplicantDetailDrawer approval status', () => {
+  // The panel read the required signers off the last history entry's
+  // action_result, where they are never stored, so it said "No approval data
+  // recorded yet" to the coordinator after the Chief and the President had
+  // both signed (workflow review W16-1).
+  const signOff = {
+    current_stage_id: 'step-d',
+    current_stage_name: 'Officer Sign-Off',
+    current_stage_type: 'multi_approval',
+    current_stage_config: { required_approvers: ['chief', 'president'], require_notes: false, approval_order: 'any' },
+    stage_history: [
+      stage({ id: 'a', stage_name: 'Application Received', completed_at: '2026-08-02T14:00:00Z' }),
+      stage({
+        id: 'd',
+        stage_name: 'Officer Sign-Off',
+        stage_type: 'multi_approval',
+        status: StepProgressStatus.IN_PROGRESS,
+        action_result: { approvals: [{ role: 'Chief', approved_by: 'user-chief' }] },
+      }),
+      // A later stage's row after the current one must not be read instead.
+      stage({ id: 'e', stage_name: 'Orientation', status: StepProgressStatus.IN_PROGRESS }),
+    ],
+  } as unknown as Partial<Applicant>;
+
+  it("lists each required signer from the stage's configuration, with who has signed", async () => {
+    renderDrawer(signOff);
+    await screen.findByText('Stage History');
+
+    expect(screen.queryByText('No approval data recorded yet.')).not.toBeInTheDocument();
+    const rows = within(screen.getByRole('list', { name: 'Approval status' })).getAllByRole('listitem');
+    expect(rows.map((r) => r.textContent)).toEqual(['chiefApproved', 'presidentPending']);
   });
 });
 

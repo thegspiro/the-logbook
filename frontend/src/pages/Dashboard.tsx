@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Megaphone,
+  PenLine,
   Pin,
   Plus,
   Share,
@@ -56,6 +57,8 @@ import { schedulingService } from '../modules/scheduling/services/api';
 import { memberSignupClosedReason } from '../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../modules/scheduling/hooks/useSignupWindow';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
+import { signOffService } from '../modules/prospective-members/services/api';
+import type { PendingSignOff } from '../modules/prospective-members/types';
 import { endOfReportingDayUTC, startOfReportingDayUTC } from '../modules/admin-hours/utils/reportingRange';
 import { getErrorMessage } from '../utils/errorHandling';
 import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
@@ -328,6 +331,7 @@ const Dashboard: React.FC = () => {
   // fails so the verdict states a narrower scope rather than implying
   // screenings were checked and passed.
   const [myScreenings, setMyScreenings] = useState<MyComplianceSummary | null>(null);
+  const [mySignOffs, setMySignOffs] = useState<PendingSignOff[]>([]);
 
   // Department Messages
   const [deptMessages, setDeptMessages] = useState<InboxMessage[]>([]);
@@ -464,6 +468,7 @@ const Dashboard: React.FC = () => {
     void runRetry('openShifts', () => loadOpenShifts());
     void runRetry('seats', () => loadMySeats());
     void runRetry('screenings', () => loadMyScreenings());
+    void runRetry('signOffs', () => loadMySignOffs());
     void runRetry('training', () => loadTrainingProgress());
     void runRetry('equipment', () => loadMyEquipment());
     void runRetry('hours', () => loadHours());
@@ -910,6 +915,24 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // The officers a Multi-Signer Approval stage names (the Chief, the
+  // President) rarely use the applicant pages, so this is where they learn a
+  // signature is waiting on them — and conversion waits until they sign
+  // (workflow review W16-1). The list only ever holds stages asking for a role
+  // the member holds. A failure shows nothing: the Sign-offs page itself says
+  // when it cannot load.
+  const loadMySignOffs = async () => {
+    if (!isModuleOn('prospective_members')) {
+      setMySignOffs([]);
+      return;
+    }
+    try {
+      setMySignOffs(await signOffService.listMine());
+    } catch {
+      setMySignOffs([]);
+    }
+  };
+
   const loadMyScreenings = async (isRetry = false) => {
     if (!isRetry) setScreeningsError(false);
     if (!isModuleOn('medical_screening')) {
@@ -1261,6 +1284,21 @@ const Dashboard: React.FC = () => {
       busy: acknowledgingId === msg.id,
     });
   }
+  if (mySignOffs.length > 0) {
+    const first = mySignOffs[0];
+    needsYouItems.push({
+      id: 'sign-offs',
+      icon: PenLine,
+      title:
+        mySignOffs.length === 1 && first
+          ? `${first.first_name} ${first.last_name} is waiting on your sign-off`
+          : `${mySignOffs.length} applicants are waiting on your sign-off`,
+      detail: [...new Set(mySignOffs.map((s) => s.step_name))].join(', '),
+      actionLabel: 'Review',
+      onAction: () => void navigate('/prospective-members/sign-offs'),
+      tone: needsYouItems.length === 0 ? 'primary' : 'warning',
+    });
+  }
   // Department-wide action-item and setup totals belong in Organization. They
   // must not make the personal "Needs you" list look like an individual inbox.
 
@@ -1465,6 +1503,7 @@ const Dashboard: React.FC = () => {
             runRetry('openShifts', () => loadOpenShifts(true)),
             runRetry('seats', () => loadMySeats(true)),
             runRetry('screenings', () => loadMyScreenings(true)),
+            runRetry('signOffs', () => loadMySignOffs()),
             runRetry('training', () => loadTrainingProgress(true)),
             runRetry('equipment', () => loadMyEquipment(true)),
           ]),
