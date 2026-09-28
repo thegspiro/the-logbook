@@ -197,8 +197,11 @@ export const MembersAdminPage: React.FC = () => {
     } catch (err: unknown) {
       const detail = getErrorDetail(err);
       const status = (err as { response?: { status?: number } })?.response?.status;
+      // A 403 here is usually the grant ceiling — the caller may assign
+      // positions, just not one that carries more than they hold — so the
+      // server's reason is the useful part (workflow review W05).
       if (status === 403) {
-        setError('You do not have permission to assign roles. Contact an administrator.');
+        setError(detail || 'You do not have permission to assign roles. Contact an administrator.');
       } else {
         setError(detail || 'Unable to save role assignments. Please try again.');
       }
@@ -252,8 +255,11 @@ export const MembersAdminPage: React.FC = () => {
     } catch (err: unknown) {
       const detail = getErrorDetail(err);
       const status = (err as { response?: { status?: number } })?.response?.status;
+      // A 403 here is usually the grant ceiling — the caller may assign
+      // positions, just not one that carries more than they hold — so the
+      // server's reason is the useful part (workflow review W05).
       if (status === 403) {
-        setError('You do not have permission to assign roles. Contact an administrator.');
+        setError(detail || 'You do not have permission to assign roles. Contact an administrator.');
       } else {
         setError(detail || 'Unable to update member assignments. Please try again.');
       }
@@ -457,7 +463,9 @@ export const MembersAdminPage: React.FC = () => {
           )}
         </div>
 
-        {error && (
+        {/* The position dialogs show their own error; repeating it here only
+            put a second copy behind the overlay. */}
+        {error && !editingRoles && !editingMembers && (
           <div
             className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4"
             role="alert"
@@ -576,7 +584,7 @@ export const MembersAdminPage: React.FC = () => {
                                 onClick={() => {
                                   void handleQuickRemoveRole(user, role.id);
                                 }}
-                                className="ml-1 hover:text-red-600"
+                                className="touch-target-phone ml-1 hover:text-red-600"
                                 aria-label={`Remove ${role.name} role from ${user.full_name || user.username}`}
                               >
                                 ×
@@ -601,20 +609,20 @@ export const MembersAdminPage: React.FC = () => {
                       <div className="flex flex-wrap justify-end gap-3">
                         <button
                           onClick={() => void navigate(`/members/admin/edit/${user.id}`)}
-                          className="text-green-700 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
+                          className="touch-target-phone text-green-700 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleEditRoles(user)}
-                          className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                          className="touch-target-phone text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                         >
                           Manage Roles
                         </button>
                         {currentUser?.id !== user.id && (
                           <button
                             onClick={() => setResetPasswordUser(user)}
-                            className="text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
+                            className="touch-target-phone text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
                           >
                             Reset Password
                           </button>
@@ -622,7 +630,7 @@ export const MembersAdminPage: React.FC = () => {
                         {currentUser?.id !== user.id && user.mfa_enabled && (
                           <button
                             onClick={() => setResetMfaUser(user)}
-                            className="text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
+                            className="touch-target-phone text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
                           >
                             Reset MFA
                           </button>
@@ -630,7 +638,7 @@ export const MembersAdminPage: React.FC = () => {
                         {currentUser?.id !== user.id && (
                           <button
                             onClick={() => handleDeleteUser(user)}
-                            className="text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                            className="touch-target-phone text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                           >
                             Delete
                           </button>
@@ -670,7 +678,7 @@ export const MembersAdminPage: React.FC = () => {
                       </div>
                       <button
                         onClick={() => handleEditMembers(role)}
-                        className="hover:bg-theme-surface-hover shrink-0 self-start rounded-md border border-blue-400 px-4 py-2 text-sm font-medium text-blue-700 hover:text-blue-800 sm:self-auto dark:text-blue-400 dark:hover:text-blue-300"
+                        className="hover:bg-theme-surface-hover touch-target-phone shrink-0 self-start rounded-md border border-blue-400 px-4 py-2 text-sm font-medium text-blue-700 hover:text-blue-800 sm:self-auto dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         Manage Members
                       </button>
@@ -705,7 +713,7 @@ export const MembersAdminPage: React.FC = () => {
                               onClick={() => {
                                 void handleQuickRemoveUser(user.id, role);
                               }}
-                              className="text-theme-text-muted ml-2 hover:text-red-600"
+                              className="text-theme-text-muted touch-target-phone ml-2 hover:text-red-600"
                               aria-label={`Remove ${user.full_name || user.username} from ${role.name}`}
                             >
                               ×
@@ -1029,6 +1037,15 @@ export const MembersAdminPage: React.FC = () => {
         >
           <p className="text-theme-text-muted mb-4 text-sm">Select the roles to assign to this member</p>
 
+          {error && (
+            <div
+              role="alert"
+              className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400"
+            >
+              {error}
+            </div>
+          )}
+
           <div className="space-y-2">
             {roles.map((role) => (
               <label
@@ -1092,6 +1109,15 @@ export const MembersAdminPage: React.FC = () => {
           }
         >
           <p className="text-theme-text-muted mb-4 text-sm">Select the members to assign to this role</p>
+
+          {error && (
+            <div
+              role="alert"
+              className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400"
+            >
+              {error}
+            </div>
+          )}
 
           <div className="space-y-2">
             {users.map((user) => (

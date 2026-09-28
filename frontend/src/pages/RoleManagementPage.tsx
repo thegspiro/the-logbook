@@ -63,6 +63,7 @@ export const RoleManagementPage: React.FC = () => {
       priority: 50,
     });
     setEditingRole(null);
+    setError(null);
     setShowCreateModal(true);
   };
 
@@ -74,6 +75,7 @@ export const RoleManagementPage: React.FC = () => {
       priority: role.priority,
     });
     setEditingRole(role);
+    setError(null);
     setShowCreateModal(true);
   };
 
@@ -81,6 +83,12 @@ export const RoleManagementPage: React.FC = () => {
     run(async () => {
       try {
         setError(null);
+        // Checked here so the reason is ours rather than the server's
+        // "name: Value is too short" (workflow review W05).
+        if (!formData.name.trim()) {
+          setError('Give the role a name.');
+          return;
+        }
 
         if (editingRole) {
           // Update existing role
@@ -174,8 +182,13 @@ export const RoleManagementPage: React.FC = () => {
           </button>
         </div>
 
-        {error && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
+        {/* While the dialog is open its own copy of the error is the one the
+            user can see; this one would sit behind the overlay. */}
+        {error && !showCreateModal && (
+          <div
+            role="alert"
+            className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10"
+          >
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
         )}
@@ -202,7 +215,7 @@ export const RoleManagementPage: React.FC = () => {
                           key={perm}
                           className="bg-theme-surface text-theme-text-secondary inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium"
                         >
-                          {perm.split('.').pop()}
+                          {perm}
                         </span>
                       ))}
                       {role.permissions.length > 5 && (
@@ -213,7 +226,7 @@ export const RoleManagementPage: React.FC = () => {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleEdit(role)}
-                      className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      className="touch-target-phone text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                     >
                       Edit
                     </button>
@@ -222,7 +235,7 @@ export const RoleManagementPage: React.FC = () => {
                         onClick={() => {
                           void handleDelete(role);
                         }}
-                        className="text-sm font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                        className="touch-target-phone text-sm font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                       >
                         Delete
                       </button>
@@ -260,6 +273,15 @@ export const RoleManagementPage: React.FC = () => {
                 className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-4"
                 data-testid="role-modal-scroll-area"
               >
+                {error && (
+                  <div
+                    role="alert"
+                    className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10"
+                  >
+                    <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+                  </div>
+                )}
+
                 {editingRole?.is_system && (
                   <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
                     <p className="text-sm text-yellow-800 dark:text-yellow-400">
@@ -282,7 +304,7 @@ export const RoleManagementPage: React.FC = () => {
                     disabled={editingRole?.is_system && editingRole.slug !== 'member'}
                     required
                     aria-required="true"
-                    className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary focus:border-theme-focus-ring focus:ring-theme-focus-ring disabled:bg-theme-surface-hover mt-1 block w-full rounded-md shadow-xs sm:text-sm"
+                    className="form-input mt-1"
                   />
                 </div>
 
@@ -295,7 +317,7 @@ export const RoleManagementPage: React.FC = () => {
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={2}
-                    className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary focus:border-theme-focus-ring focus:ring-theme-focus-ring mt-1 block w-full rounded-md shadow-xs sm:text-sm"
+                    className="form-input mt-1"
                   />
                 </div>
 
@@ -311,9 +333,16 @@ export const RoleManagementPage: React.FC = () => {
                       max="100"
                       value={formData.priority}
                       onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })}
-                      className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary focus:border-theme-focus-ring focus:ring-theme-focus-ring mt-1 block w-32 rounded-md shadow-xs sm:text-sm"
+                      className="form-input mt-1 w-32"
                     />
-                    <p className="text-theme-text-muted mt-1 text-xs">Higher priority roles have more authority</p>
+                    {/* Priority orders lists and picks a member's main position
+                        (label_service, inventory_service); no permission check
+                        reads it, so it must not be described as authority
+                        (workflow review W05). */}
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      Sets the order roles are listed in, and which of a member&apos;s roles counts as their main one.
+                      It grants no permissions.
+                    </p>
                   </div>
                 )}
 

@@ -9,6 +9,7 @@ import { Link } from 'react-router';
 import { ArrowLeft, Mail, CheckCircle } from 'lucide-react';
 import { authService } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import type { PasswordResetRequestResponse } from '../types/auth';
 import { useCaptcha } from '../hooks/useCaptcha';
 
 /** Cooldown between successive reset requests (in seconds). */
@@ -18,7 +19,11 @@ export const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  // The server's answer, kept rather than discarded: it says how long the link
+  // lasts, and when the department signs in through Google or Microsoft it says
+  // no link was sent at all — which the page used to cover with "Check Your
+  // Email" (workflow review W03).
+  const [answer, setAnswer] = useState<PasswordResetRequestResponse | null>(null);
   const [cooldown, setCooldown] = useState(0);
   const captcha = useCaptcha('password_reset');
 
@@ -50,8 +55,7 @@ export const ForgotPasswordPage: React.FC = () => {
       setIsLoading(true);
 
       try {
-        await authService.requestPasswordReset({ email }, captchaToken || undefined);
-        setSuccess(true);
+        setAnswer(await authService.requestPasswordReset({ email }, captchaToken || undefined));
         setCooldown(RESET_COOLDOWN_SECONDS);
       } catch (err: unknown) {
         setError(getErrorMessage(err, 'Failed to send reset email. Please try again or contact your administrator.'));
@@ -65,7 +69,31 @@ export const ForgotPasswordPage: React.FC = () => {
     [email, cooldown, captcha]
   );
 
-  if (success) {
+  if (answer?.auth_provider) {
+    return (
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br px-4 py-12 sm:px-6 lg:px-8"
+      >
+        <div className="w-full max-w-md">
+          <div className="card p-8 text-center">
+            <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">No Reset Link Was Sent</h2>
+            <p className="text-theme-text-secondary mb-6">{answer.message}</p>
+            <Link
+              to="/login"
+              className="focus:ring-theme-focus-ring inline-flex items-center space-x-2 rounded-sm px-3 py-2 font-medium text-red-700 transition-colors hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-red-400 dark:hover:text-red-300"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              <span>Back to Login</span>
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (answer) {
     return (
       <main
         id="main-content"
@@ -83,7 +111,8 @@ export const ForgotPasswordPage: React.FC = () => {
               receive a password reset link shortly.
             </p>
             <p className="text-theme-text-muted mb-6 text-sm">
-              The link will expire in 1 hour. If you don't see the email, check your spam folder.
+              {answer.expires_in_minutes ? `The link will expire in ${answer.expires_in_minutes} minutes. ` : ''}
+              If you don&apos;t see the email, check your spam folder.
             </p>
             <Link
               to="/login"

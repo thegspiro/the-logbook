@@ -311,7 +311,7 @@ async def get_oauth_config(
     try:
         result = await db.execute(
             select(Organization.settings)
-            .where(Organization.active == True)  # noqa: E712
+            .where(Organization.active.is_(True))
             .order_by(Organization.created_at.asc())
             .limit(1)
         )
@@ -606,7 +606,7 @@ async def register(
     # This is a single-org system — onboarding creates exactly one organization
     org_result = await db.execute(
         select(Organization)
-        .where(Organization.active == True)  # noqa: E712
+        .where(Organization.active.is_(True))
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
@@ -1489,7 +1489,7 @@ async def forgot_password(
     # Look up the organization (single-org system)
     org_result = await db.execute(
         select(Organization)
-        .where(Organization.active == True)  # noqa: E712
+        .where(Organization.active.is_(True))
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
@@ -1498,7 +1498,8 @@ async def forgot_password(
     if not organization:
         # No org — return generic success to avoid leaking info
         return {
-            "message": "If an account with that email exists, a reset link has been sent."
+            "message": "If an account with that email exists, a reset link has been sent.",
+            "expires_in_minutes": RESET_TOKEN_EXPIRY_MINUTES,
         }
 
     # Check auth provider
@@ -1613,8 +1614,12 @@ async def forgot_password(
         background_tasks.add_task(_notify_it_team)
 
     # Always return the same message to prevent email enumeration
+    # The expiry is the same for every address, so reporting it reveals nothing
+    # about which accounts exist; the page used to guess it ("1 hour") and was
+    # wrong by half.
     return {
-        "message": "If an account with that email exists, a reset link has been sent."
+        "message": "If an account with that email exists, a reset link has been sent.",
+        "expires_in_minutes": RESET_TOKEN_EXPIRY_MINUTES,
     }
 
 

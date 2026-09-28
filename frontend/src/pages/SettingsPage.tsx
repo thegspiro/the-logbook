@@ -412,6 +412,8 @@ export const SettingsPage: React.FC = () => {
 
   // General / profile state
   const [profile, setProfile] = useState<OrganizationProfile | null>(null);
+  /** The name field while it is blank — shown, never saved (see the input). */
+  const [blankNameDraft, setBlankNameDraft] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Module state
@@ -751,8 +753,11 @@ export const SettingsPage: React.FC = () => {
                 </p>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-theme-text-muted mb-1 block text-xs">Phone</label>
+                    <label htmlFor="settings-contact-phone" className="text-theme-text-muted mb-1 block text-xs">
+                      Phone
+                    </label>
                     <input
+                      id="settings-contact-phone"
                       type="text"
                       value={profile?.phone || ''}
                       onChange={(e) => updateProfileField('phone', e.target.value)}
@@ -761,8 +766,11 @@ export const SettingsPage: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-theme-text-muted mb-1 block text-xs">Email</label>
+                    <label htmlFor="settings-contact-email" className="text-theme-text-muted mb-1 block text-xs">
+                      Email
+                    </label>
                     <input
+                      id="settings-contact-email"
                       type="email"
                       value={profile?.email || ''}
                       onChange={(e) => updateProfileField('email', e.target.value)}
@@ -771,8 +779,11 @@ export const SettingsPage: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-theme-text-muted mb-1 block text-xs">Website</label>
+                    <label htmlFor="settings-contact-website" className="text-theme-text-muted mb-1 block text-xs">
+                      Website
+                    </label>
                     <input
+                      id="settings-contact-website"
                       type="url"
                       value={profile?.website || ''}
                       onChange={(e) => updateProfileField('website', e.target.value)}
@@ -781,8 +792,11 @@ export const SettingsPage: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-theme-text-muted mb-1 block text-xs">County</label>
+                    <label htmlFor="settings-contact-county" className="text-theme-text-muted mb-1 block text-xs">
+                      County
+                    </label>
                     <input
+                      id="settings-contact-county"
                       type="text"
                       value={profile?.county || ''}
                       onChange={(e) => updateProfileField('county', e.target.value)}
@@ -809,6 +823,7 @@ export const SettingsPage: React.FC = () => {
                     type="text"
                     value={profile?.mailing_address?.line1 || ''}
                     onChange={(e) => updateAddressField('line1', e.target.value)}
+                    aria-label="Mailing address line 1"
                     placeholder="Address line 1"
                     className="form-input"
                   />
@@ -816,6 +831,7 @@ export const SettingsPage: React.FC = () => {
                     type="text"
                     value={profile?.mailing_address?.line2 || ''}
                     onChange={(e) => updateAddressField('line2', e.target.value)}
+                    aria-label="Mailing address line 2"
                     placeholder="Address line 2 (optional)"
                     className="form-input"
                   />
@@ -824,6 +840,7 @@ export const SettingsPage: React.FC = () => {
                       type="text"
                       value={profile?.mailing_address?.city || ''}
                       onChange={(e) => updateAddressField('city', e.target.value)}
+                      aria-label="Mailing address city"
                       placeholder="City"
                       className="form-input"
                     />
@@ -831,6 +848,7 @@ export const SettingsPage: React.FC = () => {
                       type="text"
                       value={profile?.mailing_address?.state || ''}
                       onChange={(e) => updateAddressField('state', e.target.value)}
+                      aria-label="Mailing address state"
                       placeholder="State"
                       className="form-input"
                     />
@@ -838,6 +856,7 @@ export const SettingsPage: React.FC = () => {
                       type="text"
                       value={profile?.mailing_address?.zip || ''}
                       onChange={(e) => updateAddressField('zip', e.target.value)}
+                      aria-label="Mailing address ZIP"
                       placeholder="ZIP"
                       className="form-input"
                     />
@@ -865,6 +884,7 @@ export const SettingsPage: React.FC = () => {
                       type="text"
                       value={profile?.physical_address?.line1 || ''}
                       onChange={(e) => updatePhysicalAddressField('line1', e.target.value)}
+                      aria-label="Physical address line 1"
                       placeholder="Address line 1"
                       className="form-input"
                     />
@@ -872,6 +892,7 @@ export const SettingsPage: React.FC = () => {
                       type="text"
                       value={profile?.physical_address?.line2 || ''}
                       onChange={(e) => updatePhysicalAddressField('line2', e.target.value)}
+                      aria-label="Physical address line 2"
                       placeholder="Address line 2 (optional)"
                       className="form-input"
                     />
@@ -880,6 +901,7 @@ export const SettingsPage: React.FC = () => {
                         type="text"
                         value={profile?.physical_address?.city || ''}
                         onChange={(e) => updatePhysicalAddressField('city', e.target.value)}
+                        aria-label="Physical address city"
                         placeholder="City"
                         className="form-input"
                       />
@@ -887,6 +909,7 @@ export const SettingsPage: React.FC = () => {
                         type="text"
                         value={profile?.physical_address?.state || ''}
                         onChange={(e) => updatePhysicalAddressField('state', e.target.value)}
+                        aria-label="Physical address state"
                         placeholder="State"
                         className="form-input"
                       />
@@ -894,6 +917,7 @@ export const SettingsPage: React.FC = () => {
                         type="text"
                         value={profile?.physical_address?.zip || ''}
                         onChange={(e) => updatePhysicalAddressField('zip', e.target.value)}
+                        aria-label="Physical address ZIP"
                         placeholder="ZIP"
                         className="form-input"
                       />
@@ -936,6 +960,20 @@ export const SettingsPage: React.FC = () => {
                   <Upload className="h-3.5 w-3.5" />
                   Upload logo
                 </button>
+                {/* A logo could be replaced but never taken down; the profile
+                    endpoint already clears it on null (workflow review W06). */}
+                {profile?.logo && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (logoInputRef.current) logoInputRef.current.value = '';
+                      updateProfileField('logo', null, { immediate: true });
+                    }}
+                    className="text-theme-text-secondary hover:text-theme-text-primary ml-4 inline-flex items-center text-sm max-md:min-h-[44px]"
+                  >
+                    Remove logo
+                  </button>
+                )}
                 <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
               </div>
             </div>
@@ -956,10 +994,34 @@ export const SettingsPage: React.FC = () => {
                 <input
                   id="settings-department-name"
                   type="text"
-                  value={profile?.name || ''}
-                  onChange={(e) => updateProfileField('name', e.target.value)}
+                  value={blankNameDraft ?? (profile?.name || '')}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // A department must have a name, and the profile is saved
+                    // whole: sending a blank one got a 422 in schema language
+                    // ("name: Value is too short") and failed every other field
+                    // saved alongside it until it was retyped. A blank is kept
+                    // as an unsaved draft instead (workflow review W06).
+                    if (!value.trim()) {
+                      setBlankNameDraft(value);
+                      return;
+                    }
+                    setBlankNameDraft(null);
+                    updateProfileField('name', value);
+                  }}
+                  aria-invalid={blankNameDraft !== null}
+                  aria-describedby={blankNameDraft !== null ? 'settings-department-name-error' : undefined}
                   className="form-input"
                 />
+                {blankNameDraft !== null && (
+                  <p
+                    id="settings-department-name-error"
+                    role="alert"
+                    className="mt-1 text-sm text-red-700 dark:text-red-400"
+                  >
+                    The department needs a name. It is still saved as &ldquo;{profile?.name}&rdquo;.
+                  </p>
+                )}
               </div>
               <div>
                 <label htmlFor="settings-timezone" className="text-theme-text-primary mb-1 block text-sm font-medium">

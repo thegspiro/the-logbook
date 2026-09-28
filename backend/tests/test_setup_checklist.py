@@ -141,3 +141,36 @@ def test_the_no_item_list_does_not_excuse_a_module_that_has_one():
         "These modules have a checklist item and are also listed as needing "
         f"none: {both}"
     )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("key", "expected_path"),
+    [
+        ("scheduling", "/scheduling/admin/planning/templates"),
+        ("email", "/settings?tab=email"),
+    ],
+)
+def test_checklist_items_open_the_screen_that_does_the_step(key, expected_path):
+    """A setup card must land on the screen where its step is done.
+
+    Workflow review W06: "Create Shift Templates" opened the week calendar,
+    which cannot create a template, and "Configure & Verify Email Delivery"
+    opened the Profile section of Organization Settings. Read from source for
+    the same reason as the module test above.
+    """
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "app"
+        / "api"
+        / "v1"
+        / "endpoints"
+        / "organizations.py"
+    ).read_text()
+    match = re.search(
+        rf'key="{key}",.*?path="([^"]+)"',
+        source,
+        flags=re.DOTALL,
+    )
+    assert match, f"no checklist item with key {key!r}"
+    assert match.group(1) == expected_path

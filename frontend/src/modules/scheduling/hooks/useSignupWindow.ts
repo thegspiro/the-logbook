@@ -71,7 +71,16 @@ const clockSnapshot = (): number => Math.floor(Date.now() / SIGNUP_CLOCK_INTERVA
  */
 export const useSchedulingClock = (): number => useSyncExternalStore(subscribeToClock, clockSnapshot, clockSnapshot);
 
-export const useSignupWindow = (): SignupWindow => {
+interface UseSignupWindowOptions {
+  /**
+   * False skips loading the scheduling settings, leaving the window
+   * unresolved. For a screen that shows scheduling only when the module is
+   * on: with it off, `/scheduling/settings` answers 403 (workflow review W07).
+   */
+  enabled?: boolean;
+}
+
+export const useSignupWindow = ({ enabled = true }: UseSignupWindowOptions = {}): SignupWindow => {
   const settingsLoaded = useSchedulingStore((s) => s.settingsLoaded);
   const loadSettings = useSchedulingStore((s) => s.loadSettings);
   const closesMinutesBefore = useSchedulingStore((s) => s.signupClosesMinutesBefore);
@@ -89,8 +98,9 @@ export const useSignupWindow = (): SignupWindow => {
   // and offer a button the server refuses. The store shares one in-flight
   // request across every caller, so the dozen consumers on a board cost one.
   useEffect(() => {
+    if (!enabled) return;
     void loadSettings();
-  }, [loadSettings]);
+  }, [enabled, loadSettings]);
 
   return useMemo(
     () => (settingsLoaded ? { closesMinutesBefore, graceMinutes, openEndedCushionHours } : UNRESOLVED_SIGNUP_WINDOW),

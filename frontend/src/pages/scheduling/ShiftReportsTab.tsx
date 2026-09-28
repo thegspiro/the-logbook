@@ -859,44 +859,58 @@ export const ShiftReportsTab: React.FC = () => {
     const maxHours = Math.max(...officerAnalytics.monthly.map((m) => m.hours), 1);
     const draftCount = officerAnalytics?.status_counts?.['draft'] ?? 0;
     const pendingCount = officerAnalytics?.status_counts?.['pending_review'] ?? 0;
+    // Literal class names: Tailwind only emits classes it can find verbatim
+    // in the source, so a `sm:grid-cols-${n}` template would never be styled.
+    // A fixed five-column grid left two empty cells whenever neither the
+    // drafts nor the pending tile applied.
+    const tileCount = 3 + (draftCount > 0 ? 1 : 0) + (pendingCount > 0 ? 1 : 0);
+    const tileGrid = tileCount === 5 ? 'sm:grid-cols-5' : tileCount === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3';
     return (
       <div className="card space-y-4 p-4 sm:p-5">
-        <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
-          <BarChart3 className="h-4 w-4 text-violet-500" /> Shift Report Analytics
-        </h3>
-        {/* Stat cards */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <h2 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+          <BarChart3 className="h-4 w-4 text-violet-500" aria-hidden="true" /> Your reporting summary
+        </h2>
+        <div className={`grid grid-cols-2 gap-3 ${tileGrid}`}>
           <div className="rounded-lg border border-violet-500/15 bg-violet-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{officerAnalytics.total_reports}</p>
-            <p className="text-theme-text-muted mt-0.5 text-xs">Reports</p>
+            <p className="text-theme-text-muted mt-0.5 text-xs">Reports written</p>
           </div>
           <div className="rounded-lg border border-blue-500/15 bg-blue-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
               {formatHours(officerAnalytics.total_hours)}
             </p>
-            <p className="text-theme-text-muted mt-0.5 text-xs">Total Hours</p>
+            <p className="text-theme-text-muted mt-0.5 text-xs">Shift hours covered</p>
           </div>
           <div className="rounded-lg border border-green-500/15 bg-green-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-green-600 dark:text-green-400">{officerAnalytics.total_calls}</p>
-            <p className="text-theme-text-muted mt-0.5 text-xs">Total Calls</p>
+            <p className="text-theme-text-muted mt-0.5 text-xs">Calls covered</p>
           </div>
+          {/* These two lead somewhere, so they are buttons and say where. As
+              clickable divs they were unreachable by keyboard and looked
+              exactly like the three tiles beside them that do nothing. */}
           {draftCount > 0 && (
-            <div
-              className="cursor-pointer rounded-lg border border-blue-500/15 bg-blue-500/5 p-3 text-center transition-colors hover:bg-blue-500/10"
+            <button
+              type="button"
+              className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 text-center transition-colors hover:bg-blue-500/10"
               onClick={() => setViewMode('drafts')}
             >
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{draftCount}</p>
-              <p className="text-theme-text-muted mt-0.5 text-xs">Drafts</p>
-            </div>
+              <p className="text-theme-text-muted mt-0.5 text-xs">
+                {draftCount === 1 ? 'Draft' : 'Drafts'} to finish <span aria-hidden="true">→</span>
+              </p>
+            </button>
           )}
           {pendingCount > 0 && (
-            <div
-              className="cursor-pointer rounded-lg border border-amber-500/15 bg-amber-500/5 p-3 text-center transition-colors hover:bg-amber-500/10"
+            <button
+              type="button"
+              className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-center transition-colors hover:bg-amber-500/10"
               onClick={() => setViewMode('pending-review')}
             >
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingCount}</p>
-              <p className="text-theme-text-muted mt-0.5 text-xs">Pending Review</p>
-            </div>
+              <p className="text-theme-text-muted mt-0.5 text-xs">
+                Awaiting review <span aria-hidden="true">→</span>
+              </p>
+            </button>
           )}
         </div>
 
@@ -1039,7 +1053,8 @@ export const ShiftReportsTab: React.FC = () => {
                   <Phone className="h-3 w-3" /> {report.calls_responded} call{report.calls_responded === 1 ? '' : 's'}
                 </span>
                 {report.performance_rating && renderRating(report.performance_rating)}
-                {report.officer_name && (
+                {/* In "Written by me" every report's author is the viewer. */}
+                {report.officer_name && viewMode !== 'filed-by-me' && (
                   <span className="text-theme-text-muted flex items-center gap-1 text-xs">
                     <UserIcon className="h-3 w-3" /> {report.officer_name}
                   </span>
@@ -1068,7 +1083,9 @@ export const ShiftReportsTab: React.FC = () => {
                           : 'text-theme-text-muted'
                     }`}
                   >
-                    {days}d
+                    {/* A bare "3d" beside the status badge did not say what had
+                        been three days. */}
+                    Waiting {days} {days === 1 ? 'day' : 'days'}
                   </span>
                 );
               })()}
@@ -1087,6 +1104,16 @@ export const ShiftReportsTab: React.FC = () => {
                 Needs Acknowledgment
               </span>
             )}
+            {/* The author's side of the acknowledgment: without it an approved
+                report the member has not acknowledged looked finished. */}
+            {viewMode === 'filed-by-me' &&
+              !isMyReport &&
+              !report.trainee_acknowledged &&
+              report.review_status === SubmissionStatus.APPROVED && (
+                <span className="text-theme-text-secondary border-theme-surface-border rounded-full border px-2 py-0.5 text-xs font-medium">
+                  Not acknowledged yet
+                </span>
+              )}
             {report.trainee_acknowledged && (
               <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
                 Acknowledged
@@ -2337,6 +2364,17 @@ export const ShiftReportsTab: React.FC = () => {
                       className="form-input py-1.5 text-xs focus:ring-violet-500"
                     />
                   )}
+                </div>
+              )}
+              {viewMode === 'filed-by-me' && (
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <h2 className="text-theme-text-primary text-base font-semibold">
+                    Reports you&apos;ve written{' '}
+                    <span className="text-theme-text-muted font-normal">({reports.length})</span>
+                  </h2>
+                  <p className="text-theme-text-muted text-xs">
+                    Most recent shift first. Select a report to read it in full.
+                  </p>
                 </div>
               )}
               <div className="space-y-3">{reports.map(renderReportCard)}</div>
