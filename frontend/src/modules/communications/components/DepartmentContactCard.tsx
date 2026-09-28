@@ -22,6 +22,7 @@ import type { OrganizationProfile } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
+import { ORGANIZATION_PROFILE_MAX_LENGTH as MAX, organizationEmailError } from '../../../utils/organizationProfile';
 
 interface ContactForm {
   phone: string;
@@ -44,10 +45,6 @@ const EMPTY_FORM: ContactForm = {
   state: '',
   zip: '',
 };
-
-// Deliberately loose: the point is to catch a typo like a missing "@", not to
-// out-guess what a mail server will accept.
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function formFromProfile(profile: OrganizationProfile): ContactForm {
   return {
@@ -147,10 +144,7 @@ const DepartmentContactCard: React.FC<DepartmentContactCardProps> = ({ onSaved }
 
   const set = (key: keyof ContactForm) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  const emailError =
-    form.email.trim() && !EMAIL_PATTERN.test(form.email.trim())
-      ? 'Enter an email address like office@example.org.'
-      : null;
+  const emailError = organizationEmailError(form.email);
   const isDirty = JSON.stringify(form) !== JSON.stringify(saved);
 
   const handleSave = async () => {
@@ -255,7 +249,7 @@ const DepartmentContactCard: React.FC<DepartmentContactCardProps> = ({ onSaved }
               label="Phone"
               type="tel"
               value={form.phone}
-              maxLength={20}
+              maxLength={MAX.phone}
               disabled={disabled}
               onChange={set('phone')}
               autoComplete="tel"
@@ -265,7 +259,7 @@ const DepartmentContactCard: React.FC<DepartmentContactCardProps> = ({ onSaved }
               label="Email"
               type="email"
               value={form.email}
-              maxLength={255}
+              maxLength={MAX.email}
               disabled={disabled}
               onChange={set('email')}
               error={emailError}
@@ -276,7 +270,7 @@ const DepartmentContactCard: React.FC<DepartmentContactCardProps> = ({ onSaved }
               label="Website"
               type="url"
               value={form.website}
-              maxLength={255}
+              maxLength={MAX.website}
               disabled={disabled}
               onChange={set('website')}
               autoComplete="url"
@@ -289,7 +283,7 @@ const DepartmentContactCard: React.FC<DepartmentContactCardProps> = ({ onSaved }
                 id="dept-line1"
                 label="Address line 1"
                 value={form.line1}
-                maxLength={255}
+                maxLength={MAX.addressLine}
                 disabled={disabled}
                 onChange={set('line1')}
                 autoComplete="address-line1"
@@ -298,7 +292,7 @@ const DepartmentContactCard: React.FC<DepartmentContactCardProps> = ({ onSaved }
                 id="dept-line2"
                 label="Address line 2"
                 value={form.line2}
-                maxLength={255}
+                maxLength={MAX.addressLine}
                 disabled={disabled}
                 onChange={set('line2')}
                 autoComplete="address-line2"
@@ -309,7 +303,7 @@ const DepartmentContactCard: React.FC<DepartmentContactCardProps> = ({ onSaved }
                 id="dept-city"
                 label="City"
                 value={form.city}
-                maxLength={100}
+                maxLength={MAX.city}
                 disabled={disabled}
                 onChange={set('city')}
                 autoComplete="address-level2"
@@ -318,7 +312,7 @@ const DepartmentContactCard: React.FC<DepartmentContactCardProps> = ({ onSaved }
                 id="dept-state"
                 label="State"
                 value={form.state}
-                maxLength={50}
+                maxLength={MAX.state}
                 disabled={disabled}
                 onChange={set('state')}
                 autoComplete="address-level1"
@@ -327,7 +321,7 @@ const DepartmentContactCard: React.FC<DepartmentContactCardProps> = ({ onSaved }
                 id="dept-zip"
                 label="ZIP"
                 value={form.zip}
-                maxLength={20}
+                maxLength={MAX.zip}
                 disabled={disabled}
                 onChange={set('zip')}
                 autoComplete="postal-code"

@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage, toAppError } from '../utils/errorHandling';
+import { ORGANIZATION_PROFILE_MAX_LENGTH, organizationEmailError } from '../utils/organizationProfile';
 import { HelpLink } from '../components/HelpLink';
 import { organizationService } from '../services/api';
 import type { ModuleSettingsData, OrganizationProfile } from '../services/api';
@@ -414,6 +415,7 @@ export const SettingsPage: React.FC = () => {
   const [profile, setProfile] = useState<OrganizationProfile | null>(null);
   /** The name field while it is blank — shown, never saved (see the input). */
   const [blankNameDraft, setBlankNameDraft] = useState<string | null>(null);
+  const [invalidEmailDraft, setInvalidEmailDraft] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Module state
@@ -801,6 +803,7 @@ export const SettingsPage: React.FC = () => {
                       id="settings-contact-phone"
                       type="text"
                       value={profile?.phone || ''}
+                      maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.phone}
                       onChange={(e) => updateProfileField('phone', e.target.value)}
                       placeholder="(555) 123-4567"
                       className="form-input"
@@ -813,11 +816,37 @@ export const SettingsPage: React.FC = () => {
                     <input
                       id="settings-contact-email"
                       type="email"
-                      value={profile?.email || ''}
-                      onChange={(e) => updateProfileField('email', e.target.value)}
+                      value={invalidEmailDraft ?? (profile?.email || '')}
+                      maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.email}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Held back as a draft, like a blank name: the address
+                        // prints in email footers, so a typo would go out on
+                        // every notice. The last good address stays saved.
+                        if (organizationEmailError(value)) {
+                          setInvalidEmailDraft(value);
+                          return;
+                        }
+                        setInvalidEmailDraft(null);
+                        updateProfileField('email', value);
+                      }}
+                      aria-invalid={invalidEmailDraft !== null}
+                      aria-describedby={invalidEmailDraft !== null ? 'settings-contact-email-error' : undefined}
                       placeholder="info@firedept.org"
                       className="form-input"
                     />
+                    {invalidEmailDraft !== null && (
+                      <p
+                        id="settings-contact-email-error"
+                        role="alert"
+                        className="mt-1 text-sm text-red-700 dark:text-red-400"
+                      >
+                        {organizationEmailError(invalidEmailDraft)}{' '}
+                        {profile?.email
+                          ? `It is still saved as “${profile.email}”.`
+                          : 'Nothing is saved until it is complete.'}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="settings-contact-website" className="text-theme-text-muted mb-1 block text-xs">
@@ -827,6 +856,7 @@ export const SettingsPage: React.FC = () => {
                       id="settings-contact-website"
                       type="url"
                       value={profile?.website || ''}
+                      maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.website}
                       onChange={(e) => updateProfileField('website', e.target.value)}
                       placeholder="https://firedept.org"
                       className="form-input"
@@ -840,6 +870,7 @@ export const SettingsPage: React.FC = () => {
                       id="settings-contact-county"
                       type="text"
                       value={profile?.county || ''}
+                      maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.county}
                       onChange={(e) => updateProfileField('county', e.target.value)}
                       className="form-input"
                     />
@@ -863,6 +894,7 @@ export const SettingsPage: React.FC = () => {
                   <input
                     type="text"
                     value={profile?.mailing_address?.line1 || ''}
+                    maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.addressLine}
                     onChange={(e) => updateAddressField('line1', e.target.value)}
                     aria-label="Mailing address line 1"
                     placeholder="Address line 1"
@@ -871,6 +903,7 @@ export const SettingsPage: React.FC = () => {
                   <input
                     type="text"
                     value={profile?.mailing_address?.line2 || ''}
+                    maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.addressLine}
                     onChange={(e) => updateAddressField('line2', e.target.value)}
                     aria-label="Mailing address line 2"
                     placeholder="Address line 2 (optional)"
@@ -880,6 +913,7 @@ export const SettingsPage: React.FC = () => {
                     <input
                       type="text"
                       value={profile?.mailing_address?.city || ''}
+                      maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.city}
                       onChange={(e) => updateAddressField('city', e.target.value)}
                       aria-label="Mailing address city"
                       placeholder="City"
@@ -888,6 +922,7 @@ export const SettingsPage: React.FC = () => {
                     <input
                       type="text"
                       value={profile?.mailing_address?.state || ''}
+                      maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.state}
                       onChange={(e) => updateAddressField('state', e.target.value)}
                       aria-label="Mailing address state"
                       placeholder="State"
@@ -896,6 +931,7 @@ export const SettingsPage: React.FC = () => {
                     <input
                       type="text"
                       value={profile?.mailing_address?.zip || ''}
+                      maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.zip}
                       onChange={(e) => updateAddressField('zip', e.target.value)}
                       aria-label="Mailing address ZIP"
                       placeholder="ZIP"
@@ -924,6 +960,7 @@ export const SettingsPage: React.FC = () => {
                     <input
                       type="text"
                       value={profile?.physical_address?.line1 || ''}
+                      maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.addressLine}
                       onChange={(e) => updatePhysicalAddressField('line1', e.target.value)}
                       aria-label="Physical address line 1"
                       placeholder="Address line 1"
@@ -932,6 +969,7 @@ export const SettingsPage: React.FC = () => {
                     <input
                       type="text"
                       value={profile?.physical_address?.line2 || ''}
+                      maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.addressLine}
                       onChange={(e) => updatePhysicalAddressField('line2', e.target.value)}
                       aria-label="Physical address line 2"
                       placeholder="Address line 2 (optional)"
@@ -941,6 +979,7 @@ export const SettingsPage: React.FC = () => {
                       <input
                         type="text"
                         value={profile?.physical_address?.city || ''}
+                        maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.city}
                         onChange={(e) => updatePhysicalAddressField('city', e.target.value)}
                         aria-label="Physical address city"
                         placeholder="City"
@@ -949,6 +988,7 @@ export const SettingsPage: React.FC = () => {
                       <input
                         type="text"
                         value={profile?.physical_address?.state || ''}
+                        maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.state}
                         onChange={(e) => updatePhysicalAddressField('state', e.target.value)}
                         aria-label="Physical address state"
                         placeholder="State"
@@ -957,6 +997,7 @@ export const SettingsPage: React.FC = () => {
                       <input
                         type="text"
                         value={profile?.physical_address?.zip || ''}
+                        maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.zip}
                         onChange={(e) => updatePhysicalAddressField('zip', e.target.value)}
                         aria-label="Physical address ZIP"
                         placeholder="ZIP"
@@ -1036,6 +1077,7 @@ export const SettingsPage: React.FC = () => {
                   id="settings-department-name"
                   type="text"
                   value={blankNameDraft ?? (profile?.name || '')}
+                  maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.name}
                   onChange={(e) => {
                     const value = e.target.value;
                     // A department must have a name, and the profile is saved
