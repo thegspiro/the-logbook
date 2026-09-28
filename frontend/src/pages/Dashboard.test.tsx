@@ -58,6 +58,7 @@ const {
   mockGetAdminHoursSummary,
   mockGetEnabledModules,
   mockMarkNotificationRead,
+  mockGetMyUnreadCountsByCategory,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -65,6 +66,7 @@ const {
   mockGetInbox: vi.fn(),
   mockGetUnreadCount: vi.fn(),
   mockGetMyNotifications: vi.fn(),
+  mockGetMyUnreadCountsByCategory: vi.fn(),
   mockAcknowledge: vi.fn(),
   mockGetMyTraining: vi.fn(),
   mockGetEvents: vi.fn(),
@@ -97,6 +99,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
 vi.mock('../services/api', () => ({
   notificationsService: {
     getMyNotifications: mockGetMyNotifications,
+    getMyUnreadCountsByCategory: mockGetMyUnreadCountsByCategory,
     markMyNotificationRead: mockMarkNotificationRead,
   },
   messagesService: {
@@ -240,6 +243,7 @@ const ALL_SERVICE_MOCKS = [
   mockGetTrainingEnrollments,
   mockGetEnrollmentProgress,
   mockMarkNotificationRead,
+  mockGetMyUnreadCountsByCategory,
 ];
 
 describe('Dashboard', () => {
@@ -260,6 +264,7 @@ describe('Dashboard', () => {
     mockGetInbox.mockResolvedValue([]);
     mockGetUnreadCount.mockResolvedValue({ unread_count: 0 });
     mockGetMyNotifications.mockResolvedValue({ logs: [], total: 0 });
+    mockGetMyUnreadCountsByCategory.mockResolvedValue({ categories: {} });
     mockMarkNotificationRead.mockResolvedValue(undefined);
     mockAcknowledge.mockResolvedValue(undefined);
     mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
@@ -1363,6 +1368,49 @@ describe('Dashboard', () => {
       await waitFor(() => {
         expect(mockGetEvents.mock.calls.length).toBeGreaterThan(callsBefore);
       });
+    });
+
+    it('folds same-category notifications into one row that opens the inbox', async () => {
+      // A weekend of events leaves one validation prompt per event. Unstacked,
+      // they fill every row the card shows and push the rest off it.
+      const validation = (id: string, title: string) => ({
+        id,
+        category: 'event_validation',
+        subject: `Action Required: Validate attendance for ${title}`,
+        message: 'Please review.',
+        read: false,
+        pinned: false,
+        sent_at: '2026-09-01T12:00:00Z',
+      });
+      mockGetMyNotifications.mockResolvedValue({
+        logs: [
+          validation('v1', 'Saturday Drill'),
+          { id: 'n1', subject: 'Drill reminder', message: 'Tuesday', sent_at: '2026-09-01T11:00:00Z' },
+          validation('v2', 'Sunday Drill'),
+        ],
+        total: 3,
+      });
+      // More are waiting than the card loaded.
+      mockGetMyUnreadCountsByCategory.mockResolvedValue({ categories: { event_validation: 6 } });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+
+      const stackRow = await within(updates).findByText('6 attendance validations');
+      expect(
+        within(updates).getByText('Latest: Action Required: Validate attendance for Saturday Drill')
+      ).toBeInTheDocument();
+      expect(within(updates).getByText('Drill reminder')).toBeInTheDocument();
+      expect(
+        within(updates).queryByText('Action Required: Validate attendance for Sunday Drill')
+      ).not.toBeInTheDocument();
+
+      await user.click(stackRow);
+
+      // Opening the stack is not reading it.
+      expect(mockMarkNotificationRead).not.toHaveBeenCalled();
+      expect(mockNavigate).toHaveBeenCalledWith('/notifications?tab=inbox');
     });
 
     it('queues a read after marking a notification read', async () => {

@@ -85,6 +85,7 @@ import type { EventListItem } from '../types/event';
 import { dashboardService } from '../services/api';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { useNotificationCountStore } from '../hooks/useNotificationCount';
+import { describeStack, groupNotificationsIntoStacks, stackUnreadCount } from '../utils/notificationStacks';
 
 /**
  * Main Dashboard Component — "station board"
@@ -280,6 +281,9 @@ const Dashboard: React.FC = () => {
 
   // Notifications
   const [notifications, setNotifications] = useState<NotificationLogRecord[]>([]);
+  // Per-category unread totals, so a stacked feed row can count past the ten
+  // rows this card loads.
+  const [notificationCategoryCounts, setNotificationCategoryCounts] = useState<Record<string, number>>({});
   const unreadCount = useNotificationCountStore((s) => s.unreadCount);
   const decrementUnread = useNotificationCountStore((s) => s.decrement);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
@@ -623,6 +627,13 @@ const Dashboard: React.FC = () => {
       setNotificationsError(true);
     } finally {
       if (!isRetry) setLoadingNotifications(false);
+    }
+    try {
+      const counts = await notificationsService.getMyUnreadCountsByCategory();
+      setNotificationCategoryCounts(counts.categories || {});
+    } catch {
+      // A stacked row falls back to counting the rows loaded here.
+      setNotificationCategoryCounts({});
     }
   };
 
@@ -1331,7 +1342,26 @@ const Dashboard: React.FC = () => {
       });
     }
 
-    for (const notif of notifications) {
+    // A run of same-category notifications — a weekend's attendance
+    // validations, one follow-up per flagged report — becomes one row that
+    // opens the inbox, where the stack expands. Otherwise five of them fill
+    // every row this card shows.
+    for (const entry of groupNotificationsIntoStacks(notifications)) {
+      if (entry.kind === 'stack') {
+        const newest = entry.notifications[0];
+        const count = stackUnreadCount(entry.notifications, notificationCategoryCounts[entry.category]);
+        entries.push({
+          key: `notif-stack-${entry.category}`,
+          title: describeStack(entry.category, count),
+          body: newest ? `Latest: ${newest.subject || 'Notification'}` : '',
+          meta: newest ? formatRelativeTime(newest.sent_at || newest.created_at) : '',
+          sortAt: newest?.sent_at ? new Date(newest.sent_at).getTime() : 0,
+          unread: true,
+          onClick: () => void navigate('/notifications?tab=inbox'),
+        });
+        continue;
+      }
+      const notif = entry.notification;
       entries.push({
         key: `notif-${notif.id}`,
         title: notif.subject || 'Notification',
@@ -1359,7 +1389,7 @@ const Dashboard: React.FC = () => {
     const standing = (entry: FeedEntry) => (entry.message?.is_pinned ? 2 : entry.message?.is_persistent ? 1 : 0);
     return entries.sort((a, b) => standing(b) - standing(a) || b.sortAt - a.sortAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deptMessages, notifications, pendingAcknowledgements, tz]);
+  }, [deptMessages, notifications, notificationCategoryCounts, pendingAcknowledgements, tz]);
 
   const feedUnread = unreadCount + deptMsgUnread;
 

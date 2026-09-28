@@ -35,6 +35,8 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useNotificationCountStore } from '../hooks/useNotificationCount';
 import { NotificationLogScope } from '../constants/enums';
 import NotificationCard from '../components/NotificationCard';
+import NotificationStack from '../components/NotificationStack';
+import { groupNotificationsIntoStacks, isStackable, stackUnreadCount } from '../utils/notificationStacks';
 
 // Maps trigger enum values to display-friendly icons and colors
 const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -160,6 +162,7 @@ const NotificationsPage: React.FC = () => {
   // Shared notification count store
   const myUnreadCount = useNotificationCountStore((s) => s.unreadCount);
   const decrementGlobalUnread = useNotificationCountStore((s) => s.decrement);
+  const decrementGlobalUnreadBy = useNotificationCountStore((s) => s.decrementBy);
   const clearGlobalUnread = useNotificationCountStore((s) => s.clear);
 
   // Data states
@@ -168,6 +171,10 @@ const NotificationsPage: React.FC = () => {
   const [summary, setSummary] = useState<NotificationsSummary | null>(null);
   const [myNotifications, setMyNotifications] = useState<NotificationLogRecord[]>([]);
   const [inboxNextCursor, setInboxNextCursor] = useState<string | null>(null);
+  // Unread, unpinned rows per category across the whole inbox, not just the
+  // loaded pages — what each stack's badge reports. Kept in step locally as
+  // rows are read or pinned, and re-fetched after the bulk writes.
+  const [categoryUnreadCounts, setCategoryUnreadCounts] = useState<Record<string, number>>({});
   const markingReadIds = useRef(new Set<string>());
   // Only the newest send-log request may commit its result. A channel change
   // or a mark-all can leave an earlier fetch in flight, and letting it land
@@ -255,6 +262,21 @@ const NotificationsPage: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const loadCategoryUnreadCounts = useCallback(async () => {
+    try {
+      const data = await notificationsService.getMyUnreadCountsByCategory();
+      setCategoryUnreadCounts(data.categories || {});
+    } catch {
+      // Stacks fall back to counting the loaded rows.
+      setCategoryUnreadCounts({});
+    }
+  }, []);
+
+  const adjustCategoryUnread = (category: string | undefined, delta: number) => {
+    if (!category) return;
+    setCategoryUnreadCounts((prev) => ({ ...prev, [category]: Math.max(0, (prev[category] ?? 0) + delta) }));
+  };
+
   // Fetch user inbox on mount and when showRead filter changes
   useEffect(() => {
     const fetchInbox = async () => {
@@ -273,7 +295,8 @@ const NotificationsPage: React.FC = () => {
       }
     };
     void fetchInbox();
-  }, [showRead]);
+    void loadCategoryUnreadCounts();
+  }, [showRead, loadCategoryUnreadCounts]);
 
   // Fetch the send log on mount. Scoped to the caller, so it needs no
   // permission — but kept separate from the rules/summary fetch below, which
@@ -458,6 +481,7 @@ const NotificationsPage: React.FC = () => {
       setMyNotifications([]);
       setInboxNextCursor(null);
     }
+    setCategoryUnreadCounts({});
     clearGlobalUnread();
   };
 
@@ -490,6 +514,7 @@ const NotificationsPage: React.FC = () => {
       await notificationsService.markMyNotificationRead(logId);
       setMyNotifications((prev) => prev.map((n) => (n.id === logId ? { ...n, read: true } : n)));
       decrementGlobalUnread();
+      if (isStackable(notification)) adjustCategoryUnread(notification.category, -1);
     } catch {
       setError('Failed to mark notification as read');
     } finally {
@@ -507,9 +532,30 @@ const NotificationsPage: React.FC = () => {
     }
   };
 
+  // Clears one stack. The write covers the category's rows on pages not yet
+  // loaded too, so the badge moves by what the server marked rather than by
+  // what the page holds. Rows stay in place as read, as a single mark does.
+  const handleMarkStackRead = async (category: string) => {
+    try {
+      const { marked_read: marked } = await notificationsService.markMyCategoryRead(category);
+      setMyNotifications((prev) =>
+        prev.map((n) => (n.category === category && isStackable(n) ? { ...n, read: true } : n))
+      );
+      setCategoryUnreadCounts((prev) => ({ ...prev, [category]: 0 }));
+      decrementGlobalUnreadBy(marked);
+    } catch {
+      setError('Failed to mark notifications as read');
+    }
+  };
+
   const handleTogglePin = async (logId: string, pinned: boolean) => {
     try {
       await notificationsService.toggleMyNotificationPin(logId, pinned);
+      // A pinned row leaves its stack, and with it the stack's unread count.
+      const notification = myNotifications.find((n) => n.id === logId);
+      if (notification && !notification.read && notification.pinned !== pinned) {
+        adjustCategoryUnread(notification.category, pinned ? -1 : 1);
+      }
       setMyNotifications((prev) => prev.map((n) => (n.id === logId ? { ...n, pinned } : n)));
     } catch {
       setError('Failed to update pin state');
@@ -744,22 +790,36 @@ const NotificationsPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-2">
-                {[...myNotifications]
-                  .sort((a, b) => {
+                {groupNotificationsIntoStacks(
+                  [...myNotifications].sort((a, b) => {
                     if (a.pinned && !b.pinned) return -1;
                     if (!a.pinned && b.pinned) return 1;
                     return 0;
                   })
-                  .map((notification) => (
+                ).map((entry) =>
+                  entry.kind === 'stack' ? (
+                    <NotificationStack
+                      key={`stack-${entry.category}`}
+                      category={entry.category}
+                      notifications={entry.notifications}
+                      unreadCount={stackUnreadCount(entry.notifications, categoryUnreadCounts[entry.category])}
+                      onMarkRead={handleMarkInboxNotificationRead}
+                      onTogglePin={(id, pinned) => {
+                        void handleTogglePin(id, pinned);
+                      }}
+                      onMarkStackRead={handleMarkStackRead}
+                    />
+                  ) : (
                     <NotificationCard
-                      key={notification.id}
-                      notification={notification}
+                      key={entry.notification.id}
+                      notification={entry.notification}
                       onMarkRead={handleMarkInboxNotificationRead}
                       onTogglePin={(id, pinned) => {
                         void handleTogglePin(id, pinned);
                       }}
                     />
-                  ))}
+                  )
+                )}
                 {inboxNextCursor !== null && (
                   <div className="pt-2 text-center">
                     <button
