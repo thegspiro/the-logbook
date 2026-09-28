@@ -36,7 +36,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W10 | Find a member and read their profile, as a member (contact visibility)    | member, admin          | `/members`, `/members/:userId`               | ✅     |
 | W11 | Edit a member as an officer: details, clearing a field, status, history   | admin                  | `/members/admin/edit/:userId`                | ✅     |
 | W12 | Member settings: ranks, membership tiers, ID numbering, EVOC, visibility  | admin                  | `/members/admin/settings/*`                  | ✅     |
-| W13 | Waivers                                                                   | admin                  | `/members/admin/waivers`                     | ⬜     |
+| W13 | Waivers                                                                   | admin                  | `/members/admin/waivers`                     | ✅     |
 | W14 | Check-in station, badge scan, member labels and ID cards                  | admin                  | `/members/check-in-station`, `/members/scan` | ⬜     |
 | W15 | A member leaves: departure clearance, property return, archive, reinstate | admin                  | `/members/admin`                             | ⬜     |
 | W16 | Prospective member from application to converted member                   | membership_coordinator | `/prospective-members`                       | ⬜     |
@@ -167,6 +167,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W13 — Waivers — 2026-09-28
+
+Driven as: `admin` at 1280×900 and 390×844, with `member` reading their
+own profile and `member2` refused on page and API. Held: validation before
+anything is sent; training-plus-leave, training-only and permanent waivers
+stored as chosen; the member sees their own leave; deactivating asks first
+and takes the linked training waiver with it; the history lists every one.
+Fixed: W13-1 (MED — "Meeting Attendance" and "Shift Requirements" were
+separate choices, but a leave excuses both, so either box excused every
+shift), W13-2 (LOW — five unlabelled fields, filters by colour alone),
+W13-3 (LOW — a refused deactivation hid the server's reason), W13-4 (NIT).
+Flagged: W13-5 (LOW — whether meetings and shifts should be separable needs
+a column). All review waivers deactivated afterwards. Gate: typecheck, lint
+and the full frontend suite clean (no Python changed). Next: W14.
 
 ### W12 — Member settings — 2026-09-28
 

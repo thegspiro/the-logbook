@@ -49,11 +49,7 @@ const profile = (overrides: Partial<OrganizationProfile> = {}): OrganizationProf
 
 const pngFile = () => new File([new Uint8Array([137, 80, 78, 71])], 'crest.png', { type: 'image/png' });
 
-const logoInput = () => {
-  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
-  if (!input) throw new Error('logo file input not rendered');
-  return input;
-};
+const logoInput = () => screen.getByLabelText<HTMLInputElement>('Department logo file');
 
 describe('SettingsPage logo upload', () => {
   beforeEach(() => {
