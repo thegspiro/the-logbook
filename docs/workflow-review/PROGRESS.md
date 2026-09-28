@@ -24,7 +24,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W03 | Forgot password and reset by link                                          | anonymous         | `/forgot-password`, `/reset-password` | ✅     |
 | W04 | My account: profile, password change, MFA enrolment, notification settings | member            | `/account`                            | ✅     |
 | W05 | Positions and permissions: create a position, grant, assign, revoke        | admin → member    | `/settings/roles`                     | ✅     |
-| W06 | Organization settings, module switches, department setup checklist         | admin             | `/settings`, `/setup`                 | ⬜     |
+| W06 | Organization settings, module switches, department setup checklist         | admin             | `/settings`, `/setup`                 | ✅     |
 | W07 | Dashboard for each role: what shows, what links work, what fails behind it | every role        | `/dashboard`                          | ⬜     |
 
 ## Tier 2 — Members
@@ -168,6 +168,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W06 — Organization settings, modules, department setup — 2026-09-28
+
+Driven as: `admin`, with `member` for what the department sees, at 1280×900
+and 390×844. Held: name, timezone, contact and logo autosave, survive a
+reload and reach every member's header; a cleared field stays cleared;
+turning Minutes off removed it from the member's menu and its URL explained
+why, and turning it back on restored both; the member is refused on both
+pages and every write; "Mark as reviewed" moves and keeps the setup count.
+Fixed: W06-1 (MED — an emptied name failed every profile save until it was
+retyped), W06-2 (MED — "Create Shift Templates" and "Configure & Verify
+Email Delivery" opened screens that cannot do the step), W06-3, W06-4 (LOW —
+14 unnamed contact/address fields; a logo could not be removed). Nothing
+flagged. Gate: typecheck, lint, flake8, black, the full
+frontend suite and the checklist tests clean. Next: W07.
 
 ### W05 — Positions and permissions — 2026-09-28
 
