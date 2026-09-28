@@ -31,6 +31,28 @@ class EmailAttachmentResponse(UTCResponseBase):
     model_config = {"from_attributes": True}
 
 
+class EmailTemplateBackupResponse(UTCResponseBase):
+    """A template as it stood before a release reset it, and its restore draft.
+
+    The ``subject`` / ``html_body`` / ``text_body`` fields are the backup as
+    saved. The ``restored_*`` fields are what Restore loads into the editor:
+    the department's own subject and plain text, and its title and message
+    placed inside the current design. Nothing is written until the admin
+    saves the draft.
+    """
+
+    id: str
+    template_id: Optional[str] = None
+    reason: str
+    created_at: datetime
+    subject: Optional[str] = None
+    html_body: Optional[str] = None
+    text_body: Optional[str] = None
+    restored_subject: str
+    restored_html_body: str
+    restored_text_body: Optional[str] = None
+
+
 class EmailTemplateResponse(UTCResponseBase):
     """Response schema for an email template"""
 

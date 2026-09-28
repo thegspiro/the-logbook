@@ -985,6 +985,120 @@ def build_shell(
     return shell
 
 
+# ---------------------------------------------------------------------------
+# Reading the message back out of a stored body
+# ---------------------------------------------------------------------------
+
+
+def find_element_end(html: str, start: int, tag_name: str) -> int:
+    """Return the offset of the ``</tag_name>`` that closes an open element.
+
+    *start* is the offset just past the element's opening tag.  Nested
+    elements of the same name are counted so the first ``</div>`` inside a
+    ``<div>`` does not end it.  An unbalanced document ends at EOF rather
+    than raising — malformed HTML in an admin-edited template must still
+    send.
+    """
+    token = re.compile(rf"<(/?){re.escape(tag_name)}\b[^>]*?(/?)>", re.IGNORECASE)
+    depth = 1
+    pos = start
+    while True:
+        match = token.search(html, pos)
+        if not match:
+            return len(html)
+        if match.group(1) == "/":
+            depth -= 1
+            if depth == 0:
+                return match.start()
+        elif match.group(2) != "/":
+            depth += 1
+        pos = match.end()
+
+
+_BODY_CONTENT = re.compile(
+    r"<body\b[^>]*>(.*?)(?:</body\s*>|\Z)", re.IGNORECASE | re.DOTALL
+)
+_PAGE_ONLY = re.compile(
+    r"<!DOCTYPE[^>]*>|<head\b.*?</head\s*>|<style\b.*?</style\s*>|</?html\b[^>]*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_CONTENT_OPEN = re.compile(
+    r'<div\b[^>]*\bclass="(?:\{\{content_class\}\}|content(?:-digest|-receipt)?)"[^>]*>'
+)
+_H1 = re.compile(r"(<h1\b[^>]*>)(.*?)(</h1\s*>)", re.IGNORECASE | re.DOTALL)
+_CALLOUT_OPEN = re.compile(r'<div class="callout-[a-z]+">')
+
+
+def page_content(html: str) -> str:
+    """*html* without any page around it.
+
+    A fragment comes back unchanged apart from any ``<style>`` block. A whole
+    page (``<html>``, ``<head>``, ``<body>``) comes back as what its
+    ``<body>`` held, with the page's own head and stylesheet removed: the
+    shell supplies the page, and a second stylesheet would fight the house
+    one.
+    """
+    match = _BODY_CONTENT.search(html)
+    if match:
+        html = match.group(1)
+    return _PAGE_ONLY.sub("", html).strip()
+
+
+def title_and_message(html: str) -> tuple:
+    """The title and the message section of a stored body, whatever it was.
+
+    A body built by any version of the shell carries its message in the
+    content card (``class="{{content_class}}"``, or a literal ``content``
+    class from before that token existed) and its title in the ``<h1>``
+    above it. A body written by hand has neither: all of it is the message,
+    minus any page around it. The title is ``""`` when there is none.
+    """
+    opener = _CONTENT_OPEN.search(html)
+    if not opener:
+        message = page_content(html)
+        return "", message
+    end = find_element_end(html, opener.end(), "div")
+    heading = _H1.search(html, 0, opener.start())
+    title = heading.group(2).strip() if heading else ""
+    return title, html[opener.end() : end].strip("\n")
+
+
+def with_message(shell_html: str, title: str, message: str) -> str:
+    """*shell_html* with its title and message replaced.
+
+    For putting a department's own wording back into a body built by the
+    current :func:`build_shell`. The callout cards the shipped default stacks
+    under the message are dropped: the department's message said what it
+    wanted to say, and a default callout beside it would repeat or contradict
+    it. The tab, the summary card and the footer are the shell's and stay.
+    """
+    opener = _CONTENT_OPEN.search(shell_html)
+    if not opener:
+        raise ValueError("not a body built by build_shell: it has no content card")
+    end = find_element_end(shell_html, opener.end(), "div")
+    close = shell_html.index(">", end) + 1
+    rest = shell_html[close:]
+    while True:
+        stripped = rest.lstrip()
+        callout = _CALLOUT_OPEN.match(stripped)
+        if not callout:
+            break
+        callout_end = find_element_end(stripped, callout.end(), "div")
+        rest = stripped[stripped.index(">", callout_end) + 1 :]
+        rest = "\n" + rest if not rest.startswith("\n") else rest
+    body = (
+        shell_html[: opener.end()]
+        + "\n"
+        + message.strip("\n")
+        + "\n    "
+        + shell_html[end:close]
+        + rest
+    )
+    if title:
+        body = _H1.sub(lambda m: m.group(1) + title + m.group(3), body, count=1)
+    return body
+
+
 def uses_default_stylesheet(css: str) -> bool:
     """Is *css* the built-in stylesheet (or no stylesheet at all)?
 

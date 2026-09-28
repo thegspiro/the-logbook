@@ -472,9 +472,12 @@ new default, keeping what it replaced in `email_template_backups` (see
   stylesheet, which still defines the previous shells' classes, so one built
   from the editor's blocks keeps working; its header is whatever it was
   written with.
-- **A backup is restored by hand.** `email_template_backups` holds each reset
-  template's previous content, but no screen reads it yet. Restoring one means
-  copying it back into the editor, or running SQL.
+- **Restoring a backup brings back the wording, not the layout.** The
+  editor's "Previous version" panel loads a backup's subject, plain text,
+  title and message into the new design as an unsaved draft. What the
+  department had above or around the message (its own header, colours,
+  stylesheet, extra sections outside the message card) is not restored, by
+  design; it is still readable in `email_template_backups`.
 - **Dark mode is Apple Mail and Outlook.com.** It is a
   `prefers-color-scheme` stylesheet, which Gmail strips along with every
   other `<style>`; Gmail's apps and classic Outlook repaint the light

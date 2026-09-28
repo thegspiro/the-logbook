@@ -17,6 +17,7 @@ import type {
   EmailTemplate,
   EmailAttachment,
   EmailTemplateUpdate,
+  EmailTemplateBackup,
   EmailTemplatePreview,
   TemplatePreviewOverrides,
   EmailFooter,
@@ -316,6 +317,12 @@ export const emailTemplatesService = {
   async updateTemplate(templateId: string, data: EmailTemplateUpdate): Promise<EmailTemplate> {
     const response = await api.put<EmailTemplate>(`/email-templates/${templateId}`, data);
     return response.data;
+  },
+
+  /** Earlier versions of a template, newest first; reading them changes nothing. */
+  async getTemplateBackups(templateId: string): Promise<EmailTemplateBackup[]> {
+    const response = await api.get<EmailTemplateBackup[]>(`/email-templates/${templateId}/backups`);
+    return asArray(response.data);
   },
 
   async resetTemplate(templateId: string): Promise<EmailTemplate> {

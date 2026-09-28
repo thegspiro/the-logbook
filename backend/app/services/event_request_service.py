@@ -13,7 +13,6 @@ nobody — requester or coordinator — was told a request had arrived.
 """
 
 import html as _html
-import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Optional
 
@@ -481,14 +480,14 @@ def render_request_template(
       the shell put the logo at the top themselves, and the masthead now
       carries it; filling it would print the logo twice.
     * A body written as a complete HTML page is taken apart first
-      (:func:`_message_of`): only what was inside ``<body>`` is kept, and the
+      (``email_theme.page_content``): only what was inside ``<body>`` is kept, and the
       page's own ``<head>`` and ``<style>`` are dropped, so every request
       email is in the house design and no document is nested in another.
     """
     from app.services.email_service import wrap_email_body
-    from app.services.email_theme import ACCENT_BLUE
+    from app.services.email_theme import ACCENT_BLUE, page_content
 
-    body = _message_of(template.body_html or "")
+    body = page_content(template.body_html or "")
 
     context = {
         "contact_name": event_request.contact_name,
@@ -520,29 +519,6 @@ def render_request_template(
         footer_key="public",
     )
     return subject, body, template.body_text
-
-
-_BODY_CONTENT = re.compile(
-    r"<body\b[^>]*>(.*?)(?:</body\s*>|\Z)", re.IGNORECASE | re.DOTALL
-)
-_PAGE_ONLY = re.compile(
-    r"<!DOCTYPE[^>]*>|<head\b.*?</head\s*>|<style\b.*?</style\s*>|</?html\b[^>]*>",
-    re.IGNORECASE | re.DOTALL,
-)
-
-
-def _message_of(body_html: str) -> str:
-    """The message inside a department's template, without any page around it.
-
-    A fragment comes back unchanged apart from any ``<style>`` block. A whole
-    page comes back as what its ``<body>`` held, with the page's own head and
-    stylesheet removed: the shell supplies the page, and a second stylesheet
-    would fight the house one.
-    """
-    match = _BODY_CONTENT.search(body_html)
-    if match:
-        body_html = match.group(1)
-    return _PAGE_ONLY.sub("", body_html).strip()
 
 
 async def send_request_notification(
