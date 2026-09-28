@@ -30,6 +30,7 @@ from app.models.inventory import (
 )
 from app.models.user import Organization, User, UserStatus
 from app.schemas.organization import RejoinServiceCredit
+from app.services.email_policy import EmailKind, member_receives_email
 from app.services.member_service_history_service import MemberServiceHistoryService
 from app.utils.org_timezone import resolve_org_today
 
@@ -185,7 +186,9 @@ async def check_and_auto_archive(
         for u in admins:
             role_slugs = [r.slug for r in (u.roles or [])]
             if any(r in role_slugs for r in ADMIN_NOTIFY_ROLE_SLUGS):
-                if u.email:
+                if u.email and member_receives_email(
+                    u.notification_preferences, EmailKind.MEMBERSHIP_ADMIN
+                ):
                     admin_emails.append(u.email)
 
         if admin_emails:

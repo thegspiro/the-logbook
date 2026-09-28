@@ -71,6 +71,7 @@ from app.models.storefront import (
     StoreSettings,
 )
 from app.models.user import Organization, User, UserStatus
+from app.services.email_policy import EmailKind, member_receives_email
 from app.services.email_service import EmailService, wrap_email_body
 from app.services.email_template_service import EmailTemplateService
 from app.services.email_theme import (
@@ -90,6 +91,18 @@ from app.utils.storefront_payments import build_payment_options
 # Header banner colour by notice kind. Aliased rather than re-declared so a
 # coded fallback and its default template cannot drift apart.
 _HEADER_BLUE = ACCENT_BLUE
+
+# Which member email choice governs each notice. Notices absent here are
+# receipts for the member's own order (EmailKind.STORE_RECEIPTS), which are
+# required and so need no lookup.
+_EMAIL_KIND_BY_TEMPLATE: Dict[str, EmailKind] = {
+    "storefront_payment_reminder": EmailKind.STORE_ANNOUNCEMENTS,
+    "storefront_window_open": EmailKind.STORE_ANNOUNCEMENTS,
+    "storefront_window_closing": EmailKind.STORE_ANNOUNCEMENTS,
+    "storefront_window_closed": EmailKind.STORE_ANNOUNCEMENTS,
+    "storefront_vendor_order_placed": EmailKind.STORE_ANNOUNCEMENTS,
+    "storefront_new_order_admin": EmailKind.MEMBERSHIP_ADMIN,
+}
 _HEADER_GREEN = ACCENT_GREEN
 _HEADER_AMBER = ACCENT_AMBER
 _HEADER_RED = ACCENT_RED
@@ -478,7 +491,13 @@ class StorefrontNotificationService:
                 organization, title, body_html, header_color=header_color
             )
 
-        if self._capture is not None:
+        if self._capture is None:
+            addresses = await self._drop_opted_out(
+                organization, addresses, template_type
+            )
+            if not addresses:
+                return 0
+        else:
             self._capture.append(
                 {
                     "subject": subject,
@@ -521,6 +540,46 @@ class StorefrontNotificationService:
             # A failed notice must never roll back the order it describes.
             logger.error(f"Storefront notification '{template_type}' failed: {exc}")
             return 0
+
+    async def _drop_opted_out(
+        self,
+        organization: Optional[Organization],
+        addresses: List[str],
+        template_type: str,
+    ) -> List[str]:
+        """Remove members who turned this notice's kind of email off.
+
+        Recipients arrive as addresses, so they are matched back to members
+        of the organization. An address belonging to no member — an extra
+        address an administrator configured for new-order notices — is kept:
+        nobody chose to stop it.
+        """
+        kind = _EMAIL_KIND_BY_TEMPLATE.get(template_type)
+        if kind is None or organization is None:
+            return addresses
+        try:
+            result = await self.db.execute(
+                select(User.email, User.notification_preferences).where(
+                    User.organization_id == str(organization.id),
+                    User.email.in_(addresses),
+                )
+            )
+            rows = result.all()
+        except Exception as exc:
+            # Like a template that will not load: the notice still goes out.
+            # Sending to a member who opted out is the lesser failure than
+            # every member missing an ordering window.
+            logger.warning(
+                f"Storefront '{template_type}' could not read email choices, "
+                f"sending to every recipient: {exc}"
+            )
+            return addresses
+        opted_out = {
+            (email or "").lower()
+            for email, prefs in rows
+            if not member_receives_email(prefs, kind)
+        }
+        return [a for a in addresses if a.lower() not in opted_out]
 
     # ------------------------------------------------------------------
     # Order notices

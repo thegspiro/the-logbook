@@ -1442,7 +1442,8 @@ export const UserSettingsPage: React.FC = () => {
                       Email Notifications
                     </label>
                     <p className="text-theme-text-secondary text-sm">
-                      Receive email for reminders and alerts. Department announcements are always emailed to you.
+                      Reminders, alerts and updates. Sign-in and security emails, ballots, department messages, store
+                      receipts and notices about department property are always sent.
                     </p>
                   </div>
                   <button

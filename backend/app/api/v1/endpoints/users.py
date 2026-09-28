@@ -4,6 +4,7 @@ Users API Endpoints
 Endpoints for user management and listing.
 """
 
+import copy
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
@@ -52,7 +53,6 @@ from app.schemas.user import (
     ContactInfoUpdate,
     DeletionImpactResponse,
     MemberAuditLogEntry,
-    NotificationPreferences,
     ProfileVisibility,
     UserListResponse,
     UserProfileResponse,
@@ -65,6 +65,7 @@ from app.services.admin_continuity_service import (
     assert_not_last_administrator,
     assert_positions_retain_administrator,
 )
+from app.services.email_policy import clean_email_kind_choices
 from app.services.email_service import welcome_email_can_send
 from app.services.operational_rank_service import (
     OperationalRankService,
@@ -86,6 +87,9 @@ from app.utils.membership import (
 from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
+
+# Preference keys no sender reads any more; dropped on the member's next save.
+_RETIRED_PREFERENCE_KEYS = frozenset({"email"})
 
 
 async def _rate_limit_admin_reset(request: Request) -> None:
@@ -1499,21 +1503,30 @@ async def update_contact_info(
         # silently switched the member's other preferences back on, and the
         # 200 made it look like the save had done exactly what was asked.
         # An omitted key means "leave this alone" (CLAUDE.md pitfall 1b).
-        known_keys = set(NotificationPreferences.model_fields)
+        # Deep-copied: email_kinds and scheduling_dashboard_widgets are nested,
+        # and mutating a shared reference would leave SQLAlchemy seeing no
+        # change (pitfall 12).
         merged = {
             key: value
-            for key, value in (user.notification_preferences or {}).items()
-            # Drops keys no sender reads any more, so a blob that predates
-            # migration 20260816_0007 heals on its next save instead of
-            # carrying a dead `email` flag forever.
-            if key in known_keys
+            for key, value in copy.deepcopy(user.notification_preferences or {}).items()
+            # Drops only the retired `email` flag, so a blob that predates
+            # migration 20260816_0007 heals on its next save. This used to keep
+            # only NotificationPreferences' own fields, which also discarded
+            # everything else stored here — the scheduling dashboard layout
+            # among it — every time a member saved their preferences.
+            if key not in _RETIRED_PREFERENCE_KEYS
         }
-        merged.update(
-            contact_update.notification_preferences.model_dump(exclude_unset=True)
+        incoming = contact_update.notification_preferences.model_dump(
+            exclude_unset=True
         )
-        # Every value is a flat bool, so this rebuilt dict is a genuinely new
-        # value and SQLAlchemy issues the UPDATE. Pitfall 12 (shallow copies
-        # sharing nested references) does not arise — there is no nesting.
+        if "email_kinds" in incoming:
+            # Merged per kind, so a screen that sends one choice does not
+            # erase the others.
+            merged["email_kinds"] = {
+                **clean_email_kind_choices(merged.get("email_kinds")),
+                **clean_email_kind_choices(incoming.pop("email_kinds")),
+            }
+        merged.update(incoming)
         user.notification_preferences = merged
 
     await db.commit()

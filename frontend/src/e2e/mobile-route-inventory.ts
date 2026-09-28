@@ -158,6 +158,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
       'one of the seven SettingsLayout screens, and the only one left carrying debt this pass would fail on. Its 20px list filters and its breadcrumb overflow at 320px are both fixed; what remains is a heading-order jump (the shell h1, then h3 group headers with an h4 under them), which is a hierarchy to re-level rather than a control to resize. List it when that is done.',
   },
   {
+    path: '/communications/member-emails',
+    source: 'src/modules/communications/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'read-only admin list of email kinds and text alerts: single-column cards that go two-up at md, no controls, so /messages remains the module representative',
+  },
+  {
     path: '/communications/messages',
     source: 'src/modules/communications/routes.tsx',
     coverage: 'exempt',

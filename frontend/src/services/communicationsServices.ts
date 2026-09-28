@@ -303,7 +303,43 @@ export interface ExpiringCertification {
   status: string;
 }
 
+/** One kind of member email, as classified by the backend's email policy. */
+export interface MemberEmailKind {
+  key: string;
+  label: string;
+  required: boolean;
+  default_on: boolean;
+  audience: 'members' | 'officers';
+  includes: string[];
+  rationale: string;
+  legacy_preference: string | null;
+}
+
+/** One alert the backend permits to escalate to a text message. */
+export interface MemberTextAlert {
+  key: string;
+  label: string;
+  description: string;
+  email_kind: string;
+}
+
+export interface MemberEmailPolicy {
+  emails: MemberEmailKind[];
+  texts: MemberTextAlert[];
+  text_conditions: string[];
+}
+
 export const emailTemplatesService = {
+  /** Every member email and text, and whether members can opt out. Read-only. */
+  async getMemberEmailPolicy(): Promise<MemberEmailPolicy> {
+    const response = await api.get<MemberEmailPolicy>('/email-templates/member-email-policy');
+    return {
+      emails: asArray(response.data.emails),
+      texts: asArray(response.data.texts),
+      text_conditions: asArray(response.data.text_conditions),
+    };
+  },
+
   async getTemplates(): Promise<EmailTemplate[]> {
     const response = await api.get<EmailTemplate[]>('/email-templates');
     return asArray(response.data);

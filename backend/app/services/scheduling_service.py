@@ -57,6 +57,7 @@ from app.models.user import (
     user_positions,
 )
 from app.services.call_tracking_service import CallTrackingService
+from app.services.email_policy import EmailKind, member_receives_email
 from app.services.external_shift_hours_service import ExternalShiftHoursService
 from app.services.member_leave_service import MemberLeaveService
 from app.services.notifications_service import NotificationsService
@@ -499,6 +500,7 @@ class SchedulingService:
         email_context: Optional[dict] = None,
         email_defaults: Optional[tuple] = None,
         org: Optional[Any] = None,
+        email_kind: Optional[EmailKind] = None,
     ) -> None:
         """Create in-app NotificationLog records and optionally send email.
 
@@ -510,6 +512,10 @@ class SchedulingService:
         send through the department's editable template, falling back to those
         defaults. Callers that have no template still pass *email_html_body*
         and get the generic chrome.
+
+        *email_kind* is required when *send_email* is set: recipients who have
+        turned that kind of email off still get the in-app entry, but not the
+        email.
         """
         try:
             for rid in recipient_ids:
@@ -532,13 +538,20 @@ class SchedulingService:
                 try:
                     from app.services.email_service import EmailService, wrap_email_body
 
+                    if email_kind is None:
+                        raise ValueError("send_email needs an email_kind")
                     recipient_result = await self.db.execute(
-                        select(User.email).where(
+                        select(User.email, User.notification_preferences).where(
                             User.id.in_(list(recipient_ids)),
+                            User.organization_id == str(organization_id),
                             User.email.isnot(None),
                         )
                     )
-                    to_emails = [r[0] for r in recipient_result.all() if r[0]]
+                    to_emails = [
+                        email
+                        for email, prefs in recipient_result.all()
+                        if email and member_receives_email(prefs, email_kind)
+                    ]
                     if to_emails:
                         email_svc = EmailService(organization=org)
                         if email_template and email_defaults:
@@ -4951,6 +4964,7 @@ class SchedulingService:
                 organization_id=organization_id,
                 action_url=f"/scheduling?shift={shift_id}",
                 send_email=wants_email,
+                email_kind=EmailKind.SCHEDULING_DUTIES,
                 email_cc=sched_cfg.get("cc_emails", []),
                 email_template_type="shift_decline",
                 email_template=EmailTemplateType.SHIFT_DECLINE,
@@ -5079,6 +5093,7 @@ class SchedulingService:
                 action_url=f"/scheduling?shift={shift_id}",
                 notification_metadata=notif_metadata,
                 send_email=wants_email,
+                email_kind=EmailKind.SHIFT_NOTICES,
                 email_cc=assign_cfg.get("cc_emails", []),
                 email_template_type="shift_assignment",
                 email_template=EmailTemplateType.SHIFT_ASSIGNMENT,
@@ -6111,7 +6126,9 @@ class SchedulingService:
         ).scalar_one_or_none()
         if not user or not user.email:
             return
-        if not (user.notification_preferences or {}).get("email_notifications", True):
+        if not member_receives_email(
+            user.notification_preferences, EmailKind.SHIFT_NOTICES
+        ):
             return
 
         org = (
@@ -8834,9 +8851,9 @@ class SchedulingService:
             self.db.add(notif)
 
             # Email notification
-            prefs = officer.notification_preferences or {}
-            wants_email = prefs.get("email_notifications", True)
-            if wants_email and officer.email:
+            if officer.email and member_receives_email(
+                officer.notification_preferences, EmailKind.SCHEDULING_DUTIES
+            ):
                 try:
                     from app.services.email_service import wrap_email_body
 

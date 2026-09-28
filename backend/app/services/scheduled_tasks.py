@@ -113,6 +113,7 @@ from app.models.event import (
 from app.models.inventory import MEDICAL_ITEM_TYPES
 from app.models.user import Organization, User
 from app.services.call_tracking_service import CallTrackingService
+from app.services.email_policy import EmailKind, member_receives_email
 from app.services.email_service import _redact_email
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.email_providers import stored_email_section
@@ -477,7 +478,8 @@ async def _stock_alert_audiences(
     [...]}`` so a caller can render one message per audience containing only
     that audience's rows. Someone holding both grants appears once, in the
     two-domain group, and so receives a single complete email rather than two
-    partial ones.
+    partial ones. Officers who turned off quartermaster duty emails are left
+    out; these alerts have no in-app copy for them to miss.
     """
     from sqlalchemy.orm import selectinload
 
@@ -505,6 +507,10 @@ async def _stock_alert_audiences(
         if permission_matches("inventory.manage_medical", granted):
             domains.add(DOMAIN_MEDICAL)
         if not domains:
+            continue
+        if not member_receives_email(
+            user.notification_preferences, EmailKind.INVENTORY_DUTIES
+        ):
             continue
 
         audiences.setdefault(frozenset(domains), []).append(user.email)
@@ -536,6 +542,9 @@ async def _stock_alert_recipients(
     relationship), so every call raised ``AttributeError`` inside the per-org
     guard in ``_for_each_org``, which logged it and moved on. The alerts were
     silently undelivered rather than visibly broken.
+
+    Every caller only emails the result, so officers who turned off
+    quartermaster duty emails are left out here.
     """
     from sqlalchemy.orm import selectinload
 
@@ -553,7 +562,9 @@ async def _stock_alert_recipients(
         granted: set[str] = set()
         for role in user.roles or []:
             granted.update(role.permissions or [])
-        if permission_matches_any(permissions, granted):
+        if permission_matches_any(permissions, granted) and member_receives_email(
+            user.notification_preferences, EmailKind.INVENTORY_DUTIES
+        ):
             recipients.append(user)
     return recipients
 
@@ -1256,9 +1267,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                             )
 
                         # Email notification — only if user hasn't opted out
-                        wants_email = prefs.get("email_notifications", True)
-                        wants_reminders = prefs.get("event_reminders", True)
-                        if wants_reminders and wants_email and user.email:
+                        if user.email and member_receives_email(
+                            prefs, EmailKind.EVENT_REMINDERS
+                        ):
                             try:
                                 sent = await email_service.send_event_reminder(
                                     to_email=user.email,
@@ -1440,9 +1451,9 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                     )
 
                 # Email notification (if user has email prefs enabled)
-                prefs = creator.notification_preferences or {}
-                wants_email = prefs.get("email_notifications", True)
-                if wants_email and creator.email:
+                if creator.email and member_receives_email(
+                    creator.notification_preferences, EmailKind.EVENT_DUTIES
+                ):
                     try:
                         from app.services.email_service import wrap_email_body
 
@@ -1805,9 +1816,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                     )
 
                 # Email notification
-                prefs = officer.notification_preferences or {}
-                wants_email = prefs.get("email_notifications", True)
-                if wants_email and officer.email:
+                if officer.email and member_receives_email(
+                    officer.notification_preferences, EmailKind.SCHEDULING_DUTIES
+                ):
                     try:
                         from app.services.email_service import wrap_email_body
 
@@ -2288,6 +2299,14 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                         for r in roster:
                             email = r["email"]
                             if not email:
+                                continue
+                            # Skipped for the email only: the member still
+                            # appears on everyone else's crew roster.
+                            member = user_map.get(r["user_id"])
+                            if not member_receives_email(
+                                getattr(member, "notification_preferences", None),
+                                EmailKind.SHIFT_NOTICES,
+                            ):
                                 continue
                             try:
                                 # Each recipient gets their own render: the
@@ -2896,9 +2915,9 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                         )
 
                     # Email
-                    prefs = user.notification_preferences or {}
-                    wants_email = prefs.get("email_notifications", True)
-                    if wants_email and user.email:
+                    if user.email and member_receives_email(
+                        user.notification_preferences, EmailKind.SHIFT_NOTICES
+                    ):
                         try:
                             from app.services.email_service import wrap_email_body
 
@@ -3221,7 +3240,9 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                         e,
                     )
 
-                if trainee.email:
+                if trainee.email and member_receives_email(
+                    trainee.notification_preferences, EmailKind.SHIFT_NOTICES
+                ):
                     try:
                         e_first = _html.escape(trainee.first_name or "")
                         e_date = _html.escape(shift_date_str)
@@ -5084,9 +5105,9 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                     )
 
                 # Email notification
-                wants_email = prefs.get("email_notifications", True)
-                wants_reminders = prefs.get("event_reminders", True)
-                if wants_reminders and wants_email and creator.email:
+                if creator.email and member_receives_email(
+                    prefs, EmailKind.EVENT_REMINDERS
+                ):
                     try:
                         context = {
                             "recipient_name": user_name,

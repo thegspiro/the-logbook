@@ -898,6 +898,11 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/communications/messages', label: 'Messages administration', permission: 'notifications.manage' },
       { path: '/communications/email-templates', label: 'Email templates', permission: 'settings.manage' },
       {
+        path: '/communications/member-emails',
+        label: 'Member emails & texts',
+        anyPermission: ['settings.manage', 'organization.update_settings', 'notifications.manage'],
+      },
+      {
         path: '/communications/photo-use-consent',
         label: 'Photo use consent',
         anyPermission: ['users.view_consents', 'notifications.manage', 'members.manage', 'users.edit'],
