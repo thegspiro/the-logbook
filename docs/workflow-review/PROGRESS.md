@@ -37,7 +37,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W11 | Edit a member as an officer: details, clearing a field, status, history   | admin                  | `/members/admin/edit/:userId`                | ✅     |
 | W12 | Member settings: ranks, membership tiers, ID numbering, EVOC, visibility  | admin                  | `/members/admin/settings/*`                  | ✅     |
 | W13 | Waivers                                                                   | admin                  | `/members/admin/waivers`                     | ✅     |
-| W14 | Check-in station, badge scan, member labels and ID cards                  | admin                  | `/members/check-in-station`, `/members/scan` | ⬜     |
+| W14 | Check-in station, badge scan, member labels and ID cards                  | admin                  | `/members/check-in-station`, `/members/scan` | ✅     |
 | W15 | A member leaves: departure clearance, property return, archive, reinstate | admin                  | `/members/admin`                             | ⬜     |
 | W16 | Prospective member from application to converted member                   | membership_coordinator | `/prospective-members`                       | ⬜     |
 | W17 | An applicant checks their status by link                                  | anonymous              | `/application-status/:token`                 | ⬜     |
@@ -151,10 +151,11 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **Kiosk and check-in activities** — the member ID card's QR code is
-  unsigned JSON (`{type, id, membership_number, org}`) and the id is in every
-  profile URL; check whether any scanner treats a scanned code as proof of
-  identity rather than a lookup (W10).
+- **Facilities, reports and inventory activities** — four `DialogPanel`
+  dialogs have no `role` on the panel or a wrapper: the facilities lookup
+  editor, the report viewer, and InventoryScanModal's confirm and
+  custody-transfer dialogs (W14-2). The inventory pair sits inside another
+  modal; check its tests' dialog queries when changing it.
 - **Any run touching the app shell** — while a password change is required
   (first sign-in, admin reset), the shell and shared hooks fire ~17 requests
   the server refuses with 403, including `POST /errors/log`, so errors from
@@ -167,6 +168,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W14 — Check-in station, badge scan, labels and ID cards — 2026-09-28
+
+Driven as: `admin` at 1280×900 and 390×844, with `member2` refused on page
+and API. Held: NFC ID Cards activates; an officer issues a card and a
+duplicate serial in another format is refused; the station clocks in, guards
+a double tap, refuses unknown and suspended cards with reasons, and clocks
+out; badges print for selected members. The ID-card QR lead is closed: only
+officer-operated lookups read it, and the station and kiosk identify by NFC
+card. Fixed: W14-1 (MED — a badge printed for a member without a membership
+number carried a short id no scanner in the app resolved), W14-2 (LOW — the
+integration Activate/Connect dialog had no dialog role or name), W14-3 (NIT).
+Nothing flagged. Test card removed and NFC ID Cards deactivated afterwards.
+Gate: typecheck, lint and the full frontend suite clean (no Python changed).
+Next: W15.
 
 ### W13 — Waivers — 2026-09-28
 

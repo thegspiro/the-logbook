@@ -485,7 +485,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
         </div>
         <Link
           to={backTo}
-          className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+          className="text-theme-text-muted hover:text-theme-text-secondary touch-target-phone flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" /> {backLabel}
         </Link>
@@ -505,7 +505,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
         <div className="mx-auto max-w-4xl px-4 py-6">
           <Link
             to={backTo}
-            className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
+            className="text-theme-text-muted hover:text-theme-text-secondary touch-target-phone mb-6 flex items-center gap-1 text-sm"
           >
             <ArrowLeft className="h-4 w-4" /> {backLabel}
           </Link>
@@ -521,7 +521,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 onClick={() => setShowSettings(!showSettings)}
-                className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
+                className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary touch-target-phone flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
               >
                 <Settings2 className="h-4 w-4" /> <span className="sr-only sm:not-sr-only">Settings</span>
               </button>
@@ -530,7 +530,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                   void downloadPdf(false);
                 }}
                 disabled={downloadingPdf || items.length === 0 || (isCustom && !customValid)}
-                className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary touch-target-phone flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
               >
                 {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} PDF
               </button>
@@ -600,7 +600,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
               <button
                 onClick={handlePrint}
                 disabled={items.length === 0 || (isCustom && !customValid)}
-                className="flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
+                className="touch-target-phone flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
               >
                 <Printer className="h-4 w-4" /> Browser print dialog
               </button>
@@ -822,7 +822,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                     void downloadPdf(true);
                   }}
                   disabled={downloadingPdf || (isCustom && !customValid)}
-                  className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                  className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary touch-target-phone flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
                 >
                   {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}{' '}
                   Print Test Label

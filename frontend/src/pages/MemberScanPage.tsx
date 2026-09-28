@@ -27,6 +27,7 @@ import { ScanSuccessFlash } from '../components/ux/ScanSuccessFlash';
 import { isMemberIdPayload } from '../types/scanner';
 import { describeCameraError, QR_SCAN_CONFIG } from '../constants/camera';
 import { Breadcrumbs } from '../components/ux';
+import { matchesMemberBadgeCode } from '../utils/memberBadgeCode';
 
 export const MemberScanPage: React.FC = () => {
   const navigate = useNavigate();
@@ -67,7 +68,7 @@ export const MemberScanPage: React.FC = () => {
         if (!usersRef.current) {
           usersRef.current = await userService.getUsers();
         }
-        const match = usersRef.current.find((u) => u.membership_number?.toLowerCase() === decoded.trim().toLowerCase());
+        const match = usersRef.current.find((u) => matchesMemberBadgeCode(decoded, u));
 
         if (match) {
           void navigate(`/members/${match.id}`);
@@ -115,7 +116,7 @@ export const MemberScanPage: React.FC = () => {
       <div className="mb-6">
         <Link
           to="/members"
-          className="text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1 text-sm"
+          className="text-theme-text-muted hover:text-theme-text-secondary touch-target-phone mb-4 flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Members

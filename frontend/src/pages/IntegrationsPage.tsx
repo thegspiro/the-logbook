@@ -1983,12 +1983,14 @@ const IntegrationsPage: React.FC = () => {
                       resetFormState();
                     }}
                     className="relative w-full max-w-lg"
+                    role="dialog"
+                    aria-labelledby="integration-connect-title"
                   >
                     <div className="px-6 pt-5 pb-4">
                       <div className="mb-4 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                           <div className={`rounded-lg p-2 ${ui.bgColor} ${ui.color}`}>{ui.icon}</div>
-                          <h3 className="text-theme-text-primary text-lg font-medium">
+                          <h3 id="integration-connect-title" className="text-theme-text-primary text-lg font-medium">
                             {activation ? 'Activate' : 'Connect'} {selectedIntegration.name}
                           </h3>
                         </div>

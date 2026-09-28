@@ -159,7 +159,7 @@ export const MemberIdCardPage: React.FC = () => {
       <div className="mb-6 w-full max-w-sm print:hidden">
         <Link
           to={`/members/${userId}`}
-          className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+          className="text-theme-text-muted hover:text-theme-text-secondary touch-target-phone flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Profile
