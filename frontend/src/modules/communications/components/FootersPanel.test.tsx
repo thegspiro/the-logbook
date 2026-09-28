@@ -5,11 +5,26 @@ import userEvent from '@testing-library/user-event';
 const mockGetFooters = vi.fn();
 const mockUpdateFooters = vi.fn();
 
+const mockGetProfile = vi.fn();
+const mockUpdateContactDetails = vi.fn();
+const mockCanManageSettings = vi.fn();
+
 vi.mock('../../../services/api', () => ({
   emailTemplatesService: {
     getFooters: (...args: unknown[]) => mockGetFooters(...args) as unknown,
     updateFooters: (...args: unknown[]) => mockUpdateFooters(...args) as unknown,
   },
+  // DepartmentContactCard renders on the same screen; its own behaviour is
+  // covered in DepartmentContactCard.test.tsx.
+  organizationService: {
+    getProfile: (...args: unknown[]) => mockGetProfile(...args) as unknown,
+    updateContactDetails: (...args: unknown[]) => mockUpdateContactDetails(...args) as unknown,
+  },
+}));
+
+vi.mock('../../../stores/authStore', () => ({
+  useAuthStore: (selector: (state: { checkPermission: (p: string) => boolean }) => unknown) =>
+    selector({ checkPermission: () => mockCanManageSettings() as boolean }),
 }));
 
 // Imported after the mock so the store binds to it.
@@ -58,6 +73,13 @@ describe('FootersPanel', () => {
       hasLoaded: false,
     });
     vi.clearAllMocks();
+    // The contact card stays loading unless a test opts in, so the footer
+    // tests see only the footer controls.
+    mockGetProfile.mockReset();
+    mockGetProfile.mockReturnValue(new Promise(() => undefined));
+    mockUpdateContactDetails.mockReset();
+    mockCanManageSettings.mockReset();
+    mockCanManageSettings.mockReturnValue(false);
   });
 
   it('lists each footer with its lines and marks the default', async () => {
@@ -194,21 +216,6 @@ describe('FootersPanel', () => {
       expect(screen.getAllByText('Not set, so it will not appear')).toHaveLength(1);
     });
 
-    it('links to where the details are edited', async () => {
-      mockGetFooters.mockResolvedValue(library([makeFooter()]));
-
-      renderWithRouter(<FootersPanel />);
-
-      expect(await screen.findByRole('link', { name: /change phone, email or website/i })).toHaveAttribute(
-        'href',
-        '/settings?page=contact'
-      );
-      expect(screen.getByRole('link', { name: /change the mailing address/i })).toHaveAttribute(
-        'href',
-        '/settings?page=addresses'
-      );
-    });
-
     it('saves email and website without the phone', async () => {
       const user = userEvent.setup();
       mockGetFooters.mockResolvedValue(library([makeFooter()]));
@@ -243,5 +250,45 @@ describe('FootersPanel', () => {
       const payload = mockUpdateFooters.mock.calls[0]?.[0] as { footers: EmailFooter[] };
       expect(payload.footers[0]).toMatchObject({ show_phone: false, show_contact: false });
     });
+  });
+
+  it('refreshes the values beside the boxes after the contact details are saved, keeping unsaved footer edits', async () => {
+    const user = userEvent.setup();
+    const org = {
+      name: 'Dept',
+      timezone: 'America/New_York',
+      phone: '(555) 111-2222',
+      email: 'info@example.org',
+      website: '',
+      county: '',
+      founded_year: null,
+      logo: null,
+      mailing_address: { line1: '100 Main Street', line2: '', city: 'Falls Church', state: 'VA', zip: '22046' },
+      physical_address_same: true,
+      physical_address: { line1: '', line2: '', city: '', state: '', zip: '' },
+    };
+    mockCanManageSettings.mockReturnValue(true);
+    mockGetProfile.mockResolvedValue(org);
+    mockUpdateContactDetails.mockResolvedValue({ ...org, phone: '(555) 999-0000' });
+    const before = library([makeFooter()]);
+    mockGetFooters.mockResolvedValueOnce(before).mockResolvedValueOnce({
+      ...before,
+      contact_details: { ...before.contact_details, phone: '(555) 999-0000' },
+    });
+
+    renderWithRouter(<FootersPanel />);
+
+    const name = await screen.findByDisplayValue('Internal — members');
+    await user.clear(name);
+    await user.type(name, 'Members');
+
+    const phone = await screen.findByLabelText('Phone', { selector: 'input[type="tel"]' });
+    await user.clear(phone);
+    await user.type(phone, '(555) 999-0000');
+    await user.click(screen.getByRole('button', { name: 'Save contact details' }));
+
+    expect(await screen.findByRole('checkbox', { name: /phone\s*\(555\) 999-0000/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Members')).toBeInTheDocument();
+    expect(mockGetFooters).toHaveBeenCalledTimes(2);
   });
 });

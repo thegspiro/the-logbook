@@ -1195,7 +1195,7 @@ class MailingAddressUpdate(BaseModel):
     line1: Optional[str] = Field(None, max_length=255)
     line2: Optional[str] = Field(None, max_length=255)
     city: Optional[str] = Field(None, max_length=100)
-    state: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=50)
     zip: Optional[str] = Field(None, max_length=20)
 
 
@@ -1205,18 +1205,24 @@ class PhysicalAddressUpdate(BaseModel):
     line1: Optional[str] = Field(None, max_length=255)
     line2: Optional[str] = Field(None, max_length=255)
     city: Optional[str] = Field(None, max_length=100)
-    state: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=50)
     zip: Optional[str] = Field(None, max_length=20)
 
 
 class OrganizationProfileUpdate(BaseModel):
-    """Schema for updating organization profile details (name, contact, branding)"""
+    """Schema for updating organization profile details (name, contact, branding)
+
+    Every ``max_length`` here matches its column on ``Organization``. A longer
+    limit than the column lets a value through validation that MySQL's strict
+    mode then rejects at flush time, which the caller sees as a 500 rather
+    than a message saying what was too long.
+    """
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    timezone: Optional[str] = Field(None, max_length=100)
-    phone: Optional[str] = Field(None, max_length=30)
+    timezone: Optional[str] = Field(None, max_length=50)
+    phone: Optional[str] = Field(None, max_length=20)
     email: Optional[str] = Field(None, max_length=255)
-    website: Optional[str] = Field(None, max_length=500)
+    website: Optional[str] = Field(None, max_length=255)
     county: Optional[str] = Field(None, max_length=100)
     founded_year: Optional[int] = Field(None, ge=1600, le=2100)
     logo: Optional[str] = None

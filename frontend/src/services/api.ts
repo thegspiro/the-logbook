@@ -25,6 +25,7 @@ export { userService, organizationService, roleService } from './userServices';
 export type {
   ModuleSettingsData,
   OrganizationProfile,
+  OrganizationContactUpdate,
   EnabledModulesResponse,
   SetupChecklistItem,
   SetupChecklistResponse,

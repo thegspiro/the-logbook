@@ -7,27 +7,24 @@
  * record can each close differently.
  *
  * The contact switches show the department's actual phone, email, website and
- * mailing address beside them. Those values live in Organization settings, not
- * here, so without them an admin ticking "phone" could not tell which number
- * would print, or that a blank one would print nothing at all.
+ * mailing address beside them, and `DepartmentContactCard` above the list
+ * edits those values in place — without them an admin ticking "phone" could
+ * not tell which number would print, or that a blank one would print nothing.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Check, Loader2, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
-import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { SkeletonPage } from '../../../components/ux';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useFootersStore } from '../store/footersStore';
+import DepartmentContactCard from './DepartmentContactCard';
 import type { EmailFooter, EmailFooterContactDetails } from '../types';
 
 /** Mirrors the backend's key pattern, so a bad key is caught before the save. */
 const KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 const MAX_FOOTERS = 12;
 const MAX_LINES = 6;
-
-const CONTACT_SETTINGS_PATH = '/settings?page=contact';
-const ADDRESS_SETTINGS_PATH = '/settings?page=addresses';
 
 type ContactFlag = 'show_phone' | 'show_email' | 'show_website';
 
@@ -240,15 +237,7 @@ const FooterCard: React.FC<FooterCardProps> = ({
       <fieldset className="space-y-2">
         <legend className="form-label">Contact details</legend>
         <p className="text-theme-text-muted text-xs">
-          Tick the details this footer shows. They come from your organization&apos;s settings —{' '}
-          <Link to={CONTACT_SETTINGS_PATH} className="text-theme-text-secondary underline">
-            change phone, email or website
-          </Link>{' '}
-          or{' '}
-          <Link to={ADDRESS_SETTINGS_PATH} className="text-theme-text-secondary underline">
-            change the mailing address
-          </Link>
-          .
+          Tick the details this footer shows. The values are the department contact details above.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {CONTACT_PARTS.map((part) => (
@@ -285,6 +274,7 @@ const FootersPanel: React.FC = () => {
     hasLoaded,
     fetchFooters,
     saveFooters,
+    refreshContactDetails,
     clearError,
   } = useFootersStore();
   const { confirm } = useConfirm();
@@ -412,6 +402,8 @@ const FootersPanel: React.FC = () => {
           </p>
         </div>
       )}
+
+      <DepartmentContactCard onSaved={refreshContactDetails} />
 
       <div className="space-y-4">
         {draft.map((footer, index) => (

@@ -27,6 +27,11 @@ interface FootersState {
 
   fetchFooters: () => Promise<void>;
   saveFooters: (defaultKey: string, footers: EmailFooter[]) => Promise<void>;
+  /**
+   * Re-reads only the contact values, after they are edited. Leaves the
+   * footer list alone so unsaved footer edits on the same screen survive.
+   */
+  refreshContactDetails: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -90,6 +95,15 @@ export const useFootersStore = create<FootersState>((set) => ({
         error: getErrorMessage(err, 'Failed to save footers'),
       });
       throw err;
+    }
+  },
+
+  refreshContactDetails: async () => {
+    try {
+      const library = await emailTemplatesService.getFooters();
+      set({ contactDetails: library.contact_details });
+    } catch (err: unknown) {
+      set({ error: getErrorMessage(err, 'Failed to refresh the contact details') });
     }
   },
 
