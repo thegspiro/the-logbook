@@ -9,7 +9,7 @@ fastapi==0.141.1
 # starlette pinned explicitly (normally transitive): the 1.x line carries
 # the security fixes pip-audit flagged; fastapi>=0.141 accepts it.
 starlette==1.7.0
-uvicorn[standard]==0.53.0
+uvicorn[standard]==0.54.0
 pydantic==2.13.5
 pydantic-settings==2.15.0
 slowapi==0.1.10
@@ -24,7 +24,7 @@ mcp==2.2.0
 # ============================================
 # Database - MySQL
 # ============================================
-sqlalchemy==2.0.54
+sqlalchemy==2.1.1
 alembic==1.20.0
 pymysql==1.2.0  # Held: 1.2.1+ removed escape_bytes_prefixed, which aiomysql 0.3.2 calls for every bytes param (see docs/KNOWN_LIMITATIONS.md)
 aiomysql==0.3.2
@@ -35,12 +35,12 @@ cryptography==50.0.1  # Required by PyMySQL for secure connections; includes CVE
 # Redis & Caching
 # ============================================
 redis==8.1.0
-hiredis==3.4.1
+hiredis==3.4.2
 
 # ============================================
 # Authentication & Security
 # ============================================
-PyJWT[crypto]==2.14.0
+PyJWT[crypto]==2.15.0
 bcrypt==5.0.0
 python-multipart==0.0.32
 pyotp==2.10.0
@@ -74,9 +74,9 @@ pywebpush==2.5.0
 # ============================================
 # File Storage
 # ============================================
-boto3==1.43.98  # AWS S3
-azure-storage-blob==12.30.2
-google-cloud-storage==3.14.1
+boto3==1.43.102  # AWS S3
+azure-storage-blob==12.30.3
+google-cloud-storage==3.15.0
 python-magic==0.4.27
 
 # ============================================
@@ -113,7 +113,7 @@ stripe==15.6.1
 # Monitoring & Logging
 # ============================================
 loguru==0.7.3
-sentry-sdk==2.69.2
+sentry-sdk==2.70.0
 psutil==7.2.2  # System monitoring for health checks
 
 # ============================================
@@ -132,7 +132,7 @@ celery==5.6.3
 # ============================================
 msal==1.39.0
 msgraph-core==1.5.1
-google-auth==2.58.0
+google-auth==2.58.1
 google-auth-oauthlib==1.4.1
 google-api-python-client==2.200.0
 
@@ -144,8 +144,8 @@ pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 pytest-randomly==5.0.0
 pytest-timeout==2.4.0
-hypothesis==6.168.0  # schemathesis 4.x requires >=6.130.12
-schemathesis==4.27.5
+hypothesis==6.168.1  # schemathesis 4.x requires >=6.130.12
+schemathesis==4.28.0
 # Pinned because these two move together. 4.24.3 called
 # CanonicalSchema.is_satisfiable(), which jsonschema-rs 0.50 removed, and an
 # unbounded transitive upgrade made every generated API contract case fail
@@ -159,12 +159,12 @@ schemathesis==4.27.5
 # free choice: anything outside that range makes the file unresolvable against
 # the schemathesis above, which is what 0.56.0 did here. Read that range off
 # the schemathesis release being pinned before changing this line.
-jsonschema-rs==0.56.0
+jsonschema-rs==0.58.0
 faker==40.39.0
 
 # Code Quality
 black==26.5.1
-flake8==7.3.0
+flake8==7.4.1
 flake8-pytest-style==2.2.0
 mypy==2.3.1
 isort==9.0.1
@@ -172,7 +172,7 @@ isort==9.0.1
 # an isort bump on its own makes this file unresolvable. 3.x capped it at <7,
 # 4.0.7 at <9, and 4.0.8 widens it to <10. Raise pylint past the cap in the
 # same commit that raises isort.
-pylint==4.0.8
+pylint==4.0.9
 
 # ============================================
 # Utilities
