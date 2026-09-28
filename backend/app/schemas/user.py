@@ -5,7 +5,7 @@ Request and response schemas for user-related endpoints.
 """
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -426,6 +426,11 @@ class NotificationPreferences(BaseModel):
     sms_notifications: bool = True
     event_reminders: bool = True
     training_reminders: bool = True
+    # Per-kind email choices, {"shift_notices": false}, keyed by
+    # app.services.email_policy.EmailKind. The update endpoint drops unknown
+    # and required kinds and merges the rest into what is stored, so sending
+    # one kind leaves the member's other choices alone.
+    email_kinds: Optional[Dict[str, bool]] = None
 
     model_config = _response_config
 

@@ -34,6 +34,7 @@ from app.core.constants import (
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import Organization, User, UserStatus
+from app.services.email_policy import EmailKind, member_receives_email
 from app.services.email_service import EmailService, wrap_email_body
 from app.services.email_theme import ACCENT_AMBER, ACCENT_RED
 from app.services.notifications_service import NotificationsService
@@ -140,28 +141,17 @@ class CertAlertService:
         return [u.email for u in officers if u.email]
 
     def _member_has_email_enabled(self, member: User) -> bool:
-        """Check if a member wants training-related email reminders.
+        """Whether a member receives certification reminder emails.
 
-        Honors the master email switch (email_notifications) AND the
-        training_reminders category preference — certification expiration
-        alerts are training reminders, so a member who turns that category
-        off should stop receiving them. This mirrors how event reminders
-        honor the event_reminders preference; previously training_reminders
-        was settable in the profile but never consulted, so disabling it had
-        no effect. In-app notifications are still created regardless so
-        opted-out members can see alerts in their inbox.
-
-        This used to AND in a second key, `email`, which no other sender read
-        and which only the admin contact panel wrote — so the same switch
-        meant "no mail at all" here and nothing anywhere else. Migration
-        20260816_0007 folded that key into email_notifications.
+        Decided by the email policy (``EmailKind.TRAINING_REMINDERS``), which
+        honours the member's email switch and their older
+        ``training_reminders`` choice. In-app notifications are still created
+        regardless so opted-out members can see alerts in their inbox.
         """
-        prefs = getattr(member, "notification_preferences", None)
-        if prefs and isinstance(prefs, dict):
-            return prefs.get("email_notifications", True) and prefs.get(
-                "training_reminders", True
-            )
-        return True  # Default to enabled
+        return member_receives_email(
+            getattr(member, "notification_preferences", None),
+            EmailKind.TRAINING_REMINDERS,
+        )
 
     async def _log_in_app_notification(
         self,
@@ -480,11 +470,17 @@ class CertAlertService:
                 cc_emails = list(dict.fromkeys(escalation_cc))
 
                 to_emails = []
-                if self._member_has_email_enabled(member) and member.email:
-                    to_emails.append(member.email)
-                # Include personal email on final escalation if configured
-                if include_personal_email and getattr(member, "personal_email", None):
-                    to_emails.append(member.personal_email)
+                # The personal address is a second copy for the member, so it
+                # follows the member's own choice; it used to be added even
+                # when they had turned these emails off. The officers' CC is
+                # the escalation and is unaffected.
+                if self._member_has_email_enabled(member):
+                    if member.email:
+                        to_emails.append(member.email)
+                    if include_personal_email and getattr(
+                        member, "personal_email", None
+                    ):
+                        to_emails.append(member.personal_email)
 
                 if to_emails or cc_emails:
                     e_full_name = _html.escape(member.full_name or "")

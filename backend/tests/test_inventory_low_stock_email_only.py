@@ -41,6 +41,7 @@ def _quartermaster():
         email="qm@fd.example",
         phone="+15551234567",
         roles=[SimpleNamespace(permissions=["inventory.manage"])],
+        notification_preferences=None,
     )
 
 
@@ -93,6 +94,13 @@ class TestLowStockAlerts:
         # SMSService must not even be constructed.
         _, sms_cls = await _run([_low_stock_item()], [_quartermaster()])
         sms_cls.assert_not_called()
+
+    async def test_a_quartermaster_who_turned_duty_emails_off_is_not_emailed(self):
+        qm = _quartermaster()
+        qm.notification_preferences = {"email_kinds": {"inventory_duties": False}}
+        result, _ = await _run([_low_stock_item()], [qm])
+        assert result["total"] == 0
+        assert _FakeEmail.sent == {}
 
     async def test_nothing_is_sent_when_no_item_is_below_its_reorder_point(self):
         result, sms_cls = await _run([], [_quartermaster()])

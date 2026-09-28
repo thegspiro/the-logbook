@@ -1229,15 +1229,16 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Communications & Messaging _(documented 2026-08-10)_
 
-| URL                                 | Page                      | Permission                                                                           |
-| ----------------------------------- | ------------------------- | ------------------------------------------------------------------------------------ |
-| `/messages`                         | Messages                  | Authenticated                                                                        |
-| `/messages/:messageId`              | Message Detail            | Authenticated _(2026-08-26)_                                                         |
-| `/communications/messages`          | Message Administration    | `notifications.manage`                                                               |
-| `/communications/email-templates`   | Email Template Management | `settings.manage`                                                                    |
-| `/communications/photo-use-consent` | Photo Use Consent         | any of `users.view_consents`, `notifications.manage`, `members.manage`, `users.edit` |
-| `/communications/suggestion-boxes`  | Suggestion Box Management | `suggestions.manage` _(2026-09-23)_                                                  |
-| `/suggestions`                      | Suggestions               | Authenticated _(2026-09-23)_                                                         |
+| URL                                 | Page                      | Permission                                                                                      |
+| ----------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------- |
+| `/messages`                         | Messages                  | Authenticated                                                                                   |
+| `/messages/:messageId`              | Message Detail            | Authenticated _(2026-08-26)_                                                                    |
+| `/communications/messages`          | Message Administration    | `notifications.manage`                                                                          |
+| `/communications/email-templates`   | Email Template Management | `settings.manage`                                                                               |
+| `/communications/member-emails`     | Member Emails & Texts     | any of `settings.manage`, `organization.update_settings`, `notifications.manage` _(2026-09-28)_ |
+| `/communications/photo-use-consent` | Photo Use Consent         | any of `users.view_consents`, `notifications.manage`, `members.manage`, `users.edit`            |
+| `/communications/suggestion-boxes`  | Suggestion Box Management | `suggestions.manage` _(2026-09-23)_                                                             |
+| `/suggestions`                      | Suggestions               | Authenticated _(2026-09-23)_                                                                    |
 
 > **Suggestions** _(2026-09-23)_ is where every member submits to the
 > department's suggestion boxes — named or anonymously, as each box allows —

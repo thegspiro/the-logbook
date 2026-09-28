@@ -257,7 +257,7 @@ async def _email(
     if not member.email:
         return
     if not member_receives_email(
-        member.notification_preferences, EmailKind.EQUIPMENT_REQUEST_UPDATE
+        member.notification_preferences, EmailKind.INVENTORY_UPDATES
     ):
         return
     try:

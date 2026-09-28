@@ -1017,6 +1017,7 @@ class TrainingSessionService:
         Send email notifications to training officers about pending approval.
         """
         from app.models.user import user_roles
+        from app.services.email_policy import EmailKind, recipients_for
         from app.services.email_service import EmailService
 
         try:
@@ -1046,7 +1047,11 @@ class TrainingSessionService:
 
             # Get officer emails
             to_emails = [
-                officer.email for officer in training_officers if officer.email
+                officer.email
+                for officer in recipients_for(
+                    training_officers, EmailKind.TRAINING_DUTIES
+                )
+                if officer.email
             ]
 
             if not to_emails:

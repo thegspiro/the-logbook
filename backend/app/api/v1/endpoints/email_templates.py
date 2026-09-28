@@ -37,16 +37,21 @@ from app.schemas.email_template import (
     EmailTemplatePreviewResponse,
     EmailTemplateResponse,
     EmailTemplateUpdate,
+    MemberEmailKindResponse,
+    MemberEmailPolicyResponse,
+    MemberTextAlertResponse,
     ScheduledEmailCreate,
     ScheduledEmailResponse,
     ScheduledEmailUpdate,
 )
 from app.services import email_footers
+from app.services.email_policy import EMAIL_POLICIES
 from app.services.email_template_service import (
     GLOBAL_VARIABLES,
     EmailTemplateService,
     live_sample_context,
 )
+from app.services.notification_channels import SMS_ALERT_DETAILS, SMS_CONDITIONS
 from app.services.officer_service import OfficerService
 from app.utils.mime_validation import detect_mime_type
 from app.utils.org_scoping import assert_in_org
@@ -109,6 +114,50 @@ def _footer_contact_details(organization) -> EmailFooterContactDetails:
         email=str(ctx.get("organization_email") or ""),
         website=str(ctx.get("organization_website") or ""),
         mailing_address=str(ctx.get("organization_mailing_address") or ""),
+    )
+
+
+@router.get("/member-email-policy", response_model=MemberEmailPolicyResponse)
+async def get_member_email_policy(
+    current_user: User = Depends(
+        require_permission(
+            "settings.manage", "organization.update_settings", "notifications.manage"
+        )
+    ),
+):
+    """
+    Every member email and text message, and whether members can opt out.
+
+    Read-only: the classification lives in code (services/email_policy and
+    SmsAlert), so what this lists is exactly what the senders enforce.
+
+    Requires: settings.manage, organization.update_settings or
+    notifications.manage permission.
+    """
+    return MemberEmailPolicyResponse(
+        emails=[
+            MemberEmailKindResponse(
+                key=kind.value,
+                label=policy.label,
+                required=policy.required,
+                default_on=policy.default_on,
+                audience=policy.audience.value,
+                includes=list(policy.includes),
+                rationale=policy.rationale,
+                legacy_preference=policy.legacy_preference,
+            )
+            for kind, policy in EMAIL_POLICIES.items()
+        ],
+        texts=[
+            MemberTextAlertResponse(
+                key=alert.value,
+                label=info.label,
+                description=info.description,
+                email_kind=info.email_kind,
+            )
+            for alert, info in SMS_ALERT_DETAILS.items()
+        ],
+        text_conditions=list(SMS_CONDITIONS),
     )
 
 

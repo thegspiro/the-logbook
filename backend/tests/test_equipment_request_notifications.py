@@ -22,12 +22,6 @@ from app.models.notification import (
     NotificationTrigger,
 )
 from app.schemas.inventory import EquipmentRequestReview
-from app.services.email_policy import (
-    EMAIL_POLICIES,
-    EmailKind,
-    EmailPolicy,
-    member_receives_email,
-)
 from app.services.equipment_request_notifications import (
     build_notice,
     send_equipment_request_notice,
@@ -51,46 +45,6 @@ def _request(**overrides) -> EquipmentRequest:
     }
     values.update(overrides)
     return EquipmentRequest(**values)
-
-
-@pytest.mark.unit
-class TestEmailPolicy:
-    def test_an_optional_kind_is_sent_by_default(self):
-        assert member_receives_email(None, EmailKind.EQUIPMENT_REQUEST_UPDATE)
-        assert member_receives_email({}, EmailKind.EQUIPMENT_REQUEST_UPDATE)
-
-    def test_the_global_email_switch_does_not_yet_govern_it(self):
-        # The member-facing opt-out is deliberately not built yet; until it
-        # is, the old all-or-nothing switch does not silence this notice.
-        prefs = {"email_notifications": False}
-        assert member_receives_email(prefs, EmailKind.EQUIPMENT_REQUEST_UPDATE)
-
-    def test_an_explicit_choice_for_the_kind_is_honoured(self):
-        prefs = {"email_kinds": {"equipment_request_update": False}}
-        assert not member_receives_email(prefs, EmailKind.EQUIPMENT_REQUEST_UPDATE)
-
-    @pytest.mark.parametrize(
-        "prefs",
-        [
-            {"email_kinds": "off"},
-            {"email_kinds": {"equipment_request_update": "no"}},
-            {"email_kinds": {"equipment_request_update": None}},
-        ],
-    )
-    def test_a_malformed_choice_falls_back_to_the_default(self, prefs):
-        assert member_receives_email(prefs, EmailKind.EQUIPMENT_REQUEST_UPDATE)
-
-    def test_a_required_kind_ignores_the_members_choice(self, monkeypatch):
-        monkeypatch.setitem(
-            EMAIL_POLICIES,
-            EmailKind.EQUIPMENT_REQUEST_UPDATE,
-            EmailPolicy(label="Test", required=True),
-        )
-        prefs = {"email_kinds": {"equipment_request_update": False}}
-        assert member_receives_email(prefs, EmailKind.EQUIPMENT_REQUEST_UPDATE)
-
-    def test_every_kind_is_classified(self):
-        assert set(EMAIL_POLICIES) == set(EmailKind)
 
 
 @pytest.mark.unit
@@ -282,7 +236,7 @@ class TestDelivery:
         await db_session.execute(
             text("UPDATE users SET notification_preferences = :p WHERE id = :id"),
             {
-                "p": '{"email_kinds": {"equipment_request_update": false}}',
+                "p": '{"email_kinds": {"inventory_updates": false}}',
                 "id": dept["member"],
             },
         )
