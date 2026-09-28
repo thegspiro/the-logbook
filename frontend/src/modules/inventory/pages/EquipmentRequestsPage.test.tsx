@@ -628,6 +628,32 @@ describe('EquipmentRequestsPage', () => {
     expect(await screen.findByRole('button', { name: /Approve & fulfill now/ })).toBeDisabled();
   });
 
+  it('approves without notifying when fulfilling straight away, so the member hears once', async () => {
+    const user = userEvent.setup();
+    mockReviewEquipmentRequest.mockResolvedValue({});
+    mockGetFulfillmentOptions.mockResolvedValue(
+      fulfillmentOptions({
+        can_fulfill_now: true,
+        options: [option('gloves', { name: 'Gloves', available: 3 })],
+      })
+    );
+    renderWithRouter(<EquipmentRequestsPage />);
+    expect(await screen.findByText('Radio XTS 5000')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Review'));
+    const button = await screen.findByRole('button', { name: /Approve & fulfill now/ });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.click(button);
+
+    await waitFor(() => {
+      expect(mockReviewEquipmentRequest).toHaveBeenCalledWith('req-1', {
+        status: 'approved',
+        review_notes: undefined,
+        notify_member: false,
+      });
+    });
+  });
+
   it('displays fulfillment details for fulfilled requests', async () => {
     mockGetEquipmentRequests.mockResolvedValue({
       requests: [

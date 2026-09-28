@@ -1057,7 +1057,7 @@ export const inventoryService = {
 
   async reviewEquipmentRequest(
     requestId: string,
-    data: { status: string; review_notes?: string | undefined }
+    data: { status: string; review_notes?: string | undefined; notify_member?: boolean | undefined }
   ): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put<{ id: string; status: string; message: string }>(
       `/inventory/requests/${requestId}/review`,
