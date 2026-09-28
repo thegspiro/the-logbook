@@ -39,7 +39,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W13 | Waivers                                                                   | admin                  | `/members/admin/waivers`                     | ✅     |
 | W14 | Check-in station, badge scan, member labels and ID cards                  | admin                  | `/members/check-in-station`, `/members/scan` | ✅     |
 | W15 | A member leaves: departure clearance, property return, archive, reinstate | admin                  | `/members/admin`                             | ✅     |
-| W16 | Prospective member from application to converted member                   | membership_coordinator | `/prospective-members`                       | ⬜     |
+| W16 | Prospective member from application to converted member                   | membership_coordinator | `/prospective-members`                       | ✅     |
 | W17 | An applicant checks their status by link                                  | anonymous              | `/application-status/:token`                 | ⬜     |
 
 ## Tier 3 — Events
@@ -173,6 +173,25 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W16 — Prospective member to converted member — 2026-09-28
+
+Driven as: `membership_coordinator` at 1280×900 and 390×844, with `chief` as
+a required signer and `member2` refused on page and API. Held: a pipeline
+and stages are created from labelled forms and presets; a Required stage
+cannot be skipped; Advance records the stage history; the conversion wizard
+is honest about email being off. Fixed: W16-2 (LOW — with no pipeline, Add
+Applicant opened a form that silently did nothing), W16-3 (LOW — the Add
+Applicant dialog had no role, labels or named close), W16-4 (NIT). Flagged:
+W16-1 (HIGH — a Required Multi-Signer Approval stage is not enforced: the
+coordinator converted an applicant no officer had signed; the transfer
+endpoint never checks required stages, and no screen lets a signer record
+an approval). Gate: typecheck, lint and the full frontend suite clean (no
+Python changed).
+
+**The rotation stopped here.** W16-1 needs a decision about who may admit a
+member and when, which is an authorization and product decision, and the
+overnight routine's stop condition. Next, once decided: W17.
 
 ### W15 — A member leaves — 2026-09-28
 

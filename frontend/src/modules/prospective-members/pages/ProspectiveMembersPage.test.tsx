@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import type { ApplicantListItem, BulkActionResult, Pipeline } from '../types';
@@ -58,7 +58,7 @@ const pipeline = {
 
 const storeState = {
   pipelines: [pipeline],
-  currentPipeline: pipeline,
+  currentPipeline: pipeline as Pipeline | null,
   pipelineStats: null,
   preferredPipelineId: null,
   applicants: [row('a1', 'Riley', 'Bishop'), row('a2', 'Sam', 'Ortega')],
@@ -186,5 +186,36 @@ describe('ProspectiveMembersPage table-view bulk actions', () => {
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Network down'));
     expect(mockRefreshPipelineView).not.toHaveBeenCalled();
     expect(screen.getByText('2 selected')).toBeInTheDocument();
+  });
+});
+
+describe('ProspectiveMembersPage — Add Applicant (workflow review W16)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    storeState.currentPipeline = pipeline;
+  });
+
+  // The form was a bare div with unlabelled fields and an unnamed close button.
+  it('opens a named dialog whose fields are labelled', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    await user.click(screen.getByRole('button', { name: /add applicant/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Add Applicant' });
+
+    expect(within(dialog).getByRole('textbox', { name: 'First Name *' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('textbox', { name: 'Email *' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('combobox', { name: 'Membership Type' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  });
+
+  // With no pipeline, "Add to Pipeline" returned without a word, so the
+  // coordinator's typing went nowhere and nothing said why.
+  it('is not offered until a pipeline exists', () => {
+    storeState.currentPipeline = null;
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    expect(screen.getByRole('button', { name: /add applicant/i })).toBeDisabled();
+    storeState.currentPipeline = pipeline;
   });
 });
