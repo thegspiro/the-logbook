@@ -23,6 +23,7 @@ const definitions: Record<Kind, { title: string; singular: string; offeredOn: st
     offeredOn: 'when logging a maintenance record',
   },
 };
+const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 export default function FacilitiesSettingsPage() {
   const navigate = useNavigate(),
     [data, setData] = useState<Record<Kind, Lookup[]>>({ types: [], statuses: [], maintenance: [] }),
@@ -63,7 +64,7 @@ export default function FacilitiesSettingsPage() {
       if (kind === 'types') await facilitiesService.deleteType(item.id);
       else if (kind === 'statuses') await facilitiesService.deleteStatus(item.id);
       else await facilitiesService.deleteMaintenanceType(item.id);
-      toast.success(`${definitions[kind].singular} deleted`);
+      toast.success(`${capitalize(definitions[kind].singular)} deleted`);
     } catch (error) {
       toast.error(getErrorMessage(error, `Unable to delete ${definitions[kind].singular}`));
     } finally {
@@ -79,7 +80,7 @@ export default function FacilitiesSettingsPage() {
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Facility Settings</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">
-            Manage lookup values used by facilities and maintenance records.
+            Choose the types and statuses offered on facility and maintenance record forms.
           </p>
         </div>
       </header>
@@ -132,10 +133,10 @@ function LookupEditor({
       <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
         <div>
           <h2 className="text-theme-text-primary font-semibold">{definitions[kind].title}</h2>
-          <p className="text-theme-text-muted text-xs">Ordered as shown in facility forms.</p>
+          <p className="text-theme-text-muted text-xs">Offered {definitions[kind].offeredOn}.</p>
         </div>
         <button className="btn-primary flex items-center gap-1 text-sm" onClick={onAdd}>
-          <Plus className="h-4 w-4" /> Add
+          <Plus className="h-4 w-4" /> Add {definitions[kind].singular}
         </button>
       </div>
       <div className="overflow-x-auto">
@@ -154,7 +155,7 @@ function LookupEditor({
             {items.map((item, index) => {
               const used = item.usageCount ?? 0,
                 reason = item.isSystem
-                  ? 'System lookups cannot be deleted'
+                  ? 'System values cannot be deleted'
                   : used
                     ? `In use by ${used} record${used === 1 ? '' : 's'}`
                     : undefined;
@@ -234,7 +235,7 @@ function LookupDialog({
       } else {
         await facilitiesService.createMaintenanceType(payload);
       }
-      toast.success(`${definitions[kind].singular} saved`);
+      toast.success(`${capitalize(definitions[kind].singular)} saved`);
       await onSaved();
     } catch (error) {
       toast.error(getErrorMessage(error, `Unable to save ${definitions[kind].singular}`));

@@ -75,7 +75,7 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="Search records..."
+              aria-label="Search maintenance records"
               placeholder="Search records..."
               className={inputCls + ' pl-9'}
             />
@@ -221,7 +221,7 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
           <DialogPanel onClose={() => setShowModal(false)} className="max-h-[90dvh] w-full max-w-lg overflow-y-auto">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
-                {editingRecord ? 'Edit Record' : 'New Maintenance Record'}
+                {editingRecord ? 'Edit Maintenance Record' : 'New Maintenance Record'}
               </h2>
               <button
                 onClick={() => setShowModal(false)}
@@ -345,7 +345,7 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
                 className="btn-primary flex items-center gap-2 px-4 text-sm"
               >
                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                {editingRecord ? 'Update' : 'Create'}
+                {editingRecord ? 'Save Changes' : 'Create Record'}
               </button>
             </div>
           </DialogPanel>

@@ -62,7 +62,8 @@ export default function InspectionsListPage() {
     handleDelete,
   } = useInspectionForm();
 
-  const getFacilityName = (facilityId: string) => facilities.find((f) => f.id === facilityId)?.name || 'Unknown';
+  const getFacilityName = (facilityId: string) =>
+    facilities.find((f) => f.id === facilityId)?.name || 'Unknown facility';
 
   return (
     <div className="space-y-6">
@@ -99,7 +100,7 @@ export default function InspectionsListPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Search inspections..."
+            aria-label="Search inspections"
             placeholder="Search inspections..."
             className="form-input placeholder-theme-text-muted py-2.5 pr-4 pl-10"
           />
@@ -320,7 +321,7 @@ export default function InspectionsListPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Next Inspection</label>
+                  <label className={labelCls}>Next Inspection Date</label>
                   <input
                     type="date"
                     value={formData.next_inspection_date}
@@ -331,7 +332,7 @@ export default function InspectionsListPage() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Inspector</label>
+                  <label className={labelCls}>Inspector Name</label>
                   <input
                     type="text"
                     value={formData.inspector_name}
@@ -340,7 +341,7 @@ export default function InspectionsListPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Organization</label>
+                  <label className={labelCls}>Inspector Organization</label>
                   <input
                     type="text"
                     value={formData.inspector_organization}
@@ -412,7 +413,7 @@ export default function InspectionsListPage() {
                 className="btn-primary flex items-center gap-2 px-5 text-sm"
               >
                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                {editingInspection ? 'Update' : 'Create'}
+                {editingInspection ? 'Save Changes' : 'Create Inspection'}
               </button>
             </div>
           </DialogPanel>

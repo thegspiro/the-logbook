@@ -68,7 +68,8 @@ export default function MaintenanceListPage() {
     handleDelete,
   } = useMaintenanceForm({ initialStatusFilter: initialStatus });
 
-  const getFacilityName = (facilityId: string) => facilities.find((f) => f.id === facilityId)?.name || 'Unknown';
+  const getFacilityName = (facilityId: string) =>
+    facilities.find((f) => f.id === facilityId)?.name || 'Unknown facility';
 
   return (
     <div className="space-y-6">
@@ -105,7 +106,7 @@ export default function MaintenanceListPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Search records..."
+            aria-label="Search maintenance records"
             placeholder="Search records..."
             className="form-input placeholder-theme-text-muted py-2.5 pr-4 pl-10"
           />
@@ -393,7 +394,7 @@ export default function MaintenanceListPage() {
                 className="btn-primary flex items-center gap-2 px-5 text-sm"
               >
                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                {editingRecord ? 'Update' : 'Create'}
+                {editingRecord ? 'Save Changes' : 'Create Record'}
               </button>
             </div>
           </DialogPanel>
