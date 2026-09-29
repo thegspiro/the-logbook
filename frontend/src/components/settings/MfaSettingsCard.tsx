@@ -44,7 +44,7 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
       setEnabled(status.mfa_enabled);
       setRecoveryRemaining(status.recovery_codes_remaining);
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load MFA status'));
+      toast.error(getErrorMessage(err, 'Could not load your two-factor status'));
     } finally {
       setLoading(false);
     }
@@ -63,7 +63,7 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
       setCode('');
       setStep('enrolling');
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Could not start MFA setup'));
+      toast.error(getErrorMessage(err, 'Could not start two-factor setup'));
     } finally {
       setBusy(false);
     }
@@ -85,7 +85,7 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
       // W04-2).
       notifyOnDone.current = true;
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Invalid code — please try again'));
+      toast.error(getErrorMessage(err, 'That code did not work. Enter the current code from your authenticator app.'));
     } finally {
       setBusy(false);
     }
@@ -102,7 +102,7 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
       await loadStatus();
       onChange?.();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Could not disable MFA — check your code'));
+      toast.error(getErrorMessage(err, 'Could not disable two-factor authentication. Check your code and try again.'));
     } finally {
       setBusy(false);
     }
@@ -120,7 +120,7 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
       toast.success('New recovery codes generated');
       await loadStatus();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Could not regenerate codes — check your code'));
+      toast.error(getErrorMessage(err, 'Could not generate new recovery codes. Check your code and try again.'));
     } finally {
       setBusy(false);
     }
@@ -335,7 +335,7 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
       {enabled && showDisable && (
         <div className="space-y-2">
           <label htmlFor="mfa-disable-code" className="text-theme-text-secondary block text-sm font-medium">
-            Enter a current authenticator code to disable
+            Enter a current authenticator code to disable two-factor authentication
           </label>
           <input
             id="mfa-disable-code"
@@ -355,7 +355,7 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
               disabled={busy || !disableCode.trim()}
               className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
             >
-              Confirm disable
+              Disable two-factor authentication
             </button>
             <button
               onClick={() => {

@@ -116,7 +116,7 @@ const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
     description: 'User sign-in and SSO provider',
     subPages: [
       { key: 'signin', label: 'Sign-in', hint: 'Local accounts and SSO' },
-      { key: 'mfa', label: 'MFA Policy', hint: 'Who must enrol' },
+      { key: 'mfa', label: 'MFA Policy', hint: 'Who must enroll' },
     ],
   },
 ];
@@ -513,7 +513,7 @@ export const SettingsPage: React.FC = () => {
         setProfile(profileData);
         profileRef.current = profileData;
       } catch {
-        toast.error('Unable to load settings.');
+        toast.error('Could not load organization settings. Refresh the page to try again.');
       } finally {
         setLoading(false);
       }
@@ -715,7 +715,7 @@ export const SettingsPage: React.FC = () => {
       // rather than a generic failure the admin cannot act on.
       toast.error(
         status === 403
-          ? 'Permission denied.'
+          ? 'You do not have permission to change these settings.'
           : status === 400
             ? getErrorMessage(err, 'Failed to save email settings.')
             : 'Failed to save email settings.'
@@ -735,7 +735,9 @@ export const SettingsPage: React.FC = () => {
       toast.success('File storage settings saved');
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
-      toast.error(status === 403 ? 'Permission denied.' : 'Failed to save storage settings.');
+      toast.error(
+        status === 403 ? 'You do not have permission to change these settings.' : 'Failed to save storage settings.'
+      );
     } finally {
       setSavingStorage(false);
     }
@@ -751,7 +753,11 @@ export const SettingsPage: React.FC = () => {
       toast.success('Authentication settings saved');
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
-      toast.error(status === 403 ? 'Permission denied.' : 'Failed to save authentication settings.');
+      toast.error(
+        status === 403
+          ? 'You do not have permission to change these settings.'
+          : 'Failed to save authentication settings.'
+      );
     } finally {
       setSavingAuth(false);
     }

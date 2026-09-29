@@ -49,7 +49,7 @@ export const RoleManagementPage: React.FC = () => {
       setRoles(rolesData);
       setPermissionCategories(permsData);
     } catch (_err) {
-      setError('Unable to load roles and permissions. Please check your connection and refresh the page.');
+      setError('Could not load roles and permissions. Check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -106,7 +106,7 @@ export const RoleManagementPage: React.FC = () => {
         await fetchData();
         setShowCreateModal(false);
       } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Unable to save the role. Please check your input and try again.'));
+        setError(getErrorMessage(err, 'Could not save the role. Check the details and try again.'));
       }
     });
 
@@ -127,7 +127,7 @@ export const RoleManagementPage: React.FC = () => {
       await roleService.deleteRole(role.id);
       await fetchData();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to delete the role. It may still be assigned to users.'));
+      setError(getErrorMessage(err, 'Could not delete the role. Try again.'));
     }
   };
 
@@ -172,7 +172,7 @@ export const RoleManagementPage: React.FC = () => {
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-theme-text-primary text-2xl font-bold">Role Management</h2>
-            <p className="text-theme-text-muted mt-1 text-sm">Create and manage custom roles and permissions</p>
+            <p className="text-theme-text-muted mt-1 text-sm">Create custom roles and choose what each role can do</p>
           </div>
           <button
             onClick={handleCreate}
