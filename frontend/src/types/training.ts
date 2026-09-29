@@ -1326,6 +1326,9 @@ export interface ExternalProviderConfig {
   records_path?: string; // JSON path to records array in response (e.g. "data.records")
   additional_headers?: Record<string, string>;
   date_format?: string;
+
+  // Auto-sync at fixed "HH:MM" times in the department's timezone; null = interval
+  sync_times?: string[] | null | undefined;
 }
 
 export interface ExternalTrainingProvider {

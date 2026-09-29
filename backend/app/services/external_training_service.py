@@ -7,8 +7,9 @@ like Vector Solutions, Target Solutions, Lexipol, etc.
 
 import csv
 import io
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 import httpx
 from cryptography.fernet import InvalidToken
@@ -32,11 +33,63 @@ from app.models.training import (
     TrainingType,
 )
 from app.models.user import User
+from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.ssrf_transport import SSRFSafeAsyncTransport, join_endpoint
 
 # Target Solutions puts credentials in the request URL; make sure httpx's
 # request log is redacted even in a worker that never ran setup_logging().
 install_httpx_url_redaction()
+
+# Target Solutions lets a completion be recorded for a past date. Scheduled
+# syncs only ask for completions dated since the last sync, so re-check this
+# many days each time; re-fetched rows update in place by Transcript ID.
+TS_INCREMENTAL_LOOKBACK_DAYS = 30
+
+
+def parse_sync_times(value: Any) -> List[time]:
+    """Stored ``config.sync_times`` as ``time`` objects, or [] if unusable.
+
+    ``config`` is unvalidated JSON once stored, so anything malformed degrades
+    to the interval schedule rather than raising inside the scheduler loop.
+    """
+    if not isinstance(value, list):
+        return []
+    parsed = set()
+    for entry in value:
+        try:
+            hour, minute = str(entry).strip().split(":")
+            parsed.add(time(int(hour), int(minute)))
+        except (ValueError, TypeError):
+            return []
+    return sorted(parsed)
+
+
+def next_scheduled_sync(
+    sync_times: List[time], tz: ZoneInfo, after: datetime
+) -> datetime:
+    """The first of ``sync_times`` (wall clock in ``tz``) strictly after ``after``.
+
+    Built per calendar date so a DST change moves the UTC instant, not the
+    local time the department chose. Returned in UTC.
+    """
+    local_after = after.astimezone(tz)
+    for day_offset in range(3):
+        day = local_after.date() + timedelta(days=day_offset)
+        for slot in sync_times:
+            candidate = datetime.combine(day, slot, tzinfo=tz)
+            if candidate > local_after:
+                return candidate.astimezone(timezone.utc)
+    raise ValueError("sync_times must not be empty")
+
+
+def compute_next_sync_at(
+    provider: ExternalTrainingProvider, tz: ZoneInfo, now: datetime
+) -> datetime:
+    """When auto-sync should next run: the next set time, else now + interval."""
+    sync_times = parse_sync_times((provider.config or {}).get("sync_times"))
+    if sync_times:
+        return next_scheduled_sync(sync_times, tz, now)
+    return now + timedelta(hours=provider.sync_interval_hours or 24)
 
 
 class ExternalTrainingSyncService:
@@ -320,6 +373,11 @@ class ExternalTrainingSyncService:
                     provider.last_sync_at
                     or datetime.now(timezone.utc) - timedelta(days=30)
                 ).date()
+                if provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
+                    from_date = min(
+                        from_date,
+                        date.today() - timedelta(days=TS_INCREMENTAL_LOOKBACK_DAYS),
+                    )
             elif sync_type == "full" and not from_date:
                 # Full sync: get all records from a year ago
                 from_date = (datetime.now(timezone.utc) - timedelta(days=365)).date()
@@ -368,8 +426,11 @@ class ExternalTrainingSyncService:
             # Update provider sync timestamps
             provider.last_sync_at = datetime.now(timezone.utc)
             if provider.auto_sync_enabled:
-                provider.next_sync_at = datetime.now(timezone.utc) + timedelta(
-                    hours=provider.sync_interval_hours
+                tz = await resolve_scheduling_timezone(
+                    self.db, provider.organization_id
+                )
+                provider.next_sync_at = compute_next_sync_at(
+                    provider, tz, provider.last_sync_at
                 )
 
             await self.db.commit()

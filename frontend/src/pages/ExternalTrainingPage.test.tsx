@@ -11,6 +11,8 @@ const mockGetUserMappings = vi.fn();
 const mockUpdateCategoryMapping = vi.fn();
 const mockGetCategories = vi.fn();
 const mockDeleteProvider = vi.fn();
+const mockCreateProvider = vi.fn();
+const mockUpdateProvider = vi.fn();
 
 vi.mock('../services/api', () => ({
   externalTrainingService: {
@@ -20,6 +22,8 @@ vi.mock('../services/api', () => ({
     getUserMappings: (...a: unknown[]) => mockGetUserMappings(...a) as unknown,
     updateCategoryMapping: (...a: unknown[]) => mockUpdateCategoryMapping(...a) as unknown,
     deleteProvider: (...a: unknown[]) => mockDeleteProvider(...a) as unknown,
+    createProvider: (...a: unknown[]) => mockCreateProvider(...a) as unknown,
+    updateProvider: (...a: unknown[]) => mockUpdateProvider(...a) as unknown,
   },
   trainingService: {
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
@@ -161,5 +165,69 @@ describe('ExternalTrainingPage — provider setup form', () => {
     expect(await screen.findByLabelText('Authentication Type')).toBeInTheDocument();
     expect(screen.getByLabelText(/^API Key/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/^Site ID/)).not.toBeInTheDocument();
+  });
+});
+
+describe('ExternalTrainingPage — fixed-time sync schedule', () => {
+  beforeEach(() => {
+    mockCreateProvider.mockReset();
+    mockCreateProvider.mockResolvedValue({ ...provider, id: 'prov-new' });
+    mockUpdateProvider.mockReset();
+    mockUpdateProvider.mockResolvedValue(provider);
+  });
+
+  it('creates a provider that syncs at the chosen times of day', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /add provider/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Target Solutions/ }));
+
+    await userEvent.type(screen.getByLabelText(/^API Base URL/), 'https://app.targetsolutions.com/tsapp/api/');
+    await userEvent.type(screen.getByLabelText(/^API Key/), 'k');
+    await userEvent.type(screen.getByLabelText(/^API Secret/), 's');
+    await userEvent.click(screen.getByRole('switch', { name: 'Enable auto-sync' }));
+    await userEvent.selectOptions(screen.getByLabelText('Sync Schedule'), 'At set times of day');
+
+    expect(screen.getByLabelText('Sync time 1')).toHaveValue('06:00');
+    expect(screen.getByLabelText('Sync time 2')).toHaveValue('18:00');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create Provider' }));
+
+    await waitFor(() => expect(mockCreateProvider).toHaveBeenCalledTimes(1));
+    const payload = mockCreateProvider.mock.calls[0]?.[0] as { config?: { sync_times?: string[] | null } };
+    expect(payload.config?.sync_times).toEqual(['06:00', '18:00']);
+  });
+
+  // The update endpoint replaces the stored config, so switching the schedule
+  // must carry the provider's existing settings (Site ID) along with it.
+  it('keeps the existing config when an edit switches to set times', async () => {
+    mockGetProviders.mockResolvedValue([
+      {
+        ...provider,
+        api_base_url: 'https://app.targetsolutions.com/v1',
+        auto_sync_enabled: true,
+        sync_interval_hours: 12,
+        config: { site_id: '42' },
+      },
+    ]);
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit provider' }));
+
+    await userEvent.selectOptions(await screen.findByLabelText('Sync Schedule'), 'At set times of day');
+    await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => expect(mockUpdateProvider).toHaveBeenCalledTimes(1));
+    expect(mockUpdateProvider).toHaveBeenCalledWith(
+      'prov-1',
+      expect.objectContaining({ config: { site_id: '42', sync_times: ['06:00', '18:00'] } })
+    );
+  });
+
+  it('labels a fixed schedule with its times', async () => {
+    mockGetProviders.mockResolvedValue([
+      { ...provider, auto_sync_enabled: true, config: { sync_times: ['06:00', '18:00'] } },
+    ]);
+    renderWithRouter(<ExternalTrainingPage />);
+
+    expect(await screen.findByText('Daily at 06:00, 18:00')).toBeInTheDocument();
   });
 });
