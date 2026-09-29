@@ -128,7 +128,7 @@ const ExpenseReportsPage: React.FC = () => {
           autoCorrect="off"
           spellCheck={false}
           type="text"
-          aria-label="Search by report number or title..."
+          aria-label="Search expense reports"
           placeholder="Search by report number or title..."
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
@@ -138,6 +138,7 @@ const ExpenseReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setSearchText('')}
+            aria-label="Clear search"
             className="text-theme-text-secondary hover:text-theme-text-primary absolute top-1/2 right-3 -translate-y-1/2"
           >
             <X className="h-4 w-4" />

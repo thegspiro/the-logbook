@@ -67,8 +67,27 @@ describe('FinanceApprovalPage', () => {
 
     renderAt('tok-x');
 
-    expect(await screen.findByText(/already been approved/i)).toBeInTheDocument();
+    expect(await screen.findByText('This step has already been approved. No action is needed.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
+  });
+
+  it('describes an auto-approved step in words rather than its raw status', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        step_name: 'Treasurer Approval',
+        entity_type: 'check_request',
+        status: 'auto_approved',
+        actionable: false,
+        expired: false,
+      },
+    });
+
+    renderAt('tok-auto');
+
+    expect(
+      await screen.findByText('This step has already been approved automatically. No action is needed.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/auto_approved/)).not.toBeInTheDocument();
   });
 
   it('shows no actions when the token is invalid', async () => {

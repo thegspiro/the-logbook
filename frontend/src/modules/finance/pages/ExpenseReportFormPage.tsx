@@ -16,7 +16,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import { ExpenseType } from '../types';
+import { ExpenseType, EXPENSE_TYPE_LABELS } from '../types';
 
 // =============================================================================
 // Validation Schema
@@ -24,7 +24,7 @@ import { ExpenseType } from '../types';
 
 const lineItemSchema = z.object({
   description: z.string().min(1, 'Description is required'),
-  amount: z.number({ message: 'Amount is required' }).positive('Amount must be positive'),
+  amount: z.number({ message: 'Amount is required' }).positive('Amount must be greater than zero'),
   dateIncurred: z.string().min(1, 'Date is required'),
   expenseType: z.string().min(1, 'Expense type is required'),
   merchant: z.string().optional(),
@@ -59,20 +59,10 @@ const errorClass = 'mt-1 text-xs text-red-600';
 // Expense Type Options
 // =============================================================================
 
-const EXPENSE_TYPE_OPTIONS = [
-  { value: ExpenseType.GENERAL, label: 'General' },
-  { value: ExpenseType.UNIFORM_REIMBURSEMENT, label: 'Uniform Reimbursement' },
-  { value: ExpenseType.PPE_REPLACEMENT, label: 'PPE Replacement' },
-  { value: ExpenseType.BOOT_ALLOWANCE, label: 'Boot Allowance' },
-  { value: ExpenseType.TRAINING_REIMBURSEMENT, label: 'Training Reimbursement' },
-  { value: ExpenseType.CERTIFICATION_FEE, label: 'Certification Fee' },
-  { value: ExpenseType.CONFERENCE, label: 'Conference' },
-  { value: ExpenseType.TRAVEL, label: 'Travel' },
-  { value: ExpenseType.MEALS, label: 'Meals' },
-  { value: ExpenseType.MILEAGE, label: 'Mileage' },
-  { value: ExpenseType.EQUIPMENT_PURCHASE, label: 'Equipment Purchase' },
-  { value: ExpenseType.OTHER, label: 'Other' },
-];
+const EXPENSE_TYPE_OPTIONS = Object.values(ExpenseType).map((value) => ({
+  value,
+  label: EXPENSE_TYPE_LABELS[value] ?? value,
+}));
 
 // =============================================================================
 // Loading Skeleton
@@ -188,7 +178,7 @@ const ExpenseReportFormPage: React.FC = () => {
     }
 
     if (!validateLineItems()) {
-      toast.error('Fix line item errors before submitting');
+      toast.error('Fix the line item errors, then save again');
       return;
     }
 
@@ -255,7 +245,9 @@ const ExpenseReportFormPage: React.FC = () => {
       {/* Header */}
       <div>
         <h1 className="text-theme-text-primary text-2xl font-bold">New Expense Report</h1>
-        <p className="text-theme-text-secondary mt-1 text-sm">Submit expenses for reimbursement.</p>
+        <p className="text-theme-text-secondary mt-1 text-sm">
+          Saved as a draft. Submit it for approval from the next page.
+        </p>
       </div>
 
       {/* Form */}
@@ -324,7 +316,7 @@ const ExpenseReportFormPage: React.FC = () => {
 
           {lineItems.length === 0 ? (
             <p className="text-theme-text-secondary py-8 text-center text-sm">
-              No line items yet. Click &quot;Add Item&quot; to begin.
+              No line items yet. Use &quot;Add Item&quot; to add each expense.
             </p>
           ) : (
             <div className="space-y-4">
@@ -335,6 +327,7 @@ const ExpenseReportFormPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => removeLineItem(index)}
+                      aria-label={`Remove item ${String(index + 1)}`}
                       className="text-red-500 hover:text-red-700"
                     >
                       <Trash2 className="h-4 w-4" />

@@ -96,6 +96,7 @@ const DetailSkeleton: React.FC = () => (
 // =============================================================================
 
 interface ApprovalTimelineProps {
+  isDraft: boolean;
   steps: {
     id: string;
     stepName?: string;
@@ -107,14 +108,16 @@ interface ApprovalTimelineProps {
   }[];
 }
 
-const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
+const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ isDraft, steps }) => {
   const tz = useTimezone();
   const sorted = [...steps].sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0));
 
   if (sorted.length === 0) {
     return (
       <p className="text-theme-text-secondary py-4 text-center text-sm">
-        No approval steps configured for this request.
+        {/* Steps are created on submit, from whichever approval chain matches,
+            so a draft has none yet rather than none at all. */}
+        {isDraft ? 'Approval steps are added when you submit this request.' : 'This request has no approval steps.'}
       </p>
     );
   }
@@ -246,7 +249,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
       toast.success('Purchase request cancelled');
       void fetchPurchaseRequest(id);
     } catch {
-      toast.error('Failed to cancel');
+      toast.error('Failed to cancel purchase request');
     }
   };
 
@@ -349,7 +352,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="h-3.5 w-3.5" />
-                Submit
+                Submit for Approval
               </button>
             )}
             {canMarkOrdered && (
@@ -389,7 +392,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
                 className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
               >
                 <XCircle className="h-3.5 w-3.5" />
-                Cancel
+                Cancel Request
               </button>
             )}
           </div>
@@ -459,7 +462,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
       {/* Approval Timeline */}
       <div className="card p-6">
         <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Approval Timeline</h2>
-        <ApprovalTimeline steps={pr.approvalSteps} />
+        <ApprovalTimeline isDraft={pr.status === PurchaseRequestStatus.DRAFT} steps={pr.approvalSteps} />
       </div>
     </div>
   );

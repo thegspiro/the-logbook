@@ -20,7 +20,7 @@ import type { CheckRequest } from '../types';
 const checkRequestSchema = z.object({
   payeeName: z.string().min(1, 'Payee name is required').max(200),
   payeeAddress: z.string().max(500).optional(),
-  amount: z.number({ message: 'Amount is required' }).positive('Amount must be positive'),
+  amount: z.number({ message: 'Amount is required' }).positive('Amount must be greater than zero'),
   memo: z.string().max(500).optional(),
   purpose: z.string().max(2000).optional(),
   fiscalYearId: z.string().min(1, 'Fiscal year is required'),
@@ -159,7 +159,7 @@ const CheckRequestFormPage: React.FC = () => {
 
           <div>
             <label htmlFor="budgetId" className={labelClass}>
-              Budget (Optional)
+              Budget
             </label>
             <select id="budgetId" {...register('budgetId')} className={selectClass}>
               <option value="">No budget linked</option>

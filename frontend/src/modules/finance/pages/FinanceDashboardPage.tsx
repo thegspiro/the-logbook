@@ -172,7 +172,7 @@ const FinanceDashboardPage: React.FC = () => {
       <div className="space-y-6">
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Finance</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">Financial management overview</p>
+          <p className="text-theme-text-secondary mt-1 text-sm">Budgets, spending, and requests at a glance</p>
         </div>
         <DashboardSkeleton />
       </div>
@@ -190,7 +190,7 @@ const FinanceDashboardPage: React.FC = () => {
       {/* Header */}
       <div>
         <h1 className="text-theme-text-primary text-2xl font-bold">Finance</h1>
-        <p className="text-theme-text-secondary mt-1 text-sm">Financial management overview</p>
+        <p className="text-theme-text-secondary mt-1 text-sm">Budgets, spending, and requests at a glance</p>
       </div>
 
       {/* Error Banner */}
@@ -296,7 +296,7 @@ const FinanceDashboardPage: React.FC = () => {
             to="/finance/expenses"
             icon={<Receipt className="h-5 w-5" />}
             title="Expense Reports"
-            description="Submit expense reimbursements"
+            description="Claim reimbursement for expenses"
           />
           <QuickLinkCard
             to="/finance/check-requests"
@@ -307,20 +307,20 @@ const FinanceDashboardPage: React.FC = () => {
           <QuickLinkCard
             to="/finance/dues"
             icon={<PiggyBank className="h-5 w-5" />}
-            title="Dues Management"
-            description="Manage member dues and payments"
+            title="Dues"
+            description="Track member dues and payments"
           />
           <QuickLinkCard
             to="/finance/settings"
             icon={<Settings className="h-5 w-5" />}
             title="Settings"
-            description="Fiscal years and categories"
+            description="Fiscal years and budget categories"
           />
           <QuickLinkCard
             to="/finance/settings/approval-chains"
             icon={<ShieldCheck className="h-5 w-5" />}
             title="Approval Chains"
-            description="Configure approval workflows"
+            description="Set who approves each type of request"
           />
         </div>
       </div>
