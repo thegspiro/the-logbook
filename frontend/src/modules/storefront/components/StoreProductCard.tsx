@@ -261,7 +261,7 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
             ) : (
               <>
                 <Plus className="h-4 w-4" aria-hidden="true" />
-                Add {formatCurrency(lineTotal)}
+                Add to cart · {formatCurrency(lineTotal)}
               </>
             )}
           </button>

@@ -63,7 +63,7 @@ export const StorePaymentsTab: React.FC<StorePaymentsTabProps> = ({ onChanged })
       setEvents(data.items);
       setUnresolvedCount(data.unresolvedCount);
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load payments'));
+      toast.error(getErrorMessage(err, 'Could not load payments'));
     } finally {
       setLoading(false);
     }
@@ -88,7 +88,7 @@ export const StorePaymentsTab: React.FC<StorePaymentsTabProps> = ({ onChanged })
       onChanged();
       await load();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to apply payment'));
+      toast.error(getErrorMessage(err, 'Could not apply the payment'));
     } finally {
       setBusyId(null);
     }
@@ -105,7 +105,7 @@ export const StorePaymentsTab: React.FC<StorePaymentsTabProps> = ({ onChanged })
       // the headline stays stale until a manual refresh.
       onChanged();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to dismiss payment'));
+      toast.error(getErrorMessage(err, 'Could not dismiss the payment'));
     } finally {
       setBusyId(null);
     }
@@ -127,7 +127,7 @@ export const StorePaymentsTab: React.FC<StorePaymentsTabProps> = ({ onChanged })
           <h2 className="text-theme-text-primary text-lg font-semibold">Inbound payments</h2>
           <p className="text-theme-text-muted text-sm">
             {unresolvedCount === 0
-              ? 'Nothing is waiting on you.'
+              ? 'Nothing needs review.'
               : `${unresolvedCount} payment${unresolvedCount === 1 ? ' needs' : 's need'} review.`}
           </p>
         </div>

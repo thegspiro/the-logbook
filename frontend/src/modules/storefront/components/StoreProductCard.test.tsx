@@ -56,11 +56,11 @@ describe('StoreProductCard', () => {
     const user = userEvent.setup();
     render(<StoreProductCard offer={offer()} onAdd={onAdd} />);
 
-    expect(screen.getByRole('button', { name: /Add \$65\.00/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add to cart · \$65\.00/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'L' }));
 
-    expect(screen.getByRole('button', { name: /Add \$70\.00/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add to cart · \$70\.00/ })).toBeInTheDocument();
   });
 
   it('multiplies the add-button amount by the quantity', async () => {
@@ -69,7 +69,7 @@ describe('StoreProductCard', () => {
 
     await user.click(screen.getByRole('button', { name: /Increase quantity/ }));
 
-    expect(screen.getByRole('button', { name: /Add \$130\.00/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add to cart · \$130\.00/ })).toBeInTheDocument();
   });
 
   it('warns about low stock on the selected size only', async () => {
@@ -89,11 +89,11 @@ describe('StoreProductCard', () => {
 
     await user.click(screen.getByRole('checkbox', { name: /Add name embroidery/ }));
     // An empty box is not personalization, so it is not chargeable yet.
-    expect(screen.getByRole('button', { name: /Add \$65\.00/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add to cart · \$65\.00/ })).toBeInTheDocument();
 
     await user.type(screen.getByRole('textbox', { name: /Add name embroidery/ }), 'J. SMITH');
 
-    expect(screen.getByRole('button', { name: /Add \$73\.00/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add to cart · \$73\.00/ })).toBeInTheDocument();
   });
 
   it('previews the embroidery uppercased but submits the raw text', async () => {
@@ -106,7 +106,7 @@ describe('StoreProductCard', () => {
     // The uppercase is a rendering of the stitching, not a change to the order.
     expect(screen.getByText('j. smith', { selector: 'span' })).toHaveClass('uppercase');
 
-    await user.click(screen.getByRole('button', { name: /Add \$/ }));
+    await user.click(screen.getByRole('button', { name: /Add to cart · \$/ }));
 
     expect(onAdd).toHaveBeenCalledWith('v-m', 1, 'j. smith');
   });
@@ -214,11 +214,11 @@ describe('StoreProductCard', () => {
     const checkbox = screen.getByRole('checkbox', { name: /Add name embroidery/ });
     expect(checkbox).toBeChecked();
     expect(checkbox).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Add \$/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Add to cart · \$/ })).toBeDisabled();
 
     await user.type(screen.getByRole('textbox', { name: /Add name embroidery/ }), 'J. SMITH');
 
-    expect(screen.getByRole('button', { name: /Add \$/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Add to cart · \$/ })).toBeEnabled();
   });
 
   it('resets quantity and clears the embroidery after adding', async () => {
@@ -228,11 +228,11 @@ describe('StoreProductCard', () => {
     await user.click(screen.getByRole('button', { name: /Increase quantity/ }));
     await user.click(screen.getByRole('checkbox', { name: /Add name embroidery/ }));
     await user.type(screen.getByRole('textbox', { name: /Add name embroidery/ }), 'J. SMITH');
-    await user.click(screen.getByRole('button', { name: /Add \$/ }));
+    await user.click(screen.getByRole('button', { name: /Add to cart · \$/ }));
 
     expect(onAdd).toHaveBeenCalledWith('v-m', 2, 'J. SMITH');
     expect(screen.getByRole('textbox', { name: /Add name embroidery/ })).toHaveValue('');
-    expect(screen.getByRole('button', { name: /Add \$65\.00/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add to cart · \$65\.00/ })).toBeInTheDocument();
   });
 
   it('offers no quantity stepper and no add on a sold-out product', () => {

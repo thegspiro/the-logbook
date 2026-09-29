@@ -62,7 +62,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
       setWindows(windowList);
       setProducts(productList);
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load order windows'));
+      toast.error(getErrorMessage(err, 'Could not load order windows'));
     } finally {
       setLoading(false);
     }
@@ -94,7 +94,9 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
       void load();
       onChanged();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not change the window'));
+      toast.error(
+        getErrorMessage(err, transition.action === 'open' ? 'Could not open ordering' : 'Could not close ordering')
+      );
     } finally {
       setBusy(false);
     }
@@ -108,7 +110,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
         void load();
         onChanged();
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Could not update the window'));
+        toast.error(getErrorMessage(err, 'Could not mark the window fulfilled'));
       }
     },
     [load, onChanged]
@@ -127,10 +129,11 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
       });
       // Held-back orders come back named rather than failing the whole action,
       // so the quartermaster learns who still owes without losing the rest.
+      const advanced = `${result.advanced} ${result.advanced === 1 ? 'order' : 'orders'} marked ordered`;
       if (result.skipped.length > 0) {
-        toast.success(`${result.advanced} order(s) marked ordered · ${result.skipped.length} held back, unpaid`);
+        toast.success(`${advanced} · ${result.skipped.length} held back, unpaid`);
       } else {
-        toast.success(`${result.advanced} order(s) marked ordered`);
+        toast.success(advanced);
       }
       setVendorFor(null);
       void load();
@@ -196,7 +199,8 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                       : ''}
                   </p>
                   <p className="text-theme-text-muted mt-1 text-xs">
-                    {windowItem.orderCount} order(s) · {formatCurrency(Number(windowItem.totalSales))} sold ·{' '}
+                    {windowItem.orderCount} {windowItem.orderCount === 1 ? 'order' : 'orders'} ·{' '}
+                    {formatCurrency(Number(windowItem.totalSales))} sold ·{' '}
                     {formatCurrency(Number(windowItem.outstandingBalance))} outstanding
                   </p>
                 </div>
@@ -214,7 +218,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                         }}
                       >
                         <Play className="h-3.5 w-3.5" />
-                        Open
+                        Open ordering
                       </button>
                     )}
                   {(windowItem.status === 'closed' || windowItem.status === 'open') && (
@@ -230,7 +234,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                       }}
                     >
                       <Truck className="h-3.5 w-3.5" />
-                      {windowItem.vendorOrderedAt ? 'Vendor order' : 'Record vendor order'}
+                      {windowItem.vendorOrderedAt ? 'Update vendor order' : 'Record vendor order'}
                     </button>
                   )}
                   {windowItem.status === 'open' && (
@@ -243,7 +247,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                       }}
                     >
                       <Lock className="h-3.5 w-3.5" />
-                      Close
+                      Close ordering
                     </button>
                   )}
                   {windowItem.status === 'closed' && (
@@ -315,7 +319,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                 void runTransition();
               }}
             >
-              {busy ? 'Working…' : transition?.action === 'open' ? 'Open the window' : 'Close the window'}
+              {busy ? 'Working…' : transition?.action === 'open' ? 'Open ordering' : 'Close ordering'}
             </button>
           </div>
         }
@@ -323,8 +327,8 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
         <div className="modal-body space-y-4">
           <p className="text-theme-text-secondary text-sm">
             {transition?.action === 'open'
-              ? 'Members will be able to place orders immediately.'
-              : 'No new orders will be accepted. Everyone who ordered gets a notice with what happens next.'}
+              ? 'Members can place orders as soon as you open it.'
+              : 'Members can no longer place orders in this window.'}
           </p>
           <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
             <input
@@ -333,11 +337,13 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
               checked={notifyMembers}
               onChange={(e) => setNotifyMembers(e.target.checked)}
             />
-            {transition?.action === 'open' ? 'Email the membership' : 'Email everyone who ordered'}
+            {transition?.action === 'open'
+              ? 'Email the membership'
+              : 'Email everyone who ordered about what happens next'}
           </label>
           <div>
             <label htmlFor="transition-message" className="form-label">
-              Add to the email (optional)
+              Extra message for the email (optional)
             </label>
             <textarea
               id="transition-message"
@@ -353,7 +359,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
       <Modal
         isOpen={vendorFor !== null}
         onClose={() => setVendorFor(null)}
-        title={vendorFor?.vendorOrderedAt ? 'Vendor order' : 'Record vendor order'}
+        title={vendorFor?.vendorOrderedAt ? 'Update vendor order' : 'Record vendor order'}
         size="md"
         footer={
           <div className="flex justify-end gap-2">
@@ -368,20 +374,20 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                 void recordVendorOrder();
               }}
             >
-              {busy ? 'Working…' : 'Record it'}
+              {busy ? 'Working…' : vendorFor?.vendorOrderedAt ? 'Update vendor order' : 'Record vendor order'}
             </button>
           </div>
         }
       >
         <div className="modal-body space-y-3">
           <p className="text-theme-text-secondary text-sm">
-            Logs who the bulk order went to and when, marks every eligible order <strong>ordered</strong>, and — if you
-            want — tells the members it has been placed.
+            Records which vendor you ordered from and when, and marks every eligible order <strong>ordered</strong>. You
+            can also email the members who ordered.
           </p>
           {vendorFor?.vendorOrderedAt && (
             <p className="alert-info text-xs">
               Already recorded {formatDateTime(vendorFor.vendorOrderedAt, tz)}. Saving again updates the details and
-              re-stamps the date.
+              resets the recorded date to today.
             </p>
           )}
           <div className="form-grid-2">
@@ -423,9 +429,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
               onChange={(e) => setExpectedDelivery(e.target.value)}
               className="form-input"
             />
-            <p className="text-theme-text-muted mt-1 text-xs">
-              Goes in the email, which is what stops members asking every week.
-            </p>
+            <p className="text-theme-text-muted mt-1 text-xs">Members see this date in the store and in the email.</p>
           </div>
           <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
             <input type="checkbox" checked={vendorNotify} onChange={(e) => setVendorNotify(e.target.checked)} />

@@ -45,6 +45,8 @@ const isSettled = (order: StoreOrder): boolean =>
   order.status === StoreOrderStatus.CANCELLED ||
   (Number(order.balanceDue) <= 0 && order.status === StoreOrderStatus.FULFILLED);
 
+const itemCountLabel = (count: number): string => `${count} ${count === 1 ? 'item' : 'items'}`;
+
 const MyOrdersPage: React.FC = () => {
   const tz = useTimezone();
   // `error` is read here deliberately: without it a failed load fell through to
@@ -98,7 +100,7 @@ const MyOrdersPage: React.FC = () => {
       setReportOrder(null);
       void loadMyOrders();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not record that'));
+      toast.error(getErrorMessage(err, 'Could not report the payment'));
     } finally {
       setSubmitting(false);
     }
@@ -202,7 +204,7 @@ const MyOrdersPage: React.FC = () => {
                     {formatCurrency(balance)}
                   </p>
                   <p className="mt-1 text-[13px] text-amber-900 dark:text-amber-200">
-                    Reference <strong className="font-mono">{order.orderNumber}</strong> on your payment.
+                    Include <strong className="font-mono">{order.orderNumber}</strong> as the reference on your payment.
                   </p>
                 </div>
                 {instructions && (
@@ -339,8 +341,8 @@ const MyOrdersPage: React.FC = () => {
                         <p className="text-theme-text-primary font-mono text-base font-bold">{order.orderNumber}</p>
                         <p className="text-theme-text-secondary mt-1 text-[13px]">
                           {order.windowName ? `${order.windowName} · ` : ''}
-                          {order.items.reduce((sum, item) => sum + item.quantity, 0)} items ·{' '}
-                          {order.status === StoreOrderStatus.CANCELLED ? 'cancelled' : 'paid in full'}
+                          {itemCountLabel(order.items.reduce((sum, item) => sum + item.quantity, 0))} ·{' '}
+                          {order.status === StoreOrderStatus.CANCELLED ? 'cancelled' : 'nothing owed'}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2.5">
@@ -385,8 +387,7 @@ const MyOrdersPage: React.FC = () => {
       >
         <div className="modal-body space-y-4">
           <p className="text-theme-text-secondary text-sm">
-            This flags the order for the quartermaster to verify against the department account. It does not mark the
-            order paid on its own.
+            The quartermaster checks your payment against the department account, then marks the order paid.
           </p>
           <div>
             <label htmlFor="report-method" className="form-label">

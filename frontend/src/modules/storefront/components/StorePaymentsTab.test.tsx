@@ -140,7 +140,7 @@ describe('StorePaymentsTab', () => {
     expect(await screen.findByText('Applied')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Apply to order/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Dismiss/ })).not.toBeInTheDocument();
-    expect(screen.getByText('Nothing is waiting on you.')).toBeInTheDocument();
+    expect(screen.getByText('Nothing needs review.')).toBeInTheDocument();
   });
 
   it('shows an empty state when nothing has come in', async () => {
