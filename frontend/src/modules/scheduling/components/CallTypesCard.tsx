@@ -188,8 +188,8 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, lock
     <div className="card-secondary p-5">
       <h3 className="text-theme-text-primary text-base font-semibold">Call types</h3>
       <p className="text-theme-text-muted mt-1 text-sm">
-        The rows an officer tallies against when closing a shift out. Rename them to match how your department reports;
-        anything not broken down is recorded as &ldquo;Not categorised&rdquo;.
+        The categories officers count calls under at close-out. Rename them to match how your department reports; calls
+        not broken down are recorded as &ldquo;Not categorised&rdquo;.
       </p>
 
       {/* Which mode it is matters, not merely that it is not count-only: the

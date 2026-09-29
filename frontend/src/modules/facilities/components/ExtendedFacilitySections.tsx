@@ -34,6 +34,8 @@ interface FieldDefinition {
 
 interface ResourceSectionProps<T extends { id: string }> {
   title: string;
+  /** One record, sentence case ("Utility account") — used in toasts, confirms and aria-labels. */
+  itemName: string;
   emptyMessage: string;
   /** Create affordance — backend accepts facilities.create/edit/manage. */
   canCreate: boolean;
@@ -53,6 +55,7 @@ interface ResourceSectionProps<T extends { id: string }> {
 
 function ResourceSection<T extends { id: string }>({
   title,
+  itemName,
   emptyMessage,
   canCreate,
   canEdit,
@@ -101,10 +104,10 @@ function ResourceSection<T extends { id: string }>({
       setValues({});
       setEditingId(null);
       setShowForm(false);
-      toast.success(`${title.replace(/s$/, '')} ${editingId ? 'updated' : 'added'}`);
+      toast.success(`${itemName} ${editingId ? 'updated' : 'added'}`);
       await reload();
     } catch {
-      toast.error(`Failed to add ${title.toLowerCase().replace(/s$/, '')}`);
+      toast.error(`Failed to save ${itemName.toLowerCase()}`);
     } finally {
       setIsSaving(false);
     }
@@ -112,7 +115,7 @@ function ResourceSection<T extends { id: string }>({
 
   const handleDelete = async (item: T) => {
     const accepted = await confirm({
-      title: `Delete ${title.replace(/s$/, '').toLowerCase()}`,
+      title: `Delete ${itemName.toLowerCase()}`,
       message: 'This cannot be undone.',
       confirmLabel: 'Delete',
       variant: 'danger',
@@ -122,7 +125,7 @@ function ResourceSection<T extends { id: string }>({
       await remove(item.id);
       await reload();
     } catch {
-      toast.error(`Failed to delete ${title.toLowerCase().replace(/s$/, '')}`);
+      toast.error(`Failed to delete ${itemName.toLowerCase()}`);
     }
   };
 
@@ -205,7 +208,7 @@ function ResourceSection<T extends { id: string }>({
                           setShowForm(true);
                         }}
                         className="text-theme-text-muted hover:bg-theme-surface-hover rounded-lg p-2"
-                        aria-label={`Edit ${title.replace(/s$/, '').toLowerCase()}`}
+                        aria-label={`Edit ${itemName.toLowerCase()}`}
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
@@ -214,7 +217,7 @@ function ResourceSection<T extends { id: string }>({
                       <button
                         onClick={() => void handleDelete(item)}
                         className="text-theme-text-muted rounded-lg p-2 hover:bg-red-500/10 hover:text-red-500"
-                        aria-label={`Delete ${title.replace(/s$/, '').toLowerCase()}`}
+                        aria-label={`Delete ${itemName.toLowerCase()}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -338,7 +341,7 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
     <div className="mt-2">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="text-theme-text-muted">
-          {readings.length ? `${readings.length} recent readings` : 'No readings'}
+          {readings.length ? `${readings.length} recent reading${readings.length === 1 ? '' : 's'}` : 'No readings'}
         </span>
         {canEdit && (
           <button onClick={() => setShowForm((value) => !value)} className="text-red-600 dark:text-red-400">
@@ -410,6 +413,7 @@ export function UtilitiesSection({ facilityId, canDelete, canCreate, canEdit }: 
   return (
     <ResourceSection<UtilityAccount>
       title="Utilities"
+      itemName="Utility account"
       emptyMessage="No utility accounts have been added."
       canCreate={canCreate}
       canEdit={canEdit}
@@ -463,6 +467,7 @@ export function AccessKeysSection({ facilityId, canDelete, canCreate, canEdit }:
   return (
     <ResourceSection<AccessKey>
       title="Access Keys"
+      itemName="Access key"
       emptyMessage="No keys or credentials are tracked."
       canCreate={canCreate}
       canEdit={canEdit}
@@ -517,6 +522,7 @@ export function ShutoffsSection({ facilityId, canDelete, canCreate, canEdit }: S
   return (
     <ResourceSection<ShutoffLocation>
       title="Shutoff Locations"
+      itemName="Shutoff location"
       emptyMessage="No utility shutoffs are documented."
       canCreate={canCreate}
       canEdit={canEdit}
@@ -567,6 +573,7 @@ export function CapitalProjectsSection({ facilityId, canDelete, canCreate, canEd
   return (
     <ResourceSection<CapitalProject>
       title="Capital Projects"
+      itemName="Capital project"
       emptyMessage="No capital projects are tracked."
       canCreate={canCreate}
       canEdit={canEdit}
@@ -627,6 +634,7 @@ export function InsuranceSection({ facilityId, canDelete, canCreate, canEdit }: 
   return (
     <ResourceSection<InsurancePolicy>
       title="Insurance"
+      itemName="Insurance policy"
       emptyMessage="No insurance policies are tracked."
       canCreate={canCreate}
       canEdit={canEdit}
@@ -666,7 +674,7 @@ export function InsuranceSection({ facilityId, canDelete, canCreate, canEdit }: 
         { key: 'policy_number', label: 'Policy number' },
         { key: 'provider', label: 'Carrier', required: true },
         { key: 'coverage_amount', label: 'Coverage amount', type: 'number' },
-        { key: 'expiration_date', label: 'Expiration', type: 'date' },
+        { key: 'expiration_date', label: 'Expiration date', type: 'date' },
       ]}
       renderSummary={(item) => (
         <>
@@ -675,7 +683,7 @@ export function InsuranceSection({ facilityId, canDelete, canCreate, canEdit }: 
           </p>
           <p className="text-theme-text-muted text-xs">
             {text(item.carrierName)}
-            {item.expirationDate ? ` · Expires ${item.expirationDate}` : ''}
+            {item.expirationDate ? ` · Expires ${formatCalendarDate(item.expirationDate)}` : ''}
           </p>
         </>
       )}
@@ -688,6 +696,7 @@ export function OccupantsSection({ facilityId, canDelete, canCreate, canEdit }: 
   return (
     <ResourceSection<Occupant>
       title="Occupants"
+      itemName="Occupant"
       emptyMessage="No occupants or units are assigned."
       canCreate={canCreate}
       canEdit={canEdit}
@@ -726,7 +735,7 @@ export function OccupantsSection({ facilityId, canDelete, canCreate, canEdit }: 
           <p className="text-theme-text-primary text-sm font-medium">{text(item.unitName)}</p>
           <p className="text-theme-text-muted text-xs">
             {item.description || 'Occupant'}
-            {item.effectiveDate ? ` · Since ${item.effectiveDate}` : ''}
+            {item.effectiveDate ? ` · Since ${formatCalendarDate(item.effectiveDate)}` : ''}
           </p>
         </>
       )}

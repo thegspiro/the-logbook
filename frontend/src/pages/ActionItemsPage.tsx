@@ -30,6 +30,20 @@ const PRIORITY_BADGES: Record<string, string> = {
   urgent: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 
+// Meeting action items store priority as an integer (0=normal, 1=high,
+// 2=urgent — see MeetingActionItem.priority) and the endpoint passes it through
+// as "1"/"2"; minutes items already send a word. 0 never arrives, because the
+// endpoint drops a falsy priority.
+const MEETING_PRIORITY_LABELS: Record<string, string> = {
+  '1': 'high',
+  '2': 'urgent',
+};
+
+const priorityLabel = (item: ActionItemSummary): string | undefined =>
+  item.priority && item.source === 'meeting'
+    ? (MEETING_PRIORITY_LABELS[item.priority] ?? item.priority)
+    : item.priority;
+
 const ActionItemsPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
@@ -84,7 +98,7 @@ const ActionItemsPage: React.FC = () => {
           <ClipboardList className="h-6 w-6 text-red-700 dark:text-red-400" />
           Action Items
         </h1>
-        <p className="text-theme-text-muted mt-1 text-sm">Unified view of action items from meetings and minutes</p>
+        <p className="text-theme-text-muted mt-1 text-sm">Action items from meetings and minutes, soonest due first</p>
       </div>
 
       {/* Summary Cards */}
@@ -143,8 +157,12 @@ const ActionItemsPage: React.FC = () => {
       ) : items.length === 0 ? (
         <EmptyState
           icon={CheckCircle2}
-          title="No action items"
-          description="Nothing on your plate right now. Action items from meetings and minutes will show up here."
+          title={statusFilter || assignedToMe ? 'No matching action items' : 'No action items'}
+          description={
+            statusFilter || assignedToMe
+              ? 'Choose a different status or clear "Assigned to me" to see more.'
+              : 'Action items recorded in meetings and minutes appear here.'
+          }
         />
       ) : (
         <div className="space-y-2">
@@ -171,9 +189,9 @@ const ActionItemsPage: React.FC = () => {
                     </span>
                     {item.priority && (
                       <span
-                        className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${PRIORITY_BADGES[item.priority] || ''}`}
+                        className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${PRIORITY_BADGES[priorityLabel(item) ?? ''] || ''}`}
                       >
-                        {item.priority}
+                        {priorityLabel(item)}
                       </span>
                     )}
                     <span className="text-theme-text-muted text-xs">

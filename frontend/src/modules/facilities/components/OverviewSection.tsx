@@ -315,7 +315,7 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label className={labelCls}>Type</label>
+          <label className={labelCls}>Type *</label>
           <select
             value={ed('facility_type_id')}
             onChange={(e) => setEd('facility_type_id', e.target.value)}
@@ -330,7 +330,7 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
           </select>
         </div>
         <div>
-          <label className={labelCls}>Status</label>
+          <label className={labelCls}>Status *</label>
           <select value={ed('status_id')} onChange={(e) => setEd('status_id', e.target.value)} className={inputCls}>
             <option value="">Select status...</option>
             {facilityStatuses.map((s) => (

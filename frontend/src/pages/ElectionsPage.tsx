@@ -82,7 +82,7 @@ export const ElectionsPage: React.FC = () => {
       const data = await electionService.getElections();
       setElections(data);
     } catch (_err) {
-      setError('Unable to load elections. Please check your connection and refresh the page.');
+      setError("Couldn't load elections. Check your connection and refresh the page.");
     } finally {
       setLoading(false);
     }
@@ -191,7 +191,7 @@ export const ElectionsPage: React.FC = () => {
 
   const setDuration = (hours: number) => {
     if (!formData.start_date) {
-      setCreateError('Please set a start date first');
+      setCreateError('Set a start date first.');
       return;
     }
 
@@ -202,7 +202,7 @@ export const ElectionsPage: React.FC = () => {
 
   const setEndOfDay = () => {
     if (!formData.start_date) {
-      setCreateError('Please set a start date first');
+      setCreateError('Set a start date first.');
       return;
     }
 
@@ -311,7 +311,9 @@ export const ElectionsPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <div>
               <h1 className="text-theme-text-primary text-2xl font-bold">Elections</h1>
-              <p className="text-theme-text-muted mt-1 text-sm">Manage elections and view results</p>
+              <p className="text-theme-text-muted mt-1 text-sm">
+                {canManage ? 'Create elections, send ballots and publish results' : 'See elections and their results'}
+              </p>
             </div>
             <HelpLink
               topic="elections"
@@ -681,7 +683,7 @@ export const ElectionsPage: React.FC = () => {
                       )}
                     </select>
                     <p className="text-theme-text-muted mt-1 text-xs">
-                      Optionally link this election to a meeting for shared context and attendance.
+                      Optional. Link a meeting or event to import its attendance into this election.
                     </p>
                   </div>
 
@@ -1039,7 +1041,7 @@ export const ElectionsPage: React.FC = () => {
                             <option value="eliminate_lowest">Eliminate Lowest (remove lowest, others continue)</option>
                           </select>
                           <p className="text-theme-text-muted mt-1 text-xs">
-                            How to handle runoffs when no candidate meets victory condition
+                            Who moves on to the runoff when no candidate meets the winning condition
                           </p>
                         </div>
 
@@ -1062,7 +1064,7 @@ export const ElectionsPage: React.FC = () => {
                             className="form-input mt-1 shadow-xs"
                           />
                           <p className="text-theme-text-muted mt-1 text-xs">
-                            Maximum number of runoff rounds before declaring winner
+                            No more runoffs are created after this many rounds
                           </p>
                         </div>
                       </div>

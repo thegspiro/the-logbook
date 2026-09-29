@@ -131,7 +131,7 @@ export const MemberAdminEditPage: React.FC = () => {
       setForm(formData);
       setInitialForm(formData);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to load member data. Please try again.'));
+      setError(getErrorMessage(err, 'Unable to load member data. Try again.'));
     } finally {
       setLoading(false);
     }
@@ -352,7 +352,7 @@ export const MemberAdminEditPage: React.FC = () => {
       setForm(newFormData);
       setInitialForm(newFormData);
 
-      setSuccessMessage('Member information saved successfully.');
+      setSuccessMessage('Member information saved.');
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 403) {
@@ -363,7 +363,7 @@ export const MemberAdminEditPage: React.FC = () => {
         // `string | null` put an array in the JSX, and React threw "Objects
         // are not valid as a React child" — the ErrorBoundary replaced the
         // whole page with the error screen instead of showing the message.
-        setError(getErrorMessage(err, 'Unable to save member information. Please try again.'));
+        setError(getErrorMessage(err, 'Unable to save member information. Try again.'));
       }
     } finally {
       setSaving(false);
@@ -398,7 +398,7 @@ export const MemberAdminEditPage: React.FC = () => {
               to="/members/admin"
               className="mt-2 inline-block text-sm text-blue-700 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
             >
-              Back to Members Admin
+              Back to Members Administration
             </Link>
           </div>
         </div>
@@ -423,7 +423,7 @@ export const MemberAdminEditPage: React.FC = () => {
             <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Back to Members Admin
+            Back to Members Administration
           </Link>
           <h1 className="text-theme-text-primary text-2xl font-bold">Edit Member: {memberDisplayName}</h1>
           <p className="text-theme-text-muted mt-1 text-sm">
@@ -693,9 +693,9 @@ export const MemberAdminEditPage: React.FC = () => {
                 <div>
                   <span className="text-theme-text-primary text-sm font-medium">Exempt from Compliance</span>
                   <p className="text-theme-text-muted mt-1 text-xs">
-                    When enabled, this member will not be evaluated against training requirements, shift minimums,
-                    admin-hour targets, or certificate maintenance. They will not appear as non-compliant in reports or
-                    dashboards. Use for retired, honorary, or other members not required to maintain compliance.
+                    This member is not checked against training requirements, shift minimums, admin-hour targets or
+                    certificate maintenance, and does not appear as non-compliant in reports or dashboards. Use for
+                    retired, honorary or other members who do not need to stay compliant.
                   </p>
                 </div>
               </label>
@@ -719,9 +719,11 @@ export const MemberAdminEditPage: React.FC = () => {
                   value={form.email}
                   readOnly
                   className="form-input text-theme-text-muted bg-theme-surface-secondary cursor-not-allowed px-3 text-sm opacity-75"
-                  title="Email is managed through the contact-info endpoint and cannot be changed here."
+                  title="Change this email from Contact Information on the member's profile."
                 />
-                <p className="text-theme-text-muted mt-1 text-xs">Managed via organization contact settings.</p>
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Change this from Contact Information on the member&apos;s profile.
+                </p>
               </div>
               <div>
                 <label
@@ -863,7 +865,7 @@ export const MemberAdminEditPage: React.FC = () => {
 
             {form.emergency_contacts.length === 0 && (
               <p className="text-theme-text-muted text-sm italic">
-                No emergency contacts. Click "Add Contact" to add one.
+                No emergency contacts yet. Select Add Contact to add one.
               </p>
             )}
 

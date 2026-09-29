@@ -286,7 +286,7 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
               <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Not on a stage</p>
               <p className="text-theme-text-muted mt-1 text-xs">
                 This applicant is not on any stage of their pipeline, so they cannot be advanced. Place them on the
-                stage they should be working.
+                stage they should be on.
               </p>
               <div className="mt-2 flex items-center gap-2">
                 <label htmlFor="place-on-stage" className="sr-only">
@@ -342,7 +342,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
           {showWithdrawConfirm && (
             <div className="card-secondary p-3">
               <p className="text-theme-text-secondary mb-2 text-sm">
-                Withdraw this application? The applicant will be archived and removed from the active pipeline.
+                Withdraw this application? It leaves the pipeline and moves to the Withdrawn tab, where you can
+                reactivate it.
               </p>
               <div className="flex items-center justify-end gap-2">
                 <button
@@ -369,7 +370,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
           {showSkipConfirm && (
             <div className="rounded-lg border border-purple-500/20 bg-purple-500/10 p-3">
               <p className="mb-2 text-sm text-purple-600 dark:text-purple-300">
-                Skip the current stage? This will mark it as completed and advance the applicant.
+                Skip the current stage? It is recorded as skipped, not completed, and the applicant moves to the next
+                stage.
               </p>
               <div className="flex items-center justify-end gap-2">
                 <button
@@ -396,7 +398,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
           {showRejectConfirm && (
             <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
               <p className="mb-2 text-sm text-red-600 dark:text-red-300">
-                Are you sure you want to reject this applicant? This action cannot be easily undone.
+                Reject this applicant? They leave the pipeline and move to the Rejected tab, where you can reactivate
+                them.
               </p>
               <div className="flex items-center justify-end gap-2">
                 <button
@@ -533,7 +536,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
           {showWithdrawConfirm && (
             <div className="card-secondary p-3">
               <p className="text-theme-text-secondary mb-2 text-sm">
-                Withdraw this application? The applicant will be archived and removed from the active pipeline.
+                Withdraw this application? It leaves the pipeline and moves to the Withdrawn tab, where you can
+                reactivate it.
               </p>
               <div className="flex items-center justify-end gap-2">
                 <button
@@ -558,7 +562,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
           {showRejectConfirm && (
             <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
               <p className="mb-2 text-sm text-red-600 dark:text-red-300">
-                Are you sure you want to reject this applicant? This action cannot be easily undone.
+                Reject this applicant? They leave the pipeline and move to the Rejected tab, where you can reactivate
+                them.
               </p>
               <div className="flex items-center justify-end gap-2">
                 <button
@@ -680,7 +685,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
           {showRejectConfirm && (
             <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
               <p className="mb-2 text-sm text-red-600 dark:text-red-300">
-                Are you sure you want to reject this applicant?
+                Reject this applicant? They leave the pipeline and move to the Rejected tab, where you can reactivate
+                them.
               </p>
               <div className="flex items-center justify-end gap-2">
                 <button

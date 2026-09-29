@@ -518,24 +518,25 @@ export interface EventTemplate {
 }
 
 export interface EventTemplateCreate {
+  // `null` clears a field on update; a create omits blanks instead.
   name: string;
-  description?: string | undefined;
+  description?: string | null | undefined;
   event_type?: EventType | undefined;
-  default_title?: string | undefined;
-  default_description?: string | undefined;
+  default_title?: string | null | undefined;
+  default_description?: string | null | undefined;
   default_location_id?: string | undefined;
-  default_location?: string | undefined;
+  default_location?: string | null | undefined;
   default_location_details?: string | undefined;
-  default_duration_minutes?: number | undefined;
+  default_duration_minutes?: number | null | undefined;
   requires_rsvp?: boolean | undefined;
-  max_attendees?: number | undefined;
+  max_attendees?: number | null | undefined;
   is_mandatory?: boolean | undefined;
 
   allow_guests?: boolean | undefined;
   attendee_visibility?: 'members' | 'managers' | null | undefined;
-  check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
-  check_in_minutes_before?: number | undefined;
-  check_in_minutes_after?: number | undefined;
+  check_in_window_type?: 'flexible' | 'strict' | 'window' | null | undefined;
+  check_in_minutes_before?: number | null | undefined;
+  check_in_minutes_after?: number | null | undefined;
   require_checkout?: boolean | undefined;
   send_reminders?: boolean | undefined;
   reminder_target?: 'going' | 'all' | 'none' | undefined;

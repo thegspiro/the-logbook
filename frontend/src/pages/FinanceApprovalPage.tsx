@@ -26,6 +26,16 @@ interface ApprovalDetail {
 
 const BASE = '/api/public/v1/finance/approvals';
 
+// Only a PENDING step is actionable, so these are the states a closed link can
+// report. `sent` belongs to notification steps, which never ask for a decision.
+const CLOSED_STEP_LABELS: Record<string, string> = {
+  approved: 'approved',
+  denied: 'denied',
+  skipped: 'skipped',
+  auto_approved: 'approved automatically',
+  sent: 'closed',
+};
+
 const prettyEntity = (raw: string): string =>
   raw
     .split('_')
@@ -132,7 +142,7 @@ export const FinanceApprovalPage: React.FC = () => {
   if (detail && !detail.actionable) {
     const reason = detail.expired
       ? 'This approval link has expired.'
-      : `This request has already been ${detail.status}.`;
+      : `This step has already been ${CLOSED_STEP_LABELS[detail.status] ?? 'closed'}. No action is needed.`;
     return (
       <Shell>
         <div className="flex items-start gap-3">

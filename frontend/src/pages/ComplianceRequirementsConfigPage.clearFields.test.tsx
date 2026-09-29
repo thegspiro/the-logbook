@@ -25,6 +25,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import toast from 'react-hot-toast';
 import { renderWithRouter } from '../test/utils';
 import type { ComplianceConfigData, ComplianceProfile, AvailableRequirement } from '../types/training';
 
@@ -308,5 +309,66 @@ describe('ComplianceRequirementsConfigPage — unwired notification settings (CM
         /Not yet active: these settings are saved, but no reminder is sent yet\. Members are not notified when they become non-compliant\./
       )
     ).toBeInTheDocument();
+  });
+});
+
+describe('ComplianceRequirementsConfigPage — field names and tab state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetConfig.mockResolvedValue(baseConfig);
+    mockGetAvailableRequirements.mockResolvedValue({ requirements: [requirement] });
+    mockListReports.mockResolvedValue({ reports: [], total: 0 });
+    mockListCategories.mockResolvedValue([]);
+  });
+
+  it('names the threshold fields by their labels and marks the open tab', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+
+    expect(screen.getByLabelText('Threshold Type')).toHaveValue('percentage');
+    expect(screen.getByLabelText('Compliant Threshold (%)')).toHaveValue(100);
+    expect(screen.getByLabelText('At-Risk Threshold (%)')).toHaveValue(75);
+    expect(screen.getByLabelText('Reminder Days Before Deadline')).toHaveValue('30, 14, 7');
+
+    const thresholds = screen.getByRole('button', { name: 'Thresholds' });
+    const profiles = screen.getByRole('button', { name: 'Profiles' });
+    expect(thresholds).toHaveAttribute('aria-pressed', 'true');
+    await user.click(profiles);
+    expect(profiles).toHaveAttribute('aria-pressed', 'true');
+    expect(thresholds).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
+describe('ComplianceRequirementsConfigPage — a refused save says why', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetConfig.mockResolvedValue(baseConfig);
+    mockGetAvailableRequirements.mockResolvedValue({ requirements: [requirement] });
+    mockListReports.mockResolvedValue({ reports: [], total: 0 });
+    mockListCategories.mockResolvedValue([]);
+    mockUpdateConfig.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 422'), {
+        isAxiosError: true,
+        response: {
+          status: 422,
+          data: {
+            detail: [
+              { field: 'request', message: 'at_risk_threshold must be less than or equal to compliant_threshold' },
+            ],
+          },
+        },
+      })
+    );
+  });
+
+  it("shows the server's reason, not a bare failure", async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+
+    await user.click(screen.getByRole('button', { name: 'Save Configuration' }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('at_risk_threshold must be less than'))
+    );
   });
 });

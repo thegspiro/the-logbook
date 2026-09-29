@@ -170,6 +170,17 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     expect(within(nav).getByRole('link', { name: 'Programs' })).toHaveAttribute('href', '/training/programs');
   });
 
+  it('offers a member without training permissions no enrollment view and no Duplicate', async () => {
+    mockHasPermission = false;
+    renderWithRouter(<PipelineDetailPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Recruit Pipeline' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Duplicate/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Enrollments/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Enrolled')).not.toBeInTheDocument();
+    expect(mockGetProgramEnrollments).not.toHaveBeenCalled();
+  });
+
   it('lists enrolled members by name on the Enrollments tab', async () => {
     renderWithRouter(<PipelineDetailPage />);
 
@@ -532,7 +543,10 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     await userEvent.click(await screen.findByRole('button', { name: /^Enroll$/i }));
     const dialog = await screen.findByRole('dialog');
 
-    await userEvent.click(await within(dialog).findByText('Ava Recruit'));
+    const ava = await within(dialog).findByRole('button', { name: /Ava Recruit/ });
+    expect(ava).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(ava);
+    expect(ava).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(within(dialog).getByRole('button', { name: /Enroll 1 Member/i }));
 
     await waitFor(() =>

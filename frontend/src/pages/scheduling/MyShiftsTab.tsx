@@ -187,7 +187,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
           swapForm.target_shift_id && swapForm.target_shift_id !== 'pick' ? swapForm.target_shift_id : undefined,
         reason: swapForm.reason || undefined,
       });
-      toast.success('Swap request submitted — check Requests tab for status');
+      toast.success('Swap request sent — track it on the Requests tab');
       setShowSwapModal(false);
       void loadData();
     } catch (err) {
@@ -225,7 +225,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
         end_date: timeOffForm.end_date || timeOffForm.start_date,
         reason: timeOffForm.reason || undefined,
       });
-      toast.success('Time off request submitted — check Requests tab for status');
+      toast.success('Time off request sent — track it on the Requests tab');
       setShowTimeOffModal(false);
       setTimeOffForm({ start_date: '', end_date: '', reason: '' });
       void loadData();
@@ -488,12 +488,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
           <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
             <Clock className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
             <h3 className="text-theme-text-primary mb-1 text-lg font-medium">
-              {view === 'upcoming' ? 'No upcoming shifts' : 'No past shifts found'}
+              {view === 'upcoming' ? 'No upcoming shifts' : 'No past shifts'}
             </h3>
             <p className="text-theme-text-muted mx-auto max-w-sm text-sm">
               {view === 'upcoming'
-                ? 'You have no scheduled shifts coming up. Check the Open Shifts tab to browse and sign up for available shifts.'
-                : 'Your completed shift history will appear here once you have past assignments.'}
+                ? 'You have no shifts coming up. Find one to sign up for on the Open Shifts tab.'
+                : 'Shifts you have worked will appear here.'}
             </p>
           </div>
         ) : (
@@ -502,6 +502,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
               const shift = assignment.shift;
               const statusColor = ASSIGNMENT_STATUS_COLORS[assignment.status] || ASSIGNMENT_STATUS_COLORS.assigned;
               const shiftDate = shift ? new Date(shift.shift_date + 'T12:00:00') : null;
+              // Every row carries the same four actions, so each needs the
+              // shift in its name or a screen reader hears "Confirm" per row
+              // with nothing to tell them apart.
+              const when = shiftDate
+                ? `${formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}${shift?.start_time ? `, ${formatTime(shift.start_time, tz)}` : ''}`
+                : 'an unknown date';
 
               return (
                 <div key={assignment.id} className="card hover:border-theme-text-muted/30 p-4 sm:p-5">
@@ -603,7 +609,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                               disabled={confirmingId === assignment.id}
                               className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
                               title="Confirm you are working this shift"
-                              aria-label="Confirm shift assignment"
+                              aria-label={`Confirm shift on ${when}`}
                             >
                               {confirmingId === assignment.id ? (
                                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -619,7 +625,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                               onClick={() => setConfirmingDecline(assignment.id)}
                               className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                               title="Give this shift up so it can be re-filled"
-                              aria-label="Decline shift assignment"
+                              aria-label={`Decline shift on ${when}`}
                             >
                               <XCircle className="h-5 w-5" />
                               <span>Decline</span>
@@ -653,8 +659,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                             void openSwapRequest(assignment);
                           }}
                           className="text-theme-text-secondary mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-violet-500/10 hover:text-violet-600"
-                          title="Ask someone to trade shifts with you"
-                          aria-label="Request shift swap"
+                          title="Ask someone to swap shifts with you"
+                          aria-label={`Swap shift on ${when}`}
                         >
                           <ArrowLeftRight className="h-5 w-5" />
                           <span>Swap</span>
@@ -665,7 +671,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                           onClick={() => onViewShift(shift)}
                           className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
                           title="Open the full shift details"
-                          aria-label="View shift details"
+                          aria-label={`Details for shift on ${when}`}
                         >
                           <ChevronDown className="h-5 w-5" />
                           <span>Details</span>
@@ -696,17 +702,20 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
               <h2 className="text-theme-text-primary text-lg font-bold">Request Shift Swap</h2>
               <p className="text-theme-text-secondary mt-1 text-sm">
                 {swapAssignment?.shift?.shift_date
-                  ? `Submit a swap request for your shift on ${formatDateCustom(swapAssignment.shift.shift_date + 'T12:00:00', { weekday: 'short', month: 'short', day: 'numeric' }, tz)}`
-                  : 'Submit a swap request for your shift'}
+                  ? `Ask to swap your shift on ${formatDateCustom(swapAssignment.shift.shift_date + 'T12:00:00', { weekday: 'short', month: 'short', day: 'numeric' }, tz)}`
+                  : 'Ask to swap your shift'}
               </p>
             </div>
             <div className="space-y-4 p-6">
               {/* Swap type selector */}
               <div>
-                <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Swap Type</label>
-                <div className="grid grid-cols-2 gap-2">
+                <p id="swap-type-label" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                  Swap Type
+                </p>
+                <div role="group" aria-labelledby="swap-type-label" className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
+                    aria-pressed={!swapForm.target_shift_id}
                     onClick={() => setSwapForm((p) => ({ ...p, target_shift_id: '' }))}
                     className={`rounded-lg border p-3 text-left text-sm transition-colors ${
                       !swapForm.target_shift_id
@@ -715,10 +724,16 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     }`}
                   >
                     <span className="block font-medium">Open Swap</span>
-                    <span className="text-theme-text-muted text-xs">Any member can pick it up</span>
+                    {/* Not "any member can pick it up": no member can see an open
+                        swap, and approving one moves nothing — it only asks an
+                        officer to find cover (docs/KNOWN_LIMITATIONS.md, W33). */}
+                    <span className="text-theme-text-muted text-xs">
+                      An officer finds cover; it stays yours until then
+                    </span>
                   </button>
                   <button
                     type="button"
+                    aria-pressed={Boolean(swapForm.target_shift_id)}
                     onClick={() => setSwapForm((p) => ({ ...p, target_shift_id: availableShifts[0]?.id ?? 'pick' }))}
                     className={`rounded-lg border p-3 text-left text-sm transition-colors ${
                       swapForm.target_shift_id

@@ -523,7 +523,7 @@ export const EventDetailPage: React.FC = () => {
       });
 
       setShowCancelModal(false);
-      toast.success('Event cancelled successfully');
+      toast.success('Event cancelled');
       await fetchEvent();
     } catch (err) {
       setSubmitError(getErrorDetail(err) || 'Failed to cancel event');
@@ -554,7 +554,9 @@ export const EventDetailPage: React.FC = () => {
       );
 
       setShowCancelSeriesModal(false);
-      toast.success(result.message);
+      toast.success(
+        `Cancelled ${result.cancelled_count} event${result.cancelled_count !== 1 ? 's' : ''} in the series`
+      );
       await fetchEvent();
     } catch (err) {
       setSubmitError(getErrorDetail(err) || 'Failed to cancel series');
@@ -570,7 +572,7 @@ export const EventDetailPage: React.FC = () => {
       await eventService.checkInAttendee(eventId, { user_id: userId });
       await fetchRSVPs();
       await fetchStats();
-      toast.success('Member checked in successfully');
+      toast.success('Member checked in');
     } catch (err) {
       toast.error(getErrorDetail(err) || 'Failed to check in attendee');
     }
@@ -582,7 +584,7 @@ export const EventDetailPage: React.FC = () => {
     try {
       setSubmitting(true);
       const newEvent = await eventService.duplicateEvent(eventId);
-      toast.success('Event duplicated successfully');
+      toast.success('Event duplicated');
       void navigate(`/events/${newEvent.id}/edit`);
     } catch (err) {
       toast.error(getErrorDetail(err) || 'Failed to duplicate event');
@@ -606,7 +608,7 @@ export const EventDetailPage: React.FC = () => {
         toast.success('All events in the series deleted');
       } else {
         await eventService.deleteEvent(eventId);
-        toast.success('Event deleted successfully');
+        toast.success('Event deleted');
       }
       void navigate('/events');
     } catch (err) {
@@ -976,7 +978,7 @@ export const EventDetailPage: React.FC = () => {
                         try {
                           setSubmitting(true);
                           await eventService.publishEvent(eventId);
-                          toast.success('Event published successfully');
+                          toast.success('Event published');
                           await fetchEvent();
                         } catch (err) {
                           toast.error(getErrorDetail(err) || 'Failed to publish event');
@@ -1659,8 +1661,8 @@ export const EventDetailPage: React.FC = () => {
                        Arises when an organizer lowers the cap below a party
                        that had already queued. */
                     <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
-                      Your party is larger than this event can hold, so it cannot be moved up. Reduce your guest count
-                      or contact the event organizer.
+                      Your party is larger than this event can hold, so it can&apos;t move off the waitlist. Reduce your
+                      guest count or contact the event organizer.
                     </p>
                   ) : (
                     <p className="mt-3 text-sm text-purple-600 dark:text-purple-400">
@@ -2042,7 +2044,7 @@ export const EventDetailPage: React.FC = () => {
                     templateData.check_in_minutes_after = event.check_in_minutes_after;
                   await eventService.createTemplate(templateData);
                   setShowTemplateModal(false);
-                  toast.success('Template saved successfully');
+                  toast.success('Template saved');
                 } catch (err) {
                   toast.error(getErrorDetail(err) || 'Failed to save template');
                 } finally {

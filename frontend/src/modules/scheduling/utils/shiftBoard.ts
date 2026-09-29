@@ -367,7 +367,7 @@ export const effectiveLateSignupUntil = (
  * still seat somebody", but every roster control — confirm, decline, remove,
  * and the reopen banner itself — went on being offered indefinitely after
  * that. A shift three weeks gone was still showing "Reopen for 15 min" under
- * copy that reads "if you are a body short and somebody can still get here",
+ * copy that reads "if you are short-handed and someone can still get here",
  * and a member who had already worked it and had twelve hours recorded was
  * still being offered a button to decline the assignment those hours hang off.
  *

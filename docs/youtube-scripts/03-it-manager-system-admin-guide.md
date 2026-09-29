@@ -540,15 +540,10 @@ thresholds]**
 
 **[SCREEN: Navigate to Elections → Settings (ElectionsSettingsPage)]**
 
-> "Elections settings define your voting rules. The Logbook supports multiple
-> voting methods — simple majority, ranked choice, and more. You can set
-> eligibility rules like minimum tenure, active membership status, and good
-> standing requirements."
-
-**[SCREEN: Show election configuration options]**
-
-> "You can also control ballot secrecy, whether results are auto-published or
-> require officer certification, and the voting window duration."
+> "Elections settings cover proxy voting, the optional election workflows —
+> nominations, paper ballots, reminders, scheduled opening — and a test ballot
+> so you can preview what members see. Voting method, victory condition and
+> ballot secrecy are chosen per election, on the election's own form."
 
 **[TRANSITION: Integrations]**
 

@@ -962,6 +962,9 @@ const MyTrainingPage: React.FC = () => {
               <div className="space-y-4">
                 {data.enrollments.map((e) => (
                   <div key={e.id} className="bg-theme-surface rounded-lg p-4">
+                    {e.program_name && (
+                      <h3 className="text-theme-text-primary mb-2 text-sm font-semibold">{e.program_name}</h3>
+                    )}
                     <div className="mb-2 flex items-center justify-between">
                       <span className={`rounded-sm px-2 py-1 text-xs ${getStatusColor(e.status)}`}>
                         {e.status.replace('_', ' ')}
@@ -990,7 +993,10 @@ const MyTrainingPage: React.FC = () => {
                               ) : (
                                 <div className="border-theme-surface-border h-3.5 w-3.5 rounded-full border" />
                               )}
-                              <span className="text-theme-text-secondary">{Math.round(r.progress_percentage)}%</span>
+                              <span className="text-theme-text-secondary">
+                                {r.requirement_name ? `${r.requirement_name} · ` : ''}
+                                {Math.round(r.progress_percentage)}%
+                              </span>
                             </div>
                             <span className={`rounded-sm px-1.5 py-0.5 ${getStatusColor(r.status)}`}>
                               {r.status.replace('_', ' ')}
@@ -1206,7 +1212,7 @@ const MyTrainingPage: React.FC = () => {
             !data.certifications?.length && (
               <div className="card-secondary py-8 text-center">
                 <p className="text-theme-text-muted mb-4">
-                  No detailed training records yet. Submit external training to get started.
+                  No training on your record yet. Trained outside the department? Submit it to add it here.
                 </p>
                 <button onClick={() => void navigate('/training/submit')} className="btn-primary text-sm font-medium">
                   Submit External Training

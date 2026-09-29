@@ -133,7 +133,7 @@ const CheckRequestsPage: React.FC = () => {
           autoCorrect="off"
           spellCheck={false}
           type="text"
-          aria-label="Search by number, payee, or memo..."
+          aria-label="Search check requests"
           placeholder="Search by number, payee, or memo..."
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
@@ -143,6 +143,7 @@ const CheckRequestsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setSearchText('')}
+            aria-label="Clear search"
             className="text-theme-text-secondary hover:text-theme-text-primary absolute top-1/2 right-3 -translate-y-1/2"
           >
             <X className="h-4 w-4" />

@@ -1902,7 +1902,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       if (draftIdentity) await deleteEquipmentCheckDraft(draftIdentity);
       setSubmissionOutcome({ status: 'complete', photoCount: totalPhotoCount });
 
-      toast.success('Equipment check submitted successfully');
+      toast.success('Equipment check submitted');
       onComplete?.();
     } catch (err: unknown) {
       // Only a transport failure may fall back to the offline queue. A server
@@ -1921,8 +1921,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         if (shiftId) {
           await enqueueCheck(shiftId, basePayload, itemsWithPhotos);
         } else {
-          setSubmissionOutcome({ status: 'failed', message: 'Failed to submit check. Please try again.' });
-          toast.error('Failed to submit check. Please try again.');
+          setSubmissionOutcome({ status: 'failed', message: 'Could not submit the check. Try again.' });
+          toast.error('Could not submit the check. Try again.');
           setSubmitting(false);
           return;
         }

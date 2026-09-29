@@ -70,7 +70,7 @@ const OptionDetail: React.FC<{
     {/* Only nag about the reference when the link will not carry it. */}
     {reference && !option.prefillsReference && (
       <p className="text-theme-text-secondary text-xs">
-        Reference <strong className="font-mono">{reference}</strong>
+        Include reference <strong className="font-mono">{reference}</strong>
       </p>
     )}
     {option.instructions && (
@@ -98,7 +98,7 @@ export const PaymentOptions: React.FC<PaymentOptionsProps> = ({
         <p className="text-theme-text-secondary text-xs">
           {reference ? (
             <>
-              Reference <strong className="font-mono">{reference}</strong> when you send payment.
+              Include reference <strong className="font-mono">{reference}</strong> when you send payment.
             </>
           ) : (
             'Contact the department for payment details.'

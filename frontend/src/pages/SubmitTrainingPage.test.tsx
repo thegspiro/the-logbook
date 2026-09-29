@@ -263,6 +263,19 @@ describe('SubmitTrainingPage', () => {
     expect(screen.getByLabelText(/Course or class name/)).toHaveFocus();
   });
 
+  it('marks each missing field invalid, not only red', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<SubmitTrainingPage />);
+
+    const courseName = await screen.findByLabelText(/Course or class name/);
+    expect(courseName).toHaveAttribute('aria-invalid', 'false');
+    await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+    expect(courseName).toHaveAttribute('aria-invalid', 'true');
+    await user.type(courseName, 'Wildland refresher');
+    expect(courseName).toHaveAttribute('aria-invalid', 'false');
+  });
+
   it('saves a draft without requiring the whole form', async () => {
     const user = userEvent.setup();
     renderWithRouter(<SubmitTrainingPage />);
@@ -521,7 +534,7 @@ describe('SubmitTrainingPage', () => {
     mockGetConfig.mockRejectedValue(new Error('Failed'));
     renderWithRouter(<SubmitTrainingPage />);
     await waitFor(() => {
-      expect(screen.getByText('Failed to load submission form. Please try again.')).toBeInTheDocument();
+      expect(screen.getByText('Failed to load the submission form. Try again.')).toBeInTheDocument();
     });
   });
 });

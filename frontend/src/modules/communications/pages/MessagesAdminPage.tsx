@@ -102,7 +102,7 @@ const MessagesAdminPage: React.FC = () => {
       setMessages(data.messages);
       setTotal(data.total);
     } catch {
-      setError('Unable to load messages. Please try again.');
+      setError('Unable to load messages. Try again.');
     } finally {
       setIsLoading(false);
       setInitialLoad(false);
@@ -132,7 +132,7 @@ const MessagesAdminPage: React.FC = () => {
       setPendingDelete(null);
       void load();
     } catch {
-      toast.error('Unable to delete the message. Please try again.');
+      toast.error('Unable to delete the message. Try again.');
     }
   };
 
@@ -274,7 +274,7 @@ const MessagesAdminPage: React.FC = () => {
                       </span>
                       {m.requires_acknowledgment && (
                         <span className="bg-theme-surface-secondary text-theme-text-secondary rounded-full px-2 py-0.5 text-xs">
-                          Ack required
+                          Needs acknowledgment
                         </span>
                       )}
                       {!m.is_active && (

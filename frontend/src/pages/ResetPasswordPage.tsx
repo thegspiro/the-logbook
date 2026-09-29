@@ -57,7 +57,7 @@ export const ResetPasswordPage: React.FC = () => {
       setRateLimitedMinutes(null);
       setIsValidating(true);
       if (!token) {
-        setError('Invalid or missing reset token');
+        setError('This link is incomplete. Open the full link from your email, or request a new one.');
         setIsValidating(false);
         return;
       }
@@ -98,12 +98,12 @@ export const ResetPasswordPage: React.FC = () => {
 
     // Validate password strength
     if (!passwordValidation.isValid) {
-      setError('Please ensure your password meets all the requirements');
+      setError('Your password must meet every requirement listed.');
       return;
     }
 
     if (!token) {
-      setError('Invalid reset token');
+      setError('This reset link is invalid. Request a new one.');
       return;
     }
 
@@ -124,7 +124,7 @@ export const ResetPasswordPage: React.FC = () => {
       setError(
         wait !== null
           ? `Too many attempts. Wait ${wait} minute${wait === 1 ? '' : 's'} and try again — the link still works until it expires.`
-          : getErrorMessage(err, 'Failed to reset password. Please try again or request a new reset link.')
+          : getErrorMessage(err, "Couldn't reset your password. Try again or request a new reset link.")
       );
     } finally {
       setIsLoading(false);
@@ -155,15 +155,15 @@ export const ResetPasswordPage: React.FC = () => {
       >
         <div className="w-full max-w-md">
           <div className="card p-8 text-center">
-            <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">Please Wait a Few Minutes</h2>
+            <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">Too Many Attempts</h2>
             <p className="text-theme-text-secondary mb-6">
-              {`There have been too many password-reset attempts from this connection. Wait ${rateLimitedMinutes} minute${rateLimitedMinutes === 1 ? '' : 's'}, then reload this page — if this link has not been used, it still works until it expires.`}
+              {`This connection has made too many password-reset attempts. Wait ${rateLimitedMinutes} minute${rateLimitedMinutes === 1 ? '' : 's'}, then reload this page. If you haven't used this link yet, it still works until it expires.`}
             </p>
             <Link
               to="/login"
               className="focus:ring-theme-focus-ring inline-flex items-center rounded-sm px-3 py-2 font-medium text-red-700 transition-colors hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-red-400 dark:hover:text-red-300"
             >
-              Back to Login
+              Back to sign in
             </Link>
           </div>
         </div>
@@ -201,7 +201,7 @@ export const ResetPasswordPage: React.FC = () => {
                 to="/login"
                 className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring block rounded-sm px-3 py-2 transition-colors focus:ring-2 focus:outline-hidden"
               >
-                Back to Login
+                Back to sign in
               </Link>
             </div>
           </div>
@@ -222,16 +222,14 @@ export const ResetPasswordPage: React.FC = () => {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
               <CheckCircle className="h-10 w-10 text-green-700 dark:text-green-400" aria-hidden="true" />
             </div>
-            <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">Password Reset Successful!</h2>
-            <p className="text-theme-text-secondary mb-4">
-              Your password has been successfully reset. You can now log in with your new password.
-            </p>
-            <p className="text-theme-text-muted mb-6 text-sm">Redirecting to login page...</p>
+            <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">Password Changed</h2>
+            <p className="text-theme-text-secondary mb-4">You can now sign in with your new password.</p>
+            <p className="text-theme-text-muted mb-6 text-sm">Taking you to sign in…</p>
             <Link
               to="/login"
               className="focus:ring-theme-focus-ring inline-flex items-center space-x-2 rounded-sm px-3 py-2 font-medium text-red-700 transition-colors hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-red-400 dark:hover:text-red-300"
             >
-              <span>Go to Login Now</span>
+              <span>Sign In Now</span>
               <ArrowLeft className="h-4 w-4 rotate-180" aria-hidden="true" />
             </Link>
           </div>
@@ -431,7 +429,7 @@ export const ResetPasswordPage: React.FC = () => {
               className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring inline-flex items-center space-x-2 rounded-sm px-3 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              <span>Back to Login</span>
+              <span>Back to sign in</span>
             </Link>
           </div>
         </div>

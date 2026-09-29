@@ -26,7 +26,7 @@ const SchedulingHeader: React.FC<SchedulingHeaderProps> = ({
   actions,
   backTo,
   backLabel = 'Back to scheduling',
-  description = 'Manage schedules, sign up for shifts, and handle trades',
+  description = 'See the schedule, sign up for shifts, and request swaps and time off',
 }) => (
   <>
     {/* Kept alongside the back arrow rather than replacing it. The arrow is one

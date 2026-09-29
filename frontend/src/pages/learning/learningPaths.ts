@@ -89,7 +89,7 @@ export const learningPaths: LearningPath[] = [
         path: '/notifications?tab=inbox',
         why: 'Department announcements are the channel of record: they are emailed to you whether or not you switch email off, because you cannot opt out of being told. Reminders are different — event, training, and certification reminders follow your Email Notifications preference, so turning it off really does stop them.',
         how: [
-          'Read anything already waiting in your Inbox — it carries the same notices, inside the app.',
+          'Read anything already waiting under My Notifications — it carries the same notices, inside the app.',
           'Open Account → Notifications and set how you want to be reached.',
           'Leave Email Notifications on unless you are certain: it is the switch that silences reminder emails, and the in-app entry is then the only copy you get.',
         ],

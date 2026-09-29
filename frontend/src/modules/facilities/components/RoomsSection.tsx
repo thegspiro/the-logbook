@@ -282,7 +282,7 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
                 <div className="text-theme-text-muted flex flex-wrap items-center gap-2 text-xs">
                   <span>{enumLabel(room.roomType)}</span>
                   {room.floor != null && <span>Floor {room.floor}</span>}
-                  {room.capacity != null && <span>Cap: {room.capacity}</span>}
+                  {room.capacity != null && <span>Capacity {room.capacity}</span>}
                   {room.squareFootage != null && <span>{formatNumber(room.squareFootage)} sq ft</span>}
                   {nested > 0 && <span>{nested === 1 ? '1 sub-room' : `${nested} sub-rooms`}</span>}
                   {room.zoneClassification && room.zoneClassification !== 'unclassified' && (
@@ -556,7 +556,7 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
                 className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
               >
                 {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                {editingRoom ? 'Update' : 'Add'}
+                {editingRoom ? 'Save Changes' : 'Save Room'}
               </button>
               <button
                 onClick={resetForm}

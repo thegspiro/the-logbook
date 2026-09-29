@@ -92,7 +92,7 @@ export default function FilesSection({
     } catch (error) {
       // Leave the dialog open on failure: closing it would discard the text
       // the user typed while telling them nothing went wrong.
-      toast.error(getErrorMessage(error, 'Unable to save'));
+      toast.error(getErrorMessage(error, kind === 'photo' ? 'Unable to save caption' : 'Unable to save description'));
       return;
     }
     // Only close the dialog this request opened -- a slower earlier submit
@@ -180,7 +180,7 @@ export default function FilesSection({
         <div className="card p-6">
           <FileDropzone
             onFilesSelected={(files) => void upload(files)}
-            label={uploading ? 'Uploading…' : 'Upload a facility file'}
+            label={uploading ? 'Uploading…' : 'Upload a photo or document'}
             maxSizeMB={25}
           />
         </div>

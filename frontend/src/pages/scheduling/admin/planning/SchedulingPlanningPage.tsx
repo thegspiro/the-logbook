@@ -98,7 +98,7 @@ const SchedulingPlanningPage: React.FC<SchedulingPlanningPageProps> = ({ section
 
         {section !== 'gaps' && (
           <p className="text-theme-text-muted mt-6 text-xs">
-            The defaults a new shift or template starts from live in{' '}
+            Set the defaults for new shifts and templates in{' '}
             <button
               type="button"
               className="inline-flex items-center gap-1 font-medium underline"

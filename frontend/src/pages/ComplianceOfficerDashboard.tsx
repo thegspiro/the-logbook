@@ -431,11 +431,17 @@ const AnnualReportSection: React.FC = () => {
                       {req.members_compliant}/{req.members_total}
                     </td>
                     <td className="px-4 py-2 text-center">
-                      <span
-                        className={`font-semibold ${req.compliance_pct >= 80 ? 'text-green-500' : req.compliance_pct >= 50 ? 'text-yellow-500' : 'text-red-500'}`}
-                      >
-                        {req.compliance_pct}%
-                      </span>
+                      {/* No member is held to it (a program-only requirement, say):
+                          0 of 0 is not a 0% failure. */}
+                      {req.members_total === 0 ? (
+                        <span className="text-theme-text-muted">Not applicable</span>
+                      ) : (
+                        <span
+                          className={`font-semibold ${req.compliance_pct >= 80 ? 'text-green-500' : req.compliance_pct >= 50 ? 'text-yellow-500' : 'text-red-500'}`}
+                        >
+                          {req.compliance_pct}%
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

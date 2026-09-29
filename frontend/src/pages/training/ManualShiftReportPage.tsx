@@ -193,15 +193,15 @@ export const ManualShiftReportPage: React.FC = () => {
 
   const handleSubmit = async (asDraft: boolean) => {
     if (config?.manual_entry_require_apparatus && !apparatusId) {
-      toast.error('Please select an apparatus');
+      toast.error('Select an apparatus');
       return;
     }
     if (!shiftDate) {
-      toast.error('Please enter a shift date');
+      toast.error('Enter a shift date');
       return;
     }
     if (!startTime || !endTime) {
-      toast.error('Please enter start and end times');
+      toast.error('Enter start and end times');
       return;
     }
     if (calculatedHours <= 0) {
@@ -209,7 +209,7 @@ export const ManualShiftReportPage: React.FC = () => {
       return;
     }
     if (selectedIds.size === 0) {
-      toast.error('Please select at least one crew member');
+      toast.error('Select at least one crew member');
       return;
     }
 
@@ -287,7 +287,7 @@ export const ManualShiftReportPage: React.FC = () => {
       <div className="card space-y-5 p-5">
         {/* Apparatus Selection */}
         <div>
-          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+          <label htmlFor="shift-apparatus" className="text-theme-text-secondary mb-1 block text-sm font-medium">
             Apparatus{config?.manual_entry_require_apparatus ? ' *' : ''}
           </label>
           {loadingApparatus ? (
@@ -301,6 +301,7 @@ export const ManualShiftReportPage: React.FC = () => {
             </div>
           ) : (
             <select
+              id="shift-apparatus"
               value={apparatusId}
               onChange={(e) => setApparatusId(e.target.value)}
               className="form-input text-sm focus:ring-violet-500"
@@ -319,8 +320,11 @@ export const ManualShiftReportPage: React.FC = () => {
         {/* Date & Time */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Start Date *</label>
+            <label htmlFor="shift-start-date" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Start Date *
+            </label>
             <input
+              id="shift-start-date"
               type="date"
               value={shiftDate}
               onChange={(e) => {
@@ -331,8 +335,11 @@ export const ManualShiftReportPage: React.FC = () => {
             />
           </div>
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Start Time *</label>
+            <label htmlFor="shift-start-time" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Start Time *
+            </label>
             <input
+              id="shift-start-time"
               type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
@@ -340,8 +347,11 @@ export const ManualShiftReportPage: React.FC = () => {
             />
           </div>
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">End Date *</label>
+            <label htmlFor="shift-end-date" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              End Date *
+            </label>
             <input
+              id="shift-end-date"
               type="date"
               value={endDate}
               min={shiftDate}
@@ -350,8 +360,11 @@ export const ManualShiftReportPage: React.FC = () => {
             />
           </div>
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">End Time *</label>
+            <label htmlFor="shift-end-time" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              End Time *
+            </label>
             <input
+              id="shift-end-time"
               type="time"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
@@ -372,8 +385,11 @@ export const ManualShiftReportPage: React.FC = () => {
         {/* Calls */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Calls Responded</label>
+            <label htmlFor="shift-calls-responded" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Calls Responded
+            </label>
             <input
+              id="shift-calls-responded"
               type="number"
               min="0"
               value={callsResponded || 0}
@@ -393,6 +409,7 @@ export const ManualShiftReportPage: React.FC = () => {
                   key={type}
                   type="button"
                   onClick={() => toggleCallType(setCallTypes, type)}
+                  aria-pressed={callTypes.includes(type)}
                   className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                     callTypes.includes(type)
                       ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400'
@@ -408,8 +425,14 @@ export const ManualShiftReportPage: React.FC = () => {
 
         {/* Narrative */}
         <div>
-          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Overall Shift Narrative</label>
+          <label
+            htmlFor="shift-overall-shift-narrative"
+            className="text-theme-text-secondary mb-1 block text-sm font-medium"
+          >
+            Overall Shift Narrative
+          </label>
           <textarea
+            id="shift-overall-shift-narrative"
             rows={3}
             value={narrative}
             onChange={(e) => setNarrative(e.target.value)}
@@ -436,6 +459,7 @@ export const ManualShiftReportPage: React.FC = () => {
               autoCorrect="off"
               spellCheck={false}
               type="text"
+              aria-label="Search members to add"
               placeholder="Search members to add..."
               value={memberSearch}
               onChange={(e) => setMemberSearch(e.target.value)}
@@ -483,6 +507,7 @@ export const ManualShiftReportPage: React.FC = () => {
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleMember(member.user_id)}
+                        aria-label={`Include ${member.user_name} in the report`}
                         className="border-theme-surface-border rounded text-violet-600 focus:ring-violet-500"
                       />
                       <span className="text-theme-text-primary flex-1 text-sm">{member.user_name}</span>
@@ -519,8 +544,14 @@ export const ManualShiftReportPage: React.FC = () => {
                           />
                         </div>
                         <div>
-                          <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Strengths</label>
+                          <label
+                            htmlFor={`shift-strengths-${member.user_id}`}
+                            className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                          >
+                            Strengths
+                          </label>
                           <input
+                            id={`shift-strengths-${member.user_id}`}
                             type="text"
                             value={eval_?.areas_of_strength || ''}
                             onChange={(e) => updateEval(member.user_id, 'areas_of_strength', e.target.value)}
@@ -529,10 +560,14 @@ export const ManualShiftReportPage: React.FC = () => {
                           />
                         </div>
                         <div>
-                          <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                          <label
+                            htmlFor={`shift-areas-for-improvement-${member.user_id}`}
+                            className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                          >
                             Areas for Improvement
                           </label>
                           <input
+                            id={`shift-areas-for-improvement-${member.user_id}`}
                             type="text"
                             value={eval_?.areas_for_improvement || ''}
                             onChange={(e) => updateEval(member.user_id, 'areas_for_improvement', e.target.value)}
@@ -541,8 +576,14 @@ export const ManualShiftReportPage: React.FC = () => {
                           />
                         </div>
                         <div>
-                          <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Remarks</label>
+                          <label
+                            htmlFor={`shift-remarks-${member.user_id}`}
+                            className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                          >
+                            Remarks
+                          </label>
                           <textarea
+                            id={`shift-remarks-${member.user_id}`}
                             rows={2}
                             value={eval_?.remarks || ''}
                             onChange={(e) => updateEval(member.user_id, 'remarks', e.target.value)}

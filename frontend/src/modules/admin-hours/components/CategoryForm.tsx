@@ -132,7 +132,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
             disabled={submitting}
             className="btn-info transition disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isEditing ? 'Update' : 'Create'}
+            {isEditing ? 'Save changes' : 'Create category'}
           </button>
           <button
             type="button"

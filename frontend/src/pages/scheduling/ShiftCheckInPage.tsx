@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -21,6 +22,7 @@ const ShiftCheckInPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const paramShiftId = searchParams.get('shift') || '';
   const paramApparatusId = searchParams.get('apparatus') || '';
 
@@ -71,7 +73,7 @@ const ShiftCheckInPage: React.FC = () => {
         const checklists = await equipmentCheckService.getShiftChecklists(sid).catch(() => []);
         setHasStartChecklist(checklists.some((c) => c.checkTiming === 'start_of_shift' && !c.isCompleted));
       } catch {
-        toast.error('Unable to load shift');
+        toast.error('Could not load this shift');
       } finally {
         setLoading(false);
       }
@@ -112,7 +114,7 @@ const ShiftCheckInPage: React.FC = () => {
     try {
       const result = await schedulingService.checkIn(resolvedShiftId);
       setAttendance(result);
-      toast.success('Checked in successfully');
+      toast.success('Checked in');
     } catch (err: unknown) {
       // Show what the server said. A bare "Failed to check in" threw away the
       // one sentence that explains it — "This shift ended too long ago to check
@@ -131,6 +133,23 @@ const ShiftCheckInPage: React.FC = () => {
   };
 
   const handleCheckOut = async () => {
+    // A check-out cannot be taken back — the server refuses a second check-in
+    // on the same shift — and the button sits where a phone in a pocket or a
+    // glove finds it. Before the scheduled end, ask first.
+    const endsLater = shift?.end_time ? new Date(shift.end_time).getTime() > Date.now() : false;
+    if (
+      endsLater &&
+      shift?.end_time &&
+      !(await confirm({
+        title: 'Check out early?',
+        message: `Your shift runs until ${formatTime(shift.end_time, tz)}. Checking out now records your hours up to now, and you cannot check back in to this shift.`,
+        confirmLabel: 'Check out now',
+        cancelLabel: 'Stay checked in',
+        variant: 'warning',
+      }))
+    ) {
+      return;
+    }
     setProcessing(true);
     try {
       const result = await schedulingService.checkOut(resolvedShiftId);
@@ -159,7 +178,7 @@ const ShiftCheckInPage: React.FC = () => {
           <Clock className="mx-auto mb-3 h-12 w-12 text-amber-500" />
           <h1 className="text-theme-text-primary mb-1 text-xl font-bold">No Active Shift</h1>
           <p className="text-theme-text-muted mb-4 text-sm">
-            There is no active or upcoming shift for this apparatus right now. Check back closer to your shift start
+            This apparatus has no shift running or coming up right now. Try again closer to your shift&apos;s start
             time.
           </p>
           <button
@@ -190,7 +209,7 @@ const ShiftCheckInPage: React.FC = () => {
           <p className="text-theme-text-muted mb-4 text-sm">
             {askedForAShift
               ? 'The shift may have been deleted, or you may not be assigned to it. If you are working it, ask an officer to record your attendance.'
-              : 'This page checks you in to one particular shift. Scan the code on the apparatus, or open the shift from My Shifts and check in from there.'}
+              : 'Scan the QR code on the apparatus, or open the shift from My Shifts and check in there.'}
           </p>
           <button
             onClick={() => void navigate('/scheduling?tab=my-shifts')}
@@ -203,7 +222,9 @@ const ShiftCheckInPage: React.FC = () => {
     );
   }
 
-  const hrs = attendance?.duration_minutes ? formatHours(attendance.duration_minutes / 60) : null;
+  // `!= null`, not truthiness: a check-out in the first minute records 0, and
+  // the card then read a bare "hours".
+  const hrs = attendance?.duration_minutes != null ? formatHours(attendance.duration_minutes / 60) : null;
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
@@ -295,7 +316,7 @@ const ShiftCheckInPage: React.FC = () => {
           <div className="space-y-3 text-center">
             <div className="bg-theme-surface-hover rounded-lg p-4">
               <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-green-600" />
-              <p className="text-theme-text-primary text-lg font-bold">{hrs} hours</p>
+              {hrs !== null && <p className="text-theme-text-primary text-lg font-bold">{hrs} hours</p>}
               <p className="text-theme-text-muted text-xs">
                 {formatTime(attendance.checked_in_at, tz)} &rarr; {formatTime(attendance.checked_out_at, tz)}
               </p>
@@ -306,7 +327,7 @@ const ShiftCheckInPage: React.FC = () => {
 
         {shift.is_finalized && (
           <p className="text-center text-xs text-amber-600 dark:text-amber-400">
-            This shift has been finalized. Check-in/out is closed.
+            This shift is finalized, so check-in and check-out are closed.
           </p>
         )}
 

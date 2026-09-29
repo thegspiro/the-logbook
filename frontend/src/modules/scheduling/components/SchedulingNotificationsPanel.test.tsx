@@ -43,6 +43,7 @@ const existingRule = {
   category: 'scheduling',
   channel: 'in_app',
   enabled: true,
+  enforced: false,
   config: { event: 'assignment_created' },
 };
 
@@ -101,5 +102,24 @@ describe('SchedulingNotificationsPanel', () => {
       expect(screen.getByRole('switch', { name: 'New Assignment' })).toHaveAttribute('aria-checked', 'false')
     );
     expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  // CLAUDE.md pitfall 19: nothing reads `schedule_change` rules, so a switch
+  // showing "off" must not read as silencing the notice.
+  it('says the switches are not in effect when the backend reports them unread', async () => {
+    render(<SchedulingNotificationsPanel />);
+
+    const toggle = await screen.findByRole('switch', { name: 'New Assignment' });
+    expect(toggle).toHaveAccessibleDescription(/Not in effect yet/);
+    expect(screen.getByText(/these switches are saved, but scheduling does not read them/)).toBeInTheDocument();
+  });
+
+  it('drops the notice once the backend reports the rules as read', async () => {
+    mockGetRules.mockResolvedValue({ rules: [{ ...existingRule, enforced: true }] });
+    render(<SchedulingNotificationsPanel />);
+
+    const toggle = await screen.findByRole('switch', { name: 'New Assignment' });
+    expect(toggle).not.toHaveAccessibleDescription();
+    expect(screen.queryByText(/Not in effect yet/)).not.toBeInTheDocument();
   });
 });

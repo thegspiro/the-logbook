@@ -284,7 +284,7 @@ describe('ShiftDetailPanel crew board signup gating', () => {
 
     renderWithRouter(<ShiftDetailPanel shift={crewShift as never} onClose={vi.fn()} />);
 
-    expect(await screen.findByText(/None of the open seats on this shift match/)).toBeInTheDocument();
+    expect(await screen.findByText(/None of the open seats match your rank/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Sign myself up/ })).not.toBeInTheDocument();
   });
 
@@ -296,7 +296,7 @@ describe('ShiftDetailPanel crew board signup gating', () => {
     renderWithRouter(<ShiftDetailPanel shift={crewShift as never} onClose={vi.fn()} />);
 
     expect(await screen.findAllByRole('button', { name: /Sign myself up/ })).toHaveLength(2);
-    expect(screen.queryByText(/None of the open seats on this shift match/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/None of the open seats match your rank/)).not.toBeInTheDocument();
   });
 
   it('withholds a seat the member is cleared for but somebody already holds', async () => {
@@ -953,5 +953,25 @@ describe('ShiftDetailPanel member confirming their own assignment', () => {
     expect(await screen.findByText(/Test Member Refreshed/)).toBeInTheDocument();
     expect(screen.getByText('confirmed')).toBeInTheDocument();
     expect(screen.queryByText('assigned')).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftDetailPanel close-out manual hours', () => {
+  afterEach(() => {
+    vi.mocked(schedulingService.getShiftAssignments).mockResolvedValue([]);
+  });
+
+  it('names each member’s hours box, so a crew of several can be told apart', async () => {
+    vi.mocked(schedulingService.getShiftAssignments).mockResolvedValue([
+      { id: 'a-1', user_id: 'u-1', user_name: 'Jordan Avery', position: 'firefighter', status: 'assigned' },
+      { id: 'a-2', user_id: 'u-2', user_name: 'Alex Brooks', position: 'firefighter', status: 'assigned' },
+    ] as never);
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={shift as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Close out shift' }));
+
+    expect(await screen.findByRole('spinbutton', { name: 'Hours for Jordan Avery' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Hours for Alex Brooks' })).toBeInTheDocument();
   });
 });

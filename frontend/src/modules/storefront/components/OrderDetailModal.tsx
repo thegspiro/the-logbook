@@ -155,7 +155,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
           notifyMember: true,
         });
         setStatusMessage('');
-        toast.success('Status updated and the member notified');
+        toast.success('Status updated. The member was notified.');
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Could not update the status'));
       }
@@ -389,7 +389,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                     void recordPayment();
                   }}
                 >
-                  Record
+                  Record payment
                 </button>
                 {Number(order.amountPaid) > 0 && (
                   <button
@@ -411,8 +411,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
               <section className="card-secondary space-y-2 p-3">
                 <h3 className="text-theme-text-primary text-sm font-semibold">Waive payment</h3>
                 <p className="text-theme-text-muted text-xs">
-                  Clears the order without collecting. No money is recorded, so the window&apos;s collected total is
-                  unaffected.
+                  Settles the balance without collecting money. The window&apos;s collected total does not change.
                 </p>
                 <div className="flex flex-wrap items-end gap-2">
                   <div className="min-w-[12rem] flex-1">
@@ -436,14 +435,14 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                       void waivePayment();
                     }}
                   >
-                    Waive
+                    Waive payment
                   </button>
                 </div>
               </section>
             )}
 
             <section className="card-secondary space-y-3 p-3">
-              <h3 className="text-theme-text-primary text-sm font-semibold">Advance the order</h3>
+              <h3 className="text-theme-text-primary text-sm font-semibold">Change status</h3>
               <div className="flex flex-wrap items-end gap-2">
                 <div>
                   <label htmlFor="status-choice" className="form-label-sm">
@@ -482,7 +481,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                     void changeStatus();
                   }}
                 >
-                  Update
+                  Update status
                 </button>
               </div>
             </section>
@@ -530,7 +529,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                     void postUpdate();
                   }}
                 >
-                  Send
+                  Send update
                 </button>
               </div>
             </section>

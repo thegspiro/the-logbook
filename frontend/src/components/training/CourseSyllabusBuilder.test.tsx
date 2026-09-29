@@ -189,6 +189,23 @@ describe('CourseSyllabusBuilder', () => {
     expect(onCreateCourse).toHaveBeenCalledTimes(1);
   });
 
+  it('selects a course created from the form, and lists it', async () => {
+    const created = { ...course, id: 'new-course', name: 'Vehicle Familiarization' };
+    const onCreateCourse = vi.fn().mockResolvedValue(created);
+    const user = userEvent.setup();
+    render(<CourseSyllabusBuilder course={course} onCreateCourse={onCreateCourse} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Orientation')).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole('button', { name: /Add class/i }));
+    await user.click(screen.getByRole('button', { name: /Create a new course/i }));
+
+    const select = screen.getByLabelText('Course taught');
+    await waitFor(() => expect(select).toHaveValue('new-course'));
+    expect(within(select).getByRole('option', { name: /Vehicle Familiarization/ })).toBeInTheDocument();
+  });
+
   it('excludes the course itself from the class-course picker', async () => {
     // A recruit school must not be able to contain itself as one of its classes.
     mockGetCourses.mockResolvedValue([course, { ...course, id: 'catalog-a', name: 'Orientation' }]);

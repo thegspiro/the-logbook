@@ -47,7 +47,7 @@ export const ForgotPasswordPage: React.FC = () => {
       if (captcha.required) {
         captchaToken = await captcha.getToken();
         if (!captchaToken) {
-          setError('Please complete the challenge below before continuing.');
+          setError('Complete the challenge below to continue.');
           return;
         }
       }
@@ -58,7 +58,7 @@ export const ForgotPasswordPage: React.FC = () => {
         setAnswer(await authService.requestPasswordReset({ email }, captchaToken || undefined));
         setCooldown(RESET_COOLDOWN_SECONDS);
       } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Failed to send reset email. Please try again or contact your administrator.'));
+        setError(getErrorMessage(err, "Couldn't send the reset email. Try again or contact your administrator."));
         setCooldown(RESET_COOLDOWN_SECONDS);
         // Tokens are single-use — a retry must solve a fresh challenge.
         captcha.reset();
@@ -85,7 +85,7 @@ export const ForgotPasswordPage: React.FC = () => {
               className="focus:ring-theme-focus-ring inline-flex items-center space-x-2 rounded-sm px-3 py-2 font-medium text-red-700 transition-colors hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-red-400 dark:hover:text-red-300"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              <span>Back to Login</span>
+              <span>Back to sign in</span>
             </Link>
           </div>
         </div>
@@ -119,7 +119,7 @@ export const ForgotPasswordPage: React.FC = () => {
               className="focus:ring-theme-focus-ring inline-flex items-center space-x-2 rounded-sm px-3 py-2 font-medium text-red-700 transition-colors hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-red-400 dark:hover:text-red-300"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              <span>Back to Login</span>
+              <span>Back to sign in</span>
             </Link>
           </div>
         </div>
@@ -137,7 +137,7 @@ export const ForgotPasswordPage: React.FC = () => {
         <div className="mb-8 text-center">
           <h1 className="text-theme-text-primary mb-2 text-3xl font-extrabold">Forgot Your Password?</h1>
           <p className="text-theme-text-secondary">
-            Enter your email address and we'll send you a link to reset your password
+            Enter your email address and we'll send you a link to reset your password.
           </p>
         </div>
 
@@ -256,7 +256,7 @@ export const ForgotPasswordPage: React.FC = () => {
               className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring inline-flex items-center space-x-2 rounded-sm px-3 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              <span>Back to Login</span>
+              <span>Back to sign in</span>
             </Link>
           </div>
         </div>

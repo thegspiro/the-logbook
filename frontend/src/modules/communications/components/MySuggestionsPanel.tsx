@@ -41,7 +41,7 @@ const MySuggestionsPanel: React.FC<MySuggestionsPanelProps> = ({ selectedId, onS
         if (!cancelled) setItems(data);
       })
       .catch(() => {
-        if (!cancelled) setError('Unable to load your submissions. Please try again.');
+        if (!cancelled) setError('Unable to load your submissions. Try again.');
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);

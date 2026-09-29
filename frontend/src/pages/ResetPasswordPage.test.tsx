@@ -46,7 +46,7 @@ describe('ResetPasswordPage', () => {
 
     openLink();
 
-    expect(await screen.findByText(/please wait a few minutes/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /too many attempts/i })).toBeInTheDocument();
     expect(screen.getByText(/wait 5 minutes/i)).toBeInTheDocument();
     expect(screen.queryByText(/invalid reset link/i)).not.toBeInTheDocument();
   });

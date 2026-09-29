@@ -160,7 +160,7 @@ const StoreAdminPage: React.FC = () => {
     try {
       setDashboard(await storefrontService.getDashboard());
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load the store dashboard'));
+      toast.error(getErrorMessage(err, 'Could not load the store dashboard'));
     } finally {
       setLoading(false);
     }
@@ -311,7 +311,7 @@ const StoreAdminPage: React.FC = () => {
                       <div>
                         <p className="text-theme-text-primary font-medium">{dashboard.activeWindow.name}</p>
                         <p className="text-theme-text-muted mt-1 text-sm">
-                          {dashboard.activeWindow.description || 'This window is currently accepting orders.'}
+                          {dashboard.activeWindow.description || 'Open for orders.'}
                         </p>
                       </div>
                       <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -341,7 +341,7 @@ const StoreAdminPage: React.FC = () => {
                   ) : (
                     <div className="py-5 text-center">
                       <CalendarClock className="text-theme-text-muted mx-auto mb-2 h-7 w-7" />
-                      <p className="text-theme-text-secondary text-sm">No order window is currently open.</p>
+                      <p className="text-theme-text-secondary text-sm">No order window is open.</p>
                       <button
                         type="button"
                         className="btn-secondary btn-sm mt-3"
@@ -358,7 +358,7 @@ const StoreAdminPage: React.FC = () => {
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-theme-text-primary text-sm font-semibold">Updates from the last 7 days</h2>
-                    <p className="text-theme-text-muted text-xs">Most recent updates are shown first.</p>
+                    <p className="text-theme-text-muted text-xs">Newest first</p>
                   </div>
                   <button type="button" className="btn-secondary btn-sm" onClick={() => openOrders()}>
                     View orders
@@ -397,7 +397,7 @@ const StoreAdminPage: React.FC = () => {
                   </ol>
                 ) : (
                   <div className="card-secondary text-theme-text-muted py-8 text-center text-sm">
-                    No order updates were recorded in the last 7 days.
+                    No order updates in the last 7 days.
                   </div>
                 )}
               </section>
@@ -427,7 +427,8 @@ const StoreAdminPage: React.FC = () => {
                           </p>
                           <p className="text-theme-text-muted text-xs">
                             {order.windowName ?? 'No order window'} · {formatDateTime(order.submittedAt, tz)} ·{' '}
-                            {order.items.length} item(s) · {formatCurrency(Number(order.total))}
+                            {order.items.length} {order.items.length === 1 ? 'item' : 'items'} ·{' '}
+                            {formatCurrency(Number(order.total))}
                           </p>
                           {order.events.length > 0 && (
                             <p className="text-theme-text-secondary mt-1 flex items-center gap-1 text-xs">
@@ -466,7 +467,7 @@ const StoreAdminPage: React.FC = () => {
                   </ul>
                 ) : (
                   <div className="card-secondary text-theme-text-muted py-8 text-center text-sm">
-                    New orders and their status updates will appear here.
+                    No orders yet. New orders appear here.
                   </div>
                 )}
               </section>

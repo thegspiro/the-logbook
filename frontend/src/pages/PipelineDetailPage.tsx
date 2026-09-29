@@ -541,6 +541,7 @@ const EnrollModal: React.FC<{
                     type="button"
                     onClick={() => toggle(m)}
                     disabled={!m.eligible}
+                    aria-pressed={isSelected}
                     className={`border-theme-surface-border flex w-full items-center justify-between gap-3 border-b px-3 py-2 text-left text-sm transition-colors last:border-b-0 ${
                       !m.eligible ? 'cursor-not-allowed' : isSelected ? 'bg-red-500/10' : 'hover:bg-theme-surface-hover'
                     }`}
@@ -1238,6 +1239,12 @@ const PipelineDetailPage: React.FC = () => {
   const [savingReqId, setSavingReqId] = useState<string | null>(null);
   const [milestones, setMilestones] = useState<ProgramMilestone[]>([]);
   const canManage = useAuthStore((s) => s.checkPermission('training.manage'));
+  // The enrollment list answers only to training.view_all or training.manage.
+  // A member without either was sent it anyway, twice, took the 403 as an
+  // empty list, and read "Enrolled 0" on a program people were enrolled in.
+  const canViewEnrollments = useAuthStore(
+    (s) => s.checkPermission('training.view_all') || s.checkPermission('training.manage')
+  );
 
   // Editor modal + confirm state.
   const [showEditProgram, setShowEditProgram] = useState(false);
@@ -1285,7 +1292,7 @@ const PipelineDetailPage: React.FC = () => {
   };
 
   const loadEnrollments = async () => {
-    if (!programId) return;
+    if (!programId || !canViewEnrollments) return;
     try {
       const data = await trainingProgramService.getProgramEnrollments(programId, enrollmentStatus || undefined);
       setEnrollments(data);
@@ -1306,7 +1313,7 @@ const PipelineDetailPage: React.FC = () => {
     setIsDuplicating(true);
     try {
       const newProgram = await trainingProgramService.duplicateProgram(programId, `${program.name} (Copy)`);
-      toast.success('Pipeline duplicated successfully');
+      toast.success('Pipeline duplicated');
       void navigate(`/training/programs/${newProgram.id}`);
     } catch (err: unknown) {
       const msg = getErrorDetail(err) || 'Failed to duplicate pipeline';
@@ -1584,16 +1591,18 @@ const PipelineDetailPage: React.FC = () => {
                 <span>Enroll</span>
               </button>
             )}
-            <button
-              onClick={() => {
-                void handleDuplicate();
-              }}
-              disabled={isDuplicating}
-              className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm disabled:opacity-50"
-            >
-              <Copy className="h-4 w-4" />
-              <span>{isDuplicating ? 'Copying...' : 'Duplicate'}</span>
-            </button>
+            {canManage && (
+              <button
+                onClick={() => {
+                  void handleDuplicate();
+                }}
+                disabled={isDuplicating}
+                className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm disabled:opacity-50"
+              >
+                <Copy className="h-4 w-4" />
+                <span>{isDuplicating ? 'Copying...' : 'Duplicate'}</span>
+              </button>
+            )}
             {canManage && (
               <button
                 onClick={confirmDeleteProgram}
@@ -1633,20 +1642,22 @@ const PipelineDetailPage: React.FC = () => {
               {program.time_limit_days ? `${program.time_limit_days}d` : '—'}
             </p>
           </div>
-          <div className="bg-theme-surface rounded-lg p-4">
-            <div className="text-theme-text-muted mb-1 flex items-center space-x-2">
-              <Users className="h-4 w-4" />
-              <span className="text-xs uppercase">Enrolled</span>
+          {canViewEnrollments && (
+            <div className="bg-theme-surface rounded-lg p-4">
+              <div className="text-theme-text-muted mb-1 flex items-center space-x-2">
+                <Users className="h-4 w-4" />
+                <span className="text-xs uppercase">Enrolled</span>
+              </div>
+              <p className="text-theme-text-primary text-2xl font-bold">{enrollments.length}</p>
             </div>
-            <p className="text-theme-text-primary text-2xl font-bold">{enrollments.length}</p>
-          </div>
+          )}
         </div>
 
         {/* Tabs */}
         <div className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1" role="tablist">
           {[
             { key: 'overview' as DetailTab, label: 'Phases & Requirements', icon: Layers },
-            { key: 'enrollments' as DetailTab, label: 'Enrollments', icon: Users },
+            ...(canViewEnrollments ? [{ key: 'enrollments' as DetailTab, label: 'Enrollments', icon: Users }] : []),
           ].map((tab) => {
             const Icon = tab.icon;
             return (
@@ -1910,7 +1921,7 @@ const PipelineDetailPage: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'enrollments' && (
+        {activeTab === 'enrollments' && canViewEnrollments && (
           <div>
             <div className="mb-3 flex items-center gap-2">
               <label htmlFor="enrollment-status" className="text-theme-text-muted text-xs">
@@ -1949,7 +1960,7 @@ const PipelineDetailPage: React.FC = () => {
                 {canManage && (
                   <>
                     <p className="text-theme-text-muted mb-4 text-sm">
-                      Use the Enroll button to add members to this pipeline
+                      Enroll members to start tracking their progress.
                     </p>
                     <button onClick={() => setShowEnrollModal(true)} className="btn-primary text-sm">
                       Enroll Members

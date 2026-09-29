@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { EventTemplateForm } from './EventTemplateForm';
+import type { EventTemplate } from '../types/event';
 
 describe('EventTemplateForm reminder audience', () => {
   it('persists the selected reminder audience in the template', async () => {
@@ -33,7 +34,7 @@ describe('EventTemplateForm reminder audience', () => {
     await user.click(screen.getByRole('button', { name: /check-in settings/i }));
     await user.selectOptions(screen.getByLabelText(/check-in window type/i), 'window');
     await user.type(screen.getByLabelText(/minutes before start/i), '0');
-    await user.type(screen.getByLabelText(/minutes after start/i), '0');
+    await user.type(screen.getByLabelText(/minutes after end/i), '0');
     await user.click(screen.getByRole('button', { name: 'Save Template' }));
 
     expect(onSubmit).toHaveBeenCalledWith(
@@ -166,5 +167,56 @@ describe('EventTemplateForm reminder audience', () => {
         reminder_target: 'none',
       })
     );
+  });
+});
+
+describe('EventTemplateForm clearing a field (workflow review W21)', () => {
+  const template: EventTemplate = {
+    id: 'tpl-1',
+    organization_id: 'org-1',
+    name: 'Monday Drill',
+    event_type: 'training',
+    default_title: 'Monday Night Drill',
+    default_location: 'Station 1',
+    default_duration_minutes: 120,
+    requires_rsvp: false,
+    is_mandatory: false,
+    allow_guests: false,
+    require_checkout: false,
+    send_reminders: false,
+    reminder_target: 'none',
+    reminder_schedule: [],
+    is_active: true,
+    created_at: '2026-09-28T00:00:00Z',
+    updated_at: '2026-09-28T00:00:00Z',
+  };
+
+  // An edit left out the fields it had emptied, and the update path reads an
+  // omitted key as "leave alone": the old location and duration came back.
+  it('sends a cleared field as null when editing, so the clear is saved', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<EventTemplateForm initialData={template} onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await user.clear(screen.getByLabelText('Default Location'));
+    await user.clear(screen.getByLabelText('Default Duration (minutes)'));
+    await user.click(screen.getByRole('button', { name: /Save|Update/ }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ default_location: null, default_duration_minutes: null })
+    );
+  });
+
+  it('still leaves blank fields out when creating', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<EventTemplateForm onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/template name/i), 'Bare');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    const sent = onSubmit.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(sent).not.toHaveProperty('default_location');
+    expect(sent).not.toHaveProperty('default_duration_minutes');
   });
 });

@@ -42,7 +42,7 @@ const SuggestionBoxesAdminPage: React.FC = () => {
         setOptions(reviewerOptions);
       })
       .catch(() => {
-        if (!cancelled) setError('Unable to load suggestion boxes. Please try again.');
+        if (!cancelled) setError('Unable to load suggestion boxes. Try again.');
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);

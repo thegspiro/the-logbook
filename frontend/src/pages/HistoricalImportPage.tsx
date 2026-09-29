@@ -125,7 +125,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
   const handleFile = useCallback(
     async (file: File) => {
       if (!file.name.toLowerCase().endsWith('.csv')) {
-        toast.error('Please upload a CSV file');
+        toast.error('Choose a .csv file');
         return;
       }
       setFileName(file.name);
@@ -775,7 +775,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ result, onReset }) => (
       )}
       <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Import Complete</h2>
       <p className="text-theme-text-muted">
-        Successfully imported {result.imported} of {result.total} training records.
+        Imported {result.imported} of {result.total} training records.
       </p>
     </div>
 

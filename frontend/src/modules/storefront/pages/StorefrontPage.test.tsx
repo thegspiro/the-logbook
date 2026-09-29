@@ -125,7 +125,7 @@ describe('StorefrontPage', () => {
 
     await screen.findByText('Fall 2026 Uniform Order is open');
     expect(screen.queryByText('Closes in')).not.toBeInTheDocument();
-    expect(screen.queryByText('Last day to order')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ordering closes')).not.toBeInTheDocument();
   });
 
   it('filters the catalog by category, counting before the search box', async () => {
@@ -167,7 +167,7 @@ describe('StorefrontPage', () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Job Shirt' });
 
-    await user.click(screen.getAllByRole('button', { name: /Add \$65\.00/ })[0] as HTMLElement);
+    await user.click(screen.getAllByRole('button', { name: /Add to cart · \$65\.00/ })[0] as HTMLElement);
 
     expect(
       screen.getByText(/Nothing is charged here\..*Venmo, Zelle or Cash.*as soon as you submit/)
@@ -188,7 +188,7 @@ describe('StorefrontPage', () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Job Shirt' });
 
-    await user.click(screen.getAllByRole('button', { name: /Add \$65\.00/ })[0] as HTMLElement);
+    await user.click(screen.getAllByRole('button', { name: /Add to cart · \$65\.00/ })[0] as HTMLElement);
 
     expect(screen.getByText(/Zelle or Cash/)).toBeInTheDocument();
     expect(screen.queryByText(/Venmo/)).not.toBeInTheDocument();
@@ -199,7 +199,7 @@ describe('StorefrontPage', () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Job Shirt' });
 
-    await user.click(screen.getAllByRole('button', { name: /Add \$65\.00/ })[0] as HTMLElement);
+    await user.click(screen.getAllByRole('button', { name: /Add to cart · \$65\.00/ })[0] as HTMLElement);
     await user.click(screen.getByRole('button', { name: /Review order · \$65\.00/ }));
 
     expect(await screen.findByText('Checkout')).toBeInTheDocument();

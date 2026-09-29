@@ -11,8 +11,15 @@ import { EmptyState } from '../../../components/ux/EmptyState';
 import { formatCurrency } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { storefrontService } from '../services/api';
-import type { StoreProduct } from '../types';
+import { StoreProductStatus, type StoreProduct } from '../types';
 import { ProductFormModal } from './ProductFormModal';
+
+/** Matches the Status choices in ProductFormModal. */
+const PRODUCT_STATUS_LABELS: Record<string, string> = {
+  [StoreProductStatus.DRAFT]: 'Draft',
+  [StoreProductStatus.ACTIVE]: 'Active',
+  [StoreProductStatus.ARCHIVED]: 'Archived',
+};
 
 export const StoreCatalogTab: React.FC = () => {
   const [products, setProducts] = useState<StoreProduct[]>([]);
@@ -26,7 +33,7 @@ export const StoreCatalogTab: React.FC = () => {
     try {
       setProducts(await storefrontService.getProducts({ includeArchived }));
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load the catalog'));
+      toast.error(getErrorMessage(err, 'Could not load the catalog'));
     } finally {
       setLoading(false);
     }
@@ -103,11 +110,11 @@ export const StoreCatalogTab: React.FC = () => {
 
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="badge bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border border">
-                  {product.status}
+                  {PRODUCT_STATUS_LABELS[product.status] ?? product.status}
                 </span>
                 {product.variants.length > 0 && (
                   <span className="badge bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border border">
-                    {product.variants.length} option(s)
+                    {product.variants.length} {product.variants.length === 1 ? 'option' : 'options'}
                   </span>
                 )}
                 {product.trackStock && (

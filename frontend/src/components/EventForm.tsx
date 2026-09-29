@@ -435,10 +435,19 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   const handleStartDateChange = (startDate: string) => {
     const changes: Partial<EventCreate> = { start_datetime: startDate };
-    // Auto-set end date to 2 hours later if not already set
     if (!formData.end_datetime && startDate) {
+      // Auto-set end date to 2 hours later if not already set
       const startUtc = localToUTC(startDate, tz);
       const end = new Date(new Date(startUtc).getTime() + 2 * 60 * 60 * 1000);
+      changes.end_datetime = formatForDateTimeInput(end, tz);
+    } else if (formData.start_datetime && formData.end_datetime && startDate) {
+      // Moving the start carries the end with it, keeping the event's length.
+      // Left behind, the end stayed on the old day — before a start moved
+      // later, which a template's pre-filled times made the usual case
+      // (workflow review W21).
+      const shiftMs =
+        new Date(localToUTC(startDate, tz)).getTime() - new Date(localToUTC(formData.start_datetime, tz)).getTime();
+      const end = new Date(new Date(localToUTC(formData.end_datetime, tz)).getTime() + shiftMs);
       changes.end_datetime = formatForDateTimeInput(end, tz);
     }
     update(changes);
@@ -446,7 +455,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   const setDuration = (hours: number) => {
     if (!formData.start_datetime) {
-      setError('Please set a start date first');
+      setError('Set a start date first');
       return;
     }
     const startUtc = localToUTC(formData.start_datetime, tz);
@@ -771,8 +780,8 @@ export const EventForm: React.FC<EventFormProps> = ({
               ) : (
                 <>
                   <p className="text-sm text-teal-700 dark:text-teal-300">
-                    Prospective members reach the pipeline by signing in as guests. Turn that on to have attendees of
-                    this event opened as applicants.
+                    Attendees join the prospective members pipeline by signing in as guests. Turn on guest sign-in to
+                    add this event&apos;s guests to the pipeline.
                   </p>
                   <button
                     type="button"
@@ -918,7 +927,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
               <div>
-                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Schedule Conflict Detected</p>
+                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Schedule Conflict</p>
                 <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
                   This time overlaps with {conflicts.length === 1 ? 'an event' : 'events'} you have RSVP&apos;d to:
                 </p>
@@ -1005,7 +1014,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                       </label>
                       {isRolling ? (
                         <p className="text-theme-text-muted text-xs">
-                          New occurrences are created automatically to maintain a 12-month horizon.
+                          New occurrences are added automatically so the series always runs 12 months ahead.
                         </p>
                       ) : (
                         <input
@@ -1155,8 +1164,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
                 <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
                   <p className="text-sm text-blue-700 dark:text-blue-300">
-                    Individual events will be created for each occurrence. You can edit or cancel them independently
-                    after creation.
+                    Each occurrence is created as its own event, which you can edit or cancel on its own.
                   </p>
                 </div>
               </div>
@@ -1474,9 +1482,9 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
               className={selectClass}
             >
-              <option value="flexible">Flexible - Configured start through event end</option>
-              <option value="strict">Strict - Only during actual event time</option>
-              <option value="window">Window - Custom before/after start</option>
+              <option value="flexible">Flexible - Opens before the start, closes when the event ends</option>
+              <option value="strict">Strict - Only while the event is running</option>
+              <option value="window">Window - Opens before the start, closes after the end</option>
             </select>
           </div>
 
@@ -1489,7 +1497,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             >
               <div>
                 <label htmlFor="checkin-before" className={labelClass}>
-                  Minutes before
+                  Minutes before start
                 </label>
                 <input
                   type="number"
@@ -1507,7 +1515,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               {formData.check_in_window_type === CheckInWindowType.WINDOW && (
                 <div>
                   <label htmlFor="checkin-after" className={labelClass}>
-                    Minutes after
+                    Minutes after end
                   </label>
                   <input
                     type="number"
@@ -1727,10 +1735,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           <div className="flex items-start space-x-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
             <Upload className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
             <div className="text-sm text-blue-700 dark:text-blue-300">
-              <p className="font-medium">Upload attachments after creating the event.</p>
-              <p className="mt-1 text-blue-600 dark:text-blue-400">
-                Once saved, you can upload files from the event detail page.
-              </p>
+              <p className="font-medium">Files can&apos;t be attached from the app yet.</p>
             </div>
           </div>
         </div>

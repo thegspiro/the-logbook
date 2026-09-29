@@ -51,9 +51,7 @@ const MyIPExceptionsPage: React.FC = () => {
             </div>
             <div>
               <h1 className="text-theme-text-primary text-xl font-bold">My IP Exceptions</h1>
-              <p className="text-theme-text-muted text-sm">
-                Request and manage IP address exceptions for geo-blocked access
-              </p>
+              <p className="text-theme-text-muted text-sm">Request an IP exception and track its status</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -67,6 +65,7 @@ const MyIPExceptionsPage: React.FC = () => {
               onClick={() => {
                 void fetchMyExceptions(includeExpired);
               }}
+              aria-label="Refresh my requests"
               className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -91,13 +90,20 @@ const MyIPExceptionsPage: React.FC = () => {
               onChange={(e) => setIncludeExpired(e.target.checked)}
               className="border-theme-surface-border rounded"
             />
-            Show expired/rejected/revoked
+            Show expired, rejected, and revoked requests
           </label>
         </div>
 
         {/* Exceptions Table */}
         <div className="card overflow-hidden">
-          <IPExceptionTable exceptions={myExceptions} />
+          <IPExceptionTable
+            exceptions={myExceptions}
+            emptyMessage={
+              includeExpired
+                ? 'You have no IP exceptions. Select New Request to ask for one.'
+                : 'You have no pending or approved IP exceptions. Select New Request to ask for one.'
+            }
+          />
         </div>
       </div>
     </div>

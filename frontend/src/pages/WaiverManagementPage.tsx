@@ -162,7 +162,7 @@ export const WaiverManagementPage: React.FC = () => {
       setTrainingWaivers(waiversData);
       setMembers(membersData);
     } catch (_err) {
-      setError('Failed to load waiver data');
+      setError('Unable to load waivers. Refresh the page to try again.');
     } finally {
       setLoading(false);
     }
@@ -267,10 +267,10 @@ export const WaiverManagementPage: React.FC = () => {
     setCreateSuccess(null);
 
     try {
-      if (!formData.user_id) throw new Error('Please select a member');
-      if (formData.applies_to.length === 0) throw new Error('Please select at least one area');
+      if (!formData.user_id) throw new Error('Select a member');
+      if (formData.applies_to.length === 0) throw new Error('Select at least one area to waive');
       if (!formData.start_date) throw new Error('Start date is required');
-      if (!formData.is_permanent && !formData.end_date) throw new Error('End date is required (or select Permanent)');
+      if (!formData.is_permanent && !formData.end_date) throw new Error('Enter an end date, or check Permanent');
       if (!formData.is_permanent && formData.end_date < formData.start_date)
         throw new Error('End date must be after start date');
 
@@ -372,7 +372,7 @@ export const WaiverManagementPage: React.FC = () => {
         <div className="mb-6">
           <h1 className="text-theme-text-primary text-2xl font-bold">Waiver Management</h1>
           <p className="text-theme-text-muted mt-1 text-sm">
-            Manage waivers for training, meetings, and shifts across all members
+            Excuse members from training, meeting and shift requirements
           </p>
         </div>
 
@@ -413,7 +413,7 @@ export const WaiverManagementPage: React.FC = () => {
           <div>
             {activeWaivers.length === 0 ? (
               <div className="card py-12 text-center">
-                <p className="text-theme-text-muted">No active waivers at this time.</p>
+                <p className="text-theme-text-muted">No active waivers.</p>
                 <button
                   onClick={() => handleTabChange('create')}
                   className="touch-target-phone mt-3 text-sm text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
@@ -662,8 +662,8 @@ export const WaiverManagementPage: React.FC = () => {
                   </label>
                   {formData.is_permanent && (
                     <p className="text-theme-text-muted text-xs">
-                      This waiver will remain active indefinitely until manually deactivated. Use for long-service
-                      members exempt from certain requirements.
+                      The waiver stays active until you deactivate it. Use for long-serving members exempt from certain
+                      requirements.
                     </p>
                   )}
                 </div>
@@ -716,7 +716,7 @@ export const WaiverManagementPage: React.FC = () => {
                 type="text"
                 value={memberFilter}
                 onChange={(e) => setMemberFilter(e.target.value)}
-                aria-label="Search by member name..."
+                aria-label="Search by member name"
                 placeholder="Search by member name..."
                 className="form-input w-64 px-3 py-1.5 text-sm"
               />

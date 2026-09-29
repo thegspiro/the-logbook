@@ -421,7 +421,7 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: SCHEDULING_ADMIN,
-    expectText: 'Control whether shift reports are available for your department and which features are included.',
+    expectText: 'Turn shift reports on or off, and choose what they include.',
     // The strip, scoped by its own label. The panel's <nav> and SettingsLayout's
     // are both `data-mobile-scroll-region`, and the outer one navigates.
     states: [

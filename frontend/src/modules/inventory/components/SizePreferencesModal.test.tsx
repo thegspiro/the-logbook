@@ -251,4 +251,21 @@ describe('SizePreferencesModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(mockUpsertMy).not.toHaveBeenCalled();
   });
+
+  it('names every size field by its visible label', async () => {
+    mockGetMy.mockResolvedValue({ shirt_size: 'm', boot_width: 'EE' });
+    const user = userEvent.setup();
+    render(<SizePreferencesModal isOpen onClose={onClose} />);
+
+    expect(await screen.findByLabelText('Shirt Size')).toHaveValue('m');
+    for (const name of ['Jacket Size', 'Pant Waist', 'Pant Inseam', 'Boot Size']) {
+      expect(screen.getByLabelText(name)).toBeInTheDocument();
+    }
+
+    await user.click(screen.getByRole('button', { name: /Additional sizes/ }));
+    expect(screen.getByLabelText('Boot Width')).toHaveValue('EE');
+    for (const name of ['Fit', 'Glove Size', 'Hat Size']) {
+      expect(screen.getByLabelText(name)).toBeInTheDocument();
+    }
+  });
 });

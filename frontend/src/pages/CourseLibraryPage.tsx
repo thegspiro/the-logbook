@@ -99,36 +99,38 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
     setIsSubmitting(true);
     setError('');
 
-    const { pick } = formCoercions(isEdit);
+    // On an edit every blank field goes out as null (an empty list for the
+    // list fields): omitting the key means "leave it alone" to a
+    // model_dump(exclude_unset=True) backend, so a cleared instructor or
+    // expiry reported success and kept its old value.
+    const { text, pick, num } = formCoercions(isEdit);
+    const emptyList = isEdit ? [] : undefined;
 
     const payload = {
       name: formData.name,
-      ...(formData.code ? { code: formData.code } : {}),
-      ...(formData.description ? { description: formData.description } : {}),
+      code: text(formData.code),
+      description: text(formData.description),
       training_type: formData.training_type,
-      duration_hours: formData.duration_hours ? parseFloat(formData.duration_hours) : undefined,
-      credit_hours: formData.credit_hours ? parseFloat(formData.credit_hours) : undefined,
-      ...(formData.instructor ? { instructor: formData.instructor } : {}),
-      max_participants: formData.max_participants ? parseInt(formData.max_participants) : undefined,
-      expiration_months: formData.expiration_months ? parseInt(formData.expiration_months) : undefined,
-      // pick() sends an explicit null when editing: omitting the key means
-      // "leave it alone" to a model_dump(exclude_unset=True) backend, so
-      // clearing the grant would silently keep conferring it.
+      duration_hours: num(formData.duration_hours),
+      credit_hours: num(formData.credit_hours),
+      instructor: text(formData.instructor),
+      max_participants: num(formData.max_participants),
+      expiration_months: num(formData.expiration_months),
       grants_qualification: pick(formData.grants_qualification),
-      category_ids: formData.category_ids.length > 0 ? formData.category_ids : undefined,
+      category_ids: formData.category_ids.length > 0 ? formData.category_ids : emptyList,
       materials_required: formData.materials_required
         ? formData.materials_required.split('\n').filter((m) => m.trim())
-        : undefined,
+        : emptyList,
     };
 
     try {
       let saved: TrainingCourse;
       if (isEdit && course) {
         saved = await trainingService.updateCourse(course.id, payload as TrainingCourseUpdate);
-        toast.success('Course updated successfully');
+        toast.success('Course updated');
       } else {
         saved = await trainingService.createCourse(payload as TrainingCourseCreate);
-        toast.success('Course created successfully');
+        toast.success('Course created');
       }
       onSuccess(saved);
       onClose();
@@ -185,10 +187,11 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              <label htmlFor="course-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                 Course Name <span className="text-red-700 dark:text-red-400">*</span>
               </label>
               <input
+                id="course-name"
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -198,8 +201,11 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
               />
             </div>
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Course Code</label>
+              <label htmlFor="course-code" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                Course Code
+              </label>
               <input
+                id="course-code"
                 type="text"
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
@@ -211,8 +217,11 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
           </div>
 
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Description</label>
+            <label htmlFor="course-description" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Description
+            </label>
             <textarea
+              id="course-description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
@@ -223,8 +232,14 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Training Type *</label>
+              <label
+                htmlFor="course-training-type"
+                className="text-theme-text-secondary mb-1 block text-sm font-medium"
+              >
+                Training Type *
+              </label>
               <select
+                id="course-training-type"
                 value={formData.training_type}
                 onChange={(e) => setFormData({ ...formData, training_type: e.target.value as TrainingType })}
                 className="form-input text-sm"
@@ -237,8 +252,14 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
               </select>
             </div>
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Duration (hours)</label>
+              <label
+                htmlFor="course-duration-hours"
+                className="text-theme-text-secondary mb-1 block text-sm font-medium"
+              >
+                Duration (hours)
+              </label>
               <input
+                id="course-duration-hours"
                 type="number"
                 value={formData.duration_hours}
                 onChange={(e) => setFormData({ ...formData, duration_hours: e.target.value })}
@@ -249,8 +270,11 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
               />
             </div>
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Credit Hours</label>
+              <label htmlFor="course-credit-hours" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                Credit Hours
+              </label>
               <input
+                id="course-credit-hours"
                 type="number"
                 value={formData.credit_hours}
                 onChange={(e) => setFormData({ ...formData, credit_hours: e.target.value })}
@@ -264,8 +288,11 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Instructor</label>
+              <label htmlFor="course-instructor" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                Instructor
+              </label>
               <input
+                id="course-instructor"
                 type="text"
                 value={formData.instructor}
                 onChange={(e) => setFormData({ ...formData, instructor: e.target.value })}
@@ -274,8 +301,14 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
               />
             </div>
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Max Participants</label>
+              <label
+                htmlFor="course-max-participants"
+                className="text-theme-text-secondary mb-1 block text-sm font-medium"
+              >
+                Max Participants
+              </label>
               <input
+                id="course-max-participants"
                 type="number"
                 value={formData.max_participants}
                 onChange={(e) => setFormData({ ...formData, max_participants: e.target.value })}
@@ -285,8 +318,14 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
               />
             </div>
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Expires After (months)</label>
+              <label
+                htmlFor="course-expires-months"
+                className="text-theme-text-secondary mb-1 block text-sm font-medium"
+              >
+                Expires After (months)
+              </label>
               <input
+                id="course-expires-months"
                 type="number"
                 value={formData.expiration_months}
                 onChange={(e) => setFormData({ ...formData, expiration_months: e.target.value })}
@@ -326,13 +365,16 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
 
           {/* Categories */}
           <div>
-            <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Training Categories</label>
-            <div className="flex flex-wrap gap-2">
+            <p id="course-categories-label" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+              Training Categories
+            </p>
+            <div role="group" aria-labelledby="course-categories-label" className="flex flex-wrap gap-2">
               {parentCategories.map((cat) => (
                 <button
                   key={cat.id}
                   type="button"
                   onClick={() => toggleCategory(cat.id)}
+                  aria-pressed={formData.category_ids.includes(cat.id)}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                     formData.category_ids.includes(cat.id)
                       ? 'bg-red-800 text-white'
@@ -346,10 +388,11 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
           </div>
 
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            <label htmlFor="course-materials" className="text-theme-text-secondary mb-1 block text-sm font-medium">
               Materials Required (one per line)
             </label>
             <textarea
+              id="course-materials"
               value={formData.materials_required}
               onChange={(e) => setFormData({ ...formData, materials_required: e.target.value })}
               rows={3}
@@ -593,8 +636,14 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
           {showFilters && (
             <div className="card-secondary grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Training Type</label>
+                <label
+                  htmlFor="course-filter-type"
+                  className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                >
+                  Training Type
+                </label>
                 <select
+                  id="course-filter-type"
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
                   className="form-input text-sm"
@@ -608,8 +657,14 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                 </select>
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Category</label>
+                <label
+                  htmlFor="course-filter-category"
+                  className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                >
+                  Category
+                </label>
                 <select
+                  id="course-filter-category"
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
                   className="form-input text-sm"
@@ -686,7 +741,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                             void handleDelete(course.id, course.name);
                           }}
                           className="text-theme-text-muted rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
-                          aria-label={`Delete ${course.name}`}
+                          aria-label={`Deactivate ${course.name}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -774,24 +829,6 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
 
       {canManage && (
         <>
-          <CourseFormModal
-            isOpen={showModal}
-            course={editCourse}
-            categories={categories}
-            onClose={() => {
-              setShowModal(false);
-              setEditCourse(null);
-              // A dismissed modal must still settle the builder's promise.
-              pendingCourseResolver?.(null);
-              setPendingCourseResolver(null);
-            }}
-            onSuccess={(saved) => {
-              void loadData();
-              if (saved) pendingCourseResolver?.(saved);
-              setPendingCourseResolver(null);
-            }}
-          />
-
           {syllabusCourse && (
             <div
               className="modal-overlay z-50 flex items-center justify-center p-4"
@@ -825,6 +862,28 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
               </DialogPanel>
             </div>
           )}
+
+          {/* After the syllabus dialog on purpose: the builder's "Create a new
+              course" opens this form over it, and at the same z-index the later
+              element paints on top. Placed first, the form sat beneath the
+              syllabus and took no clicks. */}
+          <CourseFormModal
+            isOpen={showModal}
+            course={editCourse}
+            categories={categories}
+            onClose={() => {
+              setShowModal(false);
+              setEditCourse(null);
+              // A dismissed modal must still settle the builder's promise.
+              pendingCourseResolver?.(null);
+              setPendingCourseResolver(null);
+            }}
+            onSuccess={(saved) => {
+              void loadData();
+              if (saved) pendingCourseResolver?.(saved);
+              setPendingCourseResolver(null);
+            }}
+          />
         </>
       )}
     </div>

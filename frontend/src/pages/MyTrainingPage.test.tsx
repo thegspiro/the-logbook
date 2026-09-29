@@ -170,6 +170,39 @@ describe('MyTrainingPage', () => {
     expect(screen.queryByRole('button', { name: /export csv/i })).not.toBeInTheDocument();
   });
 
+  it('names each enrolled program and its requirements on the pipeline card', async () => {
+    mockGetMyTraining.mockResolvedValue({
+      ...mockTrainingData,
+      enrollments: [
+        {
+          id: 'enr-1',
+          program_id: 'prog-1',
+          program_name: 'Driver Candidate Program',
+          status: 'active',
+          progress_percentage: 0,
+          enrolled_at: '2026-09-29T06:48:44Z',
+          target_completion_date: '2027-03-28',
+          completed_at: null,
+          requirements: [
+            {
+              id: 'rp-1',
+              requirement_id: 'req-9',
+              requirement_name: 'Supervised Driving Hours',
+              status: 'not_started',
+              progress_value: 0,
+              progress_percentage: 0,
+              completed_at: null,
+            },
+          ],
+        },
+      ],
+    });
+    renderWithRouter(<MyTrainingPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Driver Candidate Program' })).toBeInTheDocument();
+    expect(screen.getByText(/Supervised Driving Hours ·/)).toBeInTheDocument();
+  });
+
   describe('member visibility settings tab', () => {
     it('is hidden from a member who cannot configure the panel', async () => {
       renderWithRouter(<MyTrainingPage />);

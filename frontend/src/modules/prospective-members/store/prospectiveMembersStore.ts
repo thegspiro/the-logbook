@@ -329,7 +329,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
       set({ pipelines, isLoadingPipelines: false });
     } catch (error) {
       set({
-        error: handleStoreError(error, 'Failed to fetch pipelines'),
+        error: handleStoreError(error, 'Failed to load pipelines'),
         isLoadingPipelines: false,
       });
     }
@@ -343,7 +343,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
       set({ currentPipeline: pipeline, preferredPipelineId: pipeline.id, isLoadingPipeline: false });
     } catch (error) {
       set({
-        error: handleStoreError(error, 'Failed to fetch pipeline'),
+        error: handleStoreError(error, 'Failed to load pipeline'),
         isLoadingPipeline: false,
       });
     }
@@ -360,7 +360,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     } catch (error) {
       if (!isCurrentFetch('stats', token)) return;
       set({
-        error: handleStoreError(error, 'Failed to fetch pipeline stats'),
+        error: handleStoreError(error, 'Failed to load pipeline stats'),
         isLoadingStats: false,
       });
     }
@@ -435,7 +435,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     try {
       return await pipelineService.getTemplates();
     } catch (error) {
-      set({ error: handleStoreError(error, 'Failed to fetch templates') });
+      set({ error: handleStoreError(error, 'Failed to load templates') });
       return [];
     }
   },
@@ -497,7 +497,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     } catch (error) {
       if (!isCurrentFetch('applicants', token)) return;
       set({
-        error: handleStoreError(error, 'Failed to fetch applicants'),
+        error: handleStoreError(error, 'Failed to load applicants'),
         isLoading: false,
       });
     }
@@ -514,7 +514,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
       });
     } catch (error) {
       set({
-        error: handleStoreError(error, 'Failed to fetch applicant'),
+        error: handleStoreError(error, 'Failed to load applicant'),
         isLoadingApplicant: false,
       });
     }
@@ -764,7 +764,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     } catch (error) {
       if (!isCurrentFetch('inactive', token)) return;
       set({
-        error: handleStoreError(error, 'Failed to fetch inactive applicants'),
+        error: handleStoreError(error, 'Failed to load inactive applicants'),
         isLoadingInactive: false,
       });
     }
@@ -801,7 +801,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     } catch (error) {
       if (!isCurrentFetch('withdrawn', token)) return;
       set({
-        error: handleStoreError(error, 'Failed to fetch withdrawn applicants'),
+        error: handleStoreError(error, 'Failed to load withdrawn applicants'),
         isLoadingWithdrawn: false,
       });
     }
@@ -838,7 +838,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     } catch (error) {
       if (!isCurrentFetch('rejected', token)) return;
       set({
-        error: handleStoreError(error, 'Failed to fetch rejected applicants'),
+        error: handleStoreError(error, 'Failed to load rejected applicants'),
         isLoadingRejected: false,
       });
     }
@@ -875,7 +875,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     } catch (error) {
       if (!isCurrentFetch('converted', token)) return;
       set({
-        error: handleStoreError(error, 'Failed to fetch converted applicants'),
+        error: handleStoreError(error, 'Failed to load converted applicants'),
         isLoadingConverted: false,
       });
     }
@@ -926,7 +926,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
       set({ currentElectionPackage: pkg, isLoadingElectionPackage: false });
     } catch (error) {
       set({
-        error: handleStoreError(error, 'Failed to fetch election package'),
+        error: handleStoreError(error, 'Failed to load election package'),
         isLoadingElectionPackage: false,
       });
     }
@@ -981,7 +981,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
       set({ interviews, isLoadingInterviews: false });
     } catch (error) {
       set({
-        error: handleStoreError(error, 'Failed to fetch interviews'),
+        error: handleStoreError(error, 'Failed to load interviews'),
         isLoadingInterviews: false,
       });
     }

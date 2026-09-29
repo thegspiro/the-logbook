@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { X, RefreshCw, Play } from 'lucide-react';
 import { schedulingService } from '../services/api';
+import { reportGeneration } from '../utils/patternGeneration';
 import type { ShiftPattern } from './shiftTemplateTypes';
 import { PATTERN_TYPES } from './shiftTemplateTypes';
 
@@ -36,7 +37,7 @@ const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClo
         start_date: startDate,
         end_date: endDate,
       });
-      toast.success(`Generated ${String(result.shifts_created)} shifts`);
+      reportGeneration(result);
       onClose();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to generate shifts'));

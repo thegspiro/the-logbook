@@ -168,6 +168,31 @@ describe('PositionRosterPage', () => {
     expect(rankBadge.className).not.toEqual(positionBadge.className);
   });
 
+  it('says why each member is cleared, not only by icon and colour', async () => {
+    mockGetPositionRoster.mockResolvedValue({
+      ...roster,
+      members: [
+        {
+          ...certifiedDriver,
+          rank_display_name: null,
+          sources: [
+            { type: 'rank', label: 'Lieutenant' },
+            { type: 'position', label: 'Engineer' },
+            { type: 'training', label: 'Driver Operator Pipeline' },
+          ],
+        },
+      ],
+    });
+    renderPage();
+
+    const reasons = await screen.findAllByText(/^By (rank|held position|completed training):/);
+    expect(reasons.map((reason) => reason.parentElement?.textContent)).toEqual([
+      'By rank: Lieutenant',
+      'By held position: Engineer',
+      'By completed training: Driver Operator Pipeline',
+    ]);
+  });
+
   it('shows a qualification source with the date it lapses', async () => {
     mockGetPositionRoster.mockResolvedValue({
       position: 'paramedic',

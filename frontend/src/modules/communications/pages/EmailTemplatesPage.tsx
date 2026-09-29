@@ -203,7 +203,7 @@ const EmailTemplatesPage: React.FC = () => {
     if (!selectedTemplate || draft.hasValidationErrors) return;
     try {
       await updateTemplate(selectedTemplate.id, draft.buildUpdate());
-      toast.success('Template saved successfully');
+      toast.success('Template saved');
     } catch {
       toast.error('Failed to save template');
     }
@@ -290,7 +290,7 @@ const EmailTemplatesPage: React.FC = () => {
       await updateTemplate(selectedTemplate.id, { is_active: !selectedTemplate.is_active });
       toast.success(selectedTemplate.is_active ? 'Template deactivated' : 'Template activated');
     } catch {
-      toast.error('Failed to toggle template status');
+      toast.error(selectedTemplate.is_active ? 'Failed to deactivate template' : 'Failed to activate template');
     } finally {
       setIsTogglingActive(false);
     }
@@ -324,7 +324,7 @@ const EmailTemplatesPage: React.FC = () => {
       if (updated) selectTemplate(updated);
       toast.success('Attachment removed');
     } catch {
-      toast.error('Failed to delete attachment');
+      toast.error('Failed to remove attachment');
     } finally {
       setAttachmentToDelete(null);
     }
@@ -678,7 +678,7 @@ const EmailTemplatesPage: React.FC = () => {
                                 <button
                                   onClick={() => setAttachmentToDelete(att)}
                                   className="ml-2 shrink-0 text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                                  aria-label={`Delete attachment ${att.filename}`}
+                                  aria-label={`Remove attachment ${att.filename}`}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
@@ -727,9 +727,9 @@ const EmailTemplatesPage: React.FC = () => {
           onConfirm={() => {
             if (attachmentToDelete) void handleDeleteAttachment(attachmentToDelete);
           }}
-          title="Delete Attachment"
-          message={`Remove "${attachmentToDelete?.filename ?? ''}" from this template? This attachment will no longer be included in emails.`}
-          confirmLabel="Delete"
+          title="Remove Attachment"
+          message={`Remove "${attachmentToDelete?.filename ?? ''}" from this template? It will no longer be sent with these emails.`}
+          confirmLabel="Remove"
           variant="danger"
         />
         <ConfirmDialog
@@ -739,7 +739,7 @@ const EmailTemplatesPage: React.FC = () => {
             void handleResetToDefault();
           }}
           title="Reset to Default"
-          message="This will restore the template's subject, HTML body, text body, styles, and footer choice to the system defaults. Your CC/BCC settings will be preserved. This action cannot be undone."
+          message="Restores the subject, HTML body, plain-text body, styles and footer choice to the defaults. Your CC/BCC settings are kept. You cannot undo this."
           confirmLabel="Reset"
           variant="danger"
         />

@@ -497,17 +497,17 @@ export interface TrainingCourseCreate {
 
 export interface TrainingCourseUpdate {
   name?: string;
-  code?: string;
-  description?: string;
+  code?: string | null;
+  description?: string | null;
   training_type?: TrainingType;
-  duration_hours?: number;
-  credit_hours?: number;
+  duration_hours?: number | null;
+  credit_hours?: number | null;
   prerequisites?: string[];
-  expiration_months?: number;
+  expiration_months?: number | null;
   /** Qualification code completing this course grants its holder. */
   grants_qualification?: string | null;
-  instructor?: string;
-  max_participants?: number;
+  instructor?: string | null;
+  max_participants?: number | null;
   materials_required?: string[];
   category_ids?: string[];
   active?: boolean;
@@ -1942,6 +1942,8 @@ export interface MyTrainingSummary {
   enrollments?: Array<{
     id: string;
     program_id: string;
+    /** Absent from servers that predate it; the card then shows no heading. */
+    program_name?: string;
     status: string;
     progress_percentage: number;
     enrolled_at: string | null;

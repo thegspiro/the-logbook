@@ -112,7 +112,7 @@ export const StoreWindowCard: React.FC<StoreWindowCardProps> = ({ storefront, on
             )}
             <div className={countdown ? 'border-theme-surface-border border-l pl-5' : undefined}>
               <p className="text-theme-text-secondary text-[10px] font-bold tracking-[.1em] uppercase">
-                Last day to order
+                Ordering closes
               </p>
               <p className="text-theme-text-primary mt-0.5 text-sm">{formatDateTime(closesAt, tz)}</p>
             </div>

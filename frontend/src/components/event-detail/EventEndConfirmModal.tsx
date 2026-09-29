@@ -32,7 +32,7 @@ const EventEndConfirmModal: React.FC<EventEndConfirmModalProps> = ({ eventTitle,
             onClick={onClose}
             className="btn-secondary text-theme-text-secondary mt-3 inline-flex w-full justify-center text-base font-medium shadow-xs focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
           >
-            Go Back
+            Keep It Running
           </button>
         </>
       }

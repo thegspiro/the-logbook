@@ -132,7 +132,7 @@ const StorefrontPage: React.FC = () => {
           headingLevel={1}
           icon={CalendarClock}
           title="No open order window"
-          description="Ordering opens on a schedule. You'll get an email when the next window opens."
+          description="The store takes orders during set order windows. Check back when the next one opens."
         >
           <Link to="/store/orders" className="btn-secondary btn-md">
             View my past orders
@@ -266,7 +266,7 @@ const StorefrontPage: React.FC = () => {
             <p className="text-theme-text-primary font-mono text-[19px] font-bold">{formatCurrency(totals.total)}</p>
           </div>
           <button type="button" className="btn-primary min-h-[48px] px-6 font-bold" onClick={goToCheckout}>
-            Review
+            Review order
           </button>
         </div>
       )}

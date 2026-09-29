@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router';
 import { markSignInPending, useAuthStore } from '../stores/authStore';
 
 /**
- * Landing page for the Google OAuth redirect.
+ * Landing page for the Google and Microsoft OAuth redirects.
  *
  * By the time the browser reaches this route, the backend callback has already
- * verified the Google identity and set the httpOnly auth cookies. This page just
+ * verified the provider identity and set the httpOnly auth cookies. This page just
  * needs to mark the local session flag and hydrate the user, then send them on.
  *
  * The backend redirects failures to /login?error=... instead of here, so any
@@ -74,9 +74,7 @@ export const OAuthCallbackPage: React.FC = () => {
         {failed ? (
           <>
             <h1 className="text-theme-text-primary mb-3 text-2xl font-bold">Sign-in could not be completed</h1>
-            <p className="text-theme-text-secondary mb-6">
-              We couldn&apos;t finish signing you in with Google. Please try again.
-            </p>
+            <p className="text-theme-text-secondary mb-6">We couldn&apos;t finish signing you in. Try again.</p>
             <button onClick={() => void navigate('/login', { replace: true })} className="btn-primary">
               Back to sign in
             </button>

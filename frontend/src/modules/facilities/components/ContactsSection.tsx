@@ -89,7 +89,7 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
 
   const handleSave = async () => {
     if (!formData.company_name.trim() && !formData.contact_name.trim()) {
-      toast.error('Company name or contact name is required');
+      toast.error('Enter a company name or a contact name');
       return;
     }
     setIsSaving(true);
@@ -223,7 +223,7 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
                 />
               </div>
               <div>
-                <label className={labelCls}>Alt Phone</label>
+                <label className={labelCls}>Alternate Phone</label>
                 <input
                   type="tel"
                   value={formData.alt_phone}
@@ -250,7 +250,7 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
                 />
               </div>
               <div>
-                <label className={labelCls}>Priority (1=highest)</label>
+                <label className={labelCls}>Priority (1 = highest)</label>
                 <input
                   type="number"
                   value={formData.priority}
@@ -269,7 +269,7 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
                 className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
               >
                 {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                {editingContact ? 'Update' : 'Add'}
+                {editingContact ? 'Save Changes' : 'Save Contact'}
               </button>
               <button
                 onClick={resetForm}
@@ -301,7 +301,7 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
                   <AlertTriangle className="text-theme-text-muted h-4 w-4" />
                   <div>
                     <p className="text-theme-text-primary text-sm font-medium">
-                      {contact.companyName || contact.contactName || 'Unknown'}
+                      {contact.companyName || contact.contactName || 'Unnamed contact'}
                     </p>
                     <div className="text-theme-text-muted flex items-center gap-3 text-xs">
                       <span>{enumLabel(contact.contactType)}</span>

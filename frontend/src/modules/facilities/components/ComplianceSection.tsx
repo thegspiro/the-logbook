@@ -169,7 +169,7 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
                 className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
               >
                 {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Create
+                Create Checklist
               </button>
               <button
                 onClick={() => setShowForm(false)}

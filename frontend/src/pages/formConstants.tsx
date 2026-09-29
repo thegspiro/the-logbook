@@ -1,6 +1,16 @@
 import React from 'react';
 import { AlertTriangle, Globe, ClipboardCheck, Plug, Clipboard, FileText, Send } from 'lucide-react';
 
+/**
+ * What a starter template's integration does with each response, named by the
+ * same module labels the Integrations dialog's Target Module list uses.
+ */
+export const INTEGRATION_HINT_LABELS: Record<string, string> = {
+  membership_interest: 'Sends responses to Membership',
+  equipment_assignment: 'Sends responses to Inventory',
+  event_request: 'Sends responses to Events',
+};
+
 /** Target fields each integration type expects the user to map. */
 export const INTEGRATION_TARGET_FIELDS: Record<string, { key: string; label: string; required: boolean }[]> = {
   membership_interest: [
@@ -140,7 +150,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
   {
     id: 'equipment-assignment',
     name: 'Equipment Assignment',
-    description: 'Quartermaster form for assigning equipment to members - integrates with inventory',
+    description: 'Quartermaster form for assigning equipment to members',
     category: 'Operations',
     fields: [
       { label: 'Assigned Member', field_type: 'member_lookup', required: true },
