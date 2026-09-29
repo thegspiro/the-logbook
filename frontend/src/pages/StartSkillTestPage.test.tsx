@@ -158,6 +158,23 @@ describe('StartSkillTestPage', () => {
       expect(await screen.findByPlaceholderText('Search templates...')).toBeInTheDocument();
       expect(templateChangeButton()).not.toBeInTheDocument();
     });
+    it('names its fields and says which test mode is chosen', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StartSkillTestPage />);
+
+      expect(await screen.findByRole('textbox', { name: 'Search candidates by name' })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'Notes' })).toBeInTheDocument();
+      const official = screen.getByRole('button', { name: /Official Evaluation/ });
+      const practice = screen.getByRole('button', { name: /Practice Run/ });
+
+      await user.click(official);
+      expect(official).toHaveAttribute('aria-pressed', 'true');
+      expect(practice).toHaveAttribute('aria-pressed', 'false');
+
+      await user.click(practice);
+      expect(practice).toHaveAttribute('aria-pressed', 'true');
+      expect(official).toHaveAttribute('aria-pressed', 'false');
+    });
   });
 
   describe('Candidate lookup', () => {

@@ -48,6 +48,12 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   );
 };
 
+// The API sends null when nothing has been tested, or nothing tested carried
+// points. Shown as 0% it read as a department failing every test, beside a
+// pass rate of 100%.
+const percentOrDash = (value: number | null | undefined): string =>
+  value === null || value === undefined ? '—' : `${Math.round(value)}%`;
+
 const SummaryCard: React.FC<{
   label: string;
   value: string | number;
@@ -268,14 +274,14 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           ) : (
             <SummaryCard
               label="Pass Rate"
-              value={`${Math.round(summary.pass_rate ?? 0)}%`}
+              value={percentOrDash(summary.pass_rate)}
               icon={<TrendingUp className="h-5 w-5 text-green-600" />}
               color="bg-green-100 dark:bg-green-900/30"
             />
           )}
           <SummaryCard
             label="Avg Score"
-            value={`${Math.round(summary.average_score ?? 0)}%`}
+            value={percentOrDash(summary.average_score)}
             icon={<BarChart3 className="h-5 w-5 text-orange-600" />}
             color="bg-orange-100 dark:bg-orange-900/30"
           />

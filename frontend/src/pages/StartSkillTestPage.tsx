@@ -336,6 +336,7 @@ export const StartSkillTestPage: React.FC = () => {
                 modeChosen.current = true;
                 setIsPractice(false);
               }}
+              aria-pressed={!isPractice}
               className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${
                 !isPractice
                   ? 'border-red-600 bg-red-50 shadow-md dark:bg-red-900/20'
@@ -360,6 +361,7 @@ export const StartSkillTestPage: React.FC = () => {
                 modeChosen.current = true;
                 setIsPractice(true);
               }}
+              aria-pressed={isPractice}
               className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${
                 isPractice
                   ? 'border-blue-600 bg-blue-50 shadow-md dark:bg-blue-900/20'
@@ -438,6 +440,7 @@ export const StartSkillTestPage: React.FC = () => {
                   autoCorrect="off"
                   spellCheck={false}
                   type="text"
+                  aria-label="Search candidates by name"
                   placeholder="Type a name to search..."
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
@@ -514,6 +517,7 @@ export const StartSkillTestPage: React.FC = () => {
                   <select
                     value={overrideRequirementId}
                     onChange={(e) => setOverrideRequirementId(e.target.value)}
+                    aria-label="Requirement this test counts toward"
                     className="form-input px-3 py-3"
                   >
                     <option value="">{defaultReq ? `Use template default (${defaultReq.name})` : 'Not linked'}</option>
@@ -539,6 +543,7 @@ export const StartSkillTestPage: React.FC = () => {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
+            aria-label="Notes"
             placeholder="Any notes for this test session..."
             className="form-input placeholder:text-theme-text-muted resize-none px-3 py-3"
           />

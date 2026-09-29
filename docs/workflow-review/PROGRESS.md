@@ -61,7 +61,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W25 | Courses and requirements                                              | training_officer          | `/training/courses`, `/training/requirements`      | ✅     |
 | W26 | A training program: build it, enroll a member, the member's progress  | training_officer → member | `/training/programs`                               | ✅     |
 | W27 | A course cohort: schedule classes, roster, attendance                 | training_officer          | `/training/cohorts`                                | ✅     |
-| W28 | Skills testing: build a sheet, run a test, the member sees the result | training_officer → member | `/training/skills-testing`                         | ⬜     |
+| W28 | Skills testing: build a sheet, run a test, the member sees the result | training_officer → member | `/training/skills-testing`                         | ✅     |
 | W29 | Compliance: configure requirements, read the matrix, print it         | training_officer          | `/training/compliance-config`, `/training/officer` | ⬜     |
 | W30 | Log a shift and file a shift report                                   | member                    | `/training/log-shift`                              | ⬜     |
 | W31 | The learning center orientation                                       | member                    | `/learning`                                        | ⬜     |
@@ -176,6 +176,19 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W28 — Skills testing: build a sheet, run a test, the member sees the result — 2026-09-29
+
+Driven as: `training_officer` at 1280×900 and `member` at 390×844, with
+`member2` refused. Held: double-clicked Create Template, Begin Evaluation and
+Submit each acted once; the scoring screen exposes PASS/FAIL state; the result
+page explains an unscored sheet and shows the department's time; the member
+sees their result, another member gets 404. Fixed: W28-1 (LOW — the template
+builder's fields had no accessible names), W28-2 (LOW — Start Skill Test's
+fields unnamed and its mode chosen only by colour), W28-3 (LOW — "Avg Score
+0%" and "Pass Rate 0%" for figures the API could not compute). No flags.
+Member-examined validation and delayed release not driven. Gate: typecheck,
+lint and the touched suites clean. Next: W29.
 
 ### W27 — A course cohort: schedule classes, roster, attendance — 2026-09-29
 
