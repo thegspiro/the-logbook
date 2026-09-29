@@ -81,7 +81,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 
 | #   | Activity                                                                     | Acts as                | Starts at                                                  | Status |
 | --- | ---------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------- | ------ |
-| W38 | Set up inventory: categories, then add items of each tracking kind           | quartermaster          | `/inventory/admin/setup`, `/inventory/admin/items`         | ⬜     |
+| W38 | Set up inventory: categories, then add items of each tracking kind           | quartermaster          | `/inventory/admin/setup`, `/inventory/admin/items`         | ✅     |
 | W39 | Issue equipment to a member, the member sees it, return it                   | quartermaster → member | `/inventory/admin/members`, `/inventory/my-equipment`      | ⬜     |
 | W40 | Pool items, checkouts, kits and variant groups                               | quartermaster          | `/inventory/admin/pool`, `/inventory/checkouts`            | ⬜     |
 | W41 | A member's request, return, write-off and reorder, and the approvals         | member → quartermaster | `/inventory/admin/requests`, `/inventory/admin/returns`    | ⬜     |
@@ -183,6 +183,18 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W38 — Set up inventory: categories, then add items of each tracking kind — 2026-09-29
+
+Driven as: `quartermaster` at 1280×900, with `member` refused, through the
+setup wizard. Held: storage, four categories, an individual item and a pool
+item were each created once despite double-clicks; the item form opened with
+category and storage filled in; members got 403 and Access Denied. Fixed:
+W38-1 (LOW — the first step offered the quartermaster an Add room form that
+`POST /locations` refuses without a location grant; the permission question is
+flagged), W38-2 (LOW — the item form didn't mark the serial and inspection
+interval a category requires). Open: W38-3, W38-4 (NIT). Gate: typecheck, lint
+and the inventory suites clean. Next: W39.
 
 ### W37 — Scheduling reports and the printed check-in sheet and shift report — 2026-09-29
 

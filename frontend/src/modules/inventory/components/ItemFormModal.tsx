@@ -252,6 +252,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   }, [editItem, isOpen, defaultCategoryId, defaultLocationId, defaultStorageAreaId, defaultTrackingType]);
 
   const cat = useMemo(() => categories.find((c) => c.id === f.category_id), [categories, f.category_id]);
+  // The server refuses an item whose category requires these and lacks them
+  // (`_validate_category_requirements`), so say so on the field rather than
+  // in a 400 after Create.
+  const serialRequired = cat?.requires_serial_number === true;
+  const intervalRequired = cat?.requires_maintenance === true;
   const itemType = getItemTypeFromCategory(cat);
   const tf = ITEM_TYPE_FIELDS[itemType] ?? [];
   const areas = useMemo(
@@ -541,13 +546,14 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               {has('serial_number') && (
                 <div>
                   <label className={lbl} htmlFor="item-serial_number">
-                    Serial #
+                    Serial #{serialRequired ? ' *' : ''}
                   </label>
                   <input
                     id="item-serial_number"
                     className={inp}
                     value={f.serial_number}
                     onChange={(e) => up('serial_number', e.target.value)}
+                    required={serialRequired}
                   />
                 </div>
               )}
@@ -1003,12 +1009,13 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className={lbl} htmlFor="item-inspection_interval_days">
-                  Inspection Interval (days)
+                  Inspection Interval (days){intervalRequired ? ' *' : ''}
                 </label>
                 <input
                   id="item-inspection_interval_days"
                   type="number"
-                  min="0"
+                  min={intervalRequired ? '1' : '0'}
+                  required={intervalRequired}
                   className={inp}
                   value={f.inspection_interval_days}
                   onChange={(e) => up('inspection_interval_days', e.target.value)}
