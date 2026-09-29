@@ -792,7 +792,11 @@ const PoolItemsPage: React.FC = () => {
             <button
               type="button"
               className="btn-info btn-md flex items-center justify-center gap-1 disabled:opacity-50"
-              disabled={!issueUserId || issueQtyError !== null || issueSubmitting}
+              // The server refuses an over-allowance issue unless it is
+              // overridden, so wait for the override rather than send it.
+              disabled={
+                !issueUserId || issueQtyError !== null || (issueExceedsAllowance && !issueOverride) || issueSubmitting
+              }
               onClick={() => void handleIssue()}
             >
               {issueSubmitting && <Loader2 size={14} className="animate-spin" />}

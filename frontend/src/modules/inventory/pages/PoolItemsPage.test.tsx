@@ -184,6 +184,24 @@ describe('PoolItemsPage', () => {
     expect(mockIssueFromPool).not.toHaveBeenCalled();
   });
 
+  // The server refuses an over-allowance issue without the override, and the
+  // dialog already said so, yet Issue stayed live and sent it to be refused.
+  it('waits for the override before issuing over the allowance', async () => {
+    mockGetItems.mockResolvedValue({ items: [poolItem()], total: 1 });
+    const user = userEvent.setup();
+    renderWithRouter(<PoolItemsPage />);
+    await screen.findByText('Dept Polo');
+    await openIssueFor(user);
+
+    const qty = screen.getByRole('spinbutton', { name: 'Quantity (max 10)' });
+    await user.clear(qty);
+    await user.type(qty, '5');
+
+    expect(lastButton('Issue')).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: 'Override allowance' }));
+    expect(lastButton('Issue')).toBeEnabled();
+  });
+
   it('says plainly when a category has no allowance', async () => {
     mockGetItems.mockResolvedValue({ items: [poolItem()], total: 1 });
     mockCheckAllowance.mockReset();

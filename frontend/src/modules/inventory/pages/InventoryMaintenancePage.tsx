@@ -25,7 +25,7 @@ import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
-import { formatDate, formatNumber } from '../../../utils/dateFormatting';
+import { formatDate, formatNumber, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { Breadcrumbs } from '../../../components/ux';
 
 const MAINTENANCE_TYPES = [
@@ -557,14 +557,16 @@ const InventoryMaintenancePage: React.FC = () => {
                 <button
                   key={value}
                   type="button"
+                  aria-pressed={formData.operation === value}
                   className={formData.operation === value ? 'btn-info btn-sm' : 'btn-secondary btn-sm'}
                   onClick={() =>
                     setFormData((prev) => ({
                       ...INITIAL_FORM,
                       operation: value,
                       condition_after: prev.condition_after,
-                      completed_date:
-                        value === 'complete' || value === 'inspection' ? new Date().toISOString().slice(0, 10) : '',
+                      // Today in the department's zone: the UTC date is already
+                      // tomorrow from 7 PM Central, which dated the work a day late.
+                      completed_date: value === 'complete' || value === 'inspection' ? getTodayLocalDate(tz) : '',
                     }))
                   }
                 >
@@ -590,8 +592,11 @@ const InventoryMaintenancePage: React.FC = () => {
           )}
           {formData.operation === 'schedule' && (
             <div>
-              <label className={labelCls}>Maintenance Type *</label>
+              <label htmlFor="maintenance-type" className={labelCls}>
+                Maintenance Type *
+              </label>
               <select
+                id="maintenance-type"
                 value={formData.maintenance_type}
                 onChange={(e) => setField('maintenance_type', e.target.value)}
                 className={inputCls}
@@ -605,10 +610,11 @@ const InventoryMaintenancePage: React.FC = () => {
             </div>
           )}
           <div>
-            <label className={labelCls}>
+            <label htmlFor="maintenance-description" className={labelCls}>
               {formData.operation === 'complete' ? 'Performed Work' : 'Task Description'} *
             </label>
             <textarea
+              id="maintenance-description"
               value={formData.description}
               onChange={(e) => setField('description', e.target.value)}
               rows={3}
@@ -623,8 +629,11 @@ const InventoryMaintenancePage: React.FC = () => {
 
           {(formData.operation === 'complete' || formData.operation === 'inspection') && (
             <div>
-              <label className={labelCls}>Completion Date *</label>
+              <label htmlFor="maintenance-completed-date" className={labelCls}>
+                Completion Date *
+              </label>
               <input
+                id="maintenance-completed-date"
                 type="date"
                 value={formData.completed_date}
                 onChange={(e) => setField('completed_date', e.target.value)}
@@ -653,8 +662,11 @@ const InventoryMaintenancePage: React.FC = () => {
           {formData.operation === 'complete' && (
             <>
               <div>
-                <label className={labelCls}>Technician / Vendor *</label>
+                <label htmlFor="maintenance-vendor" className={labelCls}>
+                  Technician / Vendor *
+                </label>
                 <input
+                  id="maintenance-vendor"
                   type="text"
                   value={formData.vendor_name}
                   onChange={(e) => setField('vendor_name', e.target.value)}
@@ -664,8 +676,11 @@ const InventoryMaintenancePage: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Condition After Work *</label>
+                  <label htmlFor="maintenance-condition-after" className={labelCls}>
+                    Condition After Work *
+                  </label>
                   <select
+                    id="maintenance-condition-after"
                     value={formData.condition_after}
                     onChange={(e) => setField('condition_after', e.target.value)}
                     className={inputCls}
@@ -679,8 +694,11 @@ const InventoryMaintenancePage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Cost ($)</label>
+                  <label htmlFor="maintenance-cost" className={labelCls}>
+                    Cost ($)
+                  </label>
                   <input
+                    id="maintenance-cost"
                     type="number"
                     value={formData.cost}
                     onChange={(e) => setField('cost', e.target.value)}
@@ -691,8 +709,11 @@ const InventoryMaintenancePage: React.FC = () => {
                 </div>
               </div>
               <div>
-                <label className={labelCls}>Next Due Date</label>
+                <label htmlFor="maintenance-next-due" className={labelCls}>
+                  Next Due Date
+                </label>
                 <input
+                  id="maintenance-next-due"
                   type="date"
                   value={formData.next_due_date}
                   onChange={(e) => setField('next_due_date', e.target.value)}
@@ -705,11 +726,18 @@ const InventoryMaintenancePage: React.FC = () => {
             className="text-theme-text-primary rounded-md border border-orange-500/30 bg-orange-500/10 p-3 text-sm"
             role="status"
           >
+            {/* A passed inspection leaves the status where it was: an item in
+                service stays in service. The old wording, shared with Complete
+                work, told the officer an assigned coat would stay out of service. */}
             {formData.operation === 'repair' || (formData.operation === 'inspection' && formData.passed === 'fail')
               ? 'This will mark the item out of service.'
-              : formData.operation === 'complete' || (formData.operation === 'inspection' && formData.passed === 'pass')
-                ? 'The item will remain out of service until you deliberately return it to service.'
-                : 'This will schedule work without changing the item status.'}
+              : formData.operation === 'inspection' && formData.passed === 'pass'
+                ? "This records the inspection without changing the item's status."
+                : formData.operation === 'inspection'
+                  ? 'Choose pass or fail. A failed inspection marks the item out of service.'
+                  : formData.operation === 'complete'
+                    ? 'The item will remain out of service until you deliberately return it to service.'
+                    : 'This will schedule work without changing the item status.'}
           </div>
         </div>
       </Modal>

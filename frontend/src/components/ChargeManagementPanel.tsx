@@ -67,6 +67,11 @@ const ChargeManagementPanel: React.FC = () => {
     }
   };
 
+  // A charge is final once applied — the row loses its Charge and Waive
+  // actions — so a blank or $0 amount recorded "charged $0.00" with no way
+  // back. Waive is the action for billing nothing.
+  const chargeAmountMissing = actionModal.action === 'charged' && !(parseFloat(chargeAmount) > 0);
+
   const openChargeModal = (item: IssuanceChargeListItem) => {
     setActionModal({ open: true, item, action: 'charged' });
     const defaultAmount = item.unit_cost_at_issuance
@@ -270,6 +275,7 @@ const ChargeManagementPanel: React.FC = () => {
           className="fixed inset-0 z-50 overflow-y-auto"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="charge-action-title"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setActionModal({ open: false, item: null, action: '' });
           }}
@@ -287,7 +293,7 @@ const ChargeManagementPanel: React.FC = () => {
                   ) : (
                     <CheckCircle className="h-5 w-5 text-green-500" />
                   )}
-                  <h3 className="text-theme-text-primary text-lg font-medium">
+                  <h3 id="charge-action-title" className="text-theme-text-primary text-lg font-medium">
                     {actionModal.action === 'charged' ? 'Apply Charge' : 'Waive Charge'}
                   </h3>
                 </div>
@@ -320,7 +326,11 @@ const ChargeManagementPanel: React.FC = () => {
                         onChange={(e) => setChargeAmount(e.target.value)}
                         className="form-input"
                         placeholder="0.00"
+                        aria-describedby="charge-amount-hint"
                       />
+                      <p id="charge-amount-hint" className="text-theme-text-muted mt-1 text-xs">
+                        Enter an amount above $0. To bill nothing, waive the charge instead.
+                      </p>
                       {actionModal.item.unit_cost_at_issuance && (
                         <p className="text-theme-text-muted mt-1 text-xs">
                           Replacement cost at issuance:{' '}
@@ -349,7 +359,7 @@ const ChargeManagementPanel: React.FC = () => {
                   onClick={() => {
                     void handleAction();
                   }}
-                  disabled={submitting}
+                  disabled={submitting || chargeAmountMissing}
                   className={`rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50 ${
                     actionModal.action === 'charged' ? 'bg-red-800 hover:bg-red-900' : 'bg-gray-600 hover:bg-gray-700'
                   }`}

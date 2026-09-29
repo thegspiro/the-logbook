@@ -85,7 +85,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W39 | Issue equipment to a member, the member sees it, return it                   | quartermaster → member | `/inventory/admin/members`, `/inventory/my-equipment`      | ✅     |
 | W40 | Pool items, checkouts, kits and variant groups                               | quartermaster          | `/inventory/admin/pool`, `/inventory/checkouts`            | ✅     |
 | W41 | A member's request, return, write-off and reorder, and the approvals         | member → quartermaster | `/inventory/admin/requests`, `/inventory/admin/returns`    | ✅     |
-| W42 | Maintenance records, vendors, charges and issuance allowances                | quartermaster          | `/inventory/admin/maintenance`, `/inventory/admin/charges` | ⬜     |
+| W42 | Maintenance records, vendors, charges and issuance allowances                | quartermaster          | `/inventory/admin/maintenance`, `/inventory/admin/charges` | ✅     |
 | W43 | Storage areas, barcode labels and CSV import                                 | quartermaster          | `/inventory/storage-areas`, `/inventory/import`            | ⬜     |
 | W44 | NFC: tag in bulk, put away, shelf audit, items not seen                      | quartermaster          | `/inventory/admin/nfc/*`, `/inventory/shelf-audit`         | ⬜     |
 | W45 | The self-service kiosk                                                       | member                 | `/inventory/kiosk`                                         | ⬜     |
@@ -183,6 +183,22 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W42 — Maintenance records, vendors, charges and issuance allowances — 2026-09-29
+
+Driven as: `quartermaster` at 1280×900, with `member` refused at 390×844.
+Held: an inspection set the coat's next due date from its category interval
+and left it assigned; a vendor was created once and a cleared phone saved as a
+clear; an allowance was created once and applied in the pool Issue dialog; four
+double-clicks acted once; the member got 403 on every write and Access Denied
+on all four pages. Fixed: W42-1 (LOW — an inspection logged after 7 PM Central
+was dated tomorrow), W42-2 (LOW — the maintenance note said a passed
+inspection keeps an in-service item out of service), W42-3 (LOW — the action
+choice and fields had no state or names), W42-4 (LOW — a charge could be
+applied at $0 and then never corrected; the dialog was unnamed), W42-5 (LOW —
+Issue stayed live for an over-allowance quantity the server refuses). Open:
+W42-6, W42-7 (NIT). Gate: typecheck, lint and the inventory suites clean.
+Next: W43.
 
 ### W41 — A member's request, return, write-off and reorder, and the approvals — 2026-09-29
 
