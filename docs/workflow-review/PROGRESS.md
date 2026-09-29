@@ -75,7 +75,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W34 | Check in to a shift by apparatus QR, and close the shift out       | member → scheduling_officer | `/scheduling/checkin`, `/scheduling/admin/closeout`         | ✅     |
 | W35 | Platoons and the position qualification roster                     | scheduling_officer          | `/scheduling/admin/platoons`, `/scheduling/admin/positions` | ✅     |
 | W36 | Every scheduling settings section                                  | scheduling_officer          | `/scheduling/admin/settings/*`                              | ✅     |
-| W37 | Scheduling reports and the printed check-in sheet and shift report | scheduling_officer          | `/scheduling/admin/reports`                                 | ⬜     |
+| W37 | Scheduling reports and the printed check-in sheet and shift report | scheduling_officer          | `/scheduling/admin/reports`                                 | ✅     |
 
 ## Tier 6 — Inventory and equipment
 
@@ -168,6 +168,10 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Any run touching the app shell, or an accessibility activity** — every
   page carries two "Skip to main content" links, one in `index.html` and one
   in `AppLayout` (W20).
+- **Any run touching the app shell, or a print page** — the app footer ("©
+  … Powered by The Logbook · End-to-end encrypted · Self-hosted ·
+  HIPAA-aware") prints under the apparatus check-in sheet and the shift
+  report (W37-3).
 - **W48** — the basic apparatus form (`/apparatus-basic` → Add Apparatus)
   names none of its fields: unit number, name, type, crew size and every
   position select are placeholders or nothing (W30).
@@ -179,6 +183,20 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W37 — Scheduling reports and the printed check-in sheet and shift report — 2026-09-29
+
+Driven as: `scheduling_officer` at 1280×900 and under print media, with
+`member` and `member2` refused. Held: Member Hours reconciles with W34's
+attendance (12 h worked, 24 h scheduled); Coverage, Availability and Call
+Volume read correctly; the check-in sheet prints the rig, a QR and its link;
+the shift report prints with a signature line; members got 403 on every report
+and another member 404 on a report. Fixed: W37-1 (LOW — a requirement nobody
+is held to read "0% · 0/0 compliant"). Flagged: W37-2 (MED — Shift Compliance
+grades training hours requirements from shift attendance alone, so Hazmat reads
+compliant here and 4 of 6 on the training side). Open: W37-3 (NIT — the app
+footer prints on both print pages; added as a lead). Gate: typecheck, lint and
+the scheduling suites clean. Next: W38.
 
 ### W36 — Every scheduling settings section — 2026-09-29
 
