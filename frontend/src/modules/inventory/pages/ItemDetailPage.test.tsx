@@ -54,13 +54,16 @@ vi.mock('../components/ItemFormModal', () => ({
     ) : null,
 }));
 vi.mock('../../../components/MemberPickerModal', () => ({ MemberPickerModal: () => null }));
+// Stubbed: it imports its own inventoryService rather than the mocked one
+// above, so rendered for real it sends a live request whose failure toasts
+// after its test has ended, into whichever test runs next. It has its own tests.
+vi.mock('../components/StockLotsPanel', () => ({ default: () => <div>stock-lots-panel</div> }));
 
 vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
 import toast from 'react-hot-toast';
-import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import ItemDetailPage from './ItemDetailPage';
 import { formatDate } from '../../../utils/dateFormatting';
 
@@ -81,13 +84,11 @@ const makeItem = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
 
 const renderPage = (entry = '/inventory/items/it-1') =>
   render(
-    <ConfirmProvider>
-      <MemoryRouter initialEntries={[entry]}>
-        <Routes>
-          <Route path="/inventory/items/:id" element={<ItemDetailPage />} />
-        </Routes>
-      </MemoryRouter>
-    </ConfirmProvider>
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route path="/inventory/items/:id" element={<ItemDetailPage />} />
+      </Routes>
+    </MemoryRouter>
   );
 
 describe('ItemDetailPage', () => {
