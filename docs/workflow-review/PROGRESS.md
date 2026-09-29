@@ -62,7 +62,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W26 | A training program: build it, enroll a member, the member's progress  | training_officer → member | `/training/programs`                               | ✅     |
 | W27 | A course cohort: schedule classes, roster, attendance                 | training_officer          | `/training/cohorts`                                | ✅     |
 | W28 | Skills testing: build a sheet, run a test, the member sees the result | training_officer → member | `/training/skills-testing`                         | ✅     |
-| W29 | Compliance: configure requirements, read the matrix, print it         | training_officer          | `/training/compliance-config`, `/training/officer` | ⬜     |
+| W29 | Compliance: configure requirements, read the matrix, print it         | training_officer          | `/training/compliance-config`, `/training/officer` | ✅     |
 | W30 | Log a shift and file a shift report                                   | member                    | `/training/log-shift`                              | ⬜     |
 | W31 | The learning center orientation                                       | member                    | `/learning`                                        | ⬜     |
 
@@ -176,6 +176,20 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W29 — Compliance: configure requirements, read the matrix, print it — 2026-09-29
+
+Driven as: `training_officer` at 1280×900 and in print media, with `member`
+refused. Held: a threshold saved and survived reload; an at-risk threshold
+above the compliant one was refused; unread settings are labelled "not in
+effect yet"; the print page drops the app chrome; `member` was refused the
+write, the matrix and both pages. Fixed: W29-1 (MED — the printed matrix
+re-derived its summary from completion instead of standing, printed "not
+started" as "does not apply", and cut requirement names to 12 characters),
+W29-2 (LOW — a refused save gave no reason), W29-3 (LOW — 17 configuration
+fields unnamed, tab state colour-only), W29-4 (LOW — a requirement nobody is
+held to read "0/0 — 0%"). No flags. Gate: typecheck, lint and the touched
+suites clean. Next: W30.
 
 ### W28 — Skills testing: build a sheet, run a test, the member sees the result — 2026-09-29
 
