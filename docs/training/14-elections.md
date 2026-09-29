@@ -875,18 +875,17 @@ report is your complete dispute-defense package.
 
 **Required Permission:** `elections.manage`
 
-Navigate to **Elections > Settings** to configure organization-wide defaults:
+Navigate to **Elections > Settings** to configure proxy voting, optional
+features, and test ballots:
 
-| Setting                     | Default         | Description                               |
-| --------------------------- | --------------- | ----------------------------------------- |
-| Default Voting Method       | Simple Majority | Applied to new elections                  |
-| Default Victory Condition   | Majority        | Applied to new elections                  |
-| Anonymous Voting            | On              | Whether votes are anonymous by default    |
-| Allow Write-Ins             | Off             | Whether write-ins are allowed by default  |
-| Results Visible Immediately | Off             | Whether results show during voting        |
-| Enable Runoffs              | On              | Auto-create runoffs when no winner        |
-| Proxy Voting Enabled        | Off             | Whether proxy voting is available         |
-| Max Proxies Per Person      | 1               | How many members one person can represent |
+| Setting                | Default | Description                               |
+| ---------------------- | ------- | ----------------------------------------- |
+| Proxy Voting Enabled   | Off     | Whether proxy voting is available         |
+| Max Proxies Per Person | 1       | How many members one person can represent |
+
+There are no organization-wide election defaults: voting method, victory
+condition, quorum, anonymity and write-ins are chosen on each election's own
+form when it is created.
 
 ### Feature Toggles
 

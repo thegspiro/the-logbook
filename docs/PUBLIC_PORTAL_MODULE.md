@@ -28,8 +28,11 @@ Allows administrators to:
 - Configure what data is exposed (whitelist approach)
 - Set rate limits per API key
 - Monitor API usage and traffic
-- Configure allowed origins (CORS)
-- Set cache TTL for different data types
+
+The config's `allowed_origins` and `cache_ttl_seconds` columns are stored but
+not read by anything, so the admin screen offers no control for them. Browser
+access to the API is governed by the server-wide `ALLOWED_ORIGINS` setting,
+and the public API does not cache responses.
 
 #### 2. Public Portal API (Backend)
 
@@ -183,9 +186,9 @@ GET /api/v1/public-portal/usage-stats
 - id: UUID (PK)
 - organization_id: UUID (FK)
 - enabled: BOOLEAN
-- allowed_origins: JSON (list of allowed CORS origins)
+- allowed_origins: JSON (stored; not read — see above)
 - default_rate_limit: INTEGER (requests per hour)
-- cache_ttl_seconds: INTEGER
+- cache_ttl_seconds: INTEGER (stored; not read — see above)
 - settings: JSON (additional settings)
 - created_at: TIMESTAMP
 - updated_at: TIMESTAMP

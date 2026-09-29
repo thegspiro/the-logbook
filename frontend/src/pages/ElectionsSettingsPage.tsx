@@ -1,28 +1,33 @@
 /**
  * Elections Settings Page
  *
- * Centralised configuration for election defaults, voter eligibility,
- * test ballots, ballot preview, and security posture.
+ * Centralised configuration for proxy voting, optional election features,
+ * test ballots, and security posture.
  * Requires `elections.manage` permission.
+ *
+ * There is deliberately no "Defaults" section. `election_defaults` (voting
+ * method, victory condition, quorum, anonymity, write-ins) is stored by
+ * PATCH /elections/settings, but neither the create-election form nor the
+ * backend create path reads it, so a control for it would claim an effect it
+ * does not have (CLAUDE.md pitfall #19). Every write sends the settings object
+ * as loaded, so the stored values still round-trip unchanged.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Loader2, Settings as SettingsIcon, UserCheck, ToggleRight, Send, ShieldCheck } from 'lucide-react';
+import { Loader2, UserCheck, ToggleRight, Send, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { ElectionSettings, ElectionListItem } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
-import { VotingMethod as VM, VictoryCondition as VC } from '../constants/enums';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
 import { SettingsToggle as Toggle } from '../components/settings/SettingsToggle';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 
-type SectionKey = 'defaults' | 'proxy' | 'features' | 'test' | 'security';
+type SectionKey = 'proxy' | 'features' | 'test' | 'security';
 
 const SECTIONS: SettingsSection<SectionKey>[] = [
-  { key: 'defaults', label: 'Defaults', icon: SettingsIcon, description: 'Saved defaults (not yet applied)' },
   { key: 'proxy', label: 'Proxy Voting', icon: UserCheck, description: 'Voting on behalf of an absent member' },
   { key: 'features', label: 'Features', icon: ToggleRight, description: 'Optional election workflows' },
   { key: 'test', label: 'Test Ballot', icon: Send, description: 'Preview the voting experience' },
@@ -31,26 +36,6 @@ const SECTIONS: SettingsSection<SectionKey>[] = [
 
 const isSectionKey = (value: string | null): value is SectionKey =>
   value !== null && SECTIONS.some((section) => section.key === value);
-
-const VOTING_METHOD_OPTIONS = [
-  { value: VM.SIMPLE_MAJORITY, label: 'Simple Majority' },
-  { value: VM.RANKED_CHOICE, label: 'Ranked Choice (IRV)' },
-  { value: VM.APPROVAL, label: 'Approval Voting' },
-  { value: VM.SUPERMAJORITY, label: 'Supermajority' },
-] as const;
-
-const VICTORY_CONDITION_OPTIONS = [
-  { value: VC.MOST_VOTES, label: 'Most Votes (Plurality)' },
-  { value: VC.MAJORITY, label: 'Majority (>50%)' },
-  { value: VC.SUPERMAJORITY, label: 'Supermajority' },
-  { value: VC.THRESHOLD, label: 'Threshold' },
-] as const;
-
-const QUORUM_TYPE_OPTIONS = [
-  { value: 'none', label: 'No Quorum' },
-  { value: 'percentage', label: 'Percentage of Eligible Voters' },
-  { value: 'count', label: 'Minimum Voter Count' },
-] as const;
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
@@ -138,10 +123,10 @@ export const ElectionsSettingsPage: React.FC = () => {
 
   const activeSection: SectionKey = isSectionKey(searchParams.get('tab'))
     ? (searchParams.get('tab') as SectionKey)
-    : 'defaults';
+    : 'proxy';
 
   const switchSection = (key: SectionKey) => {
-    setSearchParams(key === 'defaults' ? {} : { tab: key }, { replace: true });
+    setSearchParams(key === 'proxy' ? {} : { tab: key }, { replace: true });
   };
 
   const renderContent = () => {
@@ -319,147 +304,6 @@ export const ElectionsSettingsPage: React.FC = () => {
             </div>
           </div>
         );
-
-      case 'defaults':
-        return (
-          <div>
-            <SettingsPanelHead
-              title="Default Election Settings"
-              description="Saved for your department but not yet applied: the create-election form does not read these values, so set each election's options when you create it."
-            />
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label className={labelClass} htmlFor="default-voting-method">
-                  Default Voting Method
-                </label>
-                <select
-                  id="default-voting-method"
-                  className={selectClass}
-                  value={settings.default_voting_method ?? VM.SIMPLE_MAJORITY}
-                  onChange={(e) =>
-                    updateField('default_voting_method', e.target.value as ElectionSettings['default_voting_method'])
-                  }
-                >
-                  {VOTING_METHOD_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className={labelClass} htmlFor="default-victory-condition">
-                  Default Victory Condition
-                </label>
-                <select
-                  id="default-victory-condition"
-                  className={selectClass}
-                  value={settings.default_victory_condition ?? VC.MOST_VOTES}
-                  onChange={(e) =>
-                    updateField(
-                      'default_victory_condition',
-                      e.target.value as ElectionSettings['default_victory_condition']
-                    )
-                  }
-                >
-                  {VICTORY_CONDITION_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {(settings.default_victory_condition === VC.SUPERMAJORITY ||
-                settings.default_victory_condition === VC.THRESHOLD) && (
-                <div>
-                  <label className={labelClass}>Default Victory Percentage</label>
-                  <input
-                    type="number"
-                    className={inputClass}
-                    min={1}
-                    max={100}
-                    value={settings.default_victory_percentage ?? 67}
-                    onChange={(e) =>
-                      updateField('default_victory_percentage', parseInt(e.target.value, 10) || undefined, {
-                        immediate: false,
-                      })
-                    }
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className={labelClass} htmlFor="default-quorum-type">
-                  Default Quorum Type
-                </label>
-                <select
-                  id="default-quorum-type"
-                  className={selectClass}
-                  value={settings.default_quorum_type ?? 'none'}
-                  onChange={(e) => updateField('default_quorum_type', e.target.value)}
-                >
-                  {QUORUM_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {settings.default_quorum_type && settings.default_quorum_type !== 'none' && (
-                <div>
-                  <label className={labelClass}>
-                    {settings.default_quorum_type === 'percentage' ? 'Quorum Percentage' : 'Minimum Voters'}
-                  </label>
-                  <input
-                    type="number"
-                    className={inputClass}
-                    min={1}
-                    max={settings.default_quorum_type === 'percentage' ? 100 : 9999}
-                    value={settings.default_quorum_value ?? ''}
-                    onChange={(e) =>
-                      updateField('default_quorum_value', parseInt(e.target.value, 10) || undefined, {
-                        immediate: false,
-                      })
-                    }
-                  />
-                </div>
-              )}
-
-              {/* The switch carries its name in the markup, not only in
-                  `aria-label`: SettingsToggle renders that prop as the
-                  accessible name and nothing else, so passing it without
-                  visible text beside the control leaves a sighted member
-                  looking at a bare toggle while a screen reader announces it
-                  correctly. Same shape as EmailSettingsSection. */}
-              <div className="border-theme-surface-border flex items-center justify-between border-b py-3">
-                <div>
-                  <p className="text-theme-text-primary text-sm font-medium">Anonymous voting by default</p>
-                  <p className="text-theme-text-muted text-xs">Hide who cast each ballot.</p>
-                </div>
-                <Toggle
-                  label="Anonymous voting by default"
-                  checked={settings.default_anonymous_voting ?? true}
-                  onChange={(next) => updateField('default_anonymous_voting', next)}
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-3">
-                <div>
-                  <p className="text-theme-text-primary text-sm font-medium">Allow write-in candidates by default</p>
-                  <p className="text-theme-text-muted text-xs">Let voters write in a name that is not on the slate.</p>
-                </div>
-                <Toggle
-                  label="Allow write-in candidates by default"
-                  checked={settings.default_allow_write_ins ?? false}
-                  onChange={(next) => updateField('default_allow_write_ins', next)}
-                />
-              </div>
-            </div>
-          </div>
-        );
     }
   };
 
@@ -470,7 +314,7 @@ export const ElectionsSettingsPage: React.FC = () => {
       onSectionChange={switchSection}
       navLabel="Election settings sections"
       title="Election Settings"
-      subtitle="Defaults, proxy voting, and ballot integrity"
+      subtitle="Proxy voting, election features, and ballot integrity"
       saveState={saveState}
       onRetrySave={retry}
       onBack={() => void navigate('/elections')}
