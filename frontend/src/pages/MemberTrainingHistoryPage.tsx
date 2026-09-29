@@ -211,7 +211,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       setUser(userData);
       setTrainings(records);
     } catch (_err) {
-      setError('Unable to load training history. Please check your connection and refresh the page.');
+      setError('Unable to load training history. Check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -382,7 +382,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
               >
                 <Download className="h-4 w-4" />
-                CSV
+                Export CSV
               </button>
               <button
                 onClick={() => void handleExport('pdf')}
@@ -390,7 +390,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
               >
                 <Download className="h-4 w-4" />
-                PDF
+                Export PDF
               </button>
               <button
                 onClick={() =>
@@ -442,7 +442,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               aria-label="Filter training records by status"
               className="form-input"
             >
-              <option value="all">All Status</option>
+              <option value="all">All Statuses</option>
               <option value="completed">Completed</option>
               <option value="scheduled">Scheduled</option>
               <option value="in_progress">In Progress</option>

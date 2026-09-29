@@ -85,7 +85,7 @@ describe('MemberScanPage', () => {
     renderWithRouter(<MemberScanPage />);
 
     expect(screen.getByText('How to use')).toBeInTheDocument();
-    expect(screen.getByText(/Point the camera at a member/)).toBeInTheDocument();
+    expect(screen.getByText(/Point the camera at the QR code or barcode on the member/)).toBeInTheDocument();
   });
 
   it('should display the description text', () => {

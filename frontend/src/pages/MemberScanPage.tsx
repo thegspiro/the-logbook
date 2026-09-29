@@ -77,7 +77,7 @@ export const MemberScanPage: React.FC = () => {
           handledRef.current = false;
         }
       } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Lookup failed'));
+        setError(getErrorMessage(err, 'Unable to look up this member. Try scanning again.'));
         handledRef.current = false;
       } finally {
         setLookingUp(false);
@@ -204,8 +204,8 @@ export const MemberScanPage: React.FC = () => {
         <h3 className="text-theme-text-primary mb-2 text-sm font-semibold">How to use</h3>
         <ol className="text-theme-text-secondary list-inside list-decimal space-y-1 text-sm">
           <li>Tap &ldquo;Start Scanning&rdquo; and allow camera access</li>
-          <li>Point the camera at a member&apos;s QR code or barcode on their ID card</li>
-          <li>The member&apos;s profile will open automatically once recognized</li>
+          <li>Point the camera at the QR code or barcode on the member&apos;s ID card</li>
+          <li>Their profile opens as soon as the code is recognized</li>
         </ol>
       </div>
     </div>
