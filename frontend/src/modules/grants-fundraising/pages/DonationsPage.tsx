@@ -62,7 +62,7 @@ const DonationsPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Donations</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">Track and manage all donation records</p>
+          <p className="text-theme-text-secondary mt-1 text-sm">View donation records and totals</p>
         </div>
         {/* "Record Donation" pointed at /grants/donations/new, which has no
             route: the router's catch-all sends unknown paths to "/", so the
@@ -79,7 +79,9 @@ const DonationsPage: React.FC = () => {
             <DollarSign className="h-5 w-5 text-green-600" />
           </div>
           <div>
-            <p className="text-theme-text-secondary text-sm">Total ({filtered.length} donations)</p>
+            <p className="text-theme-text-secondary text-sm">
+              Total ({filtered.length} {filtered.length === 1 ? 'donation' : 'donations'})
+            </p>
             <p className="text-theme-text-primary text-xl font-bold">{formatCurrency(totalAmount)}</p>
           </div>
         </div>
@@ -94,7 +96,7 @@ const DonationsPage: React.FC = () => {
             autoCorrect="off"
             spellCheck={false}
             type="text"
-            aria-label="Search by donor name or email..."
+            aria-label="Search donations by donor name or email"
             placeholder="Search by donor name or email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -123,7 +125,9 @@ const DonationsPage: React.FC = () => {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
             <Heart className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
-            <p className="text-theme-text-secondary">No donations found</p>
+            <p className="text-theme-text-secondary">
+              {search || methodFilter ? 'No donations match your search or filter.' : 'No donations recorded yet.'}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
