@@ -580,6 +580,7 @@ class TestAPendingConfirmationDoesNotSweep:
             override_check_in_at=None,
             override_check_out_at=None,
             override_duration_minutes=None,
+            attendance_duration_minutes=None,
         )
         event = SimpleNamespace(
             id="event-1",

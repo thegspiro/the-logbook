@@ -29,13 +29,37 @@ from app.schemas.training_session import (
     RecurringTrainingSessionCreate,
     TrainingApprovalRequest,
     TrainingApprovalResponse,
+    TrainingSessionAttach,
     TrainingSessionCreate,
     TrainingSessionLinkageUpdate,
     TrainingSessionResponse,
 )
-from app.services.training_session_service import TrainingSessionService
+from app.services.event_service import ATTENDANCE_LOCKED_PREFIX
+from app.services.training_session_service import (
+    TRAINING_DETAILS_EXIST,
+    TrainingSessionService,
+)
 
 router = APIRouter()
+
+
+def _session_error(error: str) -> HTTPException:
+    """Map a session service error onto the right HTTP status.
+
+    A closed event (the attendance lock) and a second set of training details
+    are conflicts with the event's state, not bad requests; the lock's
+    sentinel prefix is stripped so the client shows only the sentence.
+    """
+    if error.startswith(ATTENDANCE_LOCKED_PREFIX):
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error[len(ATTENDANCE_LOCKED_PREFIX) :],
+        )
+    if error == TRAINING_DETAILS_EXIST:
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error)
+    if error in ("Event not found", "Training session not found"):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
 
 def _session_response(ts: TrainingSession) -> TrainingSessionResponse:
@@ -205,6 +229,58 @@ async def get_training_session_by_event(
     return _session_response(training_session)
 
 
+@router.post(
+    "/by-event/{event_id}",
+    response_model=TrainingSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def attach_training_details(
+    event_id: UUID,
+    details: TrainingSessionAttach,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Attach training details to an existing Training event
+
+    For a Training event made from Events → Create Event: picking a course,
+    category, training type or program requirement attaches a training
+    session, which files the attendance credit under them when attendance is
+    finalized. Refused (409) once attendance is finalized — reopen it first —
+    or when the event already has details.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = TrainingSessionService(db)
+    training_session, error = await service.attach_session_to_event(
+        event_id=event_id,
+        details=details,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+    )
+
+    if error:
+        raise _session_error(error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_session_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "session_id": str(training_session.id),
+            "event_id": str(event_id),
+            "action": "attached",
+            "fields": sorted(details.model_dump(exclude_none=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return _session_response(training_session)
+
+
 @router.patch("/{training_session_id}", response_model=TrainingSessionResponse)
 async def update_training_session_linkage(
     training_session_id: UUID,
@@ -213,11 +289,12 @@ async def update_training_session_linkage(
     current_user: User = Depends(require_permission("events.manage")),
 ):
     """
-    Update a training session's requirement/program links
+    Update a training session's course, type and requirement/program links
 
-    Omitted fields are left untouched; explicit nulls clear a link. Links
-    steer how future attendance is credited — records already written at
-    finalization are not reflowed.
+    Omitted fields are left untouched; explicit nulls clear a link. A change
+    applies the next time the event's attendance is finalized, which rewrites
+    the members' records under it; while attendance is finalized it is
+    refused (409) — reopen attendance first.
 
     **Authentication required**
     **Requires permission: events.manage**
@@ -231,7 +308,7 @@ async def update_training_session_linkage(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise _session_error(error)
 
     await log_audit_event(
         db=db,

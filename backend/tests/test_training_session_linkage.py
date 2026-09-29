@@ -18,6 +18,7 @@ DB is mocked; no MySQL.
 """
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -26,6 +27,7 @@ from app.schemas.training_session import (
     TrainingSessionCreate,
     TrainingSessionLinkageUpdate,
 )
+from app.services.event_service import ATTENDANCE_LOCKED_PREFIX
 from app.services.training_session_service import TrainingSessionService
 
 ORG = uuid4()
@@ -34,6 +36,18 @@ ACTOR = uuid4()
 
 def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
+
+
+def _open_event(**kw):
+    """The session's event, as update_session_linkage locks it: still open."""
+    fields = dict(
+        id=str(uuid4()),
+        title="Hose Operations",
+        attendance_finalized_at=None,
+        custom_fields={},
+    )
+    fields.update(kw)
+    return SimpleNamespace(**fields)
 
 
 class RecordingSession:
@@ -197,7 +211,9 @@ class TestUpdateLinkage:
     async def test_sets_a_link(self):
         requirement_id = uuid4()
         session = _session()
-        db = RecordingSession([_one(session), _one(str(requirement_id))])
+        db = RecordingSession(
+            [_one(session), _one(_open_event()), _one(str(requirement_id))]
+        )
         svc = TrainingSessionService(db)
 
         updated, error = await svc.update_session_linkage(
@@ -214,7 +230,7 @@ class TestUpdateLinkage:
         # The bug this guards: skipping None would 200 the request and leave
         # the old requirement attached.
         session = _session(requirement_id=str(uuid4()))
-        db = RecordingSession([_one(session)])
+        db = RecordingSession([_one(session), _one(_open_event())])
         svc = TrainingSessionService(db)
 
         updated, error = await svc.update_session_linkage(
@@ -229,7 +245,7 @@ class TestUpdateLinkage:
     async def test_omitted_field_is_left_alone(self):
         existing = str(uuid4())
         session = _session(requirement_id=existing, category_id=str(uuid4()))
-        db = RecordingSession([_one(session)])
+        db = RecordingSession([_one(session), _one(_open_event())])
         svc = TrainingSessionService(db)
 
         # Only category_id is in the payload; requirement_id was never sent
@@ -270,7 +286,7 @@ class TestUpdateLinkage:
 
     async def test_a_foreign_link_is_rejected_on_update_too(self):
         session = _session()
-        db = RecordingSession([_one(session), _one(None)])
+        db = RecordingSession([_one(session), _one(_open_event()), _one(None)])
         svc = TrainingSessionService(db)
 
         updated, error = await svc.update_session_linkage(
@@ -288,7 +304,9 @@ class TestUpdateLinkage:
         # mismatch that made the course lookup match nothing.
         category_id = uuid4()
         session = _session()
-        db = RecordingSession([_one(session), _one(str(category_id))])
+        db = RecordingSession(
+            [_one(session), _one(_open_event()), _one(str(category_id))]
+        )
         svc = TrainingSessionService(db)
 
         updated, _ = await svc.update_session_linkage(
@@ -296,6 +314,70 @@ class TestUpdateLinkage:
         )
 
         assert isinstance(updated.category_id, str)
+
+    async def test_refused_while_attendance_is_finalized(self):
+        """A change would sit unapplied beside records it disagrees with until
+        a reopen, so the closed event refuses it (a 409 at the endpoint)."""
+        session = _session()
+        locked = _open_event(attendance_finalized_at=datetime.now(timezone.utc))
+        db = RecordingSession([_one(session), _one(locked)])
+        svc = TrainingSessionService(db)
+
+        updated, error = await svc.update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(category_id=None), ORG
+        )
+
+        assert updated is None
+        assert error.startswith(ATTENDANCE_LOCKED_PREFIX)
+        assert db.commit.await_count == 0
+
+    async def test_setting_a_course_refiles_the_session_under_it(self):
+        session = _session(course_id=None, course_name="Hose Operations")
+        course = SimpleNamespace(id=str(uuid4()), name="Pump Ops I", code="PO1")
+        db = RecordingSession([_one(session), _one(_open_event()), _one(course)])
+        svc = TrainingSessionService(db)
+
+        updated, error = await svc.update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(course_id=course.id), ORG
+        )
+
+        assert error is None
+        assert updated.course_id == course.id
+        assert updated.course_name == "Pump Ops I"
+        assert updated.course_code == "PO1"
+
+    async def test_clearing_the_course_files_under_the_event_title(self):
+        session = _session(course_id=str(uuid4()), course_name="Pump Ops I")
+        event = _open_event(title="Saturday Pump Drill")
+        db = RecordingSession([_one(session), _one(event)])
+        svc = TrainingSessionService(db)
+
+        updated, error = await svc.update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(course_id=None), ORG
+        )
+
+        assert error is None
+        assert updated.course_id is None
+        assert updated.course_name == "Saturday Pump Drill"
+        assert updated.course_code is None
+
+    async def test_training_type_can_change_but_not_clear(self):
+        session = _session()
+        db = RecordingSession([_one(session), _one(_open_event())])
+        svc = TrainingSessionService(db)
+        updated, error = await svc.update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(training_type="refresher"), ORG
+        )
+        assert error is None
+        assert updated.training_type == TrainingType.REFRESHER
+
+        db = RecordingSession([_one(_session()), _one(_open_event())])
+        svc = TrainingSessionService(db)
+        updated, error = await svc.update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(training_type=None), ORG
+        )
+        assert updated is None
+        assert error == "Training type is required"
 
 
 class TestGetSessionByEvent:

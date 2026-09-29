@@ -72,6 +72,13 @@ ALLOWED = {
         "training.manage",
     ),
     ("training_sessions.py", "POST", "/approve/{token}", "training.manage"),
+    # Same authority, reached from the event: finalizing a Training event's
+    # attendance writes its training credit, and `training.manage` only decides
+    # whether that credit may also move program progress. Finalizing, ending
+    # and recording an event's times are `events.manage`.
+    ("events.py", "POST", "/{event_id}/finalize-attendance", "training.manage"),
+    ("events.py", "POST", "/{event_id}/end-event", "training.manage"),
+    ("events.py", "POST", "/{event_id}/record-times", "training.manage"),
     # `inventory.check_view` lifts a submitter's restriction to their assigned
     # templates, exactly as GET /equipment-checks/templates/{id} does. Tapping
     # a tag during a check is part of performing one, which view alone cannot.

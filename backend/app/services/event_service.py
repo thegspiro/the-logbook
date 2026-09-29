@@ -8,6 +8,8 @@ import calendar
 import copy
 import csv
 import io
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,6 +18,7 @@ from zoneinfo import ZoneInfo
 
 from loguru import logger
 from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
@@ -43,6 +46,7 @@ from app.schemas.event import (
     RSVPCreate,
     RSVPOverride,
 )
+from app.schemas.training_session import TrainingSessionAttach
 from app.services.admin_hours_service import AdminHoursService
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
@@ -211,11 +215,37 @@ def attendance_locked_error(action: str) -> str:
     )
 
 
+@dataclass
+class FinalizeOutcome:
+    """What finalizing an event's attendance did, for the officer who asked.
+
+    ``updated_count`` keeps its long-standing meaning — rows whose duration
+    finalize derived — so existing callers read it unchanged. The training
+    fields report the credit a Training event wrote: records completed, an
+    approval left for training officers, and the attendees who got nothing
+    because there was no time to credit them with.
+    """
+
+    updated_count: int = 0
+    training_credit: bool = False
+    training_records_completed: int = 0
+    training_approval_pending: bool = False
+    training_attendees_pending: int = 0
+    training_attendees_uncredited: int = 0
+    training_uncredited_names: List[str] = dataclass_field(default_factory=list)
+    admin_hours_entries_removed: int = 0
+    error: Optional[str] = None
+
+
 class EventService:
     """Service for event management"""
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # The outcome of the most recent finalize this service ran, for a
+        # caller that reached it through end_event or record_actual_times,
+        # whose return shapes predate the training report.
+        self.last_finalize_outcome: Optional[FinalizeOutcome] = None
 
     async def create_event(
         self, event_data: EventCreate, organization_id: UUID, created_by: UUID
@@ -261,8 +291,26 @@ class EventService:
                     f"Conflicting event(s): {titles}"
                 )
 
-        # Prepare event data
-        event_dict = event_data.model_dump()
+        # Prepare event data. training_details is not an event column: it
+        # becomes a training session attached below.
+        event_dict = event_data.model_dump(exclude={"training_details"})
+        training_details = event_data.training_details
+        training = None
+        course = None
+        if training_details is not None:
+            if event_dict.get("event_type") != EventType.TRAINING.value:
+                raise ValueError(
+                    "Training details can only be added to a Training event"
+                )
+            # Local import: training_session_service imports this module.
+            from app.services.training_session_service import TrainingSessionService
+
+            training = TrainingSessionService(self.db)
+            course, error = await training.resolve_attach_details(
+                training_details, organization_id
+            )
+            if error:
+                raise ValueError(error)
 
         # Set default allowed_rsvp_statuses if not provided and RSVP is required
         if event_data.requires_rsvp and not event_dict.get("allowed_rsvp_statuses"):
@@ -274,6 +322,15 @@ class EventService:
         )
 
         self.db.add(event)
+        if training is not None:
+            # One commit for both, so an event is never left behind without
+            # the details the officer picked for it.
+            await self.db.flush()
+            self.db.add(
+                training.build_session_for_event(
+                    event, training_details, course, organization_id, created_by
+                )
+            )
         await self.db.commit()
         await self.db.refresh(event)
 
@@ -2432,6 +2489,7 @@ class EventService:
         actual_start_time: Optional[datetime],
         actual_end_time: Optional[datetime],
         finalized_by: Optional[UUID] = None,
+        can_manage_training: bool = False,
     ) -> Tuple[Optional[Event], Optional[str]]:
         """
         Record actual start and end times for an event
@@ -2485,7 +2543,10 @@ class EventService:
         # Auto-finalize attendance when actual end time is recorded
         if actual_end_time is not None:
             await self.finalize_event_attendance(
-                event_id, organization_id, finalized_by=finalized_by
+                event_id,
+                organization_id,
+                finalized_by=finalized_by,
+                can_manage_training=can_manage_training,
             )
 
         return event, None
@@ -2517,16 +2578,42 @@ class EventService:
         event_id: UUID,
         organization_id: UUID,
         finalized_by: Optional[UUID] = None,
+        can_manage_training: bool = False,
     ) -> Tuple[int, Optional[str]]:
+        """Finalize attendance; see ``finalize_event_attendance_detailed``.
+
+        Returns:
+            Tuple of (number_of_rsvps_updated, error_message)
         """
-        Finalize attendance duration for all checked-in members who didn't check out.
+        outcome = await self.finalize_event_attendance_detailed(
+            event_id,
+            organization_id,
+            finalized_by=finalized_by,
+            can_manage_training=can_manage_training,
+        )
+        return outcome.updated_count, outcome.error
+
+    async def finalize_event_attendance_detailed(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        finalized_by: Optional[UUID] = None,
+        can_manage_training: bool = False,
+    ) -> "FinalizeOutcome":
+        """
+        Finalize attendance: settle every attendee's credited time and close
+        the event.
 
         When require_checkout is false (the default), members check in but never
         check out, leaving attendance_duration_minutes as NULL. This method
         calculates duration using: actual_end_time (if recorded) > end_datetime,
         minus the member's check-in time.
 
-        Also updates any linked training records that have hours_completed == 0.
+        On a Training event it also writes the members' training credit —
+        this is the one place attendance becomes training records. See
+        ``TrainingSessionService.record_event_attendance`` for what each kind
+        of Training event credits; a Training event's attendance can only be
+        finalized once the event has ended.
 
         Finalizing closes the event: the attendance-affecting writes are refused
         afterwards until ``reopen_event_attendance`` runs. Because of that lock
@@ -2534,9 +2621,12 @@ class EventService:
         finds for one of these RSVPs is left over from an earlier cycle and is
         resynced to the corrected numbers rather than skipped.
 
-        Returns:
-            Tuple of (number_of_rsvps_updated, error_message)
+        ``can_manage_training`` is the caller's training.manage, which the
+        training pipeline requires before it will move program progress.
         """
+        outcome = FinalizeOutcome()
+        self.last_finalize_outcome = outcome
+
         # Get event
         event_result = await self.db.execute(
             select(Event)
@@ -2547,19 +2637,40 @@ class EventService:
         event = event_result.scalar_one_or_none()
 
         if not event:
-            return 0, "Event not found"
+            outcome.error = "Event not found"
+            return outcome
 
         if attendance_is_finalized(event):
-            return 0, attendance_locked_error("finalizing attendance again")
+            outcome.error = attendance_locked_error("finalizing attendance again")
+            return outcome
 
         # Determine effective end time: actual_end_time takes priority
-        effective_end = event.actual_end_time or event.end_datetime
+        effective_end = self.effective_end(event)
         if not effective_end:
-            return 0, "Event has no end time"
-        # Datetimes read straight from MySQL are naive while ones set in this
-        # session are UTC-aware; normalize before any subtraction below.
-        if effective_end.tzinfo is None:
-            effective_end = effective_end.replace(tzinfo=dt_timezone.utc)
+            outcome.error = "Event has no end time"
+            return outcome
+
+        credits_training = self.event_credits_training(event)
+        training = None
+        training_session = None
+        pending_approvals: List[Any] = []
+        if credits_training:
+            # A class still running has no final roster or durations to credit.
+            if datetime.now(dt_timezone.utc) < effective_end:
+                outcome.error = (
+                    "A training event's attendance can be finalized once the "
+                    "event has ended"
+                )
+                return outcome
+            # Local import: training_session_service imports this module.
+            from app.services.training_session_service import TrainingSessionService
+
+            training = TrainingSessionService(self.db)
+            # Straight after the event lock, before any RSVP is read: event,
+            # session, approvals, RSVPs is the order every writer takes.
+            training_session, pending_approvals = (
+                await training.lock_for_event_finalize(event, organization_id)
+            )
 
         # Two different sets, and conflating them is what left whole
         # categories of attendee uncredited:
@@ -2595,33 +2706,19 @@ class EventService:
         )
         attended = list(attended_result.scalars().all())
 
-        if not attended:
+        if not attended and not credits_training:
             # No member checked in — the ordinary shape of an open house or a
             # recruitment night, whose whole roster is guests. This return is
             # why the applicant advance below cannot live at the tail of this
             # method: the events most likely to carry prospective members are
-            # exactly the ones that never reach it.
+            # exactly the ones that never reach it. (A Training event carries
+            # on: an empty roster still has to take back credit an earlier
+            # finalize gave.)
             await self._record_attendance_finalized(
                 event, organization_id, finalized_by
             )
             await self._advance_prospects_after_finalize(event)
-            return 0, None
-
-        # Get linked training session if this is a training event
-        training_session = None
-        if event.event_type == EventType.TRAINING:
-            session_result = await self.db.execute(
-                select(TrainingSession).where(TrainingSession.event_id == event.id)
-            )
-            training_session = session_result.scalar_one_or_none()
-        event_dates: List[date] = []
-        if training_session is not None and event.start_datetime is not None:
-            # The record was filed under the session's day on the department's
-            # calendar, or -- written before that -- under its UTC day.
-            event_dates = local_and_utc_dates(
-                event.start_datetime,
-                await resolve_scheduling_timezone(self.db, organization_id),
-            )
+            return outcome
 
         updated_count = 0
         for rsvp in rsvps:
@@ -2635,28 +2732,7 @@ class EventService:
             duration_minutes = max(0, int(duration_minutes))
             rsvp.attendance_duration_minutes = duration_minutes
             updated_count += 1
-
-            # Update linked training record if hours are still 0
-            if training_session and event_dates:
-                record_result = await self.db.execute(
-                    select(TrainingRecord)
-                    .where(
-                        TrainingRecord.organization_id == str(organization_id),
-                        TrainingRecord.user_id == str(rsvp.user_id),
-                        TrainingRecord.course_name == training_session.course_name,
-                        TrainingRecord.scheduled_date.in_(event_dates),
-                    )
-                    .order_by(TrainingRecord.completion_date.is_(None).desc())
-                )
-                training_record = record_result.scalars().first()
-                # Write the derived hours whenever this event is the thing the
-                # record came from. The old "only if null or zero" guard was
-                # there to avoid trampling a number someone else set, but it
-                # also meant a reopen-and-correct left the training record on
-                # the first finalize's figure while the RSVP and the hours
-                # ledger both moved — three records, two answers.
-                if training_record is not None:
-                    training_record.hours_completed = round(duration_minutes / 60.0, 2)
+        outcome.updated_count = updated_count
 
         # Close the event and credit the hours in the SAME transaction that
         # holds its row lock. Every attendance writer takes that lock too, so
@@ -2674,6 +2750,24 @@ class EventService:
         # and logged below, and a hard failure now rolls the whole finalize
         # back and leaves the event open, which is the honest outcome.
         self._stamp_attendance_finalized(event, finalized_by)
+
+        credit = None
+        if training is not None:
+            credit = await training.record_event_attendance(
+                event,
+                training_session,
+                pending_approvals,
+                attended,
+                effective_end,
+                finalized_by,
+                organization_id,
+            )
+            outcome.training_credit = True
+            outcome.training_records_completed = credit.records_completed
+            outcome.training_approval_pending = credit.approval_pending
+            outcome.training_attendees_pending = credit.attendees_pending
+            outcome.training_uncredited_names = list(credit.uncredited_names)
+            outcome.training_attendees_uncredited = len(credit.uncredited_names)
 
         # Auto-credit event hours to admin hours categories via mappings
         admin_hours_service = AdminHoursService(self.db)
@@ -2711,9 +2805,13 @@ class EventService:
         # releases the row lock. _record_attendance_finalized re-stamps (a
         # no-op), commits, and archives the validation prompt.
         await self._record_attendance_finalized(event, organization_id, finalized_by)
+        if credit is not None:
+            await training.after_event_attendance_recorded(
+                credit, organization_id, finalized_by, can_manage_training
+            )
         await self._advance_prospects_after_finalize(event)
 
-        return updated_count, None
+        return outcome
 
     async def _advance_prospects_after_finalize(self, event: Event) -> None:
         """Move applicants this event's now-settled attendance clears.
@@ -2866,6 +2964,18 @@ class EventService:
         if not attendance_is_finalized(event):
             return None, "Attendance for this event is not finalized"
 
+        now = datetime.now(dt_timezone.utc)
+        if self.event_credits_training(event):
+            # The session's finalized flag follows the event's lock, and an
+            # approval still pending was issued against the numbers this
+            # reopen exists to correct. Taken before the RSVPs: event,
+            # session, approvals, RSVPs is the order every writer locks in.
+            from app.services.training_session_service import TrainingSessionService
+
+            await TrainingSessionService(self.db).reopen_for_event(
+                event, organization_id, now
+            )
+
         rsvp_result = await self.db.execute(
             select(EventRSVP).where(
                 EventRSVP.event_id == str(event_id),
@@ -2888,7 +2998,7 @@ class EventService:
             custom.pop(marker, None)
         event.custom_fields = custom
 
-        event.updated_at = datetime.now(dt_timezone.utc)
+        event.updated_at = now
 
         await self.db.commit()
 
@@ -2918,6 +3028,7 @@ class EventService:
         event_id: UUID,
         organization_id: UUID,
         ended_by: Optional[UUID] = None,
+        can_manage_training: bool = False,
     ) -> Tuple[Optional[Event], int, Optional[str]]:
         """
         End an in-progress event: record actual_end_time as now,
@@ -2983,8 +3094,12 @@ class EventService:
         await self.db.refresh(event)
 
         # Finalize attendance durations
-        updated_count, _ = await self.finalize_event_attendance(
-            event_id, organization_id, finalized_by=ended_by
+        # The detailed outcome stays on last_finalize_outcome for the endpoint.
+        await self.finalize_event_attendance(
+            event_id,
+            organization_id,
+            finalized_by=ended_by,
+            can_manage_training=can_manage_training,
         )
 
         return event, len(rsvps), None
@@ -3044,18 +3159,19 @@ class EventService:
         if event.location_obj:
             location_name = event.location_obj.name
 
-        # The same test _auto_create_training_record applies. The check-in page
-        # announced "Training Record Created" for every training-type event,
-        # including ones with no session to record against (workflow review
-        # W20-1); it now shows that only when a record will be written.
-        records_training = False
-        if event.event_type == EventType.TRAINING:
+        # The same test finalize applies (pitfall #29): every Training event's
+        # attendance becomes a training record when it is finalized, session or
+        # not. Whether an officer must approve it first is the session's call.
+        records_training = self.event_credits_training(event)
+        training_requires_approval = False
+        if records_training:
             session_result = await self.db.execute(
-                select(TrainingSession.auto_create_records).where(
-                    TrainingSession.event_id == event.id
+                select(TrainingSession.require_completion_confirmation).where(
+                    TrainingSession.event_id == event.id,
+                    TrainingSession.organization_id == str(organization_id),
                 )
             )
-            records_training = bool(session_result.scalars().first())
+            training_requires_approval = bool(session_result.scalars().first())
 
         return {
             "event_id": str(event.id),
@@ -3080,6 +3196,7 @@ class EventService:
             "require_checkout": event.require_checkout or False,
             "timezone": org_timezone,
             "records_training": records_training,
+            "training_requires_approval": training_requires_approval,
         }, None
 
     # A self check-in this far ahead of the scheduled start is worth putting in
@@ -3170,6 +3287,63 @@ class EventService:
         if start is None or end is None:
             return None
         return max(0, int((end - start).total_seconds() / 60))
+
+    @staticmethod
+    def event_training_record_query(
+        organization_id: Any,
+        user_id: Any,
+        event_id: Any,
+        *,
+        adopt_course_name: Optional[str] = None,
+        dates: Optional[List[date]] = None,
+        lock: bool = False,
+    ):
+        """The select that finds a member's training record for an event.
+
+        The record this event's finalize wrote carries ``source_event_id``,
+        and that is the whole key: title edits, a moved start and a manual
+        record with the same name cannot confuse it.
+
+        ``adopt_course_name`` (session-backed events only) also matches a row
+        written before the source existed — the in-progress record a member's
+        own check-in starts, or one a pre-upgrade finalize completed — by the
+        course name and the event's day, as every writer used to. A CANCELLED
+        row is never adopted: it is a voided credit, not a live one. Sourced
+        rows sort first so an adopted duplicate can never win.
+
+        ``lock`` makes it a locking read. Under REPEATABLE READ a plain read
+        answers from the transaction's first snapshot, which predates the
+        event lock the caller took, and would miss a row a concurrent check-in
+        committed in between.
+        """
+        condition = TrainingRecord.source_event_id == str(event_id)
+        if adopt_course_name:
+            day_dates = list(dates or [])
+            condition = or_(
+                condition,
+                and_(
+                    TrainingRecord.source_event_id.is_(None),
+                    TrainingRecord.course_name == adopt_course_name,
+                    TrainingRecord.status != TrainingStatus.CANCELLED,
+                    or_(
+                        TrainingRecord.scheduled_date.in_(day_dates),
+                        TrainingRecord.completion_date.in_(day_dates),
+                    ),
+                ),
+            )
+        query = (
+            select(TrainingRecord)
+            .where(
+                TrainingRecord.organization_id == str(organization_id),
+                TrainingRecord.user_id == str(user_id),
+                condition,
+            )
+            .order_by(
+                TrainingRecord.source_event_id.is_(None).asc(),
+                TrainingRecord.completion_date.is_(None).desc(),
+            )
+        )
+        return query.with_for_update() if lock else query
 
     @classmethod
     def _credited_check_out_time(
@@ -3532,13 +3706,16 @@ class EventService:
                 await resolve_scheduling_timezone(self.db, organization_id),
             )
 
-            # Check if training record already exists
+            # Check if training record already exists: the one this event's
+            # attendance wrote, or one started before the source link existed.
             existing_record_result = await self.db.execute(
-                select(TrainingRecord)
-                .where(TrainingRecord.organization_id == str(organization_id))
-                .where(TrainingRecord.user_id == str(user_id))
-                .where(TrainingRecord.course_name == training_session.course_name)
-                .where(TrainingRecord.scheduled_date.in_(event_dates))
+                self.event_training_record_query(
+                    organization_id,
+                    user_id,
+                    event.id,
+                    adopt_course_name=training_session.course_name,
+                    dates=event_dates,
+                )
             )
             existing_record = existing_record_result.scalars().first()
 
@@ -3549,6 +3726,7 @@ class EventService:
             training_record = TrainingRecord(
                 organization_id=organization_id,
                 user_id=user_id,
+                source_event_id=str(event.id),
                 course_id=training_session.course_id,
                 category_id=training_session.category_id,
                 course_name=training_session.course_name,
@@ -3570,7 +3748,21 @@ class EventService:
                 created_by=user_id,
             )
 
-            self.db.add(training_record)
+            # Inside a savepoint: a finalize running at the same moment writes
+            # this member's record under the same (event, member) unique key,
+            # and losing that race must cost only this placeholder — not a
+            # rollback that expires the RSVP the check-in response returns.
+            try:
+                async with self.db.begin_nested():
+                    self.db.add(training_record)
+            except IntegrityError:
+                logger.info(
+                    "Training record for user {} at event {} was written by "
+                    "a concurrent finalize; keeping that one",
+                    user_id,
+                    event.id,
+                )
+                return
             await self.db.commit()
         except Exception:
             logger.opt(exception=True).error(
@@ -4060,6 +4252,29 @@ class EventService:
         recurrence_week_ordinal = event_data.pop("recurrence_week_ordinal", None)
         recurrence_month = event_data.pop("recurrence_month", None)
         recurrence_exceptions = event_data.pop("recurrence_exceptions", None)
+        raw_training_details = event_data.pop("training_details", None)
+
+        # Training details become one training session per occurrence. The
+        # schema already refuses them on a rolling series (the job extending
+        # it copies events, not sessions); the type is checked here.
+        training = None
+        training_details = None
+        course = None
+        if raw_training_details is not None:
+            # Local import: training_session_service imports this module.
+            from app.services.training_session_service import TrainingSessionService
+
+            if event_data.get("event_type") != EventType.TRAINING.value:
+                return [], "Training details can only be added to a Training event"
+            if rolling_recurrence:
+                return [], "Training details can't be added to a rolling series"
+            training_details = TrainingSessionAttach(**raw_training_details)
+            training = TrainingSessionService(self.db)
+            course, error = await training.resolve_attach_details(
+                training_details, organization_id
+            )
+            if error:
+                return [], error
 
         # EV-17 / XC-1: RecurringEventCreate carries `attachments` too, and it
         # is copied onto every generated occurrence — so an unvalidated foreign
@@ -4157,6 +4372,19 @@ class EventService:
             )
             self.db.add(child_event)
             created_events.append(child_event)
+
+        if training is not None:
+            await self.db.flush()
+            for occurrence in created_events:
+                self.db.add(
+                    training.build_session_for_event(
+                        occurrence,
+                        training_details,
+                        course,
+                        organization_id,
+                        created_by,
+                    )
+                )
 
         await self.db.commit()
 
