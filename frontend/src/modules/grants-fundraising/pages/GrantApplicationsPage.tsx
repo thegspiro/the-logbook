@@ -359,9 +359,7 @@ export const GrantApplicationsPage: React.FC = () => {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-theme-text-primary text-2xl font-bold">Grant Applications</h1>
-            <p className="text-theme-text-secondary mt-1 text-sm">
-              Track and manage grant applications through the pipeline
-            </p>
+            <p className="text-theme-text-secondary mt-1 text-sm">Track each application from research to closeout</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {/* View toggle */}
@@ -412,8 +410,8 @@ export const GrantApplicationsPage: React.FC = () => {
               autoCorrect="off"
               spellCheck={false}
               type="text"
-              aria-label="Search programs, agencies, assignees..."
-              placeholder="Search programs, agencies, assignees..."
+              aria-label="Search by program, agency, or assignee"
+              placeholder="Search by program, agency, or assignee..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               className="form-input pr-4 pl-10"
@@ -445,7 +443,7 @@ export const GrantApplicationsPage: React.FC = () => {
               className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm transition-colors"
             >
               <X className="h-3.5 w-3.5" />
-              Clear
+              Clear filters
             </button>
           )}
         </div>
@@ -470,8 +468,8 @@ export const GrantApplicationsPage: React.FC = () => {
             <h3 className="text-theme-text-primary mt-4 text-lg font-semibold">No grant applications found</h3>
             <p className="text-theme-text-secondary mt-1 text-sm">
               {hasFilters
-                ? 'Try adjusting your search or filters.'
-                : 'Get started by creating your first grant application.'}
+                ? 'Try a different search or clear the filters.'
+                : 'Add an application to start tracking a grant.'}
             </p>
             {!hasFilters && (
               <Link

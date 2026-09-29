@@ -136,7 +136,9 @@ export const GrantApplicationFormPage: React.FC = () => {
             // Clear it so what's displayed is what would be sent, and say
             // why for anything other than "it doesn't exist".
             if (toAppError(err).status !== 404) {
-              toast.error('Could not load the linked funding opportunity — please reselect it.');
+              toast.error(
+                'Could not load the linked grant opportunity. Select it again from the Grant Opportunity list.'
+              );
             }
             setFormData((prev) => ({ ...prev, opportunityId: '' }));
           }
@@ -203,10 +205,10 @@ export const GrantApplicationFormPage: React.FC = () => {
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!formData.grantProgramName.trim()) {
-      newErrors.grantProgramName = 'Grant program name is required';
+      newErrors.grantProgramName = 'Enter the grant program name';
     }
     if (!formData.grantAgency.trim()) {
-      newErrors.grantAgency = 'Grant agency is required';
+      newErrors.grantAgency = 'Enter the grant agency';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -215,7 +217,7 @@ export const GrantApplicationFormPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) {
-      toast.error('Please fix the errors before submitting.');
+      toast.error('Fill in the required fields marked below.');
       return;
     }
     setIsSubmitting(true);
@@ -246,15 +248,15 @@ export const GrantApplicationFormPage: React.FC = () => {
     try {
       if (isEditing && id) {
         await grantsService.updateApplication(id, payload);
-        toast.success('Application updated successfully.');
+        toast.success('Application updated.');
         void navigate(`/grants/applications/${id}`);
       } else {
         const created = await grantsService.createApplication(payload);
-        toast.success('Application created successfully.');
+        toast.success('Application created.');
         void navigate(`/grants/applications/${created.id}`);
       }
     } catch {
-      toast.error('Failed to save application.');
+      toast.error('Failed to save application. Try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -273,6 +275,8 @@ export const GrantApplicationFormPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
+          type="button"
+          aria-label="Back to applications"
           onClick={() => void navigate('/grants/applications')}
           className="text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg p-2 transition-colors"
         >
@@ -283,7 +287,9 @@ export const GrantApplicationFormPage: React.FC = () => {
             {isEditing ? 'Edit Application' : 'New Grant Application'}
           </h1>
           <p className="text-theme-text-muted text-sm">
-            {isEditing ? 'Update grant application details' : 'Create a new grant application'}
+            {isEditing
+              ? 'Update the details of this application'
+              : 'Only the program name and agency are required. You can add the rest later.'}
           </p>
         </div>
       </div>
@@ -330,7 +336,7 @@ export const GrantApplicationFormPage: React.FC = () => {
             </div>
             <div>
               <label htmlFor="opportunityId" className={labelClass}>
-                Opportunity ID
+                Grant Opportunity
               </label>
               <select
                 id="opportunityId"
@@ -597,7 +603,7 @@ export const GrantApplicationFormPage: React.FC = () => {
                 value={formData.budgetSummary}
                 onChange={handleChange}
                 className={inputClass}
-                placeholder="Overview of the grant budget allocation..."
+                placeholder="How the grant money will be spent..."
               />
             </div>
             <div>
@@ -611,7 +617,7 @@ export const GrantApplicationFormPage: React.FC = () => {
                 value={formData.keyContacts}
                 onChange={handleChange}
                 className={inputClass}
-                placeholder="Key contacts for this grant application..."
+                placeholder="Names, roles, and phone or email..."
               />
             </div>
             <div>
@@ -647,7 +653,7 @@ export const GrantApplicationFormPage: React.FC = () => {
             className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save className="h-4 w-4" />
-            {isSubmitting ? 'Saving...' : isEditing ? 'Update Application' : 'Create Application'}
+            {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Application'}
           </button>
         </div>
       </form>
