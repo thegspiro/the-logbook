@@ -234,8 +234,19 @@ describe('FacilitiesDashboard', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('No facilities yet. Add your first facility to get started.')).toBeInTheDocument();
+      expect(screen.getByText('No facilities yet. Select Add Facility to add one.')).toBeInTheDocument();
     });
+  });
+
+  it('does not point a member who cannot add facilities at the Add Facility button', async () => {
+    useAuthStore.setState({ user: { permissions: ['facilities.view'] } as never, isAuthenticated: true });
+    mockGetFacilitiesPage.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 24 });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('No facilities yet.')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /Add Facility/ })).not.toBeInTheDocument();
   });
 
   it('calls getFacilities for dashboard stats', async () => {
