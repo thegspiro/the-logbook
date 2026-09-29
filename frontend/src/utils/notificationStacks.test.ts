@@ -76,6 +76,14 @@ describe('describeStack', () => {
     expect(describeStack('event_validation', 4)).toBe('4 attendance validations');
   });
 
+  it('names pending training submissions for what they are waiting on', () => {
+    expect(describeStack('training_submission', 3)).toBe('3 training submissions awaiting approval');
+  });
+
+  it("keeps a member's decision notices apart from the officers' queue", () => {
+    expect(describeStack('training_submission_update', 2)).toBe('2 updates to your training submissions');
+  });
+
   it('humanizes an unknown category', () => {
     expect(describeStack('brand_new_thing', 2)).toBe('2 brand new thing notifications');
   });

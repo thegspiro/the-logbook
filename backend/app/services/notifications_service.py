@@ -421,7 +421,11 @@ class NotificationsService:
         common, idempotent way to remove stale prompts without coupling the
         notification table to every resource table in the application.
         """
-        now = datetime.now(timezone.utc)
+        # Whole seconds: ``expires_at`` is DATETIME with no fractional part,
+        # and MySQL 8 *rounds* the fraction where MariaDB truncates it. From
+        # x.5s on, MySQL stored the next second, so the archived prompt still
+        # read as unexpired (``expires_at > now``) for up to half a second.
+        now = datetime.now(timezone.utc).replace(microsecond=0)
         try:
             # The session is shared with the caller, which may hold staged but
             # uncommitted work (e.g. a just-flushed audit record). Run the

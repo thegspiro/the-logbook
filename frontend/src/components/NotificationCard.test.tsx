@@ -124,6 +124,53 @@ describe('NotificationCard', () => {
 
       expect(window.location.pathname).toBe('/messages/msg-1');
     });
+
+    it('sends a training officer from a pending submission to the review queue', async () => {
+      const user = userEvent.setup();
+      const onMarkRead = vi.fn();
+      renderWithRouter(
+        <NotificationCard
+          notification={makeNotification({
+            category: 'training_submission',
+            subject: 'Training submission awaiting approval — Casey Tester',
+            action_url: '/training/admin?page=records&tab=submissions',
+          })}
+          onMarkRead={onMarkRead}
+          onTogglePin={vi.fn()}
+        />
+      );
+
+      await expand(user);
+      expect(screen.getByText('Training')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /Review Submission/ }));
+
+      expect(onMarkRead).toHaveBeenCalledWith('notif-1');
+      expect(window.location.pathname).toBe('/training/admin');
+      expect(window.location.search).toBe('?page=records&tab=submissions');
+    });
+
+    it("sends a member from an officer's decision to their own submissions", async () => {
+      const user = userEvent.setup();
+      renderWithRouter(
+        <NotificationCard
+          notification={makeNotification({
+            category: 'training_submission_update',
+            subject: 'Training submission not approved — Hazmat Ops',
+            action_url: '/training/submit',
+          })}
+          onMarkRead={vi.fn()}
+          onTogglePin={vi.fn()}
+        />
+      );
+
+      await expand(user);
+      expect(screen.getByText('Training')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /View My Submissions/ }));
+
+      expect(window.location.pathname).toBe('/training/submit');
+    });
   });
 
   describe('read state', () => {
