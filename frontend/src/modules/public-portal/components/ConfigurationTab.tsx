@@ -38,7 +38,7 @@ const ConfigurationTab: React.FC = () => {
         setNewOrigin('');
       }
     } catch {
-      toast.error('Please enter a valid URL (e.g., https://example.com)');
+      toast.error('Enter a full URL, such as https://example.com');
     }
   };
 
@@ -69,8 +69,8 @@ const ConfigurationTab: React.FC = () => {
       <div className="bg-theme-surface rounded-lg p-6 shadow-sm">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Allowed Origins (CORS)</h3>
         <p className="text-theme-text-secondary mb-4 text-sm">
-          Specify which domains can make requests to your public API. Leave empty to allow all origins (not recommended
-          for production).
+          Not in effect yet: the public API doesn't read this list. Which websites can call it from a browser is set by
+          the server's ALLOWED_ORIGINS setting.
         </p>
 
         <div className="space-y-3">
@@ -85,6 +85,7 @@ const ConfigurationTab: React.FC = () => {
                   <span className="text-theme-text-secondary font-mono text-sm">{origin}</span>
                   <button
                     onClick={() => handleRemoveOrigin(origin)}
+                    aria-label={`Remove ${origin}`}
                     className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                   >
                     <X className="h-4 w-4" />
@@ -117,7 +118,7 @@ const ConfigurationTab: React.FC = () => {
       <div className="bg-theme-surface rounded-lg p-6 shadow-sm">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Rate Limiting</h3>
         <p className="text-theme-text-secondary mb-4 text-sm">
-          Set the default rate limit for API keys. Individual keys can override this value.
+          Applies to every API key that doesn't set its own limit.
         </p>
 
         <div>
@@ -146,7 +147,7 @@ const ConfigurationTab: React.FC = () => {
       <div className="bg-theme-surface rounded-lg p-6 shadow-sm">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Caching</h3>
         <p className="text-theme-text-secondary mb-4 text-sm">
-          Configure how long responses are cached to reduce database load.
+          Not in effect yet: the public API doesn't cache responses, so this value changes nothing.
         </p>
 
         <div>
@@ -162,9 +163,6 @@ const ConfigurationTab: React.FC = () => {
             max={3600}
             className="form-input"
           />
-          <p className="text-theme-text-muted mt-1 text-xs">
-            Recommended: 300 seconds (5 minutes). Set to 0 to disable caching.
-          </p>
         </div>
       </div>
 
@@ -175,10 +173,9 @@ const ConfigurationTab: React.FC = () => {
           <div className="ml-3">
             <h4 className="text-sm font-medium text-blue-900">Security Best Practices</h4>
             <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-blue-800">
-              <li>Always specify allowed origins in production</li>
               <li>Use conservative rate limits to prevent abuse</li>
               <li>Monitor access logs regularly for suspicious activity</li>
-              <li>Only whitelist fields that are safe for public access</li>
+              <li>Only enable fields under Data Control that are safe to publish</li>
             </ul>
           </div>
         </div>
