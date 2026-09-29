@@ -788,7 +788,9 @@ const StorageAreasPage: React.FC = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Storage Areas</h1>
-          <p className="text-theme-text-secondary mt-1">Manage hierarchical storage locations within rooms.</p>
+          <p className="text-theme-text-secondary mt-1">
+            Racks, shelves, and bins inside each room. Nest one inside another as needed.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1220,12 +1222,11 @@ const StorageAreasPage: React.FC = () => {
         size="sm"
       >
         <p className="text-theme-text-secondary text-sm">
-          Are you sure you want to delete{' '}
-          <strong className="text-theme-text-primary">{deleteTarget?.name ?? ''}</strong>?
+          Delete <strong className="text-theme-text-primary">{deleteTarget?.name ?? ''}</strong>?
           {(deleteTarget?.item_count ?? 0) > 0 && (
             <span className="mt-2 block text-red-600 dark:text-red-400">
-              This area contains {deleteTarget?.item_count ?? 0} item{(deleteTarget?.item_count ?? 0) !== 1 ? 's' : ''}.
-              They will need to be reassigned.
+              This area holds {deleteTarget?.item_count ?? 0} item{(deleteTarget?.item_count ?? 0) !== 1 ? 's' : ''}.
+              Move them to another storage area.
             </span>
           )}
           {(deleteTarget?.children?.length ?? 0) > 0 && (
