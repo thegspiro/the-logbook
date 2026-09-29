@@ -555,3 +555,131 @@ class TestTakingCreditBack:
         (record,) = await _records(db_session, member)
         assert record["status"] == "completed"
         assert record["hours_completed"] == 4.0
+
+
+async def _admin_mapping(db, org_id: str, event_type: str) -> str:
+    category_id = _uid()
+    await db.execute(
+        text(
+            "INSERT INTO admin_hours_categories "
+            "(id, organization_id, name, require_approval, is_active, sort_order) "
+            "VALUES (:id, :org, 'Meetings', 0, 1, 0)"
+        ),
+        {"id": category_id, "org": org_id},
+    )
+    await db.execute(
+        text(
+            "INSERT INTO event_hour_mappings "
+            "(id, organization_id, event_type, admin_hours_category_id, "
+            "percentage, is_active) VALUES (:id, :org, :type, :cat, 100, 1)"
+        ),
+        {"id": _uid(), "org": org_id, "type": event_type, "cat": category_id},
+    )
+    return category_id
+
+
+async def _admin_entries(db, user_id: str) -> list:
+    result = await db.execute(
+        text(
+            "SELECT duration_minutes, clock_in_at, clock_out_at "
+            "FROM admin_hours_entries WHERE user_id = :u"
+        ),
+        {"u": user_id},
+    )
+    return [dict(row._mapping) for row in result]
+
+
+class TestAdminHours:
+    async def test_a_meeting_retyped_to_training_drops_its_admin_entry(
+        self, db_session, dept
+    ):
+        """A business meeting finalized into admin hours, reopened, re-typed
+        as training and finalized again: the hours are now training credit,
+        and the admin-hours entry that held them is removed."""
+        org, officer, member = dept
+        await _admin_mapping(db_session, org, "business_meeting")
+        start, end = _past_window()
+        created = await EventService(db_session).create_event(
+            EventCreate(
+                title="Officers' meeting",
+                event_type="business_meeting",
+                start_datetime=start,
+                end_datetime=end,
+                requires_rsvp=False,
+            ),
+            organization_id=org,
+            created_by=officer,
+        )
+        event_id = str(created.id)
+        await _add_with_edit_times(
+            db_session, event_id, org, officer, member, start, end
+        )
+        service = EventService(db_session)
+        await service.finalize_event_attendance_detailed(event_id, org, officer)
+        assert len(await _admin_entries(db_session, member)) == 1
+
+        await service.reopen_event_attendance(event_id, org)
+        await service.update_event(
+            event_id, org, EventUpdate(event_type="training"), officer
+        )
+        outcome = await service.finalize_event_attendance_detailed(
+            event_id, org, officer
+        )
+
+        assert outcome.admin_hours_entries_removed == 1
+        assert await _admin_entries(db_session, member) == []
+        (record,) = await _records(db_session, member)
+        assert record["hours_completed"] == 4.0
+
+    async def test_a_training_mapping_credits_no_admin_hours(self, db_session, dept):
+        org, officer, member = dept
+        await _admin_mapping(db_session, org, "training")
+        event_id, start, end = await _training_event(db_session, org, officer)
+        await _add_with_edit_times(
+            db_session, event_id, org, officer, member, start, end
+        )
+
+        await EventService(db_session).finalize_event_attendance_detailed(
+            event_id, org, officer
+        )
+
+        assert await _admin_entries(db_session, member) == []
+
+    async def test_the_admin_entry_window_ends_at_the_override_check_out(
+        self, db_session, dept
+    ):
+        org, officer, member = dept
+        await _admin_mapping(db_session, org, "business_meeting")
+        start, end = _past_window()
+        created = await EventService(db_session).create_event(
+            EventCreate(
+                title="Officers' meeting",
+                event_type="business_meeting",
+                start_datetime=start,
+                end_datetime=end,
+                requires_rsvp=False,
+            ),
+            organization_id=org,
+            created_by=officer,
+        )
+        event_id = str(created.id)
+        service = EventService(db_session)
+        await service.manager_add_attendee(
+            event_id, member, org, officer, checked_in=False
+        )
+        override_out = start + timedelta(hours=3)
+        await service.override_rsvp_attendance(
+            event_id,
+            member,
+            org,
+            officer,
+            RSVPOverride(
+                override_check_in_at=start, override_check_out_at=override_out
+            ),
+        )
+
+        await service.finalize_event_attendance_detailed(event_id, org, officer)
+
+        (entry,) = await _admin_entries(db_session, member)
+        assert entry["duration_minutes"] == 180
+        assert entry["clock_out_at"].replace(tzinfo=timezone.utc) == override_out

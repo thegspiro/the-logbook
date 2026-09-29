@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
 from app.core.config import settings
+from app.models.admin_hours import EVENT_TYPES_WITHOUT_ADMIN_HOURS
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
     AttendeeVisibility,
@@ -746,6 +747,10 @@ class EventService:
             if hasattr(event.event_type, "value")
             else event.event_type
         )
+        # Credited to training records, not admin hours: the card must not
+        # promise a credit credit_event_attendance will not make.
+        if event_type in EVENT_TYPES_WITHOUT_ADMIN_HOURS:
+            return None, None
         if event_type:
             matched = mappings.get(("event_type", event_type))
         elif event.custom_category:
@@ -2897,11 +2902,22 @@ class EventService:
             outcome.training_attendees_pending = credit.attendees_pending
             outcome.training_uncredited_names = list(credit.uncredited_names)
             outcome.training_attendees_uncredited = len(credit.uncredited_names)
+            # Training events no longer credit admin hours. Entries an earlier
+            # finalize wrote for this event (mapped before the rule, or re-typed
+            # to training while reopened) would keep counting the same hours
+            # the training records now hold, so they go.
+            outcome.admin_hours_entries_removed = await AdminHoursService(
+                self.db
+            ).delete_event_attendance_entries_for_event(
+                str(event.id), str(organization_id)
+            )
 
-        # Auto-credit event hours to admin hours categories via mappings
+        # Auto-credit event hours to admin hours categories via mappings.
+        # A Training event is credited to training records above instead.
         admin_hours_service = AdminHoursService(self.db)
         event_type_val = event.event_type.value if event.event_type else None
-        for rsvp in attended:
+        admin_credited = [] if credits_training else attended
+        for rsvp in admin_credited:
             # Same clamp as above: the window handed to admin hours has to
             # match the duration credited, or the two disagree on the record.
             check_in_time = self._credited_check_in_time(event, rsvp)

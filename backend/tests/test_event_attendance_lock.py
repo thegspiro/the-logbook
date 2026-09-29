@@ -365,7 +365,8 @@ class TestAdminHoursResync:
             check_in_at=now - timedelta(minutes=duration),
             check_out_at=now,
             duration_minutes=duration,
-            event_type="training",
+            # Not training: training events no longer credit admin hours.
+            event_type="business_meeting",
             custom_category=None,
             resync=resync,
         )

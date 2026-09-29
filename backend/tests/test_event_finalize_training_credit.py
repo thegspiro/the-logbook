@@ -94,19 +94,23 @@ async def _finalize(event):
     with patch(
         "app.services.training_session_service.TrainingSessionService",
         side_effect=lambda session: _FakeTraining(session, calls),
-    ), patch("app.services.event_service.AdminHoursService"), patch(
+    ), patch("app.services.event_service.AdminHoursService") as admin_hours, patch(
         "app.services.event_service.NotificationsService"
     ) as notifications:
         notifications.return_value.archive_related_notifications = AsyncMock()
+        admin_hours.return_value.delete_event_attendance_entries_for_event = AsyncMock(
+            return_value=2
+        )
+        admin_hours.return_value.credit_event_attendance = AsyncMock(return_value=0)
         outcome = await svc.finalize_event_attendance_detailed(
             "event-1", "org-1", finalized_by="officer-1"
         )
-    return outcome, calls, db
+    return outcome, calls, db, admin_hours
 
 
 class TestFinalizeWiring:
     async def test_credit_is_inside_the_transaction_and_follow_up_after_it(self):
-        outcome, calls, db = await _finalize(_event())
+        outcome, calls, db, admin_hours = await _finalize(_event())
 
         assert outcome.error is None
         assert outcome.training_credit is True
@@ -116,22 +120,34 @@ class TestFinalizeWiring:
         assert calls == [("lock", 0), ("record", 0), ("after", 1)]
         assert db.commit.await_count == 1
 
+    async def test_training_removes_the_event_s_admin_hours_instead_of_crediting(
+        self,
+    ):
+        outcome, _calls, _db, admin_hours = await _finalize(_event())
+
+        service = admin_hours.return_value
+        service.delete_event_attendance_entries_for_event.assert_awaited_once_with(
+            "event-1", "org-1"
+        )
+        service.credit_event_attendance.assert_not_awaited()
+        assert outcome.admin_hours_entries_removed == 2
+
     async def test_an_empty_roster_still_reaches_the_training_credit(self):
         """So a re-finalize that leaves nobody on the roster can void what an
         earlier finalize credited."""
-        _outcome, calls, _db = await _finalize(_event())
+        _outcome, calls, _db, _ah = await _finalize(_event())
         assert ("record", 0) in calls
 
     async def test_a_running_training_event_is_refused(self):
         event = _event(end_datetime=NOW + timedelta(hours=1))
-        outcome, calls, db = await _finalize(event)
+        outcome, calls, db, _ah = await _finalize(event)
 
         assert "once the event has ended" in outcome.error
         assert calls == []
         db.commit.assert_not_awaited()
 
     async def test_other_events_never_touch_the_training_service(self):
-        outcome, calls, _db = await _finalize(
+        outcome, calls, _db, _ah = await _finalize(
             _event(event_type=EventType.BUSINESS_MEETING)
         )
         assert outcome.error is None

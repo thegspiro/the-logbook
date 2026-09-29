@@ -325,3 +325,8 @@ class EventHourMappingResponse(UTCResponseBase):
     percentage: int
     is_active: bool
     created_at: datetime
+    # False for a mapping stored for an event type that no longer credits
+    # admin hours (training), so the settings screen can say so instead of
+    # listing it as live. Defaults keep older clients reading what they did.
+    in_effect: bool = True
+    not_in_effect_reason: Optional[str] = None
