@@ -22,7 +22,7 @@ import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 type SectionKey = 'defaults' | 'proxy' | 'features' | 'test' | 'security';
 
 const SECTIONS: SettingsSection<SectionKey>[] = [
-  { key: 'defaults', label: 'Defaults', icon: SettingsIcon, description: 'Pre-filled values for new elections' },
+  { key: 'defaults', label: 'Defaults', icon: SettingsIcon, description: 'Saved defaults (not yet applied)' },
   { key: 'proxy', label: 'Proxy Voting', icon: UserCheck, description: 'Voting on behalf of an absent member' },
   { key: 'features', label: 'Features', icon: ToggleRight, description: 'Optional election workflows' },
   { key: 'test', label: 'Test Ballot', icon: Send, description: 'Preview the voting experience' },
@@ -325,7 +325,7 @@ export const ElectionsSettingsPage: React.FC = () => {
           <div>
             <SettingsPanelHead
               title="Default Election Settings"
-              description="These defaults pre-populate the creation form. They can be overridden per-election and per-ballot-item."
+              description="Saved for your department but not yet applied: the create-election form does not read these values, so set each election's options when you create it."
             />
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
@@ -437,9 +437,7 @@ export const ElectionsSettingsPage: React.FC = () => {
               <div className="border-theme-surface-border flex items-center justify-between border-b py-3">
                 <div>
                   <p className="text-theme-text-primary text-sm font-medium">Anonymous voting by default</p>
-                  <p className="text-theme-text-muted text-xs">
-                    New elections hide who cast each ballot. Can be overridden per election.
-                  </p>
+                  <p className="text-theme-text-muted text-xs">Hide who cast each ballot.</p>
                 </div>
                 <Toggle
                   label="Anonymous voting by default"
@@ -451,9 +449,7 @@ export const ElectionsSettingsPage: React.FC = () => {
               <div className="flex items-center justify-between py-3">
                 <div>
                   <p className="text-theme-text-primary text-sm font-medium">Allow write-in candidates by default</p>
-                  <p className="text-theme-text-muted text-xs">
-                    New ballot items accept a name that is not on the slate. Can be overridden per item.
-                  </p>
+                  <p className="text-theme-text-muted text-xs">Let voters write in a name that is not on the slate.</p>
                 </div>
                 <Toggle
                   label="Allow write-in candidates by default"
