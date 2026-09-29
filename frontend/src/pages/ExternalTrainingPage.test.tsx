@@ -127,3 +127,39 @@ describe('ExternalTrainingPage — modal behavior', () => {
     expect(document.body.style.overflow).toBe('hidden');
   });
 });
+
+describe('ExternalTrainingPage — provider setup form', () => {
+  const chooseProvider = async (label: RegExp) => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /add provider/i }));
+    await userEvent.click(await screen.findByRole('button', { name: label }));
+  };
+
+  // Target Solutions' Training Records API authenticates with a key and a
+  // secret in the report URL. The form offered no secret field for it, so a
+  // provider created from it could never authenticate.
+  it('collects a required key and secret for Target Solutions, without a Site ID', async () => {
+    await chooseProvider(/^Target Solutions/);
+
+    expect(await screen.findByLabelText(/^API Key/)).toBeRequired();
+    expect(screen.getByLabelText(/^API Secret/)).toBeRequired();
+    expect(screen.queryByLabelText(/^Site ID/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Authentication Type')).not.toBeInTheDocument();
+  });
+
+  it('keeps the AccessToken and Site ID fields for Vector Solutions', async () => {
+    await chooseProvider(/^Vector Solutions/);
+
+    expect(await screen.findByLabelText(/^Site ID/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^AccessToken/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^API Secret/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the generic API key fields for other providers', async () => {
+    await chooseProvider(/^Lexipol/);
+
+    expect(await screen.findByLabelText('Authentication Type')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^API Key/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Site ID/)).not.toBeInTheDocument();
+  });
+});

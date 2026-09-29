@@ -627,10 +627,36 @@ Training provider integrations are configured from **Training Admin > Integratio
 Available training providers:
 
 - **Vector Solutions** — Category catalog fetch, credit hours, auto-sync
-- **Target Solutions** — Training record import
+- **Target Solutions** — Course and activity completions from the Training Records API (see below)
 - **Lexipol** — Policy training sync
 - **iAmResponding** — Response tracking
 - **Custom API** — Generic webhook-based provider
+
+### Setting up Target Solutions
+
+Target Solutions provides a **Training Records API** URL that looks like
+`https://app.targetsolutions.com/tsapp/api/?action=reports.buildReport&reportType=completionsall&key=…&secret=…`.
+Split it into three fields rather than pasting it whole:
+
+| Field        | Enter                                        |
+| ------------ | -------------------------------------------- |
+| API Base URL | `https://app.targetsolutions.com/tsapp/api/` |
+| API Key      | the value after `key=`                       |
+| API Secret   | the value after `secret=`                    |
+
+The key and secret are stored encrypted and are never returned by the API or
+shown again. A base URL that still contains a key, secret or token is
+rejected, because the base URL is stored in plain text. The credentials are
+also redacted from application logs, Sentry events, and any error message an
+officer sees.
+
+Each sync downloads the completions report for its date range. Members are
+matched by the report's **Email** column against their Logbook email (ignoring
+case and spaces; deleted members are skipped). A member who cannot be matched
+yet is listed under **User Mappings**, and is matched automatically on a later
+sync once their email is on file — unless an officer has already set or cleared
+that mapping by hand. Synced completions wait under **Imports** for an officer
+to import them, as for every provider.
 
 ---
 

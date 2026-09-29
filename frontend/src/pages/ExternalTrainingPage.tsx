@@ -56,6 +56,10 @@ const PROVIDER_TYPES: { value: ExternalProviderType; label: string; description:
   { value: 'custom_api', label: 'Custom API', description: 'Connect to any training platform with a compatible API' },
 ];
 
+// Target Solutions' Training Records API: one GET returning a CSV of
+// completions, authenticated by key and secret query parameters.
+const TARGET_SOLUTIONS_REPORT_URL = 'https://app.targetsolutions.com/tsapp/api/';
+
 interface CreateProviderModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -77,6 +81,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const isTargetSolutions = formData.provider_type === 'target_solutions';
 
   const handleTypeSelect = (type: ExternalProviderType) => {
     setFormData((prev) => ({
@@ -206,7 +211,9 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 placeholder={
                   formData.provider_type === 'vector_solutions'
                     ? 'https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1'
-                    : 'https://api.example.com'
+                    : isTargetSolutions
+                      ? TARGET_SOLUTIONS_REPORT_URL
+                      : 'https://api.example.com'
                 }
                 required
                 aria-required="true"
@@ -217,9 +224,14 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1)
                 </p>
               )}
+              {isTargetSolutions && (
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  The Training Records API address, without the query string: {TARGET_SOLUTIONS_REPORT_URL}
+                </p>
+              )}
             </div>
 
-            {formData.provider_type !== 'vector_solutions' && (
+            {formData.provider_type !== 'vector_solutions' && !isTargetSolutions && (
               <div>
                 <label
                   htmlFor="provider-auth-type"
@@ -256,7 +268,9 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 placeholder={
                   formData.provider_type === 'vector_solutions'
                     ? 'Enter your TargetSolutions AccessToken'
-                    : 'Enter your API key'
+                    : isTargetSolutions
+                      ? 'The key= value from your Training Records API URL'
+                      : 'Enter your API key'
                 }
                 required
                 aria-required="true"
@@ -265,6 +279,12 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 <p className="text-theme-text-muted mt-1 text-xs">
                   Your AccessToken is provided by your Vector Solutions account manager. Each token has specific access
                   levels.
+                </p>
+              )}
+              {isTargetSolutions && (
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Target Solutions issues a Training Records API URL containing a key and a secret. Enter each value
+                  separately; they are stored encrypted.
                 </p>
               )}
             </div>
@@ -293,13 +313,13 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
               </div>
             )}
 
-            {formData.auth_type === 'basic' && (
+            {(formData.auth_type === 'basic' || isTargetSolutions) && (
               <div>
                 <label
                   htmlFor="provider-api-secret"
                   className="text-theme-text-secondary mb-2 block text-sm font-medium"
                 >
-                  API Secret
+                  API Secret {isTargetSolutions && <span aria-hidden="true">*</span>}
                 </label>
                 <input
                   id="provider-api-secret"
@@ -307,7 +327,11 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   value={formData.api_secret || ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, api_secret: e.target.value }))}
                   className="form-input"
-                  placeholder="Enter your API secret"
+                  placeholder={
+                    isTargetSolutions ? 'The secret= value from your Training Records API URL' : 'Enter your API secret'
+                  }
+                  required={isTargetSolutions}
+                  aria-required={isTargetSolutions}
                 />
               </div>
             )}
@@ -734,7 +758,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
             />
           </div>
 
-          {formData.auth_type === 'basic' && (
+          {(formData.auth_type === 'basic' || provider?.provider_type === 'target_solutions') && (
             <div>
               <label
                 htmlFor="edit-provider-api-secret"
