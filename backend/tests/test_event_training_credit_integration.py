@@ -444,6 +444,131 @@ class TestConfirmationRequired:
         assert stored.scalar_one() is not None
 
 
+class TestTheApprovalFollowsTheEvent:
+    async def _pending(self, db, dept):
+        org, officer, member = dept
+        event_id, start, end = await _training_event(db, org, officer)
+        session, _ = await TrainingSessionService(db).attach_session_to_event(
+            event_id, TrainingSessionAttach(), org, officer
+        )
+        await db.execute(
+            text(
+                "UPDATE training_sessions SET require_completion_confirmation = 1 "
+                "WHERE id = :id"
+            ),
+            {"id": session.id},
+        )
+        db.expire_all()
+        await _add_with_edit_times(db, event_id, org, officer, member, start, end)
+        await EventService(db).finalize_event_attendance_detailed(
+            event_id, org, officer
+        )
+        token = (
+            await db.execute(
+                text(
+                    "SELECT approval_token FROM training_approvals "
+                    "WHERE training_session_id = :s AND status = 'pending'"
+                ),
+                {"s": session.id},
+            )
+        ).scalar_one()
+        return event_id, str(session.id), token
+
+    async def test_a_reopen_kills_the_emailed_link(self, db_session, dept):
+        from app.schemas.training_session import AttendeeApprovalData
+
+        org, officer, member = dept
+        event_id, _session_id, token = await self._pending(db_session, dept)
+        training = TrainingSessionService(db_session)
+        approval, _ = await training.get_training_approval_by_token(token, org)
+        attendees = [AttendeeApprovalData(**a) for a in approval["attendees"]]
+
+        _, error = await EventService(db_session).reopen_event_attendance(event_id, org)
+        assert error is None
+        ok, error = await training.submit_training_approval(
+            token=token,
+            attendees=attendees,
+            approval_notes=None,
+            approved_by=officer,
+            organization_id=org,
+        )
+
+        assert (ok, error) == (False, "This approval link has expired")
+        (held,) = await _records(db_session, member)
+        assert held["status"] == "in_progress"
+
+    async def test_the_old_session_route_finalizes_the_event(self, db_session, dept):
+        org, officer, member = dept
+        event_id, start, end = await _training_event(db_session, org, officer)
+        session, _ = await TrainingSessionService(db_session).attach_session_to_event(
+            event_id, TrainingSessionAttach(), org, officer
+        )
+        session_id = str(session.id)
+        await _add_with_edit_times(
+            db_session, event_id, org, officer, member, start, end
+        )
+
+        approval, error = await TrainingSessionService(
+            db_session
+        ).finalize_training_session(session_id, org, officer)
+
+        assert error is None
+        assert approval is not None
+        finalized = await db_session.execute(
+            text("SELECT attendance_finalized_at FROM events WHERE id = :id"),
+            {"id": event_id},
+        )
+        assert finalized.scalar_one() is not None
+        (record,) = await _records(db_session, member)
+        assert (record["status"], record["hours_completed"]) == ("completed", 4.0)
+
+        # A second finalize through either door is refused by the event lock.
+        _, again = await TrainingSessionService(db_session).finalize_training_session(
+            session_id, org, officer
+        )
+        assert again is not None
+
+    async def test_a_re_finalize_that_credits_nobody_reports_no_approval(
+        self, db_session, dept
+    ):
+        org, officer, member = dept
+        event_id, start, end = await _training_event(db_session, org, officer)
+        await TrainingSessionService(db_session).attach_session_to_event(
+            event_id, TrainingSessionAttach(), org, officer
+        )
+        await _add_with_edit_times(
+            db_session, event_id, org, officer, member, start, end
+        )
+        service = EventService(db_session)
+        await service.finalize_event_attendance_detailed(event_id, org, officer)
+        training = TrainingSessionService(db_session)
+        first = await training.get_approval_summary_for_event(
+            event_id, org, include_token=False
+        )
+        assert first["status"] == "approved"
+        # created_at has one-second precision and the summary reads the
+        # newest; a reopen and a re-finalize are never inside the second the
+        # first finalize took, except in a test.
+        await db_session.execute(
+            text(
+                "UPDATE training_approvals "
+                "SET created_at = created_at - INTERVAL 1 HOUR WHERE event_id = :e"
+            ),
+            {"e": event_id},
+        )
+
+        await service.reopen_event_attendance(event_id, org)
+        await service.remove_attendee(event_id, member, org)
+        await service.finalize_event_attendance_detailed(event_id, org, officer)
+
+        assert (
+            await training.get_approval_summary_for_event(
+                event_id, org, include_token=False
+            )
+            is None
+        )
+
+
 class TestTheUniqueKey:
     async def test_a_second_record_for_one_event_and_member_is_refused(
         self, db_session, dept

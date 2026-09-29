@@ -369,8 +369,10 @@ async def finalize_training_session(
     """
     Finalize a training session after the event ends
 
-    This triggers the approval workflow by creating a TrainingApproval record
-    and sending email notifications to training officers.
+    Finalizes the session's event attendance, exactly as Finalize Attendance
+    on the event page does: the event is closed, members are credited, and a
+    session that requires confirmation leaves an approval for training
+    officers, who are emailed. Returns the approval that finalize issued.
 
     **Authentication required**
     **Requires permission: events.manage**

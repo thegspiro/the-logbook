@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.constants import ROLE_TRAINING_OFFICER
+from app.core.utils import generate_uuid
 from app.models.event import (
     CheckInWindowType,
     Event,
@@ -67,6 +68,18 @@ TRAINING_DETAILS_EXIST = "This event already has training details"
 # How far out an approval link stays usable, from when it is issued.
 APPROVAL_TOKEN_TTL = timedelta(days=30)
 
+# What an approving officer may change on a roster entry. Everything else —
+# who the member is, the times finalize credited — stays as finalize wrote it.
+_APPROVER_EDITABLE_FIELDS = frozenset(
+    {
+        "override_check_in_at",
+        "override_check_out_at",
+        "override_duration_minutes",
+        "approved",
+        "notes",
+    }
+)
+
 
 def _display_name(user: User) -> str:
     return f"{user.first_name or ''} {user.last_name or ''}".strip() or (
@@ -91,6 +104,7 @@ class EventTrainingCredit:
     uncredited_names: List[str] = field(default_factory=list)
     session_id: Optional[str] = None
     program_id: Optional[str] = None
+    approval_id: Optional[str] = None
     removed_user_ids: Set[str] = field(default_factory=set)
     pipeline_updates: List[Tuple[str, str, str, float, str]] = field(
         default_factory=list
@@ -719,272 +733,51 @@ class TrainingSessionService:
         finalized_by: UUID,
         can_manage_training: bool = False,
     ) -> Tuple[Optional[TrainingApproval], Optional[str]]:
+        """Finalize a training session by finalizing its event's attendance.
+
+        The event's Finalize Attendance is the one writer of training credit
+        and the event lock its authority. This route predates that and wrote
+        credit on its own: without the event lock, on an event whose
+        attendance stayed open, in a different lock order, and on a cancelled
+        or re-typed event. It now runs the event's finalize. Kept for API
+        callers; the app finalizes from the event page.
+
+        Returns: (the approval this finalize issued, error_message)
         """
-        Finalize a training session after the event ends
-
-        This creates a TrainingApproval record and triggers email notifications
-        to training officers.
-
-        Returns: (training_approval, error_message)
-        """
-        # Get training session with event and RSVPs
-        # Locked: two finalizes of one session arriving together each saw it
-        # unfinalized and each issued an approval.
-        session_result = await self.db.execute(
-            select(TrainingSession)
-            .options(selectinload(TrainingSession.event).selectinload(Event.rsvps))
-            .where(TrainingSession.id == str(training_session_id))
-            .where(TrainingSession.organization_id == str(organization_id))
-            .with_for_update()
-        )
-        training_session = session_result.scalar_one_or_none()
-
+        training_session = (
+            await self.db.execute(
+                select(TrainingSession)
+                .where(TrainingSession.id == str(training_session_id))
+                .where(TrainingSession.organization_id == str(organization_id))
+            )
+        ).scalar_one_or_none()
         if not training_session:
             return None, "Training session not found"
-
-        if training_session.is_finalized:
-            return None, "Training session is already finalized"
-
-        # Get event through relationship
-        event_result = await self.db.execute(
-            select(Event)
-            .options(selectinload(Event.rsvps))
-            .where(Event.id == training_session.event_id)
-        )
-        event = event_result.scalar_one_or_none()
-
-        if not event:
+        if not training_session.event_id:
             return None, "Event not found"
 
-        # Check if event has ended
-        now = datetime.now(timezone.utc)
-        event_end = event.actual_end_time or event.end_datetime
-        if event_end and event_end.tzinfo is None:
-            event_end = event_end.replace(tzinfo=timezone.utc)
-        if event_end and now < event_end:
-            return None, "Cannot finalize training session before event ends"
-
-        # Get all checked-in attendees
-        checked_in_rsvps = [rsvp for rsvp in event.rsvps if rsvp.checked_in]
-
-        if not checked_in_rsvps:
-            return None, "No attendees checked in to this training session"
-
-        # Build attendee data. The same credited times and minutes an event
-        # finalize uses (EventService.credited_minutes), so the two paths
-        # cannot credit one attendance differently.
-        attendee_data = []
-        for rsvp in checked_in_rsvps:
-            user_result = await self.db.execute(
-                select(User).where(
-                    User.id == str(rsvp.user_id),
-                    User.organization_id == str(organization_id),
-                )
-            )
-            user = user_result.scalar_one_or_none()
-
-            if not user:
-                continue
-
-            minutes = EventService.credited_minutes(event, rsvp, event_end)
-            if minutes is None:
-                continue
-
-            attendee_data.append(
-                self._attendee_snapshot_entry(event, rsvp, user, event_end, minutes)
-            )
-
-        # A re-finalize after a reopen has to answer for who is NO LONGER on
-        # the roster, not just for who is. Do it before the new approval row
-        # exists so "the previous roster" is unambiguous.
-        await self._revoke_credit_for_removed_attendees(
-            training_session=training_session,
-            event=event,
-            current_user_ids={str(a["user_id"]) for a in attendee_data},
-            organization_id=organization_id,
-            verified_by=finalized_by,
-        )
-
-        # Generate secure token for approval link
-        approval_token = secrets.token_urlsafe(48)
-        token_expires_at = now + timedelta(days=30)  # Token valid for 30 days
-        approval_deadline = event_end + timedelta(
-            days=training_session.approval_deadline_days
-        )
-
-        # Create TrainingApproval record
-        training_approval = TrainingApproval(
-            organization_id=organization_id,
-            training_session_id=training_session.id,
-            event_id=event.id,
-            approval_token=approval_token,
-            token_expires_at=token_expires_at,
-            status=ApprovalStatus.PENDING,
-            approval_deadline=approval_deadline,
-            attendee_data=attendee_data,
-        )
-
-        self.db.add(training_approval)
-
-        # Mark training session as finalized
-        training_session.is_finalized = True
-        training_session.finalized_at = now
-        training_session.finalized_by = str(finalized_by)
-
-        # When the session does not require explicit instructor confirmation,
-        # auto-approve and complete the records immediately rather than routing
-        # through the token-based officer approval workflow. (Capture the flag
-        # before commit expires the ORM object.)
-        requires_confirmation = training_session.require_completion_confirmation
-        pipeline_updates: List[Tuple[str, str, str, float, str]] = []
-        if not requires_confirmation:
-            training_approval.status = ApprovalStatus.APPROVED
-            training_approval.approved_by = str(finalized_by)
-            training_approval.approved_at = now
-            attendees = [AttendeeApprovalData(**a) for a in attendee_data]
-            pipeline_updates = await self._finalize_training_records(
-                approval=training_approval,
-                attendees=attendees,
-                approved_by=finalized_by,
-            )
-
-        # Capture values before commit expires the relationships
-        event_title = event.title
-        event_start = event.start_datetime
-        session_course = training_session.course_name
-
-        await self.db.commit()
-        await self.db.refresh(training_approval)
-
-        # Feed the pipeline after the approval+records commit — the real updater
-        # commits internally, so it must run outside the transaction above.
-        #
-        # The session id is what arms the stale-credit sweep, and it is passed
-        # only when this finalize actually approved the records. A session that
-        # requires an officer's confirmation has no approved records yet, so
-        # ``pipeline_updates`` is deliberately empty — and sweeping against an
-        # empty destination set would reverse every credit the *previous*
-        # approval earned, the moment a leader reopens the session and before
-        # anyone has confirmed what replaces it. If the officer then never
-        # submits, those hours are simply gone. ``submit_training_approval``
-        # runs the sweep with the same session id once the new records are
-        # approved, which is the point at which the destination set is real.
-        await self._apply_pipeline_updates(
-            pipeline_updates,
+        outcome = await EventService(self.db).finalize_event_attendance_detailed(
+            training_session.event_id,
             organization_id,
-            finalized_by,
-            can_manage_training,
-            session_id=(None if requires_confirmation else str(training_session.id)),
+            finalized_by=finalized_by,
+            can_manage_training=can_manage_training,
+            require_training=True,
         )
+        if outcome.error:
+            return None, outcome.error
+        if not outcome.training_approval_id:
+            return None, "Training session not found"
 
-        # Notify training officers only when their confirmation is required;
-        # an auto-approved session has nothing pending to act on.
-        if requires_confirmation:
-            await self._notify_training_officers(
-                organization_id=organization_id,
-                event_title=event_title,
-                event_start=event_start,
-                course_name=session_course,
-                approval_token=approval_token,
-                attendee_count=len(attendee_data),
-                approval_deadline=approval_deadline,
-                finalized_by=finalized_by,
+        approval = (
+            await self.db.execute(
+                select(TrainingApproval)
+                .where(TrainingApproval.id == outcome.training_approval_id)
+                .where(TrainingApproval.organization_id == str(organization_id))
             )
-
-        return training_approval, None
-
-    async def _revoke_credit_for_removed_attendees(
-        self,
-        training_session: TrainingSession,
-        event: Event,
-        current_user_ids: set,
-        organization_id: UUID,
-        verified_by: UUID,
-    ) -> None:
-        """Undo credit for members dropped from the roster during a reopen.
-
-        Re-finalization writes records for whoever is on the roster now. That
-        alone is not enough: the reason a leader reopens a session is often that
-        somebody was on it who should not have been, and re-finalizing left that
-        member's pipeline credit and completed training record exactly where the
-        first finalize put them — still counting toward their certification for
-        a session they are no longer recorded at.
-
-        The previous roster is the newest prior approval's ``attendee_data``.
-        Anyone in it and not in the current roster is reconciled:
-
-        * Pipeline credit is revoked through ``revoke_requirement_credit``, the
-          same reversal an officer's un-apply uses, so the requirement
-          percentage, enrollment rollup and phase state unwind the way they
-          accrued. The ledger key is (progress, source_type, source_id) and
-          progress is per member, so this touches only the member who left.
-        * The training record is reverted to not-completed rather than deleted.
-          Nothing on ``TrainingRecord`` records which session created it — the
-          check-in auto-create path writes one before finalization ever runs —
-          so deleting could destroy a record this session never authored.
-          Zeroing the hours and clearing the completion removes the credit while
-          leaving something a human can see and put right.
-
-        Failures are logged, not raised: the finalize that follows is the
-        caller's actual request, and losing it to a reconciliation problem on a
-        member who already left the roster is the worse outcome.
-        """
-        from app.models.training import ProgressCreditSource
-        from app.services.training_program_service import TrainingProgramService
-
-        prior_result = await self.db.execute(
-            select(TrainingApproval)
-            .where(TrainingApproval.training_session_id == training_session.id)
-            .where(TrainingApproval.organization_id == str(organization_id))
-            .order_by(TrainingApproval.created_at.desc())
-            .limit(1)
-        )
-        prior = prior_result.scalar_one_or_none()
-        if prior is None:
-            return
-
-        prior_user_ids = {
-            str(entry.get("user_id"))
-            for entry in (prior.attendee_data or [])
-            if entry.get("user_id")
-        }
-        removed = prior_user_ids - {str(uid) for uid in current_user_ids}
-        if not removed:
-            return
-
-        program_service = TrainingProgramService(self.db)
-        tz = await resolve_scheduling_timezone(self.db, organization_id)
-        event_dates = local_and_utc_dates(event.start_datetime, tz)
-
-        for user_id in removed:
-            try:
-                await self._revoke_pipeline_credit_for_user(
-                    program_service=program_service,
-                    user_id=user_id,
-                    training_session=training_session,
-                    organization_id=organization_id,
-                    verified_by=verified_by,
-                    source_type=ProgressCreditSource.TRAINING_SESSION,
-                )
-                await self._uncomplete_training_record(
-                    user_id=user_id,
-                    training_session=training_session,
-                    event_dates=event_dates,
-                )
-                await self.void_event_records(
-                    event.id,
-                    organization_id,
-                    event_title=event.title,
-                    only_user_ids={str(user_id)},
-                )
-            except Exception:
-                logger.exception(
-                    "Failed to reconcile removed attendee {} on session {}",
-                    user_id,
-                    training_session.id,
-                )
-
-        await self.db.commit()
+        ).scalar_one_or_none()
+        if approval is None:
+            return None, "Training session not found"
+        return approval, None
 
     async def _revoke_pipeline_credit_for_user(
         self,
@@ -1030,44 +823,6 @@ class TrainingSessionService:
                 source_id=str(training_session.id),
                 verified_by=verified_by,
             )
-
-    async def _uncomplete_training_record(
-        self,
-        user_id: str,
-        training_session: TrainingSession,
-        event_dates: List[date],
-    ) -> None:
-        """Take the completion back off a removed attendee's training record.
-
-        ``event_dates`` is the session's day on the department's calendar and,
-        for a record written before that, the UTC day it was filed under.
-        """
-        record_result = await self.db.execute(
-            select(TrainingRecord)
-            .where(TrainingRecord.user_id == str(user_id))
-            .where(
-                TrainingRecord.organization_id == str(training_session.organization_id)
-            )
-            .where(TrainingRecord.course_name == training_session.course_name)
-            # A record this event's finalize wrote carries its source and is
-            # voided by void_event_records; reverting it to "scheduled" here
-            # would bring a cancelled credit back as a live placeholder.
-            .where(TrainingRecord.source_event_id.is_(None))
-            .where(
-                or_(
-                    TrainingRecord.scheduled_date.in_(event_dates),
-                    TrainingRecord.completion_date.in_(event_dates),
-                )
-            )
-        )
-        record = record_result.scalars().first()
-        if record is None:
-            return
-
-        record.hours_completed = 0
-        record.completion_date = None
-        record.status = "scheduled"
-        record.updated_at = datetime.now(timezone.utc)
 
     async def _resync_admin_hours(
         self,
@@ -1158,60 +913,55 @@ class TrainingSessionService:
     ) -> Tuple[Optional[TrainingSession], Optional[str]]:
         """Reopen a finalized training session so it can be corrected.
 
-        Finalizing a session was previously one-way: ``is_finalized`` refused a
-        second finalize and nothing ever cleared it, so a member left off the
-        roster could not be added and a wrong duration could not be fixed —
-        the opposite failure from the event side, which locked nothing at all.
+        The session's finalized flag follows its event's attendance lock, so
+        this reopens the event's attendance (``reopen_event_attendance``, which
+        reopens the session and expires any pending approval with it). Reopening
+        only the session left the event locked while a second finalize could
+        write credit behind that lock.
 
-        Reopening clears the flag and kills any approval still outstanding:
-
-        * A PENDING approval's token is expired on the spot. It was emailed to
-          the training officers against attendee data that is about to change,
-          and the whole point of reopening is that those numbers were wrong.
-          Re-finalizing issues a fresh token and a fresh notification.
-        * An APPROVED one is left as it is. Its training records were already
-          written, and re-finalizing updates them in place rather than
-          duplicating (``_finalize_training_records`` matches on user, course
-          and event date). Pipeline credit is idempotent per session through
-          the progress ledger, so the corrected hours land without
-          double-crediting.
+        A session finalized by the old route has an event whose attendance was
+        never closed; for that one the session alone is reopened, under the
+        event's lock and in the order every writer uses.
 
         The caller audit-logs who reopened it and why.
         """
-        result = await self.db.execute(
-            select(TrainingSession)
-            .where(TrainingSession.id == str(training_session_id))
-            .where(TrainingSession.organization_id == str(organization_id))
-            .with_for_update()
-        )
-        training_session = result.scalar_one_or_none()
-
+        training_session = (
+            await self.db.execute(
+                select(TrainingSession)
+                .where(TrainingSession.id == str(training_session_id))
+                .where(TrainingSession.organization_id == str(organization_id))
+            )
+        ).scalar_one_or_none()
         if not training_session:
             return None, "Training session not found"
-
         if not training_session.is_finalized:
             return None, "Training session is not finalized"
 
-        now = datetime.now(timezone.utc)
-
-        pending_result = await self.db.execute(
-            select(TrainingApproval)
-            .where(
-                TrainingApproval.training_session_id == training_session.id,
-                TrainingApproval.status == ApprovalStatus.PENDING,
+        event = (
+            await self.db.execute(
+                select(Event)
+                .where(Event.id == str(training_session.event_id))
+                .where(Event.organization_id == str(organization_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
-            .with_for_update()
-        )
-        self._supersede(list(pending_result.scalars().all()), now)
+        ).scalar_one_or_none()
+        if event is None:
+            return None, "Event not found"
 
-        training_session.is_finalized = False
-        training_session.finalized_at = None
-        training_session.finalized_by = None
-        training_session.updated_at = now
+        if attendance_is_finalized(event):
+            _, error = await EventService(self.db).reopen_event_attendance(
+                event.id, organization_id
+            )
+            if error:
+                return None, error
+        else:
+            await self.reopen_for_event(
+                event, organization_id, datetime.now(timezone.utc)
+            )
+            await self.db.commit()
 
-        await self.db.commit()
         await self.db.refresh(training_session)
-
         return training_session, None
 
     # ------------------------------------------------------------------
@@ -1368,20 +1118,32 @@ class TrainingSessionService:
         ]
 
         requires_confirmation = bool(training_session.require_completion_confirmation)
-        if attendee_data:
-            approval = TrainingApproval(
-                organization_id=org,
-                training_session_id=training_session.id,
-                event_id=str(event.id),
-                approval_token=secrets.token_urlsafe(48),
-                token_expires_at=now + APPROVAL_TOKEN_TTL,
-                status=ApprovalStatus.PENDING,
-                approval_deadline=effective_end
-                + timedelta(days=training_session.approval_deadline_days or 7),
-                attendee_data=attendee_data,
-            )
-            self.db.add(approval)
-
+        # Every finalize leaves an approval, an empty one when it credited
+        # nobody: the newest approval is how the event page knows where this
+        # finalize stands, and without one it went on reporting an earlier
+        # finalize's approval for members who no longer hold any credit.
+        approval = TrainingApproval(
+            # Assigned here rather than at flush: the legacy finalize route
+            # returns this approval's id.
+            id=generate_uuid(),
+            organization_id=org,
+            training_session_id=training_session.id,
+            event_id=str(event.id),
+            approval_token=secrets.token_urlsafe(48),
+            token_expires_at=now + APPROVAL_TOKEN_TTL,
+            status=ApprovalStatus.PENDING,
+            approval_deadline=effective_end
+            + timedelta(days=training_session.approval_deadline_days or 7),
+            attendee_data=attendee_data,
+        )
+        self.db.add(approval)
+        credit.approval_id = str(approval.id)
+        if not attendee_data:
+            # Nothing to confirm; nothing waits on an officer.
+            approval.status = ApprovalStatus.APPROVED
+            approval.approved_by = str(actor) if actor else None
+            approval.approved_at = now
+        else:
             if requires_confirmation:
                 await self._hold_pending_records(
                     training_session, event, credited, event_dates, actor, org
@@ -1746,6 +1508,20 @@ class TrainingSessionService:
                 legacy_ids = await self._prior_credit_user_ids(
                     training_session, event, org
                 )
+                # The whole event's credit is going, so a link still pending
+                # would ask an officer to approve credit for an event that was
+                # cancelled, deleted or is no longer training. Every caller
+                # holds the event lock, so these are taken after it.
+                pending = await self.db.execute(
+                    select(TrainingApproval)
+                    .where(TrainingApproval.training_session_id == training_session.id)
+                    .where(TrainingApproval.organization_id == org)
+                    .where(TrainingApproval.status == ApprovalStatus.PENDING)
+                    .with_for_update()
+                )
+                self._supersede(
+                    list(pending.scalars().all()), datetime.now(timezone.utc)
+                )
             if event.start_datetime is not None:
                 tz = await resolve_scheduling_timezone(self.db, org)
                 legacy_dates = local_and_utc_dates(event.start_datetime, tz)
@@ -1932,6 +1708,14 @@ class TrainingSessionService:
             ),
             approvals[0],
         )
+        # The newest finalize credited nobody (record_event_attendance leaves an
+        # empty approval for exactly this): there is nothing approved or
+        # awaited to report, and an older approval would describe credit that
+        # has since been taken back. "Newest" is by a one-second created_at, so
+        # a reopen and re-finalize inside the second of the first finalize
+        # would tie; nothing here depends on it but this display.
+        if not chosen.attendee_data and chosen.status != ApprovalStatus.PENDING:
+            return None
         status_value = getattr(chosen.status, "value", chosen.status)
         pending_and_live = chosen.status == ApprovalStatus.PENDING and not _expired(
             chosen
@@ -2142,33 +1926,58 @@ class TrainingSessionService:
         # it travels by email and can leak, so the approving user must
         # belong to the approval's organization. Filtering here (rather
         # than comparing after fetch) also avoids revealing whether a
-        # foreign-org token exists.
-        approval_result = await self.db.execute(
-            select(TrainingApproval)
-            .where(
-                TrainingApproval.approval_token == token,
-                TrainingApproval.organization_id == str(organization_id),
-            )
-            .with_for_update()
+        # foreign-org token exists. A plain read, for its event and session:
+        # the locks below are taken in the order every writer uses.
+        found = await self.db.execute(
+            select(TrainingApproval.event_id, TrainingApproval.training_session_id)
+            .where(TrainingApproval.approval_token == token)
+            .where(TrainingApproval.organization_id == str(organization_id))
         )
-        approval = approval_result.scalar_one_or_none()
+        ids = found.one_or_none()
+        if ids is None:
+            return False, "Invalid approval link"
+        event_id, session_id = ids
 
-        if not approval:
+        # Event, session, approval — the order finalize, reopen, cancel and
+        # retype lock in. Each of those can make this approval stand for
+        # nothing, and whichever commits first, the other sees its outcome:
+        # a reopen or re-finalize has expired the link, a cancel or a retype
+        # has marked the event, and an approval that won leaves nothing
+        # pending for them to void.
+        event = (
+            await self.db.execute(
+                select(Event)
+                .where(Event.id == str(event_id))
+                .where(Event.organization_id == str(organization_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        training_session = (
+            await self.db.execute(
+                select(TrainingSession)
+                .where(TrainingSession.id == str(session_id))
+                .where(TrainingSession.organization_id == str(organization_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if event is None or training_session is None:
+            return False, "Training session or event not found"
+        approval = (
+            await self.db.execute(
+                select(TrainingApproval)
+                .where(TrainingApproval.approval_token == token)
+                .where(TrainingApproval.organization_id == str(organization_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if approval is None:
             return False, "Invalid approval link"
 
         if approval.status != ApprovalStatus.PENDING:
             return False, "This training session has already been processed"
-
-        # The FOR UPDATE above serializes this against
-        # reopen_training_session, which locks the same row to expire the token.
-        # Without it an officer holding a page loaded before the reopen could
-        # commit an approval — and its training records — against a session a
-        # leader had just opened for correction, leaving the session marked open
-        # while carrying an approved result. With it, one of the two transactions
-        # reaches the row first and the other sees its outcome: a reopen that
-        # committed first has already expired the token, so the expiry check
-        # below refuses; an approval that committed first leaves nothing pending
-        # for the reopen to void.
 
         # Check if token is expired
         token_exp = (
@@ -2178,18 +1987,35 @@ class TrainingSessionService:
         )
         if datetime.now(timezone.utc) > token_exp:
             return False, "This approval link has expired"
+        # A reopen clears the flag and expires the link together; checked
+        # separately so the refusal does not depend on a timestamp alone.
+        if not training_session.is_finalized:
+            return False, "This approval link has expired"
+        if event.is_cancelled or not EventService.event_credits_training(event):
+            return False, "This event was cancelled or is no longer a Training event"
 
-        # The roster is the one this approval was issued for. The request body
-        # names attendees by user id, and without this check an approver could
-        # write a completed training record — and an attendance override — for
-        # any member of the organization by adding them to the payload (XC-1).
-        roster_ids = {
-            str(entry.get("user_id"))
+        # The roster is the one this approval was issued for, exactly. The
+        # request names attendees by user id: without the membership check an
+        # approver could write a completed record — and an attendance override
+        # — for any member of the organization (XC-1); without the coverage
+        # check a partial submission approved the rest into limbo, their
+        # in-progress records left with nothing pending to complete them.
+        roster = {
+            str(entry.get("user_id")): entry
             for entry in (approval.attendee_data or [])
-            if entry.get("user_id")
+            if isinstance(entry, dict) and entry.get("user_id")
         }
-        if any(str(a.user_id) not in roster_ids for a in attendees):
+        submitted_ids = [str(a.user_id) for a in attendees]
+        if any(uid not in roster for uid in submitted_ids):
             return False, "Attendee is not part of this approval"
+        if len(submitted_ids) != len(set(submitted_ids)):
+            return False, "An attendee is listed more than once"
+        if set(submitted_ids) != set(roster):
+            return (
+                False,
+                "Every attendee on this approval must be included; approve 0 "
+                "minutes to give a member no credit",
+            )
         # Checked here rather than on the schema: AttendeeApprovalData also
         # parses the stored snapshot, where a bound would reject old rows.
         if any(
@@ -2198,15 +2024,40 @@ class TrainingSessionService:
         ):
             return False, "Approved minutes cannot be negative"
 
+        # Every member approved still has their attendance on the event. One
+        # removed since cannot be credited from the officer's figure alone —
+        # the roster changed, and finalizing again is what reflects that.
+        rsvp_result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == str(event.id))
+            .where(EventRSVP.organization_id == str(organization_id))
+            .where(EventRSVP.user_id.in_(sorted(roster)))
+        )
+        rsvps = {str(r.user_id): r for r in rsvp_result.scalars().all()}
+        if set(rsvps) != set(roster):
+            return (
+                False,
+                "A member on this approval is no longer on the event's attendance; "
+                "reopen the event's attendance and finalize it again",
+            )
+
         # Update approval record
         approval.status = ApprovalStatus.APPROVED
         approval.approved_by = str(approved_by)
         approval.approved_at = datetime.now(timezone.utc)
         approval.approval_notes = approval_notes
-        # mode="json": attendee_data is a JSON column and the engine has no
-        # custom serializer, so the UUIDs and datetimes a python-mode dump
-        # carries made every real submission fail with a TypeError at flush.
-        approval.attendee_data = [a.model_dump(mode="json") for a in attendees]
+        # The stored roster is the server's, with only what an officer may
+        # change taken from the request — a client-sent name or email must not
+        # rewrite the record of who attended. mode="json": attendee_data is a
+        # JSON column and the engine has no custom serializer, so the UUIDs and
+        # datetimes a python-mode dump carries failed every submission at flush.
+        approval.attendee_data = [
+            {
+                **roster[str(a.user_id)],
+                **a.model_dump(mode="json", include=_APPROVER_EDITABLE_FIELDS),
+            }
+            for a in attendees
+        ]
 
         # Update RSVP records with overrides.
         #
@@ -2219,13 +2070,7 @@ class TrainingSessionService:
         # officer's number while admin hours keeps the finalized one.
         corrected_rsvps = []
         for attendee in attendees:
-            rsvp_result = await self.db.execute(
-                select(EventRSVP)
-                .where(EventRSVP.event_id == approval.event_id)
-                .where(EventRSVP.user_id == str(attendee.user_id))
-                .where(EventRSVP.organization_id == str(organization_id))
-            )
-            rsvp = rsvp_result.scalar_one_or_none()
+            rsvp = rsvps.get(str(attendee.user_id))
 
             if rsvp:
                 if attendee.override_check_in_at is not None:
@@ -2310,7 +2155,8 @@ class TrainingSessionService:
         pipeline_updates: List[Tuple[str, str, str, float, str]] = []
         completed_records: List[Any] = []
         # Courses whose qualification has to be recomputed because a record
-        # stopped pointing at them (the session's course was cleared).
+        # stopped pointing at them (the session's course was cleared or
+        # changed).
         detached_courses: List[Tuple[str, str]] = []
 
         # Get training session details
@@ -2439,11 +2285,22 @@ class TrainingSessionService:
                     if training_session.category_id
                     else None
                 )
-                if training_session.course_id:
-                    existing_record.course_id = str(training_session.course_id)
-                elif existing_record.course_id:
-                    detached_courses.append((user_id, str(existing_record.course_id)))
-                    existing_record.course_id = None
+                # Moved off a course — cleared, or switched to another — the
+                # old course's qualification is recomputed without this record,
+                # or the member keeps a credential nothing supports any more.
+                old_course_id = (
+                    str(existing_record.course_id)
+                    if existing_record.course_id
+                    else None
+                )
+                new_course_id = (
+                    str(training_session.course_id)
+                    if training_session.course_id
+                    else None
+                )
+                if old_course_id and old_course_id != new_course_id:
+                    detached_courses.append((user_id, old_course_id))
+                existing_record.course_id = new_course_id
                 existing_record.updated_at = now
                 completed_records.append(existing_record)
             else:
@@ -2525,6 +2382,7 @@ class TrainingSessionService:
                 await qualifications.sync_from_training_record(completed)
             # A record that no longer names a course no longer supports the
             # qualification that course confers; recompute it without them.
+            # After the flush above, so the recompute sees the record moved.
             for user_id, course_id in detached_courses:
                 await qualifications.sync_from_training_record(
                     SimpleNamespace(

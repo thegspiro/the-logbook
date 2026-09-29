@@ -51,6 +51,7 @@ def _session(finalized=True):
     return SimpleNamespace(
         id="session-1",
         organization_id="org-1",
+        event_id="event-1",
         is_finalized=finalized,
         finalized_at=now - timedelta(hours=1) if finalized else None,
         finalized_by="chief-1" if finalized else None,
@@ -74,10 +75,26 @@ def _db(*results):
     return db
 
 
+def _event(finalized=False):
+    now = datetime.now(timezone.utc)
+    return SimpleNamespace(
+        id="event-1",
+        organization_id="org-1",
+        custom_fields={"attendance_finalized": True} if finalized else {},
+        attendance_finalized_at=now - timedelta(hours=1) if finalized else None,
+    )
+
+
 class TestReopenTrainingSession:
+    """The session's flag follows its event's attendance lock. These cover a
+    session the old finalize route closed on its own — its event's attendance
+    was never closed — which is reopened alone, under the event's lock."""
+
     async def test_reopen_clears_the_finalized_state(self):
         session = _session()
-        db = _db(_one(session), _all([]))
+        # The session read, the event lock, then the session and its pending
+        # approvals locked again in the order every writer takes them.
+        db = _db(_one(session), _one(_event()), _one(session), _all([]))
 
         result, err = await TrainingSessionService(db).reopen_training_session(
             "session-1", "org-1"
@@ -93,9 +110,10 @@ class TestReopenTrainingSession:
     async def test_pending_approval_token_is_expired(self):
         """It was emailed against attendee data the reopen is about to change,
         and re-finalizing issues a fresh one."""
+        session = _session()
         approval = _approval()
         before = approval.token_expires_at
-        db = _db(_one(_session()), _all([approval]))
+        db = _db(_one(session), _one(_event()), _one(session), _all([approval]))
 
         await TrainingSessionService(db).reopen_training_session("session-1", "org-1")
 
@@ -107,16 +125,34 @@ class TestReopenTrainingSession:
     async def test_only_pending_approvals_are_queried(self):
         """An approved one keeps its record — re-finalizing updates the
         training records in place rather than duplicating them."""
-        db = _db(_one(_session()), _all([]))
+        session = _session()
+        db = _db(_one(session), _one(_event()), _one(session), _all([]))
 
         await TrainingSessionService(db).reopen_training_session("session-1", "org-1")
 
-        approval_stmt = db.execute.await_args_list[1].args[0]
+        approval_stmt = db.execute.await_args_list[3].args[0]
         compiled = str(
             approval_stmt.compile(compile_kwargs={"literal_binds": True})
         ).lower()
         assert "status" in compiled
         assert "pending" in compiled
+
+    async def test_a_finalized_event_is_reopened_through_its_attendance(self):
+        """Reopening only the session left the event locked while a second
+        finalize could write credit behind that lock."""
+        session = _session()
+        db = _db(_one(session), _one(_event(finalized=True)))
+
+        with patch(
+            "app.services.training_session_service.EventService.reopen_event_attendance",
+            AsyncMock(return_value=(SimpleNamespace(), None)),
+        ) as reopen:
+            result, err = await TrainingSessionService(db).reopen_training_session(
+                "session-1", "org-1"
+            )
+
+        assert (result, err) == (session, None)
+        reopen.assert_awaited_once_with("event-1", "org-1")
 
     async def test_reopening_an_open_session_is_refused(self):
         db = _db(_one(_session(finalized=False)))
@@ -203,115 +239,24 @@ class TestRestatingCorrectedHours:
         svc.update_requirement_progress.assert_not_awaited()
 
 
-class TestRemovedAttendeeLosesCredit:
-    """PR #1791 review, P1: re-finalization wrote records for the current
-    roster and said nothing about anyone dropped from it, so a member removed
-    during a reopen kept the completed record and the pipeline credit."""
-
-    def _session_with_program(self):
-        session = _session()
-        session.program_id = "prog-1"
-        session.course_name = "Pump Ops"
-        session.course_id = None
-        session.category_id = None
-        return session
-
-    async def test_prior_roster_minus_current_is_reconciled(self):
-        session = self._session_with_program()
-        prior = SimpleNamespace(
-            attendee_data=[{"user_id": "kept-1"}, {"user_id": "removed-1"}],
-        )
-        record = SimpleNamespace(
-            hours_completed=4.0,
-            completion_date="2026-08-24",
-            status="completed",
-            updated_at=None,
-        )
-        enrollment = SimpleNamespace(id="enr-1")
-        progress = SimpleNamespace(id="prog-row-1")
-        # The enrollment lookup reads every candidate row (see
-        # _resolve_pipeline_enrollment); the record lookup uses .scalars().first()
-        db = _db(
-            _one(prior),  # newest prior approval
-            _all([enrollment]),  # removed member's enrollment
-            _all([progress]),  # their requirement rows
-            MagicMock(scalars=MagicMock(return_value=MagicMock(first=lambda: record))),
-        )
-        svc = TrainingSessionService(db)
-
-        with patch(
-            "app.services.training_program_service.TrainingProgramService"
-        ) as tps_cls:
-            revoke = AsyncMock(return_value=(None, None))
-            tps_cls.return_value.revoke_requirement_credit = revoke
-            await svc._revoke_credit_for_removed_attendees(
-                training_session=session,
-                event=SimpleNamespace(start_datetime=datetime(2026, 8, 24)),
-                current_user_ids={"kept-1"},
-                organization_id="org-1",
-                verified_by="chief-1",
-            )
-
-        revoke.assert_awaited_once()
-        assert revoke.await_args.kwargs["source_id"] == "session-1"
-        # The record is un-completed rather than deleted: nothing on
-        # TrainingRecord says which session created it.
-        assert record.hours_completed == 0
-        assert record.completion_date is None
-        assert record.status == "scheduled"
-
-    async def test_a_first_finalize_has_nothing_to_reconcile(self):
-        db = _db(_one(None))
-        svc = TrainingSessionService(db)
-
-        await svc._revoke_credit_for_removed_attendees(
-            training_session=self._session_with_program(),
-            event=SimpleNamespace(start_datetime=datetime(2026, 8, 24)),
-            current_user_ids={"kept-1"},
-            organization_id="org-1",
-            verified_by="chief-1",
-        )
-
-        db.commit.assert_not_awaited()
-
-    async def test_an_unchanged_roster_is_left_alone(self):
-        prior = SimpleNamespace(attendee_data=[{"user_id": "kept-1"}])
-        db = _db(_one(prior))
-        svc = TrainingSessionService(db)
-
-        await svc._revoke_credit_for_removed_attendees(
-            training_session=self._session_with_program(),
-            event=SimpleNamespace(start_datetime=datetime(2026, 8, 24)),
-            current_user_ids={"kept-1"},
-            organization_id="org-1",
-            verified_by="chief-1",
-        )
-
-        db.commit.assert_not_awaited()
-
-
 class TestReopenSerializesAgainstApproval:
-    async def test_reopen_locks_the_session_row(self):
-        db = _db(_one(_session()), _all([]))
+    async def test_reopen_locks_event_then_session_then_approvals(self):
+        """Event, session, approvals: the order finalize and approval submit
+        take them in, so none of the three can deadlock against another."""
+        session = _session()
+        db = _db(_one(session), _one(_event()), _one(session), _all([]))
         await TrainingSessionService(db).reopen_training_session("session-1", "org-1")
 
-        stmt = str(
-            db.execute.await_args_list[0]
-            .args[0]
-            .compile(compile_kwargs={"literal_binds": True})
-        ).lower()
-        assert "for update" in stmt
-
-    async def test_reopen_locks_the_pending_approvals(self):
-        db = _db(_one(_session()), _all([]))
-        await TrainingSessionService(db).reopen_training_session("session-1", "org-1")
-
-        stmt = str(
-            db.execute.await_args_list[1]
-            .args[0]
-            .compile(compile_kwargs={"literal_binds": True})
-        ).lower()
-        assert "for update" in stmt
+        locked = [
+            str(c.args[0].compile(compile_kwargs={"literal_binds": True})).lower()
+            for c in db.execute.await_args_list[1:4]
+        ]
+        assert all("for update" in stmt for stmt in locked)
+        assert [stmt.split("from ")[1].split()[0] for stmt in locked] == [
+            "events",
+            "training_sessions",
+            "training_approvals",
+        ]
 
 
 class TestCompletedEnrollmentsAreNotSkipped:
@@ -566,9 +511,12 @@ class TestAPendingConfirmationDoesNotSweep:
     purpose — the records are not approved yet. Sweeping against that empty set
     reverses every credit the *previous* approval earned, the moment a leader
     reopens the session and before anyone confirms what replaces it. If the
-    officer never submits, the hours are simply gone."""
+    officer never submits, the hours are simply gone.
 
-    def _finalizable(self, requires_confirmation: bool):
+    Held by ``record_event_attendance``, which every finalize now goes through.
+    """
+
+    async def _record(self, requires_confirmation: bool, prior=frozenset()):
         past = datetime.now(timezone.utc) - timedelta(hours=2)
         # AttendeeApprovalData parses user_id as a UUID.
         member_id = str(uuid4())
@@ -580,72 +528,122 @@ class TestAPendingConfirmationDoesNotSweep:
             override_check_in_at=None,
             override_check_out_at=None,
             override_duration_minutes=None,
-            attendance_duration_minutes=None,
+            attendance_duration_minutes=60,
+            early_check_in_minutes=None,
         )
         event = SimpleNamespace(
             id="event-1",
             title="Pump Ops Drill",
+            location=None,
             start_datetime=past,
             end_datetime=past + timedelta(hours=1),
             actual_end_time=None,
-            rsvps=[rsvp],
+            check_in_window_type=None,
         )
         session = SimpleNamespace(
             id="session-1",
             organization_id="org-1",
             event_id="event-1",
+            program_id="prog-1",
             course_name="Pump Ops",
             is_finalized=False,
             approval_deadline_days=14,
             require_completion_confirmation=requires_confirmation,
         )
         user = SimpleNamespace(
-            id=member_id,
-            first_name="Dana",
-            last_name="Reyes",
-            email="dana@example.org",
+            id=member_id, first_name="Dana", last_name="Reyes", email="d@example.org"
         )
-        return session, event, user
-
-    async def _finalize(self, requires_confirmation: bool):
-        session, event, user = self._finalizable(requires_confirmation)
-        db = _db(_one(session), _one(event), _one(user))
+        db = _db(_all([user]))
+        db.add = MagicMock()
+        db.flush = AsyncMock()
         svc = TrainingSessionService(db)
-        svc._revoke_credit_for_removed_attendees = AsyncMock()
+        svc._prior_credit_user_ids = AsyncMock(return_value=set(prior))
+        svc._hold_pending_records = AsyncMock()
         svc._finalize_training_records = AsyncMock(return_value=[])
-        svc._notify_training_officers = AsyncMock()
-        svc._apply_pipeline_updates = AsyncMock()
+        svc.void_event_records = AsyncMock()
 
-        approval, error = await svc.finalize_training_session(
-            training_session_id="session-1",
-            organization_id="org-1",
-            finalized_by="chief-1",
+        credit = await svc.record_event_attendance(
+            event, session, [], [rsvp], past + timedelta(hours=1), "chief-1", "org-1"
         )
-        assert error is None, error
-        return svc
+        return credit, member_id
 
     async def test_confirmation_required_withholds_the_session_id(self):
-        svc = await self._finalize(requires_confirmation=True)
-        svc._apply_pipeline_updates.assert_awaited_once()
-        assert svc._apply_pipeline_updates.await_args.kwargs["session_id"] is None
+        credit, _ = await self._record(requires_confirmation=True)
+        assert credit.sweep_session_id is None
+        assert credit.approval_pending is True
 
     async def test_auto_approved_still_sweeps(self):
         """The deferral must not disarm reconciliation for sessions that do
         approve their records here — that is the corrected-to-zero case."""
-        svc = await self._finalize(requires_confirmation=False)
-        svc._apply_pipeline_updates.assert_awaited_once()
-        assert (
-            svc._apply_pipeline_updates.await_args.kwargs["session_id"] == "session-1"
+        credit, _ = await self._record(requires_confirmation=False)
+        assert credit.sweep_session_id == "session-1"
+
+    async def test_a_member_dropped_from_the_roster_is_handed_back(self):
+        """PR #1791 review, P1: re-finalizing wrote records for the current
+        roster and said nothing about anyone dropped from it. The dropped
+        member is named for the post-commit pipeline revocation, and every
+        record this event wrote for anyone not credited now is voided."""
+        credit, member_id = await self._record(
+            requires_confirmation=False, prior={"removed-1"}
         )
+        assert credit.removed_user_ids == {"removed-1"}
+
+
+class TestTheOldFinalizeRouteFinalizesTheEvent:
+    """The legacy route wrote credit on its own — no event lock, on an event
+    whose attendance stayed open — and now runs the event's finalize."""
+
+    async def test_it_finalizes_the_event_and_returns_that_approval(self):
+        session = SimpleNamespace(id="session-1", event_id="event-1")
+        approval = SimpleNamespace(id="approval-9", approval_deadline=None)
+        db = _db(_one(session), _one(approval))
+        outcome = SimpleNamespace(error=None, training_approval_id="approval-9")
+
+        with patch(
+            "app.services.training_session_service.EventService"
+            ".finalize_event_attendance_detailed",
+            AsyncMock(return_value=outcome),
+        ) as finalize:
+            result, error = await TrainingSessionService(db).finalize_training_session(
+                "session-1", "org-1", "chief-1", can_manage_training=True
+            )
+
+        assert (result, error) == (approval, None)
+        finalize.assert_awaited_once_with(
+            "event-1",
+            "org-1",
+            finalized_by="chief-1",
+            can_manage_training=True,
+            require_training=True,
+        )
+
+    async def test_the_event_s_refusal_is_the_route_s(self):
+        db = _db(_one(SimpleNamespace(id="session-1", event_id="event-1")))
+        outcome = SimpleNamespace(
+            error="Cannot finalize attendance for a cancelled event",
+            training_approval_id=None,
+        )
+
+        with patch(
+            "app.services.training_session_service.EventService"
+            ".finalize_event_attendance_detailed",
+            AsyncMock(return_value=outcome),
+        ):
+            result, error = await TrainingSessionService(db).finalize_training_session(
+                "session-1", "org-1", "chief-1"
+            )
+
+        assert result is None
+        assert error == "Cannot finalize attendance for a cancelled event"
 
 
 class TestRevocationResolvesEnrollmentToo:
     """PR #1803 review follow-on: the crediting path was taught to disambiguate
     a re-enrolled member's two enrollment rows, but its sibling on the
     revocation side was left with the single-row fetch. That one is the quieter
-    failure — _revoke_credit_for_removed_attendees logs the exception and moves
-    on, so a member taken off a session simply keeps the credit the call exists
-    to take back."""
+    failure — the removed-attendee revocation logs the exception and moves on,
+    so a member taken off a session simply keeps the credit the call exists to
+    take back."""
 
     async def test_revocation_handles_two_enrollments(self):
         session = _session()

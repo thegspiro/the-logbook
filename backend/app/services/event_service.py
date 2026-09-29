@@ -234,6 +234,7 @@ class FinalizeOutcome:
     training_attendees_pending: int = 0
     training_attendees_uncredited: int = 0
     training_uncredited_names: List[str] = dataclass_field(default_factory=list)
+    training_approval_id: Optional[str] = None
     admin_hours_entries_removed: int = 0
     error: Optional[str] = None
 
@@ -2773,6 +2774,7 @@ class EventService:
         organization_id: UUID,
         finalized_by: Optional[UUID] = None,
         can_manage_training: bool = False,
+        require_training: bool = False,
     ) -> "FinalizeOutcome":
         """
         Finalize attendance: settle every attendee's credited time and close
@@ -2797,6 +2799,8 @@ class EventService:
 
         ``can_manage_training`` is the caller's training.manage, which the
         training pipeline requires before it will move program progress.
+        ``require_training`` refuses, under the lock, an event that is no
+        longer a Training event — for a caller that asked to credit training.
         """
         outcome = FinalizeOutcome()
         self.last_finalize_outcome = outcome
@@ -2835,6 +2839,9 @@ class EventService:
             return outcome
 
         credits_training = self.event_credits_training(event)
+        if require_training and not credits_training:
+            outcome.error = "This event is no longer a Training event"
+            return outcome
         training = None
         training_session = None
         pending_approvals: List[Any] = []
@@ -2962,6 +2969,7 @@ class EventService:
             outcome.training_attendees_pending = credit.attendees_pending
             outcome.training_uncredited_names = list(credit.uncredited_names)
             outcome.training_attendees_uncredited = len(credit.uncredited_names)
+            outcome.training_approval_id = credit.approval_id
             # Training events no longer credit admin hours. Entries an earlier
             # finalize wrote for this event (mapped before the rule, or re-typed
             # to training while reopened) would keep counting the same hours
