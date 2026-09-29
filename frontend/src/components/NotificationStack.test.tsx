@@ -84,6 +84,13 @@ describe('NotificationStack', () => {
     expect(screen.getByText(/5 more unread in this group are further down/)).toBeInTheDocument();
   });
 
+  it('titles the stack by its size, not its unread rows', () => {
+    renderStack({ notifications: [row('1'), row('2', { read: true })], unreadCount: 1 });
+
+    expect(screen.getByText('2 attendance validations')).toBeInTheDocument();
+    expect(screen.getByText('1 unread')).toBeInTheDocument();
+  });
+
   it('offers no mark-all control once everything in it is read', () => {
     renderStack({ notifications: [row('1', { read: true }), row('2', { read: true })], unreadCount: 0 });
 

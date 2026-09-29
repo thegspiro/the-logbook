@@ -135,6 +135,33 @@ describe('EventSelfCheckInPage', () => {
     });
   });
 
+  describe('Training record notice (workflow review W20-1)', () => {
+    // The success screen said "Training Record Created" for every training
+    // event, including ones with no session to record against.
+    const checkIn = async (recordsTraining: boolean) => {
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue({
+        ...mockQRCheckInData,
+        event_type: 'training',
+        records_training: recordsTraining,
+      });
+      vi.mocked(eventService.selfCheckIn).mockResolvedValue(mockRSVP);
+      const user = userEvent.setup();
+      renderWithRouter(<EventSelfCheckInPage />);
+      await user.click(await screen.findByRole('button', { name: /check in to this event/i }));
+      await screen.findByText(/Successfully Checked In/);
+    };
+
+    it('says a training record will be created when the server says so', async () => {
+      await checkIn(true);
+      expect(screen.getByText('Training Record')).toBeInTheDocument();
+    });
+
+    it('makes no training-record claim for a training event that records nothing', async () => {
+      await checkIn(false);
+      expect(screen.queryByText(/Training Record/)).not.toBeInTheDocument();
+    });
+  });
+
   describe('Successful Check-In Flow', () => {
     it('should disable button and show loading text during check-in', async () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);

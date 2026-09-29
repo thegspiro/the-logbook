@@ -150,7 +150,7 @@ const CampaignsPage: React.FC = () => {
     e.preventDefault();
 
     if (!formData.name.trim()) {
-      toast.error('Campaign name is required');
+      toast.error('Enter a campaign name');
       return;
     }
 
@@ -160,7 +160,7 @@ const CampaignsPage: React.FC = () => {
     }
 
     if (!formData.start_date) {
-      toast.error('Start date is required');
+      toast.error('Choose a start date');
       return;
     }
 
@@ -174,7 +174,7 @@ const CampaignsPage: React.FC = () => {
         startDate: formData.start_date,
         status: formData.status as FundraisingCampaign['status'],
       });
-      toast.success('Campaign created successfully');
+      toast.success('Campaign created');
       setFormData(INITIAL_FORM);
       setShowCreateForm(false);
       void loadCampaigns();
@@ -193,9 +193,7 @@ const CampaignsPage: React.FC = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Fundraising Campaigns</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">
-            Manage fundraising campaigns and track progress toward goals
-          </p>
+          <p className="text-theme-text-secondary mt-1 text-sm">Track each campaign's progress toward its goal</p>
         </div>
         {canManage && (
           <button
@@ -220,7 +218,7 @@ const CampaignsPage: React.FC = () => {
       {/* Inline Create Form */}
       {canManage && showCreateForm && (
         <form onSubmit={(e) => void handleCreateSubmit(e)} className="card space-y-4 p-5">
-          <h2 className="text-theme-text-primary text-lg font-semibold">Create New Campaign</h2>
+          <h2 className="text-theme-text-primary text-lg font-semibold">New Campaign</h2>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {/* Name */}
@@ -365,7 +363,7 @@ const CampaignsPage: React.FC = () => {
             autoCorrect="off"
             spellCheck={false}
             type="text"
-            aria-label="Search campaigns by name..."
+            aria-label="Search campaigns by name"
             placeholder="Search campaigns by name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -373,6 +371,8 @@ const CampaignsPage: React.FC = () => {
           />
           {searchQuery && (
             <button
+              type="button"
+              aria-label="Clear search"
               onClick={() => setSearchQuery('')}
               className="text-theme-text-secondary hover:text-theme-text-primary absolute top-1/2 right-3 -translate-y-1/2"
             >
@@ -416,8 +416,10 @@ const CampaignsPage: React.FC = () => {
           <Megaphone className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
           <p className="text-theme-text-secondary">
             {searchQuery || statusFilter || typeFilter
-              ? 'No campaigns match your filters'
-              : 'No campaigns yet. Create one to get started!'}
+              ? 'No campaigns match your search or filters.'
+              : canManage
+                ? 'No campaigns yet. Select New Campaign to add one.'
+                : 'No campaigns yet.'}
           </p>
         </div>
       ) : (

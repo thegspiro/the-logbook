@@ -67,7 +67,7 @@ export const NfcTagWriteButton: React.FC<NfcTagWriteButtonProps> = ({ url, label
       ) : (
         <Nfc className="h-3 w-3" aria-hidden="true" />
       )}
-      {waiting ? 'Hold to tag…' : 'Write NFC tag'}
+      {waiting ? 'Hold phone to tag…' : 'Write NFC tag'}
     </button>
   );
 };

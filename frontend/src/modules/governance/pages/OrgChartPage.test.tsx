@@ -597,7 +597,7 @@ describe('OrgChartPage', () => {
     // would turn a live link into a snapshot of it on the next save.
     expect(await screen.findByDisplayValue('Rev. J. Alvarez')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('John Doe')).not.toBeInTheDocument();
-    expect(screen.getByText(/are listed automatically and are not repeated here/i)).toBeInTheDocument();
+    expect(screen.getByText(/is listed automatically, so they are not repeated here/i)).toBeInTheDocument();
   });
 
   it('keeps the typed people when a seat gains a link', async () => {

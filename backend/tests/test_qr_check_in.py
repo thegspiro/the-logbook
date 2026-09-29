@@ -212,6 +212,52 @@ class TestQRCheckInTimeValidation:
         assert data is None
 
 
+class TestQRCheckInRecordsTraining:
+    """W20-1: the check-in page said "Training Record Created" for every
+    training-type event. A record is written only when a linked session
+    creates records automatically, and the QR data now says which."""
+
+    def _db(self, event, org, session_flag):
+        mock_db = _mock_db_returning(event, org)
+        base = mock_db.execute
+        session_result = MagicMock()
+        session_result.scalars.return_value.first.return_value = session_flag
+        calls = {"n": 0}
+
+        async def execute(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 3:
+                return session_result
+            return await base(*args, **kwargs)
+
+        mock_db.execute = execute
+        return mock_db, calls
+
+    async def _qr(self, event_type, session_flag):
+        org_id = uuid4()
+        event = _make_event(org_id=org_id, event_type=event_type)
+        db, calls = self._db(event, _make_org(org_id=org_id), session_flag)
+        data, error = await _make_service(db).get_qr_check_in_data(event.id, org_id)
+        assert error is None
+        return data, calls["n"]
+
+    @pytest.mark.asyncio
+    async def test_training_event_whose_session_records_attendance(self):
+        data, _ = await self._qr(EventType.TRAINING, True)
+        assert data["records_training"] is True
+
+    @pytest.mark.asyncio
+    async def test_training_event_with_no_recording_session(self):
+        data, _ = await self._qr(EventType.TRAINING, None)
+        assert data["records_training"] is False
+
+    @pytest.mark.asyncio
+    async def test_other_events_never_record_training_and_do_not_look(self):
+        data, queries = await self._qr(EventType.BUSINESS_MEETING, True)
+        assert data["records_training"] is False
+        assert queries == 2
+
+
 class TestSelfCheckIn:
     """Test self-check-in functionality via QR code"""
 

@@ -736,6 +736,13 @@ class QRCheckInData(BaseModel):
         default=False,
         description="Whether non-members may self-record attendance",
     )
+    records_training: bool = Field(
+        default=False,
+        description=(
+            "Whether a check-in writes a training record: a training event "
+            "with a linked session that creates records automatically"
+        ),
+    )
 
 
 # A name must contain at least one character that is neither whitespace nor a

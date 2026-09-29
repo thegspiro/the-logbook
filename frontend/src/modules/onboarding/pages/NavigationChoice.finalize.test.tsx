@@ -77,7 +77,7 @@ const renderPage = () =>
 const chooseLayoutAndContinue = async () => {
   const user = userEvent.setup();
   await user.click(screen.getByLabelText('Left sidebar navigation layout'));
-  await user.click(screen.getByRole('button', { name: 'Continue to next step' }));
+  await user.click(screen.getByRole('button', { name: 'Finish setup' }));
 };
 
 describe('NavigationChoice finalization', () => {

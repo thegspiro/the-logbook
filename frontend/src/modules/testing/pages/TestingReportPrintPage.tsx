@@ -178,7 +178,7 @@ export const TestingReportPrintPage: React.FC = () => {
               <tr>
                 <td style={CELL}>Pages in the application</td>
                 <td style={CELL}>{summary.total}</td>
-                <td style={CELL}>Covered by somebody</td>
+                <td style={CELL}>Checked</td>
                 <td style={CELL}>{totals.checked}</td>
               </tr>
               <tr>
@@ -303,8 +303,8 @@ export const TestingReportPrintPage: React.FC = () => {
           </table>
 
           <p style={{ marginTop: '14pt', fontSize: '8pt', color: '#666' }}>
-            Counts cover {canSeeAllTesters ? 'every tester in the department' : 'your own marks'}. Pages nobody has
-            opened are counted as not tested, not as passing.
+            Counts cover {canSeeAllTesters ? 'every tester in the department' : 'your own marks'}. Pages with no mark
+            count as not tested, not as passing.
           </p>
         </div>
       </div>

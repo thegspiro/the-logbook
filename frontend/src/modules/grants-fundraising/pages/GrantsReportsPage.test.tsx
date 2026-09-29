@@ -70,7 +70,7 @@ describe('GrantsReportsPage — donations-by-method percentages', () => {
       </MemoryRouter>
     );
 
-    await userEvent.click(await screen.findByRole('button', { name: /fundraising reports/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /^fundraising$/i }));
 
     // 10.10 / 30.30 = 33.3%; 20.20 / 30.30 = 66.7%. Before the fix, the
     // string-concatenated total made both percentages come out as 0.0%.

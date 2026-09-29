@@ -118,7 +118,7 @@ describe('NfcTapButton', () => {
 
     readers[0]?.emitUrl('https://evil.example.com/events/abc123/check-in');
 
-    expect(await screen.findByText(/not a check-in tag/i)).toBeInTheDocument();
+    expect(await screen.findByText(/does not open anything in this app/i)).toBeInTheDocument();
     expect(mockNavigate).not.toHaveBeenCalled();
     // The dialog stays open so the member can try another tag.
     expect(screen.getByText(/hold the back of your phone/i)).toBeInTheDocument();
@@ -143,7 +143,7 @@ describe('NfcTapButton', () => {
     await waitFor(() => expect(readers).toHaveLength(1));
 
     readers[0]?.emitUrl('https://evil.example.com/events/abc123/check-in');
-    expect(await screen.findByText(/not a check-in tag/i)).toBeInTheDocument();
+    expect(await screen.findByText(/does not open anything in this app/i)).toBeInTheDocument();
 
     readers[0]?.emitUrl(`${window.location.origin}/events/good-id/check-in`);
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/events/good-id/check-in'));

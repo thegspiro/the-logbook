@@ -34,7 +34,10 @@ const NotificationStack: React.FC<NotificationStackProps> = ({
   const loadedUnread = notifications.filter((n) => !n.read).length;
   const unloadedUnread = Math.max(0, unreadCount - loadedUnread);
   const hasUnread = unreadCount > 0;
-  const title = describeStack(category, hasUnread ? unreadCount : notifications.length);
+  // The whole stack, which is never fewer than two — counting only the unread
+  // rows read "1 attendance validations" once one of two had been opened. The
+  // badge beside it carries the unread figure.
+  const title = describeStack(category, Math.max(unreadCount, notifications.length));
 
   const handleMarkStackRead = async () => {
     setMarkingRead(true);

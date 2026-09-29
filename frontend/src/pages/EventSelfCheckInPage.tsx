@@ -311,7 +311,10 @@ const EventSelfCheckInPage: React.FC = () => {
               </div>
             </div>
 
-            {qrData?.event_type === EventTypeEnum.TRAINING && (
+            {/* Only when the server says a record is written: this used to follow the
+                event type, and told members of a training event with no session
+                that a record had been created (workflow review W20-1). */}
+            {qrData?.records_training && (
               <div className="mb-8 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-500/30 dark:bg-green-500/10">
                 <div className="flex items-start">
                   <svg
@@ -328,11 +331,9 @@ const EventSelfCheckInPage: React.FC = () => {
                     />
                   </svg>
                   <div className="text-left">
-                    <p className="mb-1 text-sm font-medium text-green-900 dark:text-green-300">
-                      Training Record Created
-                    </p>
+                    <p className="mb-1 text-sm font-medium text-green-900 dark:text-green-300">Training Record</p>
                     <p className="text-sm text-green-800 dark:text-green-400">
-                      Your attendance has been logged and a training record will be created for this session.
+                      Your attendance has been logged, and a training record will be created for this session.
                     </p>
                   </div>
                 </div>
