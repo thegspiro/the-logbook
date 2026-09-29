@@ -168,3 +168,13 @@ describe('EventCheckInMonitoringPage organizer', () => {
     expect(screen.queryByText(/Organized by (undefined|null)/)).not.toBeInTheDocument();
   });
 });
+
+describe('EventCheckInMonitoringPage recent check-ins', () => {
+  // The Status column printed the stored value ("going") (workflow review W20).
+  it('labels each status the way the rest of the events pages do', async () => {
+    renderWithRouter(<EventCheckInMonitoringPage />);
+
+    expect(await screen.findByText('Going')).toBeInTheDocument();
+    expect(screen.queryByText('going')).not.toBeInTheDocument();
+  });
+});
