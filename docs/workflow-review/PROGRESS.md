@@ -57,7 +57,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 
 | #   | Activity                                                              | Acts as                   | Starts at                                          | Status |
 | --- | --------------------------------------------------------------------- | ------------------------- | -------------------------------------------------- | ------ |
-| W24 | Submit a training record, and the officer approves or returns it      | member → training_officer | `/training/submit`, `/training/submissions`        | ⬜     |
+| W24 | Submit a training record, and the officer approves or returns it      | member → training_officer | `/training/submit`, `/training/submissions`        | ✅     |
 | W25 | Courses and requirements                                              | training_officer          | `/training/courses`, `/training/requirements`      | ⬜     |
 | W26 | A training program: build it, enroll a member, the member's progress  | training_officer → member | `/training/programs`                               | ⬜     |
 | W27 | A course cohort: schedule classes, roster, attendance                 | training_officer          | `/training/cohorts`                                | ⬜     |
@@ -176,6 +176,19 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W24 — Submit a training record, and the officer approves or returns it — 2026-09-29
+
+Driven as: `member` at 390×844 and `training_officer` at 1280×900, with
+`member` and `member2` refused. Held: a double-tapped submit, return and
+approval each acted once; the officer's note reached the member, Fix and
+Resubmit kept every value, and the approved record showed on My Training with
+its hours; officer routes refused `member`, another member's submission refused
+`member2`, and an approved submission refused edits. Fixed: W24-1 (LOW — the
+"Returned" date was the UTC day), W24-2 (LOW — missing fields were marked only
+in red), W24-3 (LOW — raw ISO dates and an unnamed notes box on the officer's
+review). Open: W24-4 (NIT). No flags. Gate: typecheck, lint and the touched
+suites clean. Next: W25.
 
 ### W23 — Locations, the kiosk display and guest check-in — 2026-09-29
 

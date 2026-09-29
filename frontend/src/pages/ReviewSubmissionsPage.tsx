@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { trainingSubmissionService, trainingService, trainingProgramService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, formatTimeOfDay } from '../utils/dateFormatting';
+import { formatCalendarDate, formatDate, formatTimeOfDay } from '../utils/dateFormatting';
 import { formatHours } from '../utils/hoursFormatting';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { SubmissionStatus, TRAINING_TYPE_LABELS } from '../constants/enums';
@@ -347,6 +347,7 @@ const ReviewPanel: React.FC<{
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         rows={2}
+        aria-label={action === 'approve' ? 'Notes for the member' : 'Reason for the member (required)'}
         placeholder={
           action === 'approve'
             ? 'Optional notes for the member...'
@@ -635,7 +636,7 @@ const SubmissionCard: React.FC<{
               </span>
               <span className="flex items-center space-x-1">
                 <Calendar className="h-3 w-3" />
-                <span>{submission.completion_date}</span>
+                <span>{formatCalendarDate(submission.completion_date)}</span>
               </span>
               <span className="flex items-center space-x-1">
                 <Clock className="h-3 w-3" />
@@ -705,7 +706,7 @@ const SubmissionCard: React.FC<{
               {submission.expiration_date && (
                 <div>
                   <span className="text-theme-text-muted">Expires: </span>
-                  <span className="text-theme-text-secondary">{submission.expiration_date}</span>
+                  <span className="text-theme-text-secondary">{formatCalendarDate(submission.expiration_date)}</span>
                 </div>
               )}
               <div>
@@ -944,6 +945,7 @@ const ConfigEditor: React.FC<{
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
           rows={3}
+          aria-label="Member instructions"
           placeholder="Optional instructions displayed to members when submitting training..."
           className="form-input text-sm"
         />
