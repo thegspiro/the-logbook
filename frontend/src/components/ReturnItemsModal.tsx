@@ -243,7 +243,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
 
     const successCount = returnResults.filter((r) => r.success).length;
     if (successCount > 0) {
-      toast.success(`Returned ${successCount} item${successCount !== 1 ? 's' : ''} successfully`);
+      toast.success(`Returned ${successCount} item${successCount !== 1 ? 's' : ''}`);
       onComplete?.();
     }
   };

@@ -56,7 +56,7 @@ const ChargeManagementPanel: React.FC = () => {
     try {
       const amount = chargeAmount ? parseFloat(chargeAmount) : undefined;
       await inventoryService.updateIssuanceCharge(actionModal.item.issuance_id, actionModal.action, amount);
-      toast.success(`Charge ${actionModal.action === 'charged' ? 'applied' : 'waived'} successfully`);
+      toast.success(`Charge ${actionModal.action === 'charged' ? 'applied' : 'waived'}`);
       setActionModal({ open: false, item: null, action: '' });
       setChargeAmount('');
       await loadCharges();
