@@ -223,13 +223,9 @@ async def create_member(
 
     # Check if membership number already exists in the organization
     if user_data.membership_number:
-        result = await db.execute(
-            select(User)
-            .where(User.membership_number == user_data.membership_number)
-            .where(User.organization_id == str(current_user.organization_id))
-            .where(User.deleted_at.is_(None))
-        )
-        if result.scalar_one_or_none():
+        if await OrganizationService(db).membership_number_in_use(
+            current_user.organization_id, user_data.membership_number
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A member with this membership number already exists",
@@ -1656,14 +1652,11 @@ async def update_user_profile(
 
     # Check membership_number uniqueness within the organization
     if "membership_number" in update_data and update_data["membership_number"]:
-        existing = await db.execute(
-            select(User)
-            .where(User.membership_number == update_data["membership_number"])
-            .where(User.organization_id == str(current_user.organization_id))
-            .where(User.id != str(user_id))
-            .where(User.deleted_at.is_(None))
-        )
-        if existing.scalar_one_or_none():
+        if await OrganizationService(db).membership_number_in_use(
+            current_user.organization_id,
+            update_data["membership_number"],
+            exclude_user_id=str(user_id),
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A member with this membership number already exists",

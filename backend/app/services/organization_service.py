@@ -613,6 +613,67 @@ class OrganizationService:
         org_settings = await self.get_organization_settings(organization_id)
         return org_settings.membership_id
 
+    async def membership_number_in_use(
+        self,
+        organization_id: UUID | str,
+        membership_number: str,
+        exclude_user_id: Optional[str] = None,
+    ) -> bool:
+        """Whether any member row in the org holds this membership number.
+
+        Deleted rows count. ``idx_user_org_membership_number`` is unique over
+        every row, and an anonymized member keeps its number with ``deleted_at``
+        set, so a check that skipped deleted rows passed a number the insert
+        then refused with an IntegrityError.
+        """
+        query = (
+            select(func.count())
+            .select_from(User)
+            .where(
+                User.organization_id == str(organization_id),
+                User.membership_number == membership_number,
+            )
+        )
+        if exclude_user_id is not None:
+            query = query.where(User.id != str(exclude_user_id))
+        result = await self.db.execute(query)
+        return (result.scalar() or 0) > 0
+
+    async def _first_free_membership_id(
+        self, organization_id: UUID | str, prefix: str, start: int
+    ) -> tuple[str, int]:
+        """The first unused ID at or after ``start``, and the number it uses.
+
+        Shared by the generator and the preview so the preview shows the ID
+        that will actually be issued rather than one already taken. The search
+        is capped so a pathological, dense ID space cannot spin forever.
+        """
+        max_attempts = 100_000
+        number = start
+        for _ in range(max_attempts):
+            candidate = f"{prefix}{str(number).zfill(4)}"
+            if not await self.membership_number_in_use(organization_id, candidate):
+                return candidate, number
+            number += 1
+        raise ValueError(
+            f"Unable to generate a unique membership ID after {max_attempts} attempts"
+        )
+
+    async def preview_next_membership_id(self, organization_id: UUID) -> Optional[str]:
+        """The ID the next auto-generated member would receive, or None.
+
+        None when numbering or auto-generation is off: nothing will be assigned
+        automatically, so there is nothing to preview. Read-only — the counter
+        is not advanced.
+        """
+        mid = (await self.get_organization_settings(organization_id)).membership_id
+        if not mid.enabled or not mid.auto_generate:
+            return None
+        membership_id, _ = await self._first_free_membership_id(
+            organization_id, mid.prefix, mid.next_number
+        )
+        return membership_id
+
     async def generate_next_membership_id(self, organization_id: UUID) -> Optional[str]:
         """
         Generate the next membership ID for a new member.
@@ -639,38 +700,9 @@ class OrganizationService:
         if not mid.get("enabled") or not mid.get("auto_generate"):
             return None
 
-        prefix = mid.get("prefix", "")
-        next_number = mid.get("next_number", 1)
-
-        # Format: prefix + zero-padded number (4 digits minimum)
-        membership_id = f"{prefix}{str(next_number).zfill(4)}"
-
-        # Verify this number isn't already in use (active members only).
-        # If it is, keep incrementing until we find an unused one — but cap the
-        # search so a pathological/dense ID space can't spin forever.
-        max_attempts = 100_000
-        attempts = 0
-        while True:
-            result = await self.db.execute(
-                select(func.count())
-                .select_from(User)
-                .where(
-                    User.organization_id == str(organization_id),
-                    User.membership_number == membership_id,
-                    User.deleted_at.is_(None),
-                )
-            )
-            count = result.scalar() or 0
-            if count == 0:
-                break
-            attempts += 1
-            if attempts >= max_attempts:
-                raise ValueError(
-                    "Unable to generate a unique membership ID after "
-                    f"{max_attempts} attempts"
-                )
-            next_number += 1
-            membership_id = f"{prefix}{str(next_number).zfill(4)}"
+        membership_id, next_number = await self._first_free_membership_id(
+            organization_id, mid.get("prefix", ""), mid.get("next_number", 1)
+        )
 
         # Increment next_number in org settings for the next call
         mid["next_number"] = next_number + 1
