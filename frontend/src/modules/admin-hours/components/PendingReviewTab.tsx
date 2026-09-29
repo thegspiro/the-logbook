@@ -62,7 +62,7 @@ const PendingReviewTab: React.FC = () => {
 
   const handleReject = async (entryId: string) => {
     if (!rejectionReason.trim()) {
-      toast.error('Please provide a rejection reason');
+      toast.error('Enter a reason for rejecting this entry');
       return;
     }
     try {
@@ -79,7 +79,7 @@ const PendingReviewTab: React.FC = () => {
     if (selectedEntryIds.size === 0) return;
     try {
       const count = await bulkApprove(Array.from(selectedEntryIds));
-      toast.success(`${count} entries approved`);
+      toast.success(`Approved ${count} ${count === 1 ? 'entry' : 'entries'}`);
       setSelectedEntryIds(new Set());
     } catch {
       // error handled by store
@@ -360,7 +360,8 @@ const PendingReviewTab: React.FC = () => {
                             type="text"
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
-                            placeholder="Reason..."
+                            placeholder="Reason for rejecting"
+                            aria-label="Reason for rejecting"
                             className="bg-theme-surface-secondary border-theme-surface-border text-theme-text-primary rounded-sm border px-2 py-1 text-sm"
                           />
                           <button
@@ -369,7 +370,7 @@ const PendingReviewTab: React.FC = () => {
                             }}
                             className="btn-primary rounded-sm px-3 py-1 text-sm"
                           >
-                            Confirm
+                            Reject
                           </button>
                           <button
                             onClick={() => {
