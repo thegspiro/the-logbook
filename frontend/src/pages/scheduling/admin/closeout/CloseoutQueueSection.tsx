@@ -381,6 +381,9 @@ const CloseoutQueueSection: React.FC = () => {
           // navigates away, so there is nothing on this page to protect.
           const blockedByOpenRow = openRow !== null && !isOpen && callTrackingMode === 'count_only';
           const pending = outstandingChecks(shift.id);
+          // One close-out button per row, so its name carries the shift: a
+          // queue of several otherwise reads as the same button over and over.
+          const rowName = `${formatCalendarDate(shift.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}, ${formatTime(shift.start_time, timezone)}, ${unitLabel(shift)}`;
           return (
             <div key={shift.id} className="card space-y-3 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -470,6 +473,11 @@ const CloseoutQueueSection: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void openCloseout(entry)}
+                  aria-label={
+                    callTrackingMode === 'count_only'
+                      ? `Close out ${rowName}`
+                      : `Open the shift to close it: ${rowName}`
+                  }
                   disabled={preparing === shift.id || blockedByOpenRow}
                   title={blockedByOpenRow ? 'Close the open row first — it has unsaved close-out entries.' : undefined}
                   className="btn-primary mobile-touch-target inline-flex items-center gap-2 px-4 text-sm font-semibold disabled:opacity-50"

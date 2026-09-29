@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -21,6 +22,7 @@ const ShiftCheckInPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const paramShiftId = searchParams.get('shift') || '';
   const paramApparatusId = searchParams.get('apparatus') || '';
 
@@ -131,6 +133,23 @@ const ShiftCheckInPage: React.FC = () => {
   };
 
   const handleCheckOut = async () => {
+    // A check-out cannot be taken back — the server refuses a second check-in
+    // on the same shift — and the button sits where a phone in a pocket or a
+    // glove finds it. Before the scheduled end, ask first.
+    const endsLater = shift?.end_time ? new Date(shift.end_time).getTime() > Date.now() : false;
+    if (
+      endsLater &&
+      shift?.end_time &&
+      !(await confirm({
+        title: 'Check out early?',
+        message: `Your shift runs until ${formatTime(shift.end_time, tz)}. Checking out now records your hours up to now, and you cannot check back in to this shift.`,
+        confirmLabel: 'Check out now',
+        cancelLabel: 'Stay checked in',
+        variant: 'warning',
+      }))
+    ) {
+      return;
+    }
     setProcessing(true);
     try {
       const result = await schedulingService.checkOut(resolvedShiftId);
@@ -203,7 +222,9 @@ const ShiftCheckInPage: React.FC = () => {
     );
   }
 
-  const hrs = attendance?.duration_minutes ? formatHours(attendance.duration_minutes / 60) : null;
+  // `!= null`, not truthiness: a check-out in the first minute records 0, and
+  // the card then read a bare "hours".
+  const hrs = attendance?.duration_minutes != null ? formatHours(attendance.duration_minutes / 60) : null;
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
@@ -295,7 +316,7 @@ const ShiftCheckInPage: React.FC = () => {
           <div className="space-y-3 text-center">
             <div className="bg-theme-surface-hover rounded-lg p-4">
               <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-green-600" />
-              <p className="text-theme-text-primary text-lg font-bold">{hrs} hours</p>
+              {hrs !== null && <p className="text-theme-text-primary text-lg font-bold">{hrs} hours</p>}
               <p className="text-theme-text-muted text-xs">
                 {formatTime(attendance.checked_in_at, tz)} &rarr; {formatTime(attendance.checked_out_at, tz)}
               </p>

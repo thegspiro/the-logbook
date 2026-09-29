@@ -290,6 +290,25 @@ describe('CloseoutQueueSection', () => {
     }
   });
 
+  it("names each row's close-out button after its own shift", async () => {
+    storeState.callTrackingMode = 'detailed';
+    mockGetBacklog.mockResolvedValue({
+      shifts: [unclosedShift, { ...unclosedShift, id: 'shift-2', apparatus_unit_number: 'Engine 2' }],
+      total: 2,
+      skip: 0,
+      limit: 200,
+    });
+    renderWithRouter(<CloseoutQueueSection />);
+    await screen.findByText(/Engine 1/);
+
+    const names = screen
+      .getAllByRole('button', { name: /^Open the shift to close it: / })
+      .map((button) => button.getAttribute('aria-label'));
+    expect(names).toHaveLength(2);
+    expect(names[0]).toMatch(/Engine 1$/);
+    expect(names[1]).toMatch(/Engine 2$/);
+  });
+
   // The checklist endpoint wants an Inventory grant that scheduling.manage does
   // not imply, so this 403s for an ordinary scheduling officer. Reading that as
   // "nothing outstanding" opens the wizard with its override hidden and leaves

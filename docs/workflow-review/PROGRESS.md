@@ -72,7 +72,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | --- | ------------------------------------------------------------------ | --------------------------- | ----------------------------------------------------------- | ------ |
 | W32 | Shift templates and patterns, then generate a month of shifts      | scheduling_officer          | `/scheduling/admin/planning/*`                              | ✅     |
 | W33 | Sign up for a shift, swap it, request time off                     | member, member2 → officer   | `/scheduling`                                               | ✅     |
-| W34 | Check in to a shift by apparatus QR, and close the shift out       | member → scheduling_officer | `/scheduling/checkin`, `/scheduling/admin/closeout`         | ⬜     |
+| W34 | Check in to a shift by apparatus QR, and close the shift out       | member → scheduling_officer | `/scheduling/checkin`, `/scheduling/admin/closeout`         | ✅     |
 | W35 | Platoons and the position qualification roster                     | scheduling_officer          | `/scheduling/admin/platoons`, `/scheduling/admin/positions` | ⬜     |
 | W36 | Every scheduling settings section                                  | scheduling_officer          | `/scheduling/admin/settings/*`                              | ⬜     |
 | W37 | Scheduling reports and the printed check-in sheet and shift report | scheduling_officer          | `/scheduling/admin/reports`                                 | ⬜     |
@@ -179,6 +179,22 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W34 — Check in to a shift by apparatus QR, and close the shift out — 2026-09-29
+
+Driven as: `member` → `scheduling_officer`, with `member2`, at 1280×900 and
+390×844, on two E-1 shifts set up for the run (one running, one ended
+yesterday). Held: the apparatus QR link found the running shift; a
+double-clicked Check In, Check Out and Close out shift each acted once; the
+close-out queue listed only the ended shift and emptied after it; hours
+entered for a no-show reached the member's history; members got 403 on
+finalize and the queue. Fixed: W34-1 (MED — one tap on Check Out ended a
+12-hour shift 11 hours early with no way back; it now asks before the
+scheduled end), W34-2 (LOW — a 0-minute check-out read a bare "hours"), W34-3
+(LOW — close-out's per-member hours boxes and the queue's row buttons were
+indistinguishable). Open: W34-4 (NIT — expected 404s logged), W34-5 (NIT — an
+unassigned member can check in, by a setting). No flags. Gate: typecheck,
+lint and the scheduling suites clean. Next: W35.
 
 ### W33 — Sign up for a shift, swap it, request time off — 2026-09-29
 
