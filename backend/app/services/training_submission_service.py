@@ -16,7 +16,9 @@ from sqlalchemy import func as sa_func
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import ROLE_TRAINING_OFFICER
 from app.core.utils import generate_uuid
+from app.models.notification import NotificationChannel, NotificationLog
 from app.models.training import (
     SelfReportConfig,
     SubmissionStatus,
@@ -27,10 +29,17 @@ from app.models.training import (
     TrainingSubmission,
     TrainingType,
 )
-from app.models.user import User
+from app.models.user import Role, User, user_roles
+from app.services.notifications_service import NotificationsService
 from app.services.separation_of_duties import assert_different_person
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+
+# In-app prompts for a submission awaiting review share this category so the
+# inbox stacks them, and carry ``submission_id`` in their metadata so a
+# decision can archive every officer's copy at once.
+REVIEW_PROMPT_CATEGORY = "training_submission"
+REVIEW_QUEUE_URL = "/training/admin?page=records&tab=submissions"
 
 
 class TrainingSubmissionService:
@@ -147,6 +156,9 @@ class TrainingSubmissionService:
             f"({hours_completed}h, status={status.value})"
         )
 
+        if status == SubmissionStatus.PENDING_REVIEW:
+            await self._notify_reviewers(submission, triggered_by=submitted_by)
+
         return submission
 
     async def _record_if_auto_approved(self, submission: TrainingSubmission) -> None:
@@ -218,6 +230,9 @@ class TrainingSubmissionService:
         else:
             await self.db.commit()
         await self.db.refresh(submission)
+
+        if submission.status == SubmissionStatus.PENDING_REVIEW:
+            await self._notify_reviewers(submission, triggered_by=user_id)
 
         return submission
 
@@ -443,11 +458,20 @@ class TrainingSubmissionService:
         apply_updates(submission, kwargs)
 
         # If it was revision_requested, move back to pending
-        if submission.status == SubmissionStatus.REVISION_REQUESTED:
+        resubmitted = submission.status == SubmissionStatus.REVISION_REQUESTED
+        if resubmitted:
             submission.status = SubmissionStatus.PENDING_REVIEW
 
         await self.db.commit()
         await self.db.refresh(submission)
+
+        # Requesting a revision archived the officers' prompt, so the
+        # corrected submission needs a fresh one. An edit to a submission that
+        # is still pending already has one.
+        if resubmitted:
+            await self._notify_reviewers(
+                submission, triggered_by=user_id, resubmitted=True
+            )
         return submission
 
     async def delete_submission(
@@ -472,6 +496,7 @@ class TrainingSubmissionService:
 
         await self.db.delete(submission)
         await self.db.commit()
+        await self._archive_review_prompts(organization_id, submission_id)
         return True
 
     # ==================== Review / Approval ====================
@@ -565,6 +590,10 @@ class TrainingSubmissionService:
 
         await self.db.refresh(submission)
         logger.info(f"Submission {submission_id} reviewed: {action} by {reviewer_id}")
+        # Every decision takes the submission out of the queue, so no officer
+        # should still be prompted for it — including a revision request,
+        # which waits on the member rather than on an officer.
+        await self._archive_review_prompts(organization_id, submission_id)
         return submission
 
     async def reverse_approval(
@@ -639,6 +668,7 @@ class TrainingSubmissionService:
         await self.db.commit()
         await self.db.refresh(submission)
         logger.info(f"Submission {submission_id} approval reversed by {reviewer_id}")
+        await self._notify_reviewers(submission, triggered_by=reviewer_id)
         return submission
 
     async def get_pending_count(self, organization_id: str) -> int:
@@ -652,6 +682,127 @@ class TrainingSubmissionService:
             )
         )
         return len(result.scalars().all())
+
+    # ==================== Review Notifications ====================
+
+    async def _training_officers(self, organization_id: str) -> List[User]:
+        """Active members holding the Training Officer position.
+
+        Matches the recipients of the email sent for training-session
+        approvals (``TrainingSessionService._notify_training_officers``), by
+        owner decision 2026-09-29. A department with nobody in the position
+        gets no prompt; the pending count on the review queue still shows.
+        """
+        result = await self.db.execute(
+            select(User)
+            .join(user_roles, User.id == user_roles.c.user_id)
+            .join(Role, Role.id == user_roles.c.position_id)
+            .where(
+                Role.slug == ROLE_TRAINING_OFFICER,
+                Role.organization_id == organization_id,
+                User.organization_id == organization_id,
+                User.deleted_at.is_(None),
+                User.is_active,
+            )
+        )
+        return list(result.scalars().unique().all())
+
+    async def _notify_reviewers(
+        self,
+        submission: TrainingSubmission,
+        *,
+        triggered_by: str,
+        resubmitted: bool = False,
+    ) -> None:
+        """Prompt training officers that a submission is waiting on them.
+
+        Runs after the submission's own commit and never raises: a member's
+        training must not fail to save because a notification could not be
+        written. The submitter is skipped (separation of duties bars them from
+        approving it), as is whoever moved it into the queue — an officer who
+        reverses an approval already knows it is back.
+        """
+        # Read everything off the submission before touching the database, so
+        # nothing below depends on it staying loaded.
+        organization_id = str(submission.organization_id)
+        submission_id = str(submission.id)
+        submitted_by = str(submission.submitted_by)
+        completed = (
+            submission.completion_date.strftime("%b %d, %Y")
+            if submission.completion_date
+            else "an unknown date"
+        )
+        summary = (
+            f"{submission.course_name} "
+            f"({submission.hours_completed:g}h, completed {completed})"
+        )
+        skip = {submitted_by, str(triggered_by)}
+
+        # The lookups and inserts share one SAVEPOINT. A failure inside it
+        # undoes only its own work; a session-level rollback here would expire
+        # every instance the request holds — the submission the endpoint is
+        # about to serialize and the current user among them.
+        try:
+            async with self.db.begin_nested():
+                officers = [
+                    officer
+                    for officer in await self._training_officers(organization_id)
+                    if str(officer.id) not in skip
+                ]
+                submitter = (
+                    await self.db.execute(
+                        select(User.first_name, User.last_name).where(
+                            User.id == submitted_by,
+                            User.organization_id == organization_id,
+                        )
+                    )
+                ).first()
+                name = (
+                    f"{submitter.first_name or ''} {submitter.last_name or ''}".strip()
+                    if submitter
+                    else ""
+                ) or "A member"
+                verb = "resubmitted" if resubmitted else "submitted"
+                for officer in officers:
+                    self.db.add(
+                        NotificationLog(
+                            organization_id=organization_id,
+                            recipient_id=str(officer.id),
+                            channel=NotificationChannel.IN_APP,
+                            category=REVIEW_PROMPT_CATEGORY,
+                            subject=f"Training submission awaiting approval — {name}",
+                            message=f"{name} {verb} {summary} for review.",
+                            action_url=REVIEW_QUEUE_URL,
+                            notification_metadata={
+                                "submission_id": submission_id,
+                                "submitted_by": submitted_by,
+                            },
+                        )
+                    )
+        except Exception:
+            logger.exception(
+                f"Failed to notify training officers of submission {submission_id}"
+            )
+            return
+        if not officers:
+            return
+        try:
+            await self.db.commit()
+        except Exception:
+            logger.exception(
+                f"Failed to commit review prompts for submission {submission_id}"
+            )
+            # A failed commit has already lost the transaction; rollback only
+            # resets the session. The submission committed before this ran.
+            await self.db.rollback()
+
+    async def _archive_review_prompts(
+        self, organization_id: str, submission_id: str
+    ) -> None:
+        """Clear every officer's prompt once a submission leaves the queue."""
+        await NotificationsService(self.db).archive_related_notifications(
+            organization_id, REVIEW_PROMPT_CATEGORY, "submission_id", submission_id
+        )
 
     # ==================== Internal ====================
 

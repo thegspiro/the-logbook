@@ -87,6 +87,16 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
     return actions;
   }
 
+  // Self-reported training awaiting an officer — the link opens the review queue
+  if (category === 'training_submission') {
+    actions.push({
+      label: 'Review Submission',
+      icon: <ClipboardCheck className="h-3.5 w-3.5" />,
+      url: actionUrl,
+    });
+    return actions;
+  }
+
   // Shift swap — offer "Review Swap"
   if (category === 'shift_swap' && subjectLower.includes('request')) {
     actions.push({
