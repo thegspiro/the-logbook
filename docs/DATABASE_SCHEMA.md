@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**285 tables · 4687 columns · 923 foreign keys**
+**285 tables · 4689 columns · 923 foreign keys**
 
 ---
 
@@ -214,7 +214,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`external_agencies`](#external_agencies) | `ExternalAgency` | 6 | A department members may staff apparatus for. |
 | [`external_apparatus`](#external_apparatus) | `ExternalApparatus` | 8 | One unit belonging to an :class:`ExternalAgency`. |
-| [`external_shift_hours`](#external_shift_hours) | `ExternalShiftHours` | 16 |  |
+| [`external_shift_hours`](#external_shift_hours) | `ExternalShiftHours` | 18 |  |
 
 ### Facilities
 
@@ -2866,6 +2866,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
 | `shift_date` | DATE | no |  |  |  |
 | `duration_minutes` | INTEGER | no |  |  |  |
+| `start_at` | DATETIME | yes |  |  |  |
+| `end_at` | DATETIME | yes |  |  |  |
 | `external_apparatus_id` | VARCHAR(36) | yes | FK, IDX |  | → `external_apparatus.id` ON DELETE SET NULL |
 | `agency_name` | VARCHAR(255) | no |  |  |  |
 | `apparatus_name` | VARCHAR(100) | no |  |  |  |

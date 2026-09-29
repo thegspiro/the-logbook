@@ -15,7 +15,7 @@ shift/hours compliance. These tests pin the invariants that make that safe:
 
 import json
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
@@ -41,6 +41,7 @@ from app.models.user import User
 from app.schemas.external_shift_hours import (
     ExternalShiftHoursCreate,
     ExternalShiftHoursReject,
+    ExternalShiftHoursResponse,
     ExternalShiftHoursUpdate,
 )
 from app.services.external_shift_hours_service import ExternalShiftHoursService
@@ -321,6 +322,221 @@ class TestMemberSelfService:
 
         assert result["total"] == 1
         assert [i["id"] for i in result["items"]] == [mine]
+
+
+def _utc(value: datetime) -> datetime:
+    """A stored datetime read back naive is UTC; compare it as such."""
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+@pytest.mark.integration
+class TestStartAndEndTimes:
+    """A shift given by its start and end derives its date and hours."""
+
+    async def test_times_derive_the_date_and_hours(self, db_session, org_and_member):
+        org_id, user_id = org_and_member
+        unit_id = await _unit(db_session, org_id)
+        member = await db_session.get(User, user_id)
+        # 07:00-19:00 in New York (EDT, UTC-4).
+        start = datetime(2025, 6, 3, 11, 0, tzinfo=timezone.utc)
+
+        result = await endpoint.log_external_shift(
+            ExternalShiftHoursCreate(
+                start_at=start,
+                end_at=start + timedelta(hours=12),
+                external_apparatus_id=unit_id,
+            ),
+            db_session,
+            member,
+        )
+
+        assert result["hours"] == 12.0
+        assert result["shift_date"] == date(2025, 6, 3)
+        row = await db_session.get(ExternalShiftHours, result["id"])
+        assert row.duration_minutes == 720
+        assert _utc(row.start_at) == start
+        assert _utc(row.end_at) == start + timedelta(hours=12)
+
+    async def test_night_shift_counts_on_the_local_day_it_began(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        unit_id = await _unit(db_session, org_id)
+        # 22:00 on 3 June in New York is 02:00 on 4 June in UTC.
+        start = datetime(2025, 6, 4, 2, 0, tzinfo=timezone.utc)
+
+        entry = await ExternalShiftHoursService(db_session).create(
+            org_id,
+            user_id,
+            ExternalShiftHoursCreate(
+                start_at=start,
+                end_at=start + timedelta(hours=24),
+                external_apparatus_id=unit_id,
+            ).model_dump(),
+        )
+
+        assert entry.shift_date == date(2025, 6, 3)
+        assert entry.duration_minutes == 24 * 60
+
+    async def test_future_start_is_refused(self, db_session, org_and_member):
+        org_id, user_id = org_and_member
+        unit_id = await _unit(db_session, org_id)
+        start = datetime.now(timezone.utc) + timedelta(days=5)
+        with pytest.raises(ValueError, match="future"):
+            await ExternalShiftHoursService(db_session).create(
+                org_id,
+                user_id,
+                ExternalShiftHoursCreate(
+                    start_at=start,
+                    end_at=start + timedelta(hours=12),
+                    external_apparatus_id=unit_id,
+                ).model_dump(),
+            )
+
+    async def test_update_with_times_recomputes_date_and_hours(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        entry_id = await _external(db_session, org_id, user_id, date(2025, 6, 3), 480)
+        start = datetime(2025, 6, 10, 11, 0, tzinfo=timezone.utc)
+
+        updated = await ExternalShiftHoursService(db_session).update_own(
+            org_id,
+            user_id,
+            entry_id,
+            ExternalShiftHoursUpdate(
+                start_at=start, end_at=start + timedelta(hours=24)
+            ).model_dump(exclude_unset=True),
+        )
+
+        assert updated.shift_date == date(2025, 6, 10)
+        assert updated.duration_minutes == 24 * 60
+        assert _utc(updated.start_at) == start
+
+    async def test_correcting_hours_alone_clears_the_times(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        unit_id = await _unit(db_session, org_id)
+        svc = ExternalShiftHoursService(db_session)
+        start = datetime(2025, 6, 3, 11, 0, tzinfo=timezone.utc)
+        entry = await svc.create(
+            org_id,
+            user_id,
+            ExternalShiftHoursCreate(
+                start_at=start,
+                end_at=start + timedelta(hours=12),
+                external_apparatus_id=unit_id,
+            ).model_dump(),
+        )
+
+        updated = await svc.update_own(org_id, user_id, entry.id, {"hours": 10})
+
+        assert updated.duration_minutes == 600
+        assert updated.start_at is None
+        assert updated.end_at is None
+
+    async def test_one_time_without_the_other_is_refused(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        entry_id = await _external(db_session, org_id, user_id, date(2025, 6, 3), 480)
+        start = datetime(2025, 6, 3, 11, 0, tzinfo=timezone.utc)
+        with pytest.raises(ValueError, match="both a start and an end"):
+            await ExternalShiftHoursService(db_session).update_own(
+                org_id, user_id, entry_id, {"start_at": start}
+            )
+
+    async def test_times_beside_hours_on_update_are_refused(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        entry_id = await _external(db_session, org_id, user_id, date(2025, 6, 3), 480)
+        start = datetime(2025, 6, 3, 11, 0, tzinfo=timezone.utc)
+        with pytest.raises(ValueError, match="not both"):
+            await ExternalShiftHoursService(db_session).update_own(
+                org_id,
+                user_id,
+                entry_id,
+                {"start_at": start, "end_at": start + timedelta(hours=8), "hours": 8},
+            )
+
+
+@pytest.mark.unit
+class TestStartAndEndSchema:
+    _unit_id = uuid.uuid4()
+    _start = datetime(2025, 6, 3, 11, 0, tzinfo=timezone.utc)
+
+    def test_end_must_follow_start(self):
+        with pytest.raises(ValidationError, match="end after it starts"):
+            ExternalShiftHoursCreate(
+                start_at=self._start,
+                end_at=self._start,
+                external_apparatus_id=self._unit_id,
+            )
+
+    def test_span_is_capped_at_48_hours(self):
+        with pytest.raises(ValidationError, match="at most 48 hours"):
+            ExternalShiftHoursCreate(
+                start_at=self._start,
+                end_at=self._start + timedelta(hours=48, minutes=15),
+                external_apparatus_id=self._unit_id,
+            )
+        ExternalShiftHoursCreate(
+            start_at=self._start,
+            end_at=self._start + timedelta(hours=48),
+            external_apparatus_id=self._unit_id,
+        )
+
+    def test_times_and_hours_together_are_refused(self):
+        with pytest.raises(ValidationError, match="not both"):
+            ExternalShiftHoursCreate(
+                start_at=self._start,
+                end_at=self._start + timedelta(hours=12),
+                hours=12,
+                external_apparatus_id=self._unit_id,
+            )
+
+    def test_a_shift_needs_times_or_date_and_hours(self):
+        with pytest.raises(ValidationError, match="start and end times"):
+            ExternalShiftHoursCreate(external_apparatus_id=self._unit_id)
+        with pytest.raises(ValidationError, match="both a start and an end"):
+            ExternalShiftHoursCreate(
+                start_at=self._start, external_apparatus_id=self._unit_id
+            )
+
+    def test_offset_times_are_stored_as_utc(self):
+        payload = ExternalShiftHoursCreate(
+            start_at="2025-06-03T07:00:00-04:00",
+            end_at="2025-06-03T23:00:00",
+            external_apparatus_id=self._unit_id,
+        )
+        assert payload.start_at == self._start
+        assert payload.start_at.tzinfo == timezone.utc
+        assert payload.end_at == self._start + timedelta(hours=12)
+
+    def test_update_checks_the_pair(self):
+        with pytest.raises(ValidationError, match="end after it starts"):
+            ExternalShiftHoursUpdate(
+                start_at=self._start, end_at=self._start - timedelta(hours=1)
+            )
+
+    def test_response_marks_times_as_utc(self):
+        naive = datetime(2025, 6, 3, 11, 0)
+        body = ExternalShiftHoursResponse(
+            id="x",
+            user_id="u",
+            shift_date=date(2025, 6, 3),
+            hours=12,
+            start_at=naive,
+            end_at=naive + timedelta(hours=12),
+            agency_name="A",
+            apparatus_name="E1",
+            status="counted",
+            created_at=naive,
+            updated_at=naive,
+        ).model_dump_json()
+        assert '"start_at":"2025-06-03T11:00:00Z"' in body
 
 
 @pytest.mark.integration

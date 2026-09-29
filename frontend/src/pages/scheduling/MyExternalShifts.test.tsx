@@ -31,6 +31,8 @@ const entry = (over: Partial<ExternalShiftEntry> = {}): ExternalShiftEntry => ({
   member_name: 'Casey Reed',
   shift_date: '2026-03-04',
   hours: 12,
+  start_at: null,
+  end_at: null,
   external_apparatus_id: 'u-42',
   agency_name: 'Township Fire Company',
   apparatus_name: 'Engine 42',
@@ -89,29 +91,108 @@ describe('MyExternalShifts', () => {
     expect(mockGetMine).toHaveBeenCalledWith({ limit: 100 });
   });
 
-  it('logs a shift on a unit picked from the list, leaving blank optional fields out', async () => {
+  it('logs a shift by its start and a +12 end, leaving blank optional fields out', async () => {
     mockGetMine.mockResolvedValue({ items: [], total: 0 });
     const user = userEvent.setup();
     renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
 
     await user.click(await screen.findByRole('button', { name: 'Log outside shift' }));
-    const dateInput = screen.getByLabelText('Date');
-    await user.clear(dateInput);
-    await user.type(dateInput, '2026-01-10');
-    await user.type(screen.getByLabelText('Hours'), '10.5');
+    // Picking a date alone starts the shift at 09:00, the picker's default.
+    await user.type(screen.getByLabelText('Start'), '2026-01-10');
+    await user.click(screen.getByRole('button', { name: '+12 hours' }));
+    expect(screen.getByText('12 hours')).toBeInTheDocument();
     await user.selectOptions(await screen.findByLabelText('Department'), 'a-county');
     await user.selectOptions(screen.getByLabelText('Apparatus'), 'u-9');
     await user.click(screen.getByRole('button', { name: 'Log shift' }));
 
     await waitFor(() => expect(mockLog).toHaveBeenCalledTimes(1));
-    expect(mockLog).toHaveBeenCalledWith({
-      shift_date: '2026-01-10',
-      hours: 10.5,
-      external_apparatus_id: 'u-9',
-      role: undefined,
-      notes: undefined,
-    });
+    // 09:00-21:00 in New York (EST, UTC-5), sent as UTC instants.
+    const payload = mockLog.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual(['end_at', 'external_apparatus_id', 'notes', 'role', 'start_at']);
+    expect(payload.external_apparatus_id).toBe('u-9');
+    expect(payload.role).toBeUndefined();
+    expect(payload.notes).toBeUndefined();
+    expect(new Date(payload.start_at as string).toISOString()).toBe('2026-01-10T14:00:00.000Z');
+    expect(new Date(payload.end_at as string).toISOString()).toBe('2026-01-11T02:00:00.000Z');
     expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('runs a +24 shift into the next day', async () => {
+    mockGetMine.mockResolvedValue({ items: [], total: 0 });
+    const user = userEvent.setup();
+    renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Log outside shift' }));
+    await user.type(screen.getByLabelText('Start'), '2026-01-10');
+    await user.click(screen.getByRole('button', { name: '+24 hours' }));
+
+    expect(screen.getByLabelText('End')).toHaveValue('2026-01-11');
+    expect(screen.getByText('24 hours')).toBeInTheDocument();
+  });
+
+  it('offers no preset until there is a start to count from', async () => {
+    mockGetMine.mockResolvedValue({ items: [], total: 0 });
+    const user = userEvent.setup();
+    renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Log outside shift' }));
+
+    expect(screen.getByRole('button', { name: '+12 hours' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '+24 hours' })).toBeDisabled();
+  });
+
+  it('refuses an end before the start', async () => {
+    mockGetMine.mockResolvedValue({ items: [], total: 0 });
+    const user = userEvent.setup();
+    renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Log outside shift' }));
+    await user.type(screen.getByLabelText('Start'), '2026-01-10');
+    const endDate = screen.getByLabelText('End');
+    await user.clear(endDate);
+    await user.type(endDate, '2026-01-09');
+    await user.selectOptions(await screen.findByLabelText('Department'), 'a-county');
+    await user.selectOptions(screen.getByLabelText('Apparatus'), 'u-9');
+
+    expect(screen.getByRole('alert')).toHaveTextContent('The shift must end after it starts');
+    expect(screen.getByRole('button', { name: 'Log shift' })).toBeDisabled();
+  });
+
+  it('shows and re-sends the times of an entry that has them', async () => {
+    mockGetMine.mockResolvedValue({
+      items: [entry({ start_at: '2026-03-04T12:00:00Z', end_at: '2026-03-05T00:00:00Z' })],
+      total: 1,
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
+
+    expect(await screen.findByText(/Mar 4, 2026 · 7:00 AM – 7:00 PM · 12 hrs/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Edit shift with Township Fire Company/ }));
+    await waitFor(() => expect(screen.getByLabelText('Apparatus')).toHaveValue('u-42'));
+    expect(screen.getByLabelText('Start')).toHaveValue('2026-03-04');
+    expect(screen.queryByLabelText('Hours')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+    const [, payload] = mockUpdate.mock.calls[0] as [string, Record<string, unknown>];
+    expect(new Date(payload.start_at as string).toISOString()).toBe('2026-03-04T12:00:00.000Z');
+    expect(new Date(payload.end_at as string).toISOString()).toBe('2026-03-05T00:00:00.000Z');
+    expect(payload).not.toHaveProperty('hours');
+    expect(payload).not.toHaveProperty('shift_date');
+  });
+
+  it('lets an entry logged as date and hours be given times instead', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
+
+    await user.click(await screen.findByRole('button', { name: /Edit shift with Township Fire Company/ }));
+    expect(screen.getByLabelText('Hours')).toHaveValue(12);
+    await user.click(screen.getByRole('button', { name: 'Enter start and end times instead' }));
+
+    expect(screen.queryByLabelText('Hours')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Start')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+24 hours' })).toBeInTheDocument();
   });
 
   it('offers only the chosen department’s apparatus, and cannot save without one', async () => {
@@ -120,7 +201,8 @@ describe('MyExternalShifts', () => {
     renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
 
     await user.click(await screen.findByRole('button', { name: 'Log outside shift' }));
-    await user.type(screen.getByLabelText('Hours'), '8');
+    await user.type(screen.getByLabelText('Start'), '2026-01-10');
+    await user.click(screen.getByRole('button', { name: '+12 hours' }));
     await user.selectOptions(await screen.findByLabelText('Department'), 'a-township');
 
     const unitSelect = screen.getByLabelText('Apparatus');

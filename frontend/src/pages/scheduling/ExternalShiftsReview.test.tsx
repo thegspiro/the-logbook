@@ -23,6 +23,8 @@ const entry = (over: Partial<ExternalShiftEntry> = {}): ExternalShiftEntry => ({
   member_name: 'Casey Reed',
   shift_date: '2026-03-04',
   hours: 12,
+  start_at: null,
+  end_at: null,
   external_apparatus_id: 'u-42',
   agency_name: 'Township Fire Company',
   apparatus_name: 'Engine 42',
