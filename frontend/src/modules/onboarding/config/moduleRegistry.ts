@@ -71,8 +71,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'members',
     name: 'Member Management',
-    description:
-      'Manage your department roster, positions, contact information, and member profiles. Core functionality for any organization.',
+    description: 'Manage your department roster, positions, contact information, and member profiles.',
     icon: Users,
     priority: 'essential',
     category: 'Core',
@@ -96,8 +95,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'events',
     name: 'Events & RSVP',
-    description:
-      'Create events, track RSVPs, manage attendance, and send event notifications. Perfect for meetings, trainings, and social gatherings.',
+    description: 'Create events, track RSVPs, manage attendance, and send event notifications.',
     icon: Calendar,
     priority: 'essential',
     category: 'Core',
@@ -164,8 +162,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'training',
     name: 'Training & Certifications',
-    description:
-      'Track required certifications, training completions, and expiration dates. Ensure compliance and readiness.',
+    description: 'Track required certifications, training completions, and expiration dates.',
     icon: GraduationCap,
     priority: 'recommended',
     category: 'Operations',
@@ -227,7 +224,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     id: 'scheduling',
     // Same name the nav and the page itself use — this was a third one.
     name: 'Shift Scheduling',
-    description: 'Create shift schedules, manage duty rosters, and handle shift trades. Simplify workforce planning.',
+    description: 'Create shift schedules, manage duty rosters, and handle shift trades.',
     icon: Clock,
     priority: 'recommended',
     category: 'Operations',
@@ -268,8 +265,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'facilities',
     name: 'Facilities Management',
-    description:
-      'Manage buildings, schedule maintenance, log inspections, and track facility systems. Keep your stations mission-ready.',
+    description: 'Manage buildings, schedule maintenance, log inspections, and track facility systems.',
     icon: Building2,
     priority: 'recommended',
     category: 'Operations',
@@ -327,8 +323,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'minutes',
     name: 'Meeting Minutes',
-    description:
-      'Record meeting minutes, track action items, and maintain organizational history. Stay compliant and organized.',
+    description: 'Record meeting minutes, track action items, and maintain organizational history.',
     icon: ClipboardList,
     priority: 'optional',
     category: 'Governance',
@@ -343,7 +338,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'reports',
     name: 'Reports & Analytics',
-    description: 'Generate custom reports, view analytics dashboards, and export data. Make data-driven decisions.',
+    description: 'Generate custom reports, view analytics dashboards, and export data.',
     icon: BarChart3,
     priority: 'optional',
     category: 'Governance',
@@ -369,7 +364,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'notifications',
     name: 'Email Notifications',
-    description: 'Automated email notifications for events, reminders, and important updates. Keep everyone informed.',
+    description: 'Automated email notifications for events, reminders, and important updates.',
     icon: Bell,
     priority: 'optional',
     category: 'Communication',
@@ -384,8 +379,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'mobile',
     name: 'Mobile App Access',
-    description:
-      'Progressive web app for mobile access. Members can check in, view schedules, and stay connected on-the-go.',
+    description: 'Progressive web app for mobile access. Members can check in and view schedules from their phones.',
     icon: Smartphone,
     priority: 'optional',
     category: 'Communication',
@@ -404,7 +398,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'integrations',
     name: 'External Integrations',
-    description: 'Connect with external tools like Google Calendar, Slack, and more. Extend platform capabilities.',
+    description: 'Connect with external tools like Google Calendar, Slack, and more.',
     icon: Plug,
     priority: 'optional',
     category: 'Advanced',

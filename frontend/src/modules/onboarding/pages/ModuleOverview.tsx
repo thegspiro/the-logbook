@@ -61,10 +61,10 @@ const ModuleOverview: React.FC = () => {
       toast.success(`${module?.name} enabled`);
     } else if (action === 'skip') {
       setModuleStatus(moduleId, 'skipped');
-      toast.success(`${module?.name} marked as "Configure Later"`);
+      toast.success(`${module?.name} left off for now`);
     } else if (action === 'ignore') {
       setModuleStatus(moduleId, 'ignored');
-      toast.success(`${module?.name} disabled`);
+      toast.success(`${module?.name} skipped`);
     }
   };
 
@@ -83,7 +83,7 @@ const ModuleOverview: React.FC = () => {
           throw new Error(response.error);
         }
 
-        toast.success('Module configuration saved');
+        toast.success('Modules saved');
 
         void navigate(nextStepPath('modules'));
         return response;
@@ -162,10 +162,9 @@ const ModuleOverview: React.FC = () => {
               <Package aria-hidden="true" className="h-8 w-8 text-white" />
             </div>
             <h1 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">Choose Your Modules</h1>
-            <p className="text-theme-text-secondary mb-2 text-xl">Select which features you want to use</p>
+            <p className="text-theme-text-secondary mb-2 text-xl">Turn on the features your department will use</p>
             <p className="text-theme-text-muted mx-auto max-w-2xl text-sm">
-              Don't worry - you can enable, disable, or reconfigure any module at any time from your dashboard. The
-              platform is designed to be flexible and adapt to your needs as they evolve.
+              Only modules marked Enable are turned on. You can turn any module on or off later from Settings.
             </p>
           </div>
 
@@ -206,7 +205,7 @@ const ModuleOverview: React.FC = () => {
               <div className="bg-theme-alert-danger-border h-px flex-1"></div>
             </div>
             <p className="text-theme-text-muted mb-6 text-center text-sm">
-              These core modules are recommended for all departments and are enabled by default
+              On by default. Most departments use all of these.
             </p>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {groupedModules.essential.map((module) => {
@@ -243,17 +242,17 @@ const ModuleOverview: React.FC = () => {
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleModuleAction(module.id, 'skip')}
-                          aria-label={`Later ${module.name}`}
+                          aria-label={`Set up ${module.name} later`}
                           className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Later
                         </button>
                         <button
                           onClick={() => handleModuleAction(module.id, 'ignore')}
-                          aria-label={`Disable ${module.name}`}
+                          aria-label={`Skip ${module.name}`}
                           className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
-                          Disable
+                          Skip
                         </button>
                       </div>
                     </div>
@@ -271,7 +270,7 @@ const ModuleOverview: React.FC = () => {
               <div className="bg-theme-alert-info-border h-px flex-1"></div>
             </div>
             <p className="text-theme-text-muted mb-6 text-center text-sm">
-              Popular modules that enhance operations - configure what fits your workflow
+              Widely used. Turn on the ones that fit how your department works.
             </p>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {groupedModules.recommended.map((module) => {
@@ -305,17 +304,17 @@ const ModuleOverview: React.FC = () => {
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleModuleAction(module.id, 'skip')}
-                          aria-label={`Skip For Now ${module.name}`}
+                          aria-label={`Set up ${module.name} later`}
                           className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
-                          Skip For Now
+                          Later
                         </button>
                         <button
                           onClick={() => handleModuleAction(module.id, 'ignore')}
-                          aria-label={`Ignore ${module.name}`}
+                          aria-label={`Skip ${module.name}`}
                           className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
-                          Ignore
+                          Skip
                         </button>
                       </div>
                     </div>
@@ -333,7 +332,7 @@ const ModuleOverview: React.FC = () => {
               <div className="bg-theme-surface-border h-px flex-1"></div>
             </div>
             <p className="text-theme-text-muted mb-6 text-center text-sm">
-              Advanced features you can enable when needed - completely optional
+              Specialized features. Turn them on only if you need them.
             </p>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
               {groupedModules.optional.map((module) => {
