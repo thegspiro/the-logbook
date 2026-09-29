@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import type { UserInventoryResponse } from '../types';
@@ -199,6 +199,86 @@ describe('MyEquipmentPage', () => {
       issuance_id: 'is-1',
       quantity_returning: 1,
     });
+  });
+
+  // The tile counted pending gear requests only, and only once My Requests
+  // had been opened: a member who had just notified the quartermaster of a
+  // return read "0 Pending" on arrival and after a reload.
+  it('counts open gear requests and return notices as pending on arrival', async () => {
+    mockGetUserInventory.mockResolvedValue(fullInv);
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [
+        { id: 'eq-1', item_name: 'Helmet', status: 'pending', created_at: '2026-02-01T00:00:00Z' },
+        { id: 'eq-2', item_name: 'Hood', status: 'fulfilled', created_at: '2026-02-01T00:00:00Z' },
+      ],
+    });
+    mockGetReturnRequests.mockResolvedValue([
+      {
+        id: 'rr-1',
+        item_name: 'Turnout Coat',
+        return_type: 'assignment',
+        status: 'requested',
+        created_at: '2026-02-02T00:00:00Z',
+      },
+      {
+        id: 'rr-2',
+        item_name: 'Old Boots',
+        return_type: 'assignment',
+        status: 'completed',
+        created_at: '2026-01-02T00:00:00Z',
+      },
+    ]);
+    renderWithRouter(<MyEquipmentPage />);
+
+    const tile = await screen.findByRole('group', { name: 'Pending' });
+    await waitFor(() => expect(tile).toHaveTextContent(/^2Pending$/));
+  });
+
+  it('names the fields of the return notice', async () => {
+    mockGetUserInventory.mockResolvedValue({
+      ...fullInv,
+      issued_items: [
+        {
+          issuance_id: 'is-1',
+          item_id: 'it-3',
+          item_name: 'Work Gloves',
+          quantity_issued: 3,
+          issued_at: '2026-02-05T00:00:00Z',
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<MyEquipmentPage />);
+    await screen.findByText('Work Gloves');
+
+    await user.click(screen.getByRole('button', { name: 'Notify quartermaster of return: Work Gloves' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Notify quartermaster of return' });
+    expect(within(dialog).getByRole('combobox', { name: 'Condition' })).toHaveValue('good');
+    expect(within(dialog).getByRole('spinbutton', { name: 'Quantity Returning' })).toHaveValue(1);
+    expect(within(dialog).getByRole('textbox', { name: 'Notes (optional)' })).toBeInTheDocument();
+  });
+
+  it('refreshes the pending count after a return notice without opening the panel', async () => {
+    mockGetUserInventory.mockResolvedValue(fullInv);
+    const user = userEvent.setup();
+    renderWithRouter(<MyEquipmentPage />);
+    await screen.findByText('Turnout Coat');
+    mockGetReturnRequests.mockResolvedValue([
+      {
+        id: 'rr-1',
+        item_name: 'Turnout Coat',
+        return_type: 'assignment',
+        status: 'requested',
+        created_at: '2026-02-02T00:00:00Z',
+      },
+    ]);
+
+    await user.click(screen.getByRole('button', { name: 'Notify quartermaster of return: Turnout Coat' }));
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    const tile = screen.getByRole('group', { name: 'Pending' });
+    await waitFor(() => expect(tile).toHaveTextContent(/^1Pending$/));
   });
 
   it('loads my requests when the panel is opened', async () => {

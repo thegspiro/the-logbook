@@ -82,7 +82,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | #   | Activity                                                                     | Acts as                | Starts at                                                  | Status |
 | --- | ---------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------- | ------ |
 | W38 | Set up inventory: categories, then add items of each tracking kind           | quartermaster          | `/inventory/admin/setup`, `/inventory/admin/items`         | ✅     |
-| W39 | Issue equipment to a member, the member sees it, return it                   | quartermaster → member | `/inventory/admin/members`, `/inventory/my-equipment`      | ⬜     |
+| W39 | Issue equipment to a member, the member sees it, return it                   | quartermaster → member | `/inventory/admin/members`, `/inventory/my-equipment`      | ✅     |
 | W40 | Pool items, checkouts, kits and variant groups                               | quartermaster          | `/inventory/admin/pool`, `/inventory/checkouts`            | ⬜     |
 | W41 | A member's request, return, write-off and reorder, and the approvals         | member → quartermaster | `/inventory/admin/requests`, `/inventory/admin/returns`    | ⬜     |
 | W42 | Maintenance records, vendors, charges and issuance allowances                | quartermaster          | `/inventory/admin/maintenance`, `/inventory/admin/charges` | ⬜     |
@@ -172,6 +172,11 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   … Powered by The Logbook · End-to-end encrypted · Self-hosted ·
   HIPAA-aware") prints under the apparatus check-in sheet and the shift
   report (W37-3).
+- **W41** — a return notice stays "requested" after the quartermaster
+  receives the gear through Return on the members page, so it lingers in the
+  returns queue, on the hub and in the member's Pending (W39-5, flagged). The
+  row also keeps offering "Notify quartermaster of return" after a notice
+  (W39-9).
 - **W48** — the basic apparatus form (`/apparatus-basic` → Add Apparatus)
   names none of its fields: unit number, name, type, crew size and every
   position select are placeholders or nothing (W30).
@@ -183,6 +188,23 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W39 — Issue equipment to a member, the member sees it, return it — 2026-09-29
+
+Driven as: `quartermaster` → `member` at 1280×900 and 390×844, with `member`
+refused. Held: an assignment and a pool issuance of 2 were each made once
+despite a double-clicked Confirm; the member saw both; a double-clicked return
+notice made one and a second was refused; a double-clicked Return returned
+once; the member got 403 on every inventory write and Access Denied on the
+members page. Fixed: W39-3 (MED — the Return Items dialog could not be used
+without a mouse), W39-1 (LOW — a member opening their own gear got
+"Insufficient permissions" over an empty History), W39-2 (LOW — a missing NFPA
+record toasted as an error), W39-4 (LOW — Pending read 0 with a return notice
+open; the notice's fields had no names), W39-6 (LOW — identical per-member
+action names), W39-7 (LOW — a loan's return time was bounded in UTC). Flagged:
+W39-5 (MED — receiving gear back leaves the member's return notice open). Open:
+W39-8, W39-9 (NIT). Gate: typecheck, lint and the inventory suites clean. Next:
+W40.
 
 ### W38 — Set up inventory: categories, then add items of each tracking kind — 2026-09-29
 

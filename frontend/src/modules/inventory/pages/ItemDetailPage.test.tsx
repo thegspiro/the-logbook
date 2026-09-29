@@ -59,6 +59,8 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
+import toast from 'react-hot-toast';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import ItemDetailPage from './ItemDetailPage';
 import { formatDate } from '../../../utils/dateFormatting';
 
@@ -77,13 +79,15 @@ const makeItem = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
   ...overrides,
 });
 
-const renderPage = () =>
+const renderPage = (entry = '/inventory/items/it-1') =>
   render(
-    <MemoryRouter initialEntries={['/inventory/items/it-1']}>
-      <Routes>
-        <Route path="/inventory/items/:id" element={<ItemDetailPage />} />
-      </Routes>
-    </MemoryRouter>
+    <ConfirmProvider>
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route path="/inventory/items/:id" element={<ItemDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </ConfirmProvider>
   );
 
 describe('ItemDetailPage', () => {
@@ -295,6 +299,47 @@ describe('ItemDetailPage', () => {
     renderPage();
     await waitFor(() => expect(mockGetItemHistory).toHaveBeenCalledWith('it-1'));
     expect(await screen.findByText('Temporary loaned to Engine 1')).toBeInTheDocument();
+  });
+
+  // The history names everyone who has held the item and the server refuses it
+  // below inventory.manage. A member opening their own issued coat was shown
+  // "Insufficient permissions" over an empty History tab.
+  describe('for a member without the manage permission', () => {
+    beforeEach(() => {
+      mockCheckPermission.mockReset();
+      mockCheckPermission.mockReturnValue(false);
+    });
+
+    it('neither offers nor requests the history', async () => {
+      renderPage();
+      await screen.findAllByText('Thermal Camera');
+
+      expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Stock Lots' })).toBeInTheDocument();
+      expect(mockGetItemHistory).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('does not request the history from a link that names the tab', async () => {
+      renderPage('/inventory/items/it-1?tab=history');
+      await screen.findAllByText('Thermal Camera');
+
+      expect(mockGetItemHistory).not.toHaveBeenCalled();
+    });
+  });
+
+  it('reads a missing NFPA record as none started rather than as an error', async () => {
+    mockGetCategories.mockResolvedValue([
+      { id: 'cat-1', name: 'Turnout Gear', item_type: 'ppe', nfpa_tracking_enabled: true },
+    ]);
+    mockGetItem.mockResolvedValue(makeItem({ category_id: 'cat-1' }));
+    mockGetNFPACompliance.mockRejectedValue({
+      response: { status: 404, data: { detail: 'No NFPA compliance record found for this item' } },
+    });
+    renderPage('/inventory/items/it-1?tab=nfpa');
+
+    expect(await screen.findByText('No NFPA compliance data available.')).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('opens the edit modal', async () => {
