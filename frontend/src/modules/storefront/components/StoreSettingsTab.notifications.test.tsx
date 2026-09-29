@@ -107,7 +107,7 @@ describe('StoreSettingsTab notification switches', () => {
     // By role, not by label: each notice's Preview button is also named for
     // its notice, so a bare label query matches the switch and the button.
     const opened = await screen.findByRole('checkbox', {
-      name: /Ordering is open/,
+      name: /^Ordering is open/,
     });
     expect(opened).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: /Ordering has closed/ })).toBeChecked();
@@ -166,7 +166,7 @@ describe('StoreSettingsTab notification switches', () => {
     render(<StoreSettingsTab onChanged={vi.fn()} />);
 
     const banner = await screen.findByRole('checkbox', {
-      name: /Show prominent store status banner/,
+      name: /Show the “Ordering is open” banner/,
     });
     expect(banner).toBeChecked();
 
