@@ -1464,7 +1464,7 @@ const CreatePipelinePage: React.FC = () => {
 
       const program = await trainingProgramService.buildProgram(payload);
 
-      toast.success('Training pipeline created successfully!');
+      toast.success('Training pipeline created');
       void navigate(`/training/programs/${program.id}`);
     } catch (err: unknown) {
       const errorMessage = getErrorDetail(err) || 'Failed to create pipeline';

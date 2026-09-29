@@ -198,12 +198,12 @@ const CreateTrainingSessionPage: React.FC = () => {
   const handleSubmit = async () => {
     // Validation
     if (!formData.title || !formData.start_datetime || !formData.end_datetime) {
-      toast.error('Please fill in all required fields');
+      toast.error('Enter a title, start time, and end time');
       return;
     }
 
     if (!formData.use_existing_course && !formData.course_name) {
-      toast.error('Please provide a course name or select an existing course');
+      toast.error('Enter a course name or choose an existing course');
       return;
     }
 
@@ -258,7 +258,7 @@ const CreateTrainingSessionPage: React.FC = () => {
         };
 
         const sessions = await trainingSessionService.createRecurringSessions(recurringData);
-        toast.success(`Created ${sessions.length} recurring training sessions!`);
+        toast.success(`Created ${sessions.length} recurring training sessions`);
 
         // Navigate to the first event in the series
         const firstSession = sessions[0];
@@ -270,7 +270,7 @@ const CreateTrainingSessionPage: React.FC = () => {
       } else {
         // Create single training session
         const response = await trainingSessionService.createSession(submitData);
-        toast.success('Training session created successfully!');
+        toast.success('Training session created');
 
         if (response.event_id) {
           void navigate(`/events/${response.event_id}`);
@@ -301,7 +301,7 @@ const CreateTrainingSessionPage: React.FC = () => {
             className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
           >
             <ArrowLeft className="mr-2 h-5 w-5" />
-            Back to Training Sessions
+            Back to Training Dashboard
           </button>
           <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
             <Calendar className="h-8 w-8 text-red-700" />

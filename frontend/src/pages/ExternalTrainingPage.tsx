@@ -640,7 +640,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
         updates.api_secret = formData.api_secret;
       }
       await externalTrainingService.updateProvider(provider.id, updates);
-      toast.success('Provider updated successfully');
+      toast.success('Provider updated');
       onSuccess();
       onClose();
     } catch (err: unknown) {
@@ -1130,7 +1130,7 @@ const ExternalTrainingPage: React.FC = () => {
     setSyncingCategoriesProvider(providerId);
     try {
       const result = await externalTrainingService.syncCategories(providerId);
-      toast.success(result.message || 'Categories fetched successfully');
+      toast.success(result.message || 'Categories synced');
     } catch (err: unknown) {
       toast.error(`Category sync failed: ${getErrorMessage(err)}`);
     } finally {
@@ -1171,7 +1171,7 @@ const ExternalTrainingPage: React.FC = () => {
     try {
       await externalTrainingService.deleteProvider(providerId);
       await loadProviders();
-      toast.success('Provider deleted successfully');
+      toast.success('Provider deleted');
     } catch (err: unknown) {
       toast.error(`Failed to delete: ${getErrorMessage(err)}`);
     }
