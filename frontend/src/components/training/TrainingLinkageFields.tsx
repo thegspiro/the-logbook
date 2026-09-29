@@ -27,7 +27,7 @@ interface TrainingLinkageFieldsProps {
 /**
  * The category / requirement / program / phase pickers for a training session,
  * with one-tap suggestion chips and a plain-language preview of what the
- * chosen links will do at check-in. Shared by the create wizard and the
+ * chosen links will do when attendance is finalized. Shared by the create wizard and the
  * session edit card so both flows behave identically.
  */
 export const TrainingLinkageFields: React.FC<TrainingLinkageFieldsProps> = ({
@@ -65,7 +65,7 @@ export const TrainingLinkageFields: React.FC<TrainingLinkageFieldsProps> = ({
   const programName = programs.find((p) => p.id === value.program_id)?.name;
   const requirementName = requirements.find((r) => r.id === value.requirement_id)?.name;
 
-  // Plain-language preview of what the chosen links will do at check-in
+  // Plain-language preview of what the chosen links will do when attendance is finalized
   const linkageSummary = ((): string | null => {
     if (value.program_id && value.requirement_id) {
       return `Attendance will advance "${requirementName}" for members enrolled in ${programName}.`;

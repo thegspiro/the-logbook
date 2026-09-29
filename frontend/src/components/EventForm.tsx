@@ -33,15 +33,24 @@ import type {
   RSVPStatus,
   EventAttachment,
 } from '../types/event';
+import { Link as RouterLink } from 'react-router';
 import { eventService, locationsService } from '../services/api';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
+import { useAuthStore } from '../stores/authStore';
 import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { Collapsible } from './ux/Collapsible';
 import DateTimeQuarterHour from './ux/DateTimeQuarterHour';
+import { TrainingDetailsFields } from './training/TrainingDetailsFields';
+import {
+  EMPTY_TRAINING_DETAILS,
+  hasExplicitTrainingDetails,
+  toTrainingDetailsPayload,
+  type TrainingDetailsValue,
+} from './training/trainingDetailsValue';
 
 export interface ConflictEvent {
   id: string;
@@ -193,6 +202,9 @@ export const EventForm: React.FC<EventFormProps> = ({
   editingEventId,
 }) => {
   const tz = useTimezone();
+  // Create Training Session lives in the Training admin hub, which only a
+  // training.manage holder can open; anyone else is pointed at who can.
+  const canCreateTrainingSession = useAuthStore((state) => state.checkPermission('training.manage'));
 
   // Convert any ISO date strings from the API into datetime-local format
   // in the user's timezone so the inputs display correctly.
@@ -244,6 +256,7 @@ export const EventForm: React.FC<EventFormProps> = ({
     initialRecurrence?.recurrence_exceptions || []
   );
   const [newExceptionDate, setNewExceptionDate] = useState('');
+  const [trainingDetails, setTrainingDetails] = useState<TrainingDetailsValue>(EMPTY_TRAINING_DETAILS);
   const checkInLeadTimeEdited = useRef(initialData?.check_in_minutes_before !== undefined);
   const reminderAudienceEdited = useRef(initialData?.reminder_target !== undefined);
 
@@ -510,6 +523,13 @@ export const EventForm: React.FC<EventFormProps> = ({
   // no deadline (a single fixed deadline has no meaning across a series).
   const rsvpDeadlineRequired = formData.requires_rsvp && !editingEventId && !(isRecurring && onSubmitRecurring);
 
+  // Training details are picked only while creating: an existing event's are
+  // edited on its detail page, where the attendance lock can be checked. The
+  // backend refuses them on a rolling series, whose occurrences are generated
+  // later by a task that has no details to attach.
+  const showsTrainingDetails = formData.event_type === EventTypeEnum.TRAINING && !editingEventId;
+  const submitsRollingSeries = isRecurring && Boolean(onSubmitRecurring) && isRolling;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -539,6 +559,13 @@ export const EventForm: React.FC<EventFormProps> = ({
 
     // Clean up data before submit
     const submitData = { ...formData };
+
+    // Only an explicit pick attaches a training session; an untouched section
+    // leaves the event to be credited under its title as Continuing Education.
+    delete submitData.training_details;
+    if (showsTrainingDetails && !submitsRollingSeries && hasExplicitTrainingDetails(trainingDetails)) {
+      submitData.training_details = toTrainingDetailsPayload(trainingDetails);
+    }
 
     // Clear location fields based on mode
     if (locationMode === 'select') {
@@ -725,12 +752,10 @@ export const EventForm: React.FC<EventFormProps> = ({
               </optgroup>
             )}
           </select>
-          {formData.event_type === EventTypeEnum.TRAINING && (
-            <div className="mt-2 rounded-lg border border-purple-500/30 bg-purple-500/10 p-3">
-              <p className="text-sm text-purple-700 dark:text-purple-300">
-                For training events with course tracking, use "Create Training Session" instead.
-              </p>
-            </div>
+          {formData.event_type === EventTypeEnum.TRAINING && editingEventId && (
+            <p className="text-theme-text-muted mt-2 text-sm">
+              Training details are edited on the event page&apos;s Requirements &amp; Programs card.
+            </p>
           )}
           {/* A recruitment event only reaches the prospective-members pipeline
               through guest sign-in, and those two switches live in Check-In,
@@ -766,6 +791,50 @@ export const EventForm: React.FC<EventFormProps> = ({
             </div>
           )}
         </div>
+
+        {showsTrainingDetails && (
+          <div
+            role="group"
+            aria-labelledby="training-details-heading"
+            className="border-theme-surface-border space-y-4 rounded-lg border p-4"
+          >
+            <div>
+              <h3 id="training-details-heading" className="text-theme-text-primary text-base font-semibold">
+                Training details (optional)
+              </h3>
+              <p className="text-theme-text-secondary mt-1 text-sm">
+                Attendance is credited to members&apos; training records when attendance is finalized. Without details
+                it is filed under the event title as Continuing Education.
+              </p>
+              <p className="text-theme-text-muted mt-1 text-sm">
+                {canCreateTrainingSession ? (
+                  <>
+                    Use{' '}
+                    <RouterLink
+                      to="/training/admin?page=records&tab=sessions"
+                      className="font-medium text-red-700 underline hover:text-red-800 dark:text-red-400"
+                    >
+                      Create Training Session
+                    </RouterLink>{' '}
+                    for instructor sign-off, certification or an assigned instructor.
+                  </>
+                ) : (
+                  'For instructor sign-off, certification or an assigned instructor, a training officer uses Create Training Session instead.'
+                )}
+              </p>
+            </div>
+            {submitsRollingSeries && (
+              <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+                Training details can&apos;t be added to a rolling series.
+              </p>
+            )}
+            <TrainingDetailsFields
+              value={trainingDetails}
+              onChange={setTrainingDetails}
+              disabled={submitsRollingSeries}
+            />
+          </div>
+        )}
 
         {/* Custom Category (optional) */}
         {customCategories.length > 0 && (

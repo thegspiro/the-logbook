@@ -1082,10 +1082,10 @@ const CreateTrainingSessionPage: React.FC = () => {
                   />
                   <div>
                     <label htmlFor="auto_create_records" className="text-theme-text-primary block font-semibold">
-                      Auto-create training records on check-in
+                      Start an in-progress training record when members check in
                     </label>
                     <p className="text-theme-text-muted mt-1 text-sm">
-                      Automatically create a training record for each member who checks in via QR code
+                      Records are completed when attendance is finalized either way.
                     </p>
                   </div>
                 </div>

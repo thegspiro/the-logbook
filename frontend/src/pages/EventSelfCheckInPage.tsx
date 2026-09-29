@@ -318,6 +318,7 @@ const EventSelfCheckInPage: React.FC = () => {
               <div className="mb-8 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-500/30 dark:bg-green-500/10">
                 <div className="flex items-start">
                   <svg
+                    aria-hidden="true"
                     className="mt-0.5 mr-2 h-5 w-5 shrink-0 text-green-600"
                     fill="none"
                     stroke="currentColor"
@@ -332,8 +333,12 @@ const EventSelfCheckInPage: React.FC = () => {
                   </svg>
                   <div className="text-left">
                     <p className="mb-1 text-sm font-medium text-green-900 dark:text-green-300">Training Record</p>
+                    {/* Credit is written when attendance is finalized, not at check-in;
+                        with officer confirmation it waits for that approval instead. */}
                     <p className="text-sm text-green-800 dark:text-green-400">
-                      Your attendance has been logged, and a training record will be created for this session.
+                      {qrData.training_requires_approval
+                        ? "Your attendance will be added to your training record after a training officer approves the event's attendance."
+                        : "Your attendance will be added to your training record when the event's attendance is finalized."}
                     </p>
                   </div>
                 </div>

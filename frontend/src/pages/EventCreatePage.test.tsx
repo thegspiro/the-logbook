@@ -19,6 +19,7 @@ function makeApiError(message: string, status = 400) {
 vi.mock('../services/api', () => ({
   eventService: {
     createEvent: vi.fn(),
+    createRecurringEvent: vi.fn(),
     getEvents: vi.fn().mockResolvedValue([]),
     getTemplates: vi.fn().mockResolvedValue([]),
     getVisibleEventTypes: vi.fn().mockResolvedValue([]),
@@ -33,6 +34,16 @@ vi.mock('../services/api', () => ({
   },
   locationsService: {
     getLocations: vi.fn().mockResolvedValue([]),
+  },
+  // Behind EventForm's Training details section.
+  trainingService: {
+    getCourses: vi.fn(),
+    getCategories: vi.fn(),
+    getRequirements: vi.fn(),
+  },
+  trainingProgramService: {
+    getPrograms: vi.fn(),
+    getProgramPhases: vi.fn(),
   },
 }));
 
@@ -162,6 +173,66 @@ describe('EventCreatePage', () => {
       });
       // The form survived: what the member typed is still there.
       expect(screen.getByLabelText(/title/i)).toHaveValue('Monthly Drill');
+    });
+  });
+
+  describe('Training details', () => {
+    // Pitfall #28: state every mock this block depends on, reset first.
+    beforeEach(() => {
+      const { trainingService, trainingProgramService } = apiModule;
+      vi.mocked(trainingService.getCourses).mockReset();
+      vi.mocked(trainingService.getCourses).mockResolvedValue([]);
+      vi.mocked(trainingService.getCategories).mockReset();
+      vi.mocked(trainingService.getCategories).mockResolvedValue([]);
+      vi.mocked(trainingService.getRequirements).mockReset();
+      vi.mocked(trainingService.getRequirements).mockResolvedValue([]);
+      vi.mocked(trainingProgramService.getPrograms).mockReset();
+      vi.mocked(trainingProgramService.getPrograms).mockResolvedValue([]);
+      vi.mocked(trainingProgramService.getProgramPhases).mockReset();
+      vi.mocked(trainingProgramService.getProgramPhases).mockResolvedValue([]);
+      vi.mocked(eventService.createEvent).mockReset();
+      vi.mocked(eventService.createEvent).mockResolvedValue({ id: 'evt-new' } as unknown as Event);
+      vi.mocked(eventService.createRecurringEvent).mockReset();
+      vi.mocked(eventService.createRecurringEvent).mockResolvedValue([{ id: 'evt-a' }] as unknown as Event[]);
+    });
+
+    const fillTrainingEvent = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.type(screen.getByLabelText(/title/i), 'Ladder drill');
+      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
+      await user.selectOptions(screen.getByLabelText('Training Type'), 'orientation');
+      fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
+      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-02' } });
+    };
+
+    it('passes the picked details through on a single event', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventCreatePage />);
+
+      await fillTrainingEvent(user);
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      await waitFor(() => {
+        expect(eventService.createEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ event_type: 'training', training_details: { training_type: 'orientation' } })
+        );
+      });
+    });
+
+    it('passes the picked details through on a recurring series', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventCreatePage />);
+
+      await fillTrainingEvent(user);
+      await user.click(screen.getByLabelText('Make this a recurring event'));
+      fireEvent.change(screen.getByLabelText('Series end date'), { target: { value: '2026-06-30' } });
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      await waitFor(() => {
+        expect(eventService.createRecurringEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ event_type: 'training', training_details: { training_type: 'orientation' } })
+        );
+      });
+      expect(eventService.createEvent).not.toHaveBeenCalled();
     });
   });
 

@@ -174,6 +174,45 @@ export interface EventListItem {
   hour_category_label?: string | null;
 }
 
+/**
+ * Training details picked for a Training-type event. Picking any attaches a
+ * training session to the event, which files attendance credit under them;
+ * a Training event without any is still credited, as its title and
+ * Continuing Education. Every id is validated server-side against the org.
+ */
+export interface EventTrainingDetails {
+  course_id?: string | undefined;
+  category_id?: string | undefined;
+  program_id?: string | undefined;
+  phase_id?: string | undefined;
+  requirement_id?: string | undefined;
+  training_type?: string | undefined;
+}
+
+/**
+ * What finalizing a Training event credited. Present (defaulted) on every
+ * finalize and End Event response; `training_credit` is false for any other
+ * kind of event.
+ */
+export interface TrainingCreditReport {
+  training_credit?: boolean | undefined;
+  training_records_completed?: number | undefined;
+  training_approval_pending?: boolean | undefined;
+  training_attendees_pending?: number | undefined;
+  training_attendees_uncredited?: number | undefined;
+  training_uncredited_names?: string[] | undefined;
+  admin_hours_entries_removed?: number | undefined;
+}
+
+export interface FinalizeAttendanceResult extends TrainingCreditReport {
+  updated_count: number;
+}
+
+export interface EndEventResult extends TrainingCreditReport {
+  checked_out_count: number;
+  actual_end_time: string;
+}
+
 export interface EventCreate {
   title: string;
   description?: string | undefined;
@@ -209,6 +248,8 @@ export interface EventCreate {
   custom_fields?: Record<string, string | number | boolean | null> | undefined;
   attachments?: EventAttachment[] | undefined;
   is_draft?: boolean | undefined;
+  /** Only for event_type "training"; omit unless a detail was picked. */
+  training_details?: EventTrainingDetails | undefined;
 }
 
 export interface EventUpdate {
@@ -349,8 +390,13 @@ export interface QRCheckInData {
   require_checkout?: boolean | undefined;
   timezone?: string | undefined;
   allow_guest_check_in?: boolean | undefined;
-  /** Set by the server: whether a check-in writes a training record. */
+  /**
+   * Set by the server: whether attendance here is credited to members'
+   * training records (every Training event, when attendance is finalized).
+   */
   records_training?: boolean | undefined;
+  /** Whether that credit waits for a training officer's approval. */
+  training_requires_approval?: boolean | undefined;
 }
 
 /** Public event detail shown on the unauthenticated guest sign-in page. */
@@ -540,6 +586,8 @@ export interface RecurringEventCreate {
   attachments?: EventAttachment[] | undefined;
   allowed_rsvp_statuses?: RSVPStatus[] | undefined;
   template_id?: string | undefined;
+  /** Attached to every occurrence; refused on a rolling series. */
+  training_details?: EventTrainingDetails | undefined;
 }
 
 // Event Attachments & Document Folder
