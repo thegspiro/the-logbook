@@ -207,6 +207,16 @@ const FormsPage: React.FC = () => {
     }
   };
 
+  const handleToggleRequireAuthentication = async (form: FormDef) => {
+    try {
+      await formsService.updateForm(form.id, { require_authentication: !form.require_authentication });
+      await loadData();
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to update form');
+      setError(message);
+    }
+  };
+
   const handleViewSubmissions = (formId: string) => {
     setSelectedFormId(formId);
     setActiveTab('submissions');
@@ -1104,7 +1114,8 @@ const FormsPage: React.FC = () => {
                       <label htmlFor="is_public" className="cursor-pointer text-sm">
                         <span className="font-medium text-cyan-700 dark:text-cyan-300">Public Form</span>
                         <p className="text-theme-text-muted mt-0.5 text-xs">
-                          Allow anyone to fill out this form via a public URL (no login required)
+                          Allow anyone to open this form via a public URL. Choose whether submitting needs a sign-in
+                          from the form&apos;s Share settings.
                         </p>
                       </label>
                     </div>
@@ -1163,13 +1174,20 @@ const FormsPage: React.FC = () => {
                   {(() => {
                     const form = forms.find((f) => f.id === selectedFormId);
                     if (!form) return null;
+                    // Mirrors the public submit endpoint: a form that forbids
+                    // repeat submissions needs a signed-in identity to enforce
+                    // "once each", so it refuses anonymous visitors whatever
+                    // require_authentication says.
+                    const anonymousSubmissionsOpen = !form.require_authentication && form.allow_multiple_submissions;
                     return (
                       <div className="space-y-4">
                         <div className="card-secondary flex items-center justify-between p-4">
                           <div>
                             <p className="text-theme-text-primary font-medium">Public Access</p>
                             <p className="text-theme-text-muted mt-0.5 text-xs">
-                              Anyone with the link can view and submit this form
+                              {anonymousSubmissionsOpen
+                                ? 'Anyone with the link can view and submit this form'
+                                : 'Anyone with the link can view this form; submitting requires signing in'}
                             </p>
                           </div>
                           <button
@@ -1184,6 +1202,32 @@ const FormsPage: React.FC = () => {
                             <span className={`toggle-knob-sm ${form.is_public ? 'translate-x-6' : 'translate-x-1'}`} />
                           </button>
                         </div>
+
+                        <label
+                          htmlFor="share-allow-anonymous"
+                          className="card-secondary mobile-touch-row cursor-pointer gap-3 p-4"
+                        >
+                          <input
+                            type="checkbox"
+                            id="share-allow-anonymous"
+                            checked={anonymousSubmissionsOpen}
+                            disabled={!form.allow_multiple_submissions}
+                            onChange={() => {
+                              void handleToggleRequireAuthentication(form);
+                            }}
+                            className="form-checkbox shrink-0"
+                          />
+                          <span className="text-sm">
+                            <span className="text-theme-text-primary block font-medium">
+                              Allow submissions without signing in
+                            </span>
+                            <span className="text-theme-text-muted mt-0.5 block text-xs">
+                              {form.allow_multiple_submissions
+                                ? 'When off, visitors must sign in to a member account before they can submit.'
+                                : 'Unavailable because this form allows only one submission per person, which needs a signed-in account.'}
+                            </span>
+                          </span>
+                        </label>
 
                         {form.is_public && form.public_slug && (
                           <>
@@ -1316,9 +1360,11 @@ const FormsPage: React.FC = () => {
 
                         <div className="card-secondary p-3">
                           <p className="text-theme-text-secondary text-sm">
-                            Public forms allow anyone to submit without logging in. Submissions include the
-                            submitter&apos;s name and email (optional) and are marked as &quot;Public&quot; in your
-                            submissions list.
+                            {anonymousSubmissionsOpen
+                              ? 'Anyone can submit this form without logging in.'
+                              : 'Only signed-in members can submit this form.'}{' '}
+                            Submissions include the submitter&apos;s name and email (optional) and are marked as
+                            &quot;Public&quot; in your submissions list.
                           </p>
                         </div>
                       </div>
