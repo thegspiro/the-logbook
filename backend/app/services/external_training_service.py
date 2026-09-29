@@ -40,56 +40,81 @@ from app.utils.ssrf_transport import SSRFSafeAsyncTransport, join_endpoint
 # request log is redacted even in a worker that never ran setup_logging().
 install_httpx_url_redaction()
 
-# Target Solutions lets a completion be recorded for a past date. Scheduled
-# syncs only ask for completions dated since the last sync, so re-check this
-# many days each time; re-fetched rows update in place by Transcript ID.
-TS_INCREMENTAL_LOOKBACK_DAYS = 30
+# Scheduled syncs come in two sizes. The frequent pull (every
+# sync_interval_hours) asks only for completions since the last sync, so a
+# finished class shows up under Imports within the hour. Once a day, at the
+# provider's review time, a review re-requests a wider window: Target
+# Solutions lets a completion be recorded for a past date, which a pull that
+# only looks forward from the last sync never sees. Re-fetched rows update in
+# place by Transcript ID, so the overlap never duplicates.
+REVIEW_SYNC_TYPE = "review"
+REVIEW_LOOKBACK_DAYS = 30
+QUICK_PULL_MIN_LOOKBACK_DAYS = 1
+DEFAULT_TS_REVIEW_TIME = time(2, 0)
 
 
-def parse_sync_times(value: Any) -> List[time]:
-    """Stored ``config.sync_times`` as ``time`` objects, or [] if unusable.
+def parse_review_time(value: Any) -> Optional[time]:
+    """Stored ``config.review_time`` ("HH:MM") as a ``time``, or None.
 
-    ``config`` is unvalidated JSON once stored, so anything malformed degrades
-    to the interval schedule rather than raising inside the scheduler loop.
+    ``config`` is unvalidated JSON once stored, so anything malformed is
+    treated as unset rather than raising inside the scheduler loop.
     """
-    if not isinstance(value, list):
-        return []
-    parsed = set()
-    for entry in value:
-        try:
-            hour, minute = str(entry).strip().split(":")
-            parsed.add(time(int(hour), int(minute)))
-        except (ValueError, TypeError):
-            return []
-    return sorted(parsed)
+    if not isinstance(value, str):
+        return None
+    try:
+        hour, minute = value.strip().split(":")
+        return time(int(hour), int(minute))
+    except (ValueError, TypeError):
+        return None
 
 
-def next_scheduled_sync(
-    sync_times: List[time], tz: ZoneInfo, after: datetime
-) -> datetime:
-    """The first of ``sync_times`` (wall clock in ``tz``) strictly after ``after``.
+def review_time_for(provider: ExternalTrainingProvider) -> Optional[time]:
+    """The provider's daily review time; Target Solutions always has one."""
+    configured = parse_review_time((provider.config or {}).get("review_time"))
+    if configured is not None:
+        return configured
+    if provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
+        return DEFAULT_TS_REVIEW_TIME
+    return None
+
+
+def next_review_slot(review_time: time, tz: ZoneInfo, after: datetime) -> datetime:
+    """The first ``review_time`` (wall clock in ``tz``) strictly after ``after``.
 
     Built per calendar date so a DST change moves the UTC instant, not the
     local time the department chose. Returned in UTC.
     """
     local_after = after.astimezone(tz)
-    for day_offset in range(3):
-        day = local_after.date() + timedelta(days=day_offset)
-        for slot in sync_times:
-            candidate = datetime.combine(day, slot, tzinfo=tz)
-            if candidate > local_after:
-                return candidate.astimezone(timezone.utc)
-    raise ValueError("sync_times must not be empty")
+    for day_offset in range(2):
+        candidate = datetime.combine(
+            local_after.date() + timedelta(days=day_offset), review_time, tzinfo=tz
+        )
+        if candidate > local_after:
+            return candidate.astimezone(timezone.utc)
+    raise AssertionError("a daily time always recurs within two days")
+
+
+def latest_review_slot(review_time: time, tz: ZoneInfo, now: datetime) -> datetime:
+    """The most recent ``review_time`` at or before ``now``, in UTC."""
+    local_now = now.astimezone(tz)
+    for day_offset in range(2):
+        candidate = datetime.combine(
+            local_now.date() - timedelta(days=day_offset), review_time, tzinfo=tz
+        )
+        if candidate <= local_now:
+            return candidate.astimezone(timezone.utc)
+    raise AssertionError("a daily time always recurs within two days")
 
 
 def compute_next_sync_at(
     provider: ExternalTrainingProvider, tz: ZoneInfo, now: datetime
 ) -> datetime:
-    """When auto-sync should next run: the next set time, else now + interval."""
-    sync_times = parse_sync_times((provider.config or {}).get("sync_times"))
-    if sync_times:
-        return next_scheduled_sync(sync_times, tz, now)
-    return now + timedelta(hours=provider.sync_interval_hours or 24)
+    """The next frequent pull, or the next daily review if that comes first."""
+    quick = now + timedelta(hours=provider.sync_interval_hours or 24)
+    review_time = review_time_for(provider)
+    if review_time is None:
+        return quick
+    return min(quick, next_review_slot(review_time, tz, now))
 
 
 class ExternalTrainingSyncService:
@@ -373,11 +398,15 @@ class ExternalTrainingSyncService:
                     provider.last_sync_at
                     or datetime.now(timezone.utc) - timedelta(days=30)
                 ).date()
-                if provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
+                if review_time_for(provider) is not None:
+                    # A frequent pull: at least yesterday too, so a class
+                    # finished just before midnight is not skipped.
                     from_date = min(
                         from_date,
-                        date.today() - timedelta(days=TS_INCREMENTAL_LOOKBACK_DAYS),
+                        date.today() - timedelta(days=QUICK_PULL_MIN_LOOKBACK_DAYS),
                     )
+            elif sync_type == REVIEW_SYNC_TYPE and not from_date:
+                from_date = date.today() - timedelta(days=REVIEW_LOOKBACK_DAYS)
             elif sync_type == "full" and not from_date:
                 # Full sync: get all records from a year ago
                 from_date = (datetime.now(timezone.utc) - timedelta(days=365)).date()
@@ -444,6 +473,46 @@ class ExternalTrainingSyncService:
             await self.db.commit()
 
         return sync_log
+
+    async def run_scheduled_sync(
+        self, provider: ExternalTrainingProvider
+    ) -> ExternalTrainingSyncLog:
+        """One scheduled run: the daily review if one is owed, else a quick pull.
+
+        A review is owed when none has succeeded since the most recent review
+        time, which also means a provider that has never been reviewed starts
+        with a full-window backfill.
+        """
+        sync_type = "incremental"
+        review_time = review_time_for(provider)
+        if review_time is not None:
+            tz = await resolve_scheduling_timezone(self.db, provider.organization_id)
+            due_since = latest_review_slot(review_time, tz, datetime.now(timezone.utc))
+            last_review = await self._last_successful_review_at(provider)
+            if last_review is None or last_review < due_since:
+                sync_type = REVIEW_SYNC_TYPE
+        return await self.sync_training_records(provider, sync_type=sync_type)
+
+    async def _last_successful_review_at(
+        self, provider: ExternalTrainingProvider
+    ) -> Optional[datetime]:
+        result = await self.db.execute(
+            select(ExternalTrainingSyncLog.started_at)
+            .where(ExternalTrainingSyncLog.provider_id == provider.id)
+            .where(ExternalTrainingSyncLog.sync_type == REVIEW_SYNC_TYPE)
+            .where(
+                ExternalTrainingSyncLog.status.in_(
+                    [SyncStatus.COMPLETED, SyncStatus.PARTIAL]
+                )
+            )
+            .order_by(ExternalTrainingSyncLog.started_at.desc())
+            .limit(1)
+        )
+        started_at = result.scalar_one_or_none()
+        if started_at is not None and started_at.tzinfo is None:
+            # MySQL hands DateTime(timezone=True) back naive; it is stored UTC.
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        return started_at
 
     async def _fetch_external_records(
         self,

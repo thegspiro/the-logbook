@@ -5711,7 +5711,7 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
         provider_name = getattr(provider, "name", "?")
         sync_service = ExternalTrainingSyncService(db)
         try:
-            await sync_service.sync_training_records(provider, sync_type="incremental")
+            await sync_service.run_scheduled_sync(provider)
             synced += 1
         except Exception:
             logger.opt(exception=True).warning(

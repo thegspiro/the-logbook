@@ -37,12 +37,13 @@ class TestExternalTrainingAutoSyncIsolation:
         db.rollback = AsyncMock()
         db.refresh = AsyncMock()
 
-        async def _sync(provider, sync_type="incremental"):
+        async def _sync(provider):
             if provider.id == "p1":
                 raise RuntimeError("boom before the internal try")
 
         service = SimpleNamespace(
-            sync_training_records=AsyncMock(side_effect=_sync),
+            # The loop's entry point; it picks a quick pull or the daily review.
+            run_scheduled_sync=AsyncMock(side_effect=_sync),
             close=AsyncMock(),
         )
         with patch(

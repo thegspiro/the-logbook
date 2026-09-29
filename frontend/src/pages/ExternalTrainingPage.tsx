@@ -60,25 +60,22 @@ const PROVIDER_TYPES: { value: ExternalProviderType; label: string; description:
 // completions, authenticated by key and secret query parameters.
 const TARGET_SOLUTIONS_REPORT_URL = 'https://app.targetsolutions.com/tsapp/api/';
 
-const DEFAULT_SYNC_TIMES = ['06:00', '18:00'];
-const MAX_SYNC_TIMES = 4;
-const FIXED_TIMES_OPTION = 'times';
+// Target Solutions pulls recent completions every hour and re-checks the last
+// 30 days once a day at its review time (config.review_time, read by the
+// backend's review_time_for, which assumes this same default when unset).
+const DEFAULT_REVIEW_TIME = '02:00';
+const TS_DEFAULT_PULL_HOURS = 1;
 
 interface SyncScheduleFieldsProps {
   idPrefix: string;
   intervalHours: number;
-  syncTimes: string[] | null;
-  onChange: (next: { intervalHours: number; syncTimes: string[] | null }) => void;
+  // null hides the review time: only Target Solutions has a daily review.
+  reviewTime: string | null;
+  onChange: (next: { intervalHours: number; reviewTime: string | null }) => void;
 }
 
-// Auto-sync runs either every N hours or at fixed wall-clock times in the
-// department's timezone (config.sync_times, read by compute_next_sync_at).
-const SyncScheduleFields: React.FC<SyncScheduleFieldsProps> = ({ idPrefix, intervalHours, syncTimes, onChange }) => {
+const SyncScheduleFields: React.FC<SyncScheduleFieldsProps> = ({ idPrefix, intervalHours, reviewTime, onChange }) => {
   const tz = useTimezone();
-  const fixed = syncTimes !== null;
-
-  const updateTime = (index: number, value: string) =>
-    onChange({ intervalHours, syncTimes: (syncTimes ?? []).map((t, i) => (i === index ? value : t)) });
 
   return (
     <div className="space-y-3">
@@ -87,19 +84,15 @@ const SyncScheduleFields: React.FC<SyncScheduleFieldsProps> = ({ idPrefix, inter
           htmlFor={`${idPrefix}-sync-interval`}
           className="text-theme-text-secondary mb-2 block text-sm font-medium"
         >
-          Sync Schedule
+          {reviewTime !== null ? 'Pull new completions' : 'Sync Interval'}
         </label>
         <select
           id={`${idPrefix}-sync-interval`}
-          value={fixed ? FIXED_TIMES_OPTION : String(intervalHours)}
-          onChange={(e) =>
-            e.target.value === FIXED_TIMES_OPTION
-              ? onChange({ intervalHours, syncTimes: [...DEFAULT_SYNC_TIMES] })
-              : onChange({ intervalHours: parseInt(e.target.value), syncTimes: null })
-          }
+          value={intervalHours}
+          onChange={(e) => onChange({ intervalHours: parseInt(e.target.value), reviewTime })}
           className="form-input"
         >
-          <option value={FIXED_TIMES_OPTION}>At set times of day</option>
+          <option value={1}>Every hour</option>
           <option value={6}>Every 6 hours</option>
           <option value={12}>Every 12 hours</option>
           <option value={24}>Daily</option>
@@ -108,43 +101,28 @@ const SyncScheduleFields: React.FC<SyncScheduleFieldsProps> = ({ idPrefix, inter
         </select>
       </div>
 
-      {fixed && (
-        <fieldset className="space-y-2">
-          <legend className="text-theme-text-secondary text-sm font-medium">Sync times</legend>
-          {(syncTimes ?? []).map((time, index) => (
-            <div key={index} className="flex items-center gap-2">
-              <input
-                type="time"
-                aria-label={`Sync time ${index + 1}`}
-                value={time}
-                onChange={(e) => updateTime(index, e.target.value)}
-                className="form-input w-40"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => onChange({ intervalHours, syncTimes: (syncTimes ?? []).filter((_, i) => i !== index) })}
-                disabled={(syncTimes ?? []).length <= 1}
-                className="text-theme-text-secondary hover:text-theme-text-primary px-2 py-1 text-sm disabled:opacity-40"
-                aria-label={`Remove sync time ${index + 1}`}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-          {(syncTimes ?? []).length < MAX_SYNC_TIMES && (
-            <button
-              type="button"
-              onClick={() => onChange({ intervalHours, syncTimes: [...(syncTimes ?? []), '12:00'] })}
-              className="text-theme-text-secondary hover:text-theme-text-primary text-sm underline"
-            >
-              Add a time
-            </button>
-          )}
-          <p className="text-theme-text-muted text-xs">
-            Times are in the department&apos;s timezone ({tz}). Each sync starts within 30 minutes after its time.
+      {reviewTime !== null && (
+        <div>
+          <label
+            htmlFor={`${idPrefix}-review-time`}
+            className="text-theme-text-secondary mb-2 block text-sm font-medium"
+          >
+            Daily 30-day review at
+          </label>
+          <input
+            id={`${idPrefix}-review-time`}
+            type="time"
+            value={reviewTime}
+            onChange={(e) => onChange({ intervalHours, reviewTime: e.target.value || DEFAULT_REVIEW_TIME })}
+            className="form-input w-40"
+            required
+          />
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Each pull fetches completions since the last one. Once a day the review re-checks the last 30 days, which
+            catches completions recorded for a past date. Times are in the department&apos;s timezone ({tz}); runs start
+            within 30 minutes of their time.
           </p>
-        </fieldset>
+        </div>
       )}
     </div>
   );
@@ -178,6 +156,12 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
       ...prev,
       provider_type: type,
       name: PROVIDER_TYPES.find((p) => p.value === type)?.label || '',
+      ...(type === 'target_solutions'
+        ? {
+            sync_interval_hours: TS_DEFAULT_PULL_HOURS,
+            config: { ...prev.config, review_time: DEFAULT_REVIEW_TIME },
+          }
+        : {}),
     }));
     setStep('details');
   };
@@ -475,12 +459,12 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 <SyncScheduleFields
                   idPrefix="provider"
                   intervalHours={formData.sync_interval_hours ?? 24}
-                  syncTimes={formData.config?.sync_times ?? null}
-                  onChange={({ intervalHours, syncTimes }) =>
+                  reviewTime={isTargetSolutions ? (formData.config?.review_time ?? DEFAULT_REVIEW_TIME) : null}
+                  onChange={({ intervalHours, reviewTime }) =>
                     setFormData((prev) => ({
                       ...prev,
                       sync_interval_hours: intervalHours,
-                      config: { ...prev.config, sync_times: syncTimes },
+                      ...(reviewTime !== null ? { config: { ...prev.config, review_time: reviewTime } } : {}),
                     }))
                   }
                 />
@@ -608,8 +592,8 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
           <p className="text-theme-text-primary text-sm">
             {!provider.auto_sync_enabled
               ? 'Disabled'
-              : provider.config?.sync_times?.length
-                ? `Daily at ${provider.config.sync_times.join(', ')}`
+              : provider.provider_type === 'target_solutions'
+                ? `Every ${provider.sync_interval_hours}h · review daily at ${provider.config?.review_time ?? DEFAULT_REVIEW_TIME}`
                 : `Every ${provider.sync_interval_hours}h`}
           </p>
         </div>
@@ -702,7 +686,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
     api_key: '',
     api_secret: '',
     auth_type: 'api_key' as 'api_key' | 'basic' | 'oauth2',
-    sync_times: null as string[] | null,
+    review_time: null as string | null,
     auto_sync_enabled: false,
     sync_interval_hours: 24,
   });
@@ -718,7 +702,8 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
         api_key: '',
         api_secret: '',
         auth_type: provider.auth_type || 'api_key',
-        sync_times: provider.config?.sync_times ?? null,
+        review_time:
+          provider.provider_type === 'target_solutions' ? (provider.config?.review_time ?? DEFAULT_REVIEW_TIME) : null,
         auto_sync_enabled: provider.auto_sync_enabled || false,
         sync_interval_hours: provider.sync_interval_hours || 24,
       });
@@ -751,9 +736,8 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
       }
       // The update replaces the stored config wholesale, so a schedule change
       // is sent on top of the existing settings (Site ID, endpoints, …).
-      const originalTimes = provider.config?.sync_times ?? null;
-      if (JSON.stringify(formData.sync_times) !== JSON.stringify(originalTimes)) {
-        updates.config = { ...(provider.config ?? {}), sync_times: formData.sync_times };
+      if (formData.review_time !== null && formData.review_time !== (provider.config?.review_time ?? null)) {
+        updates.config = { ...(provider.config ?? {}), review_time: formData.review_time };
       }
       await externalTrainingService.updateProvider(provider.id, updates);
       toast.success('Provider updated');
@@ -916,9 +900,9 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               <SyncScheduleFields
                 idPrefix="edit-provider"
                 intervalHours={formData.sync_interval_hours}
-                syncTimes={formData.sync_times}
-                onChange={({ intervalHours, syncTimes }) =>
-                  setFormData((prev) => ({ ...prev, sync_interval_hours: intervalHours, sync_times: syncTimes }))
+                reviewTime={formData.review_time}
+                onChange={({ intervalHours, reviewTime }) =>
+                  setFormData((prev) => ({ ...prev, sync_interval_hours: intervalHours, review_time: reviewTime }))
                 }
               />
             )}

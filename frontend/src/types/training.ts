@@ -1329,8 +1329,8 @@ export interface ExternalProviderConfig {
   additional_headers?: Record<string, string>;
   date_format?: string;
 
-  // Auto-sync at fixed "HH:MM" times in the department's timezone; null = interval
-  sync_times?: string[] | null | undefined;
+  // Daily 30-day review time ("HH:MM", department timezone); Target Solutions
+  review_time?: string | null | undefined;
 }
 
 export interface ExternalTrainingProvider {
@@ -1436,7 +1436,7 @@ export interface ExternalTrainingSyncLog {
   id: string;
   provider_id: string;
   organization_id: string;
-  sync_type: 'full' | 'incremental' | 'manual';
+  sync_type: 'full' | 'incremental' | 'manual' | 'review';
   status: SyncStatus;
   started_at: string;
   completed_at?: string;
