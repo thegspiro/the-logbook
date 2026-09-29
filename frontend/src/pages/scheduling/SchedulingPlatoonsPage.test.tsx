@@ -70,7 +70,7 @@ describe('SchedulingPlatoonsPage', () => {
 
     // Select the unassigned member, choose platoon A, assign.
     await user.click(screen.getByRole('checkbox', { name: /bob brown/i }));
-    await user.selectOptions(screen.getByRole('combobox'), 'A');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Platoon to assign' }), 'A');
     await user.click(screen.getByRole('button', { name: /assign to platoon/i }));
 
     await waitFor(() => expect(mockBulkAssign).toHaveBeenCalledWith(['u2'], 'A'));

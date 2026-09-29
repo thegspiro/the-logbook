@@ -1784,6 +1784,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                                   max="48"
                                   step="0.5"
                                   placeholder="hrs"
+                                  aria-label={`Hours for ${a.user_name || 'Unknown'}`}
                                   value={manualHours[a.user_id] ?? ''}
                                   onChange={(e) =>
                                     setManualHours((prev) => ({
