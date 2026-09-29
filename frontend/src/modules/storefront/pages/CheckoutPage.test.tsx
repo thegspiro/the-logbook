@@ -122,15 +122,15 @@ describe('CheckoutPage', () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Review your order' });
 
-    expect(screen.getByText(/on the confirmation screen\. The department records/)).toBeInTheDocument();
-    expect(screen.queryByText(/by email/)).not.toBeInTheDocument();
+    expect(screen.getByText(/your order page will show where to send the money/)).toBeInTheDocument();
+    expect(screen.queryByText(/confirmation email/)).not.toBeInTheDocument();
   });
 
   it('still promises the email where confirmations are on', async () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Review your order' });
 
-    expect(screen.getByText(/on the confirmation screen and by email/)).toBeInTheDocument();
+    expect(screen.getByText(/your order page and confirmation email will show/)).toBeInTheDocument();
   });
 
   it('adds the shipping flat rate to the total when shipping is chosen', async () => {
@@ -173,7 +173,7 @@ describe('CheckoutPage', () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Review your order' });
 
-    expect(screen.getByText(/Orders reach the vendor once payment is recorded/)).toBeInTheDocument();
+    expect(screen.getByText(/Your order goes to the vendor once your payment is recorded/)).toBeInTheDocument();
   });
 
   it('renders a single fulfilment option as a statement, not a choice', async () => {

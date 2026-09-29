@@ -107,7 +107,7 @@ describe('PaymentOptions', () => {
     );
 
     // Venmo passes our note through; Cash App has no note field.
-    expect(screen.getAllByText(/Reference/)).toHaveLength(1);
+    expect(screen.getAllByText(/Include reference/)).toHaveLength(1);
   });
 
   it('copies a handle to the clipboard', async () => {
@@ -172,7 +172,7 @@ describe('PaymentOptions', () => {
       />
     );
 
-    expect(screen.queryByText(/Reference/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Include reference/)).not.toBeInTheDocument();
     expect(screen.getByText('@FallsChurchFire')).toBeInTheDocument();
   });
 });
