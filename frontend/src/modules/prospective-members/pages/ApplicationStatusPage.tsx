@@ -104,7 +104,9 @@ export const ApplicationStatusPage: React.FC = () => {
       setShowWithdraw(false);
       toast.success('Your application has been withdrawn.');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Unable to withdraw your application. Please contact the department.'));
+      toast.error(
+        getErrorMessage(err, 'Your application could not be withdrawn. Contact the department to withdraw it.')
+      );
     } finally {
       setWithdrawing(false);
     }
@@ -143,8 +145,8 @@ export const ApplicationStatusPage: React.FC = () => {
           </h1>
           <p className="text-theme-text-secondary">
             {unavailable
-              ? 'Your application status could not be loaded right now. Please try again in a few minutes.'
-              : 'Application not found. Please check your link or contact the department.'}
+              ? 'Your application status could not be loaded. Try again in a few minutes.'
+              : 'This status link is not valid, has expired, or has been turned off. Check the link, or contact the department.'}
           </p>
           {unavailable && (
             <button type="button" onClick={load} className="btn-secondary mobile-touch-target mt-4 px-4">
@@ -319,7 +321,7 @@ export const ApplicationStatusPage: React.FC = () => {
 
         {/* Footer */}
         <p className="text-theme-text-muted mt-6 text-center text-xs">
-          For questions about your application, please contact the department directly.
+          Questions about your application? Contact the department directly.
         </p>
       </main>
     </div>

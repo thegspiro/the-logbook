@@ -318,9 +318,9 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <span className="text-sm font-medium text-amber-600 dark:text-amber-300">Application Inactive</span>
                 </div>
                 <p className="text-theme-text-muted text-xs">
-                  This application was marked inactive due to no activity
-                  {applicant.deactivated_at && <> since {formatDate(applicant.deactivated_at, tz)}</>}. A coordinator
-                  can reactivate it, or the individual may resubmit an interest form.
+                  This application was marked inactive
+                  {applicant.deactivated_at && <> on {formatDate(applicant.deactivated_at, tz)}</>} after a period with
+                  no activity. A coordinator can reactivate it, or the applicant can submit a new interest form.
                 </p>
                 {applicant.reactivated_at && (
                   <p className="text-theme-text-muted mt-1 text-xs">
@@ -338,7 +338,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <span className="text-theme-text-secondary text-sm font-medium">Application Withdrawn</span>
                 </div>
                 <p className="text-theme-text-muted text-xs">
-                  This applicant voluntarily withdrew from the pipeline
+                  This application was withdrawn
                   {applicant.withdrawn_at && <> on {formatDate(applicant.withdrawn_at, tz)}</>}.
                 </p>
                 {applicant.withdrawal_reason && (

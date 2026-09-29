@@ -154,9 +154,9 @@ describe('ProspectiveMembersPage table-view bulk actions', () => {
 
     expect(screen.getAllByText('2 selected')).toHaveLength(1);
     expect(screen.getByRole('button', { name: /Print Badges/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Advance All/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Hold All/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Reject All/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Advance Selected/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Hold Selected/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Reject Selected/ })).toBeInTheDocument();
   });
 
   // Hold used to be offered only by the table's own bar, which ran one request
@@ -166,7 +166,7 @@ describe('ProspectiveMembersPage table-view bulk actions', () => {
     renderWithRouter(<ProspectiveMembersPage />);
 
     await selectBoth(user);
-    await user.click(screen.getByRole('button', { name: /Hold All/ }));
+    await user.click(screen.getByRole('button', { name: /Hold Selected/ }));
 
     await waitFor(() => expect(mockBulkSetStatus).toHaveBeenCalledWith(['a1', 'a2'], 'on_hold'));
     expect(mockToastSuccess).toHaveBeenCalledWith('Held 2 applicants');
@@ -181,7 +181,7 @@ describe('ProspectiveMembersPage table-view bulk actions', () => {
     renderWithRouter(<ProspectiveMembersPage />);
 
     await selectBoth(user);
-    await user.click(screen.getByRole('button', { name: /Hold All/ }));
+    await user.click(screen.getByRole('button', { name: /Hold Selected/ }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Network down'));
     expect(mockRefreshPipelineView).not.toHaveBeenCalled();
