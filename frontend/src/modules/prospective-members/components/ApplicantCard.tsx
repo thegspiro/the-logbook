@@ -7,7 +7,7 @@
 import React from 'react';
 import { Clock, Mail, Phone, ArrowRight, AlertTriangle } from 'lucide-react';
 import type { ApplicantListItem, InactivityAlertLevel } from '../types';
-import { APPLICANT_STATUS_COLORS } from '../constants';
+import { APPLICANT_STATUS_COLORS, APPLICANT_STATUS_LABELS } from '../constants';
 import { getInitials } from '../utils';
 
 interface ApplicantCardProps {
@@ -32,7 +32,7 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({ applicant, onClick
     <div
       role="button"
       tabIndex={0}
-      aria-label={`${applicant.first_name} ${applicant.last_name}, ${applicant.status}`}
+      aria-label={`${applicant.first_name} ${applicant.last_name}, ${APPLICANT_STATUS_LABELS[applicant.status]}`}
       draggable={!!onDragStart}
       onDragStart={(e) => onDragStart?.(e, applicant)}
       onClick={() => onClick(applicant)}
@@ -76,7 +76,7 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({ applicant, onClick
             <span
               className={`inline-block rounded-sm px-1.5 py-0.5 text-xs ${APPLICANT_STATUS_COLORS[applicant.status]}`}
             >
-              {applicant.status.replace('_', ' ')}
+              {APPLICANT_STATUS_LABELS[applicant.status]}
             </span>
           </div>
         </div>
