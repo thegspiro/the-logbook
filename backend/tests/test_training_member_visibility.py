@@ -28,7 +28,13 @@ from app.core.permissions import (
     DEFAULT_POSITIONS,
     OPERATIONAL_RANKS,
 )
-from app.models.training import TrainingModuleConfig
+from app.models.training import (
+    ProgramEnrollment,
+    RequirementProgress,
+    TrainingModuleConfig,
+    TrainingProgram,
+    TrainingRequirement,
+)
 from app.models.user import User
 from app.schemas.training_module_config import (
     MEMBER_DISCLOSURE_FIELDS,
@@ -495,3 +501,39 @@ def test_member_shift_queries_filter_on_release():
     # Applied to both the report list and the aggregate, and only for members.
     assert source.count("*released_only") == 2
     assert "if is_officer else" in source
+
+
+@pytest.mark.integration
+async def test_pipeline_progress_names_the_program_and_its_requirements(
+    db_session, setup_org_and_admin
+):
+    """The member's pipeline card showed a bare bar and unlabelled rows."""
+    org_id, _ = setup_org_and_admin
+    user = await _member(db_session, setup_org_and_admin)
+    program = TrainingProgram(organization_id=org_id, name="Driver Candidate Program")
+    requirement = TrainingRequirement(
+        organization_id=org_id,
+        name="Supervised Driving Hours",
+        requirement_type="hours",
+        required_hours=20,
+        frequency="one_time",
+    )
+    db_session.add_all([program, requirement])
+    await db_session.flush()
+    enrollment = ProgramEnrollment(
+        organization_id=org_id, user_id=user.id, program_id=program.id
+    )
+    db_session.add(enrollment)
+    await db_session.flush()
+    db_session.add(
+        RequirementProgress(enrollment_id=enrollment.id, requirement_id=requirement.id)
+    )
+    await db_session.flush()
+
+    result = await get_my_training_summary(db=db_session, current_user=user)
+
+    [entry] = result["enrollments"]
+    assert entry["program_name"] == "Driver Candidate Program"
+    assert [r["requirement_name"] for r in entry["requirements"]] == [
+        "Supervised Driving Hours"
+    ]

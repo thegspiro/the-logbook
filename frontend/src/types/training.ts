@@ -1940,6 +1940,8 @@ export interface MyTrainingSummary {
   enrollments?: Array<{
     id: string;
     program_id: string;
+    /** Absent from servers that predate it; the card then shows no heading. */
+    program_name?: string;
     status: string;
     progress_percentage: number;
     enrolled_at: string | null;

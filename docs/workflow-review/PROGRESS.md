@@ -59,7 +59,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | --- | --------------------------------------------------------------------- | ------------------------- | -------------------------------------------------- | ------ |
 | W24 | Submit a training record, and the officer approves or returns it      | member → training_officer | `/training/submit`, `/training/submissions`        | ✅     |
 | W25 | Courses and requirements                                              | training_officer          | `/training/courses`, `/training/requirements`      | ✅     |
-| W26 | A training program: build it, enroll a member, the member's progress  | training_officer → member | `/training/programs`                               | ⬜     |
+| W26 | A training program: build it, enroll a member, the member's progress  | training_officer → member | `/training/programs`                               | ✅     |
 | W27 | A course cohort: schedule classes, roster, attendance                 | training_officer          | `/training/cohorts`                                | ⬜     |
 | W28 | Skills testing: build a sheet, run a test, the member sees the result | training_officer → member | `/training/skills-testing`                         | ⬜     |
 | W29 | Compliance: configure requirements, read the matrix, print it         | training_officer          | `/training/compliance-config`, `/training/officer` | ⬜     |
@@ -176,6 +176,22 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W26 — A training program: build it, enroll a member, the member's progress — 2026-09-29
+
+Driven as: `training_officer` at 1280×900 and `member` at 390×844, with
+`member` and `member2` refused. Held: a double-clicked Create Pipeline and a
+double-clicked Enroll each acted once; a member cannot set their own progress;
+`member2` was refused another member's enrollment, enrolling and editing.
+Fixed: W26-2 (LOW — the member's pipeline card named neither program nor
+requirements; `program_name` added to the summary), W26-3 (LOW — two refused
+requests per visit, an "Enrolled 0" and a Duplicate for a plain member), W26-4
+(LOW — the wizard's new-requirement fields had no accessible names; a raw
+position slug on the review), W26-5 (NIT — the enroll picker's selection was
+colour only). Flagged: W26-1 (MED — a linked requirement starts at zero,
+contradicting the compliance figure on the same screen and the wizard's
+promise). Gate: typecheck, lint, flake8, black, isort and the touched suites
+clean. Next: W27.
 
 ### W25 — Courses and requirements — 2026-09-29
 

@@ -148,6 +148,27 @@ describe('CreatePipelinePage — a one-list program', () => {
     mockBuildProgram.mockResolvedValue({ id: 'prog-2' });
   });
 
+  it('names the fields of a new requirement by their labels, and shows the target position by name', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Driver Candidate Program');
+    await user.selectOptions(screen.getByLabelText(/Target Position/), 'driver_candidate');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(await screen.findByRole('button', { name: /New Requirement/ }));
+
+    await user.type(screen.getByLabelText(/^Requirement Name/), 'Supervised Driving Hours');
+    expect(screen.getByLabelText('Type')).toHaveValue('hours');
+    expect(screen.getByLabelText('Description')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Required Hours'), '20');
+
+    await user.click(screen.getByRole('button', { name: /Next/ })); // milestones
+    await user.click(screen.getByRole('button', { name: /Next/ })); // review
+    expect(screen.getByText('Driver Candidate')).toBeInTheDocument();
+    expect(screen.queryByText('driver_candidate')).not.toBeInTheDocument();
+  });
+
   it('skips the Phases step and sends requirements at the program level', async () => {
     const user = userEvent.setup();
     renderWithRouter(<CreatePipelinePage />);
