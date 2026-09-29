@@ -51,7 +51,7 @@ const PublicFormPage = () => {
       });
       setFormData(defaults);
     } catch {
-      setError('This form is not available. It may have been removed or is not yet published.');
+      setError("It may have been removed, or it hasn't been published yet.");
     } finally {
       setLoading(false);
     }
@@ -74,7 +74,7 @@ const PublicFormPage = () => {
     if (captcha.required) {
       captchaToken = await captcha.getToken();
       if (!captchaToken) {
-        setError('Please complete the challenge below before submitting.');
+        setError('Complete the challenge below, then submit.');
         return;
       }
     }
@@ -91,7 +91,7 @@ const PublicFormPage = () => {
       setSubmitted(true);
       setSubmitMessage(result.message);
     } catch (err: unknown) {
-      const msg = getErrorMessage(err, 'Failed to submit form. Please try again.');
+      const msg = getErrorMessage(err, "Your response wasn't sent. Try again.");
       setError(msg);
       // Provider tokens are single-use: a rejected submission must solve a new
       // challenge, or every retry replays a token the server already burned.

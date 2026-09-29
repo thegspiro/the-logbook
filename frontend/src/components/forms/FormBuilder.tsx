@@ -75,7 +75,7 @@ const getFieldWarning = (field: {
       return false;
     });
     if (validOptions.length === 0) {
-      return 'Needs options — click Edit to add choices';
+      return 'Needs options — add at least one choice';
     }
   }
   if (!field.label?.trim()) {
@@ -597,8 +597,8 @@ const FormBuilder = ({
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
           <AlertCircle className="h-4 w-4 shrink-0 text-yellow-700 dark:text-yellow-400" />
           <p className="text-sm text-yellow-700 dark:text-yellow-300">
-            {incompleteCount} {incompleteCount === 1 ? 'field needs' : 'fields need'} additional setup before this form
-            is ready to use.
+            {incompleteCount} {incompleteCount === 1 ? 'field needs' : 'fields need'} setup before this form is ready to
+            use.
           </p>
         </div>
       )}
@@ -623,8 +623,7 @@ const FormBuilder = ({
           <Plus className="text-theme-text-muted mx-auto mb-3 h-8 w-8" />
           <p className="text-theme-text-primary mb-1 text-sm font-medium">No fields yet</p>
           <p className="text-theme-text-muted mb-4 text-sm">
-            Click &quot;Add Field&quot; to start building your form. Choose from text inputs, dropdowns, checkboxes,
-            date pickers, and more.
+            Add text boxes, dropdowns, checkboxes, date pickers and more.
           </p>
           <button type="button" onClick={handleAddField} className="btn-primary inline-flex items-center gap-1.5">
             <Plus className="h-4 w-4" />
