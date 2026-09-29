@@ -508,7 +508,7 @@ const OrganizationSetup: React.FC = () => {
       setIsProcessingFile(false);
     };
     reader.onerror = () => {
-      toast.error('Failed to read image file');
+      toast.error('Could not read that image. Try a different file.');
       setIsProcessingFile(false);
     };
     reader.readAsDataURL(file);
@@ -554,7 +554,7 @@ const OrganizationSetup: React.FC = () => {
       errors.mailingState = 'State is required';
     }
     if (!formData.mailingAddress.zipCode.trim()) {
-      errors.mailingZipCode = 'ZIP/Postal code is required';
+      errors.mailingZipCode = 'ZIP code is required';
     } else if (!/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(formData.mailingAddress.zipCode.trim())) {
       errors.mailingZipCode = 'Enter a valid ZIP code (e.g., 12345 or 12345-6789)';
     }
@@ -579,7 +579,7 @@ const OrganizationSetup: React.FC = () => {
 
     // Email validation (optional but must be valid if provided)
     if (formData.email && !/^[^@]+@[^@]+\.[^@]+$/.test(formData.email)) {
-      errors.email = 'Invalid email format';
+      errors.email = 'Enter a valid email address';
     }
 
     // Website validation (optional but must be valid if provided)
@@ -588,7 +588,7 @@ const OrganizationSetup: React.FC = () => {
       // Check if URL has protocol, if not, will be auto-prepended
       const urlPattern = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
       if (!urlPattern.test(website)) {
-        errors.website = 'Invalid website URL format';
+        errors.website = 'Enter a valid website address, like www.department.org';
       }
     }
 
@@ -596,16 +596,16 @@ const OrganizationSetup: React.FC = () => {
     if (formData.phone) {
       const cleaned = formData.phone.replace(/[\s\-.()]/g, '');
       if (!/^\+?[\d]{10,15}$/.test(cleaned)) {
-        errors.phone = 'Invalid phone number format';
+        errors.phone = 'Enter a phone number with 10 to 15 digits';
       }
     }
 
     // Identifier validation based on type
     if (formData.identifierType === 'fdid' && !formData.fdid.trim()) {
-      errors.fdid = 'FDID is required when selected as identifier type';
+      errors.fdid = 'Enter your FDID, or choose a different identifier';
     }
     if (formData.identifierType === 'state_id' && !formData.stateId.trim()) {
-      errors.stateId = 'State ID is required when selected as identifier type';
+      errors.stateId = 'Enter your State ID, or choose a different identifier';
     }
 
     // Keep this aligned with OrganizationSetupCreate on the API. Without
@@ -649,7 +649,7 @@ const OrganizationSetup: React.FC = () => {
 
     // Ensure session is initialized before submitting
     if (sessionLoading) {
-      toast.error('Please wait for the session to initialize...');
+      toast.error('Setup is still starting. Wait a moment, then press Continue.');
       return;
     }
     if (!hasSession && !(await startSession())) {
@@ -669,8 +669,8 @@ const OrganizationSetup: React.FC = () => {
         const nonEmptyMessages = errorMessages.filter((msg) => msg?.trim());
         toast.error(
           nonEmptyMessages.length > 0
-            ? `Please fix ${nonEmptyMessages.length} error${nonEmptyMessages.length === 1 ? '' : 's'}:\n• ${nonEmptyMessages.join('\n• ')}`
-            : 'Please fix the validation errors and try again.',
+            ? `Fix ${nonEmptyMessages.length} error${nonEmptyMessages.length === 1 ? '' : 's'}:\n• ${nonEmptyMessages.join('\n• ')}`
+            : 'Fix the highlighted fields and try again.',
           { duration: 8000 } // Longer duration for multiple errors
         );
       }
@@ -742,14 +742,14 @@ const OrganizationSetup: React.FC = () => {
       // choice recorded.
       setOrganizationType(formData.organizationType);
 
-      toast.success('Organization created successfully!');
+      toast.success('Organization created');
 
       // Navigate to next step (navigation choice)
       void navigate(nextStepPath('organization'));
     } catch (err: unknown) {
       console.error('Failed to save organization:', err);
       // Show the actual error message from the backend (includes validation details)
-      const errorMessage = getErrorMessage(err, 'Failed to save organization. Please try again.');
+      const errorMessage = getErrorMessage(err, 'Could not save the organization. Try again.');
       toast.error(errorMessage);
     } finally {
       setIsSaving(false);
@@ -917,7 +917,7 @@ const OrganizationSetup: React.FC = () => {
                   placeholder="https://www.department.org"
                   type="url"
                   maxLength={255}
-                  helpText="Will automatically prepend https:// if not provided"
+                  helpText="https:// is added if you leave it off"
                 />
               </div>
             )}
@@ -940,9 +940,9 @@ const OrganizationSetup: React.FC = () => {
                   <div className="flex items-start space-x-2">
                     <AlertCircle aria-hidden="true" className="text-theme-alert-info-icon mt-0.5 h-4 w-4 shrink-0" />
                     <p className="text-theme-alert-info-text text-sm">
-                      <strong>Why is this required?</strong> Your mailing address is used for official correspondence,
-                      certifications, and legal documentation. If your physical location differs (e.g., PO Box vs.
-                      station address), you can specify that separately below.
+                      <strong>Why is this required?</strong> It is used for official correspondence, certificates and
+                      legal documents. If your station is at a different address (for example, you use a PO Box for
+                      mail), add it under Physical Address below.
                     </p>
                   </div>
                 </div>
@@ -1218,7 +1218,7 @@ const OrganizationSetup: React.FC = () => {
                         onChange={(e) => handleLogoChange(e.target.files?.[0] || null)}
                         accept="image/png,image/jpeg,image/jpg,image/webp"
                         className="hidden"
-                        aria-label="File input for logo"
+                        aria-label="Logo file"
                       />
                       <div className="flex flex-col items-center space-y-3">
                         <div className="bg-theme-surface flex h-16 w-16 items-center justify-center rounded-full">
@@ -1294,7 +1294,7 @@ const OrganizationSetup: React.FC = () => {
               <div className="flex items-start gap-3">
                 <AlertCircle aria-hidden="true" className="text-theme-accent-red mt-0.5 h-5 w-5 shrink-0" />
                 <div>
-                  <p className="text-theme-accent-red font-medium">Please fix the following errors:</p>
+                  <p className="text-theme-accent-red font-medium">Fix these errors to continue:</p>
                   <ul className="text-theme-accent-red mt-2 list-inside list-disc text-sm">
                     {Object.entries(validationErrors).map(([key, msg]) => (
                       <li key={key}>{msg}</li>

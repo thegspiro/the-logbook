@@ -641,7 +641,7 @@ const PositionSetup: React.FC = () => {
 
   const createCustomPosition = () => {
     if (!customPositionName.trim()) {
-      toast.error('Please enter a position name');
+      toast.error('Enter a position name');
       return;
     }
 
@@ -673,7 +673,7 @@ const PositionSetup: React.FC = () => {
 
   const handleContinue = async () => {
     if (ladderLoading) {
-      toast.error('Your membership tiers are still loading — give it a moment before continuing');
+      toast.error('Your membership tiers are still loading. Wait a moment, then continue.');
       return;
     }
 
@@ -698,7 +698,7 @@ const PositionSetup: React.FC = () => {
 
     // Verify organization was created first
     if (!departmentName) {
-      toast.error('Please complete organization setup first');
+      toast.error('Finish Organization Setup first');
       void navigate('/onboarding/start');
       return;
     }
@@ -729,8 +729,8 @@ const PositionSetup: React.FC = () => {
       // they unticked the wrong row.
       const removed = response.data?.removed ?? [];
       toast.success(
-        `Positions configured successfully! Created: ${response.data?.created?.length || 0}, Updated: ${response.data?.updated?.length || 0}` +
-          (removed.length > 0 ? `. Removed: ${removed.join(', ')}` : '')
+        `Positions saved: ${response.data?.created?.length || 0} created, ${response.data?.updated?.length || 0} updated` +
+          (removed.length > 0 ? `, removed: ${removed.join(', ')}` : '')
       );
       // Separately, and as an error rather than folded into the success line:
       // the save succeeded, but one of the removals the administrator asked for
@@ -740,14 +740,14 @@ const PositionSetup: React.FC = () => {
       if (retained.length > 0) {
         toast.error(
           `Still in use, so not removed: ${retained.join(', ')}. Move the members holding ` +
-            'these to another position first, then remove them under Members → Settings.',
+            'these to another position first, then remove them under Settings → Role Management.',
           { duration: 8000 }
         );
       }
       void navigate(nextStepPath('positions'));
     } catch (error: unknown) {
       // Show specific error message from backend
-      const errorMessage = getErrorMessage(error, 'Failed to save position configuration. Please try again.');
+      const errorMessage = getErrorMessage(error, 'Could not save positions. Try again.');
       toast.error(errorMessage);
     } finally {
       setIsSaving(false);
@@ -801,7 +801,7 @@ const PositionSetup: React.FC = () => {
                   <p className="text-theme-text-secondary text-sm">
                     Each position has <strong className="text-theme-alert-success-text">View</strong> (see content) and{' '}
                     <strong className="text-theme-alert-warning-icon">Manage</strong> (create/edit/delete) permissions
-                    per module. Click on a selected position to customize its permissions.
+                    per module. Select a position under Selected Positions &amp; Permissions to change them.
                   </p>
                 </div>
               </div>
@@ -814,13 +814,10 @@ const PositionSetup: React.FC = () => {
                   aria-hidden="true"
                 />
                 <div>
-                  <p className="text-theme-alert-success-title mb-1 font-semibold">
-                    Don't Worry - You Can Change These Later
-                  </p>
+                  <p className="text-theme-alert-success-title mb-1 font-semibold">You Can Change These Later</p>
                   <p className="text-theme-text-secondary text-sm">
-                    Positions and permissions can be updated anytime in{' '}
-                    <strong>Settings → Positions & Permissions</strong>. You can add new positions, modify permissions,
-                    or remove positions as your organization's needs evolve.
+                    You can add, edit, or remove positions and their permissions at any time under{' '}
+                    <strong>Settings → Role Management</strong>.
                   </p>
                   <p className="text-theme-text-secondary mt-2 text-sm">
                     Every position your department could have starts selected. Untick the ones you do not use and they
@@ -1025,7 +1022,7 @@ const PositionSetup: React.FC = () => {
                             <p className="text-theme-text-muted mb-3 text-sm">
                               {isITManager
                                 ? 'IT Manager has full access to all features.'
-                                : 'Click to toggle permissions for each module:'}
+                                : 'Turn View and Manage on or off for each module:'}
                             </p>
                             {/* Naming the hidden rows rather than just hiding
                                 them: a department that cannot find Inventory

@@ -41,7 +41,7 @@ describe('OrganizationSetup — field errors', () => {
 
     const zip = screen.getByLabelText(/^zip code/i);
     expect(zip).toHaveAttribute('aria-invalid', 'true');
-    expect(zip).toHaveAccessibleDescription('ZIP/Postal code is required');
+    expect(zip).toHaveAccessibleDescription('ZIP code is required');
   });
 
   it('describes every invalid field by its own message', async () => {

@@ -97,11 +97,11 @@ export const useOnboardingSession = (): UseOnboardingSessionReturn => {
         return true;
       }
 
-      setError('Failed to start session');
+      setError('Could not start the setup session');
       setIsLoading(false);
       return false;
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to initialize session'));
+      setError(getErrorMessage(err, 'Could not start the setup session'));
       setIsLoading(false);
       return false;
     }
@@ -136,9 +136,9 @@ export const useOnboardingSession = (): UseOnboardingSessionReturn => {
       setIsLoading(false);
     } catch (err: unknown) {
       const appError = toAppError(err);
-      setError(appError.message || 'Failed to save organization');
+      setError(appError.message || 'Could not save the organization');
       setIsLoading(false);
-      throw Object.assign(new Error(appError.message || 'Failed to save organization'), appError);
+      throw Object.assign(new Error(appError.message || 'Could not save the organization'), appError);
     }
   }, []);
 

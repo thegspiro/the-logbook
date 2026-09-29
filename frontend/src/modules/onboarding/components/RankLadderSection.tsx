@@ -97,7 +97,7 @@ const RankLadderSection: React.FC<RankLadderSectionProps> = ({ onPendingChange }
       toast.success(rank ? 'Your rank was set' : 'Your rank was cleared');
     } catch (err: unknown) {
       setOwnRank(previous);
-      toast.error(getErrorMessage(err, 'Failed to set your rank'));
+      toast.error(getErrorMessage(err, 'Could not set your rank'));
     } finally {
       setSavingOwnRank(false);
     }
@@ -126,12 +126,11 @@ const RankLadderSection: React.FC<RankLadderSectionProps> = ({ onPendingChange }
               Most access comes from a position &mdash; but the built-in ranks carry some too
             </p>
             <p className="text-theme-text-secondary text-sm">
-              A rank says where somebody sits in the department and which shift seats they can fill, and the positions
-              you choose below are where the bulk of what a member can <em>do</em> comes from. The built-in ranks are
-              the exception: each carries a set of default permissions of its own, which a member holding that rank
-              keeps whatever position they have. So restricting a position does not restrict a chief. A rank you add
-              yourself carries none, and is marked <strong>No default permissions</strong> to say so &mdash; give those
-              members a position too.
+              A rank sets where someone sits in the department and which shift seats they can fill. Most of what a
+              member can <em>do</em> comes from the positions you choose below. The built-in ranks are the exception:
+              each carries default permissions that a member keeps whatever their position, so restricting a position
+              does not restrict a chief. A rank you add yourself carries none, and is marked{' '}
+              <strong>No default permissions</strong> &mdash; give those members a position too.
             </p>
           </div>
         </div>
@@ -141,8 +140,8 @@ const RankLadderSection: React.FC<RankLadderSectionProps> = ({ onPendingChange }
         <div className="alert-danger" role="alert">
           <p className="text-theme-text-primary text-sm font-medium">The rank ladder could not be loaded.</p>
           <p className="text-theme-text-muted mt-1 text-sm">
-            Nothing has changed — your ranks are not shown, not missing. You can carry on and set the ladder up later
-            under Members → Settings → Operational Ranks.
+            Nothing has changed — your ranks just could not be shown. You can carry on and set the ladder up later under
+            Members → Settings → Operational Ranks.
           </p>
           <button
             type="button"

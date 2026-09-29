@@ -154,7 +154,7 @@ const AuthenticationChoice: React.FC = () => {
       icon: <Lock className="h-10 w-10 text-white" />,
       color: 'from-slate-600 to-slate-800',
       features: [
-        'Passwords hashed with Argon2id (military-grade)',
+        'Passwords hashed with Argon2id',
         'Never stored in plain text',
         'Built-in password policies enforced',
         'No external services required',
@@ -189,7 +189,7 @@ const AuthenticationChoice: React.FC = () => {
     );
 
     if (data) {
-      toast.success('Authentication platform saved');
+      toast.success('Sign-in method saved');
 
       // Route to System Owner account creation
       void navigate(nextStepPath('authentication'));
@@ -217,8 +217,8 @@ const AuthenticationChoice: React.FC = () => {
             <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-purple-600">
               <Key aria-hidden="true" className="h-8 w-8 text-white" />
             </div>
-            <h2 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">User Authentication</h2>
-            <p className="text-theme-text-secondary mb-2 text-xl">How should users sign in to the system?</p>
+            <h2 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">Sign-In Method</h2>
+            <p className="text-theme-text-secondary mb-2 text-xl">How should members sign in?</p>
             <p className="text-theme-text-muted text-sm">Choose your authentication provider</p>
           </div>
 
@@ -228,11 +228,11 @@ const AuthenticationChoice: React.FC = () => {
               <div className="flex items-start space-x-3">
                 <CheckCircle aria-hidden="true" className="text-theme-alert-success-icon mt-0.5 h-5 w-5 shrink-0" />
                 <div>
-                  <p className="text-theme-alert-success-title mb-1 text-sm font-medium">Smart Recommendation</p>
+                  <p className="text-theme-alert-success-title mb-1 text-sm font-medium">Recommended for you</p>
                   <p className="text-theme-alert-success-text text-sm">
-                    Based on your {emailPlatform === 'gmail' ? 'Gmail' : 'Microsoft 365'} setup, we recommend{' '}
-                    {emailPlatform === 'gmail' ? 'Google OAuth' : 'Microsoft Azure AD'} for seamless integration with
-                    your existing accounts.
+                    You chose {emailPlatform === 'gmail' ? 'Gmail' : 'Microsoft 365'} for email, so{' '}
+                    {emailPlatform === 'gmail' ? 'Google OAuth' : 'Microsoft Azure AD'} is recommended. Members sign in
+                    with the accounts they already have.
                   </p>
                 </div>
               </div>
@@ -244,7 +244,7 @@ const AuthenticationChoice: React.FC = () => {
             <div className="flex items-start space-x-3">
               <Shield aria-hidden="true" className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" />
               <div>
-                <p className="text-theme-alert-info-title mb-1 text-sm font-medium">Enterprise Security</p>
+                <p className="text-theme-alert-info-title mb-1 text-sm font-medium">Security</p>
                 <p className="text-theme-alert-info-text text-sm">
                   All authentication methods support multi-factor authentication (MFA) and are designed to meet HIPAA
                   security requirements when properly configured.

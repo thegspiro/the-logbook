@@ -48,7 +48,7 @@ const renderSection = (tiers: MembershipTier[]) =>
 
 /** Open one tier's rights panel, where the benefit controls live. */
 const openRights = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(screen.getByRole('button', { name: 'Rights' }));
+  await user.click(screen.getByRole('button', { name: 'Show rights' }));
 };
 
 describe('the advancement cadence', () => {
