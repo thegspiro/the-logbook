@@ -270,7 +270,7 @@ describe('EventQRCodePage', () => {
       renderWithRouter(<EventQRCodePage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Event was ended early by event officer/)).toBeInTheDocument();
+        expect(screen.getByText(/This event was ended early\./)).toBeInTheDocument();
       });
     });
   });

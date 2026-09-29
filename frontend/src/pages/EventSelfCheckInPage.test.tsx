@@ -171,7 +171,7 @@ describe('EventSelfCheckInPage', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Successfully Checked In!')).toBeInTheDocument();
+        expect(screen.getByText("You're Checked In")).toBeInTheDocument();
         expect(screen.getByText(/You've been checked in to:/)).toBeInTheDocument();
       });
     });
@@ -192,7 +192,7 @@ describe('EventSelfCheckInPage', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Successfully Checked In!')).toBeInTheDocument();
+        expect(screen.getByText("You're Checked In")).toBeInTheDocument();
         expect(screen.getByText(/official check-in window/i)).toBeInTheDocument();
       });
     });
@@ -337,7 +337,7 @@ describe('EventSelfCheckInPage', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Successfully Checked In!')).toBeInTheDocument();
+        expect(screen.getByText("You're Checked In")).toBeInTheDocument();
       });
     });
   });
@@ -389,7 +389,7 @@ describe('EventSelfCheckInPage', () => {
       renderWithRouter(<EventSelfCheckInPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/This event was ended early by the event officer/)).toBeInTheDocument();
+        expect(screen.getByText(/This event was ended early\./)).toBeInTheDocument();
       });
     });
 
@@ -530,7 +530,7 @@ describe('EventSelfCheckInPage', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Successfully Checked In!')).toBeInTheDocument();
+        expect(screen.getByText("You're Checked In")).toBeInTheDocument();
         // Should not crash when timestamp is missing
         expect(screen.queryByText(/Checked In At:/)).not.toBeInTheDocument();
       });
@@ -574,7 +574,7 @@ describe('EventSelfCheckInPage', () => {
 
       await waitFor(() => {
         // Success state should be visually indicated
-        expect(screen.getByText('Successfully Checked In!')).toBeInTheDocument();
+        expect(screen.getByText("You're Checked In")).toBeInTheDocument();
       });
     });
   });

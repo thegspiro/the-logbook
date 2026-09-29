@@ -246,7 +246,7 @@ const EventSelfCheckInPage: React.FC = () => {
             </div>
 
             <h2 className="text-theme-text-primary mb-2 text-3xl font-bold">
-              {isCheckOut ? 'Successfully Checked Out!' : 'Successfully Checked In!'}
+              {isCheckOut ? "You're Checked Out" : "You're Checked In"}
             </h2>
             <p className="text-theme-text-secondary mb-8 text-xl">
               {isCheckOut ? "You've been checked out of:" : "You've been checked in to:"}
@@ -329,10 +329,10 @@ const EventSelfCheckInPage: React.FC = () => {
                   </svg>
                   <div className="text-left">
                     <p className="mb-1 text-sm font-medium text-green-900 dark:text-green-300">
-                      Training Record Created
+                      Training Attendance Logged
                     </p>
                     <p className="text-sm text-green-800 dark:text-green-400">
-                      Your attendance has been logged and a training record will be created for this session.
+                      If this session creates training records automatically, yours is added to your training history.
                     </p>
                   </div>
                 </div>
@@ -467,9 +467,7 @@ const EventSelfCheckInPage: React.FC = () => {
                   {qrData && formatTime(qrData.check_in_end, tz)}
                 </p>
                 {qrData?.actual_end_time && (
-                  <p className="mt-2 text-sm text-yellow-700 dark:text-yellow-400">
-                    Note: This event was ended early by the event officer
-                  </p>
+                  <p className="mt-2 text-sm text-yellow-700 dark:text-yellow-400">This event was ended early.</p>
                 )}
               </div>
             </div>

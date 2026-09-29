@@ -175,9 +175,7 @@ const EventQRCodePage: React.FC = () => {
 
             <h3 className="text-theme-text-primary mb-4 text-xl font-semibold">Scan to Check In</h3>
 
-            <p className="text-theme-text-secondary mb-6">
-              Members can scan this QR code to check themselves in to the event
-            </p>
+            <p className="text-theme-text-secondary mb-6">Members scan this code to check themselves in</p>
 
             {/* QR Code */}
             {checkInUrl && (
@@ -194,8 +192,8 @@ const EventQRCodePage: React.FC = () => {
               <ol className="text-theme-alert-info-text list-inside list-decimal space-y-1">
                 <li>Display this QR code at the event venue</li>
                 <li>Members scan the code with their phone camera</li>
-                <li>Members will be prompted to log in if not already logged in</li>
-                <li>After scanning, members will be checked in automatically</li>
+                <li>Members sign in if they aren&apos;t already</li>
+                <li>Members tap Check In to record their attendance</li>
               </ol>
             </div>
 
@@ -226,9 +224,7 @@ const EventQRCodePage: React.FC = () => {
                 {formatShortDateTime(qrData.check_in_start, tz)} - {formatShortDateTime(qrData.check_in_end, tz)}
               </p>
               {qrData.actual_end_time && (
-                <p className="text-theme-alert-warning-text mt-2 text-sm">
-                  Note: Event was ended early by event officer
-                </p>
+                <p className="text-theme-alert-warning-text mt-2 text-sm">This event was ended early.</p>
               )}
             </div>
 
