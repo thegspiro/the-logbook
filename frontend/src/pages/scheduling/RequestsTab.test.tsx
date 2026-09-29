@@ -248,6 +248,57 @@ describe('RequestsTab', () => {
     });
   });
 
+  it('reviews a double-clicked Approve once, and names it after the member', async () => {
+    mockCheckPermission.mockReturnValue(true);
+    mockGetSwapRequests.mockResolvedValue({
+      items: [
+        {
+          id: 'swap-1',
+          requesting_user_id: 'user-2',
+          requesting_user_name: 'Jane Doe',
+          offering_shift_id: 'shift-1',
+          status: 'pending',
+          created_at: '2026-02-25T00:00:00Z',
+        },
+      ],
+      total: 1,
+      skip: 0,
+      limit: 20,
+    });
+    // Held open so the second click lands while the first is in flight.
+    let settle: (value: unknown) => void = () => undefined;
+    mockReviewSwapRequest.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      })
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<RequestsTab />);
+
+    const approve = await screen.findByRole('button', { name: 'Approve swap for Jane Doe' });
+    expect(screen.getByRole('button', { name: 'Deny swap for Jane Doe' })).toBeInTheDocument();
+    await user.dblClick(approve);
+    settle({});
+
+    await waitFor(() => {
+      expect(mockReviewSwapRequest).toHaveBeenCalledWith('swap-1', { status: 'approved' });
+    });
+    expect(mockReviewSwapRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('says an empty list is filtered, so an answered request is not mistaken for none', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<RequestsTab />);
+
+    expect(
+      await screen.findByText('Showing pending requests only. Choose All Statuses to see the rest.')
+    ).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Filter requests by status'), '');
+    await waitFor(() => {
+      expect(screen.queryByText(/Choose All Statuses to see the rest/)).not.toBeInTheDocument();
+    });
+  });
+
   it('should render status filter', async () => {
     renderWithRouter(<RequestsTab />);
 

@@ -502,6 +502,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
               const shift = assignment.shift;
               const statusColor = ASSIGNMENT_STATUS_COLORS[assignment.status] || ASSIGNMENT_STATUS_COLORS.assigned;
               const shiftDate = shift ? new Date(shift.shift_date + 'T12:00:00') : null;
+              // Every row carries the same four actions, so each needs the
+              // shift in its name or a screen reader hears "Confirm" per row
+              // with nothing to tell them apart.
+              const when = shiftDate
+                ? `${formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}${shift?.start_time ? `, ${formatTime(shift.start_time, tz)}` : ''}`
+                : 'an unknown date';
 
               return (
                 <div key={assignment.id} className="card hover:border-theme-text-muted/30 p-4 sm:p-5">
@@ -603,7 +609,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                               disabled={confirmingId === assignment.id}
                               className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
                               title="Confirm you are working this shift"
-                              aria-label="Confirm shift assignment"
+                              aria-label={`Confirm shift on ${when}`}
                             >
                               {confirmingId === assignment.id ? (
                                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -619,7 +625,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                               onClick={() => setConfirmingDecline(assignment.id)}
                               className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                               title="Give this shift up so it can be re-filled"
-                              aria-label="Decline shift assignment"
+                              aria-label={`Decline shift on ${when}`}
                             >
                               <XCircle className="h-5 w-5" />
                               <span>Decline</span>
@@ -654,7 +660,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                           }}
                           className="text-theme-text-secondary mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-violet-500/10 hover:text-violet-600"
                           title="Ask someone to trade shifts with you"
-                          aria-label="Request shift swap"
+                          aria-label={`Swap shift on ${when}`}
                         >
                           <ArrowLeftRight className="h-5 w-5" />
                           <span>Swap</span>
@@ -665,7 +671,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                           onClick={() => onViewShift(shift)}
                           className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
                           title="Open the full shift details"
-                          aria-label="View shift details"
+                          aria-label={`Details for shift on ${when}`}
                         >
                           <ChevronDown className="h-5 w-5" />
                           <span>Details</span>
@@ -703,10 +709,13 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
             <div className="space-y-4 p-6">
               {/* Swap type selector */}
               <div>
-                <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Swap Type</label>
-                <div className="grid grid-cols-2 gap-2">
+                <p id="swap-type-label" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                  Swap Type
+                </p>
+                <div role="group" aria-labelledby="swap-type-label" className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
+                    aria-pressed={!swapForm.target_shift_id}
                     onClick={() => setSwapForm((p) => ({ ...p, target_shift_id: '' }))}
                     className={`rounded-lg border p-3 text-left text-sm transition-colors ${
                       !swapForm.target_shift_id
@@ -715,10 +724,16 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     }`}
                   >
                     <span className="block font-medium">Open Swap</span>
-                    <span className="text-theme-text-muted text-xs">Any member can pick it up</span>
+                    {/* Not "any member can pick it up": no member can see an open
+                        swap, and approving one moves nothing — it only asks an
+                        officer to find cover (docs/KNOWN_LIMITATIONS.md, W33). */}
+                    <span className="text-theme-text-muted text-xs">
+                      An officer finds cover; it stays yours until then
+                    </span>
                   </button>
                   <button
                     type="button"
+                    aria-pressed={Boolean(swapForm.target_shift_id)}
                     onClick={() => setSwapForm((p) => ({ ...p, target_shift_id: availableShifts[0]?.id ?? 'pick' }))}
                     className={`rounded-lg border p-3 text-left text-sm transition-colors ${
                       swapForm.target_shift_id

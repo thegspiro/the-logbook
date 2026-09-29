@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import toast from 'react-hot-toast';
 import { renderWithRouter } from '../../test/utils';
 import { OpenShiftsTab } from './OpenShiftsTab';
 
@@ -145,7 +146,7 @@ describe('OpenShiftsTab', () => {
     );
     renderWithRouter(<OpenShiftsTab />);
 
-    const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+    const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
     await user.click(signupButtons[0]);
 
     const position = await screen.findByLabelText('Position');
@@ -166,7 +167,7 @@ describe('OpenShiftsTab', () => {
     });
     renderWithRouter(<OpenShiftsTab />);
 
-    const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+    const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
     await user.click(signupButtons[0]);
     expect(await screen.findByRole('option', { name: 'Driver/Operator' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -185,6 +186,28 @@ describe('OpenShiftsTab', () => {
   // ==========================================================================
   // A seat someone already holds is one the server refuses
   // ==========================================================================
+  it('names each row by its shift, and does not promise an officer review', async () => {
+    const user = userEvent.setup();
+    mockGetEligiblePositions.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
+    renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
+
+    const signupButtons = await screen.findAllByRole('button', { name: /^Sign up for shift on / });
+    const names = signupButtons.map((button) => button.getAttribute('aria-label'));
+    expect(new Set(names).size).toBe(mockShifts.length);
+    expect(names[0]).toMatch(/\(E1\)$/);
+    expect(screen.getAllByRole('button', { name: /^Details for shift on / })).toHaveLength(mockShifts.length);
+    expect(screen.queryByText(/officer will review/)).not.toBeInTheDocument();
+
+    await user.click(signupButtons[0] as HTMLElement);
+    await user.click(await screen.findByRole('button', { name: 'Confirm Sign Up' }));
+
+    await waitFor(() => {
+      expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
+        'Signed up. The shift is on My Shifts, where you can confirm it.'
+      );
+    });
+  });
+
   describe('positions whose seats are already taken', () => {
     beforeEach(() => {
       // This block drives `open_positions`, so it states its own default
@@ -204,7 +227,7 @@ describe('OpenShiftsTab', () => {
       });
       renderWithRouter(<OpenShiftsTab />);
 
-      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
       await user.click(signupButtons[0]);
 
       expect(await screen.findByRole('option', { name: 'Driver/Operator' })).toBeVisible();
@@ -223,7 +246,7 @@ describe('OpenShiftsTab', () => {
       });
       renderWithRouter(<OpenShiftsTab />);
 
-      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
       await user.click(signupButtons[0]);
 
       expect(await screen.findByText(/Every seat you are cleared for/)).toBeVisible();
@@ -240,7 +263,7 @@ describe('OpenShiftsTab', () => {
       });
       renderWithRouter(<OpenShiftsTab />);
 
-      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
       await user.click(signupButtons[0]);
 
       expect(await screen.findByText(/not eligible to sign up/)).toBeVisible();
@@ -254,7 +277,7 @@ describe('OpenShiftsTab', () => {
       mockGetEligiblePositions.mockResolvedValue({ positions: ['driver'], is_excluded: false });
       renderWithRouter(<OpenShiftsTab />);
 
-      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
       await user.click(signupButtons[0]);
 
       expect(await screen.findByRole('option', { name: 'Driver/Operator' })).toBeVisible();
@@ -283,7 +306,7 @@ describe('OpenShiftsTab', () => {
 
       expect(await screen.findByText('Could not load open shifts')).toBeVisible();
       expect(mockGetShifts).not.toHaveBeenCalled();
-      expect(screen.queryByLabelText('Sign up for this shift')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Sign up for shift on /)).not.toBeInTheDocument();
     });
 
     it('recovers when the retry succeeds', async () => {
@@ -293,7 +316,7 @@ describe('OpenShiftsTab', () => {
 
       await user.click(await screen.findByRole('button', { name: 'Try again' }));
 
-      expect(await screen.findAllByLabelText('Sign up for this shift')).toHaveLength(mockShifts.length);
+      expect(await screen.findAllByLabelText(/^Sign up for shift on /)).toHaveLength(mockShifts.length);
       expect(screen.queryByText('Could not load open shifts')).not.toBeInTheDocument();
     });
   });
@@ -327,7 +350,7 @@ describe('OpenShiftsTab', () => {
       const user = userEvent.setup();
       renderWithRouter(<OpenShiftsTab />);
 
-      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
       await user.click(signupButtons[0]);
 
       expect(await screen.findByLabelText('What would you like to do?')).toBeInTheDocument();
@@ -339,7 +362,7 @@ describe('OpenShiftsTab', () => {
       const user = userEvent.setup();
       renderWithRouter(<OpenShiftsTab />);
 
-      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
       await user.click(signupButtons[0]);
 
       await screen.findByLabelText('What would you like to do?');
@@ -351,7 +374,7 @@ describe('OpenShiftsTab', () => {
       const user = userEvent.setup();
       renderWithRouter(<OpenShiftsTab />);
 
-      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
       await user.click(signupButtons[0]);
 
       await screen.findByLabelText('What would you like to do?');
@@ -377,7 +400,7 @@ describe('OpenShiftsTab', () => {
       ]);
       renderWithRouter(<OpenShiftsTab />);
 
-      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
       await user.click(signupButtons[0]);
 
       expect(await screen.findByLabelText('Position')).toBeInTheDocument();

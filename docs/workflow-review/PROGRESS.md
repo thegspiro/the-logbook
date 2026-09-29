@@ -71,7 +71,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | #   | Activity                                                           | Acts as                     | Starts at                                                   | Status |
 | --- | ------------------------------------------------------------------ | --------------------------- | ----------------------------------------------------------- | ------ |
 | W32 | Shift templates and patterns, then generate a month of shifts      | scheduling_officer          | `/scheduling/admin/planning/*`                              | ✅     |
-| W33 | Sign up for a shift, swap it, request time off                     | member, member2 → officer   | `/scheduling`                                               | ⬜     |
+| W33 | Sign up for a shift, swap it, request time off                     | member, member2 → officer   | `/scheduling`                                               | ✅     |
 | W34 | Check in to a shift by apparatus QR, and close the shift out       | member → scheduling_officer | `/scheduling/checkin`, `/scheduling/admin/closeout`         | ⬜     |
 | W35 | Platoons and the position qualification roster                     | scheduling_officer          | `/scheduling/admin/platoons`, `/scheduling/admin/positions` | ⬜     |
 | W36 | Every scheduling settings section                                  | scheduling_officer          | `/scheduling/admin/settings/*`                              | ⬜     |
@@ -179,6 +179,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W33 — Sign up for a shift, swap it, request time off — 2026-09-29
+
+Driven as: `member`, `member2` → `scheduling_officer`, at 1280×900 and
+390×844. Held: a double-clicked sign-up, swap request and time-off request
+each acted once; only the seat the member is cleared for was offered;
+approving time off cancelled the member's seat and notified them; `member2`
+was refused another member's requests (403/404). Fixed: W33-1 (LOW — every
+row's Sign up / Confirm / Swap / Approve buttons had one shared name), W33-2
+(LOW — signing up promised an officer review that does not exist), W33-3 (LOW —
+a double-clicked Approve reviewed twice and showed an error), W33-5 (LOW — an
+answered request vanished behind the Pending filter with "No requests").
+Flagged: W33-4 (MED — an open swap is visible to nobody else and approving it
+moves nothing; the dialog's "Any member can pick it up" is corrected). Gate:
+typecheck, lint and the scheduling suites clean. Next: W34.
 
 ### W32 — Shift templates and patterns, then generate a month of shifts — 2026-09-29
 

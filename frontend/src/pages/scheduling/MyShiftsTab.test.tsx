@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { MyShiftsTab } from './MyShiftsTab';
@@ -128,7 +128,7 @@ describe('MyShiftsTab', () => {
       });
 
       // Two steps: the row's Decline arms the confirmation, "Yes" commits it.
-      await user.click(await screen.findByRole('button', { name: 'Decline shift assignment' }));
+      await user.click(await screen.findByRole('button', { name: /^Decline shift on / }));
       await user.click(await screen.findByRole('button', { name: 'Confirm decline' }));
 
       await waitFor(() => {
@@ -211,6 +211,62 @@ describe('MyShiftsTab', () => {
     await waitFor(() => {
       expect(screen.getByText(/^Upcoming/)).toBeInTheDocument();
       expect(screen.getByText(/^Past/)).toBeInTheDocument();
+    });
+  });
+
+  describe('row actions', () => {
+    const day = (offset: number) => new Date(Date.now() + offset * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const row = (id: string, date: string) => ({
+      id,
+      user_id: 'user-1',
+      shift_id: `shift-${id}`,
+      position: 'firefighter',
+      assignment_status: 'assigned',
+      status: 'assigned',
+      shift: {
+        id: `shift-${id}`,
+        shift_date: date,
+        start_time: `${date}T12:00:00Z`,
+        end_time: `${date}T23:00:00Z`,
+        attendee_count: 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        organization_id: '1',
+      },
+    });
+
+    beforeEach(() => {
+      mockGetMyAssignments.mockReset();
+      mockGetMyAssignments.mockResolvedValue([row('a', day(5)), row('b', day(8))]);
+    });
+
+    it('names every action after its own shift', async () => {
+      renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+      for (const verb of ['Confirm', 'Decline', 'Swap', 'Details for']) {
+        const buttons = await screen.findAllByRole('button', { name: new RegExp(`^${verb} shift on `) });
+        expect(buttons).toHaveLength(2);
+        expect(buttons[0]?.getAttribute('aria-label')).not.toBe(buttons[1]?.getAttribute('aria-label'));
+      }
+    });
+
+    it('says which swap type is chosen, and does not promise another member will take it', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+      const [swap] = await screen.findAllByRole('button', { name: /^Swap shift on / });
+      await user.click(swap as HTMLElement);
+
+      const group = await screen.findByRole('group', { name: 'Swap Type' });
+      const open = within(group).getByRole('button', { name: /Open Swap/ });
+      const specific = within(group).getByRole('button', { name: /Specific Shift/ });
+      expect(open).toHaveAttribute('aria-pressed', 'true');
+      expect(specific).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.queryByText(/Any member can pick it up/)).not.toBeInTheDocument();
+
+      await user.click(specific);
+      expect(specific).toHaveAttribute('aria-pressed', 'true');
+      expect(open).toHaveAttribute('aria-pressed', 'false');
     });
   });
 });

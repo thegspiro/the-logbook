@@ -20,6 +20,11 @@ import { useEligiblePositions } from '../../hooks/useEligiblePositions';
 import { signupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../../modules/scheduling/hooks/useSignupWindow';
 
+// A member's signup lands on the roster at once, as an assignment they answer
+// on My Shifts; nothing routes it to an officer for approval, so the message
+// must not promise one.
+const SIGNED_UP_MESSAGE = 'Signed up. The shift is on My Shifts, where you can confirm it.';
+
 interface OpenShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
 }
@@ -135,7 +140,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         position: signupPosition,
         ...(isOutreachSignup ? { outreach_role: signupRole } : {}),
       });
-      toast.success('Signed up for shift — an officer will confirm your assignment');
+      toast.success(SIGNED_UP_MESSAGE);
       surfaceWarnings(res);
       closeSignupModal();
       void loadShifts();
@@ -148,7 +153,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
             position: signupPosition,
             outreach_role: isOutreachSignup ? signupRole : undefined,
           });
-          toast.success('Signed up for shift — an officer will confirm your assignment');
+          toast.success(SIGNED_UP_MESSAGE);
           surfaceWarnings(res);
           closeSignupModal();
           void loadShifts();
@@ -207,8 +212,8 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         <UserPlus className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
         <div className="text-theme-text-secondary text-sm">
           <p>
-            Browse available shifts and sign up for open positions. A scheduling officer will review and confirm your
-            signup.
+            Browse available shifts and sign up for an open seat you are cleared for. Your signup goes straight onto the
+            schedule, under My Shifts.
           </p>
         </div>
       </div>
@@ -252,6 +257,9 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                 <div className="space-y-3">
                   {dayShifts?.map((shift) => {
                     const signupClosed = signupClosedReason(shift, signupWindow, signupViewer);
+                    // Named per shift: a day can carry several, and every row's
+                    // buttons otherwise read alike to a screen reader.
+                    const when = `${formatDateCustom(dateObj, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}, ${formatTime(shift.start_time, tz)}${shift.apparatus_unit_number ? ` (${shift.apparatus_unit_number})` : ''}`;
                     return (
                       <div key={shift.id} className="card p-4 hover:border-violet-500/30 sm:p-5">
                         <div className="flex items-start justify-between gap-3 sm:items-center">
@@ -305,7 +313,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                                   setSignupShiftId(shift.id);
                                 }}
                                 className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-violet-700 sm:text-sm"
-                                aria-label="Sign up for this shift"
+                                aria-label={`Sign up for shift on ${when}`}
                               >
                                 <UserPlus className="h-4 w-4" /> <span className="hidden sm:inline">Sign Up</span>
                                 <span className="sm:hidden">Join</span>
@@ -315,7 +323,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                               <button
                                 onClick={() => onViewShift(shift)}
                                 className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover hidden rounded-lg border px-3 py-2 text-sm transition-colors sm:block"
-                                aria-label="View shift details"
+                                aria-label={`Details for shift on ${when}`}
                               >
                                 Details
                               </button>
