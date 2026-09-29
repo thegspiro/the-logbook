@@ -18,7 +18,7 @@ describe('ProgressIndicator', () => {
   it('says an optional step can be skipped outright', () => {
     render(<ProgressIndicator step="file_storage" />);
 
-    expect(screen.getByText(/skip is a complete answer/i)).toBeInTheDocument();
+    expect(screen.getByText(/this step is optional\. you can skip it/i)).toBeInTheDocument();
   });
 
   it('tells the operator when nothing required is left', () => {
@@ -27,7 +27,7 @@ describe('ProgressIndicator', () => {
     // steps are the ones that send people looking for credentials.
     render(<ProgressIndicator step="file_storage" />);
 
-    expect(screen.getByText(/setup can be finished from here/i)).toBeInTheDocument();
+    expect(screen.getByText(/every required step is done/i)).toBeInTheDocument();
   });
 
   it('marks every optional step in the strip and no required one', () => {
