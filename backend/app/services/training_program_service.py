@@ -3268,6 +3268,7 @@ class TrainingProgramService:
         source_id: str,
         source_type: Optional[ProgressCreditSource] = None,
         verified_by: Optional[UUID] = None,
+        user_id: Optional[Any] = None,
     ) -> int:
         """Un-apply every pipeline credit that a given source record produced.
 
@@ -3278,6 +3279,11 @@ class TrainingProgramService:
         ``source_id`` (scoped to the org, optionally narrowed to one source type)
         and reverses it through ``revoke_requirement_credit``. Returns the number
         of credits reversed.
+
+        ``user_id`` narrows it to one member's credit — a training session
+        credits a whole roster, and removing one attendee takes back only
+        theirs. Found by the source, not through a program: the session may
+        have been re-linked to another program since it credited this one.
         """
         filters = [
             RequirementProgressCredit.source_id == str(source_id),
@@ -3285,6 +3291,8 @@ class TrainingProgramService:
         ]
         if source_type is not None:
             filters.append(RequirementProgressCredit.source_type == source_type)
+        if user_id is not None:
+            filters.append(ProgramEnrollment.user_id == str(user_id))
 
         result = await self.db.execute(
             select(

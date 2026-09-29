@@ -268,15 +268,17 @@ class TestCompletedEnrollmentsAreNotSkipped:
     def _statuses_in(self, statement) -> str:
         return str(statement.compile(compile_kwargs={"literal_binds": True})).lower()
 
-    async def test_revocation_looks_past_active(self):
+    async def test_revocation_reaches_every_enrollment(self):
+        """Found by the session as the credit's source, joined through every
+        enrollment the member holds — so a completed one is not skipped, and
+        neither is a program the session has since been unlinked from."""
+        program_service = MagicMock()
+        program_service.reverse_credits_for_source = AsyncMock(return_value=1)
         session = _session()
-        session.program_id = "prog-1"
-        session.course_name = "Pump Ops"
-        db = _db(_one(None))
-        svc = TrainingSessionService(db)
+        session.program_id = None
 
-        await svc._revoke_pipeline_credit_for_user(
-            program_service=MagicMock(),
+        await TrainingSessionService(_db())._revoke_pipeline_credit_for_user(
+            program_service=program_service,
             user_id="user-1",
             training_session=session,
             organization_id="org-1",
@@ -284,9 +286,13 @@ class TestCompletedEnrollmentsAreNotSkipped:
             source_type=None,
         )
 
-        sql = self._statuses_in(db.execute.await_args.args[0])
-        assert "completed" in sql
-        assert "active" in sql
+        program_service.reverse_credits_for_source.assert_awaited_once_with(
+            organization_id="org-1",
+            source_id="session-1",
+            source_type=None,
+            verified_by="chief-1",
+            user_id="user-1",
+        )
 
     async def test_correction_looks_past_active(self):
         db = _db(_all([]))
@@ -635,47 +641,3 @@ class TestTheOldFinalizeRouteFinalizesTheEvent:
 
         assert result is None
         assert error == "Cannot finalize attendance for a cancelled event"
-
-
-class TestRevocationResolvesEnrollmentToo:
-    """PR #1803 review follow-on: the crediting path was taught to disambiguate
-    a re-enrolled member's two enrollment rows, but its sibling on the
-    revocation side was left with the single-row fetch. That one is the quieter
-    failure — the removed-attendee revocation logs the exception and moves on,
-    so a member taken off a session simply keeps the credit the call exists to
-    take back."""
-
-    async def test_revocation_handles_two_enrollments(self):
-        session = _session()
-        session.program_id = "prog-1"
-        completed = SimpleNamespace(id="enr-old", status=EnrollmentStatus.COMPLETED)
-        active = SimpleNamespace(id="enr-new", status=EnrollmentStatus.ACTIVE)
-        progress = SimpleNamespace(id="prog-row-1")
-        db = _db(
-            _all([completed, active]),  # both enrollment rows
-            MagicMock(all=MagicMock(return_value=[])),  # no prior credit recorded
-            _all([progress]),  # requirement rows under the chosen enrollment
-        )
-        program_service = MagicMock()
-        program_service.revoke_requirement_credit = AsyncMock(return_value=(None, None))
-
-        await svc_revoke(db, program_service, session)
-
-        # Resolved rather than raised: the revocation actually happened.
-        program_service.revoke_requirement_credit.assert_awaited_once()
-        assert (
-            program_service.revoke_requirement_credit.await_args.kwargs["source_id"]
-            == "session-1"
-        )
-
-
-async def svc_revoke(db, program_service, session):
-    svc = TrainingSessionService(db)
-    await svc._revoke_pipeline_credit_for_user(
-        program_service=program_service,
-        user_id="user-1",
-        training_session=session,
-        organization_id="org-1",
-        verified_by="chief-1",
-        source_type=None,
-    )

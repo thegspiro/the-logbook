@@ -957,11 +957,17 @@ class TestDatesFromTimestamps:
         db.execute = AsyncMock(side_effect=[_one(session), _one(_org()), no_record])
         db.add = MagicMock()
         db.commit = AsyncMock()
+        # Written in a savepoint inside the check-in's transaction.
+        savepoint = MagicMock()
+        savepoint.__aenter__ = AsyncMock()
+        savepoint.__aexit__ = AsyncMock(return_value=False)
+        db.begin_nested = MagicMock(return_value=savepoint)
         event = SimpleNamespace(
             id="e1",
             event_type=EventType.TRAINING,
             start_datetime=self.EVENING,
             location=None,
+            location_id=None,
         )
 
         await EventService(db)._auto_create_training_record(

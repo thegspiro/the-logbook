@@ -18,7 +18,6 @@ from zoneinfo import ZoneInfo
 
 from loguru import logger
 from sqlalchemy import and_, case, func, or_, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
@@ -2343,15 +2342,15 @@ class EventService:
         was_training: bool,
         old_title: Optional[str],
         organization_id: UUID,
-    ) -> Optional[Tuple[Any, Tuple[str, str]]]:
+    ) -> Optional[Tuple[Any, Tuple[str, Optional[str]]]]:
         """Keep an event's training credit in step with an edit to the event.
 
         * Re-typed away from Training (possible only while attendance is
           open): the credit its attendance gave is taken back, since the event
           no longer credits training.
-        * Renamed, with a session that files under the title (no course, and
-          the session's name was the old title): the session follows the new
-          title, so the next finalize files the records under it too.
+        * Renamed, where the credit is filed under the title (no session, or
+          one with no course named after the old title): the session and the
+          records this event wrote follow the new title.
 
         Does not commit. Returns the training service and the session to
         reverse pipeline credit for after the caller commits, if any.
@@ -2368,17 +2367,23 @@ class EventService:
             return (training, session_ref) if session_ref else None
         if old_title is not None and event.title != old_title:
             session = await training.get_session_by_event(event.id, organization_id)
-            if (
-                session is not None
-                and session.course_id is None
-                and session.course_name == old_title
-            ):
-                session.course_name = event.title
+            files_under_title = session is None or (
+                session.course_id is None and session.course_name == old_title
+            )
+            if files_under_title:
+                if session is not None:
+                    session.course_name = event.title
+                # The records were filed under the old title too, and a title
+                # can be fixed on a finalized event — where no re-finalize will
+                # come along to carry the new one across.
+                await training.rename_event_records(
+                    event, old_title, organization_id, session
+                )
         return None
 
     async def _void_training_credit_before_removal(
         self, events: List[Event], organization_id: UUID
-    ) -> List[Tuple[Any, Tuple[str, str]]]:
+    ) -> List[Tuple[Any, Tuple[str, Optional[str]]]]:
         """Void the training credit of events about to be deleted or cancelled.
 
         Only an open event can reach here — a finalized one is refused before
@@ -2404,7 +2409,7 @@ class EventService:
 
     @staticmethod
     async def _reverse_pipeline_after_commit(
-        pending: List[Tuple[Any, Tuple[str, str]]], organization_id: UUID
+        pending: List[Tuple[Any, Tuple[str, Optional[str]]]], organization_id: UUID
     ) -> None:
         for training, session_ref in pending:
             await training.reverse_event_pipeline_credit(session_ref, organization_id)
@@ -3059,7 +3064,7 @@ class EventService:
         event_id: UUID,
         organization_id: UUID,
         event: Optional[Event] = None,
-    ) -> List[Tuple[Any, Tuple[str, str]]]:
+    ) -> List[Tuple[Any, Tuple[str, Optional[str]]]]:
         """Drop the admin-hours entries derived from this event's attendance.
 
         Reopening leaves the entries in place on the assumption that
@@ -3931,11 +3936,16 @@ class EventService:
         # value to recompute if the organizer later moves the event.
         rsvp.early_check_in_minutes = self._minutes_before_start(event, now)
 
+        # The training placeholder goes in with the check-in, while this
+        # transaction still holds the event lock. Written after the commit, it
+        # raced a finalize that could land in between and then found nothing
+        # to void, leaving the member "in progress" on a closed event.
+        # Flushed first so the savepoint it uses covers only the placeholder.
+        await self.db.flush()
+        await self._auto_create_training_record(event, rsvp, user_id, organization_id)
+
         await self.db.commit()
         await self.db.refresh(rsvp)
-
-        # Auto-create TrainingRecord if this is a training event
-        await self._auto_create_training_record(event, rsvp, user_id, organization_id)
 
         return rsvp, None, notice
 
@@ -3943,95 +3953,81 @@ class EventService:
         self, event: Event, rsvp: EventRSVP, user_id: UUID, organization_id: UUID
     ) -> None:
         """
-        Auto-create a TrainingRecord if the event is a training session
-        with auto_create_records enabled.
+        Start an in-progress training record when a member checks in to a
+        training session with auto_create_records enabled.
 
-        Errors are logged but do not propagate — the check-in has
-        already committed, so a training-record failure must not
-        cause the caller to return an error to the user.
+        Runs inside the check-in's transaction, under its event lock, in a
+        savepoint; never commits. Any failure unwinds the placeholder alone and
+        is logged — the check-in still commits, and a record the member lacks
+        is written by finalize regardless.
         """
         if event.event_type != EventType.TRAINING:
             return
 
         try:
-            # Check if this event has a training session
-            session_result = await self.db.execute(
-                select(TrainingSession).where(TrainingSession.event_id == event.id)
-            )
-            training_session = session_result.scalar_one_or_none()
-
-            if not training_session:
-                return
-
-            if not training_session.auto_create_records:
-                return
-
-            # Filed under the session's day on the department's calendar; a
-            # record written before that carries the UTC day, so the duplicate
-            # check accepts both.
-            event_dates = local_and_utc_dates(
-                event.start_datetime,
-                await resolve_scheduling_timezone(self.db, organization_id),
-            )
-
-            # Check if training record already exists: the one this event's
-            # attendance wrote, or one started before the source link existed.
-            existing_record_result = await self.db.execute(
-                self.event_training_record_query(
-                    organization_id,
-                    user_id,
-                    event.id,
-                    adopt_course_name=training_session.course_name,
-                    dates=event_dates,
+            async with self.db.begin_nested():
+                session_result = await self.db.execute(
+                    select(TrainingSession).where(
+                        TrainingSession.event_id == event.id,
+                        TrainingSession.organization_id == str(organization_id),
+                    )
                 )
-            )
-            existing_record = existing_record_result.scalars().first()
+                training_session = session_result.scalar_one_or_none()
+                if not training_session or not training_session.auto_create_records:
+                    return
 
-            if existing_record:
-                return  # Record already exists
-
-            # Create training record
-            training_record = TrainingRecord(
-                organization_id=organization_id,
-                user_id=user_id,
-                source_event_id=str(event.id),
-                course_id=training_session.course_id,
-                category_id=training_session.category_id,
-                course_name=training_session.course_name,
-                course_code=training_session.course_code,
-                training_type=training_session.training_type,
-                scheduled_date=event_dates[0],
-                completion_date=None,
-                status=TrainingStatus.IN_PROGRESS,
-                hours_completed=0.0,
-                credit_hours=training_session.credit_hours,
-                instructor=training_session.instructor,
-                location=event.location,
-                certification_number=None,
-                issuing_agency=(
-                    training_session.issuing_agency
-                    if training_session.issues_certification
-                    else None
-                ),
-                created_by=user_id,
-            )
-
-            # Inside a savepoint: a finalize running at the same moment writes
-            # this member's record under the same (event, member) unique key,
-            # and losing that race must cost only this placeholder — not a
-            # rollback that expires the RSVP the check-in response returns.
-            try:
-                async with self.db.begin_nested():
-                    self.db.add(training_record)
-            except IntegrityError:
-                logger.info(
-                    "Training record for user {} at event {} was written by "
-                    "a concurrent finalize; keeping that one",
-                    user_id,
-                    event.id,
+                # Filed under the session's day on the department's calendar;
+                # a record written before that carries the UTC day, so the
+                # duplicate check accepts both.
+                event_dates = local_and_utc_dates(
+                    event.start_datetime,
+                    await resolve_scheduling_timezone(self.db, organization_id),
                 )
-                return
-            await self.db.commit()
+
+                # The record this event's attendance wrote, or one started
+                # before the source link existed.
+                existing_record_result = await self.db.execute(
+                    self.event_training_record_query(
+                        organization_id,
+                        user_id,
+                        event.id,
+                        adopt_course_name=training_session.course_name,
+                        dates=event_dates,
+                    )
+                )
+                if existing_record_result.scalars().first():
+                    return
+
+                self.db.add(
+                    TrainingRecord(
+                        organization_id=organization_id,
+                        user_id=user_id,
+                        source_event_id=str(event.id),
+                        course_id=training_session.course_id,
+                        category_id=training_session.category_id,
+                        course_name=training_session.course_name,
+                        course_code=training_session.course_code,
+                        training_type=training_session.training_type,
+                        scheduled_date=event_dates[0],
+                        completion_date=None,
+                        status=TrainingStatus.IN_PROGRESS,
+                        hours_completed=0.0,
+                        credit_hours=training_session.credit_hours,
+                        instructor=training_session.instructor,
+                        location_id=(
+                            str(event.location_id) if event.location_id else None
+                        ),
+                        # The record's column is shorter than the event's.
+                        location=(event.location or "")[:255] or None,
+                        certification_number=None,
+                        issuing_agency=(
+                            training_session.issuing_agency
+                            if training_session.issues_certification
+                            else None
+                        ),
+                        created_by=user_id,
+                    )
+                )
         except Exception:
             logger.opt(exception=True).error(
                 "Failed to auto-create training record for user {} "
@@ -4041,7 +4037,6 @@ class EventService:
                 event.id,
                 event.title,
             )
-            await self.db.rollback()
 
     async def get_check_in_monitoring_stats(
         self, event_id: UUID, organization_id: UUID

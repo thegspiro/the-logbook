@@ -238,6 +238,165 @@ class TestVoiding:
         assert "NOT IN ('user-2')" in compiled
 
 
+class TestLegacyReach:
+    """Records from before the source link are found by course name and day,
+    which a record somebody scheduled or entered by hand can share. Only the
+    two shapes this event's own writers left are taken back."""
+
+    def _legacy(self, **overrides):
+        fields = {
+            "user_id": "user-1",
+            "course_id": None,
+            "status": TrainingStatus.IN_PROGRESS,
+            "completion_date": None,
+            "hours_completed": 0.0,
+            "notes": None,
+            "created_by": "user-1",
+        }
+        fields.update(overrides)
+        return SimpleNamespace(**fields)
+
+    async def _void(self, legacy):
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_all([]), _all([legacy])])
+        db.delete = AsyncMock()
+        db.flush = AsyncMock()
+        svc = TrainingSessionService(db)
+        changed = await svc.void_event_records(
+            "event-1",
+            "org-1",
+            legacy_course_name="Pump Ops",
+            legacy_dates=[date(2026, 9, 20)],
+            legacy_user_ids={"user-1"},
+        )
+        return changed, db
+
+    async def test_the_member_s_own_check_in_placeholder_is_deleted(self):
+        legacy = self._legacy()
+        changed, db = await self._void(legacy)
+        assert changed == 1
+        db.delete.assert_awaited_once_with(legacy)
+
+    async def test_a_class_an_officer_scheduled_survives(self):
+        changed, db = await self._void(
+            self._legacy(status=TrainingStatus.SCHEDULED, created_by="officer-1")
+        )
+        assert changed == 0
+        db.delete.assert_not_awaited()
+
+    async def test_an_in_progress_record_somebody_else_started_survives(self):
+        changed, db = await self._void(self._legacy(created_by="officer-1"))
+        assert changed == 0
+        db.delete.assert_not_awaited()
+
+    async def test_a_completed_one_is_cancelled_not_deleted(self):
+        legacy = self._legacy(
+            status=TrainingStatus.COMPLETED,
+            completion_date=date(2026, 9, 20),
+            hours_completed=4.0,
+            created_by="officer-1",
+        )
+        changed, db = await self._void(legacy)
+        assert changed == 1
+        assert legacy.status == TrainingStatus.CANCELLED
+        db.delete.assert_not_awaited()
+
+    async def test_removing_someone_never_credited_reaches_no_legacy_row(self):
+        """void_event_credit narrows the removed attendee to the members this
+        session's approvals credited, so a stranger's same-named record on the
+        same day is not even looked for."""
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_all([]))
+        svc = TrainingSessionService(db)
+        svc.get_session_by_event = AsyncMock(
+            return_value=SimpleNamespace(
+                id="session-1", course_name="Pump Ops", program_id=None
+            )
+        )
+        svc._prior_credit_user_ids = AsyncMock(return_value={"credited-1"})
+        svc.void_event_records = AsyncMock(return_value=0)
+        event = SimpleNamespace(id="event-1", title="Pump Ops", start_datetime=None)
+
+        ref = await svc.void_event_credit(event, "org-1", only_user_ids={"stranger"})
+
+        assert svc.void_event_records.await_args.kwargs["legacy_user_ids"] == set()
+        # A session with no program still hands back its id: credit it gave
+        # under a program since unlinked is found by the session as source.
+        assert ref == ("session-1", None)
+
+
+class TestCheckInPlaceholder:
+    """Written inside the check-in's transaction, under its event lock, in a
+    savepoint: a finalize can no longer land between the check-in and the
+    placeholder, and a failure unwinds the placeholder alone."""
+
+    def _db(self, *results):
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=list(results))
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+        savepoint = MagicMock()
+        savepoint.__aenter__ = AsyncMock()
+        savepoint.__aexit__ = AsyncMock(return_value=False)
+        db.begin_nested = MagicMock(return_value=savepoint)
+        return db
+
+    def _session(self):
+        return SimpleNamespace(
+            auto_create_records=True,
+            course_id=None,
+            category_id=None,
+            course_name="Pump Ops",
+            course_code=None,
+            training_type="continuing_education",
+            credit_hours=2.0,
+            instructor=None,
+            issues_certification=False,
+            issuing_agency=None,
+        )
+
+    async def test_it_never_commits_and_truncates_the_location(self):
+        none_yet = MagicMock()
+        none_yet.scalars.return_value.first.return_value = None
+        db = self._db(_one(self._session()), none_yet)
+        event = _event(location="x" * 300, location_id=None)
+
+        with patch(
+            "app.services.event_service.resolve_scheduling_timezone",
+            AsyncMock(return_value=timezone.utc),
+        ):
+            await EventService(db)._auto_create_training_record(
+                event, SimpleNamespace(), "user-1", "org-1"
+            )
+
+        record = db.add.call_args.args[0]
+        assert len(record.location) == 255
+        assert record.source_event_id == "event-1"
+        db.begin_nested.assert_called_once()
+        db.commit.assert_not_awaited()
+        db.rollback.assert_not_awaited()
+
+    async def test_a_failure_is_logged_not_raised(self):
+        db = self._db(_one(self._session()))
+        db.execute.side_effect = [_one(self._session()), RuntimeError("boom")]
+
+        with patch(
+            "app.services.event_service.resolve_scheduling_timezone",
+            AsyncMock(return_value=timezone.utc),
+        ):
+            await EventService(db)._auto_create_training_record(
+                _event(location=None, location_id=None),
+                SimpleNamespace(),
+                "user-1",
+                "org-1",
+            )
+
+        db.add.assert_not_called()
+        db.commit.assert_not_awaited()
+        db.rollback.assert_not_awaited()
+
+
 class TestSnapshot:
     def test_the_roster_carries_the_credited_times(self):
         start = NOW - timedelta(hours=6)

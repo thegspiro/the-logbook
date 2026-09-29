@@ -764,6 +764,280 @@ class TestEndEvent:
         assert (record["status"], record["hours_completed"]) == ("completed", 4.0)
 
 
+class TestProgramCredit:
+    """Credit a program-linked session gave comes back off when its basis goes,
+    even after the session's program link was cleared during a reopen — the
+    credit is found by the session as its source, not through the link."""
+
+    async def _credited(self, db, dept):
+        from app.schemas.training_session import TrainingSessionLinkageUpdate
+
+        org, officer, member = dept
+        program_id, requirement_id = _uid(), _uid()
+        enrollment_id, progress_id = _uid(), _uid()
+        await db.execute(
+            text(
+                "INSERT INTO training_programs (id, organization_id, name) "
+                "VALUES (:id, :org, 'Recruit School')"
+            ),
+            {"id": program_id, "org": org},
+        )
+        await db.execute(
+            text(
+                "INSERT INTO training_requirements (id, organization_id, name, "
+                "requirement_type, frequency, required_hours) "
+                "VALUES (:id, :org, 'Hose Ops Hours', 'hours', 'one_time', 20)"
+            ),
+            {"id": requirement_id, "org": org},
+        )
+        await db.execute(
+            text(
+                "INSERT INTO program_requirements (id, program_id, requirement_id) "
+                "VALUES (:id, :p, :r)"
+            ),
+            {"id": _uid(), "p": program_id, "r": requirement_id},
+        )
+        await db.execute(
+            text(
+                "INSERT INTO program_enrollments (id, organization_id, user_id, "
+                "program_id, enrolled_at, status) "
+                "VALUES (:id, :org, :u, :p, NOW(), 'active')"
+            ),
+            {"id": enrollment_id, "org": org, "u": member, "p": program_id},
+        )
+        await db.execute(
+            text(
+                "INSERT INTO requirement_progress "
+                "(id, enrollment_id, requirement_id, status, progress_value) "
+                "VALUES (:id, :e, :r, 'not_started', 0)"
+            ),
+            {"id": progress_id, "e": enrollment_id, "r": requirement_id},
+        )
+        event_id, start, end = await _training_event(db, org, officer)
+        session, error = await TrainingSessionService(db).attach_session_to_event(
+            event_id,
+            TrainingSessionAttach(program_id=program_id, requirement_id=requirement_id),
+            org,
+            officer,
+        )
+        assert error is None
+        session_id = str(session.id)
+        await _add_with_edit_times(db, event_id, org, officer, member, start, end)
+        service = EventService(db)
+        await service.finalize_event_attendance_detailed(
+            event_id, org, officer, can_manage_training=True
+        )
+        assert await self._credits(db, session_id) == 1
+        assert await self._progress(db, progress_id) == 4.0
+
+        _, error = await service.reopen_event_attendance(event_id, org)
+        assert error is None
+        # The link is cleared before the credit is taken back.
+        _, error = await TrainingSessionService(db).update_session_linkage(
+            session_id,
+            TrainingSessionLinkageUpdate(program_id=None, requirement_id=None),
+            org,
+        )
+        assert error is None
+        return event_id, session_id, progress_id, service
+
+    async def _credits(self, db, session_id):
+        result = await db.execute(
+            text(
+                "SELECT COUNT(*) FROM requirement_progress_credits "
+                "WHERE source_id = :s"
+            ),
+            {"s": session_id},
+        )
+        return result.scalar_one()
+
+    async def _progress(self, db, progress_id):
+        result = await db.execute(
+            text("SELECT progress_value FROM requirement_progress WHERE id = :id"),
+            {"id": progress_id},
+        )
+        return float(result.scalar_one() or 0)
+
+    async def test_deleting_the_event_reverses_it(self, db_session, dept):
+        org, _officer, _member = dept
+        event_id, session_id, progress_id, service = await self._credited(
+            db_session, dept
+        )
+
+        assert await service.delete_event(event_id, org) is True
+
+        assert await self._credits(db_session, session_id) == 0
+        assert await self._progress(db_session, progress_id) == 0.0
+
+    async def test_removing_the_attendee_reverses_theirs(self, db_session, dept):
+        org, _officer, member = dept
+        event_id, session_id, progress_id, service = await self._credited(
+            db_session, dept
+        )
+
+        assert await service.remove_attendee(event_id, member, org) is None
+
+        assert await self._credits(db_session, session_id) == 0
+        assert await self._progress(db_session, progress_id) == 0.0
+
+
+class TestSeries:
+    async def _series(self, db, org, officer, **extra):
+        first = (datetime.now(timezone.utc) - timedelta(days=15)).replace(
+            hour=13, minute=0, second=0, microsecond=0
+        )
+        events, error = await EventService(db).create_recurring_event(
+            {
+                "title": "Weekly Hose Ops",
+                "event_type": "training",
+                "start_datetime": first,
+                "end_datetime": first + timedelta(hours=4),
+                "requires_rsvp": False,
+                "recurrence_pattern": "weekly",
+                "recurrence_end_date": first + timedelta(days=14),
+                **extra,
+            },
+            org,
+            officer,
+        )
+        assert error is None
+        # Plain ids: the session is expired below to read rows back.
+        return [(str(e.id), e.start_datetime, e.end_datetime) for e in events]
+
+    async def test_details_give_every_occurrence_its_own_session(
+        self, db_session, dept
+    ):
+        org, officer, _member = dept
+        category_id = await _insert_category(db_session, org)
+        events = await self._series(
+            db_session, org, officer, training_details={"category_id": category_id}
+        )
+
+        result = await db_session.execute(
+            text(
+                "SELECT event_id, category_id FROM training_sessions "
+                "WHERE organization_id = :org"
+            ),
+            {"org": org},
+        )
+        sessions = {row[0]: row[1] for row in result}
+        assert len(events) >= 2
+        assert set(sessions) == {event_id for event_id, _, _ in events}
+        assert set(sessions.values()) == {category_id}
+
+    @pytest.mark.parametrize("remove", ["cancel", "delete"])
+    async def test_ending_the_series_voids_a_reopened_occurrence(
+        self, db_session, dept, remove
+    ):
+        org, officer, member = dept
+        events = await self._series(db_session, org, officer)
+        event_id, start, end = events[0]
+        start = start.replace(tzinfo=timezone.utc) if start.tzinfo is None else start
+        end = end.replace(tzinfo=timezone.utc) if end.tzinfo is None else end
+        await _add_with_edit_times(
+            db_session, event_id, org, officer, member, start, end
+        )
+        service = EventService(db_session)
+        await service.finalize_event_attendance_detailed(event_id, org, officer)
+        await service.reopen_event_attendance(event_id, org)
+        parent = await db_session.execute(
+            text(
+                "SELECT COALESCE(recurrence_parent_id, id) FROM events WHERE id = :id"
+            ),
+            {"id": event_id},
+        )
+        parent_id = parent.scalar_one()
+
+        if remove == "cancel":
+            await service.cancel_series(parent_id, org, reason="Season over")
+        else:
+            await service.delete_event_series(parent_id, org)
+
+        (record,) = await _records(db_session, member)
+        assert (record["status"], record["hours_completed"]) == ("cancelled", 0.0)
+
+
+class TestQualificationFollowsTheCourse:
+    async def test_switching_the_course_takes_the_old_grant_back(
+        self, db_session, dept
+    ):
+        """Filed under course A (which grants EMT), then re-filed under B:
+        the member must not stay EMT-cleared on a record that no longer
+        names A. Only clearing the course recomputed it before."""
+        from app.models.training import TrainingCourse, TrainingType
+        from app.schemas.training_session import TrainingSessionLinkageUpdate
+        from app.services.qualification_service import QualificationService
+
+        org, officer, member = dept
+        course_a = TrainingCourse(
+            id=_uid(),
+            organization_id=org,
+            name="EMT Basic",
+            training_type=TrainingType.CERTIFICATION,
+            grants_qualification="emt",
+        )
+        course_b = TrainingCourse(
+            id=_uid(),
+            organization_id=org,
+            name="Hose Ops",
+            training_type=TrainingType.SKILLS_PRACTICE,
+        )
+        db_session.add_all([course_a, course_b])
+        await db_session.flush()
+        course_a_id, course_b_id = str(course_a.id), str(course_b.id)
+        event_id, start, end = await _training_event(db_session, org, officer)
+        session, _ = await TrainingSessionService(db_session).attach_session_to_event(
+            event_id, TrainingSessionAttach(course_id=course_a_id), org, officer
+        )
+        session_id = str(session.id)
+        await _add_with_edit_times(
+            db_session, event_id, org, officer, member, start, end
+        )
+        service = EventService(db_session)
+        await service.finalize_event_attendance_detailed(event_id, org, officer)
+        held = await QualificationService(db_session).get_current_by_member(org)
+        assert [q["code"] for q in held.get(member, [])] == ["emt"]
+
+        await service.reopen_event_attendance(event_id, org)
+        _, error = await TrainingSessionService(db_session).update_session_linkage(
+            session_id, TrainingSessionLinkageUpdate(course_id=course_b_id), org
+        )
+        assert error is None
+        await service.finalize_event_attendance_detailed(event_id, org, officer)
+
+        held = await QualificationService(db_session).get_current_by_member(org)
+        assert held.get(member, []) == []
+        stored = await db_session.execute(
+            text("SELECT course_id FROM training_records WHERE user_id = :u"),
+            {"u": member},
+        )
+        assert stored.scalar_one() == course_b_id
+
+
+class TestATitleFixReachesTheRecords:
+    async def test_renaming_a_finalized_event_renames_its_records(
+        self, db_session, dept
+    ):
+        """Title fixes are allowed on a finalized event, and no re-finalize
+        will come along to carry the new title across."""
+        org, officer, member = dept
+        event_id, start, end = await _training_event(
+            db_session, org, officer, title="Hose Opps"
+        )
+        await _add_with_edit_times(
+            db_session, event_id, org, officer, member, start, end
+        )
+        service = EventService(db_session)
+        await service.finalize_event_attendance_detailed(event_id, org, officer)
+
+        await service.update_event(
+            event_id, org, EventUpdate(title="Hose Ops"), officer
+        )
+
+        (record,) = await _records(db_session, member)
+        assert (record["course_name"], record["status"]) == ("Hose Ops", "completed")
+
+
 async def _admin_mapping(db, org_id: str, event_type: str) -> str:
     category_id = _uid()
     await db.execute(

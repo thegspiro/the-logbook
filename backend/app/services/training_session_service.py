@@ -222,6 +222,7 @@ class TrainingSessionService:
             .where(Event.id == training_session.event_id)
             .where(Event.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = event_result.scalar_one_or_none()
         if event is None:
@@ -374,6 +375,7 @@ class TrainingSessionService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         event = event_result.scalar_one_or_none()
         if event is None:
@@ -788,41 +790,22 @@ class TrainingSessionService:
         verified_by: Optional[UUID],
         source_type,
     ) -> None:
-        """Reverse this session's credit on every requirement it fed for a member."""
-        if not training_session.program_id:
-            return
+        """Reverse this session's credit on every requirement it fed for a member.
 
-        # Same resolution as the crediting path, and for the same reason: a
-        # member who completed this program and enrolled again holds an ACTIVE
-        # row and a COMPLETED one, so a single-row fetch raises
-        # MultipleResultsFound. Here the caller logs and moves on, so the
-        # symptom is quieter and worse — the removed attendee simply keeps the
-        # credit this call exists to take back.
-        enrollment = await self._resolve_pipeline_enrollment(
-            user_id=user_id,
-            program_id=str(training_session.program_id),
-            session_id=str(training_session.id),
+        Found by the session as the credit's source, in whichever program it
+        landed — not through the session's program as it stands now. A session
+        re-linked (or unlinked) during a reopen still has its old credit in the
+        old program, and resolving through the new link left that standing. It
+        also reaches every enrollment the member holds, so a member who
+        completed the program and enrolled again is not skipped.
+        """
+        await program_service.reverse_credits_for_source(
             organization_id=organization_id,
+            source_id=str(training_session.id),
+            source_type=source_type,
+            verified_by=verified_by,
+            user_id=user_id,
         )
-        if enrollment is None:
-            return
-
-        # Every requirement row under this enrollment, not just the session's
-        # explicit requirement_id — a category-linked session fans credit out
-        # across the category's requirements, and all of it has to come back.
-        progress_result = await self.db.execute(
-            select(RequirementProgress).where(
-                RequirementProgress.enrollment_id == enrollment.id
-            )
-        )
-        for progress in progress_result.scalars().all():
-            await program_service.revoke_requirement_credit(
-                progress_id=progress.id,
-                organization_id=organization_id,
-                source_type=source_type,
-                source_id=str(training_session.id),
-                verified_by=verified_by,
-            )
 
     async def _resync_admin_hours(
         self,
@@ -1387,7 +1370,9 @@ class TrainingSessionService:
         Covers the records this event's finalize wrote (``source_event_id``),
         optionally narrowed to ``only_user_ids`` and sparing ``keep_user_ids``.
         ``legacy_*`` also reaches records written before the source existed,
-        for the listed members only, by course name and the event's day.
+        for the listed members only, by course name and the event's day — and
+        of those only a completed record or the member's own check-in
+        placeholder, never a record somebody scheduled or entered by hand.
 
         A record that never carried credit — the in-progress placeholder a
         check-in or a pending approval started — is deleted. One that did is
@@ -1436,7 +1421,23 @@ class TrainingSessionService:
                 )
                 .with_for_update()
             )
-            records.extend((await self.db.execute(legacy)).scalars().all())
+            # A same-named record on the same day is not necessarily this
+            # event's: an officer may have scheduled the member for the class,
+            # or entered it by hand. Only the two shapes this event's own
+            # writers left before the source link existed are taken back — the
+            # member's check-in placeholder (created by the member, never
+            # credited) and a completed record, which the callers only look
+            # for among members this session's approvals credited.
+            for record in (await self.db.execute(legacy)).scalars().all():
+                status = getattr(record.status, "value", record.status)
+                own_placeholder = (
+                    status == TrainingStatus.IN_PROGRESS.value
+                    and record.completion_date is None
+                    and not record.hours_completed
+                    and str(record.created_by or "") == str(record.user_id)
+                )
+                if own_placeholder or status == TrainingStatus.COMPLETED.value:
+                    records.append(record)
 
         changed = 0
         touched_courses: List[Tuple[str, str]] = []
@@ -1482,7 +1483,7 @@ class TrainingSessionService:
         organization_id: Any,
         *,
         only_user_ids: Optional[Set[str]] = None,
-    ) -> Optional[Tuple[str, str]]:
+    ) -> Optional[Tuple[str, Optional[str]]]:
         """Take back the training credit an event's attendance gave.
 
         For an event about to be deleted, cancelled or re-typed away from
@@ -1491,23 +1492,26 @@ class TrainingSessionService:
         before the source link existed are reached by course name and date, for
         the members its approvals rostered (or the named attendee).
 
-        Does not commit. Returns ``(session_id, program_id)`` when the event's
-        session fed a program, so the caller can reverse that pipeline credit
+        Does not commit. Returns ``(session_id, program_id)`` when the event
+        has a session, so the caller can reverse any pipeline credit it gave
         once it has committed (``reverse_event_pipeline_credit``) — the
         reversal commits internally, and a deleted event takes its session row
         with it, so the ids are captured here, before the delete.
         """
         org = str(organization_id)
         training_session = await self.get_session_by_event(event.id, org)
-        legacy_ids: Set[str] = set(only_user_ids or ())
+        legacy_ids: Set[str] = set()
         legacy_name = None
         legacy_dates: List[date] = []
         if training_session is not None:
             legacy_name = training_session.course_name
+            # Pre-source records are reached only for members this session
+            # actually credited or held; removing somebody it never rostered
+            # must leave every same-named record of theirs alone.
+            legacy_ids = await self._prior_credit_user_ids(training_session, event, org)
+            if only_user_ids is not None:
+                legacy_ids &= {str(u) for u in only_user_ids}
             if only_user_ids is None:
-                legacy_ids = await self._prior_credit_user_ids(
-                    training_session, event, org
-                )
                 # The whole event's credit is going, so a link still pending
                 # would ask an officer to approve credit for an event that was
                 # cancelled, deleted or is no longer training. Every caller
@@ -1535,13 +1539,108 @@ class TrainingSessionService:
             legacy_dates=legacy_dates,
             legacy_user_ids=legacy_ids,
         )
-        if training_session is not None and training_session.program_id:
-            return str(training_session.id), str(training_session.program_id)
+        # Whenever there is a session, whatever it links to now: its credit is
+        # found by the session as source, and a link cleared or changed during
+        # a reopen does not take back what the old link credited.
+        if training_session is not None:
+            return (
+                str(training_session.id),
+                (
+                    str(training_session.program_id)
+                    if training_session.program_id
+                    else None
+                ),
+            )
         return None
+
+    async def rename_event_records(
+        self,
+        event: Event,
+        old_title: str,
+        organization_id: Any,
+        training_session: Optional[TrainingSession],
+    ) -> int:
+        """Carry an event's new title onto the records filed under its old one.
+
+        The records this event wrote (``source_event_id``) and still hold
+        credit — a cancelled one keeps the name its void note refers to. For a
+        session-backed event, a record written before the source link existed
+        is found the way finalize adopts one (course name and the event's day,
+        for members this session credited) and is stamped with the source as
+        it is renamed; renamed alone, it could no longer be found by either.
+        Does not commit. Returns how many records were renamed.
+        """
+        org = str(organization_id)
+        now = datetime.now(timezone.utc)
+        new_title = (event.title or "")[:255]
+        sourced = (
+            (
+                await self.db.execute(
+                    select(TrainingRecord)
+                    .where(TrainingRecord.organization_id == org)
+                    .where(TrainingRecord.source_event_id == str(event.id))
+                    .where(TrainingRecord.course_name == old_title)
+                    .where(TrainingRecord.status != TrainingStatus.CANCELLED)
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        renamed = 0
+        sourced_users = set()
+        for record in sourced:
+            record.course_name = new_title
+            record.updated_at = now
+            sourced_users.add(str(record.user_id))
+            renamed += 1
+
+        if training_session is None or event.start_datetime is None:
+            return renamed
+        prior = await self._prior_credit_user_ids(training_session, event, org)
+        # One sourced record per member and event (the unique key): a member
+        # who already has one keeps any older duplicate as it was.
+        legacy_users = sorted(prior - sourced_users)
+        if not legacy_users:
+            return renamed
+        tz = await resolve_scheduling_timezone(self.db, org)
+        dates = local_and_utc_dates(event.start_datetime, tz)
+        legacy = (
+            (
+                await self.db.execute(
+                    select(TrainingRecord)
+                    .where(TrainingRecord.organization_id == org)
+                    .where(TrainingRecord.source_event_id.is_(None))
+                    .where(TrainingRecord.user_id.in_(legacy_users))
+                    .where(TrainingRecord.course_name == old_title)
+                    .where(TrainingRecord.status != TrainingStatus.CANCELLED)
+                    .where(
+                        or_(
+                            TrainingRecord.scheduled_date.in_(dates),
+                            TrainingRecord.completion_date.in_(dates),
+                        )
+                    )
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        stamped = set()
+        for record in legacy:
+            user_id = str(record.user_id)
+            if user_id in stamped:
+                continue
+            stamped.add(user_id)
+            record.source_event_id = str(event.id)
+            record.course_name = new_title
+            record.updated_at = now
+            renamed += 1
+        return renamed
 
     async def reverse_event_pipeline_credit(
         self,
-        session_ref: Tuple[str, str],
+        session_ref: Tuple[str, Optional[str]],
         organization_id: Any,
         user_ids: Optional[Set[str]] = None,
     ) -> None:
@@ -1620,36 +1719,28 @@ class TrainingSessionService:
         from app.models.training import ProgressCreditSource
         from app.services.training_program_service import TrainingProgramService
 
-        if (
-            credit.session_id
-            and credit.program_id
-            and credit.removed_user_ids
-            and actor
-        ):
-            session_result = await self.db.execute(
-                select(TrainingSession)
-                .where(TrainingSession.id == credit.session_id)
-                .where(TrainingSession.organization_id == str(organization_id))
-            )
-            training_session = session_result.scalar_one_or_none()
-            if training_session is not None:
-                program_service = TrainingProgramService(self.db)
-                for user_id in sorted(credit.removed_user_ids):
-                    try:
-                        await self._revoke_pipeline_credit_for_user(
-                            program_service=program_service,
-                            user_id=user_id,
-                            training_session=training_session,
-                            organization_id=organization_id,
-                            verified_by=actor,
-                            source_type=ProgressCreditSource.TRAINING_SESSION,
-                        )
-                    except Exception:
-                        logger.exception(
-                            "Failed to revoke pipeline credit for removed attendee {}",
-                            user_id,
-                        )
-                await self.db.commit()
+        # Keyed on the session alone: a member dropped from the roster loses
+        # the credit this session gave them in any program, including one the
+        # session was linked to before a reopen changed it.
+        if credit.session_id and credit.removed_user_ids and actor:
+            program_service = TrainingProgramService(self.db)
+            reference = SimpleNamespace(id=credit.session_id)
+            for user_id in sorted(credit.removed_user_ids):
+                try:
+                    await self._revoke_pipeline_credit_for_user(
+                        program_service=program_service,
+                        user_id=user_id,
+                        training_session=reference,
+                        organization_id=organization_id,
+                        verified_by=actor,
+                        source_type=ProgressCreditSource.TRAINING_SESSION,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to revoke pipeline credit for removed attendee {}",
+                        user_id,
+                    )
+            await self.db.commit()
 
         if actor and (credit.pipeline_updates or credit.sweep_session_id):
             try:

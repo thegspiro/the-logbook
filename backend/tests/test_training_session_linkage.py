@@ -22,12 +22,14 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+from app.models.event import EventType
 from app.models.training import TrainingSession, TrainingType
 from app.schemas.training_session import (
+    TrainingSessionAttach,
     TrainingSessionCreate,
     TrainingSessionLinkageUpdate,
 )
-from app.services.event_service import ATTENDANCE_LOCKED_PREFIX
+from app.services.event_service import ATTENDANCE_LOCKED_PREFIX, EventService
 from app.services.training_session_service import TrainingSessionService
 
 ORG = uuid4()
@@ -393,3 +395,119 @@ class TestGetSessionByEvent:
         svc = TrainingSessionService(db)
 
         assert await svc.get_session_by_event(uuid4(), ORG) is None
+
+
+class TestAttachingDetailsStaysInOrg:
+    """XC-1 on the paths that attach training details to an existing or new
+    Training event: every id they store must be the caller's organization's."""
+
+    async def test_a_foreign_course_is_refused(self):
+        statements = []
+
+        class Capturing(RecordingSession):
+            async def execute(self, statement, *args, **kwargs):
+                statements.append(statement)
+                return _one(None)
+
+        svc = TrainingSessionService(Capturing())
+
+        course, error = await svc.resolve_attach_details(
+            TrainingSessionAttach(course_id=uuid4()), ORG
+        )
+
+        assert (course, error) == (None, "Training course not found")
+        compiled = str(statements[0].compile(compile_kwargs={"literal_binds": True}))
+        assert f"training_courses.organization_id = '{ORG}'" in compiled
+
+    async def test_another_org_s_event_is_not_found(self):
+        db = RecordingSession([_one(None)])
+
+        session, error = await TrainingSessionService(db).attach_session_to_event(
+            uuid4(), TrainingSessionAttach(), ORG, ACTOR
+        )
+
+        assert (session, error) == (None, "Event not found")
+        assert db.added == []
+        assert db.commit.await_count == 0
+
+    async def test_attach_with_a_foreign_course_adds_nothing(self):
+        start = datetime(2026, 9, 15, 9, 0, tzinfo=timezone.utc)
+        event = _open_event(
+            event_type=EventType.TRAINING,
+            is_cancelled=False,
+            start_datetime=start,
+            end_datetime=start + timedelta(hours=3),
+        )
+        # The event, its (absent) session, then the course lookup.
+        db = RecordingSession([_one(event), _one(None), _one(None)])
+
+        session, error = await TrainingSessionService(db).attach_session_to_event(
+            event.id, TrainingSessionAttach(course_id=uuid4()), ORG, ACTOR
+        )
+
+        assert (session, error) == (None, "Training course not found")
+        assert db.added == []
+        assert db.commit.await_count == 0
+
+    async def test_a_foreign_course_is_refused_on_update(self):
+        session = _session()
+        db = RecordingSession([_one(session), _one(_open_event()), _one(None)])
+
+        updated, error = await TrainingSessionService(db).update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(course_id=uuid4()), ORG
+        )
+
+        assert (updated, error) == (None, "Training course not found")
+        assert db.commit.await_count == 0
+
+
+class TestRecurringTrainingDetails:
+    """A recurring Training series from Events gets one session per
+    occurrence; the refusals come before anything is added."""
+
+    def _data(self, **overrides):
+        start = datetime(2026, 9, 15, 9, 0, tzinfo=timezone.utc)
+        data = {
+            "title": "Hose Operations",
+            "event_type": "training",
+            "start_datetime": start,
+            "end_datetime": start + timedelta(hours=3),
+            "recurrence_pattern": "weekly",
+            "recurrence_end_date": start + timedelta(days=21),
+            "training_details": {"category_id": str(uuid4())},
+        }
+        data.update(overrides)
+        return data
+
+    async def test_details_on_another_type_are_refused(self):
+        db = RecordingSession()
+        events, error = await EventService(db).create_recurring_event(
+            self._data(event_type="business_meeting"), ORG, ACTOR
+        )
+        assert (events, error) == (
+            [],
+            "Training details can only be added to a Training event",
+        )
+        assert db.added == []
+
+    async def test_a_rolling_series_is_refused(self):
+        """The job that extends a rolling series copies events, not sessions.
+        The schema refuses it first; the service holds the line for any other
+        caller."""
+        db = RecordingSession()
+        events, error = await EventService(db).create_recurring_event(
+            self._data(rolling_recurrence=True, recurrence_end_date=None), ORG, ACTOR
+        )
+        assert (events, error) == (
+            [],
+            "Training details can't be added to a rolling series",
+        )
+        assert db.added == []
+
+    async def test_a_foreign_category_is_refused(self):
+        db = RecordingSession([_one(None)])
+        events, error = await EventService(db).create_recurring_event(
+            self._data(), ORG, ACTOR
+        )
+        assert (events, error) == ([], "Invalid training category")
+        assert db.added == []

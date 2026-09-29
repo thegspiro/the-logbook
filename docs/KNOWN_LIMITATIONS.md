@@ -5221,6 +5221,14 @@ ones skipped.
 - **Duplicates of a self-reported or hand-entered record are not detected.** A
   member who submitted the same class, or an officer who entered it by hand as a
   workaround, gets a second record from finalize; void the manual one.
+- **A session-backed event still adopts a same-named record from its day.**
+  Finalizing looks for a record written before the source link existed by the
+  session's course name and the event's day, as it always has, so a record an
+  officer scheduled for that class that day is completed by it rather than
+  duplicated. Taking credit back is narrower: removing, cancelling or
+  re-typing only reaches the member's own check-in placeholder and completed
+  records for members the session credited — never a record somebody else
+  scheduled or started.
 - **The NFPA completeness report flags a missing instructor** on records from
   events without a course.
 - **A rolling recurring series cannot carry training details** — the nightly
