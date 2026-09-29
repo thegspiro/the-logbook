@@ -308,7 +308,7 @@ const CloseoutQueueSection: React.FC = () => {
 
       {failed && (
         <div className="alert-warning flex items-center gap-2 text-sm" role="alert">
-          <span className="flex-1">The close-out queue did not load, so nothing below is a complete answer.</span>
+          <span className="flex-1">The close-out queue did not load, so this list may be incomplete.</span>
           <button
             type="button"
             className="mobile-touch-target px-2 font-semibold underline"
@@ -327,8 +327,8 @@ const CloseoutQueueSection: React.FC = () => {
       {settingsFailed && (
         <div className="alert-warning flex items-center gap-2 text-sm" role="alert">
           <span className="flex-1">
-            The department&rsquo;s scheduling settings did not load, so a shift with no recorded end cannot be judged
-            against its cushion. Nothing is listed below.
+            Your department&rsquo;s scheduling settings did not load, so the queue can&rsquo;t be checked and nothing is
+            shown below. Retry to load them.
           </span>
           <button
             type="button"
@@ -368,7 +368,7 @@ const CloseoutQueueSection: React.FC = () => {
         <EmptyState
           icon={CheckCircle2}
           title="Every shift is closed out"
-          description="A shift still running is not counted — one with no recorded end is judged against the department's open-ended cushion, the same number the roster lock uses."
+          description="Shifts still running aren't listed. A shift with no end time counts as running until its open-ended shift cushion has passed."
         />
       )}
 
