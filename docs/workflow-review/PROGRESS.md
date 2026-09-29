@@ -47,7 +47,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | #   | Activity                                                                  | Acts as               | Starts at                                       | Status |
 | --- | ------------------------------------------------------------------------- | --------------------- | ----------------------------------------------- | ------ |
 | W18 | Create, edit and cancel an event, including a recurring one               | secretary             | `/events`, `/events/:id/edit`                   | ✅     |
-| W19 | RSVP, change it, and see it on the event                                  | member, member2       | `/events/:id`                                   | ⬜     |
+| W19 | RSVP, change it, and see it on the event                                  | member, member2       | `/events/:id`                                   | ✅     |
 | W20 | Check-in: QR self check-in, live monitoring, an officer's manual check-in | member, secretary     | `/events/:id/qr-code`, `/events/:id/monitoring` | ⬜     |
 | W21 | Event templates, the events admin hub, and event analytics                | secretary             | `/events/admin`, `/events/templates`            | ⬜     |
 | W22 | A public event request and its status link                                | anonymous → secretary | `/event-request/status/:token`                  | ⬜     |
@@ -173,6 +173,19 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   audit log, so the audit screen cannot show them (W02-3).
 
 ## Log
+
+### W19 — RSVP, change it, and see it on the event — 2026-09-28
+
+Driven as: `member` and `member2` at 1280×900 and 390×844, with `secretary`
+reading the result, on a one-seat meeting. Held: an impossible party is
+refused in the dialog; Going, Not Going and Maybe hold after reload; a full
+event waitlists, and declining promotes the next member automatically; the
+officer sees every response and note; a double submit writes once. Fixed:
+W19-2 (LOW — RSVP Activity printed raw values), W19-4 (NIT — "holds 1
+people"), W19-5 (NIT — 20px answer choices on phones). Flagged: W19-1 (MED —
+a waitlist promotion is in-app only, no email, against pitfall 18), W19-3
+(LOW — the promotion is missing from RSVP Activity; needs a schema marker).
+Gate: typecheck, lint and the touched suites clean. Next: W20.
 
 ### W18 — Create, edit and cancel an event, including a recurring one — 2026-09-28
 

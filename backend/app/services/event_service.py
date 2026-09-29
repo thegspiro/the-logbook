@@ -1492,9 +1492,14 @@ class EventService:
         if event.max_attendees and rsvp_data.status == RSVPStatus.GOING.value:
             party_size = 1 + effective_guest_count
             if party_size > event.max_attendees:
+                seats = (
+                    "1 person"
+                    if event.max_attendees == 1
+                    else f"{event.max_attendees} people"
+                )
                 return (
                     None,
-                    f"This event holds {event.max_attendees} people, so a party "
+                    f"This event holds {seats}, so a party "
                     f"of {party_size} cannot be accommodated.",
                 )
 

@@ -14,6 +14,22 @@ import { RSVPStatus as RSVPStatusEnum } from '../../constants/enums';
 import { Collapsible, EmptyState } from '../ux';
 import type { RSVP, RSVPHistory } from '../../types/event';
 
+const RSVP_STATUS_VALUES: readonly string[] = Object.values(RSVPStatusEnum);
+
+function isRSVPStatus(value: string): value is RSVPStatusEnum {
+  return RSVP_STATUS_VALUES.includes(value);
+}
+
+/**
+ * History rows store the raw status, and the activity feed printed it as-is
+ * ("changed from going to not_going"). An unrecognised value is shown
+ * verbatim rather than dropped.
+ */
+function rsvpStatusText(status: string | null): string {
+  if (!status) return '';
+  return isRSVPStatus(status) ? getRSVPStatusLabel(status) : status;
+}
+
 const PAGE_SIZE = 25;
 
 export interface EventRSVPSectionProps {
@@ -241,13 +257,13 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                       {isInitial ? (
                         <>
                           {' '}
-                          RSVP&apos;d as <span className="font-medium">{entry.new_status}</span>
+                          RSVP&apos;d as <span className="font-medium">{rsvpStatusText(entry.new_status)}</span>
                         </>
                       ) : (
                         <>
                           {' '}
-                          changed from <span className="font-medium">{entry.old_status}</span> to{' '}
-                          <span className="font-medium">{entry.new_status}</span>
+                          changed from <span className="font-medium">{rsvpStatusText(entry.old_status)}</span> to{' '}
+                          <span className="font-medium">{rsvpStatusText(entry.new_status)}</span>
                         </>
                       )}
                       {changerLabel && <span className="text-theme-text-muted"> ({changerLabel})</span>}

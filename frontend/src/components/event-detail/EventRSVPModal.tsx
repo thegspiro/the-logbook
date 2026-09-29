@@ -81,7 +81,7 @@ const EventRSVPModal: React.FC<EventRSVPModalProps> = ({
           <legend className="text-theme-text-secondary mb-2 block text-sm font-medium">Your Response</legend>
           <div className="space-y-2">
             {(event.allowed_rsvp_statuses || [RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING]).map((status) => (
-              <label key={status} className="flex items-center">
+              <label key={status} className="touch-target-phone flex items-center">
                 <input
                   type="radio"
                   name="rsvp-response"
