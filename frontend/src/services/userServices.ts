@@ -602,8 +602,9 @@ export const organizationService = {
     return response.enabled_modules.includes(moduleId);
   },
 
-  async previewNextMembershipId(): Promise<{ enabled: boolean; next_id?: string }> {
-    const response = await api.get<{ enabled: boolean; next_id?: string }>(
+  /** The number the next auto-numbered member receives; null when none will be. */
+  async previewNextMembershipId(): Promise<{ enabled: boolean; next_id: string | null }> {
+    const response = await api.get<{ enabled: boolean; next_id: string | null }>(
       '/organization/settings/membership-id/preview'
     );
     return response.data;

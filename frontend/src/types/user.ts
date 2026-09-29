@@ -5,6 +5,8 @@
 import type {
   ConsentStatus,
   EmailLinkDomainSource,
+  FiscalYearLabel,
+  MembershipYearBasis,
   MicrosoftAuthMethod,
   RejoinServiceCredit,
   SeparationStatus,
@@ -82,11 +84,29 @@ export const DEFAULT_PROFILE_VISIBILITY: ProfileVisibility = {
   address: false,
 };
 
+/**
+ * How member numbers are built. The server is the only formatter: read the
+ * number a pattern produces from `previewNextMembershipId`, never rebuild it
+ * here (CLAUDE.md pitfall #29).
+ */
 export interface MembershipIdSettings {
   enabled: boolean;
   auto_generate: boolean;
+  /** Text substituted for {PREFIX}. */
   prefix: string;
+  /** The counter: the next number to issue, never below `start_number`. */
   next_number: number;
+  /** Literal text plus {SEQ} (required), {PREFIX}, {YYYY} and {YY}. */
+  pattern: string;
+  /** Minimum digits for {SEQ}; 1 means no padding. */
+  padding: number;
+  /** Where numbering begins, and where a yearly count restarts. */
+  start_number: number;
+  reset_yearly: boolean;
+  year_basis: MembershipYearBasis;
+  /** 1-12. */
+  fiscal_year_start_month: number;
+  fiscal_year_label: FiscalYearLabel;
 }
 
 export const DepartmentEmailFormat = {

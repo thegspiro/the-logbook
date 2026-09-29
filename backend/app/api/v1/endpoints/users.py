@@ -223,13 +223,14 @@ async def create_member(
 
     # Check if membership number already exists in the organization
     if user_data.membership_number:
-        if await OrganizationService(db).membership_number_in_use(
-            current_user.organization_id, user_data.membership_number
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A member with this membership number already exists",
+        try:
+            await OrganizationService(db).ensure_membership_number_available(
+                current_user.organization_id, user_data.membership_number
             )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from e
 
     # Check if email already exists (including archived members)
     result = await db.execute(
@@ -1650,17 +1651,25 @@ async def update_user_profile(
     # Update only provided fields
     update_data = profile_update.model_dump(exclude_unset=True)
 
-    # Check membership_number uniqueness within the organization
-    if "membership_number" in update_data and update_data["membership_number"]:
-        if await OrganizationService(db).membership_number_in_use(
-            current_user.organization_id,
-            update_data["membership_number"],
-            exclude_user_id=str(user_id),
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A member with this membership number already exists",
+    # Check membership_number uniqueness within the organization. Only a change
+    # is checked: a member already holding a number that is now reserved (the
+    # generator could reissue a former member's number before reservations
+    # existed) must still be able to save the rest of their profile.
+    if (
+        "membership_number" in update_data
+        and update_data["membership_number"]
+        and update_data["membership_number"] != user.membership_number
+    ):
+        try:
+            await OrganizationService(db).ensure_membership_number_available(
+                current_user.organization_id,
+                update_data["membership_number"],
+                exclude_user_id=str(user_id),
             )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from e
 
     # Eligibility and assignment fields are restricted to leadership,
     # the secretary, or the membership coordinator. In particular, hire_date

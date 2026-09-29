@@ -714,20 +714,18 @@ async def update_membership_id_settings(
     """
     Update membership ID number settings
 
-    Configure whether membership IDs are enabled, auto-generated, and their format.
+    Configure whether membership IDs are enabled, auto-generated, and their
+    format: a pattern of literal text and the tokens {SEQ} (required), {PREFIX},
+    {YYYY} and {YY}, the counter, and whether it restarts each calendar or
+    fiscal year.
 
     **Authentication and permission required**
     """
     org_service = OrganizationService(db)
 
-    settings_dict = {
-        "membership_id": {
-            "enabled": membership_id_settings.enabled,
-            "auto_generate": membership_id_settings.auto_generate,
-            "prefix": membership_id_settings.prefix,
-            "next_number": membership_id_settings.next_number,
-        }
-    }
+    # Every schema field, and nothing else: the settings merge is deep, so the
+    # generator's counter_year, which the schema leaves out, is kept as stored.
+    settings_dict = {"membership_id": membership_id_settings.model_dump(mode="json")}
 
     async with handle_service_errors("Failed to update membership ID settings"):
         await org_service.update_organization_settings(
@@ -742,6 +740,8 @@ async def update_membership_id_settings(
             event_data={
                 "settings_changed": ["membership_id"],
                 "membership_id_enabled": membership_id_settings.enabled,
+                "membership_id_pattern": membership_id_settings.pattern,
+                "membership_id_reset_yearly": membership_id_settings.reset_yearly,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -864,7 +864,10 @@ async def preview_next_membership_id(
     if not membership_id_settings.enabled:
         return {"enabled": False, "next_id": None}
 
-    next_id = await org_service.preview_next_membership_id(current_user.organization_id)
+    async with handle_service_errors("Failed to preview the next membership ID"):
+        next_id = await org_service.preview_next_membership_id(
+            current_user.organization_id
+        )
     return {"enabled": True, "next_id": next_id}
 
 

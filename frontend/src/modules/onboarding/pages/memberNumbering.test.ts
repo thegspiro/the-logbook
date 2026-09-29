@@ -22,6 +22,7 @@ describe('membershipIdPayload', () => {
       auto_generate: true,
       prefix: 'FD-',
       next_number: 7,
+      start_number: 7,
     });
   });
 
