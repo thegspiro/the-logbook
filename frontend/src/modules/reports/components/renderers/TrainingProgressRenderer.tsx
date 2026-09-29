@@ -86,7 +86,7 @@ export const TrainingProgressRenderer: React.FC<Props> = ({ data }) => {
       <ReportTable
         rows={data.entries as unknown as Array<Record<string, unknown>>}
         columns={columns}
-        emptyMessage="No pipeline enrollments found."
+        emptyMessage="No training program enrollments found."
       />
     </div>
   );
